@@ -119,6 +119,9 @@ Specific projects can be pinned to the work profile regardless of the env var (s
 
 ## Setup
 
+For the detailed configuration, security, and operating reference, see
+[`OPENCODE_SETUP.md`](OPENCODE_SETUP.md).
+
 ```bash
 git clone git@github.com:xyzshantaram/dotfiles-ai.git ~/.config/opencode
 cd ~/.config/opencode
