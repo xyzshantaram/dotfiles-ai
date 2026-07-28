@@ -279,14 +279,24 @@ meridian request failure is a config bug rather than this.
 
 `meridian.service` binds to `127.0.0.1:9000` only (`MERIDIAN_HOST` defaults
 to loopback) — never reachable from the LAN regardless of `firewalld` state,
-since no firewall rule can route external traffic to a loopback socket. On
-top of that, `IPAddressDeny=any` / `IPAddressAllow=localhost` in the unit
-adds systemd-level (cgroup-bpf) network sandboxing as defense-in-depth
-against a future accidental non-loopback bind — this is the rootless
-equivalent of a per-service firewall; true packet filtering (`ufw`,
-`firewalld`) is inherently root-only and has no "rootless" mode.
-`opencode-web.service` (`127.0.0.1:4096`) has the same `IPAddressAllow=`
-hardening.
+since no firewall rule can route external traffic to a loopback socket.
+`opencode-web.service` (`127.0.0.1:4096`) is the same.
+
+**No additional per-unit sandboxing on top of that.** An earlier version of
+this setup added `IPAddressDeny=any` / `IPAddressAllow=localhost` to both
+units as supposed "rootless defense-in-depth," reasoning that systemd's
+cgroup-bpf IP filtering doesn't need root. That reasoning was wrong in
+practice on this system: `journalctl` logs `unit configures an IP firewall,
+but not running as root` and **silently no-ops the directive** — confirmed
+by `systemd-run --user --scope -p IPAddressDeny=any -p
+IPAddressAllow=localhost -- curl https://api.anthropic.com`, which still
+got a normal HTTP response. IP firewalling via cgroup-bpf requires root;
+`--user` units don't have it, and systemd doesn't hard-fail when you ask for
+it anyway — it just silently ignores it, which is worse than not setting it
+at all (false confidence). Removed from both units. If a real per-unit
+network restriction is ever wanted, it needs a root-level mechanism
+(`firewalld`/`nftables` rules, or a *system* — not user — systemd unit),
+not this.
 
 ### Logging
 
