@@ -1,0 +1,104 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "fetch": {
+      "command": [
+        "uvx",
+        "mcp-server-fetch"
+      ],
+      "type": "local"
+    },
+    "nostrbook": {
+      "command": [
+        "npx",
+        "-y",
+        "@nostrbook/mcp@latest"
+      ],
+      "type": "local"
+    },
+    "web_search": {
+      "command": [
+        "sh",
+        "-c",
+        "duckduckgo-mcp-server"
+      ],
+      "type": "local"
+    },
+    "gitlab": {
+      "type": "local",
+      "command": [
+        "glab",
+        "mcp",
+        "serve"
+      ],
+      "enabled": true
+    }
+  },
+  "plugin": [
+    "opencode-btw",
+    ["./plugin/opencode-profile.ts", {
+      "envVar": "OPENCODE_PROFILE",
+      "personalValue": "me",
+      "primaryAgent": "build",
+      "primaryPersonalModel": "deepseek/deepseek-v4-pro",
+      "subagents": ["coder", "tester", "researcher"],
+      "subagentWorkModel": "openrouter/deepseek/deepseek-v4-pro",
+      "subagentPersonalModel": "deepseek/deepseek-v4-flash"
+    }]
+  ],
+  "provider": {
+    "Lemonade": {
+      "models": {
+        "gpt-oss-20b-mxfp4-GGUF": {
+          "contextWindow": 40960,
+          "name": "gpt-oss-20b-mxfp4-GGUF (local)"
+        },
+        "gemma4-it-e4b-FLM": { "name": "gemma4-it-e4b", "contextWindow": 32768 }
+      },
+      "name": "Lemonade Server (local)",
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "apiKey": "lemonade",
+        "baseURL": "http://127.0.0.1:13305/v1"
+      }
+    },
+    "llama-server": {
+      "models": {
+        "unsloth/Qwen3.6-35B-A3B-GGUF:UD-Q4_K_S": {
+          "contextWindow": 65535,
+          "name": "Qwen3.6 30B-A3B"
+        }
+      },
+      "name": "Llama.cpp (local)",
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "apiKey": "llama",
+        "baseURL": "http://127.0.0.1:8033/v1"
+      }
+    }
+  },
+  "permission": {
+    "todowrite": "allow",
+    "external_directory": {
+      "~/ai-scratch": "allow",
+      "~/ai-scratch/**": "allow"
+    },
+    "bash": {
+      "*": "allow",
+      "etu": "ask",
+      "etu *": "ask",
+      "*/etu": "ask",
+      "*/etu *": "ask"
+    }
+  },
+  "agent": {
+    "see": {
+        "mode": "subagent",
+        "model": "openrouter/qwen/qwen3.6-flash",
+        "prompt": "You are a helpful model providing vision capabilities to models that don't have it.",
+        "permission": {
+            "edit":"deny"
+        }
+    }
+  }
+}
