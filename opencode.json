@@ -34,19 +34,27 @@
       "enabled": true
     }
   },
+  "model": "anthropic/claude-sonnet-5",
   "plugin": [
     "opencode-btw",
+    "/home/sid/.local/share/pnpm/store/v11/links/@rynfar/meridian/1.57.0/f858dc8610c5f05226e33123f19b5f791c3310d6a2e657949c556bd9641e7ae4/node_modules/@rynfar/meridian/plugin/meridian.ts",
     ["./plugin/opencode-profile.ts", {
       "envVar": "OPENCODE_PROFILE",
       "personalValue": "me",
       "primaryAgent": "build",
       "primaryPersonalModel": "deepseek/deepseek-v4-pro",
       "subagents": ["coder", "tester", "researcher"],
-      "subagentWorkModel": "openrouter/deepseek/deepseek-v4-pro",
+      "subagentWorkModel": "anthropic/claude-haiku-4-5",
       "subagentPersonalModel": "deepseek/deepseek-v4-flash"
     }]
   ],
   "provider": {
+    "anthropic": {
+      "options": {
+        "apiKey": "meridian",
+        "baseURL": "http://127.0.0.1:9000"
+      }
+    },
     "Lemonade": {
       "models": {
         "gpt-oss-20b-mxfp4-GGUF": {

@@ -1,12 +1,13 @@
 ---
 description: Fast/cheap subagent for writing and executing code changes. Give it a specific, self-contained implementation brief (files/areas, the exact change, constraints); it makes the change, runs quick sanity checks (build/typecheck/lint) it has available, and reports back a concise summary of what changed and any blockers. Does not do open-ended exploration or run full test suites — hand those to researcher/tester instead.
 mode: subagent
-# Default route: OpenRouter (work account). The opencode-profile plugin
+# Default route: Claude Haiku via Meridian (Claude Max subscription, work
+# account). The opencode-profile plugin
 # (~/.config/opencode/plugin/opencode-profile.ts) rewrites this to the direct
 # deepseek/deepseek-v4-flash provider when $OPENCODE_PROFILE=me is set,
 # except for projects listed in that plugin's pinnedToWork option (see the
 # tuple options passed to it in opencode.json's "plugin" array).
-model: openrouter/deepseek/deepseek-v4-pro
+model: anthropic/claude-haiku-4-5
 permission:
   task: deny
   skill: deny
