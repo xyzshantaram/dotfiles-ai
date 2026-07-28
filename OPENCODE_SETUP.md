@@ -19,6 +19,11 @@ phone --https:1337--> Caddy (0.0.0.0, TLS via internal CA)
                           |
                           v
                     opencode (127.0.0.1:4096 only — not on the LAN)
+                          |
+                          v
+                    meridian (127.0.0.1:9000 only — proxies "anthropic"
+                              provider requests to Claude Max via the
+                              Claude Agent SDK, see Meridian below)
 ```
 
 - **URL:** `https://potato.local:1337`
@@ -56,7 +61,8 @@ changes with `systemctl --user restart caddy` instead.
 
 | Unit | Role |
 |---|---|
-| `user-www.target` | Grouping target only — starts nothing itself. `systemctl --user {start,stop,restart} user-www.target` controls both services together (members declare `PartOf=` for this). |
+| `user-www.target` | Grouping target only — starts nothing itself. `systemctl --user {start,stop,restart} user-www.target` controls all member services together (members declare `PartOf=` for this). |
+| `meridian.service` | Claude Max API proxy for the `anthropic` provider. `WantedBy=user-www.target` directly, so `user-www.target` pulls it in on its own — `opencode-web.service` *also* declares `After=`/`Wants=meridian.service` so the dependency holds even if something starts `opencode-web.service` on its own. See Meridian below for the full story (crash fix, port, hardening). |
 | `opencode-web.service` | `opencode web --hostname 127.0.0.1 --port 4096 --cors https://potato.local:1337`, run inside a login `fish` shell via `exec` (so opencode becomes the tracked process for `Restart=`/signals). PATH is derived at runtime from `fish`'s login-shell config rather than hardcoded, so it tracks `config.fish` changes on restart — this only works because `config.fish` sets PATH unconditionally, outside any `status is-interactive` guard. `BROWSER=/bin/true` neutralizes opencode's normal "open a browser" behavior for headless runs. `Restart=always`, `StartLimitIntervalSec=0` (retries indefinitely — relevant since this starts at login, sometimes before the network is up). |
 | `caddy.service` (**user**-level) | `caddy run --config ~/.config/caddy/Caddyfile`. `Wants=` (not `Requires=`) `opencode-web.service`, so a crashed backend doesn't take the proxy down — Caddy just serves a clean 502 until opencode-web restarts. Reverse-proxies to `127.0.0.1:4096` with `flush_interval -1` so opencode's SSE agent-output stream can't stall mid-response. |
 
@@ -114,7 +120,8 @@ systemctl --user restart user-www.target
 
 | Provider | Where | Notes |
 |---|---|---|
-| `openrouter` | built-in, API key via `opencode auth` | "work" account — billed to OpenRouter credits |
+| `anthropic` | built-in, `baseURL` overridden to `127.0.0.1:9000` in `opencode.json` | "work" default — routed through `meridian.service` (Claude Max subscription), see Meridian below |
+| `openrouter` | built-in, API key via `opencode auth` | secondary work account — billed to OpenRouter credits |
 | `deepseek` | built-in, API key via `opencode auth` | "personal" account — direct DeepSeek API key |
 | `Lemonade` | `openai-compatible` @ `127.0.0.1:13305` | local server (gpt-oss-20b, gemma4-it-e4b) |
 | `llama-server` | `openai-compatible` @ `127.0.0.1:8033` | local llama.cpp (Qwen3.6-35B-A3B, Q4_K_S) |
@@ -129,21 +136,22 @@ check if either is currently up before picking a model that points at them.
 
 ### Work and Personal Routing (`plugin/opencode-profile.ts`)
 
-The `coder`/`tester`/`researcher` subagents are pinned to OpenRouter models in
-their agent files. The built-in `build` primary agent inherits the selected
-session model for work. The profile plugin rewrites those models at
-configuration load time for a personal direct-DeepSeek account:
+The default (root `"model"` in `opencode.json`) and the `coder`/`tester`/
+`researcher` subagents are pinned to Anthropic models — routed through
+`meridian.service` on the Claude Max subscription — in their agent files.
+The profile plugin rewrites those models at configuration load time for a
+personal direct-DeepSeek account:
 
 | | Work (default) | Personal (`OPENCODE_PROFILE=me`) |
 |---|---|---|
-| `build` | *(unpinned — inherits the selected session model)* | `deepseek/deepseek-v4-pro` (direct key) |
-| `coder` / `tester` / `researcher` | `openrouter/deepseek/deepseek-v4-pro` | `deepseek/deepseek-v4-flash` (direct key) |
+| `build` | `anthropic/claude-sonnet-5` (via meridian, root `"model"` in `opencode.json`) | `deepseek/deepseek-v4-pro` (direct key) |
+| `coder` / `tester` / `researcher` | `anthropic/claude-haiku-4-5` (via meridian) | `deepseek/deepseek-v4-flash` (direct key) |
 
 Toggle it by exporting the env var before launching opencode:
 
 ```sh
 OPENCODE_PROFILE=me opencode            # personal: build=v4-pro, subagents=v4-flash (direct key)
-opencode                                 # work (default): subagents on OpenRouter, build inherits session model
+opencode                                 # work (default): build=sonnet-5, subagents=haiku-4-5, both via meridian
 ```
 
 The current configuration passes its profile controls as an **options object**
@@ -153,17 +161,24 @@ them in the plugin file:
 ```json
 "plugin": [
   "opencode-btw",
+  "/absolute/path/to/@rynfar/meridian/plugin/meridian.ts",
   ["./plugin/opencode-profile.ts", {
     "envVar": "OPENCODE_PROFILE",
     "personalValue": "me",
     "primaryAgent": "build",
     "primaryPersonalModel": "deepseek/deepseek-v4-pro",
     "subagents": ["coder", "tester", "researcher"],
-    "subagentWorkModel": "openrouter/deepseek/deepseek-v4-pro",
+    "subagentWorkModel": "anthropic/claude-haiku-4-5",
     "subagentPersonalModel": "deepseek/deepseek-v4-flash"
   }]
 ]
 ```
+
+`subagentWorkModel` must exactly match the `model:` set in each subagent's
+frontmatter (`agent/coder.md`, `tester.md`, `researcher.md`) — the plugin
+only rewrites an agent's model in personal mode if it finds this exact
+string, so changing one without the other silently breaks the personal
+profile for that agent.
 
 `pinnedToWork` defaults to an empty list in the plugin, so every project
 routes based on `OPENCODE_PROFILE`. Add it to the options object only when a
@@ -175,6 +190,124 @@ starting a session:
 ```sh
 opencode debug agent coder                                # work, this project
 OPENCODE_PROFILE=me opencode debug agent build             # personal, this project
+```
+
+---
+
+## Meridian (Claude Max proxy, `meridian.service`)
+
+[Meridian](https://github.com/rynfar/meridian) bridges the Claude Agent SDK
+to a standard Anthropic API, so opencode's built-in `anthropic` provider
+(pointed at `127.0.0.1:9000` instead of `api.anthropic.com`) is served by a
+Claude Max subscription instead of a separate API key. It's a global pnpm
+package (`@rynfar/meridian`), not a project dependency.
+
+### If it crashes: `Cannot find module '@libsql/linux-x64-gnu'`
+
+**Root cause:** pnpm's auto-generated global bin shim
+(`~/.local/share/pnpm/bin/meridian`) doesn't set `NODE_PATH`, so Node can't
+resolve `libsql`'s native binding — it lives in the global install's
+isolated `.pnpm/node_modules/` directory, not in meridian's own (empty)
+`node_modules/`. This isn't specific to this machine or a one-time glitch:
+`pnpm add -g @rynfar/meridian@latest` to reinstall/upgrade **reproduces the
+exact same crash**, because pnpm regenerates the same NODE_PATH-less shim
+every time.
+
+**Fix (already applied, durable across reinstalls):** `meridian.service`
+doesn't call the pnpm shim directly. It runs `~/.local/bin/meridian-launch`
+(not tracked in this repo — see File Map), a small bash wrapper that:
+
+1. Builds `PATH` explicitly (systemd user services don't source
+   `~/.bashrc`/`~/.bash_profile`, and the fnm/pnpm setup lives in
+   `config.fish` — fish-only), using fnm's stable `aliases/default` symlink
+   so it survives Node version bumps.
+2. Greps the `# cmd-shim-target=...` comment pnpm appends to the bin shim to
+   find the *current* global install directory, then derives `NODE_PATH`
+   from that (`<global_dir>/node_modules/.pnpm/node_modules`) — dynamic, so
+   it keeps working after `pnpm add -g` reinstalls change the version-hash
+   path, instead of hardcoding today's path.
+3. `exec`s the real pnpm shim with that `NODE_PATH` set.
+
+If you ever see this crash again outside the service (e.g. running
+`meridian` interactively after a manual `pnpm add -g` upgrade), either run
+it via `~/.local/bin/meridian-launch` instead of the bare `meridian` on
+`PATH`, or manually export `NODE_PATH` per the comment in that script before
+invoking `meridian` directly.
+
+### After upgrading meridian (`pnpm add -g @rynfar/meridian@latest`)
+
+The `plugin` entry in `opencode.json` pointing at meridian's opencode plugin
+(`.../@rynfar/meridian/<version>/<hash>/node_modules/@rynfar/meridian/plugin/meridian.ts`)
+is version/hash-specific — an upgrade changes that path, and opencode just
+silently drops the plugin (no session headers/tracking) rather than erroring.
+Run `meridian setup` after any upgrade; it rewrites the plugin path in
+`~/.config/opencode/opencode.json` automatically (confirm via
+`meridian setup` printing "already configured" with the *new* path, or
+`curl -s http://127.0.0.1:9000/health` showing `"plugin": {"opencode":
+"configured"}`), then manually copy that updated absolute path back into
+this repo's `opencode.json` to keep it in sync — `meridian setup` only
+touches the live config, not the repo.
+
+### Auth
+
+Requires `claude login` once (uses the Claude Code OAuth flow, not an API
+key — `ANTHROPIC_API_KEY=x` in the provider config is a required-but-ignored
+placeholder). Check status without starting a session:
+
+```sh
+curl -s http://127.0.0.1:9000/health | python3 -m json.tool   # auth.loggedIn, email, subscriptionType
+```
+
+If auth expires (refresh token stale after weeks of inactivity), meridian's
+own error message tells you to rerun `claude login`; `meridian
+refresh-token` forces a manual refresh otherwise.
+
+### Extra Usage / billing
+
+Anthropic gates SDK-routed traffic like meridian's behind **Extra Usage**
+credits, independent of your Max plan's included quota — confirmed via a
+live `400` (`"Third-party apps now draw from your extra usage, not your
+plan limits"`) even with `curl -s http://127.0.0.1:9000/v1/usage/quota`
+showing plan quota (`five_hour`/`seven_day` buckets) fully unused. Extra
+Usage has to be enabled and funded separately, from inside `claude` itself
+(`/login` then `/usage-credits`, which opens billing settings in the
+browser for Pro/Max — not a bare claude.ai settings URL). Check
+`/v1/usage/quota`'s `extraUsage.isEnabled`/`monthlyLimit` before assuming a
+meridian request failure is a config bug rather than this.
+
+### Network exposure
+
+`meridian.service` binds to `127.0.0.1:9000` only (`MERIDIAN_HOST` defaults
+to loopback) — never reachable from the LAN regardless of `firewalld` state,
+since no firewall rule can route external traffic to a loopback socket. On
+top of that, `IPAddressDeny=any` / `IPAddressAllow=localhost` in the unit
+adds systemd-level (cgroup-bpf) network sandboxing as defense-in-depth
+against a future accidental non-loopback bind — this is the rootless
+equivalent of a per-service firewall; true packet filtering (`ufw`,
+`firewalld`) is inherently root-only and has no "rootless" mode.
+`opencode-web.service` (`127.0.0.1:4096`) has the same `IPAddressAllow=`
+hardening.
+
+### Logging
+
+`MERIDIAN_SILENT=1` is set in the unit — meridian's default per-request
+`[PROXY] ... msgs=user[text] → assistant[...]` logging dumps the entire
+conversation shape on every request/response, which floods
+`journalctl --user -u meridian.service` fast. `MERIDIAN_SILENT=1` is
+all-or-nothing: it also suppresses the one-time startup banner (model pins,
+listening address) and the `EADDRINUSE` troubleshooting hint, but *not*
+uncaught-exception/unhandled-rejection output, so real crashes still surface
+in the journal. Drop the env var temporarily (and `systemctl --user restart
+meridian.service`) if you need the verbose per-request trace for debugging.
+
+### Useful commands
+
+```sh
+systemctl --user status meridian.service
+journalctl --user -u meridian.service -f
+curl -s http://127.0.0.1:9000/health | python3 -m json.tool
+curl -s http://127.0.0.1:9000/v1/usage/quota | python3 -m json.tool
+meridian profile list                          # configured Claude accounts, if using multi-profile
 ```
 
 ---
@@ -338,5 +471,7 @@ they can't get answered non-interactively.
 ~/.config/systemd/user/
 ├── user-www.target
 ├── caddy.service
+├── meridian.service                see Meridian
 └── opencode-web.service
+~/.local/bin/meridian-launch          durable NODE_PATH-fixing launcher for meridian.service, see Meridian
 ```
