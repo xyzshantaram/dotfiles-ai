@@ -44,7 +44,7 @@
       "primaryAgent": "build",
       "primaryPersonalModel": "deepseek/deepseek-v4-pro",
       "subagents": ["coder", "tester", "researcher"],
-      "subagentWorkModel": "anthropic/claude-haiku-4-5",
+      "subagentWorkModel": "opencode-go/deepseek-v4-pro",
       "subagentPersonalModel": "deepseek/deepseek-v4-flash"
     }]
   ],

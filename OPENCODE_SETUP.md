@@ -121,6 +121,7 @@ systemctl --user restart user-www.target
 | Provider | Where | Notes |
 |---|---|---|
 | `anthropic` | built-in, `baseURL` overridden to `127.0.0.1:9000` in `opencode.json` | "work" default — routed through `meridian.service` (Claude Max subscription), see Meridian below |
+| `opencode-go` | built-in, API key via `opencode auth login` | "work" account for `coder`/`tester`/`researcher` subagents — `deepseek-v4-pro` |
 | `openrouter` | built-in, API key via `opencode auth` | secondary work account — billed to OpenRouter credits |
 | `deepseek` | built-in, API key via `opencode auth` | "personal" account — direct DeepSeek API key |
 | `Lemonade` | `openai-compatible` @ `127.0.0.1:13305` | local server (gpt-oss-20b, gemma4-it-e4b) |
@@ -136,22 +137,22 @@ check if either is currently up before picking a model that points at them.
 
 ### Work and Personal Routing (`plugin/opencode-profile.ts`)
 
-The default (root `"model"` in `opencode.json`) and the `coder`/`tester`/
-`researcher` subagents are pinned to Anthropic models — routed through
-`meridian.service` on the Claude Max subscription — in their agent files.
-The profile plugin rewrites those models at configuration load time for a
-personal direct-DeepSeek account:
+The default (root `"model"` in `opencode.json`) is pinned to an Anthropic
+model — routed through meridian.service on the Claude Max subscription. The
+`coder`/`tester`/`researcher` subagents are pinned to an OpenCode Go model in
+their agent files. The profile plugin rewrites those models at configuration
+load time for a personal direct-DeepSeek account:
 
 | | Work (default) | Personal (`OPENCODE_PROFILE=me`) |
 |---|---|---|
 | `build` | `anthropic/claude-sonnet-5` (via meridian, root `"model"` in `opencode.json`) | `deepseek/deepseek-v4-pro` (direct key) |
-| `coder` / `tester` / `researcher` | `anthropic/claude-haiku-4-5` (via meridian) | `deepseek/deepseek-v4-flash` (direct key) |
+| `coder` / `tester` / `researcher` | `opencode-go/deepseek-v4-pro` (OpenCode Go account) | `deepseek/deepseek-v4-flash` (direct key) |
 
 Toggle it by exporting the env var before launching opencode:
 
 ```sh
 OPENCODE_PROFILE=me opencode            # personal: build=v4-pro, subagents=v4-flash (direct key)
-opencode                                 # work (default): build=sonnet-5, subagents=haiku-4-5, both via meridian
+opencode                                 # work (default): build=sonnet-5 (via meridian), subagents=opencode-go/deepseek-v4-pro
 ```
 
 The current configuration passes its profile controls as an **options object**
@@ -168,7 +169,7 @@ them in the plugin file:
     "primaryAgent": "build",
     "primaryPersonalModel": "deepseek/deepseek-v4-pro",
     "subagents": ["coder", "tester", "researcher"],
-    "subagentWorkModel": "anthropic/claude-haiku-4-5",
+    "subagentWorkModel": "opencode-go/deepseek-v4-pro",
     "subagentPersonalModel": "deepseek/deepseek-v4-flash"
   }]
 ]
@@ -327,7 +328,7 @@ meridian profile list                          # configured Claude accounts, if 
 | Agent | Mode | Model | Role |
 |---|---|---|---|
 | `build` | built-in primary, **default** | selected session model (work) / `deepseek-v4-pro` direct (personal) | Plans, reviews, dispatches. Full edit/bash access; handles trivial fixes directly. Uses `grilling` + `plan` skills before non-trivial work, delegates execution via the Task tool. |
-| `coder` | subagent | `openrouter/deepseek/deepseek-v4-pro` (work) / `deepseek-v4-flash` direct (personal) | Implements a specific, scoped brief handed to it. Edit + bash allowed. Can't self-delegate (`task`/`skill`/`question` denied). |
+| `coder` | subagent | `opencode-go/deepseek-v4-pro` (work, OpenCode Go account) / `deepseek-v4-flash` direct (personal) | Implements a specific, scoped brief handed to it. Edit + bash allowed. Can't self-delegate (`task`/`skill`/`question` denied). |
 | `tester` | subagent | same routing as `coder` | Runs tests/lint/build for a given scope, reports pass/fail + failure detail. `edit` denied — reports only, never fixes. |
 | `researcher` | subagent | same routing as `coder` | Investigates a specific question (codebase, library/API behavior, docs, Nostr NIPs via nostrbook). Read-only: `edit`/`bash` denied. |
 | `see` | subagent | `openrouter/qwen/qwen3.6-flash` | Vision helper for models without native image support. `edit` denied. |
