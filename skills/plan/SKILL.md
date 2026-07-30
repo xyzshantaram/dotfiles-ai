@@ -32,6 +32,26 @@ PLAN.md is a **living working document**, not permanent documentation. It exists
 - A ticket is the unit of work, not automatically the unit of dispatch. Implement it with the appropriate subagent (`coder`, `tester`, `researcher`) per the primary dispatch rule — but a genuinely trivial ticket (small, low-risk diff) may fall under that rule's existing carve-out for direct edits in the primary session. Ticketing exists for the accountability and evaluation structure; it does not mandate a subagent round-trip for every single one.
 - **Review contract, non-negotiable:** before checking a ticket off as done in PLAN.md, independently verify at least one concrete, checkable claim from the implementation against the real artifact — re-run a cited command yourself, read the actual diff, or cross-check a cited API/spec claim against the real spec. Never mark a ticket done purely on a subagent's self-report of success. Record what was actually, independently checked in the ticket's done-note, not just what was claimed. This is a floor, scaled to the ticket's risk (see AGENTS.md) — stop once that one check passes rather than re-verifying repeatedly or dispatching extra review passes that don't add information.
 
+## Benchmarking (opt-in via `BENCHMARK_LEVER`)
+
+Check once when creating a new PLAN.md: run `echo "$BENCHMARK_LEVER"` (bash tool). Treat anything other than exactly `true` (unset, empty, `false`, etc.) as disabled and skip this section entirely — this flag defaults to off and is only turned on in specific environments (e.g. via `server.env`).
+
+If enabled, append a `## Benchmarking` section to PLAN.md. It is a running log, not a phase checklist — it is exempt from the "Keeping it compact" budget and survives phase compaction:
+
+```markdown
+## Benchmarking
+
+| Metric | Count / Value | Notes |
+|---|---|---|
+| Verification catch rate | 0 / 0 | independent checks (per the review contract) that caught a real discrepancy, vs. total checks performed |
+| Escaped defect rate | 0 / 0 | bugs/regressions found after a ticket was marked `done`, vs. tickets closed |
+| Rework/reopen rate | 0 / 0 | tickets reopened or rescoped after grilling had already settled them, vs. tickets grilled |
+| Rough cost | — | approximate turns/tokens spent on grilling + planning + dispatch + review per ticket, vs. a rough estimate of direct-implementation cost |
+```
+
+- Update these numbers after every commit that closes or touches a ticket — not just at phase boundaries — so they reflect what actually happened rather than an end-of-phase guess.
+- This section does not survive PLAN.md's own deletion at the end of an effort (see "Finishing"). If the user wants tallies preserved across efforts rather than resetting with each new PLAN.md, ask where they'd like a running total kept instead of silently discarding it.
+
 ## Session cleanup
 
 - At the end of a working session, and immediately whenever the user says "compaction" (or an equivalent explicit request), run a compaction pass over PLAN.md without being asked for anything more specific: re-verify every phase's status still matches reality, apply "Updating the plan"'s rule to any phase that's newly complete, and re-check the file against the budget in "Keeping it compact". Don't wait for a separate request to do this once the trigger word is said.
