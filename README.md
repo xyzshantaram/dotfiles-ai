@@ -98,6 +98,7 @@ Specific projects can be pinned to the work profile regardless of the env var (s
 | `plan` | Creates and maintains `PLAN.md` with phased, ticketed implementation tracking. |
 | `review` | Code-quality review: AI-slop patterns, wheel reinvention, scope creep, conventions. |
 | `etu` | Time-tracking via the `etu` CLI — check hours, sessions, memos. |
+| `ste-writing` | Rewrites prose (docs, READMEs, PR text, error messages, release notes, comments) into ASD-STE100 Simplified Technical English to cut AI slop. |
 
 ### Custom tools
 
