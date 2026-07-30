@@ -68,3 +68,6 @@
   already read, or dispatching a second review pass because the first didn't find anything is
   wasted turns and tokens, not extra safety. Token/turn budget is a real constraint here, not an
   afterthought.
+* When asked to make writing sound less like AI, tone down slop, or write in plain/controlled
+  technical English (docs, READMEs, PR descriptions, error messages, release notes, comments —
+  never code), load the `ste-writing` skill and run its self-lint pass before returning the text.
