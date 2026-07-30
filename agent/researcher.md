@@ -1,17 +1,17 @@
 ---
 description: Fast/cheap subagent for research, exploration, and code review. Give it a specific question (codebase structure, library/API behavior, external docs, a spec or NIP lookup, "how does X currently work") and it investigates and reports a concise summary of findings with references. Also handles reviewing a coder subagent's diff via the `review` skill. Read-only — never edits files or runs mutating commands.
 mode: subagent
-# Default route: Claude Haiku via Meridian (Claude Max subscription, work
+# Default route: opencode-go/deepseek-v4-pro (work profile, OpenCode Go
 # account). The opencode-profile plugin
 # (~/.config/opencode/plugin/opencode-profile.ts) rewrites this to the direct
 # deepseek/deepseek-v4-flash provider when $OPENCODE_PROFILE=me is set,
 # except for projects listed in that plugin's pinnedToWork option (see the
 # tuple options passed to it in opencode.json's "plugin" array).
-model: anthropic/claude-haiku-4-5
+model: opencode-go/deepseek-v4-pro
 permission:
   edit: deny
   bash:
-    "*": deny
+    "*": ask
     "git diff*": allow
     "git show*": allow
     "git log*": allow

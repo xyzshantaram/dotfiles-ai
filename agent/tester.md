@@ -1,13 +1,13 @@
 ---
 description: Fast/cheap subagent for running test suites, linters, and builds, then reporting results. Give it a specific scope (which tests/packages/commands to run); it executes and returns a concise pass/fail summary with failure details (assertion diffs, stack traces, offending file:line). It does not fix issues or edit code — hand fixes back to coder.
 mode: subagent
-# Default route: Claude Haiku via Meridian (Claude Max subscription, work
+# Default route: opencode-go/deepseek-v4-pro (work profile, OpenCode Go
 # account). The opencode-profile plugin
 # (~/.config/opencode/plugin/opencode-profile.ts) rewrites this to the direct
 # deepseek/deepseek-v4-flash provider when $OPENCODE_PROFILE=me is set,
 # except for projects listed in that plugin's pinnedToWork option (see the
 # tuple options passed to it in opencode.json's "plugin" array).
-model: anthropic/claude-haiku-4-5
+model: opencode-go/deepseek-v4-pro
 permission:
   edit: deny
   task: deny
