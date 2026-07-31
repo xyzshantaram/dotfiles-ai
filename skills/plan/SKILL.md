@@ -32,6 +32,20 @@ PLAN.md is a **living working document**, not permanent documentation. It exists
 - A ticket is the unit of work, not automatically the unit of dispatch. Implement it with the appropriate subagent (`coder`, `tester`, `researcher`) per the primary dispatch rule — but a genuinely trivial ticket (small, low-risk diff) may fall under that rule's existing carve-out for direct edits in the primary session. Ticketing exists for the accountability and evaluation structure; it does not mandate a subagent round-trip for every single one.
 - **Review contract, non-negotiable:** before checking a ticket off as done in PLAN.md, independently verify at least one concrete, checkable claim from the implementation against the real artifact — re-run a cited command yourself, read the actual diff, or cross-check a cited API/spec claim against the real spec. Never mark a ticket done purely on a subagent's self-report of success. Record what was actually, independently checked in the ticket's done-note, not just what was claimed. This is a floor, scaled to the ticket's risk (see AGENTS.md) — stop once that one check passes rather than re-verifying repeatedly or dispatching extra review passes that don't add information.
 
+## Human review queue
+
+The model's own independent check (the review contract above) is not a substitute for the user's own hands-on check, per AGENTS.md — especially for anything with a UI or runtime surface. Track that separately in PLAN.md so the user can review in batches instead of context-switching after every single ticket:
+
+- When closing out a ticket that needs the user's own hands-on check (UI/runtime surface, or anything else a passing build/typecheck doesn't actually confirm), add a line to a `## Human review queue` section rather than only mentioning it once in chat:
+  ```markdown
+  ## Human review queue
+  - [ ] Ticket 2.3 (BIP21 QR code) — scan with a wallet app, confirm amount/address decode correctly
+  - [ ] Ticket 2.5 (dark mode toggle) — visually check both themes for contrast issues
+  ```
+- Each line names the ticket and states concretely what to check — not "review this," but what to actually look at or exercise.
+- This section persists across phase compaction and is exempt from the "Keeping it compact" line budget (same as Benchmarking) — it can outlive the phase that added an item, since the user may batch reviews well after a ticket closes.
+- Only the user clears an item, by checking it off or explicitly saying to drop it. Never remove a queued item on the model's own initiative.
+
 ## Benchmarking (opt-in via `BENCHMARK_LEVER`)
 
 Check once when creating a new PLAN.md: run `echo "$BENCHMARK_LEVER"` (bash tool). Treat anything other than exactly `true` (unset, empty, `false`, etc.) as disabled and skip this section entirely — this flag defaults to off and is only turned on in specific environments (e.g. via `server.env`).
@@ -70,4 +84,5 @@ If enabled, append a `## Benchmarking` section to PLAN.md. It is a running log, 
 ## Finishing
 
 - Once the feature/effort is fully implemented, tested, and shipped, **delete PLAN.md** in the same commit (or an immediate follow-up commit) that finishes the work. It should not linger as stale documentation.
+- If the human review queue still has unchecked items at that point, surface them to the user explicitly before deleting the file — don't let them silently vanish with it.
 - If the user wants a permanent record of what was built, that belongs in real docs/README/CHANGELOG — not in PLAN.md.
