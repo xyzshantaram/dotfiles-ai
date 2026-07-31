@@ -35,6 +35,9 @@ Run these tool calls in parallel via the agent:
 
 #### MCP configuration
 
+The Blinkit MCP server is [yniks/blinkit-mcp](https://github.com/yniks/blinkit-mcp),
+installed locally at `~/installs/blinkit-mcp` and run with Node.
+
 From `~/.config/opencode/opencode.json`:
 
 ```jsonc
