@@ -22,7 +22,7 @@ compatibility: opencode
      cd ~/repos/etu && deno task skill ~/.config/opencode/skills/etu/SKILL.md
      Do not hand-edit between these markers; it will be overwritten. -->
 
-_Generated 2026-07-28T07:53:48.546Z from `etu 0.0.1`._
+_Generated 2026-07-31T11:06:17.591Z from `etu 0.0.1`._
 
 ### Global usage
 ```
@@ -192,7 +192,7 @@ Options:
 Commands:
   new [options] <name> <rate> [initial-hours]  Start a new project and set it as the default.
   default <id>                                 Change the default project.
-  list                                         List all projects.
+  list [options]                               List all projects.
   edit [options]                               Edit a project.
   delete [options]                             Deletes a project, all its sessions, and removes it from the default if set.
   help [command]                               display help for command
@@ -237,6 +237,8 @@ Usage: etu project list [options]
 List all projects.
 
 Options:
+  --page <n>  Page number for paginated output (structured mode only). Default:
+              1.
   -h, --help  display help for command
 ```
 
