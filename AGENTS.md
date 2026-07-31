@@ -71,3 +71,8 @@
 * When asked to make writing sound less like AI, tone down slop, or write in plain/controlled
   technical English (docs, READMEs, PR descriptions, error messages, release notes, comments —
   never code), load the `ste-writing` skill and run its self-lint pass before returning the text.
+* All non-code prose — conversation, planning text, subagent prompts, report summaries, 
+  ticket descriptions, and notes to the user — must follow the `ste-writing` skill's
+  STE-flavored mode rules. Use short common words, active voice, one instruction per
+  sentence, no contractions, no semicolons, no marketing adjectives. When you dispatch a
+  subagent, include this STE requirement in the prompt you give it.
