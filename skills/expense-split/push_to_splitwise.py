@@ -13,6 +13,7 @@ Usage:
 import argparse
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -105,6 +106,10 @@ class SplitwiseAPI:
         users__0__user_id, users__0__paid_share, users__0__owed_share, ...
         """
         return self._post("create_expense", expense_data)
+
+    def create_comment(self, expense_id, content):
+        """Post a comment on an expense."""
+        return self._post("create_comment", {"expense_id": expense_id, "content": content})
 
 
 # ---------------------------------------------------------------------------
@@ -369,43 +374,41 @@ def summarise_order(
 # ---------------------------------------------------------------------------
 # Build description for Splitwise expense
 # ---------------------------------------------------------------------------
-def build_description(order: list[dict], people: list[str], platform: str, date: str) -> str:
-    """Create a compact description string for the expense."""
-    # First 2-3 item names (truncated).
-    item_names = []
-    for item in order[:3]:
+def format_title(order):
+    """Return a short expense title like 'Blinkit order 07-23 3:19 PM'"""
+    platform = order[0]["platform"].replace("_", " ").title()
+    date = order[0]["date"]
+    dt = datetime.strptime(date, "%Y-%m-%d %I:%M %p")
+    return f"{platform} order {dt.strftime('%m-%d %-I:%M %p')}"
+
+
+def build_itemized_comment(order, people):
+    """Return a multi-line string with the itemized split for the comment."""
+    lines = ["Itemized split:"]
+    for item in order:
         name = item["item"]
-        # Strip "[Delivery]" / "[Packaging]" prefix noise.
-        if name.startswith("[") and name.endswith("]"):
-            continue
-        # Shorten very long names.
-        if len(name) > 30:
-            name = name[:30] + "…"
-        item_names.append(name)
-
-    items_str = ", ".join(item_names)
-
-    # Per-person owed totals.
-    person_owed: dict[str, float] = {}
+        price = item["price"]
+        parts = []
+        for p in people:
+            if p in item["assignments"]:
+                parts.append(f"{p}: Rs {fmt_rs(item['assignments'][p])}")
+        if parts:
+            lines.append(f"  {name} (Rs {fmt_rs(price)}) — {', '.join(parts)}")
+        else:
+            lines.append(f"  {name} (Rs {fmt_rs(price)}) — unassigned")
+    
+    # Per-person totals
+    person_owed = {p: 0.0 for p in people}
     for item in order:
         for name, amt in item["assignments"].items():
             person_owed[name] = person_owed.get(name, 0.0) + amt
-
-    parts = []
+    lines.append("")
+    lines.append("Totals:")
     for p in people:
-        amt = person_owed.get(p, 0.0)
-        if amt > 0:
-            parts.append(f"{abbreviated(p)}:{round(amt)}")
-
-    # Parse date for compact display.
-    try:
-        from datetime import datetime
-        dt = datetime.strptime(date, "%Y-%m-%d %I:%M %p")
-        date_short = dt.strftime("%b %d")
-    except (ValueError, ImportError):
-        date_short = date
-
-    return f"{platform.title()} {date_short} | {items_str} | {' '.join(parts)}"
+        if person_owed[p] > 0:
+            lines.append(f"  {p}: Rs {fmt_rs(person_owed[p])}")
+    
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -436,7 +439,7 @@ def push_order(
         for name, amt in item["assignments"].items():
             person_owed[name] = person_owed.get(name, 0.0) + amt
 
-    description = build_description(order, people, platform, date)
+    description = format_title(order)
 
     if dry_run:
         print(f"  [DRY RUN] Would create expense: ₹{fmt_rs(total)} — {description}")
@@ -459,6 +462,9 @@ def push_order(
         result = api.create_expense(data)
         eid = result.get("expenses", [{}])[0].get("id")
         print(f"  ✅ Created expense #{eid}")
+        if eid:
+            comment = build_itemized_comment(order, people)
+            api.create_comment(eid, comment)
         return True, str(eid) if eid else None
     except Exception as e:
         print(f"  ❌ Error: {e}")
