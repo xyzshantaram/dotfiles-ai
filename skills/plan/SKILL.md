@@ -1,56 +1,57 @@
 ---
 name: plan
-description: Create and maintain a single self-contained PLAN.md that tracks phased implementation progress on a feature or effort. Use whenever the user mentions planning, a "phased implementation plan", "plan.md", asks to "update the plan", says "compaction", or when kicking off/continuing medium-to-large scope work that needs a living record of in-progress phases.
+description: Create and maintain a self-contained PLAN.md that tracks phased implementation progress on a feature or effort. Use when the user mentions planning, a "phased implementation plan", "plan.md", asks to "update the plan", says "compaction", or when starting or continuing medium-to-large scope work that needs a living record of in-progress phases.
 compatibility: opencode
 ---
 
 # Plan skill
 
-PLAN.md is a **living working document**, not permanent documentation. It exists only while a feature/effort is actively in progress, and is deleted once that work ships.
+PLAN.md is a **living working document**, not permanent documentation. It exists only while a feature or effort is in progress. Delete it when the work ships.
 
-## Before creating a plan
+## Before you create a plan
 
-- **Context-gathering phase, best-effort:** before writing anything, check the repo root for an existing living planning doc (`PLAN.md` or an equivalently-purposed file — `ROADMAP.md`, `TODO.md`, etc.), an agent-instructions file (`AGENTS.md`, `CLAUDE.md`), and `README.md`. This is a quick orientation pass, not an exhaustive audit — check the obvious root-level locations and give up easily if nothing is there.
-- Use whatever is found: an existing `AGENTS.md`/`README.md` informs the repo's own conventions and terminology, which the new plan and its tickets should match rather than override.
-- **Never clobber a pre-existing planning-style file that this skill didn't create.** If a `PLAN.md` (or an equivalently-purposed file) already exists — whether it's this session's own earlier work, an unrelated in-progress effort, or something belonging to the repo's own maintainers on a repo we don't otherwise know is entirely ours to restructure — ask the user how to proceed (a distinctly named file, a new section within it, or treating the efforts as sequential) before writing anything. Default to caution on any repo that isn't clearly our own.
+- **Quick context check:** before you write anything, check the repo root for an existing planning doc (`PLAN.md` or a file with a similar role — `ROADMAP.md`, `TODO.md`). Also check for an agent-instructions file (`AGENTS.md`, `CLAUDE.md`) and `README.md`. Stop after the obvious root-level checks. Do not do an exhaustive audit.
+- Use what you find: an existing `AGENTS.md` or `README.md` shows the repo's conventions and terms. Match those in the new plan and its tickets.
+- **Never overwrite a planning file this skill did not create.** If a `PLAN.md` (or a file with the same role) already exists, ask the user how to proceed before you write anything. Use a distinct filename, add a new section inside it, or treat the efforts as sequential. Default to caution on repos you do not clearly own.
+- If the file is one this skill created in the same session, reuse it.
 
 ## Creating a plan
 
-- One PLAN.md per project, at the repo root, covering the current effort.
-- Structure it in **phases**: each phase is a self-contained unit of work with a goal, a task checklist, and a status (`pending` / `in_progress` / `done`). See "Breaking phases into tickets" below for how the checklist itself should be structured.
-- Keep it self-contained: someone with no other context should be able to read PLAN.md and understand what's being built, why, and what's left.
-- Do not start implementing non-trivial work without a plan on file first. Nail down scope (via the `grilling` skill if it isn't already settled), write the plan, then dispatch implementation.
+- One PLAN.md per project, at the repo root, for the current effort.
+- Structure it in **phases**: each phase holds a goal, a task checklist, and a status (`pending` / `in_progress` / `done`). See "Breaking phases into tickets" below for checklist structure.
+- Keep it self-contained: someone with no other context must be able to read PLAN.md and learn what you build, why, and what work remains.
+- Do not start implementing non-trivial work without a plan on file. Settle scope (use the `grilling` skill if it is not yet settled). Write the plan. Then dispatch implementation.
 
 ## Breaking phases into tickets
 
-- A phase's task checklist is not a list of vague to-dos — it is a list of **tickets**. Use the `grilling` skill to decompose a non-trivial phase into tickets before recording it, rather than writing loose bullet points and refining them later.
-- The point of narrow tickets is **accountability and interruptibility, not parallel throughput**. A ticket is a checkpoint: a clear boundary where work stops, gets reviewed, and can be discussed, redirected, or interrupted by the user without the model having drifted through a sprawling, undifferentiated task and lost track of what's actually been done versus assumed. Optimize ticket boundaries for "can this be checked in on and closed out cleanly," not for "can several of these run at once."
-- Each ticket must be **narrow enough to close out on its own**: scoped to one coherent unit of work that can be completed and reviewed as a standalone checkpoint (e.g. "add the BIP21 receive QR to the bitcoin-wallet tile", not "redesign the bitcoin wallet tile" and not "add a QR library import"). If a ticket needs its own sub-checklist to be understood, it is really a phase and should be split out as one.
-- **Exception — one large ticket, phased internally:** a change that's genuinely one cohesive unit of work (the same mechanical treatment applied uniformly across many files, e.g. a repo-wide restyle sweep) doesn't always benefit from being split by an arbitrary boundary like "one ticket per file." Splitting like that multiplies overhead without adding real accountability if every piece is the same decision applied repeatedly. In that case it's fine to keep it as a single ticket with explicit internal phases instead — typically **research** (survey the full scope, propose the concrete mapping/plan, dispatched to `researcher`) → **implement** (apply it, dispatched to `coder`) → **review** (dispatched to `researcher` via the `review` skill). Each phase is still its own checkpoint; the accountability the narrow-ticket rule protects isn't lost, it's just structured around phases instead of file boundaries. This is a deliberate call to make with the user (via `grilling` or a direct confirmation), not a default — most tickets should still default to narrow-and-many.
-- Each ticket must state explicit **evaluation criteria** alongside its description — how to verify it was actually done correctly, not just "looks done." Prefer concrete, checkable criteria: a test/build command that must pass, a specific behavior to exercise manually, a file or output artifact to inspect. **Arrive at these criteria with the user, via the `grilling` skill** — do not author them unilaterally and present them as a fait accompli. Static checks (typecheck, build, cargo check) are rarely sufficient on their own for anything with a UI or runtime surface; ask what manual/runtime behavior the user will actually check before calling the ticket done. A ticket without evaluation criteria the user has actually weighed in on is not ready to dispatch.
-- Tickets are what gets recorded in PLAN.md as the phase's checklist — there is no separate ticket document. Keep the same compaction rules: once a ticket is done, it collapses into the phase's eventual summary like everything else.
-- A ticket is the unit of work, not automatically the unit of dispatch. Implement it with the appropriate subagent (`coder`, `tester`, `researcher`) per the primary dispatch rule — but a genuinely trivial ticket (small, low-risk diff) may fall under that rule's existing carve-out for direct edits in the primary session. Ticketing exists for the accountability and evaluation structure; it does not mandate a subagent round-trip for every single one.
-- **Review contract, non-negotiable:** before checking a ticket off as done in PLAN.md, independently verify at least one concrete, checkable claim from the implementation against the real artifact — re-run a cited command yourself, read the actual diff, or cross-check a cited API/spec claim against the real spec. Never mark a ticket done purely on a subagent's self-report of success. Record what was actually, independently checked in the ticket's done-note, not just what was claimed. This is a floor, scaled to the ticket's risk (see AGENTS.md) — stop once that one check passes rather than re-verifying repeatedly or dispatching extra review passes that don't add information.
+- A phase checklist is a list of **tickets**, not a list of loose to-dos. Use the `grilling` skill to decompose a non-trivial phase into tickets before you record it. Do not write loose bullet points and refine them later.
+- Narrow tickets exist for **accountability and interruptibility**, not for parallel throughput. A ticket is a checkpoint: a clear boundary where work stops, gets reviewed, and can be discussed, redirected, or interrupted by the user. Without this, the model drifts through a large undifferentiated task and loses track of what it did versus what it assumed. Optimize ticket boundaries for "can I check in on this and close it out cleanly", not for "can several of these run at once."
+- Each ticket must be **narrow enough to close out on its own**: scoped to one unit of work you can complete and review as a standalone checkpoint (for example "add the BIP21 receive QR to the bitcoin-wallet tile", not "redesign the bitcoin wallet tile" and not "add a QR library import"). If a ticket needs its own sub-checklist to be understood, it is really a phase. Split it out as one.
+- **Exception — one large ticket, phased internally:** a change that is genuinely one cohesive unit of work (the same mechanical treatment applied uniformly across many files, for example a repo-wide restyle sweep) does not always benefit from a split by an arbitrary boundary like "one ticket per file." Splitting that way multiplies overhead without adding real accountability. In that case keep it as a single ticket with explicit internal phases: **research** (survey the full scope, propose the mapping — dispatch to `researcher`), then **implement** (apply it — dispatch to `coder`), then **review** (dispatch to `researcher` via the `review` skill). Each phase is still its own checkpoint. The accountability protection is not lost. Most tickets should still default to narrow-and-many.
+- Each ticket must state explicit **evaluation criteria** alongside its description. State how to verify it was done correctly, not just "looks done." Prefer concrete, checkable criteria: a test or build command that must pass, a specific behavior to exercise manually, a file or output artifact to inspect. **Arrive at these criteria with the user, via the `grilling` skill.** Do not author them alone and present them as final. Static checks (typecheck, build, cargo check) are rarely enough for anything with a UI or runtime surface. Ask the user what manual or runtime behavior they will check before they call the ticket done. A ticket without evaluation criteria the user has actually weighed in on is not ready to dispatch.
+- Tickets are what gets recorded in PLAN.md as the phase checklist. There is no separate ticket document. Keep the same compaction rules: once a ticket is done, it collapses into the phase's eventual summary.
+- A ticket is the unit of work, not automatically the unit of dispatch. Implement it with the appropriate subagent (`coder`, `tester`, `researcher`) per the primary dispatch rule. A genuinely trivial ticket (small, low-risk diff) may fall under the existing carve-out for direct edits in the primary session. Ticketing exists for the accountability and evaluation structure. It does not mandate a subagent round-trip for every ticket.
+- **Review contract, non-negotiable:** before you check a ticket off as done in PLAN.md, independently verify at least one concrete, checkable claim from the implementation against the real artifact. Re-run a cited command yourself. Read the actual diff. Cross-check a cited API or spec claim against the real spec. Never mark a ticket done purely on a subagent's self-report of success. Record what you actually checked in the ticket's done-note, not just what was claimed. This is a floor, scaled to the ticket's risk (see AGENTS.md). Stop once that one check passes. Do not re-verify repeatedly or dispatch extra review passes that add no information.
 
 ## Human review queue
 
-The model's own independent check (the review contract above) is not a substitute for the user's own hands-on check, per AGENTS.md — especially for anything with a UI or runtime surface. Track that separately in PLAN.md so the user can review in batches instead of context-switching after every single ticket:
+The model's own independent check (the review contract above) does not replace the user's own hands-on check, per AGENTS.md. This matters most for anything with a UI or runtime surface. Track that separately in PLAN.md:
 
-- When closing out a ticket that needs the user's own hands-on check (UI/runtime surface, or anything else a passing build/typecheck doesn't actually confirm), add a line to a `## Human review queue` section rather than only mentioning it once in chat:
+- When you close out a ticket that needs the user's own hands-on check, add a line to a `## Human review queue` section:
   ```markdown
   ## Human review queue
   - [ ] Ticket 2.3 (BIP21 QR code) — scan with a wallet app, confirm amount/address decode correctly
   - [ ] Ticket 2.5 (dark mode toggle) — visually check both themes for contrast issues
   ```
-- Each line names the ticket and states concretely what to check — not "review this," but what to actually look at or exercise.
-- This section persists across phase compaction and is exempt from the "Keeping it compact" line budget (same as Benchmarking) — it can outlive the phase that added an item, since the user may batch reviews well after a ticket closes.
-- Only the user clears an item, by checking it off or explicitly saying to drop it. Never remove a queued item on the model's own initiative.
+- Each line names the ticket and states concretely what to check. Not "review this", but the actual thing to look at or exercise.
+- This section persists across phase compaction. It is exempt from the "Keeping it compact" line budget (same as Benchmarking). It can outlive the phase that added an item.
+- Only the user clears an item, by checking it off or explicitly saying to drop it. Never remove a queued item on your own.
 
 ## Benchmarking (opt-in via `BENCHMARK_LEVER`)
 
-Check once when creating a new PLAN.md: run `echo "$BENCHMARK_LEVER"` (bash tool). Treat anything other than exactly `true` (unset, empty, `false`, etc.) as disabled and skip this section entirely — this flag defaults to off and is only turned on in specific environments (e.g. via `server.env`).
+Check once when you create a new PLAN.md: run `echo "$BENCHMARK_LEVER"` (bash tool). Treat anything other than exactly `true` (unset, empty, `false`, etc.) as disabled. Skip this whole section if disabled.
 
-If enabled, append a `## Benchmarking` section to PLAN.md. It is a running log, not a phase checklist — it is exempt from the "Keeping it compact" budget and survives phase compaction:
+If enabled, append a `## Benchmarking` section to PLAN.md. It is a running log, not a phase checklist. It is exempt from the "Keeping it compact" budget and survives phase compaction:
 
 ```markdown
 ## Benchmarking
@@ -63,26 +64,26 @@ If enabled, append a `## Benchmarking` section to PLAN.md. It is a running log, 
 | Rough cost | — | approximate turns/tokens spent on grilling + planning + dispatch + review per ticket, vs. a rough estimate of direct-implementation cost |
 ```
 
-- Update these numbers after every commit that closes or touches a ticket — not just at phase boundaries — so they reflect what actually happened rather than an end-of-phase guess.
-- This section does not survive PLAN.md's own deletion at the end of an effort (see "Finishing"). If the user wants tallies preserved across efforts rather than resetting with each new PLAN.md, ask where they'd like a running total kept instead of silently discarding it.
+- Update these numbers after every commit that closes or touches a ticket. Do not wait for phase boundaries. This way they show what actually happened.
+- This section does not survive PLAN.md's own deletion at the end of an effort (see "Finishing").
 
 ## Session cleanup
 
-- At the end of a working session, and immediately whenever the user says "compaction" (or an equivalent explicit request), run a compaction pass over PLAN.md without being asked for anything more specific: re-verify every phase's status still matches reality, apply "Updating the plan"'s rule to any phase that's newly complete, and re-check the file against the budget in "Keeping it compact". Don't wait for a separate request to do this once the trigger word is said.
+- At the end of a working session, and immediately when the user says "compaction" (or an equivalent request), run a compaction pass over PLAN.md. Re-verify every phase's status still matches reality. Apply "Updating the plan"'s rule to any phase that is newly complete. Re-check the file against the budget in "Keeping it compact". Do not wait for a separate request once the trigger word is said.
 
 ## Updating the plan
 
-- Update PLAN.md after every project milestone (not after every trivial edit), and commit it so the plan's evolution is tracked in git history alongside the code changes it describes.
-- As a phase completes: mark it `done`, then **replace its detailed checklist with a compact summary** — a few lines covering what was built, key decisions made, and any follow-ups. Do not leave finished phases as sprawling task lists; compact them immediately, in the same update where they're marked done.
-- Only the phase(s) currently `in_progress` or `pending` should carry a detailed task breakdown. Completed phases are historical summary only.
+- Update PLAN.md after every project milestone (not after every trivial edit). Commit its changes together with the related code commit rather than as a separate `Plan: ...` commit, so the plan's evolution rides alongside the code it describes instead of filling the log with plan-only commits. A standalone plan commit is fine only when no related code change exists yet to attach it to, such as the initial PLAN.md creation before implementation starts.
+- As a phase completes: mark it `done`, then **replace its detailed checklist with a compact summary**. A few lines covering what you built, key decisions made, and any follow-ups. Do not leave finished phases as large task lists. Compact them right away, in the same update where you mark them done.
+- Only the phases currently `in_progress` or `pending` should carry a detailed task breakdown. Completed phases are historical summary only.
 
 ## Keeping it compact
 
-- The plan must stay proportional to the codebase, not grow unboundedly. Rule of thumb: **~750 lines of plan for a ~20,000-line project (~3.75%)** is the accepted upper limit. Scale that ratio for other project sizes, but always compact aggressively rather than relying on having room to grow.
-- If PLAN.md is approaching or exceeding that budget, compact finished phases further (shorter summaries) before adding new content.
+- The plan must stay proportional to the codebase. Rule of thumb: **~750 lines of plan for a ~20,000-line project (~3.75%)** is the upper limit. Scale that ratio for other project sizes. Compact aggressively rather than relying on having room to grow.
+- If PLAN.md approaches or exceeds that budget, compact finished phases further (shorter summaries) before you add new content.
 
 ## Finishing
 
-- Once the feature/effort is fully implemented, tested, and shipped, **delete PLAN.md** in the same commit (or an immediate follow-up commit) that finishes the work. It should not linger as stale documentation.
-- If the human review queue still has unchecked items at that point, surface them to the user explicitly before deleting the file — don't let them silently vanish with it.
-- If the user wants a permanent record of what was built, that belongs in real docs/README/CHANGELOG — not in PLAN.md.
+- When the feature or effort is fully implemented, tested, and shipped, **delete PLAN.md** in the same commit (or an immediate follow-up commit) that finishes the work. It must not linger as stale documentation.
+- If the human review queue still has unchecked items at that point, surface them to the user explicitly before you delete the file. Do not let them silently vanish.
+- If the user wants a permanent record of what you built, that belongs in real docs, README, or CHANGELOG, not in PLAN.md.
