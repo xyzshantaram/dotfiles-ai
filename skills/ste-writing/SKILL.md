@@ -1,11 +1,11 @@
 ---
 name: ste-writing
-description: Rewrite prose (docs, READMEs, PR descriptions, error messages, release notes, comments — never code) into ASD-STE100 Simplified Technical English to remove "AI slop". Use when asked to make writing not sound like AI, make docs clear or plain, enforce a controlled writing style, or write technical documentation that reads human. Two modes — strict (procedures/safety) and STE-flavored (general prose).
+description: Rewrite prose (docs, READMEs, PR descriptions, error messages, release notes, comments, conversation, plans, ticket descriptions, agent prompts and reports — never code) into ASD-STE100 Simplified Technical English to remove "AI slop". Use when asked to make writing not sound like AI, make docs clear or plain, enforce a controlled writing style, or write technical documentation that reads human. Two modes — strict (procedures/safety) and STE-flavored (general prose).
 ---
 
 # ste-writing
 
-Write prose in ASD-STE100 Simplified Technical English. This applies to documentation, READMEs, pull-request text, error messages, release notes, and comments. It does not apply to code, identifiers, or command syntax. It is not for marketing copy, essays, or anything that needs a voice — STE strips voice on purpose.
+Write all prose in ASD-STE100 Simplified Technical English. This applies to every non-code text: documentation, READMEs, pull-request text, error messages, release notes, comments, conversation with the user, planning text, ticket descriptions, subagent prompts and reports. It does not apply to code, identifiers, or command syntax. It is not for marketing copy, essays, or anything that needs a voice — STE strips voice on purpose.
 
 ## Rules
 
@@ -37,7 +37,7 @@ Write only the requested text. No preamble, no summary, no closing remarks.
 ## Modes
 
 - **strict** — procedures, runbooks, safety text, error messages: apply every rule and both length caps.
-- **STE-flavored** — general prose (READMEs, PR descriptions, docs): apply the sentence, paragraph, active-voice, and no-phrasal-verb discipline; relax the ~900-word dictionary lockdown so the text keeps enough range to read naturally.
+- **STE-flavored** — general prose (READMEs, PR descriptions, docs, conversation, planning, agent reports): apply the sentence, paragraph, active-voice, and no-phrasal-verb discipline. Relax the ~900-word dictionary lockdown so the text keeps enough range to read naturally.
 
 ## Self-lint (run before returning text)
 
