@@ -19,6 +19,10 @@
   are 25% change A (global refactor) and 75% change B (a smaller, specific feature/bugfix), 
   prefer grouping it with change B - it's ok for some changes to cross-contaminate. 
   NEVER commit changes without asking first.
+* Do not let PLAN.md updates turn into their own `Plan: ...` commits. When PLAN.md changes
+  describe a code change you are committing, fold both into one commit. Commit PLAN.md on its
+  own only when no code change exists yet to pair it with, such as the first commit that creates
+  the plan before any implementation starts.
 * If the user makes a request in between tool calls you made, always add the task to TODO
   before continuing with your current task, unless explicitly told to do the new task first.
 * NEVER EVER install dependencies manually by editing Cargo.toml/package.json/other package
@@ -60,6 +64,13 @@
   do their own hands-on check before treating it as truly done — especially for anything with a
   UI or runtime surface, where a passing build or typecheck is not evidence the feature actually
   works.
+* Before you commit any change a subagent wrote, read the diff yourself in the main session
+  (`git diff` / `git diff --staged`). Do this every time, not only for high-risk changes. A
+  dispatched `review`-skill pass from `researcher` checks code quality and conventions. It does
+  not replace your own read of the diff. Do your own read after any dispatched review pass, and
+  right before you run `git commit`. This step reads real file content in the main session, so
+  it has a real context cost. Once you finish this review, tell the user to compact (or start a
+  fresh session) before you continue, so the session does not run low on room mid-task.
 * All of the above is a floor, not a ritual to maximize — scale rigor to a ticket's actual risk
   and size, and stop once the stated bar is met. A pure-CSS tweak or a doc fix doesn't need a
   dispatched `review` pass or repeated re-verification; a change touching money/crypto/signing,
