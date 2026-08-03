@@ -99,6 +99,9 @@ Specific projects can be pinned to the work profile regardless of the env var (s
 | `review` | Code-quality review: AI-slop patterns, wheel reinvention, scope creep, conventions. |
 | `etu` | Time-tracking via the `etu` CLI — check hours, sessions, memos. |
 | `ste-writing` | Rewrites prose (docs, READMEs, PR text, error messages, release notes, comments) into ASD-STE100 Simplified Technical English to cut AI slop. |
+| `devtunnel` | Exposes a local dev server over HTTPS on the LAN via `~/.local/bin/devtunnel` (start/stop/restart/list/logs), reusing the same Caddy + local-CA + mDNS setup as the web stack above. |
+| `share-caddy-cert` | Temporarily shares this machine's Caddy local CA root certificate with a new LAN device, so it can trust HTTPS on `potato.local:<port>` addresses. |
+| `caffeine` | Toggles a `systemd-logind` sleep/idle inhibitor so the machine stays reachable over SSH without suspending. |
 
 ### Custom tools
 
