@@ -1,0 +1,41 @@
+# W0 — Personal bundle provider settings (sync source).
+# Mirrors the live ~/.dsh/settings.yaml provider block already applied by the
+# orchestrator (verified by reading the live file). This file is the committed
+# form dotfiles-ai carries; the harness reads the same keys from the live
+# settings document.
+agent-default-model:
+  provider: opencode-go
+  model: deepseek-v4-pro
+  reasoningEffort: low
+
+llm-pi-ai:
+  providers:
+    opencode-go:
+      apiKeyEnv: OPENCODE_API_KEY
+    meridian:
+      displayName: Meridian
+      apiKeyEnv: MERIDIAN_API_KEY
+      api: openai-completions
+      baseURL: http://127.0.0.1:9000/v1
+      models:
+        - id: claude-sonnet-5
+          name: Claude Sonnet 5
+          contextWindow: 200000
+        - id: claude-sonnet-4-6
+          name: Claude Sonnet 4.6
+          contextWindow: 200000
+        - id: claude-opus-5
+          name: Claude Opus 5
+          contextWindow: 1000000
+        - id: claude-opus-4-6
+          name: Claude Opus 4.6
+          contextWindow: 1000000
+        - id: claude-haiku-4-5
+          name: Claude Haiku 4.5
+          contextWindow: 200000
+        - id: claude-fable-5
+          name: Claude Fable 5
+          contextWindow: 1000000
+
+# meridian /v1/models also lists claude-opus-4-7 and claude-opus-4-8.
+# The live config omits them. Add them here when meridian promotes them.

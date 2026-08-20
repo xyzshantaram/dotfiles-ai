@@ -1,0 +1,5 @@
+{
+  "commands": ["find"],
+  "verdict": "deny",
+  "reason": "find is denied. Use fd or rg instead. They respect .gitignore and have saner defaults."
+}

@@ -1,0 +1,10 @@
+# W3 — swiggy-food MCP server row (remote, streamable-http).
+# Row shape verified against DSH/dsh-mcp-client/README.md:22-30
+# (transport streamable-http + url for remote servers; README.md:36-45).
+# Model sees tools as mcp__swiggy-food__<rawName> (README.md:5, 55).
+- id: mcp-swiggy-food
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    serverName: swiggy-food
+    transport: streamable-http
+    url: https://mcp.swiggy.com/food

@@ -1,0 +1,65 @@
+# Caddyfile for the personal bundle's LAN web stack.
+#
+# Deploy location: ~/.config/caddy/Caddyfile (systemd user service,
+# `caddy run --config ~/.config/caddy/Caddyfile`). The devtunnel script
+# maintains its own `potato.local:1338+` blocks in this same file; keep them.
+#
+# This mirrors the opencode-web Caddy pattern (dotfiles-ai/OPENCODE_SETUP.md):
+# Caddy binds 0.0.0.0, terminates TLS with its internal CA, and proxies to the
+# loopback-only dsh web server.
+
+{
+	# No admin API. Nothing here needs runtime reconfiguration, and the default
+	# admin endpoint is an unauthenticated listener on localhost:2019 that can
+	# fully rewrite the running config. Consequence: `caddy reload` will not
+	# work, so apply changes with `systemctl --user restart caddy`.
+	admin off
+
+	# Caddy otherwise adds an HTTP->HTTPS redirect listener on port 80 for every
+	# site with automatic HTTPS, regardless of the site's own port. A systemd
+	# *user* service cannot bind privileged ports, so that made the entire config
+	# fail to load with "listening on :80: bind: permission denied".
+	# This keeps certificate automation and drops only the port-80 redirector.
+	auto_https disable_redirects
+
+	# Caddy's internal CA otherwise tries to install its root into this
+	# machine's OWN OS trust store on every startup, via an interactive sudo
+	# prompt. caddy.service has no TTY (systemd, non-interactive), so that
+	# sudo call fails after a ~30s PAM auth timeout on every restart. The
+	# trust model here is "each client device installs the root as a user CA"
+	# (see the share-caddy-cert skill), never the host OS's store.
+	skip_install_trust
+}
+
+# dsh web on the LAN. Port 1337 currently serves opencode-web on this machine;
+# switch it over to dsh web (and update the dsh-web.service --port to match)
+# when opencode is retired, or pick another port here and in the unit.
+potato.local:1337 {
+	# Certificate from Caddy's own local CA. No public CA can issue for .local
+	# (RFC 6762 reserves the TLD, and the CA/Browser Forum prohibited internal
+	# names in 2015), so a private CA is the only route to HTTPS on this name.
+	# Install this root on the phone as a user CA:
+	#   ~/.local/share/caddy/pki/authorities/local/root.crt
+	tls internal
+
+	# NOTE: dsh web ships no auth (DSH/dsh-host-webserver/README.md:21 —
+	# "No TLS, auth, or origin policy"). opencode-web enforced its own basic
+	# auth; dsh web does not. Basic auth is ENABLED here (user decision):
+	# anyone on the LAN who can reach potato.local must authenticate. The hash
+	# below is for the placeholder password `potato123` (same value as the
+	# opencode server.env). Regenerate it for a real password with
+	# `caddy hash-password` and replace the line, then `systemctl --user
+	# restart caddy`.
+	basic_auth {
+		potato {
+			$2a$14$vRq.5krVe.NwLkwpYmzowOzhQYRrvrQtUR/EHPjj6WYEV0r/oZxgy
+		}
+	}
+
+	reverse_proxy 127.0.0.1:3080 {
+		# dsh web streams agent output over SSE. Caddy already flushes
+		# text/event-stream immediately, but -1 disables response buffering
+		# for every content type, so nothing can stall mid-stream.
+		flush_interval -1
+	}
+}

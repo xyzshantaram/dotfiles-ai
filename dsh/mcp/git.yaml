@@ -1,0 +1,19 @@
+# W10 — mcp-server-git row (raw git denied to the model; git only through MCP).
+# Row shape verified against DSH/dsh-mcp-client/README.md:11-30
+# (transport stdio, command, args). Deploy via `uvx mcp-server-git`
+# (official README: https://github.com/modelcontextprotocol/servers/tree/main/src/git).
+# Tool set (official README "Tools" section): git_status, git_diff_unstaged,
+# git_diff_staged, git_diff, git_commit, git_add, git_reset, git_log,
+# git_create_branch, git_checkout, git_show, git_branch (git_hash also present
+# in current source per deepwiki.com/modelcontextprotocol/servers).
+# NOT provided by the server: push, fetch, pull, remotes, stash, rebase,
+# merge, submodules, credentials, tags. Those route to the user.
+# Model sees tools as mcp__git__<rawName> (README.md:5, 55).
+- id: mcp-git
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    serverName: git
+    transport: stdio
+    command: uvx
+    args:
+      - mcp-server-git
