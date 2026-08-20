@@ -1,0 +1,5 @@
+{
+  "commands": ["grep", "egrep", "fgrep", "zgrep"],
+  "verdict": "deny",
+  "reason": "grep is denied. Use rg (ripgrep) instead. It is faster and respects .gitignore."
+}

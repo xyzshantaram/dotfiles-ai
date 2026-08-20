@@ -1,5 +1,25 @@
 {
   "dependencies": {
-    "@opencode-ai/plugin": "1.4.7"
+    "@cad0p/unbash-walker": "^0.1.0",
+    "@opencode-ai/plugin": "1.4.7",
+    "unbash": "^4.0.10"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.1",
+    "@deepseek-ai/dsh-agent": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-agent-presets": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-compaction": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-fs": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-llm": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-scope": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-session": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-settings": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-shell": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-subagent": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-system-prompt": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-tools": "0.1.0-rc.8",
+    "@deepseek-ai/schemastery": "3.18.1",
+    "@types/node": "^26.2.0",
+    "esbuild": "^0.28.2"
   }
 }

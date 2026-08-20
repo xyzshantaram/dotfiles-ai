@@ -1,0 +1,5 @@
+{
+  "commands": ["git"],
+  "verdict": "deny",
+  "reason": "Raw git is denied. Use the mcp__git__* tools. If the operation is not available there, ask the user to run it."
+}
