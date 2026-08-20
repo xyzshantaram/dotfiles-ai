@@ -24,6 +24,10 @@
 #      AIDOS_BUNDLE_PATH, defaulting to $HOME/repos/aidos/packages/aidos), and
 #      add that bundle to the web profile's dsh.profile.bundles so the
 #      host-plane aidos-core service mounts (see step 8b below)
+#   9. set the agent-presets default to `standard`, and declare image input on
+#      the meridian route so the see tool's vision subagent can read images
+#  10. ensure .dsh_better_edit/ is ignored by git machine-wide (core.excludesFile
+#      if set, else git's XDG default) so the hashline artifact is never tracked
 #
 # Idempotent: re-running it converges to the same state. Safe to run after
 # clone, after a rebase, or after editing the bundle source.
@@ -175,6 +179,35 @@ with open(p, 'w') as f:
 print(open(p).read())
 PY
 
+echo "=== [9b] Ensure .dsh_better_edit/ is ignored by git machine-wide"
+# The hashline editor drops a .dsh_better_edit/ state directory into whatever
+# repo a session edits files in. It is a tool artifact that belongs in no
+# repository, so ignore it once per machine rather than per repo. Honor an
+# existing core.excludesFile; otherwise use git's XDG default path, which git
+# reads with no extra configuration when core.excludesFile is unset.
+git_ignore=""
+if command -v git >/dev/null 2>&1; then
+  git_ignore="$(git config --get core.excludesFile || true)"
+fi
+if [ -n "$git_ignore" ]; then
+  git_ignore="${git_ignore/#\~/$HOME}"
+else
+  git_ignore="${XDG_CONFIG_HOME:-$HOME/.config}/git/ignore"
+fi
+mkdir -p "$(dirname "$git_ignore")"
+touch "$git_ignore"
+if grep -qxF '.dsh_better_edit/' "$git_ignore"; then
+  echo "    already ignored in $git_ignore"
+else
+  cat >> "$git_ignore" <<'EOF'
+
+# dsh-better-edit (hashline) scratch/state directory. A tool artifact that
+# appears in whatever repo a session edits files in. Never belongs in a repo.
+.dsh_better_edit/
+EOF
+  echo "    added .dsh_better_edit/ to $git_ignore"
+fi
+
 echo
 echo "Done. Restart dsh web to pick up the new bundle layer (bundle rows are"
 echo "static per boot; skills/presets are discovered live on the next session)."
@@ -185,3 +218,4 @@ echo "  rules:   $DSH_HOME/AGENTS.md"
 echo "  guards:  $DSH_HOME/plugins/guards"
 echo "  patch:   $DSH_HOME/profiles/web/cordis.patch.yml"
 echo "  preset:  $DSH_HOME/.agent-presets/aidos"
+echo "  ignore:  $git_ignore (.dsh_better_edit/)"
