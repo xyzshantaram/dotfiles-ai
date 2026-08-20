@@ -140,7 +140,7 @@ else
 fi
 cat > "$DSH_HOME/.agent-presets/aidos/preset.yml" <<'EOF'
 name: Aidos
-description: The ticket board agent: plan, tickets, evidence, and state-gated tool access.
+description: "The ticket board agent: plan, tickets, evidence, and state-gated tool access."
 order: 3
 EOF
 
