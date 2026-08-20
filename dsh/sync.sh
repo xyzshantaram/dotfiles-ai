@@ -21,9 +21,9 @@
 #      guard, the package tool, and the see vision helper
 #   8. register the aidos agent preset in $DSH_HOME/.agent-presets/aidos
 #      (real directory, loader re-exporting the aidos bundle that lives at
-#      AIDOS_BUNDLE_PATH, defaulting to $HOME/repos/aidos/packages/aidos)
-#   9. set the agent-presets default to `standard` (the personal bundle is
-#      host-plane; standard is the base coding agent every session joins)
+#      AIDOS_BUNDLE_PATH, defaulting to $HOME/repos/aidos/packages/aidos), and
+#      add that bundle to the web profile's dsh.profile.bundles so the
+#      host-plane aidos-core service mounts (see step 8b below)
 #
 # Idempotent: re-running it converges to the same state. Safe to run after
 # clone, after a rebase, or after editing the bundle source.
@@ -31,7 +31,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
-DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
+export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
 AIDOS_BUNDLE_PATH="${AIDOS_BUNDLE_PATH:-$REPO/../aidos/packages/aidos}"
 
 echo "=== [1/8] Install repo dev deps (esbuild for the build step)"
@@ -144,13 +144,32 @@ description: The ticket board agent: plan, tickets, evidence, and state-gated to
 order: 3
 EOF
 
-echo "=== [9/9] Set agent-presets default to standard (base coding agent)"
+echo "=== [8b] Add aidos as a web-profile bundle (mounts host-plane aidos-core)"
+# The aidos preset's tools run against a host-plane `aidos` core service that
+# the aidos BUNDLE patch mounts (aidos-invariants + aidos-core). The web-profile
+# patch file cannot resolve those rows with a bare 'name:', so add the package
+# to dsh.profile.bundles (the container-verified path). Idempotent: dsh's
+# reconcile excludes a bundle already present.
+if command -v dsh >/dev/null 2>&1; then
+  dsh plugin --profile web add "$AIDOS_BUNDLE_PATH"
+else
+  echo "WARNING: dsh not on PATH; skipping aidos bundle-add."
+  echo "         Re-run './dsh/sync.sh' from a shell where dsh is installed."
+fi
+
+echo "=== [9/9] Set agent-presets default + meridian image input"
 python3 - "$DSH_HOME/settings.yaml" <<'PY'
 import sys
 import yaml
 p = sys.argv[1]
 d = yaml.safe_load(open(p)) or {}
 d.setdefault('agent-presets', {})['default'] = 'standard'
+# meridian reports image_input.supported true for all its models, but dsh's
+# pi-ai adapter only accepts images when a route/model declares image input.
+# Hand-declared models get none by default, so the see tool's vision subagent
+# fails. Declare it once on the route for every meridian model.
+meridian = d.setdefault('llm-pi-ai', {}).setdefault('providers', {}).setdefault('meridian', {})
+meridian['defaultInput'] = ['text', 'image']
 with open(p, 'w') as f:
     yaml.safe_dump(d, f, sort_keys=False)
 print(open(p).read())
