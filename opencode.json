@@ -45,8 +45,10 @@
     }
   },
   "model": "anthropic/claude-sonnet-5",
+  "subagent_depth": 2,
   "plugin": [
     "/home/sid/.local/share/pnpm/store/v11/links/@rynfar/meridian/1.57.0/f858dc8610c5f05226e33123f19b5f791c3310d6a2e657949c556bd9641e7ae4/node_modules/@rynfar/meridian/plugin/meridian.ts",
+    "./plugin/session-hygiene.ts",
     ["./plugin/opencode-profile.ts", {
       "envVar": "OPENCODE_PROFILE",
       "personalValue": "me",
@@ -106,16 +108,6 @@
       "etu *": "ask",
       "*/etu": "ask",
       "*/etu *": "ask"
-    }
-  },
-  "agent": {
-    "see": {
-        "mode": "subagent",
-        "model": "openrouter/qwen/qwen3.6-flash",
-        "prompt": "You are a helpful model providing vision capabilities to models that don't have it.",
-        "permission": {
-            "edit":"deny"
-        }
     }
   }
 }

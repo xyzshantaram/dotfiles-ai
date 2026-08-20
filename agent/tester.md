@@ -10,7 +10,9 @@ mode: subagent
 model: opencode-go/deepseek-v4-pro
 permission:
   edit: deny
-  task: deny
+  task:
+    see: allow
+    "*": deny
   skill: deny
   question: deny
 ---

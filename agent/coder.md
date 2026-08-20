@@ -9,7 +9,9 @@ mode: subagent
 # tuple options passed to it in opencode.json's "plugin" array).
 model: opencode-go/deepseek-v4-pro
 permission:
-  task: deny
+  task:
+    see: allow
+    "*": deny
   skill: deny
   question: deny
 ---
