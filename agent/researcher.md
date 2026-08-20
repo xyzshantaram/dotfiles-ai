@@ -17,7 +17,9 @@ permission:
     "git log*": allow
     "git status*": allow
     "git blame*": allow
-  task: deny
+  task:
+    see: allow
+    "*": deny
   question: allow
 ---
 

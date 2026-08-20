@@ -5,7 +5,7 @@ Config and infrastructure for my AI workstation — a multi-agent coding assista
 ## What it does
 
 - **Multi-agent coding**: a primary agent orchestrates three subagents — a `coder` (implements), a `researcher` (investigates and reviews), and a `tester` (runs test suites, linters, builds) — all operating on the same model family at different tiers.
-- **Model routing by profile**: the same config switches between work (OpenRouter) and personal (direct API key) provider accounts depending on `$OPENCODE_PROFILE`, so personal and work sessions cost different accounts without separate configs.
+- **Model routing by profile**: work sessions use the meridian service (`rynfar/meridian`, a local Anthropic-compatible proxy for Claude models) as the orchestrator; personal sessions use a direct DeepSeek key; subagents run on the OpenCode Go subscription (`deepseek-v4-flash`). A profile switch (plugin or manual model pick) selects which account a session costs.
 - **Secure LAN access**: the opencode web server binds to loopback only; Caddy terminates TLS at `potato.local:1337` (mDNS advertised via avahi, internal CA), so a phone or tablet on the same WiFi can drive a full multi-agent session.
 - **systemd-managed daemons**: everything runs as a user systemd stack (no root) via a `user-www.target` grouping target — `opencode-web.service` + `caddy.service` — with automatic startup on boot and restart on crash.
 
@@ -33,36 +33,21 @@ Config and infrastructure for my AI workstation — a multi-agent coding assista
 
 ## Infrastructure
 
-### systemd user services (`~/.config/systemd/user/`)
+The workstation runs a small user systemd stack (no root). `user-www.target`
+groups `opencode-web.service` (the opencode web server on `127.0.0.1:4096`)
+and `caddy.service` (Caddy reverse proxy, TLS at `potato.local:1337` via
+mDNS/avahi and an internal CA). The **work AI** is the meridian service
+([`rynfar/meridian`](https://github.com/rynfar/meridian)) at `127.0.0.1:9000`,
+an Anthropic-compatible proxy for Claude models.
 
-| Unit | Purpose |
-|---|---|
-| `user-www.target` | Grouping target for the entire web stack. `WantedBy=default.target` pulls it in at boot. |
-| `opencode-web.service` | Runs `opencode web` bound to `127.0.0.1:4096`, with `Restart=always`. Reads secrets from `server.env`. PartOf `user-www.target` so a `systemctl --user restart user-www.target` restarts both the backend and Caddy. |
-| `caddy.service` | Caddy reverse proxy, TLS-terminating at `potato.local:1337`. Proxies to `127.0.0.1:4096` with unbuffered streaming (`flush_interval -1`) so SSE agent output streams through without stalling. No admin API — config changes need a `systemctl --user restart caddy`. |
-
-Enable and start the whole stack:
+The configs for these — the Caddyfile, the systemd units, meridian's config —
+live in the deployed locations (`~/.config/caddy/Caddyfile`,
+`~/.config/systemd/user/`, meridian's own directory) and are not part of this
+repo. See [`OPENCODE_SETUP.md`](OPENCODE_SETUP.md) for the full reference.
 
 ```bash
 systemctl --user enable --now user-www.target
 ```
-
-Individual services: `systemctl --user {status,restart,stop} opencode-web caddy`.
-
-### Caddy reverse proxy (`~/.config/caddy/Caddyfile`)
-
-- **Domain**: `potato.local:1337` — mDNS-resolvable on the LAN (avahi advertises it; Android resolves `.local` natively for non-VPN connections).
-- **TLS**: internal CA (`tls internal`). Install the root cert on the client device:
-  ```
-  ~/.local/share/caddy/pki/authorities/local/root.crt
-  ```
-- **No HTTP redirect**: `auto_https disable_redirects` — the systemd user service can't bind port 80, and nothing needs a redirect; clients connect directly to `https://potato.local:1337`.
-
-### Opencode web server
-
-- Binds to `127.0.0.1:4096` (loopback only — Caddy is the only entry point from the network).
-- `--cors https://potato.local:1337` tells the browser the real origin so CORS and WebSocket upgrades work across the proxy.
-- `BROWSER=/bin/true` suppresses the auto-open-browser behavior in headless/systemd context.
 
 ## Opencode config
 
@@ -78,7 +63,12 @@ See `agent/*.md` for full definitions.
 
 ### Profile switching (`plugin/opencode-profile.ts`)
 
-Routes agents between a work account (OpenRouter) and a personal account (direct API key) depending on `$OPENCODE_PROFILE`:
+A legacy env-var switch for routing agents between a work account and a
+personal account. In practice the models are picked manually per session. The
+work account is the meridian proxy; personal is a direct DeepSeek key; the
+OpenCode Go subscription covers subagents (`deepseek-v4-flash`). The dsh
+harness port replaces this with a Profile submenu in the model selector (see
+`DSH.md` in the harness scratch dir).
 
 ```
 OPENCODE_PROFILE=work (default) → primary inherits session model,

@@ -1,3 +1,9 @@
+---
+name: devtunnel
+description: Run a local dev server and expose it over HTTPS on the LAN via ~/.local/bin/devtunnel, producing a persistent https://potato.local:<port>/ URL reachable from other LAN devices. Use when the user wants to reach a dev server (Vite, Next.js, any HTTP server) from a phone, tablet, or another device instead of localhost, or asks to start/stop/restart/list/toggle a dev tunnel or exposed server.
+compatibility: linux, systemd, caddy
+---
+
 # Skill: devtunnel
 
 Run a local dev server and expose it over HTTPS on the LAN at

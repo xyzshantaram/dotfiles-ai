@@ -331,7 +331,6 @@ meridian profile list                          # configured Claude accounts, if 
 | `coder` | subagent | `opencode-go/deepseek-v4-pro` (work, OpenCode Go account) / `deepseek-v4-flash` direct (personal) | Implements a specific, scoped brief handed to it. Edit + bash allowed. Can't self-delegate (`task`/`skill`/`question` denied). |
 | `tester` | subagent | same routing as `coder` | Runs tests/lint/build for a given scope, reports pass/fail + failure detail. `edit` denied — reports only, never fixes. |
 | `researcher` | subagent | same routing as `coder` | Investigates a specific question (codebase, library/API behavior, docs, Nostr NIPs via nostrbook). Read-only: `edit`/`bash` denied. |
-| `see` | subagent | `openrouter/qwen/qwen3.6-flash` | Vision helper for models without native image support. `edit` denied. |
 
 Plus opencode's built-ins: `build`, `plan` (built-in "Plan Mode" agent — not
 to be confused with the `plan` *skill*), `general`, `explore`.
