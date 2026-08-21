@@ -14,7 +14,9 @@ const entries = [
   ["plugins/manifest-guard.ts", "plugins/manifest-guard.js"],
   ["plugins/package-tool.ts", "plugins/package-tool.js"],
   ["plugins/skill-gate.ts", "plugins/skill-gate.js"],
+  ["plugins/ask-interrupt.ts", "plugins/ask-interrupt.js"],
 ];
+
 for (const [entry, outfile] of entries) {
   await build({
     entryPoints: [join(here, entry)],
