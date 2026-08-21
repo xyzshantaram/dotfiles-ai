@@ -29,6 +29,7 @@
     "pull": "ask",
     "checkout": "ask",
     "switch": "ask",
-    "restore": "ask"
+    "restore": "ask",
+    "apply": "ask"
   }
 }
