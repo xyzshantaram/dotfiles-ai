@@ -40,7 +40,7 @@ import type { ContentBlock } from "@deepseek-ai/dsh-llm";
 import { installSettingsSection, settingsNamespace } from "@deepseek-ai/dsh-settings";
 import { scopeOf } from "@deepseek-ai/dsh-scope";
 import type { SubagentStartRequest } from "@deepseek-ai/dsh-subagent";
-
+import { normalizeEntry } from "./profile-routes";
 export const name = "see";
 
 export const inject = ["tools", "subagents", "systemPrompt"] as const;
@@ -50,17 +50,16 @@ export const Config = z.object({});
 /** The `profile` settings namespace. See VERIFY.md W2 (NOT-VERIFIED). */
 const PROFILE_NS = settingsNamespace("profile");
 
-/** Schema of the profile settings section. Fields are optional at runtime. */
+/**
+ * Schema of the profile settings section. Fields are optional at runtime.
+ * Each work/personal entry is one route or an ordered `routes` chain (shared
+ * data model in plugins/profile-routes.ts); see takes the chain head.
+ */
+const ROUTE_ENTRY = z.object({ provider: z.string(), model: z.string() });
 const PROFILE_SCHEMA = z.object({
   active: z.string().default("work"),
-  work: z.object({
-    provider: z.string(),
-    model: z.string(),
-  }),
-  personal: z.object({
-    provider: z.string(),
-    model: z.string(),
-  }),
+  work: z.union([ROUTE_ENTRY, z.object({ routes: z.array(ROUTE_ENTRY) })]),
+  personal: z.union([ROUTE_ENTRY, z.object({ routes: z.array(ROUTE_ENTRY) })]),
 });
 
 /** One resolved model route. */
@@ -69,11 +68,11 @@ interface ProfileRoute {
   model: string;
 }
 
-/** The resolved profile settings value. */
+/** The resolved profile settings value. Entries stay raw; normalizeEntry parses. */
 interface ProfileSettings {
   active?: string;
-  work?: { provider?: string; model?: string };
-  personal?: { provider?: string; model?: string };
+  work?: unknown;
+  personal?: unknown;
 }
 
 /** Default route when no settings value resolves. */
@@ -101,12 +100,10 @@ Write all your prose (the report back to the orchestrator) in STE-flavored Simpl
 function readProfile(source: () => ProfileSettings | undefined): ProfileRoute {
   const settings = source();
   const active = settings?.active ?? "work";
-  const route = active === "personal" ? settings?.personal : settings?.work;
-  const fallback = active === "personal" ? DEFAULT_ROUTES.personal : DEFAULT_ROUTES.work;
-  return {
-    provider: route?.provider ?? fallback.provider,
-    model: route?.model ?? fallback.model,
-  };
+  const entry = active === "personal" ? settings?.personal : settings?.work;
+  const head = normalizeEntry(entry)[0];
+  if (head) return { provider: head.provider, model: head.model };
+  return active === "personal" ? DEFAULT_ROUTES.personal : DEFAULT_ROUTES.work;
 }
 
 /** Join the text blocks of a child result into one string. */

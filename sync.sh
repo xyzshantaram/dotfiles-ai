@@ -18,9 +18,9 @@
 #   7. write the web-profile patch (cordis.patch.yml): the host-plane rows
 #      that apply to EVERY preset: the four MCP servers, the bash guard
 #      (git/find/grep deny rules from the drop-in files), the manifest
-#      guard, the package tool, the see vision helper, and the manual
-#      dsh-worktree insert row (its dsh.bundle is false, so it does not
-#      self-mount)
+#      guard, the package tool, the see vision helper, the per-role subagent
+#      router (coder/tester/researcher), and the manual dsh-worktree insert
+#      row (its dsh.bundle is false, so it does not self-mount)
 #   8. install the E4 third-party plugin set on the web profile
 #      (dsh-any-background, dsh-ui-file-browser, dsh-input-history,
 #      dsh-tool-calculator, dsh-tool-diff, dsh-at-file, dsh-worktree,
@@ -132,6 +132,9 @@ cat > "$patch_dir/cordis.patch.yml" <<PATCH
     - id: ask-interrupt
       name: $HERE/plugins/ask-interrupt.js
 
+    - id: profiles
+      name: $HERE/plugins/profiles.js
+
     - id: worktree
       name: 'dsh-worktree'
 PATCH
@@ -170,6 +173,12 @@ if command -v dsh >/dev/null 2>&1; then
   dsh plugin --profile web add https://github.com/omdsh-dev/dsh-at-file/archive/refs/tags/v0.6.7.tar.gz
   dsh plugin --profile web add dsh-worktree
   dsh plugin --profile web add github:Tieboyh/dsh-session-search
+  # Provider fallback chains for EVERY LLM request (main agents, role
+  # children, see). Ships dsh.bundle so this alone activates it. Dormant
+  # until the llm-fallback settings namespace has entries; sync.sh seeds it
+  # below with the active profile's tail. peerDependencies pin rc.6 — same
+  # watch-item as dsh-worktree.
+  dsh plugin --profile web add @visol-456/dsh-llm-fallback
 else
   echo "WARNING: dsh not on PATH; skipping E4 third-party plugin installs."
   echo "         Re-run './sync.sh' from a shell where dsh is installed."
@@ -211,7 +220,7 @@ description: "The ticket board agent: plan, tickets, evidence, and state-gated t
 order: 3
 EOF
 
-echo "=== [10/11] Set agent-presets default + meridian image input"
+echo "=== [10/11] Set agent-presets default + meridian image input + profile routes"
 python3 - "$DSH_HOME/settings.yaml" <<'PY'
 import sys
 import yaml
@@ -224,6 +233,37 @@ d.setdefault('agent-presets', {})['default'] = 'standard'
 # fails. Declare it once on the route for every meridian model.
 meridian = d.setdefault('llm-pi-ai', {}).setdefault('providers', {}).setdefault('meridian', {})
 meridian['defaultInput'] = ['text', 'image']
+# Seed the shared `profile` namespace (owned by plugins/see.ts, read at call
+# time by see AND the profiles role tools) on FIRST RUN ONLY. A later sync.sh
+# run never rewrites an existing section: flipping `active` between work and
+# personal is a user decision made at runtime, not bundle state to converge.
+# Each entry is an ordered route chain: head first, then fallbacks. The
+# profiles plugin aligns the llm-fallback plugin's global list with the
+# active entry's tail on every flip, and pushes the head into
+# agent-default-model, so one switch moves the whole stack.
+# TODO(deepseek-official): the personal chain's third candidate needs a
+# provider block (baseURL/apiKeyEnv/model id) that settings.yaml does not
+# have yet. Append it to personal.routes once it exists.
+if 'profile' not in d:
+    d['profile'] = {
+        'active': 'personal',
+        'work': {'routes': [
+            {'provider': 'meridian', 'model': 'claude-opus-5'},
+            {'provider': 'meridian', 'model': 'claude-sonnet-5'},
+            {'provider': 'opencode-zen', 'model': 'x-preview-f-free'},
+        ]},
+        'personal': {'routes': [
+            {'provider': 'opencode-zen', 'model': 'deepseek-v4-flash-free'},
+            {'provider': 'opencode-go', 'model': 'deepseek-v4-flash'},
+        ]},
+    }
+# Seed the @visol-456/dsh-llm-fallback namespace with the ACTIVE profile's
+# tail so failover works from first boot (the profiles plugin keeps it
+# aligned on later flips). Same first-run-only rule as `profile`.
+if 'llm-fallback' not in d:
+    d['llm-fallback'] = {'fallbacks': [
+        {'provider': 'opencode-go', 'model': 'deepseek-v4-flash'},
+    ]}
 with open(p, 'w') as f:
     yaml.safe_dump(d, f, sort_keys=False)
 print(open(p).read())
