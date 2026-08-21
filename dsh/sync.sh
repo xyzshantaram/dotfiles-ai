@@ -112,13 +112,6 @@ cat > "$patch_dir/cordis.patch.yml" <<PATCH
       name: $HERE/plugins/manifest-guard.js
     - id: package-tool
       name: $HERE/plugins/package-tool.js
-    - id: session-hygiene
-      name: $HERE/plugins/session-hygiene.js
-      config:
-        softAgeHours: 2
-        softCompactions: 5
-        hardAgeHours: 4
-        hardCompactions: 10
     - id: see
       name: $HERE/plugins/see.js
 PATCH
