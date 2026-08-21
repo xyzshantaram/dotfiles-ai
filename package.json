@@ -1,7 +1,6 @@
 {
   "dependencies": {
     "@cad0p/unbash-walker": "^0.1.0",
-    "@opencode-ai/plugin": "1.4.7",
     "unbash": "^4.0.10"
   },
   "devDependencies": {
@@ -23,5 +22,9 @@
     "@types/semver": "^7.8.0",
     "esbuild": "^0.28.2",
     "semver": "^7.8.5"
+  },
+  "scripts": {
+    "gen:customize-setup": "node generate-customize-setup.mjs",
+    "build": "node build.mjs"
   }
 }
