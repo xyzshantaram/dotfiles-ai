@@ -168,6 +168,63 @@ export function apply(ctx: Context, config: unknown): void {
     reapplyDeny(agent, active);
   }
 
+  /**
+   * Parse the known-global-tools list from a `restrict()` "unknown global
+   * tool" error message, so a retry can drop exactly the rejected names.
+   *
+   * There is no public introspection method for the live tool registry
+   * (confirmed against the installed `@deepseek-ai/dsh-tools` source: `view()`
+   * is private, and the exported `ToolsService` surface has no `list`,
+   * `knownNames`, or `restrictableNames` accessor). `restrict()` itself is
+   * the only path, and its own validation error is the one place the
+   * registry publishes the current known-tool set:
+   * `@deepseek-ai/dsh-tools/lib/types/index.js:507` —
+   * `` `tools.restrict() names unknown global tool... known global tools: ${[...known].sort().join(', ') || '(none)'}` ``.
+   */
+  function parseKnownTools(message: string): Set<string> | undefined {
+    const match = message.match(/known global tools: (.*)$/);
+    if (!match) return undefined;
+    const list = match[1].trim();
+    if (list === "(none)") return new Set();
+    const names = [...list.matchAll(/"([^"]*)"/g)].map((m) => m[1]);
+    return new Set(names);
+  }
+
+  /**
+   * Call `tools.restrict({ deny })`, filtering out any name the registry does
+   * not currently know. `restrict()` validates every name against the live
+   * global tool registry and throws on an unknown name (source cited above),
+   * so a gated tool declared by a skill but not yet registered — for example
+   * an MCP tool whose server has not finished connecting, or is offline —
+   * would otherwise break gating for every agent and every skill, not just
+   * the one that named it.
+   *
+   * No direct "list current tools" API exists, so this retries on the
+   * specific "unknown global tool" error, parsing the rejected/known names
+   * out of its message and filtering the deny list down before retrying.
+   * Bounded by the deny list's own length: each retry removes at least one
+   * name, so the loop cannot spin longer than the initial list is long.
+   */
+  function restrictKnown(agent: Agent, deny: string[]): (() => void) | undefined {
+    let candidate = deny;
+    for (let attempt = 0; attempt < candidate.length + 1; attempt++) {
+      if (candidate.length === 0) return undefined;
+      try {
+        return agent.ctx.tools.restrict({ deny: candidate });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        const known = parseKnownTools(message);
+        // Not the "unknown global tool" error, or nothing left to remove:
+        // this is a real failure, not a stale-name issue. Propagate it.
+        if (!known) throw err;
+        const filtered = candidate.filter((tool) => known.has(tool));
+        if (filtered.length === candidate.length) throw err;
+        candidate = filtered;
+      }
+    }
+    return undefined;
+  }
+
   function reapplyDeny(agent: Agent, active: Set<string>): void {
     const gates = discoverGates(skillDirs);
     const allGated = new Set<string>();
@@ -181,6 +238,12 @@ export function apply(ctx: Context, config: unknown): void {
       disposerById.delete(agent.id);
       return;
     }
-    disposerById.set(agent.id, agent.ctx.tools.restrict({ deny }));
+    const disposer = restrictKnown(agent, deny);
+    if (disposer) {
+      disposerById.set(agent.id, disposer);
+    } else {
+      disposerById.delete(agent.id);
+    }
   }
+
 }
