@@ -1,5 +1,7 @@
 /**
- * profiles — per-role subagent routing WITH fallback chains, on the host plane.
+ * profiles — per-role subagent routing AND profile-driven LLM failover, on
+ * the host plane. One plugin because both halves serve one feature: the
+ * model route is a property of the active profile, not of any preset.
  *
  * The problem. Delegation tools are agent-plane rows, so per-role model
  * routing would normally mean forking a preset composition. That bakes one
@@ -7,71 +9,93 @@
  * gets the role tools, and the work/personal model choice stays a runtime
  * setting, not composition text.
  *
- * The shape. This is a normal host-plane plugin (mounted from the web
- * profile's cordis.patch.yml, like package-tool and see). It registers three
- * thin delegation tools — `coder`, `tester`, `researcher` — over the same
- * `ctx.subagents` seam the shipped `subagent` tool uses. Each tool starts a
- * leaf child (maxDepth 1) whose ROUTE CHAIN resolves AT CALL TIME:
+ * ── Half 1: role delegation tools ──────────────────────────────────────
  *
- *   1. a per-role pin from this plugin's Config (single route or a chain), else
- *   2. the active entry of the shared `profile` settings namespace (the same
- *      namespace `see.ts` owns: `active` picks between `work` and `personal`;
- *      each entry is one route or an ordered `routes` chain), else
- *   3. no `agentOptions` at all — the child inherits `agent-default-model`.
+ * Registers three thin delegation tools — `coder`, `tester`, `researcher` —
+ * over the same `ctx.subagents` seam the shipped `subagent` tool uses. Each
+ * tool starts a leaf child (maxDepth 1) whose route HEAD resolves AT CALL
+ * TIME: a per-role pin from Config, else the active `profile` entry's head,
+ * else no agentOptions (the child inherits agent-default-model).
  *
- * Failover is DELEGATED. The @visol-456/dsh-llm-fallback plugin (mounted
- * separately by sync.sh) hooks the agent loop's request-error recovery and
- * retries a failed request down its global `fallbacks` list — for main
- * agents, role children, and see alike. This plugin therefore does NOT retry
- * itself; it owns the two things that plugin cannot do:
+ * Personas deliberately stay OUT of this plugin: the coder/tester/researcher
+ * skills are the one source of truth; the dispatch prompt names the skill.
  *
- *   1. HEAD SELECTION. Which route a request carries in the first place:
- *      a per-role pin, else the active profile entry's head, else inherit
- *      agent-default-model.
- *   2. LIST ALIGNMENT. On a `profile.active` flip, rewrite llm-fallback's
- *      settings namespace with the active entry's TAIL (the chain minus its
- *      head), so the global fallback order always matches the active profile
- *      (work: sonnet then free; personal: opencode-go flash then official
- *      deepseek), and push the new head into agent-default-model so future
- *      main sessions compose on it. A live session keeps its current model.
+ * ── Half 2: LLM failover along the active chain ─────────────────────────
  *
- * There is no harness-native failover for the session's own model
- * (`agent-default-model` is strictly single-selection, verified against
- * dsh-agent-default-model/lib/index.js); head-sync plus llm-fallback is the
- * closest reachable behavior: one flip, and every new session and every
- * failed request lands on the chosen profile's stack.
+ * Hooks `agent/request` and `agent/request-error` (design stolen MIT from
+ * CanGeng/llm-fallback; dormancy idea from @visol-456/dsh-llm-fallback) so
+ * EVERY agent — main sessions, role children, see children — fails over
+ * along the ACTIVE profile entry's chain when a route faults. A request
+ * whose (provider, model) equals ANY level of the active chain fails over
+ * from the NEXT level; all other requests pass through untouched. Levels may
+ * change the model as well as the provider: the retry pass re-enters the
+ * `agent/request` waterfall, where this plugin returns the next level's full
+ * {provider, model}.
  *
- * Settings are read WITHOUT ownership: `ctx.settings.get(ns)` resolves any
- * registered namespace (dsh-settings README); duplicate registration fails
- * loud, so this plugin deliberately does NOT register `profile` — see.ts owns
- * it. The lazy `ctx.get('settings')` lookup (same pattern as
- * dsh-tool-subagent's `ctx.get('jobs')`) keeps this plugin loadable when no
+ * There is NO second config surface: the chains ARE the `profile` namespace
+ * entries (see.ts owns the namespace; this plugin reads it live). Flipping
+ * `profile.active` swaps heads, chains, and failover order for every future
+ * request with no restart.
+ *
+ *   work     meridian/claude-opus-5 -> sonnet-5 -> zen x-preview-f-free
+ *   personal zen/deepseek-v4-flash-free -> opencode-go flash -> (official)
+ *
+ * Failover semantics:
+ * - Stay on the matched level within a step so request prefixes stay
+ *   stable; advance only when the current level fails.
+ * - Each NEW step starts back at the matched level. During a hard outage
+ *   every step pays one failed attempt before failing over; acceptable for
+ *   v1 (a cooldown circuit is the known upgrade if it annoys).
+ * - Before proposing a level, probe it with ctx.llm.resolveCallConfig and
+ *   skip levels that would fail before streaming (unregistered route,
+ *   unknown model). An abort during the probe surfaces as an abort.
+ * - An adapter whose retryPolicy.mode is "always" retries forever by
+ *   itself; non-last always-levels are capped at alwaysMaxRetries
+ *   same-provider retries before failing over, and an always level may not
+ *   be last (it can never terminate).
+ * - A user abort is never a failover trigger.
+ * - Composition with the shipped dsh-llm-retry: both listen on
+ *   `agent/request-error`; the host-base retry layer runs first, so
+ *   same-provider retries exhaust before this plugin advances a level.
+ *
+ * ── Flip propagation ────────────────────────────────────────────────────
+ *
+ * On a `profile.active` flip, push the new active head into
+ * `agent-default-model` via its own saveSelection, so sessions created from
+ * then on compose on that route (a live session keeps its current model;
+ * its requests still fail over per the rules above regardless). There is no
+ * harness-native failover for the session's own model — verified against
+ * dsh-agent-default-model/lib/index.js; head-sync plus these waterfalls is
+ * the closest reachable behavior.
+ *
+ * Settings are read WITHOUT ownership (`ctx.settings.get(ns)` resolves any
+ * registered namespace; duplicate registration fails loud — see.ts owns
+ * `profile`). Lazy `ctx.get(...)` lookups keep this plugin loadable when no
  * settings provider mounts.
- *
- * Personas deliberately stay OUT of this plugin. The bundle already carries
- * the coder/tester/researcher personas as skills; the orchestrator's dispatch
- * prompt names the skill, and the child loads it. One source of truth.
  *
  * Seams (verified against installed rc.8 source):
  * - Request construction mirrors @deepseek-ai/dsh-tool-subagent/lib/index.js
- *   (request object at :222-233; continuable start at :241-248 returning
- *   `{ childId }`; foreground start at :262/:271).
- * - `agentOptions: { provider, model }` is the documented per-child route
- *   override (dsh-subagent README request fields; proven live by see.ts).
+ *   (:222-233 request; :241-248 continuable `{childId}`; :262/:271 start).
  * - Leaf guardrail: maxDepth 1; resolveChildDepth rejects depth 2+
  *   (dsh-subagent/lib/index.js:486-489).
+ * - `agent/request`: dsh-agent-loop/lib/index.js:708; proposal needs
+ *   non-empty provider and model (:714). `agent/request-error` returning
+ *   `{ kind: 'retry' }`: :653, kind check :662.
+ * - `ctx.llm.resolveCallConfig`: dsh-llm/lib/index.js:1351.
+ *   `providerRetryPolicy`: dsh-llm/lib/index.js:1260.
+ *
+ * NOT-VERIFIED until live: end-to-end failover under a real 429, and that
+ * the retry pass re-enters `agent/request` (it must, for the rewrite).
  *
  * Mount (sync.sh writes this row):
  *
  *   - id: profiles
  *     name: /path/to/plugins/profiles.js
  *     # config:
- *     #   provider: spawn     # subagents provider, defaults to spawn
+ *     #   provider: spawn        # subagents provider, defaults to spawn
+ *     #   alwaysMaxRetries: 2
  *     #   roles:
- *     #     coder:                                  # pin overriding the namespace
- *     #       routes:
- *     #         - { provider: opencode-zen, model: big-pickle }
- *     #         - { provider: opencode-go, model: deepseek-v4-flash }
+ *     #     coder: { provider: opencode-zen, model: big-pickle }   # head pin
  */
 
 import type { Context } from "@deepseek-ai/cordis";
@@ -90,12 +114,17 @@ export const name = "profiles";
 export const inject = ["tools", "subagents", "systemPrompt"] as const;
 
 /** One routable pair, or an ordered chain of them. */
-const RoutePin = z.union([z.object({ provider: z.string(), model: z.string() }), z.object({ routes: z.array(z.object({ provider: z.string(), model: z.string() })) })]);
+const RoutePin = z.union([
+  z.object({ provider: z.string(), model: z.string() }),
+  z.object({ routes: z.array(z.object({ provider: z.string(), model: z.string() })) }),
+]);
 
 export const Config = z.object({
   /** The subagents provider to start children on. The standard preset uses spawn. */
   provider: z.string().default("spawn"),
-  /** Per-role route pins. Any role left unset follows the profile namespace. */
+  /** Same-provider retry cap for retryPolicy.mode="always" adapters. */
+  alwaysMaxRetries: z.number().step(1).min(1).default(2),
+  /** Per-role head pins. Any role left unset follows the profile namespace. */
   roles: z
     .object({
       coder: RoutePin.default(void 0),
@@ -107,6 +136,7 @@ export const Config = z.object({
 
 type ProfilesConfig = {
   provider?: string;
+  alwaysMaxRetries?: number;
   roles?: { coder?: unknown; tester?: unknown; researcher?: unknown };
 };
 
@@ -117,23 +147,47 @@ interface ProfileSettings {
   personal?: unknown;
 }
 
-/** Minimal structural view of the settings service, looked up lazily. */
+/** Minimal structural views of services, looked up lazily. */
 interface SettingsService {
   get(ns: string): unknown;
+}
+interface LlmService {
+  resolveCallConfig(config: unknown, signal?: AbortSignal): Promise<unknown>;
+  providerRetryPolicy(provider: string): { mode?: string } | undefined;
 }
 
 /** The shared namespace, registered by plugins/see.ts. */
 const PROFILE_NS = settingsNamespace("profile");
 
-/**
- * The @visol-456/dsh-llm-fallback settings namespace. The string is
- * duplicated rather than imported: mounting that plugin is a deployment
- * choice, and a write to an unregistered namespace rejects, which the
- * best-effort catch below absorbs.
- */
-const FALLBACK_NS = "llm-fallback";
 /** Every role child is a leaf worker: depth 0 parent + 1, no grandchildren. */
 const ROLE_MAX_DEPTH = 1;
+
+/** One failover level. */
+type Level = RouteCandidate;
+
+/** Per-agent failover state for the current step. */
+interface StepState {
+  stepKey: string;
+  levels: Level[];
+  cursor: number;
+  retries: number;
+  failures: Array<{ level: Level; code: string; message: string }>;
+}
+
+function service<T>(ctx: Context, name: string): T | undefined {
+  return (ctx as { get(name: string): unknown }).get(name) as T | undefined;
+}
+
+function activeEntry(profile: ProfileSettings | undefined): unknown {
+  return (profile?.active ?? "work") === "personal" ? profile?.personal : profile?.work;
+}
+
+/** The active chain right now. Empty when unconfigured — everything dormant. */
+function activeChain(ctx: Context): Level[] {
+  const settings = service<SettingsService>(ctx, "settings");
+  const profile = settings?.get(PROFILE_NS) as ProfileSettings | undefined;
+  return normalizeEntry(activeEntry(profile));
+}
 
 interface RoleSpec {
   toolName: string;
@@ -159,20 +213,18 @@ const ROLES: RoleSpec[] = [
 ];
 
 /**
- * Resolve one role's candidate chain at call time: the pin, else the profile
- * namespace's active entry, else [] (a single no-agentOptions attempt that
- * inherits agent-default-model).
+ * Resolve one role's route HEAD at call time: the pin, else the profile
+ * namespace's active entry head, else undefined (inherit
+ * agent-default-model). Failover beyond the head is the waterfall's job.
  */
-function resolveChain(
+function resolveHead(
   pin: unknown,
   settings: SettingsService | undefined,
-): RouteCandidate[] {
+): RouteCandidate | undefined {
   const pinned = normalizeEntry(pin);
-  if (pinned.length > 0) return pinned;
+  if (pinned.length > 0) return pinned[0];
   const profile = settings?.get(PROFILE_NS) as ProfileSettings | undefined;
-  const active = profile?.active ?? "work";
-  const entry = active === "personal" ? profile?.personal : profile?.work;
-  return normalizeEntry(entry);
+  return normalizeEntry(activeEntry(profile))[0];
 }
 
 /**
@@ -180,33 +232,12 @@ function resolveChain(
  * compose on the flipped profile's primary route.
  */
 function syncDefaultModel(ctx: Context, profile: ProfileSettings | undefined): void {
-  const active = profile?.active ?? "work";
-  const entry = active === "personal" ? profile?.personal : profile?.work;
-  const head = normalizeEntry(entry)[0];
+  const head = normalizeEntry(activeEntry(profile))[0];
   if (!head) return;
-  const service = (ctx as { get(name: string): unknown }).get("agentDefaultModel") as
-    | { saveSelection(next: { provider: string; model: string }): Promise<void> }
-    | undefined;
-  void service?.saveSelection({ provider: head.provider, model: head.model }).catch(() => {});
-}
-
-/**
- * Align llm-fallback's global list with the active profile's tail (the chain
- * minus its head). That plugin owns failover EXECUTION for every request,
- * but its list is global, so a static list could not honor different tails
- * per profile. An empty tail resets the namespace to its base (dormant).
- * Best-effort: never break the settings commit that triggered this.
- */
-function syncFallbackList(ctx: Context, profile: ProfileSettings | undefined): void {
-  const active = profile?.active ?? "work";
-  const entry = active === "personal" ? profile?.personal : profile?.work;
-  const tail = normalizeEntry(entry).slice(1);
-  const settings = (ctx as { get(name: string): unknown }).get("settings") as
-    | { replace(ns: string, section: Record<string, unknown>): Promise<void> }
-    | undefined;
-  if (!settings) return;
-  const section = tail.length > 0 ? { fallbacks: tail } : {};
-  void settings.replace(FALLBACK_NS, section).catch(() => {});
+  const agentDefaultModel = service<{
+    saveSelection(next: { provider: string; model: string }): Promise<void>;
+  }>(ctx, "agentDefaultModel");
+  void agentDefaultModel?.saveSelection({ provider: head.provider, model: head.model }).catch(() => {});
 }
 
 /** Join the text blocks of a child result into one string (see.ts technique). */
@@ -265,13 +296,10 @@ function registerRoleTool(
         const parent = exec.agent;
         if (!parent) throw new Error(`${spec.toolName} requires a calling agent (exec.agent was undefined)`);
 
-        // Lazy lookup at call time: the chain must reflect the CURRENT
+        // Lazy lookup at call time: the head must reflect the CURRENT
         // settings value, and the plugin must load with no provider mounted.
-        const settings = (ctx as { get(name: string): unknown }).get("settings") as
-          | SettingsService
-          | undefined;
-        const chain = resolveChain(config.roles?.[spec.toolName as keyof NonNullable<ProfilesConfig["roles"]>], settings);
-        const head = chain[0];
+        const settings = service<SettingsService>(ctx, "settings");
+        const head = resolveHead(config.roles?.[spec.toolName as keyof NonNullable<ProfilesConfig["roles"]>], settings);
         const provider = config.provider ?? "spawn";
         const request: SubagentStartRequest = {
           label: args.description,
@@ -313,20 +341,141 @@ function registerRoleTool(
   );
 }
 
+/** Install the two agent waterfalls that provide chain failover. */
+function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
+  // agent -> state for its current step. WeakMap: agents die, state follows.
+  const state = new WeakMap<object, StepState>();
+  const keyOf = (turn: unknown, step: unknown): string => `${String(turn)}:${String(step)}`;
+
+  ctx.on("agent/request", async (payload: unknown, next: () => Promise<unknown>) => {
+    const proposal = (await next()) as { provider?: string; model?: string } | undefined;
+    if (!proposal?.provider || !proposal.model) return proposal;
+
+    const chain = activeChain(ctx);
+    // Failover applies from the matched level onward; unmatched requests
+    // (a manual picker choice off-chain, an unrelated provider) pass through.
+    const matched = chain.findIndex(
+      (level) => level.provider === proposal.provider && level.model === proposal.model,
+    );
+    if (matched < 0) return proposal;
+
+    const p = payload as { agent?: object; turn?: unknown; step?: unknown; signal?: AbortSignal };
+    if (!p.agent) return proposal;
+
+    const stepKey = keyOf(p.turn, p.step);
+    let s = state.get(p.agent);
+    if (!s || s.stepKey !== stepKey) {
+      s = { stepKey, levels: chain, cursor: matched, retries: 0, failures: [] };
+      state.set(p.agent, s);
+    }
+
+    const llm = service<LlmService>(ctx, "llm");
+
+    // Skip levels that would fail before streaming. An abort during the
+    // probe must surface as an abort, not eat every level.
+    while (s.cursor < s.levels.length) {
+      const candidate = s.levels[s.cursor];
+      try {
+        await llm?.resolveCallConfig(
+          { ...proposal, provider: candidate.provider, model: candidate.model },
+          p.signal,
+        );
+        break;
+      } catch (error) {
+        if (p.signal?.aborted) throw error;
+        const err = error as { code?: string; message?: string };
+        s.failures.push({
+          level: candidate,
+          code: err?.code ?? "UNKNOWN",
+          message: err?.message ?? String(error),
+        });
+        s.cursor += 1;
+      }
+    }
+
+    if (!s || s.cursor >= s.levels.length) {
+      const tried = s
+        ? s.failures.map((f) => `  - ${f.level.provider}/${f.level.model}: ${f.code} — ${f.message}`).join("\n")
+        : "(no levels)";
+      throw new Error(`profiles: no level can serve the active chain:\n${tried}`);
+    }
+
+    const level = s.levels[s.cursor];
+    return { ...proposal, provider: level.provider, model: level.model };
+  });
+
+  ctx.on("agent/request-error", (payload: unknown, next: () => Promise<unknown>) => {
+    const p = payload as {
+      agent?: object;
+      turn?: unknown;
+      step?: unknown;
+      signal?: AbortSignal;
+      failure?: { code?: string; message?: string };
+      retryPolicy?: { mode?: string };
+    };
+    const s = p.agent ? state.get(p.agent) : undefined;
+    if (!s || !p.agent || s.stepKey !== keyOf(p.turn, p.step)) return next();
+
+    const cur = s.levels[s.cursor];
+    if (!cur) return next();
+
+    // A user abort is never a failover trigger.
+    if (p.signal?.aborted) {
+      state.delete(p.agent);
+      return next();
+    }
+
+    const failure = p.failure ?? {};
+    const last = s.failures[s.failures.length - 1];
+    if (last && last.level.provider === cur.provider && last.level.model === cur.model) {
+      last.code = failure.code ?? "UNKNOWN";
+      last.message = failure.message ?? "";
+    } else {
+      s.failures.push({ level: cur, code: failure.code ?? "UNKNOWN", message: failure.message ?? "" });
+    }
+
+    // An "always" adapter retries itself endlessly; cap it, then advance.
+    if (p.retryPolicy?.mode === "always") {
+      s.retries += 1;
+      if (s.retries <= alwaysMaxRetries) return next();
+    }
+    s.retries = 0;
+
+    s.cursor += 1;
+    if (s.cursor < s.levels.length) {
+      const nxt = s.levels[s.cursor];
+      ctx.logger.warn(
+        "profiles: %s/%s failed (%s) -> failing over to %s/%s",
+        cur.provider,
+        cur.model,
+        failure.code ?? "UNKNOWN",
+        nxt.provider,
+        nxt.model,
+      );
+      return { kind: "retry" };
+    }
+
+    const tried = s.failures
+      .map((f) => `  - ${f.level.provider}/${f.level.model}: ${f.code} — ${f.message}`)
+      .join("\n");
+    state.delete(p.agent);
+    throw new Error(`profiles: all levels exhausted for the active chain:\n${tried}`);
+  });
+}
+
 export function apply(ctx: Context, config: unknown): void {
   const cfg = (config ?? {}) as ProfilesConfig;
 
   for (const spec of ROLES) {
     registerRoleTool(ctx, spec, cfg);
   }
+  registerFailover(ctx, cfg.alwaysMaxRetries ?? 2);
 
   // Main-agent sync: only on profile flips, never at boot, never on writes
   // the model picker made to its own namespace.
   ctx.on("settings/updated", (ns, next) => {
     if (ns !== PROFILE_NS) return;
-    const profile = next as ProfileSettings;
-    syncDefaultModel(ctx, profile);
-    syncFallbackList(ctx, profile);
+    syncDefaultModel(ctx, next as ProfileSettings);
   });
 
   ctx.systemPrompt.section({

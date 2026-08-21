@@ -43,7 +43,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#a68f4b232c41}"
 # dsh-input-history ships no git-tagged publish (confirmed: no checkout found
 # in this repo or its parent directory). Its README documents a local-path
 # install only. There is no known real path yet, so this stays an explicit
@@ -165,7 +165,11 @@ echo "=== [8/11] Install the E4 third-party plugin set on the web profile"
 # decision (its /commit auto-committer conflicts with git-authority policy;
 # its read-only tools duplicate the git MCP and dsh-worktree).
 if command -v dsh >/dev/null 2>&1; then
-  dsh plugin --profile web add github:Tkingxiao/dsh-any-background
+  # All specs PINNED 2026-08-21 (exact npm version or commit SHA) so a
+  # re-run can never silently move a plugin forward. To upgrade: bump the
+  # pin here deliberately, then re-run.
+  dsh plugin --profile web add dsh-any-background@0.1.9
+  dsh plugin --profile web add github:xiyue718/dsh-ui-file-browser#44e769f90f7c
   dsh plugin --profile web add github:xiyue718/dsh-ui-file-browser
   if [ -n "$DSH_INPUT_HISTORY_PATH" ]; then
     dsh plugin --profile web add "$DSH_INPUT_HISTORY_PATH"
@@ -175,14 +179,18 @@ if command -v dsh >/dev/null 2>&1; then
     echo "         2026-08-21). Clone it, then re-run with"
     echo "         DSH_INPUT_HISTORY_PATH=/path/to/dsh-input-history ./sync.sh"
   fi
-  dsh plugin --profile web add github:omdsh-dev/dsh-tool-calculator
-  dsh plugin --profile web add github:omdsh-dev/dsh-tool-diff
+  dsh plugin --profile web add github:omdsh-dev/dsh-tool-calculator#d5c40dbdc48f
+  dsh plugin --profile web add github:omdsh-dev/dsh-tool-diff#cc1d1b74582f
   dsh plugin --profile web add https://github.com/omdsh-dev/dsh-at-file/archive/refs/tags/v0.6.7.tar.gz
   # dsh-worktree install DISABLED 2026-08-21 late (see the patch-file note:
   # rc.6-built registrar breaks the rc.8 scheduler). Re-enable together with
   # its mount row after an rc.8-peers release.
   # dsh plugin --profile web add dsh-worktree
-  dsh plugin --profile web add github:Tieboyh/dsh-session-search
+  dsh plugin --profile web add github:Tieboyh/dsh-session-search#82990a0e9804
+  # Streaming markdown renderer replacement (markstream-react: streaming-safe
+  # markdown, Mermaid, KaTeX, Shiki). Client-only; replaces the planned W13
+  # step 2 self-build. Tolerant peers (>=rc.5), no web-react require.
+  dsh plugin --profile web add dsh-better-markdown@0.1.2
   # Provider fallback chains for EVERY LLM request (main agents, role
   # children, see). INSTALL DISABLED 2026-08-21 late: v0.1.2's client bundle
   # requires @deepseek-ai/dsh-client-web-react, which rc.8 does not serve —

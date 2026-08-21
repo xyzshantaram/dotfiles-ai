@@ -1,5 +1,34 @@
 {
   "commands": ["git"],
   "verdict": "deny",
-  "reason": "Raw git is denied. Use the mcp__git__* tools. If the operation is not available there, ask the user to run it."
+  "reason": "Raw git is denied for this subcommand. Read-only git verbs are allowed; useful mutations prompt first. The mcp__git__* tools remain the sanctioned path for commits. Note: plugin git via ctx.subprocess (dsh-worktree, dsh-git-plugin) and the git MCP both bypass this guard — it gates only model bash calls.",
+  "subcommands": {
+    "status": "allow",
+    "log": "allow",
+    "diff": "allow",
+    "show": "allow",
+    "blame": "allow",
+    "shortlog": "allow",
+    "describe": "allow",
+    "rev-parse": "allow",
+    "rev-list": "allow",
+    "ls-files": "allow",
+    "ls-remote": "allow",
+    "cat-file": "allow",
+    "merge-base": "allow",
+    "diff-tree": "allow",
+    "diff-index": "allow",
+    "diff-files": "allow",
+    "version": "allow",
+    "help": "allow",
+    "worktree": "ask",
+    "stash": "ask",
+    "branch": "ask",
+    "tag": "ask",
+    "fetch": "ask",
+    "pull": "ask",
+    "checkout": "ask",
+    "switch": "ask",
+    "restore": "ask"
+  }
 }

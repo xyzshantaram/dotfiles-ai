@@ -9,10 +9,10 @@ importers:
   .:
     dependencies:
       '@cad0p/unbash-walker':
-        specifier: ^0.1.0
+        specifier: 0.1.0
         version: 0.1.0
       unbash:
-        specifier: ^4.0.10
+        specifier: 4.0.10
         version: 4.0.10
     devDependencies:
       '@deepseek-ai/cordis':
@@ -58,16 +58,16 @@ importers:
         specifier: 3.18.1
         version: 3.18.1
       '@types/node':
-        specifier: ^26.2.0
+        specifier: 26.2.0
         version: 26.2.0
       '@types/semver':
-        specifier: ^7.8.0
+        specifier: 7.8.0
         version: 7.8.0
       esbuild:
-        specifier: ^0.28.2
+        specifier: 0.28.2
         version: 0.28.2
       semver:
-        specifier: ^7.8.5
+        specifier: 7.8.5
         version: 7.8.5
 
 packages:

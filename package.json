@@ -1,7 +1,7 @@
 {
   "dependencies": {
-    "@cad0p/unbash-walker": "^0.1.0",
-    "unbash": "^4.0.10"
+    "@cad0p/unbash-walker": "0.1.0",
+    "unbash": "4.0.10"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.1",
@@ -18,10 +18,10 @@
     "@deepseek-ai/dsh-system-prompt": "0.1.0-rc.8",
     "@deepseek-ai/dsh-tools": "0.1.0-rc.8",
     "@deepseek-ai/schemastery": "3.18.1",
-    "@types/node": "^26.2.0",
-    "@types/semver": "^7.8.0",
-    "esbuild": "^0.28.2",
-    "semver": "^7.8.5"
+    "@types/node": "26.2.0",
+    "@types/semver": "7.8.0",
+    "esbuild": "0.28.2",
+    "semver": "7.8.5"
   },
   "scripts": {
     "gen:customize-setup": "node generate-customize-setup.mjs",
