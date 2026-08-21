@@ -4,7 +4,7 @@
 # Usage:  clone the dotfiles-ai repo, cd into it, run ./sync.sh
 #   ./sync.sh                          # installs into $DSH_HOME (default ~/.dsh)
 #   DSH_HOME=/path/to/home ./sync.sh
-#   AIDOS_BUNDLE_PATH=/path  ./sync.sh   # where the aidos package lives
+#   AIDOS_PLUGIN_SPEC=github:you/aidos ./sync.sh   # override the aidos git spec
 #
 # What it does:
 #   1. pnpm install (repo dev deps, e.g. esbuild for the build step)
@@ -18,16 +18,23 @@
 #   7. write the web-profile patch (cordis.patch.yml): the host-plane rows
 #      that apply to EVERY preset: the four MCP servers, the bash guard
 #      (git/find/grep deny rules from the drop-in files), the manifest
-#      guard, the package tool, and the see vision helper
-#   8. register the aidos agent preset in $DSH_HOME/.agent-presets/aidos
-#      (real directory, loader re-exporting the aidos bundle that lives at
-#      AIDOS_BUNDLE_PATH, defaulting to $HOME/repos/aidos/packages/aidos), and
-#      add that bundle to the web profile's dsh.profile.bundles so the
-#      host-plane aidos-core service mounts (see step 8b below)
-#   9. set the agent-presets default to `standard`, and declare image input on
+#      guard, the package tool, the see vision helper, and the manual
+#      dsh-worktree insert row (its dsh.bundle is false, so it does not
+#      self-mount)
+#   8. install the E4 third-party plugin set on the web profile
+#      (dsh-any-background, dsh-ui-file-browser, dsh-input-history,
+#      dsh-tool-calculator, dsh-tool-diff, dsh-at-file, dsh-worktree,
+#      dsh-session-search)
+#   9. install the aidos plugin from git (github:xyzshantaram/aidos) and register
+#      the aidos agent preset in $DSH_HOME/.agent-presets/aidos (a loader that
+#      re-exports the installed package's aidos-tools bundle); the install also
+#      mounts aidos-core on the host plane via the package's own dsh.bundle.patch
+#      (see step 9b below)
+#  10. set the agent-presets default to `standard`, and declare image input on
 #      the meridian route so the see tool's vision subagent can read images
-#  10. ensure .dsh_better_edit/ is ignored by git machine-wide (core.excludesFile
+#  11. ensure .dsh_better_edit/ is ignored by git machine-wide (core.excludesFile
 #      if set, else git's XDG default) so the hashline artifact is never tracked
+
 #
 # Idempotent: re-running it converges to the same state. Safe to run after
 # clone, after a rebase, or after editing the bundle source.
@@ -36,7 +43,15 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_BUNDLE_PATH="${AIDOS_BUNDLE_PATH:-$REPO/../aidos/packages/aidos}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos}"
+# dsh-input-history ships no git-tagged publish (confirmed: no checkout found
+# in this repo or its parent directory). Its README documents a local-path
+# install only. There is no known real path yet, so this stays an explicit
+# override, empty by default, following the same pattern as
+# AIDOS_PLUGIN_SPEC above. Set it before running sync.sh once a checkout
+# exists.
+DSH_INPUT_HISTORY_PATH="${DSH_INPUT_HISTORY_PATH:-}"
+
 
 echo "=== [1/8] Install repo dev deps (esbuild for the build step)"
 (cd "$REPO" && pnpm install)
@@ -114,47 +129,89 @@ cat > "$patch_dir/cordis.patch.yml" <<PATCH
       name: $HERE/plugins/package-tool.js
     - id: see
       name: $HERE/plugins/see.js
+    - id: ask-interrupt
+      name: $HERE/plugins/ask-interrupt.js
+
+    - id: worktree
+      name: 'dsh-worktree'
 PATCH
 
-echo "=== [8/9] Register the aidos agent preset"
+echo "=== [8/11] Install the E4 third-party plugin set on the web profile"
+# Approved set, settled 2026-08-21 (see docs/plugins-conflict-table.md for the
+# full per-plugin summary, conflict analysis, and caveats while that file
+# still exists). Idempotent: `dsh plugin add` forwards to `pnpm add`, and
+# dsh's reconcile step re-derives the bundle list from the installed state
+# rather than diffing against a prior run, so a repeat add of an
+# already-installed spec converges instead of duplicating a row (verified in
+# the installed dsh's plugin.js: reconcilePlugins reads the post-install
+# manifest, not a before/after diff, on every invocation).
+#
+# Every plugin here needs a `dsh web` restart to load; this step only stages
+# the install. dsh-worktree also needs the manual cordis.patch.yml row above,
+# because its `dsh.bundle` is false and it does not self-mount.
+# dsh-session-search additionally needs the `session-search` skill gate (see
+# skills/session-search/SKILL.md) before its tools are model-visible.
+# dsh-git-plugin is intentionally SKIPPED per the settled conflict-table
+# decision (its /commit auto-committer conflicts with git-authority policy;
+# its read-only tools duplicate the git MCP and dsh-worktree).
+if command -v dsh >/dev/null 2>&1; then
+  dsh plugin --profile web add github:Tkingxiao/dsh-any-background
+  dsh plugin --profile web add github:xiyue718/dsh-ui-file-browser
+  if [ -n "$DSH_INPUT_HISTORY_PATH" ]; then
+    dsh plugin --profile web add "$DSH_INPUT_HISTORY_PATH"
+  else
+    echo "WARNING: DSH_INPUT_HISTORY_PATH not set; skipping dsh-input-history."
+    echo "         No git-tagged publish exists for this plugin (checked"
+    echo "         2026-08-21). Clone it, then re-run with"
+    echo "         DSH_INPUT_HISTORY_PATH=/path/to/dsh-input-history ./sync.sh"
+  fi
+  dsh plugin --profile web add github:omdsh-dev/dsh-tool-calculator
+  dsh plugin --profile web add github:omdsh-dev/dsh-tool-diff
+  dsh plugin --profile web add https://github.com/omdsh-dev/dsh-at-file/archive/refs/tags/v0.6.7.tar.gz
+  dsh plugin --profile web add dsh-worktree
+  dsh plugin --profile web add github:Tieboyh/dsh-session-search
+else
+  echo "WARNING: dsh not on PATH; skipping E4 third-party plugin installs."
+  echo "         Re-run './sync.sh' from a shell where dsh is installed."
+fi
+
+echo "=== [9/11] Install the aidos plugin from git (mounts host-plane aidos-core)"
+# The aidos preset's tools run against a host-plane `aidos` core service that
+# the package's own dsh.bundle.patch mounts (aidos-invariants + aidos-core).
+# The package now lives at the repo root of AIDOS_PLUGIN_SPEC (flattened from
+# packages/aidos so a plain git spec resolves it — pnpm has no git-subdirectory
+# install syntax), so `dsh plugin add` installs it AND auto-mounts the bundle
+# patch with no manual `- insert` row needed. Idempotent: dsh's reconcile
+# excludes a bundle already present.
+if command -v dsh >/dev/null 2>&1; then
+  dsh plugin --profile web add "$AIDOS_PLUGIN_SPEC"
+else
+  echo "WARNING: dsh not on PATH; skipping aidos plugin install."
+  echo "         Re-run './sync.sh' from a shell where dsh is installed."
+fi
+
+echo "=== [9b] Register the aidos agent preset"
 mkdir -p "$DSH_HOME/.agent-presets/aidos"
 cat > "$DSH_HOME/.agent-presets/aidos/agent.cordis.yml" <<'EOF'
 # The aidos agent preset composition (installed by $REPO/sync.sh).
-# The loader re-exports the real plugin bundle from the aidos package, so the
-# plugin's @deepseek-ai/* imports resolve from the bundle's node_modules.
+# The loader re-exports the aidos-tools bundle from the installed aidos
+# package (resolved as a bare specifier against the web profile's
+# node_modules, the same way @deepseek-ai/* rows resolve), so the plugin's
+# own @deepseek-ai/* imports resolve from that same install.
 - name: ./aidos-loader.js
 EOF
-if [ -f "$AIDOS_BUNDLE_PATH/presets/aidos/aidos-tools.js" ]; then
-  cat > "$DSH_HOME/.agent-presets/aidos/aidos-loader.js" <<EOF
-// Installed by $REPO/sync.sh. Re-exports the real aidos-tools plugin bundle.
-export { name, inject, Config, apply } from "$AIDOS_BUNDLE_PATH/presets/aidos/aidos-tools.js";
+cat > "$DSH_HOME/.agent-presets/aidos/aidos-loader.js" <<'EOF'
+// Installed by $REPO/sync.sh. Re-exports the aidos-tools plugin bundle from
+// the aidos package installed via `dsh plugin add` (see step 9 above).
+export { name, inject, Config, apply } from "aidos/presets/aidos/aidos-tools.js";
 EOF
-else
-  echo "WARNING: aidos bundle not found at $AIDOS_BUNDLE_PATH. Skipping the loader;"
-  echo "         preset $DSH_HOME/.agent-presets/aidos will be listed as broken."
-  echo "         Set AIDOS_BUNDLE_PATH to the aidos package and re-run."
-  rm -f "$DSH_HOME/.agent-presets/aidos/aidos-loader.js"
-fi
 cat > "$DSH_HOME/.agent-presets/aidos/preset.yml" <<'EOF'
 name: Aidos
 description: "The ticket board agent: plan, tickets, evidence, and state-gated tool access."
 order: 3
 EOF
 
-echo "=== [8b] Add aidos as a web-profile bundle (mounts host-plane aidos-core)"
-# The aidos preset's tools run against a host-plane `aidos` core service that
-# the aidos BUNDLE patch mounts (aidos-invariants + aidos-core). The web-profile
-# patch file cannot resolve those rows with a bare 'name:', so add the package
-# to dsh.profile.bundles (the container-verified path). Idempotent: dsh's
-# reconcile excludes a bundle already present.
-if command -v dsh >/dev/null 2>&1; then
-  dsh plugin --profile web add "$AIDOS_BUNDLE_PATH"
-else
-  echo "WARNING: dsh not on PATH; skipping aidos bundle-add."
-echo "         Re-run './sync.sh' from a shell where dsh is installed."
-fi
-
-echo "=== [9/9] Set agent-presets default + meridian image input"
+echo "=== [10/11] Set agent-presets default + meridian image input"
 python3 - "$DSH_HOME/settings.yaml" <<'PY'
 import sys
 import yaml
@@ -172,7 +229,7 @@ with open(p, 'w') as f:
 print(open(p).read())
 PY
 
-echo "=== [9b] Ensure .dsh_better_edit/ is ignored by git machine-wide"
+echo "=== [11/11] Ensure .dsh_better_edit/ is ignored by git machine-wide"
 # The hashline editor drops a .dsh_better_edit/ state directory into whatever
 # repo a session edits files in. It is a tool artifact that belongs in no
 # repository, so ignore it once per machine rather than per repo. Honor an
