@@ -19,8 +19,17 @@
  *   {
  *     "commands": ["git", "git-foo"],
  *     "verdict": "deny",            // "deny" | "ask" | "allow"
- *     "reason": "Raw git is denied. Use the mcp__git__* tools or ask the user."
+ *     "reason": "Raw git is denied. Use the mcp__git__* tools or ask the user.",
+ *     "subcommands": {              // optional, per-subcommand refinement
+ *       "status": "allow",          // read-only verbs run without prompting
+ *       "worktree": "ask"           // useful mutations prompt the user
+ *     }
  *   }
+ *
+ * A subcommands entry refines the base verdict by the invoked subcommand
+ * (the first non-option argument). Subcommands the map does not name
+ * inherit the base verdict, so an allow-list stays closed under every verb
+ * it does not name.
  *
  * Files are re-read on every call (they are tiny; no watcher needed).
  * A file that does not parse is logged and skipped (fail-safe: its commands
@@ -52,7 +61,8 @@
  */
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { parse, extractAllCommandsFromAST, expandWrapperCommands, getBasename } from '@cad0p/unbash-walker'
+import { parse, extractAllCommandsFromAST, expandWrapperCommands, getBasename, getCommandArgs } from '@cad0p/unbash-walker'
+import type { CommandRef } from '@cad0p/unbash-walker'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-tools'
@@ -75,6 +85,8 @@ interface GuardEntry {
   commands: string[]
   verdict: 'deny' | 'ask' | 'allow'
   reason?: string
+  /** Optional per-subcommand refinement; unnamed subcommands inherit verdict. */
+  subcommands?: Record<string, 'deny' | 'ask' | 'allow'>
 }
 
 /** Resolve $DSH_HOME in a configured path. */
@@ -108,7 +120,20 @@ async function loadRules(ctx: Context, dir: string): Promise<Map<string, GuardEn
         throw new Error(`bad verdict: ${String(entry.verdict)}`)
       }
       const clean = entry.commands.filter((c) => typeof c === 'string' && c.length > 0)
-      for (const cmd of clean) rules.set(cmd, { commands: entry.commands, verdict: entry.verdict, reason: entry.reason })
+      let subcommands: Record<string, 'deny' | 'ask' | 'allow'> | undefined
+      if (entry.subcommands !== undefined) {
+        if (typeof entry.subcommands !== 'object' || entry.subcommands === null) throw new Error('bad subcommands')
+        subcommands = {}
+        for (const [sub, verdict] of Object.entries(entry.subcommands)) {
+          if (verdict !== 'deny' && verdict !== 'ask' && verdict !== 'allow') {
+            throw new Error(`bad subcommand verdict for "${sub}": ${String(verdict)}`)
+          }
+          subcommands[sub] = verdict
+        }
+      }
+      for (const cmd of clean) {
+        rules.set(cmd, { commands: entry.commands, verdict: entry.verdict, reason: entry.reason, subcommands })
+      }
     } catch (error) {
       ctx.logger.warn(`bash-guard: skipping malformed rule file ${name}: ${error instanceof Error ? error.message : String(error)}`)
     }
@@ -131,6 +156,33 @@ function mostRestrictive(verdicts: Verdict[]): Verdict {
   if (verdicts.includes('ask')) return 'ask'
   if (verdicts.includes('allow')) return 'allow'
   return 'none'
+}
+
+/**
+ * The subcommand token of a parsed command's argv: the first argument that
+ * is not an option. Conservative by construction: a global option that takes
+ * a separate value (`git -C <path> status`) makes its value read as the
+ * subcommand, which will not sit in the rule map, so the stricter base
+ * verdict applies instead of anything looser.
+ */
+function firstSubcommand(args: string[]): string | undefined {
+  for (const arg of args) {
+    if (arg === '--') break
+    if (arg.startsWith('-')) continue
+    return arg
+  }
+  return undefined
+}
+
+/**
+ * Verdict for one matched command: the rule's per-subcommand verdict when it
+ * names the invoked subcommand, else the rule's base verdict.
+ */
+function verdictFor(rule: GuardEntry, ref: CommandRef): Verdict {
+  if (rule.subcommands === undefined) return rule.verdict
+  const sub = firstSubcommand(getCommandArgs(ref))
+  const refined = sub !== undefined ? rule.subcommands[sub] : undefined
+  return refined ?? rule.verdict
 }
 
 export function apply(ctx: Context, config: BashGuardConfig): void {
@@ -170,21 +222,22 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
       .map((ref) => {
         const name = getBasename(ref)
         const rule = rules.get(name)
-        return { name, rule }
+        if (rule === undefined) return undefined
+        return { name, rule, verdict: verdictFor(rule, ref) }
       })
-      .filter((h): h is { name: string; rule: GuardEntry } => h.rule !== undefined)
+      .filter((h): h is { name: string; rule: GuardEntry; verdict: Verdict } => h !== undefined)
 
     if (hits.length === 0) return next()
-    const verdicts = hits.map((h) => h.rule.verdict)
+    const verdicts = hits.map((h) => h.verdict)
     const overall = mostRestrictive(verdicts)
     switch (overall) {
       case 'deny': {
-        const hit = hits.find((h) => h.rule.verdict === 'deny')
+        const hit = hits.find((h) => h.verdict === 'deny')
         const reason = hit?.rule.reason ?? DEFAULT_DENY(hit?.name ?? 'unknown')
         return { kind: 'deny', reason }
       }
       case 'ask': {
-        const hit = hits.find((h) => h.rule.verdict === 'ask')
+        const hit = hits.find((h) => h.verdict === 'ask')
         return { kind: 'ask', reason: hit?.rule.reason ?? DEFAULT_ASK(hit?.name ?? 'unknown') }
       }
       case 'allow':
