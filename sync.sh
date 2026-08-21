@@ -135,8 +135,15 @@ cat > "$patch_dir/cordis.patch.yml" <<PATCH
     - id: profiles
       name: $HERE/plugins/profiles.js
 
-    - id: worktree
-      name: 'dsh-worktree'
+    # dsh-worktree mount row REMOVED 2026-08-21 late: its rc.6-built tool
+    # registration poisons the rc.8 tool scheduler — every tool call on the
+    # profile fails with "cannot read properties of undefined (reading
+    # 'prepare')" the moment this row mounts. Diagnosed by bisection; the
+    # package stays installed but MUST NOT mount until it ships rc.8 peers.
+    # Re-add ONLY after verifying its tools load clean:
+    #   - id: worktree
+    #     name: 'dsh-worktree'
+
 PATCH
 
 echo "=== [8/11] Install the E4 third-party plugin set on the web profile"
@@ -171,14 +178,22 @@ if command -v dsh >/dev/null 2>&1; then
   dsh plugin --profile web add github:omdsh-dev/dsh-tool-calculator
   dsh plugin --profile web add github:omdsh-dev/dsh-tool-diff
   dsh plugin --profile web add https://github.com/omdsh-dev/dsh-at-file/archive/refs/tags/v0.6.7.tar.gz
-  dsh plugin --profile web add dsh-worktree
+  # dsh-worktree install DISABLED 2026-08-21 late (see the patch-file note:
+  # rc.6-built registrar breaks the rc.8 scheduler). Re-enable together with
+  # its mount row after an rc.8-peers release.
+  # dsh plugin --profile web add dsh-worktree
   dsh plugin --profile web add github:Tieboyh/dsh-session-search
   # Provider fallback chains for EVERY LLM request (main agents, role
-  # children, see). Ships dsh.bundle so this alone activates it. Dormant
-  # until the llm-fallback settings namespace has entries; sync.sh seeds it
-  # below with the active profile's tail. peerDependencies pin rc.6 — same
-  # watch-item as dsh-worktree.
-  dsh plugin --profile web add @visol-456/dsh-llm-fallback
+  # children, see). INSTALL DISABLED 2026-08-21 late: v0.1.2's client bundle
+  # requires @deepseek-ai/dsh-client-web-react, which rc.8 does not serve —
+  # the loader refuses the whole entry at boot ("failed to import loader
+  # entry ... client-modules: require(...) missed the module table"). The
+  # host-side logic is fine; the client Settings page is the blocker.
+  # Re-enable when upstream rebuilds against rc.8 (or vendor a client-trimmed
+  # build). Until then there is NO automatic failover anywhere; the profiles
+  # plugin still picks heads, and its flip-sync writes to the llm-fallback
+  # namespace are absorbed no-ops while nothing consumes them.
+  # dsh plugin --profile web add @visol-456/dsh-llm-fallback
 else
   echo "WARNING: dsh not on PATH; skipping E4 third-party plugin installs."
   echo "         Re-run './sync.sh' from a shell where dsh is installed."
