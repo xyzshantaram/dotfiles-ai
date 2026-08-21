@@ -68,6 +68,11 @@
   do their own hands-on check before treating it as truly done — especially for anything with a
   UI or runtime surface, where a passing build or typecheck is not evidence the feature actually
   works.
+* Before you accept any claim in a diff, a linked issue, or a commit message as true — your own
+  or a subagent's — load the `verification` skill. An existence check ("does X exist in the
+  codebase") is not a verification. State what observable behavior a revert would change, cite
+  the evidence line for every factual claim, and confirm every new test can actually fail.
+
 * Before you commit any change a subagent wrote, read the diff yourself in the main session
   (`git diff` / `git diff --staged`). Do this every time, not only for high-risk changes. A
   dispatched `review`-skill pass from `researcher` checks code quality and conventions. It does

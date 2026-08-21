@@ -21,6 +21,8 @@ This is a **code-quality and convention review**, not a functional or runtime ch
 - **Scope adherence**: does the diff stay within the ticket's stated scope? Flag anything unrelated that snuck in (opportunistic refactors, unrelated formatting churn) even if it is individually reasonable. That is a decision for the orchestrator or user, not something to wave through silently.
 - **Convention adherence**: matches the surrounding file's naming, style, and structure. Use kebab-case for CSS class/id names (never camelCase) unless the project already uses camelCase. No manual `package.json` or `Cargo.toml` edits where a package-manager add command should have been used instead.
 - **Claim-checking**: if the report cites a specific behavior, API, or spec section as justification, verify the citation actually says what it claims to say. This is exactly the kind of claim that slips through when only the report is read, not the source.
+- **Claim-evidence separation.** Load the `verification` skill before you write a pass verdict on any diff. State plainly, in the report, what you actually read yourself versus what you inferred or took on trust from the description. Do not blend the two. If a claim in the diff's description, the linked issue, or the commit message has no evidence line you can point to (an `rg`/`grep` result, a `file:line`, a command you ran), strike it from the verdict as unproven instead of assuming it true.
+- **Hedges survive verbatim.** If your own investigation turns up a hedge ("I could not confirm X", "this appears to work but I did not check Y"), that hedge must reach your final report in close to the same words. Never drop it or smooth it into a confident pass during your own summarizing.
 
 ## When intent is unclear
 
