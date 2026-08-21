@@ -31,7 +31,7 @@ false assurance.
 
 ### Phase A: personal bundle, open ports — `in_progress`
 
-- [ ] **W16 per-role routing + profile failover — ONE combined `profiles` host plugin.** **Coded and committed 2026-08-21 late; build-, schema-, and seed-dry-run verified. Restart DONE — LIVE VERIFICATION IS THE NEXT ACTION.** `profiles` registers `coder`/`tester`/`researcher` tools on the HOST plane (web-profile patch row), so every agent preset gets them without forking a preset composition (user call: presets have no patch semantics, and a fork would bake one route into one preset). Each tool starts a leaf child (`maxDepth: 1`) over the same `spawn` seam as the shipped `subagent` tool, background-by-default via `startContinuable`, foreground on `run_in_background: false`. The route HEAD resolves AT CALL TIME: patch-row role pin → the shared `profile` settings namespace's active entry (see.ts owns that namespace; this plugin reads it with `ctx.settings.get`, never registering it twice) → inherit `agent-default-model`. FAILOVER lives in the SAME plugin (user call: combine them): two waterfalls — `agent/request` rewrites a proposal sitting on ANY active-chain level, `agent/request-error` advances the level and returns `{kind: 'retry'}` — so main sessions, role children, and see children all fail over along the active chain with no second config surface. Design stolen MIT from CanGeng/llm-fallback (~180 lines, seams verified in rc.8: agent-loop :708/:653/:662, dsh-llm resolveCallConfig :1351); the external @visol-456/dsh-llm-fallback stays GATED OUT (its client bundle needs dsh-client-web-react, absent on rc.8) and its namespace seed is now inert. On a `profile.active` flip the plugin pushes the new head into `agent-default-model`; chains re-read live per request. sync.sh seeds `profile` FIRST RUN ONLY: work = meridian opus → sonnet → zen x-preview-f-free; personal = zen deepseek-v4-flash-free → opencode-go deepseek-v4-flash → official deepseek PENDING a provider block in settings.yaml. see.ts schema accepts chain-shaped entries. Personas stay OUT: the coder/tester/researcher skills remain the one source of truth. *Evaluate NOW (restart done):* the three tools appear in a fresh session; one background dispatch through `coder` returns a child id and settles on deepseek-v4-flash-free; a forced failure falls over to opencode-go flash (watch for the `profiles: ... failing over` warn line); flipping `profile.active` to work moves new sessions to opus.
+- [ ] **W16 per-role routing + profile failover — ONE combined `profiles` host plugin.** **LIVE VERIFICATION 3 OF 4 CHECKS PASS (2026-08-21 late). Remaining: the `profile.active` flip test.** Verified: (1) role tools + `tool:profiles` prompt section present in a fresh post-restart session, patch row mounted; (2) background `coder` dispatch returned a child id and resolved the personal head (`via opencode-zen/deepseek-v4-flash-free`, confirmed in the child's descriptor record); (3) failover fired FOR REAL during that dispatch — the child's session record shows the zen request finish with `400 Upstream request failed: Model is unavailable`, then ~10 ms later the same turn/step re-dispatched on `opencode-go/deepseek-v4-flash`, which served the whole step. Gotcha learned: plugin `ctx.logger.warn` lands ONLY in dsh's in-memory ring buffer (cordis default exporter never writes stdout), so the `profiles: ... failing over` warn line will NEVER appear in journalctl — verify failover from session records or trajectory view, not the journal.
 
 - [ ] **W13 step 1: the keyed-slot shadowing spike.** **STATUS 2026-08-21 evening: dispatched twice, killed both times by the subagent-infrastructure fault (see Critical context, "Session state"). No findings recorded. RERUN after the profiles plugin lands.** Answer one question: can a
       client plugin claim a key that a shipped plugin already registered on a
@@ -288,10 +288,12 @@ records that the AI decided it was done.
   normally; the `see` tool returns a factual image description on the work
   profile.
 
-### Pickup point
+### Pickup point 2026-08-21 late
 
-The live web patch carries 9 rows and no session-hygiene row. A `dsh web`
-restart is needed before that removal takes effect.
+- **Phase F: R1, R3, R4, R5 CLOSED. R2 re-scoped after a real root-cause hunt; its dead predecessors are REMOVED.** Fork commit `ad7090b` carries the `/auth/trace` debug channel AND the removal of all three dead mechanisms (early flip, late flip, unpin) from `src/client.js`; `lib/client.js` is rebuilt and installed live. No `isLoopback` write remains anywhere in the fork, so remote settings are FULLY BROKEN until R2 lands — accepted, per the one-mechanism decision. sync.sh installs from pinned sha `a0969cae342a`, now STALE (one commit behind); bump it when R2 lands. R5 proven: a proxied page load writes an ordered trace to `journalctl --user -u dsh-web.service`. R2 root cause and design are settled (host-injected loader wrapper; full evidence in the Phase F root-cause block). The user chose ONE mechanism only: no sync.sh disk patch, no upstream report for now. NEXT ACTIONS: (1) implement R2; (2) live eval per the R2 criteria; (3) W16 flip test: the `profile` namespace has NO settings page (that seat is W6), so flip via direct `$DSH_HOME/settings.yaml` edit — verify `agent-default-model` flips to `meridian/claude-opus-5`, fresh session composes on opus, then flip back.
+- **Live config now carries a `remote` override row** (sync.sh step 7). It MUST be a top-level patch row, NOT a child of the `insert` list: an insert row with an existing id kills boot with `duplicate loader entry id: remote`. `applyEntryPatches` (dsh-app-boot) assigns each override key WHOLESALE, so the row repeats every default from the plugin's own bundle patch. Two values differ: `debug: true` (trace endpoint) and `session.secure: true`. CAUTION: the Secure cookie attribute now applies, so a plain-HTTP loopback page at http://127.0.0.1:3080 can no longer set or send the session cookie. Flip `session.secure` back if loopback login misbehaves.
+- guards/git.json: `git apply` moved to the ask tier (user request) — source updated and deployed live to $DSH_HOME/plugins/guards/.
+- The live web patch carries the profiles row, the remote config row (`session.secure: true`), and no session-hygiene row; the restart above activates the fork client bundle.
 
 ## User preferences and special rules
 
@@ -305,6 +307,10 @@ restart is needed before that removal takes effect.
   started.
 
 ## Human review queue
+
+- [ ] Remote auth — after the restart: create the admin account on loopback,
+      log in over the proxy, confirm settings config cards read and write
+      remotely, and confirm the background theme plugin is gone.
 
 - [ ] Phase C (verification skill) — run it yourself against a real MR
       description and judge whether it would have caught the invented root cause
@@ -415,11 +421,109 @@ PLAN.md is a living migration document. Delete it once the remaining phase work 
       hidden until load; `guards/git.json` names the git skill; customize-setup is
       a prerequisite in cordis `whenToUse`.
 - [ ] **E7 fold attachment-vision into `see.ts`.** Settlement decided 2026-08-21 from a read of `endlass/dsh-attachment-vision` and `FSMargoo/dsh-at-file`. dsh ships a native `read_image` tool (`dsh-tool-fs`) but it is **route-gated to image-capable models**, so a visionless parent cannot call it directly. The bundle's `see.ts` already implements the image→path-for-no-vision pattern: a visionless model is handed an image path, calls `see`, which dispatches a vision subagent whose keep-set includes `read_image`/`read`, routing on the profile whose image input `sync.sh` has declared. The `@` file-mention is **not native to dsh** (dsh-session-reference handles cross-session mentions only); it comes from `dsh-at-file`, which emits a `<workspace-reference path=... kind=file>` marker and does NOT inline content, so a `@`-ed image gives the model the path (not base64). **Verdict: do NOT modify `see.ts`; drop `dsh-attachment-vision` (it is for GUI drag-and-drop image blocks, a different path than `@`); install `dsh-at-file` so `@ image` yields a path the model can feed to `see`.** *Evaluate:* no new vision plugin installed; `@ image.png` gives the visionless model a path; `see` with that path returns a description; overlap documented above.
+### Phase F: the dsh-remote fork — `in_progress`
+
+The user forked `@xgone/dsh-remote` to `github.com/xyzshantaram/dsh-remote`, cloned at
+`~/repos/dsh-remote`. The fork now HAS a build step: `src/client.js` is the readable
+source and `scripts/build.mjs` bundles it with esbuild into the committed
+`lib/client.js` (highlight.js must be inlined, because npm deps do not resolve in the
+browser loader). `lib/index.js` stays hand-written. Install uses a pinned git hash of
+the fork (R4).
+
+Root causes, verified against installed rc.8 source 2026-08-21:
+
+- **File-panel error dialog** ("expected server-response"): the fetch patch that
+  intercepts `/api/host.openPath` fabricates `{rpcId, result}` but the wire schema
+  (dsh-client-runtime) demands `{type:"server-response", rpcId, result}`. One-line fix.
+- **Settings dead over proxy** — root cause CORRECTED 2026-08-21 late, from a live
+  journal trace plus the shipped rc.8 source. The earlier reading in this plan was
+  wrong and cost several rounds, so the evidence is recorded in full below.
+  - dsh classifies remote purely by `location.hostname`
+    (dsh-client-connection/lib/client.js:10247 `isLoopbackHostname`, used at :10279).
+  - ui-settings stamps the mode at CONSTRUCTION, in two places:
+    `new SettingsDescribeMirror(connection.api, connection.isLoopback ? "host" : "memory")`
+    (dsh-client-ui-settings/lib/client.js:1340, inside its own apply) and
+    `new SettingsScopeController(..., connection.isLoopback ? "host" : "memory", ...)`
+    (:1166, inside `bind(spec)`, once per namespace).
+  - A `"memory"` scope is crippled at birth: its constructor (:978-995) seeds the
+    snapshot store with `status: "unavailable"` and calls `mirror.subscribe` +
+    `derive()` ONLY in the `"host"` branch. So it never hears a later mirror load.
+    `derive()` itself (:1087) reads no mode at all — an unsubscribed scope is not
+    poisoned, it is merely deaf.
+  - The apply-time flip this plan assumed would win the race CANNOT win it. The web
+    shell applies every client plugin through one `Promise.all` with no sort, and
+    `dsh.client.immediately: true` only PREFETCHES the bundle script. There is no
+    ordering knob. The earlier claim that ui-settings injects our `remote` service
+    was also wrong: `remote` is `ClientRemoteService` from dsh-api-gateway, not ours.
+  - `unpinRemoteSettingsScopes` is a PERMANENT no-op on rc.8, not a fallback.
+    `SettingsScopeController` is `var SettingsScopeController = class {` (:951),
+    module-local, and the bundle tail exports only `{apply, inject}`. So
+    `require(...)` returns no class, the guard fails, and the empty `catch` hides it.
+  - Live trace evidence (host `/auth/trace` → journal): on a proxied page the flip
+    lands and HOLDS (`isLoopback: true` from post-flip through 8000 ms) on a handle
+    that is never replaced (same id at every tick). So the flip was never the fault.
+- Flip side effects audited across all four isLoopback consumers: deliverables gains
+  working open-path buttons (they route into the viewer anyway); ui-settings-general
+  enables the raw settings.yaml document editor remotely — ACCEPTED by user.
+
+Tickets:
+
+- [x] **R1 openPath envelope fix** (`src/client.js`). Added `type: "server-response"`
+      to the fabricated openPath reply.
+      *Evaluated:* filename click over https://potato.local:1337 opens the panel with
+      no error dialog. Verified live by the user.
+- [ ] **R2 order-proof isLoopback flip via host-injected loader wrapper**
+      (`lib/index.js` + `src/client.js`). SUPERSEDES the apply-time flip, which is
+      unwinnable (see the root cause above). The host half injects a small script into
+      the shell HTML for requests that carry a VALID session. That script wraps the
+      client module loader, shadows `ctx.provide`, and sets `isLoopback = true` at the
+      moment the `connection` handle is provided — before any consumer can read it, so
+      the mirror and every scope are BORN in `"host"` mode. Mechanism proven in the
+      wild by studyzy/dsh-web-remote-access (src/loopback.ts); the session gate is ours
+      and is the part studyzy lacks.
+      Same ticket REMOVES the mechanisms this replaces, because dead code that looks
+      like a fix is worse than no code: the apply-entry early flip, the `/auth/me` late
+      flip, and `unpinRemoteSettingsScopes` (proven no-op).
+      Injection must fail LOUDLY (host log line) when the shell markup does not match,
+      never silently.
+      *Evaluate:* logged in over the proxy, Settings → Models loads the provider
+      directory and a config-card write sticks after reload; a logged-OUT remote
+      browser receives no injected script and shows no error storm; loopback behavior
+      unchanged; the trace shows `isLoopback: true` at apply-enter (not flipped by us,
+      already true).
+- [x] **R3 syntax highlighting in the viewer text pane** (`src/client.js` +
+      package.json dep via pnpm add). highlight.js ^11, extension-routed subset,
+      200 KB cap with plain-text fallback, `.dsh-remote-hljs` scoped CSS. Required a
+      build step: npm deps do not resolve in the browser loader, so scripts/build.mjs
+      now bundles src/client.js into lib/client.js with esbuild.
+      *Evaluated:* colored code renders in the panel over the proxy. Verified live by
+      the user.
+- [x] **R5 host-side debug trace channel** (`lib/index.js` + `src/client.js`).
+      `config.debug` (default false) registers `POST /auth/trace`; the client ships a
+      buffered trace there when the page URL carries `?dshTrace=1`. Kept in the fork
+      permanently, off by default, because it is what found the real R2 cause.
+      NOTE: trace lines use `console.log`, NOT `ctx.logger` — the cordis logger buffers
+      into an in-memory ring the GUI log panel reads and never reaches stdout or the
+      journal. This corrects an earlier claim in this plan.
+      *Evaluated:* a proxied page load produced a full ordered trace in
+      `journalctl --user -u dsh-web.service`.
+- [x] **R4 install switch to pinned fork hash** (sync.sh). `sync.sh` step 8 installs
+      `github:xyzshantaram/dsh-remote#a0969cae342a`. Bump the pin deliberately to
+      upgrade. NOTE: the pin is STALE relative to the working tree — the trace channel
+      and the dead-mechanism removals are committed to the fork but the sha here still
+      points at a0969ca. Bump it when R2 lands, so one sync run installs the whole
+      Phase F result.
+      *Evaluated:* a sync run installed from the pin and the restart loaded the fork
+      build (its version line appears in the browser console).
 
 ### Ordering
 
 E1 → E2 (and E3 in parallel) → E4/E7 independent → E5 needs E4's tool list →
 E6 needs E3+E4+E5.
+
+Phase F: R1, R3, R4, and R5 are closed. R2 is the only open ticket, and it now
+stands alone — it supersedes the mechanisms it replaces rather than building on
+them.
 
 ### Risks
 

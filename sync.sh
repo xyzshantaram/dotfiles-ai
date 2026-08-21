@@ -144,6 +144,36 @@ cat > "$patch_dir/cordis.patch.yml" <<PATCH
     #   - id: worktree
     #     name: 'dsh-worktree'
 
+# Config override for the self-mounting dsh-remote plugin (step 8 pins our
+# fork). The plugin creates the remote row from its own bundle patch, so
+# this MUST be a top-level override row, NOT a child of the insert list
+# above: an insert row with the same id kills boot with "duplicate loader
+# entry id: remote".
+#
+# applyEntryPatches assigns each override key WHOLESALE (target[key] = value,
+# dsh-app-boot/lib/index.js). It does not deep-merge, so the block below must
+# repeat every default from the plugin's own cordis.patch.yml. Only two values
+# differ from those defaults:
+#   session.secure: the proxy terminates TLS, so the cookie may carry Secure.
+#   debug: registers POST /auth/trace, which writes client trace lines to the
+#     server journal. Keep it false unless you debug a remote-mode fault. The
+#     client half only ships traces when the page URL also carries ?dshTrace=1.
+- id: remote
+  config:
+    enabled: true
+    debug: true
+    accounts: []
+    secret: ''
+    session:
+      cookieName: dsh_session
+      ttlSeconds: 604800
+      secure: true
+      sameSite: lax
+    enforceRoles: true
+    rateLimit:
+      maxAttempts: 5
+      windowMs: 900000
+
 PATCH
 
 echo "=== [8/11] Install the E4 third-party plugin set on the web profile"
@@ -168,13 +198,20 @@ if command -v dsh >/dev/null 2>&1; then
   # All specs PINNED 2026-08-21 (exact npm version or commit SHA) so a
   # re-run can never silently move a plugin forward. To upgrade: bump the
   # pin here deliberately, then re-run.
-  dsh plugin --profile web add dsh-any-background@0.1.9
+  # dsh-any-background REMOVED 2026-08-21 late (user call: not wanted). To
+  # restore: dsh plugin --profile web add dsh-any-background@0.1.9
   dsh plugin --profile web add github:xiyue718/dsh-ui-file-browser#44e769f90f7c
   # dsh-input-history: no npm publish and no git tag, so it pins to a commit
   # SHA like the other GitHub-only plugins (gate removed 2026-08-21 late).
   dsh plugin --profile web add github:sunshaobei/dsh-input-history#9b5b7a494a5c
-  dsh plugin --profile web add github:omdsh-dev/dsh-tool-calculator#d5c40dbdc48f
-  dsh plugin --profile web add github:omdsh-dev/dsh-tool-diff#cc1d1b74582f
+  # d5c40dbdc48f was orphaned by an upstream history rewrite 2026-08-21; the
+  # new head's lib/ files diffed byte-identical against the installed copy,
+  # so this is the same code under a new sha.
+  dsh plugin --profile web add github:omdsh-dev/dsh-tool-calculator#05090e946113
+  # cc1d1b74582f was orphaned by an upstream history rewrite 2026-08-21; new
+  # head diffs identical on every lib/ file and the patch row (package.json
+  # dependency metadata only), so this is the same code under a new sha.
+  dsh plugin --profile web add github:omdsh-dev/dsh-tool-diff#d4afd6e2de0b
   dsh plugin --profile web add https://github.com/omdsh-dev/dsh-at-file/archive/refs/tags/v0.6.7.tar.gz
   # dsh-worktree install DISABLED 2026-08-21 late (see the patch-file note:
   # rc.6-built registrar breaks the rc.8 scheduler). Re-enable together with
@@ -182,9 +219,23 @@ if command -v dsh >/dev/null 2>&1; then
   # dsh plugin --profile web add dsh-worktree
   dsh plugin --profile web add github:Tieboyh/dsh-session-search#82990a0e9804
   # Streaming markdown renderer replacement (markstream-react: streaming-safe
+  # Remote-access auth (login accounts, roles, MFA) so LOGIN WORKS OVER THE
+  # PROXY: dsh serves settings RPCs loopback-only, so every proxied browser
+  # gets inert settings scopes without this plugin. Self-mounts via its own
+  # bundle patch; sync.sh step 7 adds a same-id config row (secure cookie).
+  # Pinned to OUR fork (github.com/xyzshantaram/dsh-remote). Fork commits on
+  # top of 0.2.5: the openPath server-response envelope fix, highlight.js in
+  # the file panel, an esbuild build step (src/client.js -> lib/client.js),
+  # and a debug trace channel (config.debug + ?dshTrace=1). The old
+  # connection.isLoopback flips are REMOVED — they could not win the
+  # composition race; R2 replaces them with a host-injected loader wrapper.
+  # Upgrade = bump the pin here deliberately.
+  dsh plugin --profile web add github:xyzshantaram/dsh-remote#a0969cae342a
+  # Streaming markdown renderer replacement (markstream-react: streaming-safe
   # markdown, Mermaid, KaTeX, Shiki). Client-only; replaces the planned W13
   # step 2 self-build. Tolerant peers (>=rc.5), no web-react require.
   dsh plugin --profile web add dsh-better-markdown@0.1.2
+
   # Provider fallback chains for EVERY LLM request (main agents, role
   # children, see). INSTALL DISABLED 2026-08-21 late: v0.1.2's client bundle
   # requires @deepseek-ai/dsh-client-web-react, which rc.8 does not serve —
