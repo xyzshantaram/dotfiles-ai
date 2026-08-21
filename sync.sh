@@ -170,15 +170,9 @@ if command -v dsh >/dev/null 2>&1; then
   # pin here deliberately, then re-run.
   dsh plugin --profile web add dsh-any-background@0.1.9
   dsh plugin --profile web add github:xiyue718/dsh-ui-file-browser#44e769f90f7c
-  dsh plugin --profile web add github:xiyue718/dsh-ui-file-browser
-  if [ -n "$DSH_INPUT_HISTORY_PATH" ]; then
-    dsh plugin --profile web add "$DSH_INPUT_HISTORY_PATH"
-  else
-    echo "WARNING: DSH_INPUT_HISTORY_PATH not set; skipping dsh-input-history."
-    echo "         No git-tagged publish exists for this plugin (checked"
-    echo "         2026-08-21). Clone it, then re-run with"
-    echo "         DSH_INPUT_HISTORY_PATH=/path/to/dsh-input-history ./sync.sh"
-  fi
+  # dsh-input-history: no npm publish and no git tag, so it pins to a commit
+  # SHA like the other GitHub-only plugins (gate removed 2026-08-21 late).
+  dsh plugin --profile web add github:sunshaobei/dsh-input-history#9b5b7a494a5c
   dsh plugin --profile web add github:omdsh-dev/dsh-tool-calculator#d5c40dbdc48f
   dsh plugin --profile web add github:omdsh-dev/dsh-tool-diff#cc1d1b74582f
   dsh plugin --profile web add https://github.com/omdsh-dev/dsh-at-file/archive/refs/tags/v0.6.7.tar.gz
