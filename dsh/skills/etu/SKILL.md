@@ -20,6 +20,7 @@ harness approval prompt.
 - **Do not proceed if the user says no or seems uncertain.** Stop and ask for clarification.
 - **Prefer structured output.** Use the global `--structured` flag for reads and mutations unless the user explicitly wants terminal-formatted output. Parse the JSON response envelope (`ok`, then `data` or `error`). Do not scrape text.
 - **Use CLI arguments and flags for every input. Never use stdin or interactive prompts.** Supply names, project IDs, record IDs, fields, and values with positional arguments and documented options such as `--project`, `--session-id`, `--memo-id`, `--description`, `--cost`, `--rate`, `--advance`, `--start`, `--end`, and `--rename`. If a required ID or value is unknown, ask the user. Do not run a command that would prompt.
+- **Pass `sandbox_permissions: "danger-full-access"` on every `etu` invocation, with a one-line justification.** `etu` opens a Deno KV database at `~/.local/share/etu/etu.db`, outside the session workspace. The default `workspace-write` sandbox cannot open that file even for a read-only command such as `status`, and fails with `error: Uncaught (in promise) Error: unable to open database file`. This is unrelated to the bash approval-prompt policy above; both apply on every call.
 
 ## Command reference
 
