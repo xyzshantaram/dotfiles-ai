@@ -1,9 +1,15 @@
+---
+name: share-caddy-cert
+description: Temporarily share this machine's Caddy local CA root certificate with a new device on the LAN, so that device can trust HTTPS on potato.local:<port> addresses. Use when the user asks to "share/expose/send the caddy cert", "let my [phone/tablet/laptop/Chromebook] trust the local HTTPS", or "how do I get my new device onto potato.local".
+whenToUse: A device does not yet trust Caddy's local CA and needs the root certificate to install as a trusted CA. Trigger phrases are "share the caddy cert", "trust the local HTTPS", and "get my device onto potato.local".
+---
+
 # Skill: share-caddy-cert
 
 Temporarily share this machine's Caddy local CA root certificate with a new
 device on the LAN, so that device can trust HTTPS on `potato.local:<port>`
-addresses (see the Caddy setup in `dotfiles-ai/OPENCODE_SETUP.md`, and the
-`devtunnel` skill, for context — same CA, same trust model).
+addresses (see the Caddy setup in the personal bundle's `lang/README.md`, and
+the `devtunnel` skill, for context — same CA, same trust model).
 
 ## When to use
 

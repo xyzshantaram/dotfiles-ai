@@ -1,16 +1,16 @@
 ---
 name: devtunnel
-description: Run a local dev server and expose it over HTTPS on the LAN via ~/.local/bin/devtunnel, producing a persistent https://potato.local:<port>/ URL reachable from other LAN devices. Use when the user wants to reach a dev server (Vite, Next.js, any HTTP server) from a phone, tablet, or another device instead of localhost, or asks to start/stop/restart/list/toggle a dev tunnel or exposed server.
-compatibility: linux, systemd, caddy
+description: Run a local dev server and expose it over HTTPS on the LAN via ~/.local/bin/devtunnel, producing a persistent https://potato.local:<port>/ URL reachable from other LAN devices. Use when the user wants to reach a dev server (Vite, Next.js, any HTTP server) from a phone, tablet, or another device instead of localhost. Use it also when the user asks to start, stop, restart, list, or toggle a dev tunnel or exposed server.
+whenToUse: The user wants a dev server reachable from another LAN device, or a real HTTPS URL instead of localhost. Trigger phrases are "tunnel", "expose", "devtunnel", and "reachable from my phone".
 ---
 
 # Skill: devtunnel
 
 Run a local dev server and expose it over HTTPS on the LAN at
 `https://potato.local:<port>/`, using `~/.local/bin/devtunnel`. Built on the
-same Caddy + local-CA + mDNS setup documented in
-`dotfiles-ai/OPENCODE_SETUP.md` (see also the `share-caddy-cert` skill, for
-getting a *new* device to trust that CA in the first place).
+same Caddy + local-CA + mDNS setup documented in the personal bundle's
+`lang/README.md` (see also the `share-caddy-cert` skill, for getting a *new*
+device to trust that CA in the first place).
 
 The live script this skill drives is `~/.local/bin/devtunnel` (on `PATH`,
 outside this repo). A tracked copy lives alongside this file at
@@ -73,7 +73,7 @@ tunnel or exposed server.
   edits if hot-reload doesn't fire.
 - **Restarting Caddy (which every `start`/`stop`/`restart` does) briefly
   blips every other proxied service**, including `potato.local:1337`
-  (opencode-web — this very chat, if you're running on this same session).
+  (dsh web — this very chat, if you're running on this same session).
   It's fast (~100ms) and self-healing; not worth avoiding, just don't be
   alarmed by a momentary reconnect. Avoid firing off several `start`/`stop`/
   `restart` calls back-to-back against tunnels you don't own the lifecycle

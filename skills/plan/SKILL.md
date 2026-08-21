@@ -1,7 +1,7 @@
 ---
 name: plan
 description: Create and maintain a self-contained PLAN.md that tracks phased implementation progress on a feature or effort. Use when the user mentions planning, a "phased implementation plan", "plan.md", asks to "update the plan", says "compaction", or when starting or continuing medium-to-large scope work that needs a living record of in-progress phases.
-compatibility: opencode
+whenToUse: Starting or continuing medium-to-large scope work, or when the user mentions planning, a phased implementation plan, plan.md, updating the plan, or compaction.
 ---
 
 # Plan skill

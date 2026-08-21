@@ -1,6 +1,7 @@
 ---
 name: ste-writing
 description: Rewrite prose (docs, READMEs, PR descriptions, error messages, release notes, comments, conversation, plans, ticket descriptions, agent prompts and reports — never code) into ASD-STE100 Simplified Technical English to remove "AI slop". Use when asked to make writing not sound like AI, make docs clear or plain, enforce a controlled writing style, or write technical documentation that reads human. Two modes — strict (procedures/safety) and STE-flavored (general prose).
+whenToUse: The user asks to make writing sound less like AI, tone down slop, or write in plain/controlled technical English. Use it for docs, READMEs, PR descriptions, error messages, release notes, comments, and conversation — never code.
 ---
 
 # ste-writing

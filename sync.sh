@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # dsh personal bundle installer — idempotent.
 #
-# Usage:  clone the dotfiles-ai repo, cd into it, run ./dsh/sync.sh
-#   ./dsh/sync.sh                 # installs into $DSH_HOME (default ~/.dsh)
-#   DSH_HOME=/path/to/home ./dsh/sync.sh
-#   AIDOS_BUNDLE_PATH=/path  ./dsh/sync.sh   # where the aidos package lives
+# Usage:  clone the dotfiles-ai repo, cd into it, run ./sync.sh
+#   ./sync.sh                          # installs into $DSH_HOME (default ~/.dsh)
+#   DSH_HOME=/path/to/home ./sync.sh
+#   AIDOS_BUNDLE_PATH=/path  ./sync.sh   # where the aidos package lives
 #
 # What it does:
 #   1. pnpm install (repo dev deps, e.g. esbuild for the build step)
@@ -34,7 +34,7 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO="$(cd "$HERE/.." && pwd)"
+REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
 AIDOS_BUNDLE_PATH="${AIDOS_BUNDLE_PATH:-$REPO/../aidos/packages/aidos}"
 
@@ -119,14 +119,14 @@ PATCH
 echo "=== [8/9] Register the aidos agent preset"
 mkdir -p "$DSH_HOME/.agent-presets/aidos"
 cat > "$DSH_HOME/.agent-presets/aidos/agent.cordis.yml" <<'EOF'
-# The aidos agent preset composition (installed by $REPO/dsh/sync.sh).
+# The aidos agent preset composition (installed by $REPO/sync.sh).
 # The loader re-exports the real plugin bundle from the aidos package, so the
 # plugin's @deepseek-ai/* imports resolve from the bundle's node_modules.
 - name: ./aidos-loader.js
 EOF
 if [ -f "$AIDOS_BUNDLE_PATH/presets/aidos/aidos-tools.js" ]; then
   cat > "$DSH_HOME/.agent-presets/aidos/aidos-loader.js" <<EOF
-// Installed by $REPO/dsh/sync.sh. Re-exports the real aidos-tools plugin bundle.
+// Installed by $REPO/sync.sh. Re-exports the real aidos-tools plugin bundle.
 export { name, inject, Config, apply } from "$AIDOS_BUNDLE_PATH/presets/aidos/aidos-tools.js";
 EOF
 else
@@ -151,7 +151,7 @@ if command -v dsh >/dev/null 2>&1; then
   dsh plugin --profile web add "$AIDOS_BUNDLE_PATH"
 else
   echo "WARNING: dsh not on PATH; skipping aidos bundle-add."
-  echo "         Re-run './dsh/sync.sh' from a shell where dsh is installed."
+echo "         Re-run './sync.sh' from a shell where dsh is installed."
 fi
 
 echo "=== [9/9] Set agent-presets default + meridian image input"

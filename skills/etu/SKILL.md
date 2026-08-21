@@ -1,25 +1,31 @@
 ---
 name: etu
-description: Use the etu time-tracker CLI to check hours, sessions, and memos. opencode's own permission system prompts for approval before every `etu` invocation, so call it directly.
-compatibility: opencode
+description: Use the etu time-tracker CLI to check hours, sessions, and memos. The personal bundle's bash approval policy prompts for approval before every etu invocation, so call it directly.
+whenToUse: The user wants time-tracking data or actions. Trigger phrases are "track time", "how many hours", "start tracking", "stop the clock", "session", "memo", and "etu".
 ---
 
 # etu time-tracker skill
 
-`etu` is a time-tracking CLI you invoke directly. opencode's `permission.bash` config asks for confirmation before **every** `etu` invocation — not just destructive ones. Do not add your own confirmation logic. Present your plan, then run the command. The human approves or rejects via opencode's own prompt.
+`etu` is a time-tracking CLI you invoke directly. The personal bundle's bash
+approval policy asks for confirmation before **every** `etu` invocation — not
+just destructive ones (a `tools/pre-execute` ask listener, the dsh form of
+just destructive ones (a `tools/pre-execute` ask listener, the dsh form of the legacy permission system). Do not add your own confirmation logic. Present
+your plan, then run the command. The human approves or rejects through the
+harness approval prompt.
 
 ## Rules
 
-- **Present a plan before you run anything.** State the exact `etu` command and what it does. Then run it. opencode shows an approval prompt to the human before it executes.
+- **Present a plan before you run anything.** State the exact `etu` command and what it does. Then run it. The harness shows an approval prompt to the human before it executes.
 - **Do not try to route around the prompt.** No `sh -c 'etu ...'`, `eval`, or building the command in a variable to dodge the pattern match. If a command needs to run, ask for it.
 - **Do not proceed if the user says no or seems uncertain.** Stop and ask for clarification.
 - **Prefer structured output.** Use the global `--structured` flag for reads and mutations unless the user explicitly wants terminal-formatted output. Parse the JSON response envelope (`ok`, then `data` or `error`). Do not scrape text.
 - **Use CLI arguments and flags for every input. Never use stdin or interactive prompts.** Supply names, project IDs, record IDs, fields, and values with positional arguments and documented options such as `--project`, `--session-id`, `--memo-id`, `--description`, `--cost`, `--rate`, `--advance`, `--start`, `--end`, and `--rename`. If a required ID or value is unknown, ask the user. Do not run a command that would prompt.
+- **Pass `sandbox_permissions: "danger-full-access"` on every `etu` invocation, with a one-line justification.** `etu` opens a Deno KV database at `~/.local/share/etu/etu.db`, outside the session workspace. The default `workspace-write` sandbox cannot open that file even for a read-only command such as `status`, and fails with `error: Uncaught (in promise) Error: unable to open database file`. This is unrelated to the bash approval-prompt policy above; both apply on every call.
 
 ## Command reference
 
 <!-- BEGIN GENERATED: source is `etu --help`, walked recursively. Regenerate with:
-     cd ~/repos/etu && deno task skill ~/.config/opencode/skills/etu/SKILL.md
+     cd ~/repos/etu && deno task skill ~/.dsh/skills/etu/SKILL.md
      Do not hand-edit between these markers; it will be overwritten. -->
 
 _Generated 2026-07-31T11:06:07.201Z from `etu 0.0.1`._
@@ -358,7 +364,7 @@ Options:
 
 1. **Understand the intent.** What does the user want? Check status, start or stop tracking, review logs, or manage memos.
 2. **Present the plan.** Tell the user: "I will run `etu <command>` to <explain what it does>. OK?"
-3. **Execute.** Run the command. opencode's permission prompt reaches the human automatically. You do not need to relay or duplicate it.
+3. **Execute.** Run the command. The harness approval prompt reaches the human automatically. You do not need to relay or duplicate it.
 4. **Report results.** Show the output and any relevant context.
 5. **Use structured, non-interactive commands.** `--structured` is global. Prefer `etu --structured log` for hours, billing, and sessions. Prefer `etu --structured status` for active-session data. Prefer `etu --structured project list` for project data. For mutations, provide all required positional inputs and flags. Do not rely on stdin or interactive prompts.
 
