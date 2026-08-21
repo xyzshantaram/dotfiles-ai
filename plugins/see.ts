@@ -9,7 +9,7 @@
  * Seams (all cited in VERIFY.md W2):
  * - Tool shape: `defineTool` from `@deepseek-ai/dsh-tools`
  *   (DSH/dsh-tools/README.md:65-97, the "Typed tool parameter schemas"
- *   section; the B1 aidos tools at packages/aidos/src/tools/aidos-tools.ts
+ *   section; the B1 aidos tools at src/tools/aidos-tools.ts in the aidos repo
  *   are the reference implementation).
  * - Settings namespace: `installSettingsSection` and `settingsNamespace`
  *   from `@deepseek-ai/dsh-settings`
@@ -23,7 +23,7 @@
  *   fields). `stopReason === "completed"` is the only success terminal state
  *   (DSH/dsh-subagent/lib/index.js:232).
  * - Child tool filter: computed from the visible registry at call time, the
- *   same technique as the B1 mask (packages/aidos/src/tools/mask.ts:96-105),
+ *   same technique as the B1 mask (src/tools/mask.ts:96-105 in the aidos repo),
  *   so it never names a tool the registry does not hold.
  *
  * NOT-VERIFIED (see VERIFY.md W2): the `profile` settings namespace contract.
