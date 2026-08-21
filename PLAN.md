@@ -295,7 +295,7 @@ records that the AI decided it was done.
 
 ### Deployment
 
-- The bundle lives here and syncs to `$DSH_HOME`. `dsh/sync.sh` is the
+- The bundle lives here and syncs to `$DSH_HOME`. `sync.sh` is the
   idempotent installer for a fresh machine. `node build.mjs` rebuilds the plugin
   bundles, and the live patch rows point at the repo copies, so a rebuild updates
   a live plugin with no sync run.
@@ -380,6 +380,9 @@ records that the AI decided it was done.
   a `preset.yml` description made the whole file fail to parse, and dsh still
   discovered the preset by directory name, so tools and tier masks worked with
   zero display metadata. The symptom looked like a missing bundle.
+- **Direct edits to `package.json` are denied by the harness; reads are allowed.** The `edit`/`write`/`batch_edit` tools refuse package.json (E_ACCESS / manifest denial). The `package` tool now (2026-08-21) has an `add_task` action that registers a `scripts` entry from validated argv via a node one-liner — this is the sanctioned way to change a script. Direct `write`/`edit` of package.json is still banned; only the tool (its `ctx.shell` calls are exempt from the manifest guard) may do it. pnpm's `pkg set` dotted-path parser rejects `:` and `-` in keys, so the tool must use the node route, not `pnpm pkg set`.
+- **bash-guard gates only the `bash` tool.** Verified in `bash-guard.ts` (it returns `next()` unless `exec.name === 'bash'`). So the "raw git denied, use mcp__git__*" rule binds only model bash calls. Plugin git via `ctx.subprocess` (dsh-worktree, dsh-git-plugin) and the git MCP both bypass it. The E6 `guards/git.json` reason update should point at the `git` skill AND note these bypass paths.
+- **E4 install commands (deferred until a `dsh web` restart; the live GUI holds the profile and the plugin CLI errors with a SQLite lock).** `dsh plugin --profile web add` for: `github:Tkingxiao/dsh-any-background` (THEMING plugin, not background jobs — verify intent), `github:xiyue718/dsh-ui-file-browser` (reversible), `/path/to/dsh-input-history` (local-path), `github:omdsh-dev/dsh-tool-calculator`, `github:omdsh-dev/dsh-tool-diff`, `https://github.com/omdsh-dev/dsh-at-file/archive/refs/tags/v0.6.7.tar.gz`. Analysis set: `dsh-worktree` (needs a manual `- insert` patch row; `dsh.bundle` is false; deps pin `@deepseek-ai/* 0.1.0-rc.6` vs installed 0.1.0-rc.7), `github:Tieboyh/dsh-session-search` (gate behind the session-search skill). Skip `dsh-git-plugin` unless a slash-command UI is wanted. All need a restart.
 
 ### Retired and reverted
 
@@ -473,26 +476,31 @@ restart is needed before that removal takes effect.
       `tools/post-execute` listener actually observes `skill` calls and that
       `exec.agent.ctx.tools.restrict({ deny })` applies per-agent (both written
       from source, neither runtime-tested).
+- [ ] E7 attachment-vision settlement — after installing `dsh-at-file`, `@` an
+      image file in the composer and confirm the visionless model receives a
+      usable path (not base64 or a denied image block), then that `see` with
+      that path returns a description. This is the hands-on proof that
+      attachment-vision can be dropped.
 ---
 
 ## Phase E: customize-setup + plugin curation + bundle restructure — `in_progress`
 
 ### Vision
 
-Drop the opencode era, flatten `dsh/` to the repo root, add a `customize-setup`
-skill (template-generated with the installed dsh version, revived by a pnpm
-task), curate third-party dsh plugins, and build a shared **skill-gating
-plugin** so tools mount only while a skill that declares them is active.
+Drop the opencode era and flatten the bundle to the repo root — done (E1/E2/E3). The opencode-era content is deleted and the `dsh/` tree now lives at the repo root. Remaining: the customize-setup skill exists (template-generated from the installed dsh version via a pnpm task), curate third-party dsh plugins, and build a shared **skill-gating plugin** so tools mount only while a skill that declares them is active.
+
+PLAN.md is a living migration document. Delete it once the remaining phase work is imported into aidos.
 
 ### Settled decisions
 
 - Skill frontmatter declares the tool gate. One shared gating plugin watches the
   `skill` tool result, unmasks named tools per-agent via `ctx.tools.restrict`,
   and clears the gate on compaction. Gated skills: `util`, `git`,
-  `session-search`, cordis.
+  `session-search`, cordis, ecommerce.
+- **ecommerce gates the Swiggy MCP tools.** New `ecommerce` skill with `tools-gated: [mcp__swiggy-food__get_addresses, mcp__swiggy-food__get_food_orders, mcp__swiggy-food__get_food_order_details, mcp__swiggy-instamart__get_orders]`. **Prerequisite (researched 2026-08-21): `skill-gate.ts` `reapplyDeny` must tolerate not-yet-registered MCP tool names before adding these.** `tools.restrict({ deny })` THROWS on a name absent from the live `restrictableNames` set, and MCP tools register asynchronously after the server connects, so an offline server would break ALL skill gating. Fix: in `reapplyDeny`, filter the deny list to names currently known (or try/catch + retry with the filtered set). Do NOT add `mcp__swiggy-*` to any `tools-gated` before that fix lands. `expense-split` must load `ecommerce` first (or list the same tool names) after gating.
 - The three personas (`coder`/`tester`/`researcher`) stay in dotfiles-ai and
   become **skills** the orchestrator tells a subagent to load. `agent/see.md` is
-  deleted (superseded by `dsh/plugins/see.ts`).
+  deleted (superseded by `plugins/see.ts`).
 - PLAN.md is editable again (the other subagent is done with it).
 
 ### Verified dsh facts
@@ -510,40 +518,15 @@ plugin** so tools mount only while a skill that declares them is active.
   skills to import.
 
 ### Tickets
-- [x] **E1 port the three personas into skills.** Done. `dsh/skills/{coder,tester,researcher}/SKILL.md` created from `agent/coder.md`/`tester.md`/`researcher.md`; role description, persona body, restrictions, and reporting contract ported with no `opencode` token. Originals still present until E2 deletes them.
-- [ ] **E2 delete opencode, scrub opencode, flatten `dsh/`, update README.**
-      Delete `agent/see.md`, stale top-level `skills/`, `plugin/opencode-profile.ts`,
-      `plugin/session-hygiene.ts`, `tools/shell-command-long-running.ts`,
-      `opencode.json`, `btw.jsonc`, `OPENCODE_SETUP.md`, and the
-      `@opencode-ai/plugin` dependency (via `pnpm remove`, never hand-edit). `git mv`
-      the `dsh/` tree to root, fix internal path refs, rewrite README.
-      *Evaluate:* `rg -i opencode` returns zero matches; `./sync.sh` runs from the
-      new root; README describes dsh.
-- [ ] **E3 write `customize-setup` skill + pnpm regeneration task.** Explain the
-      two components, layout, and the skill/plugin/preset model; generated from a
-      template filling the installed dsh version; regenerated by a pnpm task (not
-      a second skill). *Evaluate:* the pnpm task rewrites SKILL.md with the live
-      installed version.
-- [ ] **E4 curate plugins.** Install now (`dsh-any-background`, `dsh-ui-file-browser`
-      with reversible uninstall, `dsh-input-history`, `dsh-tool-calculator`,
-      `dsh-tool-diff` always-on); analyze (`dsh-worktree` vs bash whitelist vs own
-      git plugin; `dsh-git-plugin` coexisting with git MCP + worktree; `dsh-at-file`;
-      `dsh-session-search` gated). Wrap time/regex/markdown/encoding into one `util`
-      skill. Produce a conflict table. All installs via `dsh plugin --profile web
-      add`, never hand-edit manifests. *Evaluate:* web profile gains only approved
-      plugins; `util` skill gates the four tools; conflict table written.
-- [ ] **E5 build the shared skill-gating plugin.** Implemented, not yet runtime-verified. `dsh/plugins/skill-gate.ts` written and wired into `build.mjs` (bundles to `skill-gate.js`). Reads `tools-gated` from skill frontmatter at runtime, gates per-agent via `agent.ctx.tools.restrict({ deny })`, observes `skill` calls on `tools/post-execute`, clears on `compaction/start`. *Remaining:* mount it in a live `dsh web` session and confirm the gate flips (see human review queue). *Evaluate:* loading a gated skill makes its tools callable that session; a skill-less session cannot call them; compaction clears the gate.
+- [ ] **E4 curate plugins.** Install-now set + conflict table settled 2026-08-21 (researcher, read-only). **Recommended resolution:** install `dsh-worktree` (winner for the worktree case — the git MCP has no worktree lifecycle/workspace-registration; needs a manual `- insert` patch row since its `dsh.bundle` is false), `dsh-at-file` v0.6.7 (confirms E7), + the client/appearance/always-on set (`dsh-any-background` = THEMING plugin, verify intent; `dsh-ui-file-browser` reversible; `dsh-input-history`; `dsh-tool-calculator`; `dsh-tool-diff`). **Skip `dsh-git-plugin`** (read-only tools duplicate git MCP + worktree; its `/commit` auto-committer conflicts with the git-authority policy — install only if a slash-command UI is wanted, gated behind the `git` skill). **Gate `dsh-session-search`** behind the `session-search` skill (native `session.search` may suffice). Install commands + restart notes are in Critical context. **Not installed yet:** all installs are `dsh plugin --profile web add ...` and are DEFERRED until a `dsh web` restart (the live GUI holds the profile and the plugin CLI errors with a SQLite lock). "Util" skill (wrapping time/regex/markdown/encoding) still to write. *Evaluate:* web profile gains only approved plugins; `util` skill gates the four tools; conflict table written (done).
+- [ ] **E5 build the shared skill-gating plugin.** Implemented, not yet runtime-verified. `plugins/skill-gate.ts` written and wired into `build.mjs` (bundles to `skill-gate.js`). Reads `tools-gated` from skill frontmatter at runtime, gates per-agent via `agent.ctx.tools.restrict({ deny })`, observes `skill` calls on `tools/post-execute`, clears on `compaction/start`. *Remaining:* mount it in a live `dsh web` session and confirm the gate flips (see human review queue). Also needs the reapplyDeny MCP fix before `mcp__swiggy-*` tools can be gated (see ecommerce skill). *Evaluate:* loading a gated skill makes its tools callable that session; a skill-less session cannot call them; compaction clears the gate.
 - [ ] **E6 cordis import + util + git skills + bash-guard.** Import the two cordis
       skills with `tool-cordis` gated behind the skill; `whenToUse` tells the agent
       to load `customize-setup` first. Write `util` and `git` skills. Update
       `guards/git.json` reason to point at the git skill. *Evaluate:* gated tools
       hidden until load; `guards/git.json` names the git skill; customize-setup is
       a prerequisite in cordis `whenToUse`.
-- [ ] **E7 fold attachment-vision into `see.ts`.** Read `endlass/dsh-attachment-vision`
-      read-only and extract the image→path-for-no-vision concept into `see.ts`;
-      settle whether `at-file` already covers it. *Evaluate:* no new vision plugin
-      installed; no-vision path works via the existing subagent; at-file overlap
-      decided and documented.
+- [ ] **E7 fold attachment-vision into `see.ts`.** Settlement decided 2026-08-21 from a read of `endlass/dsh-attachment-vision` and `FSMargoo/dsh-at-file`. dsh ships a native `read_image` tool (`dsh-tool-fs`) but it is **route-gated to image-capable models**, so a visionless parent cannot call it directly. The bundle's `see.ts` already implements the image→path-for-no-vision pattern: a visionless model is handed an image path, calls `see`, which dispatches a vision subagent whose keep-set includes `read_image`/`read`, routing on the profile whose image input `sync.sh` has declared. The `@` file-mention is **not native to dsh** (dsh-session-reference handles cross-session mentions only); it comes from `dsh-at-file`, which emits a `<workspace-reference path=... kind=file>` marker and does NOT inline content, so a `@`-ed image gives the model the path (not base64). **Verdict: do NOT modify `see.ts`; drop `dsh-attachment-vision` (it is for GUI drag-and-drop image blocks, a different path than `@`); install `dsh-at-file` so `@ image` yields a path the model can feed to `see`.** *Evaluate:* no new vision plugin installed; `@ image.png` gives the visionless model a path; `see` with that path returns a description; overlap documented above.
 
 ### Ordering
 
@@ -556,3 +539,4 @@ E6 needs E3+E4+E5.
 - Frontmatter key: resolved — top-level `tools-gated: [...]`.
 - Gating plugin runtime: `exec.agent.ctx.tools.restrict` and the host-context `tools/post-execute` listener are implemented from verified source but NOT runtime-tested. This is now a human-review-queue item, not an open design risk.
 - `dsh plugin` vs package-tool install path: run the `dsh plugin` commands directly; do not hand-edit manifests.
+- **Direct edits to `package.json` are denied by the harness.** The `edit`/`write`/`batch_edit` tools refuse it with E_ACCESS / a manifest denial. The `package` tool handles dependency changes only, so a project-script task (pnpm `scripts` entry) cannot be registered through any tool. Confirmed 2026-08-21 when E3 could not add its `gen:customize-setup` script. Fix belongs in the package tool: add an add-task action (e.g. `pnpm pkg set scripts.<name>=...`), and allow read-only inspection of manifests so the model can see them without triggering the denial.

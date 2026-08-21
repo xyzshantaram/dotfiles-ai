@@ -1,7 +1,7 @@
 /**
  * W4 — Session hygiene prompt section (personal bundle).
  *
- * Port of the opencode session-hygiene behavior
+ * An evolution of the legacy session-hygiene plugin
  * (staging `_src/plugin/session-hygiene.ts`) onto dsh's prompt-section seam.
  *
  * dsh has no `experimental.chat.system.transform` hook. Instead this plugin
@@ -22,7 +22,7 @@
  * (DSH/dsh-system-prompt/lib/index.js `interpolate`).
  *
  * Thresholds are plugin-row `config` (schemastery), so the preset tunes them
- * without editing this file. Defaults match the opencode original
+ * without editing this file. Defaults are:
  * (2h / 5 compactions soft, 4h / 10 hard).
  *
  * NOT-VERIFIED: the exact `compaction/*` event payload fields (only the

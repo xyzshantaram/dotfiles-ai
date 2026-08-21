@@ -1,3 +1,9 @@
+---
+name: expense-split
+description: Fetch delivery-platform order history, itemize it into JSON, run a Tkinter dashboard to split expenses among people, then push the splits to Splitwise via OAuth. Every step persists to ~/.cache/ordersplit/ so the process is crash-safe and resumable.
+whenToUse: The user wants to split delivery-platform (Blinkit, Swiggy, Zepto) expenses among roommates, partners, or a group. Trigger phrases are "split the order", "splitwise", "who owes what", and "expense split".
+---
+
 # Skill: expense-split
 
 Fetch delivery-platform order history, itemize it into JSON, run a
@@ -20,25 +26,33 @@ so the process is crash-safe and resumable.
 | `dashboard.py` | Tkinter GUI: load orders.json, split items by person, export output.json |
 | `push_to_splitwise.py` | CLI: read output.json, OAuth to Splitwise, create expenses interactively |
 
+Resolve `dashboard.py` and `push_to_splitwise.py` against this skill's base
+directory.
+
 ## Full workflow
 
 ### Step 1: Fetch orders from each platform
 
-Run these tool calls in parallel via the agent:
+Run these tool calls in parallel via the agent. The MCP tool prefix in dsh is
+`mcp__<serverName>__<rawName>`. The raw suffix follows each server's
+advertised tools:
 
 | Platform | Tool | Notes |
 |----------|------|-------|
-| Blinkit | `blinkit_blinkit_order_history` | Needs `blinkit_blinkit_send_otp` + `blinkit_blinkit_verify_otp` login first. No address param needed. |
-| Zepto | `zepto_list_order_history` | Returns UUID order ids. Follow up with `zepto_get_order_detail` for each order to get per-item prices (in paise). |
-| Swiggy Instamart | `swiggy-instamart_get_orders` (orderType: "DASH" then "INSTAMART") | Returns per-item prices and bill breakdown directly. No addressId needed. |
-| Swiggy Food | `swiggy-food_get_addresses` then `swiggy-food_get_food_orders` | Needs addressId from get_addresses. Per-item prices require `swiggy-food_get_food_order_details` for each orderId. |
+| Blinkit | `mcp__blinkit__blinkit_order_history` | Needs `mcp__blinkit__blinkit_send_otp` + `mcp__blinkit__blinkit_verify_otp` login first. No address param needed. |
+| Zepto | `mcp__zepto__list_order_history` | Returns UUID order ids. Follow up with `mcp__zepto__get_order_detail` for each order to get per-item prices (in paise). |
+| Swiggy Instamart | `mcp__swiggy-instamart__get_orders` (orderType: "DASH" then "INSTAMART") | Returns per-item prices and bill breakdown directly. No addressId needed. |
+| Swiggy Food | `mcp__swiggy-food__get_addresses` then `mcp__swiggy-food__get_food_orders` | Needs addressId from get_addresses. Per-item prices require `mcp__swiggy-food__get_food_order_details` for each orderId. |
 
 #### MCP configuration
 
 The Blinkit MCP server is [yniks/blinkit-mcp](https://github.com/yniks/blinkit-mcp),
 installed locally at `~/installs/blinkit-mcp` and run with Node.
 
-From `~/.config/opencode/opencode.json`:
+The source config from the legacy harness is kept
+for reference below. In dsh these servers are configured as
+`@deepseek-ai/dsh-mcp-client` plugin rows in the personal bundle's `mcp/`
+composition (see SPEC-W W3):
 
 ```jsonc
 {
@@ -65,18 +79,23 @@ From `~/.config/opencode/opencode.json`:
 }
 ```
 
+Note: the personal bundle's MCP roster (W3) ships swiggy-food and
+swiggy-instamart. Blinkit and Zepto servers are NOT in that roster. They must
+be added before this skill can fetch from those platforms.
+
 #### Authentication per platform
 
-**Blinkit**: The agent calls `blinkit_blinkit_send_otp` with the user's
-phone number. The user reads the SMS and tells the agent the OTP. The agent
-calls `blinkit_blinkit_verify_otp`. Token is cached in the MCP process.
+**Blinkit**: The agent calls `mcp__blinkit__blinkit_send_otp` with the
+user's phone number. The user reads the SMS and tells the agent the OTP. The
+agent calls `mcp__blinkit__blinkit_verify_otp`. Token is cached in the MCP
+process.
 
 **Swiggy Food + Instamart**: Built-in MCP auth works automatically.
 The remote MCP at `mcp.swiggy.com` handles the token exchange. No
 intervention needed.
 
 **Zepto**: Uses `mcp-remote` tunneling to `mcp.zepto.co.in`. Auth is
-handled by the remote server. First call to `zepto_list_order_history`
+handled by the remote server. First call to `mcp__zepto__list_order_history`
 may need the user to authenticate in-browser once.
 
 ### Step 2: Itemize orders into JSON
@@ -84,17 +103,17 @@ may need the user to authenticate in-browser once.
 After fetching all orders, the agent must:
 
 1. Exclude cancelled orders.
-2. Search each product on Blinkit via `blinkit_blinkit_search` /
-   `blinkit_blinkit_pick_best` to get current prices. Use the exact
+2. Search each product on Blinkit via `mcp__blinkit__blinkit_search` /
+   `mcp__blinkit__blinkit_pick_best` to get current prices. Use the exact
    product name from the order history as the search query. Check
    alternatives in the response for the correct variant (pack size
    matters — 2pcs vs 10pcs vs 4pcs).
-3. For Zepto, per-item prices come from `zepto_get_order_detail`
+3. For Zepto, per-item prices come from `mcp__zepto__get_order_detail`
    (`unitSellingPrice` and `totalFinalSellingPrice` in paise).
    Note: Zepto fees are baked into `totalFinalSellingPrice` — do not
    add separate delivery lines for Zepto orders. Set fees to zero.
 4. For Swiggy Food, per-item prices come from
-   `swiggy-food_get_food_order_details`. Delivery charges are the gap
+   `mcp__swiggy-food__get_food_order_details`. Delivery charges are the gap
    between item sum and order total.
 5. For Swiggy Instamart DASH, the API returns `itemTotal` but not
    per-item prices. Use `itemTotal` as the item sum and backsolve
@@ -150,7 +169,7 @@ quantity to get the effective per-unit price for the orders.json.
 ### Step 3: Run the expense-split dashboard
 
 ```
-python ~/.config/opencode/skills/expense-split/dashboard.py ~/ai-scratch/orders.json
+python dashboard.py ~/ai-scratch/orders.json
 ```
 
 #### Dashboard features
@@ -176,7 +195,7 @@ python ~/.config/opencode/skills/expense-split/dashboard.py ~/ai-scratch/orders.
 - **Summary**: `--summary` flag prints a terminal table of every order
   with per-person columns, no GUI:
   ```
-  python ~/.config/opencode/skills/expense-split/dashboard.py --summary ~/ai-scratch/orders.json
+  python dashboard.py --summary ~/ai-scratch/orders.json
   ```
 
 #### Keyboard shortcuts
@@ -238,7 +257,7 @@ pip install requests-oauthlib
 #### Run
 
 ```
-python ~/.config/opencode/skills/expense-split/push_to_splitwise.py --env ~/ai-scratch/splitwise.env
+python push_to_splitwise.py --env ~/ai-scratch/splitwise.env
 ```
 
 #### Flow

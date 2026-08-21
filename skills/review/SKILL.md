@@ -1,7 +1,7 @@
 ---
 name: review
 description: Review a code change (a coder subagent's diff, a specific commit, or a set of files) for code quality, convention adherence, and scope creep. Use when dispatched to review implementation work, or when the user asks to review a diff/PR/commit.
-compatibility: opencode
+whenToUse: The user asks to review a diff, PR, or commit. Use it also when the orchestrator dispatches a review pass over a coder subagent's work.
 ---
 
 # Review skill
