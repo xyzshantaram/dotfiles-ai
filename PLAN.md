@@ -31,7 +31,7 @@ false assurance.
 
 ### Phase A: personal bundle, open ports — `in_progress`
 
-- [ ] **W13 step 1: the keyed-slot shadowing spike.** Answer one question: can a
+- [ ] **W13 step 1: the keyed-slot shadowing spike.** **STATUS 2026-08-21 evening: dispatched twice, killed both times by the subagent-infrastructure fault (see Critical context, "Session state"). No findings recorded. RERUN after the profiles plugin lands.** Answer one question: can a
       client plugin claim a key that a shipped plugin already registered on a
       KEYED slot, and win? The slot system documents the rule only for the `root`
       SINGLE slot, where a dynamically registered entry takes a lower priority
@@ -59,19 +59,7 @@ false assurance.
       override. The tab title reads `dsh | <session title>`. The cost figure
       tracks a real session.
 
-- [ ] **W7 dismissed questions interrupt the loop.** Today, closing a question
-      rejects the pending ask with `ASK_CANCELLED` (verified in
-      `dsh-host-apiproxy`), the model sees a tool error, and it keeps going. Ship
-      a personal `ask_user_question` row that wraps the shipped tool. On
-      `ASK_CANCELLED` the wrapper calls
-      `exec.agent.cancel('user-dismissed-question', { keepInbox: true })`.
-      `keepInbox` preserves queued and steering work for the next prompt, so a
-      dismissed question stops the run, not the session. Plan-review dismissal
-      already stops via `dsh-plan-mode`; this covers the generic question path.
-      *Evaluate:* dismissing a question stops the turn. A queued message still
-      runs on the next prompt. The session stays usable.
-
-- [ ] **W8 reject with a comment.** The approval answer payload is exactly
+- [ ] **W8 reject with a comment.** **STATUS 2026-08-21 evening: dispatched twice, killed both times by the subagent-infrastructure fault. Unknown whether partial edits exist; inventory plugins/, build.mjs, sync.sh before rerunning. RERUN after the profiles plugin lands.** The approval answer payload is exactly
       `{ sessionId, approvalId, outcome: 'allowed-once' | 'rejected' }` (verified
       in `dsh-host-apiproxy/api/approvals.schema`). There is no comment channel.
       Extend the permission card with an optional Comment field. Reject with a
@@ -85,7 +73,7 @@ false assurance.
       changes its next action. A rejection with no comment behaves as it does
       today.
 
-- [ ] **W14 the wake-tone client plugin.** Replace the caffeine skill with a web
+- [ ] **W14 caffeine inhibitor-leak fix.** **DECIDED 2026-08-21: the wake-tone client plugin idea below is DROPPED (user call: "the silent tone idea is not great"). Only the inhibitor-leak bug fix remains. The fix was dispatched twice and killed both times by the infrastructure fault; check skills/caffeine/ for half-applied edits before rerunning. The stale wake-tone body below is kept only for provenance and can be deleted at the next plan compaction.** ~~Replace the caffeine skill with a web
       client plugin that plays a near-silent tone while the agent works. KDE
       PowerDevil blocks automatic sleep while audio plays, so the tone holds the
       machine awake with no manual toggle and no logind inhibitor to leak.
@@ -124,34 +112,6 @@ false assurance.
       suspends on its normal timeout after the turn ends. Two tabs open on the
       same harness do not produce two tones. Closing the tab stops the tone.
 
-- [ ] **W15 package-tool rework.** The `package` tool invented a project. On
-      2026-08-21 it ran `npm install` at the aidos repo root, which carries no
-      manifest, and created a `package.json`, a lockfile, and a `node_modules`
-      there. The change belonged in `packages/aidos`. Three faults combined:
-      `cwd` comes only from `exec.agent.session.header.cwd` (`package-tool.ts`
-      line 247), `NODE_MARKERS` lists lockfiles but never `package.json` so
-      `detectManager` cannot tell "no project" from "npm project", and npm does
-      not walk up for an install target.
-      **Agreed scope, settled 2026-08-21. No more discussion needed.**
-      - Fail closed. Detect a real manifest for the ecosystem, and refuse with a
-        message naming the directory when none exists. This is the fault that
-        matters. A `cwd` argument alone does not fix it.
-      - Add a `cwd` argument, resolved against the session cwd. Confine it inside
-        the tool, because no seam below does it (see Critical context).
-      - Add a dev flag for nodejs. Default to production, matching npm.
-      - REMOVE the `version` parameter. Agents hallucinate versions from stale
-        training data. A pin is a request to the user, not a tool argument.
-      - Refuse a downgrade instead. Compare the resolved version against any
-        installed version with `semver.lt` and refuse, naming the command to run
-        by hand. `semver@7.8.5` is a devDependency here now.
-      - Fix the dead `pip install pkg==` branch, and either make `update`
-        distinct from `add` or say in the description that it means
-        install-latest.
-      *Evaluate:* an add with no manifest in the target directory refuses and
-      names the directory. An add with a `cwd` naming `packages/aidos` writes
-      that manifest and nothing else. A dev add lands in `devDependencies`. An
-      add that would downgrade an installed package refuses and prints the manual
-      command. No tool path can name a version.
 
 - [ ] **W13 step 2: the markdown renderer.** Only if the spike passes. The
       shipped markdown renderer is a hand-rolled `switch` over mdast node kinds
@@ -190,79 +150,8 @@ false assurance.
       *Evaluate:* the harness works with no opencode config left, and a fresh
       clone of this repo syncs the same personal bundle.
 
-### Phase C: the verification skill and the rules — `in_progress`
+### Phase C: the verification skill and the rules — `done`
 
-- [ ] **T1.1 Write the `verification` skill.** Create
-      `skills/verification/SKILL.md`. The skill must force three questions for
-      any change under review, and must forbid a TRUE verdict without an evidence
-      line:
-      1. If this diff is reverted, what observable behaviour changes. Name the
-         file and the mechanism. A change with no answer is a no-op.
-      2. For every factual claim in the description, the issue, and the commit
-         message, paste the `rg` or `file:line` that proves it. Strike any claim
-         with no evidence line.
-      3. For every new test, name a code change that makes it fail. A test with
-         no such change is tautological.
-      The skill must also state that an existence check is not a verification,
-      and that a hedge in a subagent report must survive into the final prose.
-      *Evaluate:* run the skill against MR !248's original diff and description.
-      It must independently reach "this is a no-op" and "the #317 root cause is
-      false" without being told either. Both checks are reproducible from
-      `origin/main`.
-      *Open design question, still to settle.* The !248 test has a weakness. We
-      already know both answers, so we could write a skill that passes only this
-      one case. That is the same error the old verification pass made. The user
-      agrees the !248 result is worth having anyway, and wants to think about the
-      wider question. Candidate second test: point the skill at a `nostr-canvas`
-      merge request that nobody has analysed yet, and judge the output blind.
-      Settle this before closing T1.1.
-
-- [ ] **T1.2 Wire the skill into the reviewer and the orchestrator.** Reference
-      the `verification` skill from the `researcher` subagent persona and from
-      `AGENTS.md`, so both the review path and the primary session reach for it.
-      *Evaluate:* both files name the skill. Restart `dsh web` and confirm the
-      skill appears in the session skill catalog.
-
-- [ ] **T3.1 Orphan rule in the `plan` skill.** A ticket that builds something
-      without wiring it must create a paired wire-up ticket. No ticket closes
-      while a new exported symbol has no non-test caller.
-      *Evaluate:* the rule text names the check command. Run that command against
-      the `useLuaLintSandbox` commit and confirm it flags the orphan.
-
-- [ ] **T3.2 Claim-evidence rule in the `review` skill.** A review must separate
-      what the reviewer read from what it inferred, and must carry hedges forward
-      verbatim.
-      *Evaluate:* the `review` skill body references the `verification` skill.
-
-- [ ] **T3.4 Plan-artifact rule.** No `PLAN.md`, ticket file, or `Plan:` commit
-      may enter a product repo. `AGENTS.md` already says this. Restate it as a
-      pre-push check.
-      *Evaluate:* the rule names the check. Confirm it would have caught the 26
-      `Plan:` commits and `AI_CHAT_TILES_PLAN.md` on `ai-chat-tlc`.
-
-### Phase D: `working-with-soapbox` skill — `pending`
-
-- [ ] **T4.1 Write `skills/working-with-soapbox/SKILL.md`.** Let the agent answer
-      "what should I work on" from the tracker instead of from whatever it
-      noticed while reading code. !249 fixed a cosmetic gap the AI found itself,
-      in the same function as #229, which the DevRel lead reported in April from
-      a real iPhone 12.
-      Cover: the `soapbox-pub` group on gitlab.com, the stacked-MR and
-      squash-merge workflow, the 11-step `CONTRIBUTING.md:67` contribution
-      workflow, the seven close-without-review triggers at
-      `CONTRIBUTING.md:166`, the `Regression-of:` trailer convention, and the
-      one-bug-one-MR rule. State where to pull work from, in priority order:
-      unassigned P1 issues, then human-reported bug clusters, then everything
-      else. Self-discovered work ranks last. Name the reviewer bot `dirkrost` and
-      the colleagues whose lanes need a heads-up.
-      Also carry the checkbox rule. Never edit, reword, or negate a checklist
-      item in the merge request template to make it checkable. Leave the box
-      unchecked. Say why in the description. Point at the open issue that asks to
-      change the rule. Use `CONTRIBUTING.md:63` and issue #320 as the worked
-      example, and state that #320 is already open so nobody opens a duplicate.
-      *Evaluate:* ask a fresh session "what should I work on in ditto" and
-      confirm it returns tracker issues in priority order, and that it names the
-      open P1s and the iOS cluster ahead of anything self-discovered.
 
 ### Phase E: rebuild the measurement side — `blocked`
 
@@ -292,6 +181,20 @@ records that the AI decided it was done.
       unsupported. That is the actual defect class, and it was never counted.
 
 ## Critical context
+
+### Session state 2026-08-21 evening — READ ME FIRST
+
+- **Subagent dispatch is broken.** Since the user switched AI providers mid-session (`agent-default-model` is now `opencode-zen / x-preview-f-free`), every `subagent` dispatch fails within seconds with no closing message, while the orchestrator session works fine. Diagnosis so far: (a) the first wave of failures was explained by a `dsh web` crash loop — sync.sh's rewritten aidos step added the bundle row but the git install failed (the systemd user service has no SSH agent for `git@github.com`), leaving an unresolvable bundle that killed composition at boot; the user installed the aidos package manually and dropped it from the profile bundles list, which ended the crash loop. (b) A fresh probe dispatched on the now-stable server ALSO died instantly, so the crash loop is not the whole story. Verified NOT the cause: missing built plugin files (all `plugins/*.js` referenced by the live patch exist). Unverified suspicion: free-tier concurrency limits on opencode zen rejecting parallel child streams. The `subagent` tool exposes no per-call model override, so children inherit `agent-default-model`; there is no way to route them differently today.
+- **Decision: build the profiles plugin in the MAIN session first** (proper per-role model routing, the W6-adjacent seam), then rerun the failed jobs once routing works. Failed jobs to rerun: W13 spike, W8 reject-with-comment, W14 caffeine fix, and E4 completion (add `@xgone/dsh-remote`, see below).
+- **Completed and verified this session (staged, not committed):** W7 ask-interrupt wrapper (`plugins/ask-interrupt.ts` + build.mjs entry + sync.sh row); W15 package-tool rework (fail-closed manifest, confined cwd, dev flag, version param removed, downgrade refusal via semver.lt, add_task intact); Phase C verification skill (+ wiring into researcher/AGENTS/plan/review; !248 run plus blind !257 run both real); Phase D working-with-soapbox skill (several CONTRIBUTING.md citations marked UNCONFIRMED inside the skill because GitLab MCP tools died mid-run — verify before trusting); E5 reapplyDeny fix coded (`restrictKnown` retry, build-verified only). All of this survived the user's stash/unstash cycle intact.
+- **dsh-remote approved for E4 (user decision: instance is LAN-only behind Caddy TLS, never internet-exposed).** Add `dsh plugin --profile web add @xgone/dsh-remote` to sync.sh's install step plus a config row `- id: remote, config: { enabled: true, session: { secure: true } }` in the cordis.patch.yml heredoc. No bootstrap section: potato has a local browser, the user creates the admin account via loopback first-run. Source: https://github.com/xgone/dsh-remote
+- **aidos bundle state:** the package IS installed in `~/.dsh/profiles/web/node_modules/aidos`, but its bundle row is currently ABSENT from the profile's `package.json` bundles list (dropped during the crash-loop recovery). Without the row the host-plane aidos-core service does not mount. sync.sh's aidos step re-registers it idempotently on the next run; make sure the git install actually succeeds this time (needs SSH auth available to whatever shell runs sync.sh).
+- **Nothing from this session is committed.** Working tree carries all of it as modifications + untracked files. Commit groups, after user review: (1) aidos git-install rework (sync.sh, plugins/see.ts, PLAN.md path fixes), (2) W7+W15+E5 plugin fixes, (3) Phase C+D skills and wiring, (4) E4 staging (sync.sh installs, util/session-search skills, conflict-table doc).
+
+### Verification skill
+
+- **T1.1's blind-test question is settled.** The `verification` skill's three questions were run against MR !248 (known answer) and, blind, against MR !257 ("Upgrade Blobbi Kit to 0.5.0", picked from the open MR list with no prior read of its outcome). The !248 run correctly found the current diff is NOT a no-op (the plan's own phrasing described an earlier, superseded revision of that same MR, not its current head) and confirmed the #317 root cause was invented. The !257 blind run found the version bump and override removal are real, but struck the MR's central justifying claim — that `@blobbi-kit/core@0.5.0` itself drops the `@nostrify/nostrify` peer dependency — as unproven, since neither a web search nor the API-returned lockfile diff (returned collapsed/empty) could confirm it. The skill worked blind: it did not just confirm what was already expected, and it produced a real, unresolved hedge instead of a false pass.
+
 
 ### Deployment
 
@@ -332,6 +235,8 @@ records that the AI decided it was done.
   personal-profile `see` path is unverified.
 
 ### Seams and gotchas
+
+- **GitLab MCP tools can drop out mid-session.** During T4.1 research, `glab_issue_view`, `glab_mr_view`, `glab_issue_list`, and `glab_api` stopped responding partway through a research pass in a delegated subagent session, while `glab_repo_view` kept working. This looked like a permission denial at first but was a tool-availability fault instead, so retrying did not help. If this recurs, fall back to whatever `glab_*` tool still answers and flag any unconfirmed fact in the output rather than blocking on full research.
 
 - **Keyed-slot shadowing is unverified and two tickets depend on it.** W6's
   Profile seat and W13's renderer both assume a plugin can claim a key a shipped
@@ -382,7 +287,7 @@ records that the AI decided it was done.
   zero display metadata. The symptom looked like a missing bundle.
 - **Direct edits to `package.json` are denied by the harness; reads are allowed.** The `edit`/`write`/`batch_edit` tools refuse package.json (E_ACCESS / manifest denial). The `package` tool now (2026-08-21) has an `add_task` action that registers a `scripts` entry from validated argv via a node one-liner — this is the sanctioned way to change a script. Direct `write`/`edit` of package.json is still banned; only the tool (its `ctx.shell` calls are exempt from the manifest guard) may do it. pnpm's `pkg set` dotted-path parser rejects `:` and `-` in keys, so the tool must use the node route, not `pnpm pkg set`.
 - **bash-guard gates only the `bash` tool.** Verified in `bash-guard.ts` (it returns `next()` unless `exec.name === 'bash'`). So the "raw git denied, use mcp__git__*" rule binds only model bash calls. Plugin git via `ctx.subprocess` (dsh-worktree, dsh-git-plugin) and the git MCP both bypass it. The E6 `guards/git.json` reason update should point at the `git` skill AND note these bypass paths.
-- **E4 install commands (deferred until a `dsh web` restart; the live GUI holds the profile and the plugin CLI errors with a SQLite lock).** `dsh plugin --profile web add` for: `github:Tkingxiao/dsh-any-background` (THEMING plugin, not background jobs — verify intent), `github:xiyue718/dsh-ui-file-browser` (reversible), `/path/to/dsh-input-history` (local-path), `github:omdsh-dev/dsh-tool-calculator`, `github:omdsh-dev/dsh-tool-diff`, `https://github.com/omdsh-dev/dsh-at-file/archive/refs/tags/v0.6.7.tar.gz`. Analysis set: `dsh-worktree` (needs a manual `- insert` patch row; `dsh.bundle` is false; deps pin `@deepseek-ai/* 0.1.0-rc.6` vs installed 0.1.0-rc.7), `github:Tieboyh/dsh-session-search` (gate behind the session-search skill). Skip `dsh-git-plugin` unless a slash-command UI is wanted. All need a restart.
+- **E4 install commands and the full conflict table are in `docs/plugins-conflict-table.md`** (durable handoff; temporary — delete it once E4 is wired into `sync.sh` and verified). Summary: deferred until a `dsh web` restart (the live GUI holds the profile and the plugin CLI errors with a SQLite lock). `dsh plugin --profile web add` for `dsh-any-background` (THEMING, verify intent), `dsh-ui-file-browser` (reversible), `dsh-input-history` (local path), `dsh-tool-calculator`, `dsh-tool-diff`, and `dsh-at-file` v0.6.7 tarball; analysis set: `dsh-worktree` (manual `- insert` patch row; `dsh.bundle` false; pins `@deepseek-ai/* 0.1.0-rc.6` vs rc.7), `dsh-session-search` (gate behind session-search skill). Skip `dsh-git-plugin`. All need a restart.
 
 ### Retired and reverted
 
@@ -448,8 +353,6 @@ restart is needed before that removal takes effect.
       fresh clone syncs the same bundle.
 - [ ] W14 — re-dispatch both research passes. Both failed on 2026-08-21 and
       produced no report.
-- [ ] W15 — the package tool refuses an add in a directory with no manifest, and
-      a `cwd` argument reaches `packages/aidos`.
 - [ ] Personal-bundle orphan — `~/.dsh/plugins/personal/` holds five stale plugin
       builds stamped 2026-08-20 08:42. Nothing mounts it: neither `sync.sh` nor
       `build.mjs` names that path, and the live patch points at the repo copies.
@@ -497,7 +400,7 @@ PLAN.md is a living migration document. Delete it once the remaining phase work 
   `skill` tool result, unmasks named tools per-agent via `ctx.tools.restrict`,
   and clears the gate on compaction. Gated skills: `util`, `git`,
   `session-search`, cordis, ecommerce.
-- **ecommerce gates the Swiggy MCP tools.** New `ecommerce` skill with `tools-gated: [mcp__swiggy-food__get_addresses, mcp__swiggy-food__get_food_orders, mcp__swiggy-food__get_food_order_details, mcp__swiggy-instamart__get_orders]`. **Prerequisite (researched 2026-08-21): `skill-gate.ts` `reapplyDeny` must tolerate not-yet-registered MCP tool names before adding these.** `tools.restrict({ deny })` THROWS on a name absent from the live `restrictableNames` set, and MCP tools register asynchronously after the server connects, so an offline server would break ALL skill gating. Fix: in `reapplyDeny`, filter the deny list to names currently known (or try/catch + retry with the filtered set). Do NOT add `mcp__swiggy-*` to any `tools-gated` before that fix lands. `expense-split` must load `ecommerce` first (or list the same tool names) after gating.
+- **ecommerce gates the Swiggy MCP tools.** New `ecommerce` skill with `tools-gated: [mcp__swiggy-food__get_addresses, mcp__swiggy-food__get_food_orders, mcp__swiggy-food__get_food_order_details, mcp__swiggy-instamart__get_orders]`. **Prerequisite fix coded 2026-08-21, runtime-unverified:** `skill-gate.ts` `reapplyDeny` now filters the deny list to names `tools.restrict()` currently accepts, so a not-yet-registered MCP tool name (for example a Swiggy MCP server still connecting, or offline) no longer breaks gating for other skills. `tools.restrict({ deny })` still throws on a name absent from the live `restrictableNames` set; no direct list-current-tools API exists in `@deepseek-ai/dsh-tools` (`view()` is private), so the fix retries `restrict()` on that specific error, parsing the known-tool set out of the error message and filtering the deny list before retrying. Runtime verification is pending the next `dsh web` restart (see E5). `expense-split` must load `ecommerce` first (or list the same tool names) after gating.
 - The three personas (`coder`/`tester`/`researcher`) stay in dotfiles-ai and
   become **skills** the orchestrator tells a subagent to load. `agent/see.md` is
   deleted (superseded by `plugins/see.ts`).
@@ -518,8 +421,9 @@ PLAN.md is a living migration document. Delete it once the remaining phase work 
   skills to import.
 
 ### Tickets
-- [ ] **E4 curate plugins.** Install-now set + conflict table settled 2026-08-21 (researcher, read-only). **Recommended resolution:** install `dsh-worktree` (winner for the worktree case — the git MCP has no worktree lifecycle/workspace-registration; needs a manual `- insert` patch row since its `dsh.bundle` is false), `dsh-at-file` v0.6.7 (confirms E7), + the client/appearance/always-on set (`dsh-any-background` = THEMING plugin, verify intent; `dsh-ui-file-browser` reversible; `dsh-input-history`; `dsh-tool-calculator`; `dsh-tool-diff`). **Skip `dsh-git-plugin`** (read-only tools duplicate git MCP + worktree; its `/commit` auto-committer conflicts with the git-authority policy — install only if a slash-command UI is wanted, gated behind the `git` skill). **Gate `dsh-session-search`** behind the `session-search` skill (native `session.search` may suffice). Install commands + restart notes are in Critical context. **Not installed yet:** all installs are `dsh plugin --profile web add ...` and are DEFERRED until a `dsh web` restart (the live GUI holds the profile and the plugin CLI errors with a SQLite lock). "Util" skill (wrapping time/regex/markdown/encoding) still to write. *Evaluate:* web profile gains only approved plugins; `util` skill gates the four tools; conflict table written (done).
-- [ ] **E5 build the shared skill-gating plugin.** Implemented, not yet runtime-verified. `plugins/skill-gate.ts` written and wired into `build.mjs` (bundles to `skill-gate.js`). Reads `tools-gated` from skill frontmatter at runtime, gates per-agent via `agent.ctx.tools.restrict({ deny })`, observes `skill` calls on `tools/post-execute`, clears on `compaction/start`. *Remaining:* mount it in a live `dsh web` session and confirm the gate flips (see human review queue). Also needs the reapplyDeny MCP fix before `mcp__swiggy-*` tools can be gated (see ecommerce skill). *Evaluate:* loading a gated skill makes its tools callable that session; a skill-less session cannot call them; compaction clears the gate.
+- [ ] **E4 curate plugins.** Conflict table settled 2026-08-21 (researcher, read-only); full table in `docs/plugins-conflict-table.md`. **Staged, not yet live.** `sync.sh` step 8 now runs `dsh plugin --profile web add` for all eight approved plugins: `dsh-any-background`, `dsh-ui-file-browser`, `dsh-input-history` (behind an empty-by-default `DSH_INPUT_HISTORY_PATH` override — it ships no git-tagged publish and no local checkout exists yet, so the install is skipped with a warning until that variable is set), `dsh-tool-calculator`, `dsh-tool-diff`, `dsh-at-file` v0.6.7 tarball, `dsh-worktree`, and `dsh-session-search`. `dsh-git-plugin` is skipped, as settled. `dsh-worktree`'s manual `- insert: {id: worktree, name: 'dsh-worktree'}` patch row is in step 7's `cordis.patch.yml` heredoc. `skills/util/SKILL.md` gates `tool-time`/`tool-regex`/`tool-markdown`/`tool-encoding`, sourced from the `omdsh-dev/dsh-toolkit` collection (confirmed real via its README; `dsh-tool-calculator`/`dsh-tool-diff` stay always-on and ungated, per conflict row C10). `skills/session-search/SKILL.md` gates `agent_session_search`/`agent_session_read`, the real tool names from the plugin's README. `bash -n sync.sh` and `node build.mjs` both pass. **Remaining, blocked on the single end-of-session `dsh web` restart:** run `sync.sh` (may still hit the SQLite profile lock if a live `dsh web` process holds it — do not kill that process to work around it; wait for the orchestrator's restart); after the restart, confirm the eight plugins load with no error, confirm the `worktree` tools appear (watch for the `dsh-worktree` peer pinned to `@deepseek-ai/* 0.1.0-rc.6` vs this install's rc.7 — report a load failure instead of pinning a workaround), confirm `util` and `session-search` skills appear in the session catalog and their gated tools stay hidden until loaded, then delete `docs/plugins-conflict-table.md`. *Evaluate:* web profile gains only the approved plugins; `util` skill gates the four toolkit tools and leaves calculator/diff ungated; `session-search` skill gates the two real session-search tool names; conflict table deleted only after live verification.
+- [ ] **E5 build the shared skill-gating plugin.** Implemented, not yet runtime-verified. `plugins/skill-gate.ts` written and wired into `build.mjs` (bundles to `skill-gate.js`). Reads `tools-gated` from skill frontmatter at runtime, gates per-agent via `agent.ctx.tools.restrict({ deny })`, observes `skill` calls on `tools/post-execute`, clears on `compaction/start`. **The reapplyDeny MCP fix is now coded (2026-08-21): `restrictKnown` retries `restrict()` on its "unknown global tool" error, filtering the deny list down to the known-tool set the error itself reports, so one not-yet-registered MCP tool name (for example a Swiggy MCP tool before its server connects) no longer breaks gating for every other skill. This fix is build-verified only — `node build.mjs` passes — and still needs the runtime check below.** *Remaining:* mount it in a live `dsh web` session and confirm: loading a gated skill unmasks its tools that session; a fresh session without the skill cannot call them; compaction re-hides them; and specifically that an ecommerce-style skill naming a not-yet-registered MCP tool does not break gating for other skills (see human review queue). *Evaluate:* loading a gated skill makes its tools callable that session; a skill-less session cannot call them; compaction clears the gate.
+
 - [ ] **E6 cordis import + util + git skills + bash-guard.** Import the two cordis
       skills with `tool-cordis` gated behind the skill; `whenToUse` tells the agent
       to load `customize-setup` first. Write `util` and `git` skills. Update
