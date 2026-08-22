@@ -6,35 +6,30 @@
 #   DSH_HOME=/path/to/home ./sync.sh
 #   AIDOS_PLUGIN_SPEC=github:you/aidos ./sync.sh   # override the aidos git spec
 #
-# What it does:
-#   1. pnpm install (repo dev deps, e.g. esbuild for the build step)
-#   2. build the personal plugins (bash-guard, see, manifest-guard,
-#      package-tool, session-hygiene) to self-contained ESM bundles
-#   3. copy the ported skills into $DSH_HOME/skills
-#   4. copy AGENTS.md into $DSH_HOME/AGENTS.md
-#   5. copy the dsh-better-edit personal-preset guidance overrides
-#      into $DSH_HOME/plugins/dsh-better-edit/
-#   6. copy the bash-guard rule drop-ins into $DSH_HOME/plugins/guards/
-#   7. write the web-profile patch (cordis.patch.yml): the host-plane rows
-#      that apply to EVERY preset: the four MCP servers, the bash guard
-#      (git/find/grep deny rules from the drop-in files), the manifest
-#      guard, the package tool, the see vision helper, the per-role subagent
-#      router (coder/tester/researcher), and the manual dsh-worktree insert
-#      row (its dsh.bundle is false, so it does not self-mount)
-#   8. install the E4 third-party plugin set on the web profile
-#      (dsh-any-background, dsh-ui-file-browser, dsh-input-history,
-#      dsh-tool-calculator, dsh-tool-diff, dsh-at-file, dsh-worktree,
-#      dsh-session-search)
-#   9. install the aidos plugin from git (github:xyzshantaram/aidos) and register
-#      the aidos agent preset in $DSH_HOME/.agent-presets/aidos (a loader that
-#      re-exports the installed package's aidos-tools bundle); the install also
-#      mounts aidos-core on the host plane via the package's own dsh.bundle.patch
-#      (see step 9b below)
-#  10. set the agent-presets default to `standard`, and declare image input on
-#      the meridian route so the see tool's vision subagent can read images
-#  11. ensure .dsh_better_edit/ is ignored by git machine-wide (core.excludesFile
-#      if set, else git's XDG default) so the hashline artifact is never tracked
-
+# What it does (steps auto-number at runtime; add/remove freely):
+#   - pnpm install (repo dev deps, e.g. esbuild for the build step)
+#   - build the personal plugins (bash-guard, see, manifest-guard,
+#     package-tool, session-hygiene) to self-contained ESM bundles
+#   - copy the ported skills into $DSH_HOME/skills
+#   - copy AGENTS.md into $DSH_HOME/AGENTS.md
+#   - copy the dsh-better-edit personal-preset guidance overrides
+#     into $DSH_HOME/plugins/dsh-better-edit/
+#   - copy the bash-guard rule drop-ins into $DSH_HOME/plugins/guards/
+#   - write the web-profile patch (cordis.patch.yml): the host-plane rows
+#     that apply to EVERY preset: the four MCP servers, the bash guard
+#     (git/find/grep deny rules from the drop-in files), the manifest
+#     guard, the package tool, the see vision helper, the per-role subagent
+#     router (coder/tester/researcher), and the manual dsh-worktree insert
+#     row (its dsh.bundle is false, so it does not self-mount)
+#   - install the third-party plugin set on the web profile
+#     (dsh-ui-file-browser, dsh-input-history, dsh-tool-calculator,
+#     dsh-tool-diff, dsh-at-file, dsh-session-search, our dsh-remote fork,
+#     dsh-better-markdown)
+#   - install the aidos plugin from git and mount its host-plane core
+#   - register the aidos agent preset in $DSH_HOME/.agent-presets/aidos
+#   - set the agent-presets default to `standard`, declare image input on
+#     the meridian route, and seed the profile route chains on first run
+#   - ensure .dsh_better_edit/ is ignored by git machine-wide
 #
 # Idempotent: re-running it converges to the same state. Safe to run after
 # clone, after a rebase, or after editing the bundle source.
@@ -53,31 +48,37 @@ AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#a68f4b232c41}"
 DSH_INPUT_HISTORY_PATH="${DSH_INPUT_HISTORY_PATH:-}"
 
 
-echo "=== [1/8] Install repo dev deps (esbuild for the build step)"
-(cd "$REPO" && pnpm install)
+step_install_deps() {
+	(cd "$REPO" && pnpm install)
+}
 
-echo "=== [2/8] Build the personal plugins"
-(cd "$HERE" && node build.mjs)
+step_build_plugins() {
+	(cd "$HERE" && node build.mjs)
+}
 
-echo "=== [3/8] Sync skills -> $DSH_HOME/skills"
-mkdir -p "$DSH_HOME/skills"
-cp -r "$HERE/skills/." "$DSH_HOME/skills/"
+step_sync_skills() {
+	mkdir -p "$DSH_HOME/skills"
+	cp -r "$HERE/skills/." "$DSH_HOME/skills/"
+}
 
-echo "=== [4/8] Sync AGENTS.md -> $DSH_HOME/AGENTS.md"
-cp "$HERE/home/AGENTS.md" "$DSH_HOME/AGENTS.md"
+step_sync_agents_md() {
+	cp "$HERE/home/AGENTS.md" "$DSH_HOME/AGENTS.md"
+}
 
-echo "=== [5/8] Sync dsh-better-edit guidance overrides"
-mkdir -p "$DSH_HOME/plugins/dsh-better-edit"
-cp -r "$HERE/home/plugins/dsh-better-edit/." "$DSH_HOME/plugins/dsh-better-edit/"
+step_sync_better_edit_guidance() {
+	mkdir -p "$DSH_HOME/plugins/dsh-better-edit"
+	cp -r "$HERE/home/plugins/dsh-better-edit/." "$DSH_HOME/plugins/dsh-better-edit/"
+}
 
-echo "=== [6/9] Sync bash-guard rule drop-ins (git, find, grep) -> $DSH_HOME/plugins/guards"
-mkdir -p "$DSH_HOME/plugins/guards"
-cp -r "$HERE/guards/." "$DSH_HOME/plugins/guards/"
+step_sync_guard_rules() {
+	mkdir -p "$DSH_HOME/plugins/guards"
+	cp -r "$HERE/guards/." "$DSH_HOME/plugins/guards/"
+}
 
-echo "=== [7/9] Write the web-profile patch (host-plane rows, applies to every preset)"
-patch_dir="$DSH_HOME/profiles/web"
-mkdir -p "$patch_dir"
-cat > "$patch_dir/cordis.patch.yml" <<PATCH
+step_write_web_patch() {
+	patch_dir="$DSH_HOME/profiles/web"
+	mkdir -p "$patch_dir"
+	cat > "$patch_dir/cordis.patch.yml" <<PATCH
 # Auto-generated by $HERE/sync.sh. Do not hand-edit; re-run the script instead.
 # Personal bundle host-plane rows: these apply to EVERY session regardless of
 # preset — the MCP servers, the bash guard (rules read live from
@@ -144,11 +145,11 @@ cat > "$patch_dir/cordis.patch.yml" <<PATCH
     #   - id: worktree
     #     name: 'dsh-worktree'
 
-# Config override for the self-mounting dsh-remote plugin (step 8 pins our
-# fork). The plugin creates the remote row from its own bundle patch, so
-# this MUST be a top-level override row, NOT a child of the insert list
-# above: an insert row with the same id kills boot with "duplicate loader
-# entry id: remote".
+# Config override for the self-mounting dsh-remote plugin (the plugin
+# install step pins our fork). The plugin creates the remote row from its
+# own bundle patch, so this MUST be a top-level override row, NOT a child
+# of the insert list above: an insert row with the same id kills boot with
+# "duplicate loader entry id: remote".
 #
 # applyEntryPatches assigns each override key WHOLESALE (target[key] = value,
 # dsh-app-boot/lib/index.js). It does not deep-merge, so the block below must
@@ -173,103 +174,97 @@ cat > "$patch_dir/cordis.patch.yml" <<PATCH
     rateLimit:
       maxAttempts: 5
       windowMs: 900000
+    files:
+      # /tmp/dsh: the agent's sanctioned scratch space (see AGENTS.md);
+      # readable through the remote file panel.
+      roots:
+        - /tmp/dsh
 
 PATCH
+}
 
-echo "=== [8/11] Install the E4 third-party plugin set on the web profile"
-# Approved set, settled 2026-08-21 (see docs/plugins-conflict-table.md for the
-# full per-plugin summary, conflict analysis, and caveats while that file
-# still exists). Idempotent: `dsh plugin add` forwards to `pnpm add`, and
-# dsh's reconcile step re-derives the bundle list from the installed state
-# rather than diffing against a prior run, so a repeat add of an
-# already-installed spec converges instead of duplicating a row (verified in
-# the installed dsh's plugin.js: reconcilePlugins reads the post-install
-# manifest, not a before/after diff, on every invocation).
-#
-# Every plugin here needs a `dsh web` restart to load; this step only stages
-# the install. dsh-worktree also needs the manual cordis.patch.yml row above,
-# because its `dsh.bundle` is false and it does not self-mount.
-# dsh-session-search additionally needs the `session-search` skill gate (see
-# skills/session-search/SKILL.md) before its tools are model-visible.
-# dsh-git-plugin is intentionally SKIPPED per the settled conflict-table
-# decision (its /commit auto-committer conflicts with git-authority policy;
-# its read-only tools duplicate the git MCP and dsh-worktree).
-if command -v dsh >/dev/null 2>&1; then
-  # All specs PINNED 2026-08-21 (exact npm version or commit SHA) so a
-  # re-run can never silently move a plugin forward. To upgrade: bump the
-  # pin here deliberately, then re-run.
-  # dsh-any-background REMOVED 2026-08-21 late (user call: not wanted). To
-  # restore: dsh plugin --profile web add dsh-any-background@0.1.9
-  dsh plugin --profile web add github:xiyue718/dsh-ui-file-browser#44e769f90f7c
-  # dsh-input-history: no npm publish and no git tag, so it pins to a commit
-  # SHA like the other GitHub-only plugins (gate removed 2026-08-21 late).
-  dsh plugin --profile web add github:sunshaobei/dsh-input-history#9b5b7a494a5c
-  # d5c40dbdc48f was orphaned by an upstream history rewrite 2026-08-21; the
-  # new head's lib/ files diffed byte-identical against the installed copy,
-  # so this is the same code under a new sha.
-  dsh plugin --profile web add github:omdsh-dev/dsh-tool-calculator#05090e946113
-  # cc1d1b74582f was orphaned by an upstream history rewrite 2026-08-21; new
-  # head diffs identical on every lib/ file and the patch row (package.json
-  # dependency metadata only), so this is the same code under a new sha.
-  dsh plugin --profile web add github:omdsh-dev/dsh-tool-diff#d4afd6e2de0b
-  dsh plugin --profile web add https://github.com/omdsh-dev/dsh-at-file/archive/refs/tags/v0.6.7.tar.gz
-  # dsh-worktree install DISABLED 2026-08-21 late (see the patch-file note:
-  # rc.6-built registrar breaks the rc.8 scheduler). Re-enable together with
-  # its mount row after an rc.8-peers release.
-  # dsh plugin --profile web add dsh-worktree
-  dsh plugin --profile web add github:Tieboyh/dsh-session-search#82990a0e9804
-  # Streaming markdown renderer replacement (markstream-react: streaming-safe
-  # Remote-access auth (login accounts, roles, MFA) so LOGIN WORKS OVER THE
-  # PROXY: dsh serves settings RPCs loopback-only, so every proxied browser
-  # gets inert settings scopes without this plugin. Self-mounts via its own
-  # bundle patch; sync.sh step 7 adds a same-id config row (secure cookie).
-  # Pinned to OUR fork (github.com/xyzshantaram/dsh-remote). Fork commits on
-  # top of 0.2.5: the openPath server-response envelope fix, highlight.js in
-  # the file panel, an esbuild build step (src/client.js -> lib/client.js),
-  # and a debug trace channel (config.debug + ?dshTrace=1). The old
-  # connection.isLoopback flips are REMOVED — they could not win the
-  # composition race; R2 replaces them with a host-injected loader wrapper.
-  # Upgrade = bump the pin here deliberately.
-  dsh plugin --profile web add github:xyzshantaram/dsh-remote#a0969cae342a
-  # Streaming markdown renderer replacement (markstream-react: streaming-safe
-  # markdown, Mermaid, KaTeX, Shiki). Client-only; replaces the planned W13
-  # step 2 self-build. Tolerant peers (>=rc.5), no web-react require.
-  dsh plugin --profile web add dsh-better-markdown@0.1.2
+step_install_plugins() {
+	# Approved third-party plugin set on the web profile. Idempotent:
+	# `dsh plugin add` forwards to `pnpm add`, and dsh's reconcile step
+	# re-derives the bundle list from the installed state rather than diffing
+	# against a prior run, so a repeat add of an already-installed spec
+	# converges instead of duplicating a row.
+	#
+	# Every plugin here needs a `dsh web` restart to load; this step only
+	# stages the install.
+	# dsh-git-plugin is intentionally SKIPPED per the settled conflict-table
+	# decision (its /commit auto-committer conflicts with git-authority
+	# policy; its read-only tools duplicate the git MCP and dsh-worktree).
+	if command -v dsh >/dev/null 2>&1; then
+		# All specs PINNED (exact npm version or commit SHA) so a re-run can
+		# never silently move a plugin forward. To upgrade: bump the pin here
+		# deliberately, then re-run.
+		# dsh-any-background REMOVED 2026-08-21 late (user call: not wanted). To
+		# restore: dsh plugin --profile web add dsh-any-background@0.1.9
+		dsh plugin --profile web add github:xiyue718/dsh-ui-file-browser#44e769f90f7c
+		# dsh-input-history: no npm publish and no git tag, so it pins to a
+		# commit SHA like the other GitHub-only plugins (gate removed
+		# 2026-08-21 late).
+		dsh plugin --profile web add github:sunshaobei/dsh-input-history#9b5b7a494a5c
+		# d5c40dbdc48f was orphaned by an upstream history rewrite 2026-08-21;
+		# the new head's lib/ files diffed byte-identical against the installed
+		# copy, so this is the same code under a new sha.
+		dsh plugin --profile web add github:omdsh-dev/dsh-tool-calculator#05090e946113
+		# cc1d1b74582f was orphaned by an upstream history rewrite 2026-08-21;
+		# new head diffs identical on every lib/ file and the patch row
+		# (package.json dependency metadata only), so this is the same code
+		# under a new sha.
+		dsh plugin --profile web add github:omdsh-dev/dsh-tool-diff#d4afd6e2de0b
+		dsh plugin --profile web add https://github.com/omdsh-dev/dsh-at-file/archive/refs/tags/v0.6.7.tar.gz
+		# dsh-worktree install DISABLED 2026-08-21 late (see the patch-file
+		# note: rc.6-built registrar breaks the rc.8 scheduler). Re-enable
+		# together with its mount row after an rc.8-peers release.
+		# dsh plugin --profile web add dsh-worktree
+		dsh plugin --profile web add github:Tieboyh/dsh-session-search#82990a0e9804
+		# Remote-access auth (login accounts, roles, MFA) so LOGIN WORKS OVER
+		# THE PROXY: dsh serves settings RPCs loopback-only, so every proxied
+		# browser gets inert settings scopes without this plugin. Self-mounts
+		# via its own bundle patch; the patch step adds a same-id config row
+		# (secure cookie). Pinned to OUR fork
+		# (github.com/xyzshantaram/dsh-remote). Fork commits on top of 0.2.5:
+		# the openPath server-response envelope fix, highlight.js in the file
+		# panel, an esbuild build step (src/client.js -> lib/client.js), a
+		# debug trace channel (config.debug + ?dshTrace=1), and the R2
+		# order-proof isLoopback flip (host-injected loader wrapper; public
+		# manifest/favicon paths; clean 401s for gated static assets). The old
+		# connection.isLoopback flips are REMOVED — they could not win the
+		# composition race. Upgrade = bump the pin here deliberately.
+		dsh plugin --profile web add github:xyzshantaram/dsh-remote#ab821d79e33e
+		# Streaming markdown renderer replacement (markstream-react:
+		# streaming-safe markdown, Mermaid, KaTeX, Shiki). Client-only;
+		# replaces the planned W13 step 2 self-build. Tolerant peers (>=rc.5),
+		# no web-react require.
+		dsh plugin --profile web add dsh-better-markdown@0.1.2
+	else
+		echo "WARNING: dsh not on PATH; skipping third-party plugin installs."
+		echo "         Re-run './sync.sh' from a shell where dsh is installed."
+	fi
+}
 
-  # Provider fallback chains for EVERY LLM request (main agents, role
-  # children, see). INSTALL DISABLED 2026-08-21 late: v0.1.2's client bundle
-  # requires @deepseek-ai/dsh-client-web-react, which rc.8 does not serve —
-  # the loader refuses the whole entry at boot ("failed to import loader
-  # entry ... client-modules: require(...) missed the module table"). The
-  # host-side logic is fine; the client Settings page is the blocker.
-  # Re-enable when upstream rebuilds against rc.8 (or vendor a client-trimmed
-  # build). Until then there is NO automatic failover anywhere; the profiles
-  # plugin still picks heads, and its flip-sync writes to the llm-fallback
-  # namespace are absorbed no-ops while nothing consumes them.
-  # dsh plugin --profile web add @visol-456/dsh-llm-fallback
-else
-  echo "WARNING: dsh not on PATH; skipping E4 third-party plugin installs."
-  echo "         Re-run './sync.sh' from a shell where dsh is installed."
-fi
+step_install_aidos() {
+	# The aidos preset's tools run against a host-plane `aidos` core service
+	# that the package's own dsh.bundle.patch mounts (aidos-invariants +
+	# aidos-core). The package now lives at the repo root of AIDOS_PLUGIN_SPEC
+	# (flattened from packages/aidos so a plain git spec resolves it — pnpm
+	# has no git-subdirectory install syntax), so `dsh plugin add` installs it
+	# AND auto-mounts the bundle patch with no manual `- insert` row needed.
+	# Idempotent: dsh's reconcile excludes a bundle already present.
+	if command -v dsh >/dev/null 2>&1; then
+		dsh plugin --profile web add "$AIDOS_PLUGIN_SPEC"
+	else
+		echo "WARNING: dsh not on PATH; skipping aidos plugin install."
+		echo "         Re-run './sync.sh' from a shell where dsh is installed."
+	fi
+}
 
-echo "=== [9/11] Install the aidos plugin from git (mounts host-plane aidos-core)"
-# The aidos preset's tools run against a host-plane `aidos` core service that
-# the package's own dsh.bundle.patch mounts (aidos-invariants + aidos-core).
-# The package now lives at the repo root of AIDOS_PLUGIN_SPEC (flattened from
-# packages/aidos so a plain git spec resolves it — pnpm has no git-subdirectory
-# install syntax), so `dsh plugin add` installs it AND auto-mounts the bundle
-# patch with no manual `- insert` row needed. Idempotent: dsh's reconcile
-# excludes a bundle already present.
-if command -v dsh >/dev/null 2>&1; then
-  dsh plugin --profile web add "$AIDOS_PLUGIN_SPEC"
-else
-  echo "WARNING: dsh not on PATH; skipping aidos plugin install."
-  echo "         Re-run './sync.sh' from a shell where dsh is installed."
-fi
-
-echo "=== [9b] Register the aidos agent preset"
-mkdir -p "$DSH_HOME/.agent-presets/aidos"
-cat > "$DSH_HOME/.agent-presets/aidos/agent.cordis.yml" <<'EOF'
+step_register_aidos_preset() {
+	mkdir -p "$DSH_HOME/.agent-presets/aidos"
+	cat > "$DSH_HOME/.agent-presets/aidos/agent.cordis.yml" <<'EOF'
 # The aidos agent preset composition (installed by $REPO/sync.sh).
 # The loader re-exports the aidos-tools bundle from the installed aidos
 # package (resolved as a bare specifier against the web profile's
@@ -277,19 +272,20 @@ cat > "$DSH_HOME/.agent-presets/aidos/agent.cordis.yml" <<'EOF'
 # own @deepseek-ai/* imports resolve from that same install.
 - name: ./aidos-loader.js
 EOF
-cat > "$DSH_HOME/.agent-presets/aidos/aidos-loader.js" <<'EOF'
+	cat > "$DSH_HOME/.agent-presets/aidos/aidos-loader.js" <<'EOF'
 // Installed by $REPO/sync.sh. Re-exports the aidos-tools plugin bundle from
-// the aidos package installed via `dsh plugin add` (see step 9 above).
+// the aidos package installed via `dsh plugin add`.
 export { name, inject, Config, apply } from "aidos/presets/aidos/aidos-tools.js";
 EOF
-cat > "$DSH_HOME/.agent-presets/aidos/preset.yml" <<'EOF'
+	cat > "$DSH_HOME/.agent-presets/aidos/preset.yml" <<'EOF'
 name: Aidos
 description: "The ticket board agent: plan, tickets, evidence, and state-gated tool access."
 order: 3
 EOF
+}
 
-echo "=== [10/11] Set agent-presets default + meridian image input + profile routes"
-python3 - "$DSH_HOME/settings.yaml" <<'PY'
+step_set_defaults() {
+	python3 - "$DSH_HOME/settings.yaml" <<'PY'
 import sys
 import yaml
 p = sys.argv[1]
@@ -321,50 +317,78 @@ if 'profile' not in d:
             {'provider': 'opencode-zen', 'model': 'x-preview-f-free'},
         ]},
         'personal': {'routes': [
+            {'provider': 'opencode-zen', 'model': 'x-preview-f-free'},
             {'provider': 'opencode-zen', 'model': 'deepseek-v4-flash-free'},
             {'provider': 'opencode-go', 'model': 'deepseek-v4-flash'},
         ]},
     }
-# Seed the @visol-456/dsh-llm-fallback namespace with the ACTIVE profile's
-# tail so failover works from first boot (the profiles plugin keeps it
-# aligned on later flips). Same first-run-only rule as `profile`.
-if 'llm-fallback' not in d:
-    d['llm-fallback'] = {'fallbacks': [
-        {'provider': 'opencode-go', 'model': 'deepseek-v4-flash'},
-    ]}
+
 with open(p, 'w') as f:
     yaml.safe_dump(d, f, sort_keys=False)
 print(open(p).read())
 PY
+}
 
-echo "=== [11/11] Ensure .dsh_better_edit/ is ignored by git machine-wide"
-# The hashline editor drops a .dsh_better_edit/ state directory into whatever
-# repo a session edits files in. It is a tool artifact that belongs in no
-# repository, so ignore it once per machine rather than per repo. Honor an
-# existing core.excludesFile; otherwise use git's XDG default path, which git
-# reads with no extra configuration when core.excludesFile is unset.
-git_ignore=""
-if command -v git >/dev/null 2>&1; then
-  git_ignore="$(git config --get core.excludesFile || true)"
-fi
-if [ -n "$git_ignore" ]; then
-  git_ignore="${git_ignore/#\~/$HOME}"
-else
-  git_ignore="${XDG_CONFIG_HOME:-$HOME/.config}/git/ignore"
-fi
-mkdir -p "$(dirname "$git_ignore")"
-touch "$git_ignore"
-if grep -qxF '.dsh_better_edit/' "$git_ignore"; then
-  echo "    already ignored in $git_ignore"
-else
-  cat >> "$git_ignore" <<'EOF'
+step_ignore_better_edit_dir() {
+	# The hashline editor drops a .dsh_better_edit/ state directory into
+	# whatever repo a session edits files in. It is a tool artifact that
+	# belongs in no repository, so ignore it once per machine rather than per
+	# repo. Honor an existing core.excludesFile; otherwise use git's XDG
+	# default path, which git reads with no extra configuration when
+	# core.excludesFile is unset.
+	git_ignore=""
+	if command -v git >/dev/null 2>&1; then
+		git_ignore="$(git config --get core.excludesFile || true)"
+	fi
+	if [ -n "$git_ignore" ]; then
+		git_ignore="${git_ignore/#\~/$HOME}"
+	else
+		git_ignore="${XDG_CONFIG_HOME:-$HOME/.config}/git/ignore"
+	fi
+	mkdir -p "$(dirname "$git_ignore")"
+	touch "$git_ignore"
+	if grep -qxF '.dsh_better_edit/' "$git_ignore"; then
+		echo "    already ignored in $git_ignore"
+	else
+		cat >> "$git_ignore" <<'EOF'
 
 # dsh-better-edit (hashline) scratch/state directory. A tool artifact that
 # appears in whatever repo a session edits files in. Never belongs in a repo.
 .dsh_better_edit/
 EOF
-  echo "    added .dsh_better_edit/ to $git_ignore"
-fi
+		echo "    added .dsh_better_edit/ to $git_ignore"
+	fi
+}
+
+# ── step table ────────────────────────────────────────────────────────────────
+# Each entry: "Human title|function_name". Numbers derive from the array, so
+# adding, removing, or reordering steps needs NO manual renumbering.
+STEPS=(
+	"Install repo dev deps (esbuild for the build step)|step_install_deps"
+	"Build the personal plugins|step_build_plugins"
+	"Sync skills -> $DSH_HOME/skills|step_sync_skills"
+	"Sync AGENTS.md -> $DSH_HOME/AGENTS.md|step_sync_agents_md"
+	"Sync dsh-better-edit guidance overrides|step_sync_better_edit_guidance"
+	"Sync bash-guard rule drop-ins -> $DSH_HOME/plugins/guards|step_sync_guard_rules"
+	"Write the web-profile patch (host-plane rows)|step_write_web_patch"
+	"Install the third-party plugin set on the web profile|step_install_plugins"
+	"Install the aidos plugin from git|step_install_aidos"
+	"Register the aidos agent preset|step_register_aidos_preset"
+	"Set agent-presets default + meridian image input + profile routes|step_set_defaults"
+	"Ensure .dsh_better_edit/ is ignored by git machine-wide|step_ignore_better_edit_dir"
+)
+
+main() {
+	local n=0
+	local total=${#STEPS[@]}
+	for entry in "${STEPS[@]}"; do
+		n=$((n + 1))
+		echo "=== [$n/$total] ${entry%%|*}"
+		"${entry##*|}"
+	done
+}
+
+main
 
 echo
 echo "Done. Restart dsh web to pick up the new bundle layer (bundle rows are"
@@ -376,4 +400,3 @@ echo "  rules:   $DSH_HOME/AGENTS.md"
 echo "  guards:  $DSH_HOME/plugins/guards"
 echo "  patch:   $DSH_HOME/profiles/web/cordis.patch.yml"
 echo "  preset:  $DSH_HOME/.agent-presets/aidos"
-echo "  ignore:  $git_ignore (.dsh_better_edit/)"

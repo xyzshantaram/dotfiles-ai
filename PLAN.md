@@ -31,91 +31,34 @@ false assurance.
 
 ### Phase A: personal bundle, open ports — `in_progress`
 
-- [ ] **W16 per-role routing + profile failover — ONE combined `profiles` host plugin.** **LIVE VERIFICATION 3 OF 4 CHECKS PASS (2026-08-21 late). Remaining: the `profile.active` flip test.** Verified: (1) role tools + `tool:profiles` prompt section present in a fresh post-restart session, patch row mounted; (2) background `coder` dispatch returned a child id and resolved the personal head (`via opencode-zen/deepseek-v4-flash-free`, confirmed in the child's descriptor record); (3) failover fired FOR REAL during that dispatch — the child's session record shows the zen request finish with `400 Upstream request failed: Model is unavailable`, then ~10 ms later the same turn/step re-dispatched on `opencode-go/deepseek-v4-flash`, which served the whole step. Gotcha learned: plugin `ctx.logger.warn` lands ONLY in dsh's in-memory ring buffer (cordis default exporter never writes stdout), so the `profiles: ... failing over` warn line will NEVER appear in journalctl — verify failover from session records or trajectory view, not the journal.
-
-- [ ] **W13 step 1: the keyed-slot shadowing spike.** **STATUS 2026-08-21 evening: dispatched twice, killed both times by the subagent-infrastructure fault (see Critical context, "Session state"). No findings recorded. RERUN after the profiles plugin lands.** Answer one question: can a
-      client plugin claim a key that a shipped plugin already registered on a
-      KEYED slot, and win? The slot system documents the rule only for the `root`
-      SINGLE slot, where a dynamically registered entry takes a lower priority
-      than the shipped one, which makes it the winner. Whether keyed slots
-      resolve the same way is unverified. `dsh-client-ui-slots` ships no readable
-      `index.d.ts` in the installed tree, so the answer comes from a real plugin
-      in a real browser, not from a type. **W6 needs the same answer, so one
-      spike closes two tickets.**
-      *Evaluate:* a throwaway plugin registers a component under a key an
-      installed plugin already owns, and the browser renders the new component
-      instead of the shipped one. A negative result is equally valid and closes
-      W13 step 2 as impossible.
-
-- [ ] **W6 profiles client.** Gated on the W13 spike. One client plugin carries
-      the Profile submenu in the model seat, the match badge, the per-session
-      override, the cost display, and the title rewriter. The patch disables the
-      shipped `ui-model-selection` and registers the replacement seat. Selecting
-      a profile calls `sessions.models(...)`, the same call the shipped selector
-      uses, and changes providers only. The badge comparison runs client-side
-      against the profile config and drops when the selection no longer matches.
-      The cost display sums per-model tokens from `assistant/chunk` usage records
-      times a price-table settings namespace.
+- [ ] **W6 profiles client.** UNBLOCKED 2026-08-22: the W13 spike proved keyed-slot
+      shadowing works. One client plugin carries the Profile submenu in the model
+      seat, the match badge, the per-session override, the cost display, and the
+      title rewriter. The patch disables the shipped `ui-model-selection` and
+      registers the replacement seat at a LOWER priority (lowest renders).
+      Selecting a profile calls `sessions.models(...)`, the same call the shipped
+      selector uses, and changes providers only. The badge comparison runs
+      client-side against the profile config and drops when the selection no
+      longer matches. The cost display sums per-model tokens from
+      `assistant/chunk` usage records times a price-table settings namespace.
       *Evaluate:* the submenu switches both profiles and the session answers on
       the new model. The badge appears on a match and drops after a manual
       override. The tab title reads `dsh | <session title>`. The cost figure
       tracks a real session.
 
-- [ ] **W8 reject with a comment.** **STATUS 2026-08-21 evening: dispatched twice, killed both times by the subagent-infrastructure fault. Unknown whether partial edits exist; inventory plugins/, build.mjs, sync.sh before rerunning. RERUN after the profiles plugin lands.** The approval answer payload is exactly
-      `{ sessionId, approvalId, outcome: 'allowed-once' | 'rejected' }` (verified
-      in `dsh-host-apiproxy/api/approvals.schema`). There is no comment channel.
-      Extend the permission card with an optional Comment field. Reject with a
-      comment answers the approval normally as `'rejected'` and injects a
-      steering message through `sessions.send(sessionId, { mode: 'steer',
-      content })`, which submits at the nearest step boundary. The message reads
-      "The user rejected the <tool> call. Comment: <text> Adjust your next
-      action." Upstream end state is an optional rejection-reason field on the
-      outcome, after which this is deleted.
-      *Evaluate:* a rejection with a comment reaches the agent as text and
-      changes its next action. A rejection with no comment behaves as it does
+- [ ] **W8 reject with a comment.** IMPLEMENTED 2026-08-22
+      (`plugins/approval-comment/`); built, behavior-harness verified, NOT yet
+      mounted or browser-tested. It replaces the shipped approval card through
+      the `conversation.composer` CHAIN slot at priority 0 (chains try selectors
+      ascending, first non-null wins), adds a collapsed Comment field, answers
+      `'rejected'` FIRST, then fires `session.prompt(content, "steer")` with the
+      rejection text. Steer failure never loses the rejection. Mount when
+      wanted: `dsh plugin --profile web add ./plugins/approval-comment`, then
+      restart.
+      *Evaluate:* a rejection with a comment reaches the agent as steering text
+      at the nearest step boundary. A rejection with no comment behaves as
       today.
 
-- [ ] **W14 caffeine inhibitor-leak fix.** **DECIDED 2026-08-21: the wake-tone client plugin idea below is DROPPED (user call: "the silent tone idea is not great"). Only the inhibitor-leak bug fix remains. The fix was dispatched twice and killed both times by the infrastructure fault; check skills/caffeine/ for half-applied edits before rerunning. The stale wake-tone body below is kept only for provenance and can be deleted at the next plan compaction.** ~~Replace the caffeine skill with a web
-      client plugin that plays a near-silent tone while the agent works. KDE
-      PowerDevil blocks automatic sleep while audio plays, so the tone holds the
-      machine awake with no manual toggle and no logind inhibitor to leak.
-      **Why it looks possible.** `dsh-client-connection/lib/client.js` carries
-      `isRunning` (lines 67, 72, 113) and consumes `turn/start` at many points,
-      so a client plugin can read the busy state. A browser tab already holds an
-      uncorked PipeWire stream in this exact setup: `pactl` showed sink-input
-      #215 owned by Firefox with `Corked: no` for the harness tab itself.
-      **Both research passes FAILED on 2026-08-21 and must be re-dispatched.**
-      One subagent errored before it finished. The other went idle and delivered
-      no report. Nothing from either is recorded, so treat every question below
-      as unanswered.
-      *Browser facts to settle.* Whether Firefox on Linux needs a user gesture
-      before an `AudioContext` produces output, and whether `127.0.0.1` differs
-      from a remote origin. Whether a gain-zero graph still registers an uncorked
-      PipeWire sink input, and whether a very low non-zero gain behaves
-      differently. Whether a background or minimized tab throttles the context.
-      Whether PowerDevil takes a `systemd-logind` lock or polls the audio server
-      with no lock — the inhibitor list showed no audio entry while a Firefox
-      stream ran, so the list may be the wrong place to look.
-      *Seam facts to settle.* The client plugin manifest shape and its `./client`
-      export. The exact public export a third-party bundle imports to read
-      `isRunning`. The idle signal, including the error, abort, and
-      approval-prompt paths. What `sync.sh` and `build.mjs` must add for a
-      browser build target.
-      A user-gesture requirement turns this from automatic into one click per
-      session, which changes the design.
-      **Carry over one bug.** `caffeine.sh` leaks an inhibitor. The `on` path
-      spawns `systemd-inhibit` and then writes the PID file, so a failure between
-      the two steps leaves an unowned process that `off` cannot kill. This
-      happened on 2026-08-21 and left pid 280505 holding the machine awake. Fix
-      the script or delete it together with the skill.
-      *Evaluate:* the tone starts when a turn starts and stops when the agent
-      goes idle, including after an error, an abort, and an approval prompt. The
-      machine stays awake through a long turn with no key press. The machine
-      suspends on its normal timeout after the turn ends. Two tabs open on the
-      same harness do not produce two tones. Closing the tab stops the tone.
-
-
-- [x] **W13 step 2: the markdown renderer — DROPPED, superseded by `dsh-better-markdown`.** The self-build was correctly scoped as a full copy of the shipped assistant component tracking a moving contract (status flags, blocks array, file mentions, tool-call blocks) plus npm-only client-ui deps absent from the installed tree. The user found `zerob13/dsh-better-markdown` (npm `dsh-better-markdown@0.1.2`, pinned in sync.sh): a client plugin that swaps the streaming markdown chain to `markstream-react` — streaming-safe unclosed constructs, Mermaid 11, KaTeX, Shiki code blocks, `htmlPolicy="escape"`, tolerant peers (`>=0.1.0-rc.5`), no web-react require. *Evaluate after restart:* streaming and settled assistant rows render through the new renderer; a Mermaid block and inline math render; a tool call inside an assistant row is unchanged. If it misbehaves, remove its bundle row from the profile package.json — nothing else depends on it.
 
 ### Phase B: decommission opencode — `pending`
 
@@ -131,32 +74,11 @@ false assurance.
 ### Phase C: the verification skill and the rules — `done`
 
 
-### Phase E: rebuild the measurement side — `blocked`
+### Phase E: rebuild the measurement side — MOVED
 
-**What this means.** "Dashboard" here means the scripts in
-`~/ai-scratch/session-analysis/` that produced `REPORT.md` and
-`WORKFLOW_COST_REPORT.md`. Those scripts count cost, task time, commits, and
-frustration. They do not count whether the work landed or whether the claims held
-up. The old numbers said the workflow got 4 times faster. The outside numbers
-moved the other way: merge rate fell from 72.8% to 28.6%, median time to merge
-rose from 0.04 days to 10.5 days, and median merge request size grew from 3 files
-to 64. The old scripts counted a `git commit` as "finished". A commit only
-records that the AI decided it was done.
-
-**Blocked on two answers from the user.**
-
-1. Confirm the user wants these scripts changed at all. Skip this phase if the
-   measurement side does not matter.
-2. `~/ai-scratch/session-analysis/PLAN.md` already exists. The `plan` skill
-   forbids overwriting a planning file it did not create. Add a phase to that
-   file, or make a separate one?
-
-- [ ] **T5.1 GitLab outcome puller.** Pull merge rate, time-to-merge, merge
-      request size, review findings split blocking and non-blocking, and
-      struck-claim count.
-- [ ] **T5.2 Replace commit-based completion with merge-based completion.**
-- [ ] **T5.3 Add the struck-claim metric.** Count claims a reviewer rejected as
-      unsupported. That is the actual defect class, and it was never counted.
+Moved 2026-08-22 (user call) to `~/ai-scratch/session-analysis/PLAN.md` as its
+own phase (T5.1 outcome puller, T5.2 merge-based completion, T5.3 struck-claim
+metric). Still blocked there on the go-ahead.
 
 ## Critical context
 
@@ -222,10 +144,18 @@ records that the AI decided it was done.
 - **`@visol-456/dsh-llm-fallback` v0.1.2 cannot load on rc.8 (client half) — SUPERSEDED, keep it gated.** Its built client bundle requires `@deepseek-ai/dsh-client-web-react`, which rc.8 does not serve ("client-modules: require(...) missed the module table"), so the loader refuses the whole entry at boot. Its function is replaced by the first-party failover waterfalls inside `plugins/profiles.ts` (chains read live from the `profile` namespace; no client bundle). The `llm-fallback` settings seed in settings.yaml is inert. Revisit only if visol ships an rc.8 build AND offers something the first-party waterfalls lack (its web UI page and cooldown circuit are the candidates).
 - **GitLab MCP tools can drop out mid-session.** During T4.1 research, `glab_issue_view`, `glab_mr_view`, `glab_issue_list`, and `glab_api` stopped responding partway through a research pass in a delegated subagent session, while `glab_repo_view` kept working. This looked like a permission denial at first but was a tool-availability fault instead, so retrying did not help. If this recurs, fall back to whatever `glab_*` tool still answers and flag any unconfirmed fact in the output rather than blocking on full research.
 
-- **Keyed-slot shadowing is unverified and two tickets depend on it.** W6's
-  Profile seat and W13's renderer both assume a plugin can claim a key a shipped
-  plugin already owns. The documented rule covers the `root` single slot only.
-- **The markdown renderer lives in the prebuilt shell.** No slot in the
+- **Keyed-slot shadowing VERIFIED 2026-08-22 (W13 spike, answer: YES).** Keyed
+  slots sort ascending by priority; the LOWEST live entry renders; the same key
+  at a DIFFERENT priority never throws; the runtime injects no origin privilege
+  for shipped entries (dsh-client-ui-slots lib/index.js :68, :76-80, :122,
+  :168-191; pass-through verified at dsh-client-runtime lib/client.js :243-258).
+  Live proof: dsh-better-markdown owns `conversation.chat.node` /
+  `assistant-step` at priority -100 against the shipped 0. MOUNTING CAVEAT: a
+  client half ships through exports["./client"] discovered from the
+  package.json `dshClient` declaration — a bare file-path patch row mounts only
+  an empty host half; use package installs (pattern:
+  plugins/approval-comment).
+
   conversation contract touches markdown or links, and no `urlTransform` hook
   exists. The only reachable route is owning the whole assistant row. `aidos://`
   deeplinking was dropped for this reason on 2026-08-21.
@@ -288,12 +218,32 @@ records that the AI decided it was done.
   normally; the `see` tool returns a factual image description on the work
   profile.
 
-### Pickup point 2026-08-21 late
+### Pickup point 2026-08-22
 
-- **Phase F: R1, R3, R4, R5 CLOSED. R2 re-scoped after a real root-cause hunt; its dead predecessors are REMOVED.** Fork commit `ad7090b` carries the `/auth/trace` debug channel AND the removal of all three dead mechanisms (early flip, late flip, unpin) from `src/client.js`; `lib/client.js` is rebuilt and installed live. No `isLoopback` write remains anywhere in the fork, so remote settings are FULLY BROKEN until R2 lands — accepted, per the one-mechanism decision. sync.sh installs from pinned sha `a0969cae342a`, now STALE (one commit behind); bump it when R2 lands. R5 proven: a proxied page load writes an ordered trace to `journalctl --user -u dsh-web.service`. R2 root cause and design are settled (host-injected loader wrapper; full evidence in the Phase F root-cause block). The user chose ONE mechanism only: no sync.sh disk patch, no upstream report for now. NEXT ACTIONS: (1) implement R2; (2) live eval per the R2 criteria; (3) W16 flip test: the `profile` namespace has NO settings page (that seat is W6), so flip via direct `$DSH_HOME/settings.yaml` edit — verify `agent-default-model` flips to `meridian/claude-opus-5`, fresh session composes on opus, then flip back.
-- **Live config now carries a `remote` override row** (sync.sh step 7). It MUST be a top-level patch row, NOT a child of the `insert` list: an insert row with an existing id kills boot with `duplicate loader entry id: remote`. `applyEntryPatches` (dsh-app-boot) assigns each override key WHOLESALE, so the row repeats every default from the plugin's own bundle patch. Two values differ: `debug: true` (trace endpoint) and `session.secure: true`. CAUTION: the Secure cookie attribute now applies, so a plain-HTTP loopback page at http://127.0.0.1:3080 can no longer set or send the session cookie. Flip `session.secure` back if loopback login misbehaves.
-- guards/git.json: `git apply` moved to the ask tier (user request) — source updated and deployed live to $DSH_HOME/plugins/guards/.
-- The live web patch carries the profiles row, the remote config row (`session.secure: true`), and no session-hygiene row; the restart above activates the fork client bundle.
+- **R2 CLOSED, verified end to end.** Remote settings work over the proxy:
+  Models UI loads, config writes stick (user-verified), trace shows the handle
+  born isLoopback:true. Full story in the Phase F R2 entry; root-cause evidence
+  block above stays for reference. Fork head after today's gate-hardening
+  commit is the pin target — sync.sh currently pins `ab821d79e33e`, STALE by
+  one commit until pushed and re-bumped.
+- **Gate hardening came out of R2's live testing:** manifest.webmanifest +
+  favicon.svg are public paths (Chromium fetches manifests with NO credentials);
+  every other extension path gets 401 instead of login HTML (kills the whole
+  class of "static asset parses auth page" console errors).
+- **sync.sh rewritten 2026-08-22:** steps are functions driven by a STEPS array;
+  banners auto-number (`[n/total]`); no manual renumbering ever again. The
+  remote `files.roots` now includes /tmp/dsh (agent scratch space, also
+  documented in AGENTS.md — deployed live). User cleanup folded in: dsh-remote
+  pin bump, llm-fallback install + seed removed, personal waterfall gained
+  x-preview-f-free as head.
+- **Meridian route switched to anthropic-messages by the user** — prompt
+  caching way better, token counts correct. Residual doc alignment is G3.
+- **W14 caffeine leak fix landed + live-verified** (on/idempotent/orphan-detect/
+  off-without-pidfile cycle passed). W13 spike answered YES (see Seams). W8
+  built, unmounted. E4/E5/E6 audits recorded gaps in their tickets.
+- **NEXT ACTIONS:** push both repos (ASK first); bump the sync.sh fork pin to
+  the new fork head after push; then W6 is the biggest open build.
+
 
 ## User preferences and special rules
 
@@ -308,10 +258,8 @@ records that the AI decided it was done.
 
 ## Human review queue
 
-- [ ] Remote auth — after the restart: create the admin account on loopback,
-      log in over the proxy, confirm settings config cards read and write
-      remotely, and confirm the background theme plugin is gone.
-
+- [x] Remote auth — DONE 2026-08-22: admin login over the proxy works, settings
+      cards read AND write remotely, theme plugin confirmed gone.
 - [ ] Phase C (verification skill) — run it yourself against a real MR
       description and judge whether it would have caught the invented root cause
       without hints.
@@ -341,8 +289,6 @@ records that the AI decided it was done.
       requirements.txt.
 - [ ] W12 — the harness runs with zero opencode config left in this repo, and a
       fresh clone syncs the same bundle.
-- [ ] W14 — re-dispatch both research passes. Both failed on 2026-08-21 and
-      produced no report.
 - [ ] Personal-bundle orphan — `~/.dsh/plugins/personal/` holds five stale plugin
       builds stamped 2026-08-20 08:42. Nothing mounts it: neither `sync.sh` nor
       `build.mjs` names that path, and the live patch points at the repo copies.
@@ -411,17 +357,43 @@ PLAN.md is a living migration document. Delete it once the remaining phase work 
   skills to import.
 
 ### Tickets
-- [ ] **E4 curate plugins.** Conflict table settled 2026-08-21 (researcher, read-only); full table in `docs/plugins-conflict-table.md`. **Staged, not yet live.** `sync.sh` step 8 now runs `dsh plugin --profile web add` for all eight approved plugins: `dsh-any-background`, `dsh-ui-file-browser`, `dsh-input-history` (behind an empty-by-default `DSH_INPUT_HISTORY_PATH` override — it ships no git-tagged publish and no local checkout exists yet, so the install is skipped with a warning until that variable is set), `dsh-tool-calculator`, `dsh-tool-diff`, `dsh-at-file` v0.6.7 tarball, `dsh-worktree`, and `dsh-session-search`. `dsh-git-plugin` is skipped, as settled. `dsh-worktree`'s manual `- insert: {id: worktree, name: 'dsh-worktree'}` patch row is in step 7's `cordis.patch.yml` heredoc. `skills/util/SKILL.md` gates `tool-time`/`tool-regex`/`tool-markdown`/`tool-encoding`, sourced from the `omdsh-dev/dsh-toolkit` collection (confirmed real via its README; `dsh-tool-calculator`/`dsh-tool-diff` stay always-on and ungated, per conflict row C10). `skills/session-search/SKILL.md` gates `agent_session_search`/`agent_session_read`, the real tool names from the plugin's README. `bash -n sync.sh` and `node build.mjs` both pass. **Remaining, blocked on the single end-of-session `dsh web` restart:** run `sync.sh` (may still hit the SQLite profile lock if a live `dsh web` process holds it — do not kill that process to work around it; wait for the orchestrator's restart); after the restart, confirm the eight plugins load with no error, confirm the `worktree` tools appear (watch for the `dsh-worktree` peer pinned to `@deepseek-ai/* 0.1.0-rc.6` vs this install's rc.7 — report a load failure instead of pinning a workaround), confirm `util` and `session-search` skills appear in the session catalog and their gated tools stay hidden until loaded, then delete `docs/plugins-conflict-table.md`. *Evaluate:* web profile gains only the approved plugins; `util` skill gates the four toolkit tools and leaves calculator/diff ungated; `session-search` skill gates the two real session-search tool names; conflict table deleted only after live verification.
-- [ ] **E5 build the shared skill-gating plugin.** Implemented, not yet runtime-verified. `plugins/skill-gate.ts` written and wired into `build.mjs` (bundles to `skill-gate.js`). Reads `tools-gated` from skill frontmatter at runtime, gates per-agent via `agent.ctx.tools.restrict({ deny })`, observes `skill` calls on `tools/post-execute`, clears on `compaction/start`. **The reapplyDeny MCP fix is now coded (2026-08-21): `restrictKnown` retries `restrict()` on its "unknown global tool" error, filtering the deny list down to the known-tool set the error itself reports, so one not-yet-registered MCP tool name (for example a Swiggy MCP tool before its server connects) no longer breaks gating for every other skill. This fix is build-verified only — `node build.mjs` passes — and still needs the runtime check below.** *Remaining:* mount it in a live `dsh web` session and confirm: loading a gated skill unmasks its tools that session; a fresh session without the skill cannot call them; compaction re-hides them; and specifically that an ecommerce-style skill naming a not-yet-registered MCP tool does not break gating for other skills (see human review queue). *Evaluate:* loading a gated skill makes its tools callable that session; a skill-less session cannot call them; compaction clears the gate.
-
-- [ ] **E6 cordis import + util + git skills + bash-guard.** Import the two cordis
-      skills with `tool-cordis` gated behind the skill; `whenToUse` tells the agent
-      to load `customize-setup` first. Write `util` and `git` skills. Update
-      `guards/git.json` reason to point at the git skill. *Evaluate:* gated tools
-      hidden until load; `guards/git.json` names the git skill; customize-setup is
-      a prerequisite in cordis `whenToUse`.
-- [ ] **E7 fold attachment-vision into `see.ts`.** Settlement decided 2026-08-21 from a read of `endlass/dsh-attachment-vision` and `FSMargoo/dsh-at-file`. dsh ships a native `read_image` tool (`dsh-tool-fs`) but it is **route-gated to image-capable models**, so a visionless parent cannot call it directly. The bundle's `see.ts` already implements the image→path-for-no-vision pattern: a visionless model is handed an image path, calls `see`, which dispatches a vision subagent whose keep-set includes `read_image`/`read`, routing on the profile whose image input `sync.sh` has declared. The `@` file-mention is **not native to dsh** (dsh-session-reference handles cross-session mentions only); it comes from `dsh-at-file`, which emits a `<workspace-reference path=... kind=file>` marker and does NOT inline content, so a `@`-ed image gives the model the path (not base64). **Verdict: do NOT modify `see.ts`; drop `dsh-attachment-vision` (it is for GUI drag-and-drop image blocks, a different path than `@`); install `dsh-at-file` so `@ image` yields a path the model can feed to `see`.** *Evaluate:* no new vision plugin installed; `@ image.png` gives the visionless model a path; `see` with that path returns a description; overlap documented above.
+- [ ] **E4 curate plugins.** Installed set live since 2026-08-21 (file-browser,
+      input-history, calculator, diff, at-file, session-search, our dsh-remote
+      fork, better-markdown; worktree + any-background gated out; git-plugin
+      skipped). **GAP FOUND 2026-08-22:** the four toolkit tools the `util`
+      skill gates (tool-time, tool-regex, tool-markdown, tool-encoding) were
+      NEVER INSTALLED — no omdsh-dev/dsh-toolkit row exists anywhere in the
+      profile — so the gate has nothing to unmask ("unknown tool" before AND
+      after loading the skill; subagent probe 2026-08-22). Decide: install
+      @omdsh-dev/dsh-toolkit pinned, or strip tools-gated from util. Then
+      delete docs/plugins-conflict-table.md.
+      *Evaluate:* every tool a gating skill names exists and becomes callable
+      when that skill loads.
+- [ ] **E5 build the shared skill-gating plugin.** Implemented incl. the
+      reapplyDeny MCP filter fix (build-verified only). Runtime unmask STILL
+      unverified: the 2026-08-22 probe could not exercise it because the
+      target tools are not installed (see E4). The compaction-clear path
+      (`compaction/start`) is written, never observed live.
+      *Evaluate:* loading a gated skill unmasks exactly its tools for that
+      agent; a skill-less agent cannot call them; compaction re-hides them.
+- [ ] **E6 cordis import + util/git skills + bash-guard reason.** AUDIT
+      2026-08-22: util/session-search/customize-setup skills live ✓;
+      guards/git.json deployed with subcommand tiers ✓. GAPS: (1) the two
+      cordis skills were never imported into skills/; (2) the guards/git.json
+      deny reason does not mention the git skill yet.
+      *Evaluate:* a cordis skill appears in the catalog with tool-cordis
+      gated behind it; the deny reason names the git skill.
+- [ ] **E7 paste-image path for visionless models.** RE-SCOPED 2026-08-22
+      (user call): the real want is paste-in-composer → app uploads to a
+      .dsh_uploads cache dir → model receives a PATH it can feed to `see`.
+      dsh-attachment-vision judged overkill for this. First investigate what
+      the composer does with pasted images today (native upload? drop?), then
+      close the gap minimally. Prior settlement stands: do NOT modify see.ts;
+      keep dsh-at-file for @ mentions.
+      *Evaluate:* pasting an image gives the model a usable file path, and
+      see returns a description for it.
 ### Phase F: the dsh-remote fork — `in_progress`
+
 
 The user forked `@xgone/dsh-remote` to `github.com/xyzshantaram/dsh-remote`, cloned at
 `~/repos/dsh-remote`. The fork now HAS a build step: `src/client.js` is the readable
@@ -466,64 +438,36 @@ Root causes, verified against installed rc.8 source 2026-08-21:
   working open-path buttons (they route into the viewer anyway); ui-settings-general
   enables the raw settings.yaml document editor remotely — ACCEPTED by user.
 
-Tickets:
+All five R-tickets CLOSED — bodies live in git history up to the commit that
+carries this plan update:
 
-- [x] **R1 openPath envelope fix** (`src/client.js`). Added `type: "server-response"`
-      to the fabricated openPath reply.
-      *Evaluated:* filename click over https://potato.local:1337 opens the panel with
-      no error dialog. Verified live by the user.
-- [ ] **R2 order-proof isLoopback flip via host-injected loader wrapper**
-      (`lib/index.js` + `src/client.js`). SUPERSEDES the apply-time flip, which is
-      unwinnable (see the root cause above). The host half injects a small script into
-      the shell HTML for requests that carry a VALID session. That script wraps the
-      client module loader, shadows `ctx.provide`, and sets `isLoopback = true` at the
-      moment the `connection` handle is provided — before any consumer can read it, so
-      the mirror and every scope are BORN in `"host"` mode. Mechanism proven in the
-      wild by studyzy/dsh-web-remote-access (src/loopback.ts); the session gate is ours
-      and is the part studyzy lacks.
-      Same ticket REMOVES the mechanisms this replaces, because dead code that looks
-      like a fix is worse than no code: the apply-entry early flip, the `/auth/me` late
-      flip, and `unpinRemoteSettingsScopes` (proven no-op).
-      Injection must fail LOUDLY (host log line) when the shell markup does not match,
-      never silently.
-      *Evaluate:* logged in over the proxy, Settings → Models loads the provider
-      directory and a config-card write sticks after reload; a logged-OUT remote
-      browser receives no injected script and shows no error storm; loopback behavior
-      unchanged; the trace shows `isLoopback: true` at apply-enter (not flipped by us,
-      already true).
-- [x] **R3 syntax highlighting in the viewer text pane** (`src/client.js` +
-      package.json dep via pnpm add). highlight.js ^11, extension-routed subset,
-      200 KB cap with plain-text fallback, `.dsh-remote-hljs` scoped CSS. Required a
-      build step: npm deps do not resolve in the browser loader, so scripts/build.mjs
-      now bundles src/client.js into lib/client.js with esbuild.
-      *Evaluated:* colored code renders in the panel over the proxy. Verified live by
-      the user.
-- [x] **R5 host-side debug trace channel** (`lib/index.js` + `src/client.js`).
-      `config.debug` (default false) registers `POST /auth/trace`; the client ships a
-      buffered trace there when the page URL carries `?dshTrace=1`. Kept in the fork
-      permanently, off by default, because it is what found the real R2 cause.
-      NOTE: trace lines use `console.log`, NOT `ctx.logger` — the cordis logger buffers
-      into an in-memory ring the GUI log panel reads and never reaches stdout or the
-      journal. This corrects an earlier claim in this plan.
-      *Evaluated:* a proxied page load produced a full ordered trace in
-      `journalctl --user -u dsh-web.service`.
-- [x] **R4 install switch to pinned fork hash** (sync.sh). `sync.sh` step 8 installs
-      `github:xyzshantaram/dsh-remote#a0969cae342a`. Bump the pin deliberately to
-      upgrade. NOTE: the pin is STALE relative to the working tree — the trace channel
-      and the dead-mechanism removals are committed to the fork but the sha here still
-      points at a0969ca. Bump it when R2 lands, so one sync run installs the whole
-      Phase F result.
-      *Evaluated:* a sync run installed from the pin and the restart loaded the fork
-      build (its version line appears in the browser console).
+- [x] **R1** openPath envelope fix · **R3** viewer highlighting · **R4** pinned
+      fork install (pin now `ab821d79e33e`, bump again when the gate-hardening
+      commit below is pushed) · **R5** host trace channel. All evaluated live.
+- [x] **R2 order-proof isLoopback flip — DONE 2026-08-22, verified end to end.**
+      The host half registers a `webServer.tapIndex` that injects one classic
+      script before `</head>`. It wraps `window.__ModuleLoader__.create` → wraps
+      the created system's `register` → intercepts the dsh-client-connection
+      factory → shadows `ctx.provide`, so the connection handle is BORN
+      `isLoopback: true` (trace proof: apply-enter true, wrapInstalled true,
+      flipCount 1). Session gating is structural (the auth gate already serves
+      shell HTML only to valid sessions); the script also checks the JS-readable
+      MARKER cookie, not the HttpOnly session cookie document.cookie can never
+      see — the first deploy checked the wrong one and silently bailed.
+      Gate hardening shipped with it after a live bug report:
+      manifest.webmanifest + favicon.svg are PUBLIC paths (Chromium fetches
+      manifests WITHOUT credentials, so gating them served login HTML to
+      logged-in browsers → console Syntax error), and every other extension
+      path now gets a clean 401 instead of login HTML. Loopback unchanged;
+      settings writes over LAN verified by the user; Models UI loads.
+
 
 ### Ordering
 
-E1 → E2 (and E3 in parallel) → E4/E7 independent → E5 needs E4's tool list →
-E6 needs E3+E4+E5.
+E4/E5/E6/E7 stand alone; W6 is unblocked; W8 needs only a mount + live check.
 
-Phase F: R1, R3, R4, and R5 are closed. R2 is the only open ticket, and it now
-stands alone — it supersedes the mechanisms it replaces rather than building on
-them.
+Phase F: ALL of R1–R5 closed 2026-08-22. Remote settings work over the proxy.
+
 
 ### Risks
 
@@ -531,4 +475,53 @@ them.
 - Frontmatter key: resolved — top-level `tools-gated: [...]`.
 - Gating plugin runtime: `exec.agent.ctx.tools.restrict` and the host-context `tools/post-execute` listener are implemented from verified source but NOT runtime-tested. This is now a human-review-queue item, not an open design risk.
 - `dsh plugin` vs package-tool install path: run the `dsh plugin` commands directly; do not hand-edit manifests.
+
+## Phase G: model-route quality — SETTLED 2026-08-22
+
+The suspected common cause was confirmed and fixed by route switch, not code:
+meridian's OpenAI-compat surface never sent a cache hint (the adapter only
+emits cache_control for openrouter-style compat), so caching drifted 75–80%,
+and cache tokens rode on meridian's lossy OpenAI translation. The user switched
+the live route to `api: anthropic-messages` (`baseURL` WITHOUT `/v1`; the SDK
+appends `/v1/messages`). Result reported by the user: prompt caching way
+better, anthropic token counts display correctly. Reasoning-token display stays
+absent — `mapUsage` drops `reasoning` for BOTH pi-ai protocols
+(dsh-llm-pi-ai/lib/index.js:415-425); accepted for now.
+
+- [ ] **G3 align aidos docs.** Update `~/repos/aidos/docs/w0-providers.md`
+      section 3 + route plan to match live config (anthropic-messages,
+      baseURL without /v1, models hand-declared; note /models autodetect is
+      lost but unused).
+      *Evaluate:* docs match settings.yaml exactly.
+
+## Phase H: harness ergonomics
+
+- [ ] **H1 /grant command.** A composer command `/grant <path>` that grants the
+      CURRENT session's model write access to an arbitrary path for the rest of
+      the session (cross-repo work without full danger mode). Needs research:
+      where per-session file policy lives in dsh, whether a client plugin can
+      mutate it mid-session, and how it interacts with the approval system.
+      *Evaluate:* /grant /some/repo lets a later edit tool write there with no
+      prompt, in that session only.
+- [ ] **H2 render edit-tool diffs in the GUI.** The conversation view shows
+      edit/batch_edit calls as opaque payloads; render before/after as a diff
+      block. Slot knowledge from W13 applies (tool-call blocks are their own
+      render cells; find the key, register lower priority).
+      *Evaluate:* an edit call renders as a readable diff in the chat.
+- [ ] **H3 syntax-highlight read/bash tool output.** Same seam family as H2:
+      highlight file contents (language by extension) and shell output in the
+      tool-call rendering. Reuse highlight.js via the loader like R3 did.
+      *Evaluate:* a read of a .ts file renders highlighted; bash output keeps
+      plain text but styled.
+- [ ] **H4 investigate opencode go/zen usage reporting.** Usage from the
+      opencode go/zen routes does not land correctly in the context ring /
+      usage accounting. Find which wire fields those routes emit vs what the
+      usage pipeline expects (same field-map audit as the meridian research).
+      *Evaluate:* a known-cost request on opencode-go shows matching numbers in
+      the ring.
+- [ ] **H5 monorepo restructure — DEFERRED until after the aidos MVP.** Split
+      this bundle into @shantaram.xyz/dsh-* plugin packages plus
+      @shantaram.xyz/dsh-dotfiles as the personal meta-bundle.
+      *Evaluate:* each plugin installs standalone; the dotfiles package pulls
+      them all.
 - **Direct edits to `package.json` are denied by the harness; reads are allowed.** Resolved 2026-08-21: the `package` tool now has an `add_task` action (registers a `scripts` entry from validated argv via a node one-liner, since pnpm `pkg set` rejects `:`/`-` in keys), which is the sanctioned write path. Direct `write`/`edit` of package.json is still banned; only the tool (its exempt `ctx.shell`) may do it.

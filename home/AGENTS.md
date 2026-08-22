@@ -1,5 +1,8 @@
 # AGENTS.md — personal bundle rules (dsh edition)
 
+* `/tmp/dsh` is the sanctioned scratch space. The sandbox allows writes there
+  without approval, and the dsh-remote `files.roots` config exposes it to the
+  file panel. Use it for temporary files instead of asking for wider access.
 * NEVER EVER instruct subagents to return entire file contents. If you need to read a file,
   read it yourself. Subagents are to be used for tasks which can be compartmentalized
   easily and which you only need the indirect result off, like self-contained patches,
