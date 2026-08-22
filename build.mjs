@@ -11,7 +11,6 @@ const here = dirname(fileURLToPath(import.meta.url));
 const entries = [
   ["plugins/bash-guard.ts", "plugins/bash-guard.js"],
   ["plugins/see.ts", "plugins/see.js"],
-  ["plugins/session-hygiene.ts", "plugins/session-hygiene.js"],
   ["plugins/manifest-guard.ts", "plugins/manifest-guard.js"],
   ["plugins/package-tool.ts", "plugins/package-tool.js"],
   ["plugins/skill-gate.ts", "plugins/skill-gate.js"],
@@ -31,34 +30,41 @@ for (const [entry, outfile] of entries) {
   });
 }
 
-// W13 spike: a CLIENT plugin, not a host-plane plugin. It runs in the
-// browser, so it bundles as a browser script rather than a node module.
-// The output is the self-contained client half; see the file header for
-// how the slot registration wins.
-await build({
-  entryPoints: [join(here, "plugins/spike-keyed-slot.ts")],
-  bundle: true,
-  platform: "browser",
-  format: "iife",
-  outfile: join(here, "plugins/spike-keyed-slot.js"),
-  logLevel: "info",
-});
 
-// W8: the approval reject-with-comment CLIENT plugin package. Its client
-// half is factory-form CJS: the browser module loader executes the file
-// and calls the factory with its own require resolver. esbuild must not
-// resolve or rewrite that factory, so the build step copies the two
-// sources verbatim into the package's lib/. The package mirrors the
-// installed client plugins (dsh-at-file, dsh-better-markdown).
-const approvalCommentSources = [
+// W8: the approval reject-with-comment CLIENT plugin package. The host
+// half (index.js) copies verbatim, same as before. The client half now
+// bundles like tool-render: highlight.js inlined (the browser module
+// table cannot resolve npm deps), react and the @deepseek-ai packages
+// external, wrapped in the module-loader facade with Symbol.toStringTag.
+const approvalCommentHostSources = [
   ["plugins/approval-comment/src/index.js", "plugins/approval-comment/lib/index.js"],
-  ["plugins/approval-comment/src/client.js", "plugins/approval-comment/lib/client.js"],
 ];
 
-for (const [source, outfile] of approvalCommentSources) {
+for (const [source, outfile] of approvalCommentHostSources) {
   const dest = join(here, outfile);
   await mkdir(dirname(dest), { recursive: true });
   await copyFile(join(here, source), dest);
+}
+
+await build({
+  entryPoints: [join(here, "plugins/approval-comment/src/client.cjs")],
+  bundle: true,
+  platform: "browser",
+  format: "cjs",
+  target: "es2022",
+  external: ["react", "react/jsx-runtime", "react-dom/client", "@deepseek-ai/*"],
+  outfile: join(here, "plugins/approval-comment/dist/_client.bundle.js"),
+  logLevel: "info",
+});
+{
+  const bundled = (
+    await readFile(join(here, "plugins/approval-comment/dist/_client.bundle.js"), "utf8")
+  ).replace(/\s+$/, "");
+  await writeFile(
+    join(here, "plugins/approval-comment/lib/client.js"),
+    `window.__ModuleLoader__.load({\n\tid: "approval-comment",\n\tfactory: (require) => {\n\t\tvar module = { exports: {} };\n\t\tvar exports = module.exports;\n\t\tObject.defineProperty(exports, Symbol.toStringTag, { value: "Module" });\n${bundled}\n\t\treturn module.exports;\n\t}\n});\n`,
+  );
+  await rm(join(here, "plugins/approval-comment/dist/_client.bundle.js"));
 }
 
 // W8/W13 family: H2+H3 tool-render CLIENT plugin package. The client half

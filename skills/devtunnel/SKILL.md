@@ -8,8 +8,8 @@ whenToUse: The user wants a dev server reachable from another LAN device, or a r
 
 Run a local dev server and expose it over HTTPS on the LAN at
 `https://potato.local:<port>/`, using `~/.local/bin/devtunnel`. Built on the
-same Caddy + local-CA + mDNS setup documented in the personal bundle's
-`lang/README.md` (see also the `share-caddy-cert` skill, for getting a *new*
+same Caddy + local-CA + mDNS setup (see also the `share-caddy-cert`
+skill, for getting a *new* device to trust that CA in the first place).
 device to trust that CA in the first place).
 
 The live script this skill drives is `~/.local/bin/devtunnel` (on `PATH`,

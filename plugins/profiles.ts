@@ -103,11 +103,11 @@ import z from "@deepseek-ai/schemastery";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import type {} from "@deepseek-ai/dsh-tools";
 import type { SubagentStartRequest } from "@deepseek-ai/dsh-subagent";
-import type { ContentBlock } from "@deepseek-ai/dsh-llm";
 import { settingsNamespace } from "@deepseek-ai/dsh-settings";
 import type {} from "@deepseek-ai/dsh-settings";
 import type {} from "@deepseek-ai/dsh-agent";
 import { normalizeEntry, type RouteCandidate } from "./profile-routes";
+import { outputText } from "./shared/output-text";
 
 export const name = "profiles";
 
@@ -225,33 +225,6 @@ function resolveHead(
   if (pinned.length > 0) return pinned[0];
   const profile = settings?.get(PROFILE_NS) as ProfileSettings | undefined;
   return normalizeEntry(activeEntry(profile))[0];
-}
-
-/**
- * Push the active chain's head into agent-default-model so future sessions
- * compose on the flipped profile's primary route.
- */
-function syncDefaultModel(ctx: Context, profile: ProfileSettings | undefined): void {
-  const head = normalizeEntry(activeEntry(profile))[0];
-  if (!head) return;
-  const agentDefaultModel = service<{
-    saveSelection(next: { provider: string; model: string }): Promise<void>;
-  }>(ctx, "agentDefaultModel");
-  void agentDefaultModel?.saveSelection({ provider: head.provider, model: head.model }).catch(() => {});
-}
-
-/** Join the text blocks of a child result into one string (see.ts technique). */
-function outputText(output: ContentBlock[]): string {
-  return output
-    .filter(
-      (value): value is { type: "text"; text: string } =>
-        typeof value === "object" &&
-        value !== null &&
-        (value as { type?: unknown }).type === "text" &&
-        typeof (value as { text?: unknown }).text === "string",
-    )
-    .map((value) => value.text)
-    .join("");
 }
 
 /** Human-readable name of the route a dispatch used. */

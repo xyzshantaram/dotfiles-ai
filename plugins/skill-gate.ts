@@ -9,25 +9,39 @@
  *   ---
  *   name: util
  *   description: Utilities for regex, time, markdown, and encoding.
- *   tools-gated: [tool-time, tool-regex, tool-markdown, tool-encoding]
+ *   tools-gated: [time, regex, markdown, encoding]
  *   ---
  *
- * Mechanism (verified against dsh-tools and dsh-agent source):
+ * Mechanism (verified against dsh-tools/dsh-agent source AND exercised live
+ * through a dynamic probe plugin against the util gate):
  *   - The gated tools are registered GLOBALLY by their own plugins and stay
  *     always online at the registry level.
  *   - This plugin hides them per-agent with `tools.restrict({ deny })`, called
- *     on the AGENT's scoped handle (`exec.agent.ctx.tools`). `restrict`
- *     validates that every named tool is a global tool and applies an
- *     agent-scoped visibility mask. A deny mask removes a tool; the tool
- *     returns when the deny mask no longer names it.
- *   - On a successful `skill` tool call, this plugin adds the loaded skill's
- *     gated tools to that agent's active set and recomputes the deny mask.
+ *     on the AGENT's scoped handle (`agent.ctx.tools`). `restrict` validates
+ *     that every named tool is a global tool and applies an agent-scoped
+ *     visibility mask. A deny mask removes a tool; the tool returns when the
+ *     deny mask no longer names it.
+ *   - Enforcement runs on `agent/pre-step`, before every model step of every
+ *     agent: the mask is reconciled with the agent's loaded-skill state and
+ *     only rewritten when it actually changed. This covers fresh agents
+ *     (hidden until their first skill load) and agents that existed before
+ *     this plugin mounted.
+ *   - On a successful `skill` tool call (`tools/post-execute`), this plugin
+ *     adds the loaded skill's gated tools to that agent's active set; the next
+ *     step's reconciliation unmasks them.
  *   - On `compaction/start`, active state for every agent is cleared and the
- *     full deny mask is re-applied.
+ *     masks are lifted; the next pre-step re-applies the full deny, so gated
+ *     tools return to hidden after a compaction instead of leaking open.
  *
  * The complete gated-tool list is read at runtime from the user skill root
  * (`$DSH_HOME/skills`), so the frontmatter is the only place a gate is
- * declared; no second list lives in this file.
+ * declared; no second list lives in this file. Frontmatter must name the
+ * GLOBAL tool names exactly as registered (e.g. `time`, not the package id
+ * `tool-time`) — unknown names are filtered out of the deny list, which would
+ * leave those tools permanently visible. An entry MAY end with `*` as a
+ * prefix pattern (`mcp__gitlab__*`); patterns expand at enforcement time
+ * against the live tool schemas, so tool sets that shift between releases
+ * (MCP servers) stay fully gated without maintaining a literal list.
  */
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
@@ -114,21 +128,50 @@ function discoverGates(skillDirs: string[]): Map<string, string[]> {
   return gates;
 }
 
-/** Active gated tools per agent id, and the current deny disposer per agent id. */
+/**
+ * Per-agent gating state, keyed by agent id:
+ *   - activeById:  gated tools this agent has unlocked by loading skills.
+ *   - appliedById: serialized deny snapshot last pushed for this agent, so the
+ *                  per-step reconciliation can skip work when nothing changed.
+ *   - disposerById: the live restriction disposer for this agent.
+ */
 const activeById = new Map<string, Set<string>>();
+const appliedById = new Map<string, string>();
 const disposerById = new Map<string, () => void>();
 
+/** Cached skill-name → gated-tools map; invalidated on `skills/change`. */
+let gatesCache: Map<string, string[]> | undefined;
+
 export function apply(ctx: Context, config: unknown): void {
-  void ctx; // the host context is only the mount point; per-agent work uses exec.agent.ctx
   const cfg = (config ?? {}) as { skillDirs?: string[] };
   const skillDirs = cfg.skillDirs ?? [];
+
+  ctx.on("skills/change", () => {
+    gatesCache = undefined;
+  });
+
+  // Enforcement point: before EVERY model step of EVERY agent — fresh agents,
+  // agents that predate this mount, and post-compaction states all reconcile
+  // here. Never break stepping over a gating fault.
+  ctx.on("agent/pre-step", (payload, next) => {
+    try {
+      enforce(payload.agent);
+    } catch {
+      // Observe only.
+    }
+    return next();
+  });
 
   ctx.on("tools/post-execute", (exec, result, next) => {
     const proceed = async () => {
       const outcome = await next();
       // Observe only. Never rewrite the skill call's outcome.
       if ((exec as { name?: string }).name === "skill") {
-        notifySkillLoaded(exec, result);
+        try {
+          notifySkillLoaded(exec, result);
+        } catch {
+          // Observe only.
+        }
       }
       return outcome;
     };
@@ -139,13 +182,107 @@ export function apply(ctx: Context, config: unknown): void {
     clearAll();
   });
 
+  /** Every `tools-gated` declaration, exact names and `*` patterns alike. */
+  function gatedPatterns(): string[] {
+    if (!gatesCache) gatesCache = discoverGates(skillDirs);
+    const out = new Set<string>();
+    for (const toolList of gatesCache.values()) {
+      for (const tool of toolList) out.add(tool);
+    }
+    return [...out];
+  }
+
+  /**
+   * True when the agent's active (skill-unlocked) set covers `name`, either
+   * as an exact entry or through a loaded `prefix*` pattern.
+   */
+  function covered(active: Set<string>, name: string): boolean {
+    if (active.has(name)) return true;
+    for (const entry of active) {
+      if (entry.endsWith("*") && name.startsWith(entry.slice(0, -1))) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Build the concrete deny list for one agent: exact gated names plus every
+   * live-registered tool matching a `*` pattern, minus anything unlocked.
+   * Pattern expansion reads the runtime schema list; when that surface is
+   * unavailable the pattern contributes nothing this round, and a later
+   * reconcile picks it up once schemas are readable (the snapshot mark then
+   * differs, forcing the rewrite).
+   */
+  function expandDeny(
+    agent: Agent,
+    patterns: string[],
+    active: Set<string>,
+  ): string[] {
+    const exact: string[] = [];
+    const prefixes: string[] = [];
+    for (const pattern of patterns) {
+      if (pattern.endsWith("*")) prefixes.push(pattern.slice(0, -1));
+      else exact.push(pattern);
+    }
+    const deny = new Set<string>();
+    for (const name of exact) {
+      if (!covered(active, name)) deny.add(name);
+    }
+    if (prefixes.length > 0) {
+      let names: string[] | undefined;
+      try {
+        const schemas = (
+          agent.ctx.tools as { schemas?: () => Array<{ name: string }> }
+        ).schemas?.();
+        names = Array.isArray(schemas) ? schemas.map((s) => s.name) : undefined;
+      } catch {
+        names = undefined;
+      }
+      if (names) {
+        for (const name of names) {
+          if (!covered(active, name) && prefixes.some((p) => name.startsWith(p))) {
+            deny.add(name);
+          }
+        }
+      }
+    }
+    return [...deny].sort();
+  }
+
+  /**
+   * Reconcile one agent's deny mask with its loaded-skill state. Cheap when
+   * nothing changed: the snapshot comparison skips the restrict() round trip.
+   */
+  function enforce(agent: Agent | undefined): void {
+    if (!agent || !agent.ctx || !agent.ctx.tools) return;
+    const patterns = gatedPatterns();
+    if (patterns.length === 0) return;
+    const active = activeById.get(agent.id) ?? new Set<string>();
+    const deny = expandDeny(agent, patterns, active);
+    const mark = deny.join(",");
+    if (appliedById.get(agent.id) === mark) return;
+    disposerById.get(agent.id)?.();
+    disposerById.delete(agent.id);
+    appliedById.set(agent.id, mark);
+    if (deny.length === 0) return;
+    const disposer = restrictKnown(agent, deny);
+    if (disposer) disposerById.set(agent.id, disposer);
+  }
+
   function clearAll(): void {
-    // A full session compaction leaves no reliable per-agent signal here, so
-    // clear every tracked agent. The deny masks are disposed, which returns
-    // all gated tools to their default (hidden) state until a skill reloads.
-    for (const dispose of disposerById.values()) dispose();
-    disposerById.clear();
+    // Compaction wipes which skills each conversation had loaded. Drop the
+    // active sets and lift the masks; the next pre-step reconciles every
+    // agent back to the full deny, so gated tools return to hidden instead
+    // of leaking open into post-compaction prompts.
     activeById.clear();
+    appliedById.clear();
+    for (const dispose of disposerById.values()) {
+      try {
+        dispose();
+      } catch {
+        // A stale agent may already be gone; nothing to unwind.
+      }
+    }
+    disposerById.clear();
   }
 
   function notifySkillLoaded(exec: unknown, result: unknown): void {
@@ -159,13 +296,13 @@ export function apply(ctx: Context, config: unknown): void {
     // Only treat a successful load as activation.
     const isError = (result as { isError?: boolean })?.isError === true;
     if (isError) return;
-    const gates = discoverGates(skillDirs);
-    const gated = gates.get(skillName);
+    if (!gatesCache) gatesCache = discoverGates(skillDirs);
+    const gated = gatesCache.get(skillName);
     if (!gated || gated.length === 0) return;
     const active = activeById.get(agent.id) ?? new Set<string>();
     for (const tool of gated) active.add(tool);
     activeById.set(agent.id, active);
-    reapplyDeny(agent, active);
+    // The next pre-step reconciles the mask; no restrict() call here.
   }
 
   /**
@@ -224,26 +361,4 @@ export function apply(ctx: Context, config: unknown): void {
     }
     return undefined;
   }
-
-  function reapplyDeny(agent: Agent, active: Set<string>): void {
-    const gates = discoverGates(skillDirs);
-    const allGated = new Set<string>();
-    for (const toolList of gates.values()) {
-      for (const tool of toolList) allGated.add(tool);
-    }
-    // Deny every gated tool that is not active for this agent.
-    const deny = [...allGated].filter((tool) => !active.has(tool));
-    disposerById.get(agent.id)?.();
-    if (deny.length === 0) {
-      disposerById.delete(agent.id);
-      return;
-    }
-    const disposer = restrictKnown(agent, deny);
-    if (disposer) {
-      disposerById.set(agent.id, disposer);
-    } else {
-      disposerById.delete(agent.id);
-    }
-  }
-
 }

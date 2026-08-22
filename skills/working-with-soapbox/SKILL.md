@@ -4,6 +4,9 @@ description: Find and prioritize real work in the soapbox-pub/ditto project from
 whenToUse: The user asks "what should I work on" in soapbox-pub/ditto, or asks you to start work on ditto with no specific issue named yet.
 metadata:
   confirmed_against_live_repo: 2026-08-21
+# Prefix pattern: expands at enforcement time against live tool schemas, so
+# glab releases that add or rename tools stay gated without editing this list.
+tools-gated: [mcp__gitlab__*]
 ---
 
 # Working with soapbox-pub/ditto

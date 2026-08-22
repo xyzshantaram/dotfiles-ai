@@ -8092,28 +8092,38 @@ var CSS_TEXT = [
   ".tool-render-sep{background:var(--dsw-alias-label-caption);border-radius:1px;flex:none;width:2px;height:2px;margin:0 8px}",
   ".tool-render-summary{text-overflow:ellipsis;white-space:nowrap;min-width:0;color:var(--dsw-alias-label-tertiary);flex:auto;font-size:14px;line-height:24px;overflow:hidden}",
   ".tool-render-summary[tool-render-error]{color:var(--dsw-alias-state-error-primary)}",
-  ".tool-render-path{color:var(--dsw-alias-label-secondary);cursor:pointer}",
+  ".tool-render-path{color:var(--dsw-alias-label-secondary);cursor:pointer;min-width:0;max-width:100%;display:inline-block;vertical-align:bottom;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
   ".tool-render-path:hover{color:var(--dsw-alias-label-primary);text-decoration:underline}",
   ".tool-render-body{flex-direction:column;display:flex}",
   ".tool-render-io{flex-direction:column;display:flex}",
   ".tool-render-command{font-family:var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-tertiary);margin:4px 0 0 4px;padding:2px 0;font-size:13px;line-height:20px}",
+  ".tool-render-command code.hljs{background:transparent;padding:0;font-family:inherit;font-size:inherit;line-height:inherit;white-space:inherit}",
   ".tool-render-output{box-sizing:border-box;background:var(--dsw-alias-markdown-code-block);font-family:var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-primary);border-radius:12px;margin:4px 0 4px 4px;padding:12px 16px;font-size:13px;line-height:22px;max-height:280px;overflow-y:auto}",
   ".tool-render-output[tool-render-error]{color:var(--dsw-alias-state-error-primary)}",
   ".tool-render-code{box-sizing:border-box;background:var(--dsw-alias-markdown-code-block);font-family:var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-primary);border-radius:12px;margin:4px 0 4px 4px;padding:12px 16px;font-size:13px;line-height:22px;max-height:400px;overflow-y:auto}",
   ".tool-render-code code.hljs{background:transparent;padding:0;font-family:inherit;font-size:inherit;line-height:inherit;white-space:inherit;display:block}",
-  ".tool-render-code .hljs-comment,.tool-render-code .hljs-quote{color:#8b949e;font-style:italic}",
-  ".tool-render-code .hljs-keyword,.tool-render-code .hljs-selector-tag,.tool-render-code .hljs-literal,.tool-render-code .hljs-section{color:#ff7b72}",
-  ".tool-render-code .hljs-string,.tool-render-code .hljs-regexp,.tool-render-code .hljs-meta .hljs-string{color:#a5d6ff}",
-  ".tool-render-code .hljs-title,.tool-render-code .hljs-title.function_,.tool-render-code .hljs-title.class_,.tool-render-code .hljs-params{color:#d2a8ff}",
-  ".tool-render-code .hljs-number,.tool-render-code .hljs-symbol,.tool-render-code .hljs-bullet{color:#79c0ff}",
-  ".tool-render-code .hljs-attr,.tool-render-code .hljs-attribute,.tool-render-code .hljs-variable,.tool-render-code .hljs-template-variable{color:#ffa657}",
-  ".tool-render-code .hljs-name,.tool-render-code .hljs-tag,.tool-render-code .hljs-built_in,.tool-render-code .hljs-type{color:#7ee787}",
-  ".tool-render-code .hljs-deletion{color:#ffa198}",
-  ".tool-render-code .hljs-addition{color:#aff5b4}",
+  ".tool-render-code .hljs-comment,.tool-render-command .hljs-comment,.tool-render-write-diff .hljs-comment,.tool-render-code .hljs-quote,.tool-render-command .hljs-quote,.tool-render-write-diff .hljs-quote{color:#8b949e;font-style:italic}",
+  ".tool-render-code .hljs-keyword,.tool-render-command .hljs-keyword,.tool-render-write-diff .hljs-keyword,.tool-render-code .hljs-selector-tag,.tool-render-command .hljs-selector-tag,.tool-render-write-diff .hljs-selector-tag,.tool-render-code .hljs-literal,.tool-render-command .hljs-literal,.tool-render-write-diff .hljs-literal,.tool-render-code .hljs-section,.tool-render-command .hljs-section,.tool-render-write-diff .hljs-section{color:#ff7b72}",
+  ".tool-render-code .hljs-string,.tool-render-command .hljs-string,.tool-render-write-diff .hljs-string,.tool-render-code .hljs-regexp,.tool-render-command .hljs-regexp,.tool-render-write-diff .hljs-regexp,.tool-render-code .hljs-meta .hljs-string,.tool-render-command .hljs-meta .hljs-string,.tool-render-write-diff .hljs-meta .hljs-string{color:#a5d6ff}",
+  ".tool-render-code .hljs-title,.tool-render-command .hljs-title,.tool-render-write-diff .hljs-title,.tool-render-code .hljs-title.function_,.tool-render-command .hljs-title.function_,.tool-render-write-diff .hljs-title.function_,.tool-render-code .hljs-title.class_,.tool-render-command .hljs-title.class_,.tool-render-write-diff .hljs-title.class_,.tool-render-code .hljs-params,.tool-render-command .hljs-params,.tool-render-write-diff .hljs-params{color:#d2a8ff}",
+  ".tool-render-code .hljs-number,.tool-render-command .hljs-number,.tool-render-write-diff .hljs-number,.tool-render-code .hljs-symbol,.tool-render-command .hljs-symbol,.tool-render-write-diff .hljs-symbol,.tool-render-code .hljs-bullet,.tool-render-command .hljs-bullet,.tool-render-write-diff .hljs-bullet{color:#79c0ff}",
+  ".tool-render-code .hljs-attr,.tool-render-command .hljs-attr,.tool-render-write-diff .hljs-attr,.tool-render-code .hljs-attribute,.tool-render-command .hljs-attribute,.tool-render-write-diff .hljs-attribute,.tool-render-code .hljs-variable,.tool-render-command .hljs-variable,.tool-render-write-diff .hljs-variable,.tool-render-code .hljs-template-variable,.tool-render-command .hljs-template-variable,.tool-render-write-diff .hljs-template-variable{color:#ffa657}",
+  ".tool-render-code .hljs-name,.tool-render-command .hljs-name,.tool-render-write-diff .hljs-name,.tool-render-code .hljs-tag,.tool-render-command .hljs-tag,.tool-render-write-diff .hljs-tag,.tool-render-code .hljs-built_in,.tool-render-command .hljs-built_in,.tool-render-write-diff .hljs-built_in,.tool-render-code .hljs-type,.tool-render-command .hljs-type,.tool-render-write-diff .hljs-type{color:#7ee787}",
+  ".tool-render-code .hljs-deletion,.tool-render-command .hljs-deletion,.tool-render-write-diff .hljs-deletion{color:#ffa198}",
+  ".tool-render-code .hljs-addition,.tool-render-command .hljs-addition,.tool-render-write-diff .hljs-addition{color:#aff5b4}",
   ".tool-render-diff{margin:4px 0 4px 4px}",
   ".tool-render-inspect{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-secondary);cursor:pointer;opacity:0;border-radius:999px;align-self:flex-start;align-items:center;gap:4px;margin:4px 0 2px 4px;padding:2px 8px;font-size:11px;line-height:16px;transition:opacity .1s;display:inline-flex}",
   ".tool-render-card:hover .tool-render-inspect,.tool-render-inspect:focus-visible{opacity:1}",
-  ".tool-render-inspect:hover{background:var(--dsw-alias-interactive-bg-hover-solid);color:var(--dsw-alias-label-primary)}"
+  ".tool-render-inspect:hover{background:var(--dsw-alias-interactive-bg-hover-solid);color:var(--dsw-alias-label-primary)}",
+  ".tool-render-diff-fallback{box-sizing:border-box;background:var(--dsw-alias-markdown-code-block);font-family:var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-primary);border-radius:12px;margin:4px 0 4px 4px;padding:12px 16px;font-size:13px;line-height:22px;max-height:400px;overflow-y:auto}",
+  ".tool-render-fallback-note{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px;margin-bottom:6px}",
+  ".tool-render-fallback-add{color:#aff5b4}",
+  ".tool-render-write{flex-direction:column;display:flex}",
+  ".tool-render-write-diff{box-sizing:border-box;background:var(--dsw-alias-markdown-code-block);font-family:var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-primary);border-radius:12px;margin:4px 0 4px 4px;padding:12px 16px;font-size:13px;line-height:22px;max-height:400px;overflow-y:auto}",
+  ".tool-render-line-same{color:var(--dsw-alias-label-primary)}",
+  ".tool-render-line-del{color:#ffa198;background:rgba(255,161,152,.12)}",
+  ".tool-render-line-add{color:#aff5b4;background:rgba(175,245,180,.12)}",
+  ".tool-render-write-note{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px;margin-bottom:6px}"
 ].join("");
 if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(STYLE_TAG_ID) + "]") === null) {
   tag = document.createElement("style");
@@ -8353,7 +8363,8 @@ function BashRow(props) {
   if (command !== void 0 || output !== null && output !== "") {
     var inner = [];
     if (command !== void 0) {
-      inner.push(createElement("div", { className: "tool-render-command" }, "$ " + command));
+      var commandHtml = highlightCode(command, "bash");
+      inner.push(createElement("div", { className: "tool-render-command" }, "$ ", createElement("code", { className: "hljs", dangerouslySetInnerHTML: { __html: commandHtml } })));
     }
     if (output !== null && output !== "") {
       inner.push(
@@ -8404,15 +8415,22 @@ function wireDiffs(block) {
   var resultDiffs = result === null ? null : narrowDiffs(result.diffs);
   return resultDiffs === null ? null : { diffs: resultDiffs };
 }
-function pathEquals(a, b) {
+function matchesPath(a, b, cwd) {
   if (typeof a !== "string" || typeof b !== "string") return false;
-  if (a === b) return true;
   var strip = function(p) {
     return p.replace(/[/\\]+$/, "");
   };
-  return strip(a) === strip(b);
+  if (strip(a) === strip(b)) return true;
+  if (typeof cwd !== "string" || cwd === "") return false;
+  var root = cwd.replace(/[/\\]+$/, "");
+  var relA = relativizeToCwd(a, root);
+  var relB = relativizeToCwd(b, root);
+  if (strip(relA) === strip(relB)) return true;
+  var joinedA = /^[/\\]/.test(a) ? a : root + "/" + a;
+  var joinedB = /^[/\\]/.test(b) ? b : root + "/" + b;
+  return strip(joinedA) === strip(joinedB);
 }
-function latestReadText(snapshot, path, beforeTime) {
+function latestReadText(snapshot, path, beforeTime, cwd) {
   var nodes = snapshot && snapshot.chat && snapshot.chat.nodes;
   if (nodes === void 0 || nodes === null || typeof nodes.values !== "function") return null;
   var best = null;
@@ -8430,7 +8448,7 @@ function latestReadText(snapshot, path, beforeTime) {
     var args = parseArgs(argsRawOf(block));
     if (args === null) continue;
     var readPath = pickString(args, ["path", "file_path"]);
-    if (readPath === void 0 || !pathEquals(readPath, path)) continue;
+    if (readPath === void 0 || !matchesPath(readPath, path, cwd)) continue;
     var text = resultTextOf(block);
     if (text === null || text === "") continue;
     if (best === null || time > best.time) best = { time, text };
@@ -8468,6 +8486,51 @@ function extractHunk(readText, removeFrom, removeTo, replacementText) {
   var before = [];
   for (var n = from; n <= to; n++) before.push(rows[n].content);
   return { before: before.join("\n"), after: typeof replacementText === "string" ? replacementText : "" };
+}
+function splitLines(text) {
+  return typeof text === "string" && text !== "" ? text.split("\n") : [];
+}
+function diffLines(oldText, newText) {
+  var a = splitLines(oldText);
+  var b = splitLines(newText);
+  var n = a.length;
+  var m = b.length;
+  var dp = [];
+  for (var i = 0; i <= n; i++) {
+    dp.push(new Array(m + 1));
+    dp[i][m] = 0;
+  }
+  for (var j = 0; j <= m; j++) dp[n][j] = 0;
+  for (var i = n - 1; i >= 0; i--) {
+    for (var j = m - 1; j >= 0; j--) {
+      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  var ops = [];
+  var i = 0;
+  var j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) {
+      ops.push({ type: "same", text: a[i] });
+      i++;
+      j++;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      ops.push({ type: "del", text: a[i] });
+      i++;
+    } else {
+      ops.push({ type: "add", text: b[j] });
+      j++;
+    }
+  }
+  while (i < n) {
+    ops.push({ type: "del", text: a[i] });
+    i++;
+  }
+  while (j < m) {
+    ops.push({ type: "add", text: b[j] });
+    j++;
+  }
+  return ops;
 }
 function collectEditRequests(args) {
   var out = [];
@@ -8513,16 +8576,17 @@ function collectEditRequests(args) {
   }
   return out;
 }
-function resolveEditDiffs(block, requests, useSession) {
+function resolveEditDiffs(block, requests, useSession, cwd) {
   var running = !doneOf(block);
   var beforeTime = running ? block.time : typeof block.callTime === "number" ? block.callTime : void 0;
+  var filter = typeof beforeTime === "number" ? beforeTime : void 0;
   var out = [];
   for (var i = 0; i < requests.length; i++) {
     var req = requests[i];
     var oldText = req.oldText;
-    if (oldText === null && typeof beforeTime === "number" && useSession !== void 0) {
+    if (oldText === null && useSession !== void 0) {
       var readText = useSession(function(snapshot) {
-        return latestReadText(snapshot, req.path, beforeTime);
+        return latestReadText(snapshot, req.path, filter, cwd);
       });
       if (readText !== null) {
         var hunk = extractHunk(readText, req.removeFrom, req.removeTo, req.newText);
@@ -8533,6 +8597,43 @@ function resolveEditDiffs(block, requests, useSession) {
   }
   return out;
 }
+function allHunksNull(diffs) {
+  for (var i = 0; i < diffs.length; i++) {
+    if (diffs[i].oldText !== null) return false;
+  }
+  return true;
+}
+function diffFallbackBody(diffs) {
+  var children = [
+    createElement("div", { className: "tool-render-fallback-note" }, "Before text unavailable")
+  ];
+  for (var i = 0; i < diffs.length; i++) {
+    var newText = typeof diffs[i].newText === "string" ? diffs[i].newText : "";
+    var lines = newText.split("\n");
+    for (var j = 0; j < lines.length; j++) {
+      children.push(createElement("div", { className: "tool-render-fallback-add" }, "+ " + lines[j]));
+    }
+  }
+  return createElement("div", { className: "tool-render-diff-fallback" }, children);
+}
+function resolveEffectiveCwd(props) {
+  if (typeof props.useSessions === "function") {
+    try {
+      var cwd = props.useSessions(function(list) {
+        if (list === null || typeof list !== "object") return void 0;
+        var id = typeof props.sessionId === "string" && props.sessionId !== "" ? props.sessionId : typeof list.current === "string" ? list.current : void 0;
+        if (id === void 0) return void 0;
+        var row = list.byId === void 0 || list.byId === null ? void 0 : list.byId[id];
+        if (row === void 0 || row === null) return void 0;
+        return row.cwd;
+      });
+      if (typeof cwd === "string" && cwd !== "") return cwd;
+    } catch (error) {
+    }
+  }
+  if (typeof props.cwd === "string" && props.cwd !== "") return props.cwd;
+  return void 0;
+}
 function makeEditRow(toolTitle) {
   return function EditToolRow(props) {
     var expandedState = useState(false);
@@ -8542,23 +8643,28 @@ function makeEditRow(toolTitle) {
     var done = doneOf(block);
     var args = parseArgs(argsRawOf(block));
     var argsObject = args !== null ? args : {};
+    var effectiveCwd = resolveEffectiveCwd(props);
     var wire = wireDiffs(block);
     var diffs;
     if (wire !== null) {
       diffs = wire.diffs;
     } else {
       var requests = collectEditRequests(argsObject);
-      diffs = resolveEditDiffs(block, requests, props.useSession);
+      diffs = resolveEditDiffs(block, requests, props.useSession, effectiveCwd);
       if (diffs.length === 0) diffs = null;
     }
     var output = done ? resultTextOf(block) : null;
     var state = rowStateOf(block);
     var errorSummary = state === "error" && output !== null && output !== "" ? firstLine(output) : void 0;
     var summaryPath = pickString(argsObject, ["path", "file_path"]);
-    var summary = summaryPath !== void 0 ? relativizeToCwd(firstLine(summaryPath), props.cwd) : toolTitle;
+    var summary = summaryPath !== void 0 ? relativizeToCwd(firstLine(summaryPath), effectiveCwd) : toolTitle;
     var body = null;
     if (diffs !== null && diffs.length > 0) {
-      body = createElement(DiffBlock, { diffs, className: "tool-render-diff" });
+      if (wire === null && done && state === "ok" && allHunksNull(diffs)) {
+        body = diffFallbackBody(diffs);
+      } else {
+        body = createElement(DiffBlock, { diffs, className: "tool-render-diff" });
+      }
     } else if (output !== null && output !== "") {
       body = createElement("pre", { className: "tool-render-output", "tool-render-error": state === "error" || void 0 }, output);
     }
@@ -8582,6 +8688,77 @@ function makeEditRow(toolTitle) {
 }
 var EditRow = makeEditRow("Edit");
 var BatchEditRow = makeEditRow("Batch edit");
+function writeLineClass(type) {
+  if (type === "del") return "tool-render-line-del";
+  if (type === "add") return "tool-render-line-add";
+  return "tool-render-line-same";
+}
+function writeBody(path, before, newText) {
+  if (before === null || before === "") {
+    var html = highlightCode(newText, languageFor(path !== void 0 ? path : ""));
+    return createElement(
+      "div",
+      { className: "tool-render-write" },
+      createElement("div", { className: "tool-render-write-note" }, "No earlier version on record; new content below"),
+      createElement(
+        "pre",
+        { className: "tool-render-code" },
+        createElement("code", { className: "hljs", dangerouslySetInnerHTML: { __html: html } })
+      )
+    );
+  }
+  var ops = diffLines(before, newText);
+  var lines = [];
+  for (var i = 0; i < ops.length; i++) {
+    var op = ops[i];
+    lines.push(createElement("div", { className: writeLineClass(op.type), dangerouslySetInnerHTML: { __html: highlightCode(op.text, languageFor(path !== void 0 ? path : "")) } }));
+  }
+  return createElement("div", { className: "tool-render-write-diff" }, lines);
+}
+function WriteRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var block = props.block;
+  var done = doneOf(block);
+  var args = parseArgs(argsRawOf(block));
+  var argsObject = args !== null ? args : {};
+  var effectiveCwd = resolveEffectiveCwd(props);
+  var path = pickString(argsObject, ["file_path", "path"]);
+  var newText = typeof argsObject.content === "string" ? argsObject.content : "";
+  var output = done ? resultTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary = state === "error" && output !== null && output !== "" ? firstLine(output) : void 0;
+  var summary = path !== void 0 ? relativizeToCwd(firstLine(path), effectiveCwd) : "Write";
+  var body = null;
+  if (done && state === "ok") {
+    var before = null;
+    if (path !== void 0 && props.useSession !== void 0) {
+      before = props.useSession(function(snapshot) {
+        return latestReadText(snapshot, path, void 0, effectiveCwd);
+      });
+    }
+    body = writeBody(path, before, newText);
+  } else if (output !== null && output !== "") {
+    body = createElement("pre", { className: "tool-render-output", "tool-render-error": state === "error" || void 0 }, output);
+  }
+  return toolRenderRow({
+    icon: createElement(IconEditOutline16, { size: 14 }),
+    title: "Write",
+    summary,
+    path,
+    onOpenFile: props.openFile,
+    state,
+    expandable: body !== null,
+    expanded,
+    onToggle: function() {
+      setExpanded(!expanded);
+    },
+    body,
+    errorSummary,
+    inspect: props.inspect
+  });
+}
 var inject = ["slots"];
 function apply(ctx) {
   ctx.slots.inject("tool.call.toolview", function* () {
@@ -8605,6 +8782,11 @@ function apply(ctx) {
       key: "batch_edit",
       priority: -100
     }, BatchEditRow);
+    yield ctx.slots.register({
+      name: "tool.call.toolview",
+      key: "write",
+      priority: -100
+    }, WriteRow);
   });
 }
 module.exports = { apply, inject, name: PLUGIN_NAME };
