@@ -32,6 +32,13 @@
  *   - On `compaction/start`, active state for every agent is cleared and the
  *     masks are lifted; the next pre-step re-applies the full deny, so gated
  *     tools return to hidden after a compaction instead of leaking open.
+ *   - SUBAGENT LOCKDOWN: agents with delegation depth > 0 are hard-denied a
+ *     configurable tool list (`subagentDeny`, default the cordis mutation
+ *     set) regardless of loaded skills. Children keep read-only inspection
+ *     (cordis_inspect_list / cordis_inspect_query) but cannot define, run,
+ *     or delete dynamic plugins, and cannot read a session's own registry.
+ *     Depth is read like dsh-subagent's `delegationDepthOf` — the persisted
+ *     header count or the runtime AgentOptions override, whichever is deeper.
  *
  * The complete gated-tool list is read at runtime from the user skill root
  * (`$DSH_HOME/skills`), so the frontmatter is the only place a gate is
@@ -57,6 +64,15 @@ export const inject = ["tools"] as const;
 export const Config = z.object({
   /** Extra skill roots to scan for `tools-gated` declarations, in addition to `$DSH_HOME/skills`. */
   skillDirs: z.array(z.string()).default([]),
+  /**
+   * Global tool names a SUBAGENT (delegation depth > 0) may never call,
+   * even when a skill that gates them is loaded. Depth-0 sessions are
+   * unaffected. Defaults to the cordis session-mutation set, so children
+   * can inspect the environment (inspect_list / inspect_query) but cannot
+   * define, run, or delete plugins, and cannot read a session's own
+   * plugin registry.
+   */
+  subagentDeny: z.array(z.string()).default(DEFAULT_SUBAGENT_DENY),
 });
 
 /** Read the frontmatter between the first two `---` lines. */
@@ -139,12 +155,49 @@ const activeById = new Map<string, Set<string>>();
 const appliedById = new Map<string, string>();
 const disposerById = new Map<string, () => void>();
 
+/**
+ * Tools every child agent is hard-denied, matching the deployed cordis
+ * toolset. Keep in sync with the registered cordis_* names (dsh-tool-cordis).
+ */
+const DEFAULT_SUBAGENT_DENY = [
+  "cordis_inspect_self",
+  "cordis_define",
+  "cordis_run",
+  "cordis_stop",
+  "cordis_undefine",
+];
+
+/**
+ * An agent's delegation depth: the persisted header count, or the runtime
+ * AgentOptions override, whichever is deeper. Mirrors dsh-subagent's
+ * `delegationDepthOf` (agent.session.header.delegationDepth ?? 0 vs
+ * agent.options.subagentDepth ?? 0). Depth 0 is the primary session;
+ * every spawned child is deeper.
+ */
+function delegationDepth(agent: Agent): number {
+  try {
+    const header = (agent as { session?: { header?: { delegationDepth?: unknown } } }).session
+      ?.header?.delegationDepth;
+    const runtime = (agent as { options?: { subagentDepth?: unknown } }).options?.subagentDepth;
+    const h = typeof header === "number" && Number.isSafeInteger(header) && header >= 0 ? header : 0;
+    const r = typeof runtime === "number" && Number.isSafeInteger(runtime) && runtime >= 0 ? runtime : 0;
+    return Math.max(h, r);
+  } catch {
+    return 0;
+  }
+}
+
+function isSubagent(agent: Agent): boolean {
+  return delegationDepth(agent) > 0;
+}
+
 /** Cached skill-name → gated-tools map; invalidated on `skills/change`. */
 let gatesCache: Map<string, string[]> | undefined;
 
 export function apply(ctx: Context, config: unknown): void {
-  const cfg = (config ?? {}) as { skillDirs?: string[] };
+  const cfg = (config ?? {}) as { skillDirs?: string[]; subagentDeny?: string[] };
   const skillDirs = cfg.skillDirs ?? [];
+  const subagentDeny = cfg.subagentDeny ?? DEFAULT_SUBAGENT_DENY;
 
   ctx.on("skills/change", () => {
     gatesCache = undefined;
@@ -255,9 +308,12 @@ export function apply(ctx: Context, config: unknown): void {
   function enforce(agent: Agent | undefined): void {
     if (!agent || !agent.ctx || !agent.ctx.tools) return;
     const patterns = gatedPatterns();
-    if (patterns.length === 0) return;
+    const lockdown = isSubagent(agent) ? subagentDeny : [];
+    if (patterns.length === 0 && lockdown.length === 0) return;
     const active = activeById.get(agent.id) ?? new Set<string>();
     const deny = expandDeny(agent, patterns, active);
+    for (const name of lockdown) if (!deny.includes(name)) deny.push(name);
+    deny.sort();
     const mark = deny.join(",");
     if (appliedById.get(agent.id) === mark) return;
     disposerById.get(agent.id)?.();

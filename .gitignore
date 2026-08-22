@@ -9,5 +9,8 @@ server.env
 /plugins/tool-render/dist/
 /plugins/profiles-client/dist/
 /plugins/profiles-client/lib/
+# W18 subscriptions package — built dist/ and lib/ artifacts
+/plugins/subscriptions/dist/
+/plugins/subscriptions/lib/
 # Workspace paste storage (dsh-paste-to-path attachments)
 /.dsh/

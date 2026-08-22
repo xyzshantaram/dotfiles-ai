@@ -31,66 +31,8 @@ false assurance.
 
 ### Phase A: personal bundle, open ports — `in_progress`
 
-tlJ- [ ] **W6 profiles client.** IMPLEMENTED + INSTALLED 2026-08-22
-Rn2      (`plugins/profiles-client/`); built via the build.mjs entry, artifact
-So3      verified against the loader contract; installed into the web profile
-      (link: dep) and wired into sync.sh step_install_plugins 2026-08-22.
-      PENDING: dsh-web restart + browser check of all four behaviors.
-      Seat: `conversation.input.model` at SEAT_PRIORITY -100 versus the shipped
-      default 0 (single-kind slot; entriesOfSlot[0] wins). Shadow-only; no
-      shipped entry patched out — the earlier "disables ui-model-selection"
-      wording is obsolete. Selection reuses the exact shipped mutation:
-      `directory.select(selection)` on the shared ModelDirectory. Badge = green
-      dot while directory.current equals the active profile head; hides on any
-      manual override. Cost chip = `conversation.composer.dock` id
-      `profiles-cost`, priced by a NEW `prices` namespace owned by the host
-      half (rates keyed provider/model, USD per M tokens; hides when no rate
-      row exists). Title rewriter = MutationObserver keeping
-      `dsh | <session title>`; compares equal on re-fire so the loop stops.
-      Deviations: seat parks until modelDirectories mounts (mirrors shipped
-      /model); selecting a profile does NOT flip profile.active (session-only
-      per the brief); cache-read/write tokens not priced separately.
-P45      *Evaluate:* the submenu switches both profiles and the session answers on
-CE8      the new model. The badge appears on a match and drops after a manual
-WTn      override. The tab title reads `dsh | <session title>`. The cost figure
-1g6      tracks a real session.
-DRX
-- [ ] **W18 opencode-go usage settings panel.** STEP 1 DONE 2026-08-22
-     (researcher pass). Facts: ocg fetches GET {base}/v1/usage from
-     https://opencode.ai/zen/go/v1/usage with Bearer OPENCODE_GO_API_KEY,
-     served to the browser via the same-origin proxy /opencode-go/usage
-     (webServer.register). Response: usage.rolling/weekly/monthly, each
-     {percent, status, resetsAt} — no limit or used-amount numbers, and NO
-     balance endpoint exists anywhere in the package. ds-api-usage
-     registers settings.section (id ds-api-usage, order 25); ocg registers
-     sidebar.footer.action (id dsh-opencode-go-usage). PLAN: copy the
-     ds-api-usage settings.section pattern, render the three bars from the
-     same-origin proxy, show an explicit 'balance not exposed by the
-     opencode API' note instead of a balance figure.
-     *Evaluate:* settings page shows all three windows matching the sidebar
-     widget's source, carries the not-exposed note, survives a reload.
-
-- [ ] **W21 profiles v2: named chains + quota-aware rung pick + error cache.**
-     GRILLED 2026-08-22 (4/4). Decisions: (1) chains live in the settings
-     'profile' namespace, which sync.sh's settings-writer now REPLACES on
-     every run (stateless config, no secrets; 'active' preserved); (2)
-     orchestrator vs subagent is chosen by DEPTH — depth-0 rides the
-     orchestrator chain, any spawned child the subagent chain; (3)
-     opencode-zen free tier stays FIRST, then per quota: opencode-go
-     subscription when quota remains, else deepseek-official balance, else
-     opencode-go usage billing; (4) error cache for ALL models in ALL
-     chains: repeated model-unavailable / no-credits / 401 / 400 skip that
-     rung for >= 10 minutes. Data layer (researcher 2026-08-22): ocg usage
-     GET https://opencode.ai/zen/go/v1/usage (Bearer OPENCODE_GO_API_KEY,
-     browser via /opencode-go/usage proxy) returns rolling/weekly/monthly
-     {percent,status,resetsAt}; ds balance GET
-     https://api.deepseek.com/user/balance (curl + DEEPSEEK_API_KEY,
-     balance_infos[0].total_balance). Quota pick maps percent < 100 go-sub
-     -> balance > 0 ds -> go usage billing. Cache lives host-side
-     (profiles.ts), keyed provider + model + error-class.
-     *Evaluate:* chains per profile; depth routes children correctly;
-     drained go-sub falls to ds balance then usage billing; a failing rung
-     is not retried inside the cache window.
+- [ ] **W18 subscriptions panel.** IMPLEMENTED + VERIFIED 2026-08-22 (`plugins/subscriptions/`): combined settings panel — go windows, claude/meridian windows + 24h telemetry, go balance via cookie route, weekly pace (+/- pts + run-out date). Folds in and REPLACES ds-api-usage + dsh-opencode-go-usage. PENDING: restart + OPENCODE_SESSION_COOKIE + hands-on (queue).
+- [ ] **W21 profiles v2: named chains + quota-aware rung pick + error cache.** IMPLEMENTED + VERIFIED 2026-08-22 (51-harness pass; supersedes W17). PENDING: restart + live check (queue).
 - [ ] **W22 line numbers in file views.** Add a line-number gutter to (a)
      the dsh-remote file panel viewer (our fork xyzshantaram/dsh-remote,
      which already carries the highlight.js-in-panel change) and (b) every
@@ -100,32 +42,19 @@ DRX
      pin bump in sync.sh; tool side is a client.cjs change.
      *Evaluate:* a read of a .ts file shows aligned line numbers; the
      remote file panel shows the same; diff +/- colors stay intact.
+- [ ] **W23 archived-session management UI.** A settings panel to manage
+     archived sessions. GRILLED-IN-SHORT (2026-08-22, user call): build it
+     as a settings.section panel like W18's subscriptions, not a sidebar
+     widget. RESEARCH GAP: the installed rc.8 dsh source has NO archive
+     concept anywhere (zero hits for archive/archived in the client and
+     host packages; the workspace session list has no archive notion), so
+     "archived" must be defined before UI work starts — options: hide
+     sessions from the workspace list behind a flag, a state field on the
+     session header, or a separate store. Decide the meaning of archived
+     and the storage home first, then build the panel.
+     *Evaluate:* the settings panel lists archived sessions, unarchives or
+     deletes one, and the workspace session list reflects the state.
 
-- [ ] **W8 reject with a comment.** IMPLEMENTED 2026-08-22
-      (`plugins/approval-comment/`); built, behavior-harness verified, mounted
-      into the web profile 2026-08-22 (link dep + sync.sh step, bash command
-      now syntax-highlighted via inlined hljs), awaiting restart + browser
-      test. It replaces the shipped approval card through
-      the `conversation.composer` CHAIN slot at priority 0 (chains try selectors
-      ascending, first non-null wins), adds a collapsed Comment field, answers
-      `'rejected'` FIRST, then fires `session.prompt(content, "steer")` with the
-      rejection text. Steer failure never loses the rejection. Mount when
-      wanted: `dsh plugin --profile web add ./plugins/approval-comment`, then
-      restart.
-      *Evaluate:* a rejection with a comment reaches the agent as steering text
-      at the nearest step boundary. A rejection with no comment behaves as
-      today.
-
-
-- [ ] **W17 profiles failure cache.** When a waterfall rung fails on an
-      out-of-credit or other persistent credential fault, `plugins/profiles.ts`
-      records that rung as down with a timestamp. Selections inside a short
-      cooldown window skip the dead rung and start at the next live one, so
-      requests stop paying the failed attempt every turn. The entry clears
-      when the window ends or when the user flips profiles manually.
-      *Evaluate:* with the head rung's credential dead, the first call fails
-      over once, calls inside the window reach the fallback with no repeated
-      failed attempt, and the entry clears after the window.
 
 ### Phase B: decommission opencode — `pending`
 
@@ -154,7 +83,7 @@ metric). Still blocked there on the go-ahead.
 - **The tool-pipeline outage is SOLVED.** Every tool call failed with `cannot read properties of undefined (reading 'prepare')` after the evening restart; bisection proved the `dsh-worktree` mount row was the poison (its rc.6-built tool registration breaks the rc.8 scheduler — see Seams and gotchas). The row is gated out of sync.sh. An earlier same-evening "unbash parser" error was the same fault, not unbash. The ORIGINAL subagent-dispatch fault from before that restart had a different, still-unconfirmed cause; if reruns die the same way again, suspect free-tier concurrency on opencode zen first.
 - **Everything is committed and the tree is clean.** Commit chain for this effort: a61e899 → 7ee7102 → 92e54f1 → 92016f8 → 2ecdf6a (profiles v1) → 8094c55 (worktree/llm-fallback gates) → f13d122 (combined profiles + guard tiers + pins). Push when you like.
 - **Restart DONE; live verification is the next action.** W16's evaluation steps are in its ticket: role tools in catalog, background `coder` dispatch settles on deepseek-v4-flash-free, forced failure falls over to opencode-go flash (watch for the `profiles: ... failing over` warn), `profile.active` flip moves new sessions' default model.
-- **Rerun queue after verification passes:** W13 spike (keyed-slot shadowing — also unblocks W6 and tells us whether dsh-better-markdown's slot usage generalizes), W8 reject-with-comment, W14 caffeine inhibitor-leak fix (check `skills/caffeine/` for half-applied edits first). E4 completion remains: add `@xgone/dsh-remote` install + config row `- id: remote, config: { enabled: true, session: { secure: true } }` to sync.sh (LAN-only instance, user approved; admin account via loopback first-run).
+- **Restart cycle staged 2026-08-22 (3rd).** Everything implemented is installed-pending-restart: tool-render (H2/H3), profiles-client (W6), approval-comment (W8), skill-gate (E5/E6 + subagent lockdown), paste-to-path, tmp-dsh-shared (shared /tmp/dsh bind), subscriptions panel (W18: go + claude + deepseek + cookie balance + pace), profiles v2 (W21). ds-api-usage + dsh-opencode-go-usage are REMOVED from the sync.sh install set — step_report_extra_plugins prints their removal commands on the next sync run (or run `dsh plugin --profile web remove dsh-opencode-go-usage dsh-plugin-ds-api-usage`). The Human review queue holds every hands-on item.
 - **Open user input:** official DeepSeek provider block (baseURL, apiKeyEnv, exact model id) for the personal chain's third rung — settings.yaml has no such provider yet.
 - **dsh-input-history now pinned** to `github:sunshaobei/dsh-input-history#9b5b7a494a5c` (no npm publish, no git tag); the DSH_INPUT_HISTORY_PATH override gate is gone. First mount attempt happens on the current boot — if it fails to load like llm-fallback did, drop it and bisect.
 
@@ -269,8 +198,8 @@ metric). Still blocked there on the go-ahead.
   discovered the preset by directory name, so tools and tier masks worked with
   zero display metadata. The symptom looked like a missing bundle.
 - **Direct edits to `package.json` are denied by the harness; reads are allowed.** The `edit`/`write`/`batch_edit` tools refuse package.json (E_ACCESS / manifest denial). The `package` tool now (2026-08-21) has an `add_task` action that registers a `scripts` entry from validated argv via a node one-liner — this is the sanctioned way to change a script. Direct `write`/`edit` of package.json is still banned; only the tool (its `ctx.shell` calls are exempt from the manifest guard) may do it. pnpm's `pkg set` dotted-path parser rejects `:` and `-` in keys, so the tool must use the node route, not `pnpm pkg set`.
-mRn- **bash-guard gates only the `bash` tool.** Verified in `bash-guard.ts` (it returns `next()` unless `exec.name === 'bash'`). So the "raw git denied, use mcp__git__*" rule binds only model bash calls. Plugin git via `ctx.subprocess` (dsh-worktree, dsh-git-plugin) and the git MCP both bypass it. The E6 `guards/git.json` reason notes these bypass paths and points at the mcp__git__* tools (the `git` skill was dropped 2026-08-22 — it only ever existed for the removed dsh-worktree workflow).
-- **E4 install commands and the full conflict table are in `docs/plugins-conflict-table.md`** (durable handoff; temporary — delete it once E4 is wired into `sync.sh` and verified). Summary: deferred until a `dsh web` restart (the live GUI holds the profile and the plugin CLI errors with a SQLite lock). `dsh plugin --profile web add` for `dsh-any-background` (THEMING, verify intent), `dsh-ui-file-browser` (reversible), `dsh-input-history` (local path), `dsh-tool-calculator`, `dsh-tool-diff`, and `dsh-at-file` v0.6.7 tarball; analysis set: `dsh-worktree` (manual `- insert` patch row; `dsh.bundle` false; pins `@deepseek-ai/* 0.1.0-rc.6` vs rc.7), `dsh-session-search` (gate behind session-search skill). Skip `dsh-git-plugin`. All need a restart.
+- **bash-guard gates only the `bash` tool.** Verified in `bash-guard.ts` (it returns `next()` unless `exec.name === 'bash'`). So the "raw git denied, use mcp__git__*" rule binds only model bash calls. Plugin git via `ctx.subprocess` (dsh-worktree, dsh-git-plugin) and the git MCP both bypass it. The E6 `guards/git.json` reason notes these bypass paths and points at the mcp__git__* tools (the `git` skill was dropped 2026-08-22 — it only ever existed for the removed dsh-worktree workflow).
+- **skill-gate subagent lockdown (2026-08-22 2nd).** Agents with delegation depth > 0 are hard-denied the cordis mutation tools (cordis_define / cordis_run / cordis_stop / cordis_undefine / cordis_inspect_self) regardless of loaded skills, via Config `subagentDeny` (default = that list). Children keep cordis_inspect_list / cordis_inspect_query. Depth mirrors dsh-subagent's `delegationDepthOf` (header delegationDepth vs runtime subagentDepth). Enforced, not prompted — the deny mask removes the tools from the catalog. Restart needed to load; hands-on item in the review queue.
 
 ### Retired and reverted
 
@@ -334,6 +263,17 @@ mRn- **bash-guard gates only the `bash` tool.** Verified in `bash-guard.ts` (it 
 
 - [x] Remote auth — DONE 2026-08-22: admin login over the proxy works, settings
       cards read AND write remotely, theme plugin confirmed gone.
+- [ ] H2 — an edit or batch_edit call renders as a readable diff in the chat; a write call shows diff + syntax highlight.
+- [ ] H3 — a read of a .ts file renders syntax-highlighted; bash output stays plain but styled.
+- [ ] H4 — after restart, the ds-api-usage settings panel (balance + 24h/14d) and the opencode-go sidebar widget show plausible numbers.
+- [ ] E6 — after restart, the cordis_* tools are hidden until a cordis skill loads; the deny reason no longer names a git skill.
+- [ ] E7/paste-to-path — paste an image in the composer; confirm the file lands under <workspace>/.dsh/pastes/ and the model receives a path it can feed to see.
+- [ ] skill-gate subagent lockdown — after restart, a coder/tester/researcher subagent cannot call cordis_define/run/stop/undefine or cordis_inspect_self (hard-denied, no prompt), while cordis_inspect_list/query stay available.
+- [ ] W19 follow-up — run git rm --cached -r on the four tracked artifact dirs (tool-render/dist, profiles-client/dist, profiles-client/lib) to untrack built files; raw git rm is guard-denied to the model.
+- [ ] W18 subscriptions panel — after restart + OPENCODE_SESSION_COOKIE credential: settings page shows all four sections, balance renders from the cookie, pace lines show +/- points and run-out dates.
+- [ ] tmp-dsh-shared — after restart: drop a file into /tmp/dsh on the host, ask the agent to cat it; agent writes land in the same dir; survives across bash calls.
+- [ ] Removed usage plugins — after next sync: step_report_extra_plugins prints removal commands for dsh-opencode-go-usage and dsh-plugin-ds-api-usage (or run them by hand); settings page no longer shows their panels.
+- [ ] profiles settings panel — QUESTION (unanswered): the profiles-client plugin has NO settings panel (seat + badge + cost chip + title rewriter only). Decide whether to add one.
 - [ ] Phase C (verification skill) — run it yourself against a real MR
       description and judge whether it would have caught the invented root cause
       without hints.
@@ -430,71 +370,6 @@ PLAN.md is a living migration document. Delete it once the remaining phase work 
   `code`, `minimal.bak`, `cordis.bak`). `cordis.bak/skills/` holds the two cordis
   skills to import.
 
-### Tickets
-- [x] **E4 curate plugins.** CLOSED 2026-08-22. Installed set live since
-      2026-08-21 (file-browser, input-history, calculator, diff, at-file,
-      session-search, our dsh-remote fork, better-markdown; worktree +
-      any-background gated out; git-plugin skipped). The 2026-08-22 gap (the
-      four util-gated toolkit tools never installed) was closed by installing
-      them pinned as four separate repos; live Tool.listTools confirms time/
-      regex/markdown/encoding registered. Conflict-table deletion moved to
-      W19 cleanup. Root-cause note for posterity: the gate looked broken
-      because util frontmatter named package ids (tool-time); see E5.
-      *Evaluate:* met — every tool a gating skill names exists and becomes
-      callable when that skill loads (probe-verified, see E5).
-- [ ] **E5 build the shared skill-gating plugin.** REBUILT + LIVE-VERIFIED
-      2026-08-22. Two real bugs found behind "tools stay visible": (1) skill
-      frontmatter named PACKAGE ids (tool-time) while tools register under
-      bare GLOBAL names (time), so restrictKnown() silently filtered the
-      whole deny list to empty every time; (2) the plugin had NO initial-deny
-      path — masks were only narrowed after a first skill load, and compaction
-      DISPOSED masks without re-applying. Fixes: frontmatter corrected in
-      util/cordis skills; plugin rewritten — enforcement on agent/pre-step
-      reconciles per agent (covers fresh agents, pre-existing agents,
-      post-compaction) with a snapshot dirty-check, `skills/change` cache
-      invalidation, compaction reset, restrictKnown stale-name filtering
-      kept, and trailing-* prefix patterns (mcp__gitlab__*) expanded against
-      agent.ctx.tools.schemas(). Mechanism verified END-TO-END through a
-      dynamic probe plugin: initial deny hid util's four tools from a loaded
-      agent; loading util unmasked exactly those four; stopping the probe
-      lifted masks cleanly. Mounted in sync.sh heredoc + live patch. glab MCP
-      gated behind working-with-soapbox (prefix pattern). PENDING: restart
-      + hands-on check (fresh session hides gated tools; loading a skill
-      unmasks; cordis/session-search/glab behave).
-      *Evaluate:* unchanged — hidden until load, unmask on load, re-hide
-      after compaction.
-- [ ] **E6 cordis import + util/git skills + bash-guard reason.** AUDIT
-      2026-08-22: util/session-search/customize-setup skills live ✓;
-      guards/git.json deployed with subcommand tiers ✓. 2026-08-22 (2nd): the
-      two cordis skills (cordis-plugin-development, editing-cordis-compositions)
-      imported into skills/ ✓; dsh-tool-cordis mounted as a host-plane row in
-      sync.sh's cordis.patch.yml ✓; both skills gate their real cordis_* tools
-      (cordis_inspect_list/query/self, cordis_define/run/stop/undefine) via the
-      skill-gate plugin ✓; git-skill reference dropped from guards/git.json ✓.
-1nV      REMAINING: restart + confirm the cordis_* tools are hidden until one of
-DXX      the two cordis skills loads (folded into the E5 restart checklist).
-      *Evaluate:* a cordis skill appears in the catalog and its tools are
-      hidden until that skill loads; the deny reason no longer names a git
-      skill that does not exist.
-- [ ] **E7 paste-image path for visionless models.** RE-SCOPED 2026-08-22
-      (user call): the real want is paste-in-composer → app uploads to a
-      .dsh_uploads cache dir → model receives a PATH it can feed to `see`.
-      dsh-attachment-vision judged overkill for this. First investigate what
-      the composer does with pasted images today (native upload? drop?), then
-      close the gap minimally. Prior settlement stands: do NOT modify see.ts;
-      keep dsh-at-file for @ mentions.
-      ADOPTED 2026-08-22: omdsh-dev/dsh-paste-input (#59223c5668b3) does the
-      whole job — paste/drag/picker files upload at send time to
-      <workspace>/.dsh/tmp/attachments/<session>/<send>/, and the model gets
-      a plain text block quoting the root dir plus relative names to join for
-      see. No base64, no attachment block, no see.ts edit. Vanilla composer
-      sends pasted images as base64 in-message (confirmed) — that was the
-      gap. Package declares no dsh.bundle, so it needs the MANUAL mount row,
-      which sync.sh now carries. Unconfirmed: bubble-folding observer vs
-      better-markdown re-render interaction; first-use notice is Chinese
-      only.
-      *Evaluate:* pasting an image gives the model a usable file path, and
-      see returns a description for it.
 ### Phase F: the dsh-remote fork — `in_progress`
 
 
@@ -613,65 +488,6 @@ absent — `mapUsage` drops `reasoning` for BOTH pi-ai protocols
       disappear only for granted paths.
       *Evaluate:* /grant /some/repo lets a later edit tool write there with no
       prompt, in that session only.
-bIg- [ ] **H2 render edit-tool diffs in the GUI.** IMPLEMENTED + INSTALLED
-21h      (`plugins/tool-render/`); built via the build.mjs entry, artifact
-      verified against the loader contract; installed into the web profile
-      (link:) and wired into sync.sh step_install_plugins 2026-08-22.
-      PENDING: restart + browser check. Live-slot diagnosis 2026-08-22:
-      batch_edit absent from tool.call.toolview taken-keys confirmed the
-      module had not loaded pre-install (last boot 12:02 predates the 12:31
-      install — no fault in the bundle itself).
-      Discovery: owning the whole `tool-call` node is IMPOSSIBLE — SlotCore
-      throws on a second declaration of its `tool.call.toolview` child slot
-      (verified against the shipped core). The plugin registers the
-      read/bash/edit/batch_edit KEYS of that child slot at priority -100.
-      dsh-better-edit drops its diff from the wire, so edit diffs rebuild
-      before-text from conversation read history + 3-char anchors; no prior
-      read degrades to an add-only hunk.
-      *Evaluate:* an edit call renders as a readable diff in the chat.
-- [ ] **H3 syntax-highlight read/bash tool output.** IMPLEMENTED 2026-08-22
-      in the same `plugins/tool-render/` package. highlight.js 11.12.0 core +
-      17 curated languages, registered on first use and INLINED by esbuild —
-      true dynamic import cannot work because the loader serves exactly one
-      bundle per plugin. Read rows strip the HASH│ prefixes for display;
-      bash rows keep plain text, monospace block, ANSI stripped.
-OTM      *Evaluate:* a read of a .ts file renders highlighted; bash output keeps
-xth      plain text but styled.
-- [x] **W19 dead-code/config cleanup (audit 2026-08-22).** EXECUTED 2026-08-22
-      after a 3-part user grill. DELETED (each approved): conflict-table
-      doc + session-search SKILL ref; mcp/*.yaml x5; home/settings.yaml;
-      repo-root AGENTS.md; spike-keyed-slot.ts/.js + build.mjs block;
-      session-hygiene.ts/.js + build.mjs entry; ~/.dsh/plugins/personal/
-      stale builds (incl. git-guard.js). FIXED: etu SKILL.md unbacked claim
-      + duplicated clause (and frontmatter description); dangling VERIFY.md
-      refs in see.ts/bash-guard.ts; lang/README.md refs in
-      share-caddy-cert/devtunnel skills; README stale claims. KEPT on user
-      call: unused devDeps @deepseek-ai/dsh-agent-presets + dsh-compaction.
-      BUILT: skills/ecommerce/SKILL.md gating mcp__swiggy-food__* and
-      mcp__swiggy-instamart__* (blinkit/zepto patterns later). REFACTORED:
-      outputText() deduped into plugins/shared/output-text.ts. POLICY:
-      untrack+ignore built artifacts — .gitignore now covers
-      tool-render/dist, profiles-client/{dist,lib}, approval-comment/lib;
-      the four tracked artifacts need one manual `git rm --cached` (raw git
-      rm is bash-guard denied) at commit time. node build.mjs + bash -n
-      sync.sh green after removals.
-      *Evaluate:* verdicts above; open item is the manual untrack.
-
-      Wire audit (one live probe): opencode go/zen streams prompt/completion
-      tokens fine, but an EMPTY prompt_tokens_details and NO reasoning detail,
-      so cacheRead never lands (the ring overfills vs real billing) and
-      reasoning folds invisibly into completion_tokens. Our mapUsage
-      additionally drops usage.reasoning for BOTH protocols
-      (dsh-llm-pi-ai lib/index.js :415-422); the upstream one-liner was
-      DROPPED per user call. The route's top-level "cost" string reaches no
-      parser anywhere. Cost display adopted instead via two plugins wired
-      into sync.sh: github:Sev7een/ds-api-usage#d7644200ed05 (DeepSeek
-      balance + 24h/14d timeline; reuses DEEPSEEK_API_KEY) and
-      dsh-opencode-go-usage@1.2.2 (sidebar quota widget + /opencode-go
-      command). Both self-mount via their own bundle patches; both client
-      bundles scanned clean of the rc.8 web-react boot-killer import.
-      Per-session cost stays with W6 D4 (ring hover or beside-ring).
-      *Evaluate:* after restart+sync, both panels show plausible numbers.
 - [ ] **H5 monorepo restructure — DEFERRED until after the aidos MVP.** Split
       this bundle into @shantaram.xyz/dsh-* plugin packages plus
       @shantaram.xyz/dsh-dotfiles as the personal meta-bundle.
