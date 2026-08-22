@@ -41,7 +41,7 @@
  * allow > none. Fail-closed: a command that cannot be parsed (unbash
  * reports errors) is DENIED, never let through unparsed.
  *
- * Seams (cited in VERIFY.md W10):
+ * Seams:
  *   - decision shape { kind: 'allow' } | { kind: 'deny', reason } |
  *     { kind: 'ask', reason? }: DSH/dsh-tools/README.md:49
  *   - event signature (exec, next) => Promise<PreToolDecision>:

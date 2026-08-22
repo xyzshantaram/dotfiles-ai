@@ -8,8 +8,8 @@ whenToUse: A device does not yet trust Caddy's local CA and needs the root certi
 
 Temporarily share this machine's Caddy local CA root certificate with a new
 device on the LAN, so that device can trust HTTPS on `potato.local:<port>`
-addresses (see the Caddy setup in the personal bundle's `lang/README.md`, and
-the `devtunnel` skill, for context — same CA, same trust model).
+addresses (see the `devtunnel` skill for context — same CA, same trust
+model).
 
 ## When to use
 

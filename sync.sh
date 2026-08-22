@@ -38,7 +38,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#a68f4b232c41}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#207cfc6203d9}"
 # dsh-input-history ships no git-tagged publish (confirmed: no checkout found
 # in this repo or its parent directory). Its README documents a local-path
 # install only. There is no known real path yet, so this stays an explicit
@@ -128,16 +128,22 @@ step_write_web_patch() {
       name: $HERE/plugins/manifest-guard.js
     - id: package-tool
       name: $HERE/plugins/package-tool.js
+    # Skill gating (E5): hides every 'tools-gated' tool until its skill loads.
+    # Enforcement reconciles per agent on agent/pre-step; masks lift on skill
+    # load and re-apply after compaction. Frontmatter must name GLOBAL tool
+    # names exactly as registered (time, NOT tool-time).
+    - id: skill-gate
+      name: $HERE/plugins/skill-gate.js
     - id: see
       name: $HERE/plugins/see.js
     - id: ask-interrupt
       name: $HERE/plugins/ask-interrupt.js
 
-    # dsh-paste-input mounts through a MANUAL row because the package declares
-    # no dsh.bundle patch of its own (E7 adoption 2026-08-22). Id and name per
-    # its README; without this row the client half never joins the profile.
-    - id: dsh-paste-input
-      name: '@dsh-community/dsh-paste-input'
+    # dsh-paste-to-path REPLACED dsh-paste-input 2026-08-22 (user call:
+    # replace entirely). Universal attachment dock: files save under
+    # <workspace>/.dsh/pastes/ and the message carries a PATH instruction, so
+    # any model works via see/read tools. Self-mounts through its own bundle
+    # patch, so NO manual row goes here.
 
     - id: profiles
       name: $HERE/plugins/profiles.js
@@ -147,6 +153,13 @@ step_write_web_patch() {
       # Order per user call: free zen tier first, then the go subscription,
       # then official API credits as the last rung. deepseek-official needs
       # DEEPSEEK_API_KEY in ~/.dsh/.credentials.yaml to serve.
+      #
+      # IMPORTANT: these pins choose each role's HEAD ONLY. Failover does NOT
+      # walk them — it walks the ACTIVE entry of the 'profile' namespace in
+      # ~/.dsh/settings.yaml (profiles.ts activeChain()). Keep that file's
+      # personal/work routes carrying the same tail rungs; a 2026-08-22 chain
+      # exhaustion (zen 400 + go 401) happened because official existed here
+      # but not in the stored chain.
       config:
         roles:
           coder:
@@ -173,6 +186,14 @@ step_write_web_patch() {
               model: deepseek-v4-flash
             - provider: deepseek-official
               model: deepseek-v4-flash
+
+    # The cordis toolset (E6): mount the self-referential cordis_* tools at the
+    # host plane. The tools are gated behind the cordis-plugin-development and
+    # editing-cordis-compositions skills via the skill-gate plugin, so they
+    # stay hidden until one of those skills loads. Resolves against the host
+    # base (@deepseek-ai/*) like the MCP rows above.
+    - id: tool-cordis
+      name: '@deepseek-ai/dsh-tool-cordis'
     # dsh-worktree mount row REMOVED 2026-08-21 late: its rc.6-built tool
     # registration poisons the rc.8 tool scheduler — every tool call on the
     # profile fails with "cannot read properties of undefined (reading
@@ -233,39 +254,52 @@ step_install_plugins() {
 	# decision (its /commit auto-committer conflicts with git-authority
 	# policy; its read-only tools duplicate the git MCP and dsh-worktree).
 	if command -v dsh >/dev/null 2>&1; then
+		# One install helper: print the plugin name, keep pnpm quiet, and
+		# surface only warnings and errors (or the full output on failure).
+		pi() {
+			local spec="$1" name
+			name="$(printf '%s' "$spec" | sed -E 's#.*github.com/[^/]+/([^/#]+)/archive.*#\1#; s/#[^/]*$//; s#.*[/:]##')"
+			name="${name%%@*}"
+			echo "  installing ${name:-$spec}"
+			local out rc
+			out="$(dsh plugin --profile web add "$spec" 2>&1)"
+			rc=$?
+			if [ "$rc" -ne 0 ]; then printf '%s\n' "$out"; return "$rc"; fi
+			printf '%s\n' "$out" | rg -i 'warn|error' || true
+		}
 		# All specs PINNED (exact npm version or commit SHA) so a re-run can
 		# never silently move a plugin forward. To upgrade: bump the pin here
 		# deliberately, then re-run.
 		# dsh-any-background REMOVED 2026-08-21 late (user call: not wanted). To
 		# restore: dsh plugin --profile web add dsh-any-background@0.1.9
-		dsh plugin --profile web add github:xiyue718/dsh-ui-file-browser#44e769f90f7c
+		pi "github:xiyue718/dsh-ui-file-browser#44e769f90f7c"
 		# dsh-input-history: no npm publish and no git tag, so it pins to a
 		# commit SHA like the other GitHub-only plugins (gate removed
 		# 2026-08-21 late).
-		dsh plugin --profile web add github:sunshaobei/dsh-input-history#9b5b7a494a5c
+		pi "github:sunshaobei/dsh-input-history#9b5b7a494a5c"
 		# d5c40dbdc48f was orphaned by an upstream history rewrite 2026-08-21;
 		# the new head's lib/ files diffed byte-identical against the installed
 		# copy, so this is the same code under a new sha.
-		dsh plugin --profile web add github:omdsh-dev/dsh-tool-calculator#05090e946113
+		pi "github:omdsh-dev/dsh-tool-calculator#05090e946113"
 		# cc1d1b74582f was orphaned by an upstream history rewrite 2026-08-21;
 		# new head diffs identical on every lib/ file and the patch row
 		# (package.json dependency metadata only), so this is the same code
 		# under a new sha.
-		dsh plugin --profile web add github:omdsh-dev/dsh-tool-diff#d4afd6e2de0b
+		pi "github:omdsh-dev/dsh-tool-diff#d4afd6e2de0b"
 		# The four tools the `util` skill gates (ticket E4). Installed as
 		# separate repos, NOT through the omdsh-dev/dsh-toolkit monorepo:
 		# that collection also registers calculator and diff, which are
 		# already installed above and would be double-registered.
-		dsh plugin --profile web add github:omdsh-dev/dsh-tool-time#8b7a2137f516
-		dsh plugin --profile web add github:omdsh-dev/dsh-tool-regex#5afda86cd686
-		dsh plugin --profile web add github:omdsh-dev/dsh-tool-markdown#267871b115c4
-		dsh plugin --profile web add github:omdsh-dev/dsh-tool-encoding#dbf829b5a755
-		dsh plugin --profile web add https://github.com/omdsh-dev/dsh-at-file/archive/refs/tags/v0.6.7.tar.gz
+		pi "github:omdsh-dev/dsh-tool-time#8b7a2137f516"
+		pi "github:omdsh-dev/dsh-tool-regex#5afda86cd686"
+		pi "github:omdsh-dev/dsh-tool-markdown#267871b115c4"
+		pi "github:omdsh-dev/dsh-tool-encoding#dbf829b5a755"
+		pi "https://github.com/omdsh-dev/dsh-at-file/archive/refs/tags/v0.6.7.tar.gz"
 		# dsh-worktree install DISABLED 2026-08-21 late (see the patch-file
 		# note: rc.6-built registrar breaks the rc.8 scheduler). Re-enable
 		# together with its mount row after an rc.8-peers release.
 		# dsh plugin --profile web add dsh-worktree
-		dsh plugin --profile web add github:Tieboyh/dsh-session-search#82990a0e9804
+		pi "github:Tieboyh/dsh-session-search#82990a0e9804"
 		# Remote-access auth (login accounts, roles, MFA) so LOGIN WORKS OVER
 		# THE PROXY: dsh serves settings RPCs loopback-only, so every proxied
 		# browser gets inert settings scopes without this plugin. Self-mounts
@@ -279,26 +313,34 @@ step_install_plugins() {
 		# manifest/favicon paths; clean 401s for gated static assets). The old
 		# connection.isLoopback flips are REMOVED — they could not win the
 		# composition race. Upgrade = bump the pin here deliberately.
-		dsh plugin --profile web add github:xyzshantaram/dsh-remote#0c9e708c2b5c
+		pi "github:xyzshantaram/dsh-remote#0c9e708c2b5c"
 		# Streaming markdown renderer replacement (markstream-react:
 		# streaming-safe markdown, Mermaid, KaTeX, Shiki). Client-only;
 		# replaces the planned W13 step 2 self-build. Tolerant peers (>=rc.5),
 		# no web-react require.
-		dsh plugin --profile web add dsh-better-markdown@0.1.2
-		# E7 adoption 2026-08-22: paste/drag files land in
-		# <workspace>/.dsh/tmp/attachments and the model gets a PATH it can feed
-		# to see (replaces the vanilla base64 image path). Needs the manual
-		# dsh-paste-input mount row above plus a restart.
-		dsh plugin --profile web add github:omdsh-dev/dsh-paste-input#59223c5668b3
+		pi "dsh-better-markdown@0.1.2"
+		# Paste-to-path adoption 2026-08-22, replacing dsh-paste-input
+		# entirely (user call). Any pasted/dropped/chosen file lands in
+		# <workspace>/.dsh/pastes/<category>/ and the composer carries only a
+		# PATH reference; the agent reads it with see/shell tools. No vision
+		# capability check. Pinned to upstream HEAD at adoption.
+		pi "github:Johnny-xuan/dsh-paste-to-path#d68fb104ca25a663ba3912bb17f8c2ab32d60e37"
+
 		# Usage dashboards adopted 2026-08-22 (H4 close-out: account/route-level
 		# spend panels; the wire-field findings stay recorded in PLAN.md). Both
 		# self-mount through their own dsh.bundle.patch — no manual rows.
 		# ds-api-usage: balance + 24h/14d usage timeline from api.deepseek.com,
 		# reuses the existing DEEPSEEK_API_KEY credential (no extra setup).
-		dsh plugin --profile web add github:Sev7een/ds-api-usage#d7644200ed05
+		pi "github:Sev7een/ds-api-usage#d7644200ed05"
 		# opencode-go-usage: plan quota widget in the sidebar, same-origin
 		# usage proxy, /opencode-go command. npm-pinned exact.
-		dsh plugin --profile web add dsh-opencode-go-usage@1.2.2
+		pi "dsh-opencode-go-usage@1.2.2"
+		# Local client plugins (H2/H3 + W6), installed from the repo tree as
+		# link: deps so a rebuild in plugins/ is live on the next restart.
+		# All three self-mount through their own cordis.patch.yml.
+		pi "$HERE/plugins/tool-render"
+		pi "$HERE/plugins/profiles-client"
+		pi "$HERE/plugins/approval-comment"
 	else
 		echo "WARNING: dsh not on PATH; skipping third-party plugin installs."
 		echo "         Re-run './sync.sh' from a shell where dsh is installed."
@@ -349,6 +391,8 @@ import sys
 import yaml
 p = sys.argv[1]
 d = yaml.safe_load(open(p)) or {}
+# Owned sections, replaced on EVERY run. The local settings.yaml is
+# stateless: it holds no secrets, so sync.sh may overwrite freely.
 d.setdefault('agent-presets', {})['default'] = 'standard'
 # meridian reports image_input.supported true for all its models, but dsh's
 # pi-ai adapter only accepts images when a route/model declares image input.
@@ -356,32 +400,30 @@ d.setdefault('agent-presets', {})['default'] = 'standard'
 # fails. Declare it once on the route for every meridian model.
 meridian = d.setdefault('llm-pi-ai', {}).setdefault('providers', {}).setdefault('meridian', {})
 meridian['defaultInput'] = ['text', 'image']
-# Seed the shared `profile` namespace (owned by plugins/see.ts, read at call
-# time by see AND the profiles role tools) on FIRST RUN ONLY. A later sync.sh
-# run never rewrites an existing section: flipping `active` between work and
-# personal is a user decision made at runtime, not bundle state to converge.
-# Each entry is an ordered route chain: head first, then fallbacks. The
-# profiles plugin aligns the llm-fallback plugin's global list with the
-# active entry's tail on every flip, and pushes the head into
-# agent-default-model, so one switch moves the whole stack.
-# TODO(deepseek-official): the personal chain's third candidate needs a
-# provider block (baseURL/apiKeyEnv/model id) that settings.yaml does not
-# have yet. Append it to personal.routes once it exists.
-if 'profile' not in d:
-    d['profile'] = {
-        'active': 'personal',
-        'work': {'routes': [
-            {'provider': 'meridian', 'model': 'claude-opus-5'},
-            {'provider': 'meridian', 'model': 'claude-sonnet-5'},
-            {'provider': 'opencode-zen', 'model': 'x-preview-f-free'},
-        ]},
-        'personal': {'routes': [
-            {'provider': 'opencode-zen', 'model': 'x-preview-f-free'},
-            {'provider': 'opencode-zen', 'model': 'deepseek-v4-flash-free'},
-            {'provider': 'opencode-go', 'model': 'deepseek-v4-flash'},
-        ]},
-    }
-
+# The `profile` namespace is owned by plugins/see.ts and the profiles plugin.
+# `active` is a runtime decision (the profiles tool flips it), so sync
+# PRESERVES the current value while replacing the chains themselves. Each
+# entry is an ordered route chain: head first, then fallbacks. The profiles
+# plugin aligns llm-fallback's global list with the active entry's tail on
+# every flip, and pushes the head into agent-default-model. W21 will grow
+# this into named chains (orchestrator vs subagent per profile).
+prof = d.get('profile') or {}
+active = prof.get('active', 'personal')
+d['profile'] = {
+    'active': active,
+    'work': {'routes': [
+        {'provider': 'meridian', 'model': 'claude-opus-5'},
+        {'provider': 'meridian', 'model': 'claude-sonnet-5'},
+        {'provider': 'opencode-zen', 'model': 'x-preview-f-free'},
+        {'provider': 'deepseek-official', 'model': 'deepseek-v4-flash'},
+    ]},
+    'personal': {'routes': [
+        {'provider': 'opencode-zen', 'model': 'x-preview-f-free'},
+        {'provider': 'opencode-zen', 'model': 'deepseek-v4-flash-free'},
+        {'provider': 'opencode-go', 'model': 'deepseek-v4-flash'},
+        {'provider': 'deepseek-official', 'model': 'deepseek-v4-flash'},
+    ]},
+}
 with open(p, 'w') as f:
     yaml.safe_dump(d, f, sort_keys=False)
 print(open(p).read())

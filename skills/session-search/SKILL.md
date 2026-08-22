@@ -31,8 +31,8 @@ plugin is an index-free, direct-scan alternative that also reaches beyond
 dsh's own sessions into Codex, Claude Code, pi, and OpenCode logs. The two
 tools overlap on dsh sessions. Gating this skill keeps the plugin's broader
 but slower cross-agent search available on demand, without adding it to
-every session's default tool set. See `docs/plugins-conflict-table.md`,
-conflict row C6, for the full analysis.
+every session's default tool set.
+
 
 ## Rules
 

@@ -1,17 +1,15 @@
 ---
 name: etu
-description: Use the etu time-tracker CLI to check hours, sessions, and memos. The personal bundle's bash approval policy prompts for approval before every etu invocation, so call it directly.
+description: Use the etu time-tracker CLI to check hours, sessions, and memos.
 whenToUse: The user wants time-tracking data or actions. Trigger phrases are "track time", "how many hours", "start tracking", "stop the clock", "session", "memo", and "etu".
 ---
 
 # etu time-tracker skill
 
-`etu` is a time-tracking CLI you invoke directly. The personal bundle's bash
-approval policy asks for confirmation before **every** `etu` invocation — not
-just destructive ones (a `tools/pre-execute` ask listener, the dsh form of
-just destructive ones (a `tools/pre-execute` ask listener, the dsh form of the legacy permission system). Do not add your own confirmation logic. Present
-your plan, then run the command. The human approves or rejects through the
-harness approval prompt.
+`etu` is a time-tracking CLI you invoke directly. Do not add your own
+confirmation logic. Present your plan, then run the command. The harness
+shows an approval prompt when policy requires it.
+
 
 ## Rules
 

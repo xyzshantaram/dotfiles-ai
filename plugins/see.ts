@@ -6,7 +6,7 @@
  * `profile` settings namespace, spawns a fresh one-shot child with that route
  * and a vision-only tool set, and returns the child's factual description.
  *
- * Seams (all cited in VERIFY.md W2):
+ * Seams:
  * - Tool shape: `defineTool` from `@deepseek-ai/dsh-tools`
  *   (DSH/dsh-tools/README.md:65-97, the "Typed tool parameter schemas"
  *   section; the B1 aidos tools at src/tools/aidos-tools.ts in the aidos repo
@@ -26,7 +26,7 @@
  *   same technique as the B1 mask (src/tools/mask.ts:96-105 in the aidos repo),
  *   so it never names a tool the registry does not hold.
  *
- * NOT-VERIFIED (see VERIFY.md W2): the `profile` settings namespace contract.
+ * NOT-VERIFIED: the `profile` settings namespace contract.
  * No shipped dsh source defines it. The field names and the "qwen3.7-plus"
  * personal route are authored from SPEC-W W2 only. TODO: confirm the final
  * settings.yaml shape and the personal provider/model route with the
@@ -36,18 +36,18 @@
 import type { Context } from "@deepseek-ai/cordis";
 import z from "@deepseek-ai/schemastery";
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import type { ContentBlock } from "@deepseek-ai/dsh-llm";
 import { installSettingsSection, settingsNamespace } from "@deepseek-ai/dsh-settings";
 import { scopeOf } from "@deepseek-ai/dsh-scope";
 import type { SubagentStartRequest } from "@deepseek-ai/dsh-subagent";
 import { normalizeEntry } from "./profile-routes";
+import { outputText } from "./shared/output-text";
 export const name = "see";
 
 export const inject = ["tools", "subagents", "systemPrompt"] as const;
 
 export const Config = z.object({});
 
-/** The `profile` settings namespace. See VERIFY.md W2 (NOT-VERIFIED). */
+/** The `profile` settings namespace (NOT-VERIFIED). */
 const PROFILE_NS = settingsNamespace("profile");
 
 /**
@@ -104,20 +104,6 @@ function readProfile(source: () => ProfileSettings | undefined): ProfileRoute {
   const head = normalizeEntry(entry)[0];
   if (head) return { provider: head.provider, model: head.model };
   return active === "personal" ? DEFAULT_ROUTES.personal : DEFAULT_ROUTES.work;
-}
-
-/** Join the text blocks of a child result into one string. */
-function outputText(output: ContentBlock[]): string {
-  return output
-    .filter(
-      (value): value is { type: "text"; text: string } =>
-        typeof value === "object" &&
-        value !== null &&
-        (value as { type?: unknown }).type === "text" &&
-        typeof (value as { text?: unknown }).text === "string",
-    )
-    .map((value) => value.text)
-    .join("");
 }
 
 /** Register the `see` tool on a context. */

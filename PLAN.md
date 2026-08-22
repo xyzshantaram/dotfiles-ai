@@ -31,9 +31,11 @@ false assurance.
 
 ### Phase A: personal bundle, open ports — `in_progress`
 
-- [ ] **W6 profiles client.** IMPLEMENTED 2026-08-22
-      (`plugins/profiles-client/`); built via the build.mjs entry, artifact
-      verified against the loader contract, NOT mounted or browser-tested.
+tlJ- [ ] **W6 profiles client.** IMPLEMENTED + INSTALLED 2026-08-22
+Rn2      (`plugins/profiles-client/`); built via the build.mjs entry, artifact
+So3      verified against the loader contract; installed into the web profile
+      (link: dep) and wired into sync.sh step_install_plugins 2026-08-22.
+      PENDING: dsh-web restart + browser check of all four behaviors.
       Seat: `conversation.input.model` at SEAT_PRIORITY -100 versus the shipped
       default 0 (single-kind slot; entriesOfSlot[0] wins). Shadow-only; no
       shipped entry patched out — the earlier "disables ui-model-selection"
@@ -48,14 +50,62 @@ false assurance.
       Deviations: seat parks until modelDirectories mounts (mirrors shipped
       /model); selecting a profile does NOT flip profile.active (session-only
       per the brief); cache-read/write tokens not priced separately.
-      *Evaluate:* the submenu switches both profiles and the session answers on
-      the new model. The badge appears on a match and drops after a manual
-      override. The tab title reads `dsh | <session title>`. The cost figure
-      tracks a real session.
+P45      *Evaluate:* the submenu switches both profiles and the session answers on
+CE8      the new model. The badge appears on a match and drops after a manual
+WTn      override. The tab title reads `dsh | <session title>`. The cost figure
+1g6      tracks a real session.
+DRX
+- [ ] **W18 opencode-go usage settings panel.** STEP 1 DONE 2026-08-22
+     (researcher pass). Facts: ocg fetches GET {base}/v1/usage from
+     https://opencode.ai/zen/go/v1/usage with Bearer OPENCODE_GO_API_KEY,
+     served to the browser via the same-origin proxy /opencode-go/usage
+     (webServer.register). Response: usage.rolling/weekly/monthly, each
+     {percent, status, resetsAt} — no limit or used-amount numbers, and NO
+     balance endpoint exists anywhere in the package. ds-api-usage
+     registers settings.section (id ds-api-usage, order 25); ocg registers
+     sidebar.footer.action (id dsh-opencode-go-usage). PLAN: copy the
+     ds-api-usage settings.section pattern, render the three bars from the
+     same-origin proxy, show an explicit 'balance not exposed by the
+     opencode API' note instead of a balance figure.
+     *Evaluate:* settings page shows all three windows matching the sidebar
+     widget's source, carries the not-exposed note, survives a reload.
+
+- [ ] **W21 profiles v2: named chains + quota-aware rung pick + error cache.**
+     GRILLED 2026-08-22 (4/4). Decisions: (1) chains live in the settings
+     'profile' namespace, which sync.sh's settings-writer now REPLACES on
+     every run (stateless config, no secrets; 'active' preserved); (2)
+     orchestrator vs subagent is chosen by DEPTH — depth-0 rides the
+     orchestrator chain, any spawned child the subagent chain; (3)
+     opencode-zen free tier stays FIRST, then per quota: opencode-go
+     subscription when quota remains, else deepseek-official balance, else
+     opencode-go usage billing; (4) error cache for ALL models in ALL
+     chains: repeated model-unavailable / no-credits / 401 / 400 skip that
+     rung for >= 10 minutes. Data layer (researcher 2026-08-22): ocg usage
+     GET https://opencode.ai/zen/go/v1/usage (Bearer OPENCODE_GO_API_KEY,
+     browser via /opencode-go/usage proxy) returns rolling/weekly/monthly
+     {percent,status,resetsAt}; ds balance GET
+     https://api.deepseek.com/user/balance (curl + DEEPSEEK_API_KEY,
+     balance_infos[0].total_balance). Quota pick maps percent < 100 go-sub
+     -> balance > 0 ds -> go usage billing. Cache lives host-side
+     (profiles.ts), keyed provider + model + error-class.
+     *Evaluate:* chains per profile; depth routes children correctly;
+     drained go-sub falls to ds balance then usage billing; a failing rung
+     is not retried inside the cache window.
+- [ ] **W22 line numbers in file views.** Add a line-number gutter to (a)
+     the dsh-remote file panel viewer (our fork xyzshantaram/dsh-remote,
+     which already carries the highlight.js-in-panel change) and (b) every
+     tool call that renders file content — tool-render read rows (the
+     HASH│ prefix is stripped for display today) and the write/edit diff
+     rows where a gutter adds context. Remote side needs a fork patch +
+     pin bump in sync.sh; tool side is a client.cjs change.
+     *Evaluate:* a read of a .ts file shows aligned line numbers; the
+     remote file panel shows the same; diff +/- colors stay intact.
 
 - [ ] **W8 reject with a comment.** IMPLEMENTED 2026-08-22
-      (`plugins/approval-comment/`); built, behavior-harness verified, NOT yet
-      mounted or browser-tested. It replaces the shipped approval card through
+      (`plugins/approval-comment/`); built, behavior-harness verified, mounted
+      into the web profile 2026-08-22 (link dep + sync.sh step, bash command
+      now syntax-highlighted via inlined hljs), awaiting restart + browser
+      test. It replaces the shipped approval card through
       the `conversation.composer` CHAIN slot at priority 0 (chains try selectors
       ascending, first non-null wins), adds a collapsed Comment field, answers
       `'rejected'` FIRST, then fires `session.prompt(content, "steer")` with the
@@ -219,7 +269,7 @@ metric). Still blocked there on the go-ahead.
   discovered the preset by directory name, so tools and tier masks worked with
   zero display metadata. The symptom looked like a missing bundle.
 - **Direct edits to `package.json` are denied by the harness; reads are allowed.** The `edit`/`write`/`batch_edit` tools refuse package.json (E_ACCESS / manifest denial). The `package` tool now (2026-08-21) has an `add_task` action that registers a `scripts` entry from validated argv via a node one-liner — this is the sanctioned way to change a script. Direct `write`/`edit` of package.json is still banned; only the tool (its `ctx.shell` calls are exempt from the manifest guard) may do it. pnpm's `pkg set` dotted-path parser rejects `:` and `-` in keys, so the tool must use the node route, not `pnpm pkg set`.
-- **bash-guard gates only the `bash` tool.** Verified in `bash-guard.ts` (it returns `next()` unless `exec.name === 'bash'`). So the "raw git denied, use mcp__git__*" rule binds only model bash calls. Plugin git via `ctx.subprocess` (dsh-worktree, dsh-git-plugin) and the git MCP both bypass it. The E6 `guards/git.json` reason update should point at the `git` skill AND note these bypass paths.
+mRn- **bash-guard gates only the `bash` tool.** Verified in `bash-guard.ts` (it returns `next()` unless `exec.name === 'bash'`). So the "raw git denied, use mcp__git__*" rule binds only model bash calls. Plugin git via `ctx.subprocess` (dsh-worktree, dsh-git-plugin) and the git MCP both bypass it. The E6 `guards/git.json` reason notes these bypass paths and points at the mcp__git__* tools (the `git` skill was dropped 2026-08-22 — it only ever existed for the removed dsh-worktree workflow).
 - **E4 install commands and the full conflict table are in `docs/plugins-conflict-table.md`** (durable handoff; temporary — delete it once E4 is wired into `sync.sh` and verified). Summary: deferred until a `dsh web` restart (the live GUI holds the profile and the plugin CLI errors with a SQLite lock). `dsh plugin --profile web add` for `dsh-any-background` (THEMING, verify intent), `dsh-ui-file-browser` (reversible), `dsh-input-history` (local path), `dsh-tool-calculator`, `dsh-tool-diff`, and `dsh-at-file` v0.6.7 tarball; analysis set: `dsh-worktree` (manual `- insert` patch row; `dsh.bundle` false; pins `@deepseek-ai/* 0.1.0-rc.6` vs rc.7), `dsh-session-search` (gate behind session-search skill). Skip `dsh-git-plugin`. All need a restart.
 
 ### Retired and reverted
@@ -381,32 +431,51 @@ PLAN.md is a living migration document. Delete it once the remaining phase work 
   skills to import.
 
 ### Tickets
-- [ ] **E4 curate plugins.** Installed set live since 2026-08-21 (file-browser,
-      input-history, calculator, diff, at-file, session-search, our dsh-remote
-      fork, better-markdown; worktree + any-background gated out; git-plugin
-      skipped). **GAP FOUND 2026-08-22:** the four toolkit tools the `util`
-      skill gates (tool-time, tool-regex, tool-markdown, tool-encoding) were
-      NEVER INSTALLED — no omdsh-dev/dsh-toolkit row exists anywhere in the
-      profile — so the gate has nothing to unmask ("unknown tool" before AND
-      after loading the skill; subagent probe 2026-08-22). Decide: install
-      @omdsh-dev/dsh-toolkit pinned, or strip tools-gated from util. Then
-      delete docs/plugins-conflict-table.md.
-      *Evaluate:* every tool a gating skill names exists and becomes callable
-      when that skill loads.
-- [ ] **E5 build the shared skill-gating plugin.** Implemented incl. the
-      reapplyDeny MCP filter fix (build-verified only). Runtime unmask STILL
-      unverified: the 2026-08-22 probe could not exercise it because the
-      target tools are not installed (see E4). The compaction-clear path
-      (`compaction/start`) is written, never observed live.
-      *Evaluate:* loading a gated skill unmasks exactly its tools for that
-      agent; a skill-less agent cannot call them; compaction re-hides them.
+- [x] **E4 curate plugins.** CLOSED 2026-08-22. Installed set live since
+      2026-08-21 (file-browser, input-history, calculator, diff, at-file,
+      session-search, our dsh-remote fork, better-markdown; worktree +
+      any-background gated out; git-plugin skipped). The 2026-08-22 gap (the
+      four util-gated toolkit tools never installed) was closed by installing
+      them pinned as four separate repos; live Tool.listTools confirms time/
+      regex/markdown/encoding registered. Conflict-table deletion moved to
+      W19 cleanup. Root-cause note for posterity: the gate looked broken
+      because util frontmatter named package ids (tool-time); see E5.
+      *Evaluate:* met — every tool a gating skill names exists and becomes
+      callable when that skill loads (probe-verified, see E5).
+- [ ] **E5 build the shared skill-gating plugin.** REBUILT + LIVE-VERIFIED
+      2026-08-22. Two real bugs found behind "tools stay visible": (1) skill
+      frontmatter named PACKAGE ids (tool-time) while tools register under
+      bare GLOBAL names (time), so restrictKnown() silently filtered the
+      whole deny list to empty every time; (2) the plugin had NO initial-deny
+      path — masks were only narrowed after a first skill load, and compaction
+      DISPOSED masks without re-applying. Fixes: frontmatter corrected in
+      util/cordis skills; plugin rewritten — enforcement on agent/pre-step
+      reconciles per agent (covers fresh agents, pre-existing agents,
+      post-compaction) with a snapshot dirty-check, `skills/change` cache
+      invalidation, compaction reset, restrictKnown stale-name filtering
+      kept, and trailing-* prefix patterns (mcp__gitlab__*) expanded against
+      agent.ctx.tools.schemas(). Mechanism verified END-TO-END through a
+      dynamic probe plugin: initial deny hid util's four tools from a loaded
+      agent; loading util unmasked exactly those four; stopping the probe
+      lifted masks cleanly. Mounted in sync.sh heredoc + live patch. glab MCP
+      gated behind working-with-soapbox (prefix pattern). PENDING: restart
+      + hands-on check (fresh session hides gated tools; loading a skill
+      unmasks; cordis/session-search/glab behave).
+      *Evaluate:* unchanged — hidden until load, unmask on load, re-hide
+      after compaction.
 - [ ] **E6 cordis import + util/git skills + bash-guard reason.** AUDIT
       2026-08-22: util/session-search/customize-setup skills live ✓;
-      guards/git.json deployed with subcommand tiers ✓. GAPS: (1) the two
-      cordis skills were never imported into skills/; (2) the guards/git.json
-      deny reason does not mention the git skill yet.
-      *Evaluate:* a cordis skill appears in the catalog with tool-cordis
-      gated behind it; the deny reason names the git skill.
+      guards/git.json deployed with subcommand tiers ✓. 2026-08-22 (2nd): the
+      two cordis skills (cordis-plugin-development, editing-cordis-compositions)
+      imported into skills/ ✓; dsh-tool-cordis mounted as a host-plane row in
+      sync.sh's cordis.patch.yml ✓; both skills gate their real cordis_* tools
+      (cordis_inspect_list/query/self, cordis_define/run/stop/undefine) via the
+      skill-gate plugin ✓; git-skill reference dropped from guards/git.json ✓.
+1nV      REMAINING: restart + confirm the cordis_* tools are hidden until one of
+DXX      the two cordis skills loads (folded into the E5 restart checklist).
+      *Evaluate:* a cordis skill appears in the catalog and its tools are
+      hidden until that skill loads; the deny reason no longer names a git
+      skill that does not exist.
 - [ ] **E7 paste-image path for visionless models.** RE-SCOPED 2026-08-22
       (user call): the real want is paste-in-composer → app uploads to a
       .dsh_uploads cache dir → model receives a PATH it can feed to `see`.
@@ -544,9 +613,14 @@ absent — `mapUsage` drops `reasoning` for BOTH pi-ai protocols
       disappear only for granted paths.
       *Evaluate:* /grant /some/repo lets a later edit tool write there with no
       prompt, in that session only.
-- [ ] **H2 render edit-tool diffs in the GUI.** IMPLEMENTED 2026-08-22
-      (`plugins/tool-render/`); built via the build.mjs entry, artifact
-      verified against the loader contract, NOT mounted or browser-tested.
+bIg- [ ] **H2 render edit-tool diffs in the GUI.** IMPLEMENTED + INSTALLED
+21h      (`plugins/tool-render/`); built via the build.mjs entry, artifact
+      verified against the loader contract; installed into the web profile
+      (link:) and wired into sync.sh step_install_plugins 2026-08-22.
+      PENDING: restart + browser check. Live-slot diagnosis 2026-08-22:
+      batch_edit absent from tool.call.toolview taken-keys confirmed the
+      module had not loaded pre-install (last boot 12:02 predates the 12:31
+      install — no fault in the bundle itself).
       Discovery: owning the whole `tool-call` node is IMPOSSIBLE — SlotCore
       throws on a second declaration of its `tool.call.toolview` child slot
       (verified against the shipped core). The plugin registers the
@@ -561,9 +635,28 @@ absent — `mapUsage` drops `reasoning` for BOTH pi-ai protocols
       true dynamic import cannot work because the loader serves exactly one
       bundle per plugin. Read rows strip the HASH│ prefixes for display;
       bash rows keep plain text, monospace block, ANSI stripped.
-      *Evaluate:* a read of a .ts file renders highlighted; bash output keeps
-      plain text but styled.
-- [x] **H4 usage reporting — INVESTIGATED AND CLOSED 2026-08-22 BY ADOPTION.**
+OTM      *Evaluate:* a read of a .ts file renders highlighted; bash output keeps
+xth      plain text but styled.
+- [x] **W19 dead-code/config cleanup (audit 2026-08-22).** EXECUTED 2026-08-22
+      after a 3-part user grill. DELETED (each approved): conflict-table
+      doc + session-search SKILL ref; mcp/*.yaml x5; home/settings.yaml;
+      repo-root AGENTS.md; spike-keyed-slot.ts/.js + build.mjs block;
+      session-hygiene.ts/.js + build.mjs entry; ~/.dsh/plugins/personal/
+      stale builds (incl. git-guard.js). FIXED: etu SKILL.md unbacked claim
+      + duplicated clause (and frontmatter description); dangling VERIFY.md
+      refs in see.ts/bash-guard.ts; lang/README.md refs in
+      share-caddy-cert/devtunnel skills; README stale claims. KEPT on user
+      call: unused devDeps @deepseek-ai/dsh-agent-presets + dsh-compaction.
+      BUILT: skills/ecommerce/SKILL.md gating mcp__swiggy-food__* and
+      mcp__swiggy-instamart__* (blinkit/zepto patterns later). REFACTORED:
+      outputText() deduped into plugins/shared/output-text.ts. POLICY:
+      untrack+ignore built artifacts — .gitignore now covers
+      tool-render/dist, profiles-client/{dist,lib}, approval-comment/lib;
+      the four tracked artifacts need one manual `git rm --cached` (raw git
+      rm is bash-guard denied) at commit time. node build.mjs + bash -n
+      sync.sh green after removals.
+      *Evaluate:* verdicts above; open item is the manual untrack.
+
       Wire audit (one live probe): opencode go/zen streams prompt/completion
       tokens fine, but an EMPTY prompt_tokens_details and NO reasoning detail,
       so cacheRead never lands (the ring overfills vs real billing) and

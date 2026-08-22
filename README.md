@@ -6,17 +6,17 @@ It holds the personal configuration and tooling for the AI workstation.
 ## What the bundle contains
 
 - `skills/` — the personal skills. Each skill is a markdown file with `name`,
-  `description`, and `whenToUse` in frontmatter.
-- `plugins/*.ts` — the host-plane plugins. These are the built-in personal
-  tools. Examples are the bash guard, the manifest guard, the package tool,
-  the see vision helper, session hygiene, and skill gating.
+  `description`, and `whenToUse` in frontmatter. Some skills gate tool groups
+  through `tools-gated` names, enforced by the skill-gate plugin (E5).
+- `plugins/*.ts` — the host-plane plugin sources. Examples are the bash guard,
+  the manifest guard, the package tool, the see vision helper, skill gating,
+  and the profile plugin. `build.mjs` bundles them into `plugins/*.js`.
+- `plugins/{tool-render,profiles-client,approval-comment}/` — client plugin
+  packages with their own `cordis.patch.yml` and built bundles.
 - `guards/` — the bash-guard rule drop-ins for git, find, and grep.
-- `mcp/` — the MCP server rows, one file per server.
-- `home/` — the files that sync into `$DSH_HOME`. This includes `AGENTS.md`,
-  `settings.yaml`, and the dsh-better-edit guidance overrides.
-- `generate-customize-setup.mjs` — the generator for the customize-setup skill.
+- `home/` — the files that sync into `$DSH_HOME` (default `~/.dsh`), such as
+  the personal skills and settings.
 - `sync.sh` — the idempotent installer.
-
 ## Install and sync
 
 Clone the repo, then run the sync script from the repo root.
