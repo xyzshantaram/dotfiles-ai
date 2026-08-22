@@ -31,16 +31,23 @@ false assurance.
 
 ### Phase A: personal bundle, open ports — `in_progress`
 
-- [ ] **W6 profiles client.** UNBLOCKED 2026-08-22: the W13 spike proved keyed-slot
-      shadowing works. One client plugin carries the Profile submenu in the model
-      seat, the match badge, the per-session override, the cost display, and the
-      title rewriter. The patch disables the shipped `ui-model-selection` and
-      registers the replacement seat at a LOWER priority (lowest renders).
-      Selecting a profile calls `sessions.models(...)`, the same call the shipped
-      selector uses, and changes providers only. The badge comparison runs
-      client-side against the profile config and drops when the selection no
-      longer matches. The cost display sums per-model tokens from
-      `assistant/chunk` usage records times a price-table settings namespace.
+- [ ] **W6 profiles client.** IMPLEMENTED 2026-08-22
+      (`plugins/profiles-client/`); built via the build.mjs entry, artifact
+      verified against the loader contract, NOT mounted or browser-tested.
+      Seat: `conversation.input.model` at SEAT_PRIORITY -100 versus the shipped
+      default 0 (single-kind slot; entriesOfSlot[0] wins). Shadow-only; no
+      shipped entry patched out — the earlier "disables ui-model-selection"
+      wording is obsolete. Selection reuses the exact shipped mutation:
+      `directory.select(selection)` on the shared ModelDirectory. Badge = green
+      dot while directory.current equals the active profile head; hides on any
+      manual override. Cost chip = `conversation.composer.dock` id
+      `profiles-cost`, priced by a NEW `prices` namespace owned by the host
+      half (rates keyed provider/model, USD per M tokens; hides when no rate
+      row exists). Title rewriter = MutationObserver keeping
+      `dsh | <session title>`; compares equal on re-fire so the loop stops.
+      Deviations: seat parks until modelDirectories mounts (mirrors shipped
+      /model); selecting a profile does NOT flip profile.active (session-only
+      per the brief); cache-read/write tokens not priced separately.
       *Evaluate:* the submenu switches both profiles and the session answers on
       the new model. The badge appears on a match and drops after a manual
       override. The tab title reads `dsh | <session title>`. The cost figure
@@ -59,6 +66,16 @@ false assurance.
       at the nearest step boundary. A rejection with no comment behaves as
       today.
 
+
+- [ ] **W17 profiles failure cache.** When a waterfall rung fails on an
+      out-of-credit or other persistent credential fault, `plugins/profiles.ts`
+      records that rung as down with a timestamp. Selections inside a short
+      cooldown window skip the dead rung and start at the next live one, so
+      requests stop paying the failed attempt every turn. The entry clears
+      when the window ends or when the user flips profiles manually.
+      *Evaluate:* with the head rung's credential dead, the first call fails
+      over once, calls inside the window reach the fallback with no repeated
+      failed attempt, and the entry clears after the window.
 
 ### Phase B: decommission opencode — `pending`
 
@@ -120,11 +137,13 @@ metric). Still blocked there on the go-ahead.
   the orchestrator and `see` move.
 - Profiles live in a `profile` settings namespace, schema-validated and
   revision-gated. The plugin reads the resolved value per selection and per call.
-- **The meridian route** is settled and live. Meridian exposes OpenAI-compatible
-  `/v1/chat/completions` and `/v1/models` on port 9000. The route is declared
-  with `api: openai-completions`, which also enables `/models` auto-detection in
-  the Models page that `anthropic-messages` cannot do. A dummy `apiKeyEnv` value
-  satisfies the credential check. Exact rows are in `~/repos/aidos/docs/w0-providers.md`.
+- **The meridian route** is settled and live. Declared `api: anthropic-messages`,
+  `baseURL: http://localhost:9000` (no `/v1` suffix; the SDK appends it), six
+  hand-declared Claude models, `defaultInput: [text, image]`. Prompt caching
+  works and token counts display correctly (Phase G). A dummy `apiKeyEnv`
+  value satisfies the credential check. Live rows are the source of truth:
+  `$DSH_HOME/settings.yaml` under `llm-pi-ai.providers.meridian`. The old
+  w0-providers research doc was deleted by user call 2026-08-22.
 - **The Go subscription route** is pinned: base URL `https://opencode.ai/zen/go/v1`
   (the adapter appends `/chat/completions`), key `OPENCODE_GO_API_KEY` in
   `$DSH_HOME/.credentials.yaml` or the env var, which wins.
@@ -241,8 +260,13 @@ metric). Still blocked there on the go-ahead.
 - **W14 caffeine leak fix landed + live-verified** (on/idempotent/orphan-detect/
   off-without-pidfile cycle passed). W13 spike answered YES (see Seams). W8
   built, unmounted. E4/E5/E6 audits recorded gaps in their tickets.
-- **NEXT ACTIONS:** push both repos (ASK first); bump the sync.sh fork pin to
-  the new fork head after push; then W6 is the biggest open build.
+- **NEXT ACTIONS:** one restart+sync cycle stages everything wired today:
+      four omdsh toolkit tools (E4), dsh-paste-input + manual mount row (E7),
+      ds-api-usage + opencode-go-usage (H4), worker-tier pins in the profiles
+      row (zen flash-free → go flash → official deepseek). After that cycle:
+      mount plugins/tool-render + approval-comment, then the hands-on queue.
+      W6 profiles-client coder still in flight; its entry lands in build.mjs
+      when it reports.
 
 
 ## User preferences and special rules
@@ -390,6 +414,16 @@ PLAN.md is a living migration document. Delete it once the remaining phase work 
       the composer does with pasted images today (native upload? drop?), then
       close the gap minimally. Prior settlement stands: do NOT modify see.ts;
       keep dsh-at-file for @ mentions.
+      ADOPTED 2026-08-22: omdsh-dev/dsh-paste-input (#59223c5668b3) does the
+      whole job — paste/drag/picker files upload at send time to
+      <workspace>/.dsh/tmp/attachments/<session>/<send>/, and the model gets
+      a plain text block quoting the root dir plus relative names to join for
+      see. No base64, no attachment block, no see.ts edit. Vanilla composer
+      sends pasted images as base64 in-message (confirmed) — that was the
+      gap. Package declares no dsh.bundle, so it needs the MANUAL mount row,
+      which sync.sh now carries. Unconfirmed: bubble-folding observer vs
+      better-markdown re-render interaction; first-use notice is Chinese
+      only.
       *Evaluate:* pasting an image gives the model a usable file path, and
       see returns a description for it.
 ### Phase F: the dsh-remote fork — `in_progress`
@@ -488,37 +522,63 @@ better, anthropic token counts display correctly. Reasoning-token display stays
 absent — `mapUsage` drops `reasoning` for BOTH pi-ai protocols
 (dsh-llm-pi-ai/lib/index.js:415-425); accepted for now.
 
-- [ ] **G3 align aidos docs.** Update `~/repos/aidos/docs/w0-providers.md`
-      section 3 + route plan to match live config (anthropic-messages,
-      baseURL without /v1, models hand-declared; note /models autodetect is
-      lost but unused).
-      *Evaluate:* docs match settings.yaml exactly.
+- [x] **G3 align aidos docs — DROPPED 2026-08-22.** The alignment was made,
+      then the user deleted `~/repos/aidos/docs/w0-providers.md` as pointless.
+      `$DSH_HOME/settings.yaml` under `llm-pi-ai.providers.meridian` is the
+      single source of truth for route rows now. Nothing left to evaluate.
 
 ## Phase H: harness ergonomics
 
 - [ ] **H1 /grant command.** A composer command `/grant <path>` that grants the
       CURRENT session's model write access to an arbitrary path for the rest of
       the session (cross-repo work without full danger mode). Needs research:
-      where per-session file policy lives in dsh, whether a client plugin can
-      mutate it mid-session, and how it interacts with the approval system.
+      the session (cross-repo work without full danger mode).
+      RESEARCHED 2026-08-22, verdict PARTIAL-feasible: the policy is enforced
+      IN-PROCESS (fs fence `checkedTarget`; bash wrap bwrap/Landlock), but rc.8
+      has NO per-path allow-list in the policy object. Design: a host plugin
+      wraps the shared SandboxedFileSystem writeText/editText and skips the
+      fence when the call's sessionId matches a granted session and the target
+      sits under a granted root. WeakMap keyed by session; memory-only; dies
+      with the session or a restart. Bash writes to granted paths stay
+      kernel-denied; child subagent sessions are NOT covered; approval prompts
+      disappear only for granted paths.
       *Evaluate:* /grant /some/repo lets a later edit tool write there with no
       prompt, in that session only.
-- [ ] **H2 render edit-tool diffs in the GUI.** The conversation view shows
-      edit/batch_edit calls as opaque payloads; render before/after as a diff
-      block. Slot knowledge from W13 applies (tool-call blocks are their own
-      render cells; find the key, register lower priority).
+- [ ] **H2 render edit-tool diffs in the GUI.** IMPLEMENTED 2026-08-22
+      (`plugins/tool-render/`); built via the build.mjs entry, artifact
+      verified against the loader contract, NOT mounted or browser-tested.
+      Discovery: owning the whole `tool-call` node is IMPOSSIBLE — SlotCore
+      throws on a second declaration of its `tool.call.toolview` child slot
+      (verified against the shipped core). The plugin registers the
+      read/bash/edit/batch_edit KEYS of that child slot at priority -100.
+      dsh-better-edit drops its diff from the wire, so edit diffs rebuild
+      before-text from conversation read history + 3-char anchors; no prior
+      read degrades to an add-only hunk.
       *Evaluate:* an edit call renders as a readable diff in the chat.
-- [ ] **H3 syntax-highlight read/bash tool output.** Same seam family as H2:
-      highlight file contents (language by extension) and shell output in the
-      tool-call rendering. Reuse highlight.js via the loader like R3 did.
+- [ ] **H3 syntax-highlight read/bash tool output.** IMPLEMENTED 2026-08-22
+      in the same `plugins/tool-render/` package. highlight.js 11.12.0 core +
+      17 curated languages, registered on first use and INLINED by esbuild —
+      true dynamic import cannot work because the loader serves exactly one
+      bundle per plugin. Read rows strip the HASH│ prefixes for display;
+      bash rows keep plain text, monospace block, ANSI stripped.
       *Evaluate:* a read of a .ts file renders highlighted; bash output keeps
       plain text but styled.
-- [ ] **H4 investigate opencode go/zen usage reporting.** Usage from the
-      opencode go/zen routes does not land correctly in the context ring /
-      usage accounting. Find which wire fields those routes emit vs what the
-      usage pipeline expects (same field-map audit as the meridian research).
-      *Evaluate:* a known-cost request on opencode-go shows matching numbers in
-      the ring.
+- [x] **H4 usage reporting — INVESTIGATED AND CLOSED 2026-08-22 BY ADOPTION.**
+      Wire audit (one live probe): opencode go/zen streams prompt/completion
+      tokens fine, but an EMPTY prompt_tokens_details and NO reasoning detail,
+      so cacheRead never lands (the ring overfills vs real billing) and
+      reasoning folds invisibly into completion_tokens. Our mapUsage
+      additionally drops usage.reasoning for BOTH protocols
+      (dsh-llm-pi-ai lib/index.js :415-422); the upstream one-liner was
+      DROPPED per user call. The route's top-level "cost" string reaches no
+      parser anywhere. Cost display adopted instead via two plugins wired
+      into sync.sh: github:Sev7een/ds-api-usage#d7644200ed05 (DeepSeek
+      balance + 24h/14d timeline; reuses DEEPSEEK_API_KEY) and
+      dsh-opencode-go-usage@1.2.2 (sidebar quota widget + /opencode-go
+      command). Both self-mount via their own bundle patches; both client
+      bundles scanned clean of the rc.8 web-react boot-killer import.
+      Per-session cost stays with W6 D4 (ring hover or beside-ring).
+      *Evaluate:* after restart+sync, both panels show plausible numbers.
 - [ ] **H5 monorepo restructure — DEFERRED until after the aidos MVP.** Split
       this bundle into @shantaram.xyz/dsh-* plugin packages plus
       @shantaram.xyz/dsh-dotfiles as the personal meta-bundle.

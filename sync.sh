@@ -133,9 +133,46 @@ step_write_web_patch() {
     - id: ask-interrupt
       name: $HERE/plugins/ask-interrupt.js
 
+    # dsh-paste-input mounts through a MANUAL row because the package declares
+    # no dsh.bundle patch of its own (E7 adoption 2026-08-22). Id and name per
+    # its README; without this row the client half never joins the profile.
+    - id: dsh-paste-input
+      name: '@dsh-community/dsh-paste-input'
+
     - id: profiles
       name: $HERE/plugins/profiles.js
-
+      # Worker-tier pins (coder/tester/researcher). WITHOUT these, an unset
+      # role inherits the active profile's waterfall head, so children rode
+      # x-preview-f-free once personal headed there (found 2026-08-22).
+      # Order per user call: free zen tier first, then the go subscription,
+      # then official API credits as the last rung. deepseek-official needs
+      # DEEPSEEK_API_KEY in ~/.dsh/.credentials.yaml to serve.
+      config:
+        roles:
+          coder:
+            routes:
+            - provider: opencode-zen
+              model: deepseek-v4-flash-free
+            - provider: opencode-go
+              model: deepseek-v4-flash
+            - provider: deepseek-official
+              model: deepseek-v4-flash
+          tester:
+            routes:
+            - provider: opencode-zen
+              model: deepseek-v4-flash-free
+            - provider: opencode-go
+              model: deepseek-v4-flash
+            - provider: deepseek-official
+              model: deepseek-v4-flash
+          researcher:
+            routes:
+            - provider: opencode-zen
+              model: deepseek-v4-flash-free
+            - provider: opencode-go
+              model: deepseek-v4-flash
+            - provider: deepseek-official
+              model: deepseek-v4-flash
     # dsh-worktree mount row REMOVED 2026-08-21 late: its rc.6-built tool
     # registration poisons the rc.8 tool scheduler — every tool call on the
     # profile fails with "cannot read properties of undefined (reading
@@ -215,6 +252,14 @@ step_install_plugins() {
 		# (package.json dependency metadata only), so this is the same code
 		# under a new sha.
 		dsh plugin --profile web add github:omdsh-dev/dsh-tool-diff#d4afd6e2de0b
+		# The four tools the `util` skill gates (ticket E4). Installed as
+		# separate repos, NOT through the omdsh-dev/dsh-toolkit monorepo:
+		# that collection also registers calculator and diff, which are
+		# already installed above and would be double-registered.
+		dsh plugin --profile web add github:omdsh-dev/dsh-tool-time#8b7a2137f516
+		dsh plugin --profile web add github:omdsh-dev/dsh-tool-regex#5afda86cd686
+		dsh plugin --profile web add github:omdsh-dev/dsh-tool-markdown#267871b115c4
+		dsh plugin --profile web add github:omdsh-dev/dsh-tool-encoding#dbf829b5a755
 		dsh plugin --profile web add https://github.com/omdsh-dev/dsh-at-file/archive/refs/tags/v0.6.7.tar.gz
 		# dsh-worktree install DISABLED 2026-08-21 late (see the patch-file
 		# note: rc.6-built registrar breaks the rc.8 scheduler). Re-enable
@@ -234,12 +279,26 @@ step_install_plugins() {
 		# manifest/favicon paths; clean 401s for gated static assets). The old
 		# connection.isLoopback flips are REMOVED — they could not win the
 		# composition race. Upgrade = bump the pin here deliberately.
-		dsh plugin --profile web add github:xyzshantaram/dsh-remote#ab821d79e33e
+		dsh plugin --profile web add github:xyzshantaram/dsh-remote#0c9e708c2b5c
 		# Streaming markdown renderer replacement (markstream-react:
 		# streaming-safe markdown, Mermaid, KaTeX, Shiki). Client-only;
 		# replaces the planned W13 step 2 self-build. Tolerant peers (>=rc.5),
 		# no web-react require.
 		dsh plugin --profile web add dsh-better-markdown@0.1.2
+		# E7 adoption 2026-08-22: paste/drag files land in
+		# <workspace>/.dsh/tmp/attachments and the model gets a PATH it can feed
+		# to see (replaces the vanilla base64 image path). Needs the manual
+		# dsh-paste-input mount row above plus a restart.
+		dsh plugin --profile web add github:omdsh-dev/dsh-paste-input#59223c5668b3
+		# Usage dashboards adopted 2026-08-22 (H4 close-out: account/route-level
+		# spend panels; the wire-field findings stay recorded in PLAN.md). Both
+		# self-mount through their own dsh.bundle.patch — no manual rows.
+		# ds-api-usage: balance + 24h/14d usage timeline from api.deepseek.com,
+		# reuses the existing DEEPSEEK_API_KEY credential (no extra setup).
+		dsh plugin --profile web add github:Sev7een/ds-api-usage#d7644200ed05
+		# opencode-go-usage: plan quota widget in the sidebar, same-origin
+		# usage proxy, /opencode-go command. npm-pinned exact.
+		dsh plugin --profile web add dsh-opencode-go-usage@1.2.2
 	else
 		echo "WARNING: dsh not on PATH; skipping third-party plugin installs."
 		echo "         Re-run './sync.sh' from a shell where dsh is installed."
