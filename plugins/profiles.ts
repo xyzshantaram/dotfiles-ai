@@ -25,27 +25,33 @@
  * Hooks `agent/request` and `agent/request-error` (design stolen MIT from
  * CanGeng/llm-fallback; dormancy idea from @visol-456/dsh-llm-fallback) so
  * EVERY agent — main sessions, role children, see children — fails over
- * along the ACTIVE profile entry's chain when a route faults. A request
+ * along the active profile entry's chain when a route faults. A request
  * whose (provider, model) equals ANY level of the active chain fails over
  * from the NEXT level; all other requests pass through untouched. Levels may
  * change the model as well as the provider: the retry pass re-enters the
  * `agent/request` waterfall, where this plugin returns the next level's full
  * {provider, model}.
  *
+ * W21 named chains: each profile entry holds TWO chains, one per agent
+ * depth. Depth-0 agents ride the orchestrator chain; any spawned child
+ * (depth >= 1) rides the subagent chain. The go/ds tail is reordered
+ * live-first at selection time by quota (opencode-go monthly usage, then
+ * deepseek balance, then opencode-go usage billing). A persistent fault
+ * (no-credits / model-unavailable / auth / bad-request) marks the rung down
+ * in a host-side cache for >= 10 minutes; selections inside the window skip
+ * the dead rung. The cache clears on a `profile` namespace update.
+ *
  * There is NO second config surface: the chains ARE the `profile` namespace
  * entries (see.ts owns the namespace; this plugin reads it live). Flipping
  * `profile.active` swaps heads, chains, and failover order for every future
  * request with no restart.
  *
- *   work     meridian/claude-opus-5 -> sonnet-5 -> zen x-preview-f-free
- *   personal zen/deepseek-v4-flash-free -> opencode-go flash -> (official)
- *
  * Failover semantics:
  * - Stay on the matched level within a step so request prefixes stay
  *   stable; advance only when the current level fails.
  * - Each NEW step starts back at the matched level. During a hard outage
- *   every step pays one failed attempt before failing over; acceptable for
- *   v1 (a cooldown circuit is the known upgrade if it annoys).
+ *   every step pays one failed attempt before failing over; the error cache
+ *   skips the dead rung on later selections.
  * - Before proposing a level, probe it with ctx.llm.resolveCallConfig and
  *   skip levels that would fail before streaming (unregistered route,
  *   unknown model). An abort during the probe surfaces as an abort.
@@ -60,13 +66,13 @@
  *
  * ── Flip propagation ────────────────────────────────────────────────────
  *
- * On a `profile.active` flip, push the new active head into
- * `agent-default-model` via its own saveSelection, so sessions created from
- * then on compose on that route (a live session keeps its current model;
- * its requests still fail over per the rules above regardless). There is no
- * harness-native failover for the session's own model — verified against
- * dsh-agent-default-model/lib/index.js; head-sync plus these waterfalls is
- * the closest reachable behavior.
+ * On a `profile.active` flip, clear the error cache and push the new active
+ * head into `agent-default-model` via its own saveSelection, so sessions
+ * created from then on compose on that route (a live session keeps its
+ * current model; its requests still fail over per the rules above
+ * regardless). There is no harness-native failover for the session's own
+ * model — verified against dsh-agent-default-model/lib/index.js; head-sync
+ * plus these waterfalls is the closest reachable behavior.
  *
  * Settings are read WITHOUT ownership (`ctx.settings.get(ns)` resolves any
  * registered namespace; duplicate registration fails loud — see.ts owns
@@ -80,9 +86,13 @@
  *   (dsh-subagent/lib/index.js:486-489).
  * - `agent/request`: dsh-agent-loop/lib/index.js:708; proposal needs
  *   non-empty provider and model (:714). `agent/request-error` returning
- *   `{ kind: 'retry' }`: :653, kind check :662.
+ *   `{ kind: 'retry' }`: :653, kind check :662. The fused dispatcher
+ *   (dsh-agent/lib/index.js agentEvents) injects `agent` into both payloads.
  * - `ctx.llm.resolveCallConfig`: dsh-llm/lib/index.js:1351.
  *   `providerRetryPolicy`: dsh-llm/lib/index.js:1260.
+ * - Depth: dsh-subagent/lib/types/depth.js delegationDepthOf —
+ *   `Math.max(agent.session.header.delegationDepth ?? 0,
+ *   agent.options.subagentDepth ?? 0)`.
  *
  * NOT-VERIFIED until live: end-to-end failover under a real 429, and that
  * the retry pass re-enters `agent/request` (it must, for the rewrite).
@@ -106,7 +116,7 @@ import type { SubagentStartRequest } from "@deepseek-ai/dsh-subagent";
 import { settingsNamespace } from "@deepseek-ai/dsh-settings";
 import type {} from "@deepseek-ai/dsh-settings";
 import type {} from "@deepseek-ai/dsh-agent";
-import { normalizeEntry, type RouteCandidate } from "./profile-routes";
+import { normalizeEntry, chainOf, type RouteCandidate } from "./profile-routes";
 import { outputText } from "./shared/output-text";
 
 export const name = "profiles";
@@ -182,11 +192,210 @@ function activeEntry(profile: ProfileSettings | undefined): unknown {
   return (profile?.active ?? "work") === "personal" ? profile?.personal : profile?.work;
 }
 
-/** The active chain right now. Empty when unconfigured — everything dormant. */
-function activeChain(ctx: Context): Level[] {
+// ── Error cache (W21) ───────────────────────────────────────────────────────
+// A persistent fault marks one (provider, model, error-class) key down for
+// ERROR_WINDOW_MS. Selections skip the dead rung at proposal time and when
+// the waterfall walks the chain. Any `profile` namespace update clears the
+// whole cache: a manual active flip rewrites every chain anyway.
+const ERROR_WINDOW_MS = 600_000; // >= 10 minutes
+const ERROR_CLASSES = ["no-credits", "model-unavailable", "auth", "bad-request"] as const;
+type ErrorClass = (typeof ERROR_CLASSES)[number];
+const downCache = new Map<string, number>();
+
+function errorKey(level: Level, cls: ErrorClass): string {
+  return `${level.provider}:${level.model}:${cls}`;
+}
+
+/**
+ * Classify a provider failure code/message into a cacheable error class.
+ * Matches code constants and message substrings; anything else is transient
+ * and is NOT cached.
+ */
+function normalizeErrorClass(code: string | undefined, message: string): ErrorClass | undefined {
+  const c = String(code ?? "").toLowerCase();
+  const m = String(message ?? "").toLowerCase();
+  const hit = (...needles: string[]) => needles.some((n) => c.includes(n) || m.includes(n));
+  if (hit("401", "unauthorized", "authentication", "invalid api key")) return "auth";
+  if (hit("400", "bad request", "bad_request", "invalid request")) return "bad-request";
+  if (hit("quota", "balance", "insufficient", "credit", "usage limit", "billing", "429", "rate limit")) return "no-credits";
+  if (hit("model", "not found", "unavailable", "404", "no such model")) return "model-unavailable";
+  return undefined;
+}
+
+function markDown(level: Level, code: string | undefined, message: string): void {
+  const cls = normalizeErrorClass(code, message);
+  if (!cls) return;
+  downCache.set(errorKey(level, cls), Date.now());
+}
+
+/** True when ANY class key of the level is inside the window. */
+function isCachedDown(level: Level): boolean {
+  const now = Date.now();
+  for (const cls of ERROR_CLASSES) {
+    const at = downCache.get(errorKey(level, cls));
+    if (at !== undefined && now - at < ERROR_WINDOW_MS) return true;
+  }
+  return false;
+}
+
+// ── Depth resolution (W21) ─────────────────────────────────────────────────
+// Mirrors dsh-subagent delegationDepthOf: the persisted header depth is the
+// floor; options.subagentDepth may deepen it. Depth-0 rides the orchestrator
+// chain; any spawned child (depth >= 1) rides the subagent chain.
+function depthOf(agent: unknown): number {
+  const a = agent as
+    | { session?: { header?: { delegationDepth?: number } }; options?: { subagentDepth?: number } }
+    | null
+    | undefined;
+  const header = a?.session?.header?.delegationDepth ?? 0;
+  const options = a?.options?.subagentDepth ?? 0;
+  return Math.max(header, options);
+}
+
+// ── Quota probes (W21) ─────────────────────────────────────────────────────
+// The pick reads cached probe results only. A stale cache starts a background
+// refresh and the request never waits on a probe: fail-open keeps the
+// declared chain order, and the error cache catches real failures. A
+// missing/unknown value also fails open (the rung is tried once).
+const PROBE_TTL_MS = 30_000;
+interface ProbeSlot {
+  at: number;
+  live: boolean;
+  busy: boolean;
+}
+const probes: { go: ProbeSlot; ds: ProbeSlot } = {
+  go: { at: 0, live: true, busy: false },
+  ds: { at: 0, live: true, busy: false },
+};
+
+/** OpenCode GO subscription quota: live while monthly usage percent < 100. */
+async function fetchGoLive(ctx: Context): Promise<boolean> {
+  try {
+    const credentials = service<{ resolve(name: string): Promise<{ value?: string } | null | undefined> }>(
+      ctx,
+      "credentials",
+    );
+    const key = (await credentials?.resolve("OPENCODE_GO_API_KEY"))?.value;
+    if (!key) return true; // no key: assume quota remains, the error cache catches
+    const res = await fetch("https://opencode.ai/zen/go/v1/usage", {
+      headers: { Authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) return true;
+    const data = (await res.json()) as { usage?: { monthly?: { percent?: unknown } } };
+    const percent = data?.usage?.monthly?.percent;
+    if (typeof percent !== "number") return true; // unknown window: fail open
+    return percent < 100;
+  } catch {
+    return true; // a probe must never break a request
+  }
+}
+
+/** DeepSeek balance: live while total_balance > 0 (curl via subprocess). */
+async function fetchDsLive(ctx: Context): Promise<boolean> {
+  try {
+    const credentials = service<{ resolve(name: string): Promise<{ value?: string } | null | undefined> }>(
+      ctx,
+      "credentials",
+    );
+    const subprocess = service<{
+      spawn(options: unknown): {
+        done: Promise<{ exitCode: number }>;
+        collected?: { stdout?: { readFrom(offset: number): { text: string } } };
+      };
+    }>(ctx, "subprocess");
+    const cred = await credentials?.resolve("DEEPSEEK_API_KEY");
+    if (!cred?.value || !subprocess) return true;
+    const sandboxPolicy = service<{ workspaceRoot?: string }>(ctx, "sandboxPolicy");
+    const handle = subprocess.spawn({
+      argv: [
+        "curl", "-sS", "--max-time", "15",
+        "-H", `Authorization: Bearer ${cred.value}`,
+        "https://api.deepseek.com/user/balance",
+      ],
+      cwd: sandboxPolicy?.workspaceRoot ?? "/",
+      stdio: {
+        stdin: "ignore",
+        stdout: { maxBytes: 65536 },
+        stderr: { maxBytes: 4096 },
+      },
+      graceMs: 20_000,
+    });
+    const outcome = await handle.done;
+    const out = handle.collected?.stdout ? handle.collected.stdout.readFrom(0).text : "";
+    if (outcome.exitCode !== 0 || !out) return true;
+    const json = JSON.parse(out) as { balance_infos?: Array<{ total_balance?: unknown }> };
+    const total = json?.balance_infos?.[0]?.total_balance;
+    if (typeof total !== "number") return true; // unknown: fail open
+    return total > 0;
+  } catch {
+    return true; // a probe must never break a request
+  }
+}
+
+/** Read one probe slot; refresh it in the background when stale. */
+function liveNow(slot: ProbeSlot, fetchLive: () => Promise<boolean>): boolean {
+  if (slot.at !== 0 && Date.now() - slot.at < PROBE_TTL_MS) return slot.live;
+  if (!slot.busy) {
+    slot.busy = true;
+    void fetchLive()
+      .then((live) => {
+        slot.at = Date.now();
+        slot.live = live;
+      })
+      .catch(() => {})
+      .finally(() => {
+        slot.busy = false;
+      });
+  }
+  return slot.live; // stale or never fetched: fail open
+}
+
+function goLiveNow(ctx: Context): boolean {
+  return liveNow(probes.go, () => fetchGoLive(ctx));
+}
+
+function dsLiveNow(ctx: Context): boolean {
+  return liveNow(probes.ds, () => fetchDsLive(ctx));
+}
+
+/**
+ * Order a chain's go/ds tail live-first at selection time. The opencode-zen
+ * free tier and every other rung keep their order. Among the quota-checked
+ * rungs (opencode-go, deepseek-official) the live choice is go-sub while
+ * monthly usage percent < 100, else deepseek-official while balance > 0,
+ * else opencode-go usage billing. A chain with fewer than two quota rungs
+ * (or none) passes through unchanged.
+ */
+function quotaAwareChain(ctx: Context, chain: Level[]): Level[] {
+  const goIdx = chain.findIndex((level) => level.provider === "opencode-go");
+  const dsIdx = chain.findIndex((level) => level.provider === "deepseek-official");
+  if (goIdx < 0 || dsIdx < 0) return chain;
+  const goLive = goLiveNow(ctx);
+  const dsLive = goLive ? true : dsLiveNow(ctx);
+  const liveFirstGo = goLive || !dsLive;
+  if (liveFirstGo === goIdx < dsIdx) return chain; // the live choice is already first
+  const result = chain.slice();
+  result[goIdx] = chain[dsIdx];
+  result[dsIdx] = chain[goIdx];
+  return result;
+}
+
+/**
+ * The active profile entry's chain for one agent depth. Depth-0 rides the
+ * orchestrator chain; any spawned child (depth >= 1) rides the subagent
+ * chain. Falls back to the other named chain, then to the legacy single
+ * `routes` shape, then to [].
+ */
+function chainForDepth(ctx: Context, depth: number): Level[] {
   const settings = service<SettingsService>(ctx, "settings");
   const profile = settings?.get(PROFILE_NS) as ProfileSettings | undefined;
-  return normalizeEntry(activeEntry(profile));
+  return chainOf(activeEntry(profile), depth >= 1 ? "subagent" : "orchestrator");
+}
+
+/** The quota-ordered chain for one depth. The error cache filters at walk time. */
+function effectiveChain(ctx: Context, depth: number): Level[] {
+  return quotaAwareChain(ctx, chainForDepth(ctx, depth));
 }
 
 interface RoleSpec {
@@ -213,18 +422,17 @@ const ROLES: RoleSpec[] = [
 ];
 
 /**
- * Resolve one role's route HEAD at call time: the pin, else the profile
- * namespace's active entry head, else undefined (inherit
- * agent-default-model). Failover beyond the head is the waterfall's job.
+ * Resolve one role's route HEAD at call time: the pin, else the active
+ * profile's subagent chain head (role children are depth >= 1, so they ride
+ * the subagent chain), else undefined (inherit agent-default-model). The
+ * head skips rungs the error cache has down. Failover beyond the head is the
+ * waterfall's job.
  */
-function resolveHead(
-  pin: unknown,
-  settings: SettingsService | undefined,
-): RouteCandidate | undefined {
+function resolveHead(ctx: Context, pin: unknown): RouteCandidate | undefined {
   const pinned = normalizeEntry(pin);
   if (pinned.length > 0) return pinned[0];
-  const profile = settings?.get(PROFILE_NS) as ProfileSettings | undefined;
-  return normalizeEntry(activeEntry(profile))[0];
+  const chain = effectiveChain(ctx, 1);
+  return chain.find((level) => !isCachedDown(level));
 }
 
 /** Human-readable name of the route a dispatch used. */
@@ -271,8 +479,7 @@ function registerRoleTool(
 
         // Lazy lookup at call time: the head must reflect the CURRENT
         // settings value, and the plugin must load with no provider mounted.
-        const settings = service<SettingsService>(ctx, "settings");
-        const head = resolveHead(config.roles?.[spec.toolName as keyof NonNullable<ProfilesConfig["roles"]>], settings);
+        const head = resolveHead(ctx, config.roles?.[spec.toolName as keyof NonNullable<ProfilesConfig["roles"]>]);
         const provider = config.provider ?? "spawn";
         const request: SubagentStartRequest = {
           label: args.description,
@@ -324,16 +531,19 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
     const proposal = (await next()) as { provider?: string; model?: string } | undefined;
     if (!proposal?.provider || !proposal.model) return proposal;
 
-    const chain = activeChain(ctx);
+    const p = payload as { agent?: object; turn?: unknown; step?: unknown; signal?: AbortSignal };
+    if (!p.agent) return proposal;
+
+    // W21: the chain rides the agent's DEPTH (0 -> orchestrator, child ->
+    // subagent) and the go/ds tail is reordered by quota. The error cache is
+    // honored while walking below.
+    const chain = effectiveChain(ctx, depthOf(p.agent));
     // Failover applies from the matched level onward; unmatched requests
     // (a manual picker choice off-chain, an unrelated provider) pass through.
     const matched = chain.findIndex(
       (level) => level.provider === proposal.provider && level.model === proposal.model,
     );
     if (matched < 0) return proposal;
-
-    const p = payload as { agent?: object; turn?: unknown; step?: unknown; signal?: AbortSignal };
-    if (!p.agent) return proposal;
 
     const stepKey = keyOf(p.turn, p.step);
     let s = state.get(p.agent);
@@ -344,10 +554,14 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
 
     const llm = service<LlmService>(ctx, "llm");
 
-    // Skip levels that would fail before streaming. An abort during the
-    // probe must surface as an abort, not eat every level.
+    // Skip rungs the error cache has down, then levels that would fail
+    // before streaming. An abort during the probe must surface as an abort.
     while (s.cursor < s.levels.length) {
       const candidate = s.levels[s.cursor];
+      if (isCachedDown(candidate)) {
+        s.cursor += 1;
+        continue;
+      }
       try {
         await llm?.resolveCallConfig(
           { ...proposal, provider: candidate.provider, model: candidate.model },
@@ -362,6 +576,7 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
           code: err?.code ?? "UNKNOWN",
           message: err?.message ?? String(error),
         });
+        markDown(candidate, err?.code, err?.message ?? String(error));
         s.cursor += 1;
       }
     }
@@ -407,6 +622,9 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
       s.failures.push({ level: cur, code: failure.code ?? "UNKNOWN", message: failure.message ?? "" });
     }
 
+    // W21: a persistent fault marks the rung down so later selections skip it.
+    markDown(cur, failure.code, failure.message ?? "");
+
     // An "always" adapter retries itself endlessly; cap it, then advance.
     if (p.retryPolicy?.mode === "always") {
       s.retries += 1;
@@ -415,6 +633,9 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
     s.retries = 0;
 
     s.cursor += 1;
+    // Skip rungs the error cache has down while walking the chain.
+    while (s.cursor < s.levels.length && isCachedDown(s.levels[s.cursor])) s.cursor += 1;
+
     if (s.cursor < s.levels.length) {
       const nxt = s.levels[s.cursor];
       ctx.logger.warn(
@@ -436,6 +657,21 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
   });
 }
 
+/**
+ * Push the active chain's head into agent-default-model so future sessions
+ * compose on the flipped profile's primary route. The orchestrator chain
+ * head IS the profile head (the orchestrator chain matches the pre-W21 flat
+ * chain for both profiles).
+ */
+function syncDefaultModel(ctx: Context, profile: ProfileSettings | undefined): void {
+  const head = chainOf(activeEntry(profile), "orchestrator")[0];
+  if (!head) return;
+  const agentDefaultModel = service<{
+    saveSelection(next: { provider: string; model: string }): Promise<void>;
+  }>(ctx, "agentDefaultModel");
+  void agentDefaultModel?.saveSelection({ provider: head.provider, model: head.model }).catch(() => {});
+}
+
 export function apply(ctx: Context, config: unknown): void {
   const cfg = (config ?? {}) as ProfilesConfig;
 
@@ -444,10 +680,11 @@ export function apply(ctx: Context, config: unknown): void {
   }
   registerFailover(ctx, cfg.alwaysMaxRetries ?? 2);
 
-  // Main-agent sync: only on profile flips, never at boot, never on writes
-  // the model picker made to its own namespace.
+  // Main-agent sync + error-cache reset: only on profile flips, never at
+  // boot, never on writes the model picker made to its own namespace.
   ctx.on("settings/updated", (ns, next) => {
     if (ns !== PROFILE_NS) return;
+    downCache.clear();
     syncDefaultModel(ctx, next as ProfileSettings);
   });
 

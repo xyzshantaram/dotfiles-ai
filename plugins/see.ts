@@ -39,7 +39,7 @@ import { defineTool } from "@deepseek-ai/dsh-tools";
 import { installSettingsSection, settingsNamespace } from "@deepseek-ai/dsh-settings";
 import { scopeOf } from "@deepseek-ai/dsh-scope";
 import type { SubagentStartRequest } from "@deepseek-ai/dsh-subagent";
-import { normalizeEntry } from "./profile-routes";
+import { chainOf } from "./profile-routes";
 import { outputText } from "./shared/output-text";
 export const name = "see";
 
@@ -52,14 +52,27 @@ const PROFILE_NS = settingsNamespace("profile");
 
 /**
  * Schema of the profile settings section. Fields are optional at runtime.
- * Each work/personal entry is one route or an ordered `routes` chain (shared
- * data model in plugins/profile-routes.ts); see takes the chain head.
+ * Since W21 each work/personal entry is either a legacy route/chain or a
+ * nested pair of named chains (orchestrator for depth-0 agents, subagent
+ * for spawned children). The see child is a spawned child, but its head
+ * comes from the ORCHESTRATOR chain: that chain is byte-identical to the
+ * pre-W21 flat chain for both profiles, so the vision route does not move.
  */
 const ROUTE_ENTRY = z.object({ provider: z.string(), model: z.string() });
+const CHAIN_ENTRY = z.object({ routes: z.array(ROUTE_ENTRY) });
+const CHAIN_OR_ROUTE = z.union([ROUTE_ENTRY, CHAIN_ENTRY]);
+const PROFILE_ENTRY = z.union([
+  ROUTE_ENTRY,
+  CHAIN_ENTRY,
+  z.object({
+    orchestrator: CHAIN_OR_ROUTE.default(void 0),
+    subagent: CHAIN_OR_ROUTE.default(void 0),
+  }),
+]);
 const PROFILE_SCHEMA = z.object({
   active: z.string().default("work"),
-  work: z.union([ROUTE_ENTRY, z.object({ routes: z.array(ROUTE_ENTRY) })]),
-  personal: z.union([ROUTE_ENTRY, z.object({ routes: z.array(ROUTE_ENTRY) })]),
+  work: PROFILE_ENTRY,
+  personal: PROFILE_ENTRY,
 });
 
 /** One resolved model route. */
@@ -101,7 +114,7 @@ function readProfile(source: () => ProfileSettings | undefined): ProfileRoute {
   const settings = source();
   const active = settings?.active ?? "work";
   const entry = active === "personal" ? settings?.personal : settings?.work;
-  const head = normalizeEntry(entry)[0];
+  const head = chainOf(entry, "orchestrator")[0];
   if (head) return { provider: head.provider, model: head.model };
   return active === "personal" ? DEFAULT_ROUTES.personal : DEFAULT_ROUTES.work;
 }

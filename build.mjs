@@ -16,6 +16,7 @@ const entries = [
   ["plugins/skill-gate.ts", "plugins/skill-gate.js"],
   ["plugins/profiles.ts", "plugins/profiles.js"],
   ["plugins/ask-interrupt.ts", "plugins/ask-interrupt.js"],
+  ["plugins/tmp-dsh-shared.ts", "plugins/tmp-dsh-shared.js"],
 ];
 
 for (const [entry, outfile] of entries) {
@@ -65,6 +66,41 @@ await build({
     `window.__ModuleLoader__.load({\n\tid: "approval-comment",\n\tfactory: (require) => {\n\t\tvar module = { exports: {} };\n\t\tvar exports = module.exports;\n\t\tObject.defineProperty(exports, Symbol.toStringTag, { value: "Module" });\n${bundled}\n\t\treturn module.exports;\n\t}\n});\n`,
   );
   await rm(join(here, "plugins/approval-comment/dist/_client.bundle.js"));
+}
+
+// W18: combined subscription panel (OpenCode GO + Claude/meridian) CLIENT
+// plugin package. The host half (index.js) copies verbatim, same as
+// approval-comment. The client half bundles as factory-form CJS (react
+// external) and gets wrapped in the module-loader facade.
+const subscriptionsHostSources = [
+  ["plugins/subscriptions/src/index.js", "plugins/subscriptions/lib/index.js"],
+];
+
+for (const [source, outfile] of subscriptionsHostSources) {
+  const dest = join(here, outfile);
+  await mkdir(dirname(dest), { recursive: true });
+  await copyFile(join(here, source), dest);
+}
+
+await build({
+  entryPoints: [join(here, "plugins/subscriptions/src/client.cjs")],
+  bundle: true,
+  platform: "browser",
+  format: "cjs",
+  target: "es2022",
+  external: ["react", "react/jsx-runtime", "react-dom/client", "@deepseek-ai/*"],
+  outfile: join(here, "plugins/subscriptions/dist/_client.bundle.js"),
+  logLevel: "info",
+});
+{
+  const bundled = (
+    await readFile(join(here, "plugins/subscriptions/dist/_client.bundle.js"), "utf8")
+  ).replace(/\s+$/, "");
+  await writeFile(
+    join(here, "plugins/subscriptions/lib/client.js"),
+    `window.__ModuleLoader__.load({\n\tid: "subscriptions",\n\tfactory: (require) => {\n\t\tvar module = { exports: {} };\n\t\tvar exports = module.exports;\n\t\tObject.defineProperty(exports, Symbol.toStringTag, { value: "Module" });\n${bundled}\n\t\treturn module.exports;\n\t}\n});\n`,
+  );
+  await rm(join(here, "plugins/subscriptions/dist/_client.bundle.js"));
 }
 
 // W8/W13 family: H2+H3 tool-render CLIENT plugin package. The client half
