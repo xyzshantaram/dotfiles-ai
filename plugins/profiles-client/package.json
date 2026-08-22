@@ -1,0 +1,26 @@
+{
+  "name": "profiles-client",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "W6: profile-aware model seat with match badge, session cost chip, and title rewriter.",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./dist/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "dist",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "license": "MIT"
+}
