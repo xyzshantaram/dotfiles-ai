@@ -19,8 +19,39 @@ STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}"
 PID_FILE="$STATE_DIR/caffeine.pid"
 WHO="caffeine-skill"
 
-is_on() {
-    [[ -f "$PID_FILE" ]] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null
+# Returns true when a live caffeine inhibitor exists. Uses the PID file
+# first, then falls back to matching the inhibitor command line. This
+# covers a missing PID file or a stale PID inside it.
+inhibitor_alive() {
+    [[ -n "$(all_inhibitor_pids)" ]]
+}
+
+# Prints the PID stored in the PID file, but only when that process is
+# still alive. Prints nothing when the file is missing or the PID is
+# dead. Always returns success so `set -e` does not stop the script.
+recorded_pid() {
+    local pid
+    if [[ -f "$PID_FILE" ]]; then
+        pid="$(cat "$PID_FILE" 2>/dev/null || true)"
+        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+            echo "$pid"
+        fi
+    fi
+    return 0
+}
+
+# Prints the PID of every live caffeine inhibitor, one per line. This
+# adds a command-line match for a lock that lost its PID file. The
+# --who marker is unique to this skill. Matching it cannot reach an
+# unrelated inhibitor lock.
+all_inhibitor_pids() {
+    recorded_pid
+    pgrep -f "systemd-inhibit .*--who=$WHO" 2>/dev/null || true
+}
+
+# Prints one live caffeine inhibitor PID for display in `status`.
+live_inhibitor_pid() {
+    all_inhibitor_pids | head -n1
 }
 
 # Prints "on", "off", or "unknown" (no kscreen-doctor, or it returned
@@ -51,8 +82,8 @@ wait_dpms_state() {
 
 status() {
     local caff_state disp_state
-    if is_on; then
-        caff_state="ON (pid $(cat "$PID_FILE"))"
+    if inhibitor_alive; then
+        caff_state="ON (pid $(live_inhibitor_pid))"
     else
         caff_state="OFF"
     fi
@@ -65,16 +96,19 @@ status() {
 }
 
 on() {
-    if is_on; then
+    if inhibitor_alive; then
         status
         return 0
     fi
-    rm -f "$PID_FILE" 2>/dev/null || true
     systemd-inhibit --what=sleep:idle --who="$WHO" \
         --why="Keeping system awake on user request" --mode=block \
         sleep infinity &
+    # Record the PID at spawn. Write to a temp file and move it into
+    # place so a failure never leaves a half-written PID file. If the
+    # write still fails, `off` finds the lock by its command line.
+    printf '%s\n' "$!" >"$PID_FILE.tmp" 2>/dev/null &&
+        mv "$PID_FILE.tmp" "$PID_FILE" 2>/dev/null || true
     disown
-    echo $! >"$PID_FILE"
     status
 }
 
@@ -86,15 +120,18 @@ off() {
         kscreen-doctor --dpms on
         wait_dpms_state "on"
     fi
-    if [[ -f "$PID_FILE" ]]; then
-        kill "$(cat "$PID_FILE")" 2>/dev/null || true
-        rm -f "$PID_FILE" 2>/dev/null || true
+    local pids
+    pids="$(all_inhibitor_pids)"
+    if [[ -n "$pids" ]]; then
+        # shellcheck disable=SC2086 # one PID per argument is intended
+        kill $pids 2>/dev/null || true
     fi
+    rm -f "$PID_FILE" 2>/dev/null || true
     status
 }
 
 blank() {
-    if ! is_on; then
+    if ! inhibitor_alive; then
         echo "caffeine is OFF. Turn it on first: caffeine.sh on" >&2
         exit 1
     fi
@@ -112,7 +149,7 @@ on | start) on ;;
 off | stop) off ;;
 status) status ;;
 toggle)
-    if is_on; then off; else on; fi
+    if inhibitor_alive; then off; else on; fi
     ;;
 blank) blank ;;
 *)
