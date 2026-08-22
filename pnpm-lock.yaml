@@ -11,6 +11,9 @@ importers:
       '@cad0p/unbash-walker':
         specifier: 0.1.0
         version: 0.1.0
+      highlight.js:
+        specifier: 11.12.0
+        version: 11.12.0
       unbash:
         specifier: 4.0.10
         version: 4.0.10
@@ -514,6 +517,10 @@ packages:
     engines: {node: '>=18'}
     hasBin: true
 
+  highlight.js@11.12.0:
+    resolution: {integrity: sha512-nbfWpyRMcMrPMmDwJB+dhX/eiaPKtc2RB+0QZskqJ3WjRA/FDS0e9hZrx8EC/lbEv8gXy98FcDbNa/dspAaJMg==}
+    engines: {node: '>=12.0.0'}
+
   js-yaml@4.3.1:
     resolution: {integrity: sha512-CY6crGq313MX8GkwvB7tzgp99vjQxY1++5y10/BKN/GUfHqWaOGQMNZkBvqSzsZKWk/ijwHlWzzkLulsGHhjWQ==}
     hasBin: true
@@ -882,6 +889,8 @@ snapshots:
       '@esbuild/win32-arm64': 0.28.2
       '@esbuild/win32-ia32': 0.28.2
       '@esbuild/win32-x64': 0.28.2
+
+  highlight.js@11.12.0: {}
 
   js-yaml@4.3.1:
     dependencies:

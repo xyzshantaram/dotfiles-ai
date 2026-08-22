@@ -1,5 +1,5 @@
 import { build } from "esbuild";
-import { copyFile, mkdir } from "node:fs/promises";
+import { copyFile, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -61,3 +61,57 @@ for (const [source, outfile] of approvalCommentSources) {
   await copyFile(join(here, source), dest);
 }
 
+// W8/W13 family: H2+H3 tool-render CLIENT plugin package. The client half
+// bundles as factory-form CJS (highlight.js inlined; the browser loader
+// table cannot resolve npm deps) and gets wrapped in the module-loader
+// facade. react and @deepseek-ai stay external. The host half copies
+// verbatim, same as approval-comment.
+await build({
+  entryPoints: [join(here, "plugins/tool-render/src/client.cjs")],
+  bundle: true,
+  platform: "browser",
+  format: "cjs",
+  target: "es2022",
+  external: ["react", "react/jsx-runtime", "react-dom/client", "@deepseek-ai/*"],
+  outfile: join(here, "plugins/tool-render/dist/_client.bundle.js"),
+  logLevel: "info",
+});
+// Why the wrapper asymmetry (review nit, 2026-08-22): tool-render bundles CJS
+// with npm deps inlined, so esbuild's CJS output needs the module-loader facade
+// with Symbol.toStringTag to expose a shape the loader accepts. profiles-client
+// has no npm deps, so it emits a plain IIFE that calls window.__ModuleLoader__.
+// load itself; no facade is needed. Not unifying on one wrapper: the IIFE form
+// is simpler, and the facade form exists only because esbuild cannot emit a bare
+// load call around an inlined bundle without it.
+{
+  const bundled = (
+    await readFile(join(here, "plugins/tool-render/dist/_client.bundle.js"), "utf8")
+  ).replace(/\s+$/, "");
+  await writeFile(
+    join(here, "plugins/tool-render/dist/client.js"),
+    `window.__ModuleLoader__.load({\n\tid: "tool-render",\n\tfactory: (require) => {\n\t\tvar module = { exports: {} };\n\t\tvar exports = module.exports;\n\t\tObject.defineProperty(exports, Symbol.toStringTag, { value: "Module" });\n${bundled}\n\t\treturn module.exports;\n\t}\n});\n`,
+  );
+  await rm(join(here, "plugins/tool-render/dist/_client.bundle.js"));
+}
+await copyFile(
+  join(here, "plugins/tool-render/src/index.js"),
+  join(here, "plugins/tool-render/dist/index.js"),
+);
+
+// W6: profiles-client CLIENT plugin package. The seat, cost chip, and title
+// rewriter live in the browser half; the host half owns the `prices` settings
+// namespace and ships verbatim (W8 pattern). No npm deps to inline, so the
+// browser half bundles as a plain IIFE that calls window.__ModuleLoader__.load
+// itself at evaluation.
+await build({
+  entryPoints: [join(here, "plugins/profiles-client/src/client.js")],
+  bundle: true,
+  platform: "browser",
+  format: "iife",
+  outfile: join(here, "plugins/profiles-client/dist/client.js"),
+  logLevel: "info",
+});
+await copyFile(
+  join(here, "plugins/profiles-client/src/index.js"),
+  join(here, "plugins/profiles-client/lib/index.js"),
+);

@@ -1,0 +1,8 @@
+# W6 — profiles-client (client plugin).
+# The profile-aware model seat, the cost chip, and the title rewriter live in
+# the ./client bundle. The host row keeps the client-module registry mounting
+# this package in the web profile and serving that bundle. The host half also
+# owns the `prices` settings namespace the cost chip reads.
+- insert:
+    - id: profiles-client
+      name: profiles-client

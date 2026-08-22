@@ -1,0 +1,29 @@
+{
+  "name": "tool-render",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "H2+H3: readable edit/batch_edit diffs, syntax-highlighted read output, styled plain bash output in the tool-call render cell.",
+  "main": "dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./client": "./dist/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-primitives"
+      ]
+    }
+  },
+  "license": "MIT"
+}
