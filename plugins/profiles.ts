@@ -39,7 +39,10 @@
  * deepseek balance, then opencode-go usage billing). A persistent fault
  * (no-credits / model-unavailable / auth / bad-request) marks the rung down
  * in a host-side cache for >= 10 minutes; selections inside the window skip
- * the dead rung. The cache clears on a `profile` namespace update.
+ * the dead rung. The cache clears on a `profile` namespace update. Command
+ * Code rungs are skipped while either Command Code window (5-hour or
+ * weekly) is exhausted; the flag is cached from the same-origin
+ * /subscriptions/commandcode-credits route for 5 minutes and fails open.
  *
  * There is NO second config surface: the chains ARE the `profile` namespace
  * entries (see.ts owns the namespace; this plugin reads it live). Flipping
@@ -113,11 +116,13 @@ import z from "@deepseek-ai/schemastery";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import type {} from "@deepseek-ai/dsh-tools";
 import type { SubagentStartRequest } from "@deepseek-ai/dsh-subagent";
+import type { LlmCallConfig } from "@deepseek-ai/dsh-llm";
 import { settingsNamespace } from "@deepseek-ai/dsh-settings";
 import type {} from "@deepseek-ai/dsh-settings";
-import type {} from "@deepseek-ai/dsh-agent";
+import type { RequestErrorAction } from "@deepseek-ai/dsh-agent";
 import { normalizeEntry, chainOf, type RouteCandidate } from "./profile-routes";
 import { outputText } from "./shared/output-text";
+import type { IncomingMessage, ServerResponse } from "node:http";
 
 export const name = "profiles";
 
@@ -153,6 +158,8 @@ type ProfilesConfig = {
 /** Shape of the `profile` settings namespace owned by see.ts. */
 interface ProfileSettings {
   active?: string;
+  /** Named-chain library: name -> { routes: [...] }; string refs resolve here. */
+  chains?: Record<string, unknown>;
   work?: unknown;
   personal?: unknown;
 }
@@ -359,6 +366,89 @@ function dsLiveNow(ctx: Context): boolean {
   return liveNow(probes.ds, () => fetchDsLive(ctx));
 }
 
+// ── Command Code quota (W29) ───────────────────────────────────────────────
+// Command Code enforces two rolling windows (5 hours and weekly), each with
+// a hard cap. When either window is exhausted the provider rejects new
+// requests, so failover should skip command-code rungs BEFORE trying them
+// rather than after one fails. The quota comes from the same-origin
+// /subscriptions/commandcode-credits route the subscriptions plugin serves.
+// The result is cached for 5 minutes and refreshed in the background, so a
+// request never waits on the check. Any failure (route absent, no web
+// server, network) treats Command Code as available: fail-open, and the
+// error cache still catches real failures. A window reset clears the flag
+// on the next check, because the fresh fetch then reports used < cap.
+const COMMAND_CODE_QUOTA_TTL_MS = 300_000; // 5 minutes
+const COMMAND_CODE_PROVIDER = "command-code";
+const COMMAND_CODE_QUOTA_PATH = "/subscriptions/commandcode-credits";
+
+interface CommandCodeWindow {
+  used?: unknown;
+  cap?: unknown;
+  resetAt?: unknown;
+}
+
+/** True when a window's used is a number at or past its cap. */
+function windowExhausted(window: CommandCodeWindow | undefined): boolean {
+  if (!window || typeof window !== "object") return false;
+  const { used, cap } = window;
+  return typeof used === "number" && typeof cap === "number" && used >= cap;
+}
+
+/**
+ * Fetch Command Code quota from the same-origin route. Fail-open: any
+ * error reports the provider as available.
+ */
+async function fetchCommandCodeExhausted(ctx: Context): Promise<boolean> {
+  try {
+    const server = service<{ host?: string; port?: number }>(ctx, "webServer");
+    const port = server?.port;
+    if (!port) return false; // no web server mounted: fail open
+    const host = server?.host && server.host !== "0.0.0.0" ? server.host : "127.0.0.1";
+    const res = await fetch(`http://${host}:${port}${COMMAND_CODE_QUOTA_PATH}`, {
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) return false;
+    const data = (await res.json()) as {
+      ok?: boolean;
+      windows?: { fiveHour?: CommandCodeWindow; weekly?: CommandCodeWindow };
+    };
+    if (data?.ok === false) return false; // route answered: no key configured
+    const windows = data?.windows;
+    return Boolean(windows) && (windowExhausted(windows.fiveHour) || windowExhausted(windows.weekly));
+  } catch {
+    return false; // a quota check must never break a request
+  }
+}
+
+let commandCodeQuotaAt = 0;
+let commandCodeExhaustedFlag = false;
+let commandCodeQuotaBusy = false;
+
+/** Read the cached flag; refresh in the background when stale. */
+function commandCodeExhaustedNow(ctx: Context): boolean {
+  if (commandCodeQuotaAt !== 0 && Date.now() - commandCodeQuotaAt < COMMAND_CODE_QUOTA_TTL_MS) {
+    return commandCodeExhaustedFlag;
+  }
+  if (!commandCodeQuotaBusy) {
+    commandCodeQuotaBusy = true;
+    void fetchCommandCodeExhausted(ctx)
+      .then((exhausted) => {
+        commandCodeQuotaAt = Date.now();
+        commandCodeExhaustedFlag = exhausted;
+      })
+      .catch(() => {})
+      .finally(() => {
+        commandCodeQuotaBusy = false;
+      });
+  }
+  return commandCodeExhaustedFlag; // stale or never fetched: fail open
+}
+
+/** A level is skipped when it rides command-code and the quota is out. */
+function isQuotaExhausted(level: Level, ctx: Context): boolean {
+  return level.provider === COMMAND_CODE_PROVIDER && commandCodeExhaustedNow(ctx);
+}
+
 /**
  * Order a chain's go/ds tail live-first at selection time. The opencode-zen
  * free tier and every other rung keep their order. Among the quota-checked
@@ -385,12 +475,13 @@ function quotaAwareChain(ctx: Context, chain: Level[]): Level[] {
  * The active profile entry's chain for one agent depth. Depth-0 rides the
  * orchestrator chain; any spawned child (depth >= 1) rides the subagent
  * chain. Falls back to the other named chain, then to the legacy single
- * `routes` shape, then to [].
+ * `routes` shape, then to []. String fields resolve through the profile's
+ * `chains` map.
  */
 function chainForDepth(ctx: Context, depth: number): Level[] {
   const settings = service<SettingsService>(ctx, "settings");
   const profile = settings?.get(PROFILE_NS) as ProfileSettings | undefined;
-  return chainOf(activeEntry(profile), depth >= 1 ? "subagent" : "orchestrator");
+  return chainOf(activeEntry(profile), depth >= 1 ? "subagent" : "orchestrator", profile?.chains);
 }
 
 /** The quota-ordered chain for one depth. The error cache filters at walk time. */
@@ -429,10 +520,12 @@ const ROLES: RoleSpec[] = [
  * waterfall's job.
  */
 function resolveHead(ctx: Context, pin: unknown): RouteCandidate | undefined {
-  const pinned = normalizeEntry(pin);
+  const settings = service<SettingsService>(ctx, "settings");
+  const profile = settings?.get(PROFILE_NS) as ProfileSettings | undefined;
+  const pinned = normalizeEntry(pin, profile?.chains);
   if (pinned.length > 0) return pinned[0];
   const chain = effectiveChain(ctx, 1);
-  return chain.find((level) => !isCachedDown(level));
+  return chain.find((level) => !isCachedDown(level) && !isQuotaExhausted(level, ctx));
 }
 
 /** Human-readable name of the route a dispatch used. */
@@ -481,7 +574,7 @@ function registerRoleTool(
         // settings value, and the plugin must load with no provider mounted.
         const head = resolveHead(ctx, config.roles?.[spec.toolName as keyof NonNullable<ProfilesConfig["roles"]>]);
         const provider = config.provider ?? "spawn";
-        const request: SubagentStartRequest = {
+        const request: Omit<SubagentStartRequest, "signal"> = {
           label: args.description,
           prompt: [{ type: "text", text: args.prompt }],
           parent,
@@ -528,7 +621,7 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
   const keyOf = (turn: unknown, step: unknown): string => `${String(turn)}:${String(step)}`;
 
   ctx.on("agent/request", async (payload: unknown, next: () => Promise<unknown>) => {
-    const proposal = (await next()) as { provider?: string; model?: string } | undefined;
+    const proposal = (await next()) as LlmCallConfig;
     if (!proposal?.provider || !proposal.model) return proposal;
 
     const p = payload as { agent?: object; turn?: unknown; step?: unknown; signal?: AbortSignal };
@@ -537,18 +630,30 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
     // W21: the chain rides the agent's DEPTH (0 -> orchestrator, child ->
     // subagent) and the go/ds tail is reordered by quota. The error cache is
     // honored while walking below.
-    const chain = effectiveChain(ctx, depthOf(p.agent));
-    // Failover applies from the matched level onward; unmatched requests
-    // (a manual picker choice off-chain, an unrelated provider) pass through.
-    const matched = chain.findIndex(
-      (level) => level.provider === proposal.provider && level.model === proposal.model,
-    );
-    if (matched < 0) return proposal;
+      const chain = effectiveChain(ctx, depthOf(p.agent));
+      // A manual picker choice leads the levels: it is tried first, then the
+      // chain's remaining rungs. The choice may be the chain head (the list
+      // keeps every rung once) or off-chain (it prefixes the chain).
+      const agentDefaultModel = service<{
+        currentSelection(): { provider: string; model: string } | undefined;
+      }>(ctx, "agentDefaultModel");
+      const selection = agentDefaultModel?.currentSelection?.();
+      const levels = selection
+        ? [selection, ...chain.filter(
+            (level) => !(level.provider === selection.provider && level.model === selection.model),
+          )]
+        : chain;
+      // Failover applies from the matched level onward; unmatched requests
+      // (a pick for another rung, an unrelated provider) pass through.
+      const matched = levels.findIndex(
+        (level) => level.provider === proposal.provider && level.model === proposal.model,
+      );
+      if (matched < 0) return proposal;
 
     const stepKey = keyOf(p.turn, p.step);
     let s = state.get(p.agent);
     if (!s || s.stepKey !== stepKey) {
-      s = { stepKey, levels: chain, cursor: matched, retries: 0, failures: [] };
+      s = { stepKey, levels, cursor: matched, retries: 0, failures: [] };
       state.set(p.agent, s);
     }
 
@@ -558,7 +663,7 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
     // before streaming. An abort during the probe must surface as an abort.
     while (s.cursor < s.levels.length) {
       const candidate = s.levels[s.cursor];
-      if (isCachedDown(candidate)) {
+      if (isCachedDown(candidate) || isQuotaExhausted(candidate, ctx)) {
         s.cursor += 1;
         continue;
       }
@@ -592,7 +697,7 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
     return { ...proposal, provider: level.provider, model: level.model };
   });
 
-  ctx.on("agent/request-error", (payload: unknown, next: () => Promise<unknown>) => {
+  ctx.on("agent/request-error", (payload: unknown, next: () => Promise<RequestErrorAction>) => {
     const p = payload as {
       agent?: object;
       turn?: unknown;
@@ -634,7 +739,10 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
 
     s.cursor += 1;
     // Skip rungs the error cache has down while walking the chain.
-    while (s.cursor < s.levels.length && isCachedDown(s.levels[s.cursor])) s.cursor += 1;
+    while (
+      s.cursor < s.levels.length &&
+      (isCachedDown(s.levels[s.cursor]) || isQuotaExhausted(s.levels[s.cursor], ctx))
+    ) s.cursor += 1;
 
     if (s.cursor < s.levels.length) {
       const nxt = s.levels[s.cursor];
@@ -646,7 +754,7 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
         nxt.provider,
         nxt.model,
       );
-      return { kind: "retry" };
+      return { kind: "retry" } as unknown as Promise<RequestErrorAction>;
     }
 
     const tried = s.failures
@@ -664,13 +772,288 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
  * chain for both profiles).
  */
 function syncDefaultModel(ctx: Context, profile: ProfileSettings | undefined): void {
-  const head = chainOf(activeEntry(profile), "orchestrator")[0];
+  const head = chainOf(activeEntry(profile), "orchestrator", profile?.chains)[0];
   if (!head) return;
   const agentDefaultModel = service<{
     saveSelection(next: { provider: string; model: string }): Promise<void>;
   }>(ctx, "agentDefaultModel");
   void agentDefaultModel?.saveSelection({ provider: head.provider, model: head.model }).catch(() => {});
 }
+
+// ── W24: settings panel routes ────────────────────────────────────────────
+// GET /profiles/config returns the resolved `profile` namespace: string chain
+// refs resolve through profile.chains, then the entry normalizes to the
+// canonical nested shape plus live quota/error-cache info. PUT validates
+// strictly and writes through the SAME settings service this plugin reads
+// (settings.replace on the registered namespace), so the write hot-applies:
+// the settings/updated listener below clears the error cache and re-syncs the
+// default model, and every selection reads the namespace live.
+
+/** Write-side of the settings service this plugin already reads. */
+interface SettingsWriteService extends SettingsService {
+  replace(ns: string, section: unknown): Promise<void>;
+}
+
+/** One canonical W21 entry: both named chains, each an ordered routes list. */
+interface CanonicalEntry {
+  orchestrator: { routes: RouteCandidate[] };
+  subagent: { routes: RouteCandidate[] };
+}
+
+function canonicalEntry(entry: unknown, chains?: Record<string, unknown>): CanonicalEntry {
+  return {
+    orchestrator: { routes: chainOf(entry, "orchestrator", chains) },
+    subagent: { routes: chainOf(entry, "subagent", chains) },
+  };
+}
+
+function canonicalConfig(profile: ProfileSettings | undefined) {
+  return {
+    active: profile?.active ?? "work",
+    chains: profile?.chains,
+    work: canonicalEntry(profile?.work, profile?.chains),
+    personal: canonicalEntry(profile?.personal, profile?.chains),
+  };
+}
+
+const MAX_BODY_BYTES = 64 * 1024;
+
+function sendJson(res: ServerResponse, status: number, body: unknown): void {
+  res.statusCode = status;
+  res.setHeader("content-type", "application/json; charset=utf-8");
+  res.setHeader("cache-control", "no-store");
+  res.end(JSON.stringify(body));
+}
+
+async function readBody(req: IncomingMessage): Promise<unknown> {
+  const declared = req.headers["content-length"];
+  if (declared !== undefined && Number(declared) > MAX_BODY_BYTES) {
+    throw new Error("request body too large");
+  }
+  const chunks: Buffer[] = [];
+  let received = 0;
+  for await (const chunk of req) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    received += buffer.byteLength;
+    if (received > MAX_BODY_BYTES) throw new Error("request body too large");
+    chunks.push(buffer);
+  }
+  const text = Buffer.concat(chunks).toString("utf8");
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error("body is not valid JSON");
+  }
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+type Validated<T> = { ok: true; value: T } | { ok: false; error: string };
+
+function validateRouteRow(value: unknown, path: string): Validated<RouteCandidate> {
+  if (!isPlainObject(value)) return { ok: false, error: `${path} must be an object` };
+  for (const key of Object.keys(value)) {
+    if (key !== "provider" && key !== "model") return { ok: false, error: `${path} has unknown key "${key}"` };
+  }
+  const provider = value.provider;
+  const model = value.model;
+  if (typeof provider !== "string" || provider.length === 0) {
+    return { ok: false, error: `${path}.provider must be a non-empty string` };
+  }
+  if (typeof model !== "string" || model.length === 0) {
+    return { ok: false, error: `${path}.model must be a non-empty string` };
+  }
+  return { ok: true, value: { provider, model } };
+}
+
+function validateChain(value: unknown, path: string): Validated<unknown> {
+  if (isPlainObject(value)) {
+    // {routes: [...]} form — validate each route pair.
+    for (const key of Object.keys(value)) {
+      if (key !== "routes") return { ok: false, error: `${path} has unknown key "${key}"` };
+    }
+    if (!Array.isArray(value.routes)) return { ok: false, error: `${path}.routes must be an array` };
+    for (let i = 0; i < value.routes.length; i++) {
+      const row = validateRouteRow(value.routes[i], `${path}.routes[${i}]`);
+      if (row.ok === false) return row;
+    }
+    return { ok: true, value };
+  }
+  if (Array.isArray(value)) {
+    // Composition array: each step is a string ("provider/model" or "chain:<name>")
+    // or a route pair object.
+    for (let i = 0; i < value.length; i++) {
+      const step = value[i];
+      if (typeof step === "string") {
+        if (step.length === 0) return { ok: false, error: `${path}[${i}] must be a non-empty string` };
+      } else if (isPlainObject(step)) {
+        const row = validateRouteRow(step, `${path}[${i}]`);
+        if (row.ok === false) return row;
+      } else {
+        return { ok: false, error: `${path}[${i}] must be a string or route pair` };
+      }
+    }
+    return { ok: true, value };
+  }
+  return { ok: false, error: `${path} must be an object ({routes}) or array (composition)` };
+}
+
+
+function validateEntry(value: unknown, path: string): Validated<{ orchestrator: unknown; subagent: unknown }> {
+  if (!isPlainObject(value)) return { ok: false, error: `${path} must be an object` };
+  for (const key of Object.keys(value)) {
+    if (key !== "orchestrator" && key !== "subagent") {
+      return { ok: false, error: `${path} has unknown key "${key}"` };
+    }
+  }
+  const orchestrator = validateChain(value.orchestrator, `${path}.orchestrator`);
+  if (orchestrator.ok === false) return orchestrator;
+  const subagent = validateChain(value.subagent, `${path}.subagent`);
+  if (subagent.ok === false) return subagent;
+  return { ok: true, value: { orchestrator: orchestrator.value, subagent: subagent.value } };
+}
+
+type ChainLibrary = Record<string, unknown>;
+
+function validateChains(value: unknown, path: string): Validated<ChainLibrary> {
+  if (!isPlainObject(value)) return { ok: false, error: `${path} must be an object` };
+  const result: ChainLibrary = {};
+  for (const key of Object.keys(value)) {
+    const chain = validateChain(value[key], `${path}.${key}`);
+    if (chain.ok === false) return chain;
+    result[key] = chain.value;
+  }
+  return { ok: true, value: result };
+}
+
+function validateSection(value: unknown): Validated<{
+  active: string;
+  work: unknown;
+  personal: unknown;
+  chains?: ChainLibrary;
+}> {
+  if (!isPlainObject(value)) return { ok: false, error: "config must be an object" };
+  for (const key of Object.keys(value)) {
+    if (key !== "active" && key !== "work" && key !== "personal" && key !== "chains") {
+      return { ok: false, error: `unknown key "${key}"` };
+    }
+  }
+  const active = value.active;
+  if (typeof active !== "string" || (active !== "work" && active !== "personal")) {
+    return { ok: false, error: 'active must be "work" or "personal"' };
+  }
+  const work = validateEntry(value.work, "work");
+  if (work.ok === false) return work;
+  const personal = validateEntry(value.personal, "personal");
+  if (personal.ok === false) return personal;
+  let chains: ChainLibrary | undefined;
+  if (value.chains !== undefined) {
+    const validatedChains = validateChains(value.chains, "chains");
+    if (validatedChains.ok === false) return validatedChains;
+    chains = validatedChains.value;
+  }
+  return { ok: true, value: { active, work: work.value, personal: personal.value, chains } };
+}
+
+function makeConfigHandler(ctx: Context) {
+  return async (req: IncomingMessage, res: ServerResponse) => {
+    if (req.method === "GET") {
+      const settings = service<SettingsService>(ctx, "settings");
+      const profile = settings?.get(PROFILE_NS) as ProfileSettings | undefined;
+      const goLive = goLiveNow(ctx);
+      const dsLive = goLive ? true : dsLiveNow(ctx);
+      sendJson(res, 200, {
+        ok: true,
+        config: canonicalConfig(profile),
+        quota: { goLive, dsLive },
+        errorCache: { ttlMs: ERROR_WINDOW_MS, down: [...downCache.keys()] },
+      });
+      return;
+    }
+    if (req.method === "PUT") {
+      const settings = service<SettingsWriteService>(ctx, "settings");
+      if (settings === undefined) {
+        sendJson(res, 503, { ok: false, error: "settings service unavailable" });
+        return;
+      }
+      let body: unknown;
+      try {
+        body = await readBody(req);
+      } catch (error) {
+        sendJson(res, 400, { ok: false, error: error instanceof Error ? error.message : String(error) });
+        return;
+      }
+      const validated = validateSection(body);
+      if (validated.ok === false) {
+        sendJson(res, 400, { ok: false, error: validated.error });
+        return;
+      }
+      try {
+        await settings.replace(PROFILE_NS, validated.value);
+      } catch (error) {
+        sendJson(res, 400, { ok: false, error: error instanceof Error ? error.message : String(error) });
+        return;
+      }
+      const goLive = goLiveNow(ctx);
+      const dsLive = goLive ? true : dsLiveNow(ctx);
+      const profile = settings.get(PROFILE_NS) as ProfileSettings | undefined;
+      sendJson(res, 200, {
+        ok: true,
+        config: canonicalConfig(profile),
+        quota: { goLive, dsLive },
+        errorCache: { ttlMs: ERROR_WINDOW_MS, down: [...downCache.keys()] },
+      });
+      return;
+    }
+    sendJson(res, 405, { ok: false, error: `method ${req.method} not allowed` });
+  };
+}
+
+function makeSwitchHandler(ctx: Context) {
+  return async (req: IncomingMessage, res: ServerResponse) => {
+    if (req.method !== "PUT") {
+      sendJson(res, 405, { ok: false, error: `method ${req.method} not allowed` });
+      return;
+    }
+    const settings = service<SettingsWriteService>(ctx, "settings");
+    if (settings === undefined) {
+      sendJson(res, 503, { ok: false, error: "settings service unavailable" });
+      return;
+    }
+    let body: unknown;
+    try {
+      body = await readBody(req);
+    } catch (error) {
+      sendJson(res, 400, { ok: false, error: error instanceof Error ? error.message : String(error) });
+      return;
+    }
+    const rawActive = isPlainObject(body) ? body.active : undefined;
+    if (typeof rawActive !== "string" || (rawActive !== "work" && rawActive !== "personal")) {
+      sendJson(res, 400, { ok: false, error: 'active must be "work" or "personal"' });
+      return;
+    }
+    const profile = settings.get(PROFILE_NS) as ProfileSettings | undefined;
+    const next = { ...(profile ?? {}), active: rawActive };
+    try {
+      await settings.replace(PROFILE_NS, next);
+    } catch (error) {
+      sendJson(res, 400, { ok: false, error: error instanceof Error ? error.message : String(error) });
+      return;
+    }
+    const goLive = goLiveNow(ctx);
+    const dsLive = goLive ? true : dsLiveNow(ctx);
+    const after = settings.get(PROFILE_NS) as ProfileSettings | undefined;
+    sendJson(res, 200, {
+      ok: true,
+      config: canonicalConfig(after),
+      quota: { goLive, dsLive },
+      errorCache: { ttlMs: ERROR_WINDOW_MS, down: [...downCache.keys()] },
+    });
+  };
+}
+
 
 export function apply(ctx: Context, config: unknown): void {
   const cfg = (config ?? {}) as ProfilesConfig;
@@ -679,6 +1062,22 @@ export function apply(ctx: Context, config: unknown): void {
     registerRoleTool(ctx, spec, cfg);
   }
   registerFailover(ctx, cfg.alwaysMaxRetries ?? 2);
+
+  // W24: the settings panel reads/writes the profile namespace over these
+  // routes. Lazy inject so the plugin still loads where no web server mounts.
+  ctx.inject(["webServer"], (scope) => {
+    const server = (scope as unknown as { webServer: { register(options: unknown): unknown } }).webServer;
+    server.register({
+      kind: "exact",
+      path: "/profiles/config",
+      handler: makeConfigHandler(ctx),
+    });
+    server.register({
+      kind: "exact",
+      path: "/profiles/switch",
+      handler: makeSwitchHandler(ctx),
+    });
+  });
 
   // Main-agent sync + error-cache reset: only on profile flips, never at
   // boot, never on writes the model picker made to its own namespace.

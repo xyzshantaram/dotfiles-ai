@@ -25,5 +25,8 @@
       ]
     }
   },
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "highlight.js": "11.12.0"
+  }
 }

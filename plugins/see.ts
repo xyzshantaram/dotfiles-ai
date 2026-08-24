@@ -57,10 +57,12 @@ const PROFILE_NS = settingsNamespace("profile");
  * for spawned children). The see child is a spawned child, but its head
  * comes from the ORCHESTRATOR chain: that chain is byte-identical to the
  * pre-W21 flat chain for both profiles, so the vision route does not move.
+ * Since W24 either field may be a STRING naming a key in the `chains` map.
+ * The map itself is kept raw: unknown schema keys pass through untouched.
  */
 const ROUTE_ENTRY = z.object({ provider: z.string(), model: z.string() });
 const CHAIN_ENTRY = z.object({ routes: z.array(ROUTE_ENTRY) });
-const CHAIN_OR_ROUTE = z.union([ROUTE_ENTRY, CHAIN_ENTRY]);
+const CHAIN_OR_ROUTE = z.union([ROUTE_ENTRY, CHAIN_ENTRY, z.string()]);
 const PROFILE_ENTRY = z.union([
   ROUTE_ENTRY,
   CHAIN_ENTRY,
@@ -84,6 +86,8 @@ interface ProfileRoute {
 /** The resolved profile settings value. Entries stay raw; normalizeEntry parses. */
 interface ProfileSettings {
   active?: string;
+  /** Named-chain library: name -> { routes: [...] }; string refs resolve here. */
+  chains?: Record<string, unknown>;
   work?: unknown;
   personal?: unknown;
 }
@@ -110,14 +114,21 @@ Write all your prose (the report back to the orchestrator) in STE-flavored Simpl
 - If you were given a file path or URL and cannot read it, report that as a blocker rather than describing a different image or inventing content.`;
 
 /** Resolve the model route from the profile settings. */
-function readProfile(source: () => ProfileSettings | undefined): ProfileRoute {
+function readProfile(source: () => ProfileSettings | undefined): ProfileRoute[] {
   const settings = source();
   const active = settings?.active ?? "work";
+  // A named `see-<active>` chain wins (per-profile vision routing; work's
+  // chain composes the haiku prefix + the base `see` chain in settings).
+  // Fall back to the profile's orchestrator chain when absent.
+  const seeRoutes = chainOf({ orchestrator: "see-" + active }, "orchestrator", settings?.chains);
+  if (seeRoutes.length > 0) return seeRoutes;
   const entry = active === "personal" ? settings?.personal : settings?.work;
-  const head = chainOf(entry, "orchestrator")[0];
-  if (head) return { provider: head.provider, model: head.model };
-  return active === "personal" ? DEFAULT_ROUTES.personal : DEFAULT_ROUTES.work;
+  const head = chainOf(entry, "orchestrator", settings?.chains)[0];
+  if (head) return [head];
+  return active === "personal" ? [DEFAULT_ROUTES.personal] : [DEFAULT_ROUTES.work];
 }
+
+
 
 /** Register the `see` tool on a context. */
 function registerSeeTool(ctx: Context, source: () => ProfileSettings | undefined): void {
@@ -145,7 +156,9 @@ function registerSeeTool(ctx: Context, source: () => ProfileSettings | undefined
       async execute(args, exec) {
         const parent = exec.agent;
         if (!parent) throw new Error("see requires a calling agent (exec.agent was undefined)");
-        const route = readProfile(source);
+        // Walk the chain: try each route in order; on failure, try the next.
+        const routes = readProfile(source);
+        if (routes.length === 0) throw new Error("see: no vision route resolved");
 
         // Deny every tool the visible registry holds except the vision-only
         // keep set. Computed at call time (B1 mask.ts technique) so the
@@ -155,37 +168,44 @@ function registerSeeTool(ctx: Context, source: () => ProfileSettings | undefined
           .map((schema) => schema.name)
           .filter((toolName) => toolName !== "run_code" && !SEE_CHILD_KEEP.has(toolName));
 
-        const request: SubagentStartRequest = {
-          label: "see",
-          prompt: [
-            {
-              type: "text",
-              text: [
-                `Image: ${args.image}`,
-                `Question: ${args.question}`,
-                "",
-                "Read the image and answer the question. Describe only what is visible.",
-              ].join("\n"),
-            },
-          ],
-          parent,
-          agentOptions: { provider: route.provider, model: route.model },
-          persona: SEE_PERSONA,
-          toolFilter: { deny },
-          maxDepth: 1,
-          signal: exec.signal,
-        };
-        const run = await ctx.subagents.start("spawn", request);
-        try {
-          const result = await run.result;
-          if (result.stopReason !== "completed") {
+        let lastError: Error | null = null;
+        for (const route of routes) {
+          const request: SubagentStartRequest = {
+            label: "see",
+            prompt: [
+              {
+                type: "text",
+                text: [
+                  `Image: ${args.image}`,
+                  `Question: ${args.question}`,
+                  "",
+                  "Read the image and answer the question. Describe only what is visible.",
+                ].join("\n"),
+              },
+            ],
+            parent,
+            agentOptions: { provider: route.provider, model: route.model },
+            persona: SEE_PERSONA,
+            toolFilter: { deny },
+            maxDepth: 1,
+            signal: exec.signal,
+          };
+          const run = await ctx.subagents.start("spawn", request);
+          try {
+            const result = await run.result;
+            if (result.stopReason === "completed") {
+              return outputText(result.output);
+            }
             const diagnostic = result.diagnostic ? `: ${result.diagnostic}` : "";
-            throw new Error(`see: child ended with stop reason "${result.stopReason}"${diagnostic}`);
+lastError = new Error(`see: child ended with stop reason "${result.stopReason}"${diagnostic}`);
+          } catch (err) {
+            lastError = err instanceof Error ? err : new Error(String(err));
+          } finally {
+            await run.dispose().catch(() => {});
           }
-          return outputText(result.output);
-        } finally {
-          await run.dispose();
-        }
+}
+        throw lastError ?? new Error("see: all vision routes failed");
+
       },
       presentCall: (args) => ({
         card: "generic",

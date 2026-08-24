@@ -46,24 +46,41 @@
 // ---- highlight.js: core + a curated language set, INLINED by esbuild. ----
 // Registered lazily (on first use) from an extension map, so the bundle
 // carries only the languages that read calls can actually produce.
-var hljs = require("highlight.js/lib/core");
+import hljs from "highlight.js/lib/core";
+import jsGrammar from "highlight.js/lib/languages/javascript";
+import tsGrammar from "highlight.js/lib/languages/typescript";
+import jsonGrammar from "highlight.js/lib/languages/json";
+import pyGrammar from "highlight.js/lib/languages/python";
+import bashGrammar from "highlight.js/lib/languages/bash";
+import yamlGrammar from "highlight.js/lib/languages/yaml";
+import mdGrammar from "highlight.js/lib/languages/markdown";
+import cssGrammar from "highlight.js/lib/languages/css";
+import xmlGrammar from "highlight.js/lib/languages/xml";
+import sqlGrammar from "highlight.js/lib/languages/sql";
+import goGrammar from "highlight.js/lib/languages/go";
+import rustGrammar from "highlight.js/lib/languages/rust";
+import javaGrammar from "highlight.js/lib/languages/java";
+import cGrammar from "highlight.js/lib/languages/c";
+import cppGrammar from "highlight.js/lib/languages/cpp";
+import diffGrammar from "highlight.js/lib/languages/diff";
 var languageModules = {
-  javascript: require("highlight.js/lib/languages/javascript"),
-  typescript: require("highlight.js/lib/languages/typescript"),
-  json: require("highlight.js/lib/languages/json"),
-  python: require("highlight.js/lib/languages/python"),
-  bash: require("highlight.js/lib/languages/bash"),
-  yaml: require("highlight.js/lib/languages/yaml"),
-  markdown: require("highlight.js/lib/languages/markdown"),
-  css: require("highlight.js/lib/languages/css"),
-  xml: require("highlight.js/lib/languages/xml"),
-  sql: require("highlight.js/lib/languages/sql"),
-  go: require("highlight.js/lib/languages/go"),
-  rust: require("highlight.js/lib/languages/rust"),
-  java: require("highlight.js/lib/languages/java"),
-  c: require("highlight.js/lib/languages/c"),
-  cpp: require("highlight.js/lib/languages/cpp"),
-  diff: require("highlight.js/lib/languages/diff"),
+  javascript: jsGrammar,
+  typescript: tsGrammar,
+  json: jsonGrammar,
+  python: pyGrammar,
+  bash: bashGrammar,
+  yaml: yamlGrammar,
+  markdown: mdGrammar,
+  css: cssGrammar,
+  xml: xmlGrammar,
+  html: xmlGrammar, /* xml grammar covers html */
+  sql: sqlGrammar,
+  go: goGrammar,
+  rust: rustGrammar,
+  java: javaGrammar,
+  c: cGrammar,
+  cpp: cppGrammar,
+  diff: diffGrammar
 };
 var registeredLanguages = new Set();
 
@@ -96,11 +113,10 @@ var EXTENSION_LANGUAGE = {
 };
 
 // ---- Platform modules: resolved by the shell loader seed at runtime. ----
-var React = require("react");
-var primitives = require("@deepseek-ai/dsh-client-ui-primitives");
+import React from "react";
+import * as primitives from "@deepseek-ai/dsh-client-ui-primitives";
 var createElement = React.createElement;
 var useState = React.useState;
-var DiffBlock = primitives.DiffBlock;
 var StateDot = primitives.StateDot;
 var IconBrowseOutline16 = primitives.IconBrowseOutline16;
 var IconEditOutline16 = primitives.IconEditOutline16;
@@ -113,6 +129,30 @@ var PLUGIN_NAME = "tool-render";
 
 // ---- One stylesheet for this bundle (house pattern: data-plugin-css guard). ----
 var STYLE_TAG_ID = "tool-render/client.module.css";
+// ---- highlight.js github-dark theme, embedded as text. ----------------
+// The loader table cannot resolve a sidecar CSS file, so the theme ships
+// inside the bundle like the plugin CSS below. The token colors replace
+// the hand-rolled palette this bundle used to carry.
+var HLJS_THEME_CSS = [
+  "pre code.hljs{display:block;overflow-x:auto;padding:1em}",
+  "code.hljs{padding:3px 5px}",
+  ".hljs{color:#c9d1d9;background:#0d1117}",
+  ".hljs-doctag,.hljs-keyword,.hljs-meta .hljs-keyword,.hljs-template-tag,.hljs-template-variable,.hljs-type,.hljs-variable.language_{color:#ff7b72}",
+  ".hljs-title,.hljs-title.class_,.hljs-title.class_.inherited__,.hljs-title.function_{color:#d2a8ff}",
+  ".hljs-attr,.hljs-attribute,.hljs-literal,.hljs-meta,.hljs-number,.hljs-operator,.hljs-variable,.hljs-selector-attr,.hljs-selector-class,.hljs-selector-id{color:#79c0ff}",
+  ".hljs-regexp,.hljs-string,.hljs-meta .hljs-string{color:#a5d6ff}",
+  ".hljs-built_in,.hljs-symbol{color:#ffa657}",
+  ".hljs-comment,.hljs-code,.hljs-formula{color:#8b949e}",
+  ".hljs-name,.hljs-quote,.hljs-selector-tag,.hljs-selector-pseudo{color:#7ee787}",
+  ".hljs-subst{color:#c9d1d9}",
+  ".hljs-section{color:#1f6feb;font-weight:bold}",
+  ".hljs-bullet{color:#f2cc60}",
+  ".hljs-emphasis{color:#c9d1d9;font-style:italic}",
+  ".hljs-strong{color:#c9d1d9;font-weight:bold}",
+  ".hljs-addition{color:#aff5b4;background-color:#033a16}",
+  ".hljs-deletion{color:#ffdcd7;background-color:#67060c}"
+].join("");
+
 var CSS_TEXT = [
   ".tool-render-row{align-items:center;min-width:0;height:24px;display:flex;position:relative;overflow:hidden}",
   ".tool-render-row[data-expandable]{cursor:pointer}",
@@ -122,7 +162,8 @@ var CSS_TEXT = [
   ".tool-render-sep{background:var(--dsw-alias-label-caption);border-radius:1px;flex:none;width:2px;height:2px;margin:0 8px}",
   ".tool-render-summary{text-overflow:ellipsis;white-space:nowrap;min-width:0;color:var(--dsw-alias-label-tertiary);flex:auto;font-size:14px;line-height:24px;overflow:hidden}",
   ".tool-render-summary[tool-render-error]{color:var(--dsw-alias-state-error-primary)}",
-  ".tool-render-path{color:var(--dsw-alias-label-secondary);cursor:pointer;min-width:0;max-width:100%;display:inline-block;vertical-align:bottom;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+  ".tool-render-path{color:var(--dsw-alias-label-tertiary);cursor:pointer;min-width:0;max-width:100%;display:inline-block;vertical-align:bottom;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;line-height:24px}",
+
   ".tool-render-path:hover{color:var(--dsw-alias-label-primary);text-decoration:underline}",
   ".tool-render-body{flex-direction:column;display:flex}",
   ".tool-render-io{flex-direction:column;display:flex}",
@@ -131,37 +172,122 @@ var CSS_TEXT = [
   ".tool-render-output{box-sizing:border-box;background:var(--dsw-alias-markdown-code-block);font-family:var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-primary);border-radius:12px;margin:4px 0 4px 4px;padding:12px 16px;font-size:13px;line-height:22px;max-height:280px;overflow-y:auto}",
   ".tool-render-output[tool-render-error]{color:var(--dsw-alias-state-error-primary)}",
   ".tool-render-code{box-sizing:border-box;background:var(--dsw-alias-markdown-code-block);font-family:var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-primary);border-radius:12px;margin:4px 0 4px 4px;padding:12px 16px;font-size:13px;line-height:22px;max-height:400px;overflow-y:auto}",
-  ".tool-render-code code.hljs{background:transparent;padding:0;font-family:inherit;font-size:inherit;line-height:inherit;white-space:inherit;display:block}",
-  ".tool-render-code .hljs-comment,.tool-render-command .hljs-comment,.tool-render-write-diff .hljs-comment,.tool-render-code .hljs-quote,.tool-render-command .hljs-quote,.tool-render-write-diff .hljs-quote{color:#8b949e;font-style:italic}",
-  ".tool-render-code .hljs-keyword,.tool-render-command .hljs-keyword,.tool-render-write-diff .hljs-keyword,.tool-render-code .hljs-selector-tag,.tool-render-command .hljs-selector-tag,.tool-render-write-diff .hljs-selector-tag,.tool-render-code .hljs-literal,.tool-render-command .hljs-literal,.tool-render-write-diff .hljs-literal,.tool-render-code .hljs-section,.tool-render-command .hljs-section,.tool-render-write-diff .hljs-section{color:#ff7b72}",
-  ".tool-render-code .hljs-string,.tool-render-command .hljs-string,.tool-render-write-diff .hljs-string,.tool-render-code .hljs-regexp,.tool-render-command .hljs-regexp,.tool-render-write-diff .hljs-regexp,.tool-render-code .hljs-meta .hljs-string,.tool-render-command .hljs-meta .hljs-string,.tool-render-write-diff .hljs-meta .hljs-string{color:#a5d6ff}",
-  ".tool-render-code .hljs-title,.tool-render-command .hljs-title,.tool-render-write-diff .hljs-title,.tool-render-code .hljs-title.function_,.tool-render-command .hljs-title.function_,.tool-render-write-diff .hljs-title.function_,.tool-render-code .hljs-title.class_,.tool-render-command .hljs-title.class_,.tool-render-write-diff .hljs-title.class_,.tool-render-code .hljs-params,.tool-render-command .hljs-params,.tool-render-write-diff .hljs-params{color:#d2a8ff}",
-  ".tool-render-code .hljs-number,.tool-render-command .hljs-number,.tool-render-write-diff .hljs-number,.tool-render-code .hljs-symbol,.tool-render-command .hljs-symbol,.tool-render-write-diff .hljs-symbol,.tool-render-code .hljs-bullet,.tool-render-command .hljs-bullet,.tool-render-write-diff .hljs-bullet{color:#79c0ff}",
-  ".tool-render-code .hljs-attr,.tool-render-command .hljs-attr,.tool-render-write-diff .hljs-attr,.tool-render-code .hljs-attribute,.tool-render-command .hljs-attribute,.tool-render-write-diff .hljs-attribute,.tool-render-code .hljs-variable,.tool-render-command .hljs-variable,.tool-render-write-diff .hljs-variable,.tool-render-code .hljs-template-variable,.tool-render-command .hljs-template-variable,.tool-render-write-diff .hljs-template-variable{color:#ffa657}",
-  ".tool-render-code .hljs-name,.tool-render-command .hljs-name,.tool-render-write-diff .hljs-name,.tool-render-code .hljs-tag,.tool-render-command .hljs-tag,.tool-render-write-diff .hljs-tag,.tool-render-code .hljs-built_in,.tool-render-command .hljs-built_in,.tool-render-write-diff .hljs-built_in,.tool-render-code .hljs-type,.tool-render-command .hljs-type,.tool-render-write-diff .hljs-type{color:#7ee787}",
-  ".tool-render-code .hljs-deletion,.tool-render-command .hljs-deletion,.tool-render-write-diff .hljs-deletion{color:#ffa198}",
-  ".tool-render-code .hljs-addition,.tool-render-command .hljs-addition,.tool-render-write-diff .hljs-addition{color:#aff5b4}",
-  ".tool-render-diff{margin:4px 0 4px 4px}",
+  ".tool-render-code code.hljs{background:transparent;padding:0;font-family:inherit;font-size:inherit;line-height:inherit;white-space:inherit;display:block;flex:auto;min-width:0}",
   ".tool-render-inspect{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-secondary);cursor:pointer;opacity:0;border-radius:999px;align-self:flex-start;align-items:center;gap:4px;margin:4px 0 2px 4px;padding:2px 8px;font-size:11px;line-height:16px;transition:opacity .1s;display:inline-flex}",
   ".tool-render-card:hover .tool-render-inspect,.tool-render-inspect:focus-visible{opacity:1}",
   ".tool-render-inspect:hover{background:var(--dsw-alias-interactive-bg-hover-solid);color:var(--dsw-alias-label-primary)}",
   ".tool-render-diff-fallback{box-sizing:border-box;background:var(--dsw-alias-markdown-code-block);font-family:var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-primary);border-radius:12px;margin:4px 0 4px 4px;padding:12px 16px;font-size:13px;line-height:22px;max-height:400px;overflow-y:auto}",
   ".tool-render-fallback-note{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px;margin-bottom:6px}",
-  ".tool-render-fallback-add{color:#aff5b4}",
   ".tool-render-write{flex-direction:column;display:flex}",
   ".tool-render-write-diff{box-sizing:border-box;background:var(--dsw-alias-markdown-code-block);font-family:var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-primary);border-radius:12px;margin:4px 0 4px 4px;padding:12px 16px;font-size:13px;line-height:22px;max-height:400px;overflow-y:auto}",
   ".tool-render-line-same{color:var(--dsw-alias-label-primary)}",
-  ".tool-render-line-del{color:#ffa198;background:rgba(255,161,152,.12)}",
-  ".tool-render-line-add{color:#aff5b4;background:rgba(175,245,180,.12)}",
-  ".tool-render-write-note{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px;margin-bottom:6px}"
+  ".tool-render-diff-row.tool-render-line-del,.tool-render-diff-cell.tool-render-line-del{background:rgba(255,166,87,.16)}",
+  ".tool-render-diff-row.tool-render-line-add,.tool-render-diff-cell.tool-render-line-add{background:rgba(125,180,255,.16)}",
+  ".tool-render-diff-marker{flex:none;width:2ch;text-align:center;align-self:flex-start;user-select:none;color:var(--dsw-alias-label-tertiary)}",
+  ".tool-render-diff-marker-del{color:#ffb86c}",
+  ".tool-render-diff-marker-add{color:#7db4ff}",
+  ".tool-render-write-note{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px;margin-bottom:6px}",
+  ".tool-render-code-row{display:flex;align-items:flex-start;min-width:0}",
+  ".tool-render-diff-row{display:flex;align-items:flex-start;min-width:0}",
+  ".tool-render-diff-pair{display:flex;align-items:stretch;min-width:0}",
+  ".tool-render-diff-cell{flex:1 1 0;min-width:0;display:flex;align-items:flex-start}",
+  ".tool-render-diff-cell + .tool-render-diff-cell{border-left:1px solid var(--dsw-alias-border-l2)}",
+  ".tool-render-gutter{flex:none;align-self:flex-start;padding-right:12px;text-align:right;color:var(--dsw-alias-label-tertiary);user-select:none;font-family:var(--ds-font-family-code);font-size:13px;line-height:22px}",
+  ".tool-render-line-cell{flex:auto;min-width:0;display:block;font-family:var(--ds-font-family-code);font-size:13px;line-height:22px;white-space:pre-wrap;word-break:break-word}",
+  ".tool-render-line-cell.hljs{background:transparent;padding:0;font-family:inherit;font-size:inherit;line-height:inherit;white-space:inherit}",
+  ".tool-render-diff-path{color:var(--dsw-alias-label-secondary);font-family:var(--ds-font-family-code);font-size:13px;line-height:22px;border-bottom:1px solid var(--dsw-alias-border-l2);padding-bottom:4px;margin-bottom:6px}",
+  ".tool-render-diff-sep{display:flex;align-items:center;gap:10px;color:var(--dsw-alias-label-caption);font-family:var(--ds-font-family-code);font-size:12px;line-height:18px;margin:8px 0}",
+  ".tool-render-diff-sep::before,.tool-render-diff-sep::after{content:'';flex:1;height:1px;background:var(--dsw-alias-border-l2)}",
+  ".tool-render-card{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-layer-1);padding:6px 10px}",
+  ".tool-render-card:hover{border-color:var(--dsw-alias-border-l3)}",
+  ".tool-render-title{font-weight:500}",
+  ".tool-render-summary,.tool-render-path{font-size:13px}",
+  ".tool-render-output,.tool-render-code,.tool-render-write-diff,.tool-render-diff-fallback{border:1px solid var(--dsw-alias-border-l1)}",
+  ".tool-render-row:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}"
 ].join("");
 if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(STYLE_TAG_ID) + "]") === null) {
   var tag = document.createElement("style");
   tag.dataset.plugin = PLUGIN_NAME;
   tag.dataset.pluginCss = STYLE_TAG_ID;
-  tag.textContent = CSS_TEXT;
+  tag.textContent = HLJS_THEME_CSS + "\n" + CSS_TEXT;
   document.head.appendChild(tag);
 }
+
+// ---- Post-render highlighting pass for raw <pre><code> blocks. ---------
+// The render path already highlights every block it creates and marks the
+// element data-highlighted so this pass never re-runs on it. The observer
+// catches blocks that OTHER renderers mount inside a tool card after the
+// row renders (markdown in a result view, future views). It stays inside
+// .tool-render-card, honors hljs's own data-highlighted guard, skips
+// elements that already hold child spans, and auto-detects only small
+// snippets: blind auto-detection on large plain output is slow and misreads
+// (verified: ~500ms on a 116KB listing).
+var HLJS_SCOPE_SELECTOR = ".tool-render-card pre code";
+function hljsPassEligible(el) {
+  if (el.dataset.highlighted) return false;
+  if (el.children && el.children.length > 0) return false;
+  var cls = typeof el.className === "string" ? el.className : "";
+  var m = /(?:^|\s)language-([A-Za-z0-9_-]+)/.exec(cls);
+  if (m !== null) return hljs.getLanguage(m[1].toLowerCase()) !== undefined;
+  return (el.textContent || "").length <= 4096;
+}
+function runHljsPass(root) {
+  var blocks;
+  try {
+    blocks = root.querySelectorAll(HLJS_SCOPE_SELECTOR);
+  } catch (error) {
+    return;
+  }
+  for (var i = 0; i < blocks.length; i++) {
+    var el = blocks[i];
+    if (!hljsPassEligible(el)) continue;
+    try {
+      hljs.highlightElement(el);
+    } catch (error) {
+      /* a bad grammar must not take the card down */
+    }
+  }
+}
+function ensureHljsPass() {
+  if (typeof document === "undefined" || typeof MutationObserver === "undefined") return;
+  if (typeof window !== "undefined" && window.__toolRenderHljsPass) return;
+  if (typeof window !== "undefined") window.__toolRenderHljsPass = true;
+  runHljsPass(document);
+  var observer = new MutationObserver(function (mutations) {
+    for (var m = 0; m < mutations.length; m++) {
+      var added = mutations[m].addedNodes;
+      if (!added || added.length === 0) continue;
+      for (var i = 0; i < added.length; i++) {
+        var node = added[i];
+        if (!node || node.nodeType !== 1) continue;
+        if (typeof node.matches === "function" && node.matches(HLJS_SCOPE_SELECTOR)) {
+          if (hljsPassEligible(node)) {
+            try {
+              hljs.highlightElement(node);
+            } catch (error) {
+              /* keep going */
+            }
+          }
+          continue;
+        }
+        if (typeof node.querySelectorAll === "function") {
+          var blocks = node.querySelectorAll(HLJS_SCOPE_SELECTOR);
+          for (var b = 0; b < blocks.length; b++) {
+            var el = blocks[b];
+            if (!hljsPassEligible(el)) continue;
+            try {
+              hljs.highlightElement(el);
+            } catch (error) {
+              /* keep going */
+            }
+          }
+        }
+      }
+    }
+  });
+  observer.observe(document.body || document.documentElement, { childList: true, subtree: true });
+}
+ensureHljsPass();
 
 // ---- Small pure helpers on the projected Tool block shapes. ----
 // A block is a RunningToolCall { callId, name, argsRaw, time, subCalls }
@@ -183,17 +309,17 @@ function doneOf(block) {
 function argsRawOf(block) {
   return doneOf(block)
     ? (block.call && typeof block.call.argsRaw === "string" ? block.call.argsRaw : "")
-    : (typeof block.argsRaw === "string" ? block.argsRaw : "");
+    : (block !== null && typeof block === "object" && typeof block.argsRaw === "string" ? block.argsRaw : "");
 }
 
 function callNameOf(block) {
   return doneOf(block)
     ? (block.call && typeof block.call.name === "string" ? block.call.name : "")
-    : (typeof block.name === "string" ? block.name : "");
+    : (block !== null && typeof block === "object" && typeof block.name === "string" ? block.name : "");
 }
 
 function rowStateOf(block) {
-  if (!doneOf(block)) return "running";
+  if (block === null || typeof block !== "object" || !doneOf(block)) return "running";
   if (block.error && block.error.code === "interrupted") return "stopped";
   return block.isError === true ? "error" : "ok";
 }
@@ -255,14 +381,101 @@ function stripAnsi(text) {
   return String(text).replace(ANSI_RE, "");
 }
 
+// ---- Render-time de-indent for code content displays. ----
+// Strip the common leading whitespace from a snippet. The minimum indent
+// comes from the non-empty lines; all-whitespace lines collapse to empty.
+// The line count never changes, so callers keep their line numbers. This
+// is display-only: stored block data is never rewritten.
+function deIndent(text) {
+  if (typeof text !== "string" || text === "") return text;
+  var lines = text.split("\n");
+  var min = -1;
+  for (var i = 0; i < lines.length; i++) {
+    if (lines[i].trim() === "") continue;
+    var count = 0;
+    while (count < lines[i].length && lines[i].charAt(count) === " ") count++;
+    if (min === -1 || count < min) min = count;
+  }
+  if (min <= 0) return text;
+  var out = [];
+  for (var i = 0; i < lines.length; i++) {
+    out.push(lines[i].trim() === "" ? "" : lines[i].slice(min));
+  }
+  return out.join("\n");
+}
+
+
 // ---- hashline row parsing (the personal dsh-better-edit read format). ----
 // A served row is `HASH│content` with HASH in [A-Za-z0-9]{3}
 // (hashline/alphabet.js: HASH_LEN = 3; ALPH base62; HASH_SEP = "│").
 var HASH_ROW_RE = /^([A-Za-z0-9]{3})│/;
-function stripHashRows(text) {
-  return String(text).split("\n").map(function (line) {
-    return HASH_ROW_RE.test(line) ? line.slice(4) : line;
-  }).join("\n");
+// ---- Read line metadata and numbering. ----
+// dsh-better-edit's read records the requested start as the `offset` arg
+// (1-indexed) on the block and appends a `[Showing lines X-Y of Z]` hint
+// to partial reads. A plain read carries neither; rows then number
+// sequentially from 1.
+function readStartLine(args, output) {
+  if (args !== null && typeof args === "object" &&
+      typeof args.offset === "number" && Number.isInteger(args.offset) && args.offset >= 1) {
+    return args.offset;
+  }
+  var lines = String(output).split("\n");
+  if (lines.length > 0 && HASH_ROW_RE.test(lines[0])) {
+    var m = /\[Showing lines (\d+)-(\d+) of \d+/.exec(String(output));
+    if (m !== null) return parseInt(m[1], 10);
+  }
+  return 1;
+}
+
+// Split a read result into display rows with line numbers. A hashline read
+// prefixes every served row with a 3-char anchor; hint and warning lines
+// are not file content and carry no number. A plain read numbers every
+// line. `startLine` comes from readStartLine.
+function numberedReadRows(output, startLine) {
+  var lines = String(output).split("\n");
+  var hashline = lines.length > 0 && HASH_ROW_RE.test(lines[0]);
+  var rows = [];
+  var next = startLine;
+  for (var i = 0; i < lines.length; i++) {
+    if (hashline && HASH_ROW_RE.test(lines[i])) {
+      rows.push({ number: next, text: lines[i].slice(4) });
+      next++;
+    } else if (hashline) {
+      rows.push({ number: null, text: lines[i] });
+    } else {
+      rows.push({ number: next, text: lines[i] });
+      next++;
+    }
+  }
+  // De-indent numbered rows at render time. Numbered rows are file
+  // content and get leveled; unnumbered rows (hints, warnings) stay as
+  // served. deIndent keeps the line count, so numbers still match.
+  var content = [];
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].number !== null) content.push(rows[i].text);
+  }
+  var leveled = deIndent(content.join("\n")).split("\n");
+  var at = 0;
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].number !== null) rows[i].text = leveled[at++];
+  }
+  return rows;
+}
+
+// Reduce a stored read's text to its file lines so the write diff compares
+// content against content. Anchors and non-row lines (pagination hints,
+// warnings, notes) are dropped. `start` is the first kept line's real
+// number, or 1 when the read carried no range.
+function cleanReadTextForDiff(text) {
+  var lines = String(text).split("\n");
+  if (lines.length === 0 || !HASH_ROW_RE.test(lines[0])) {
+    return { content: text, start: readStartLine(null, text) };
+  }
+  var kept = [];
+  for (var i = 0; i < lines.length; i++) {
+    if (HASH_ROW_RE.test(lines[i])) kept.push(lines[i].slice(4));
+  }
+  return { content: kept.join("\n"), start: readStartLine(null, text) };
 }
 
 function extOf(path) {
@@ -390,13 +603,12 @@ function ReadRow(props) {
     if (state === "error") {
       body = createElement("pre", { className: "tool-render-output", "tool-render-error": true }, output);
     } else {
-      var code = stripHashRows(output);
+      var rows = numberedReadRows(output, readStartLine(args, output));
       var language = languageFor(path !== undefined ? path : "");
-      var html = highlightCode(code, language);
       body = createElement(
-        "pre",
+        "div",
         { className: "tool-render-code" },
-        createElement("code", { className: "hljs", dangerouslySetInnerHTML: { __html: html } })
+        readLineRows(rows, language)
       );
     }
   }
@@ -434,7 +646,7 @@ function BashRow(props) {
     var inner = [];
     if (command !== undefined) {
       var commandHtml = highlightCode(command, "bash");
-      inner.push(createElement("div", { className: "tool-render-command" }, "$ ", createElement("code", { className: "hljs", dangerouslySetInnerHTML: { __html: commandHtml } })));
+      inner.push(createElement("div", { className: "tool-render-command" }, "$ ", createElement("code", { className: "hljs", "data-highlighted": "yes", dangerouslySetInnerHTML: { __html: commandHtml } })));
     }
     if (output !== null && output !== "") {
       inner.push(
@@ -467,7 +679,10 @@ function BashRow(props) {
 // carry only 3-char anchors, so for those we reconstruct the before text
 // from the conversation's own read history: the latest settled read of the
 // same path holds `HASH│content` rows, and the anchors select the removed
-// range. The after text is the args' replacement_text.
+// range. The after text is the args' replacement_text. The removed range's
+// first line number comes from the read's own start (its offset arg or the
+// `[Showing lines X-Y of Z]` hint), so the diff's old-side gutter shows
+// real file lines instead of a 1-based recount.
 function narrowDiffs(diffs) {
   if (!Array.isArray(diffs) || diffs.length === 0) return null;
   var out = [];
@@ -483,6 +698,7 @@ function narrowDiffs(diffs) {
 }
 
 function wireDiffs(block) {
+  if (block === null || typeof block !== "object") return null;
   if (!doneOf(block)) {
     var call = block.callView !== undefined && block.callView !== null && block.callView.card === "diff" ? block.callView : null;
     var callDiffs = call === null ? null : narrowDiffs(call.diffs);
@@ -509,13 +725,21 @@ function matchesPath(a, b, cwd) {
   return strip(joinedA) === strip(joinedB);
 }
 
-function latestReadText(snapshot, path, beforeTime, cwd) {
+function readsOf(snapshot, path, beforeTime, cwd) {
   var nodes = snapshot && snapshot.chat && snapshot.chat.nodes;
-  if (nodes === undefined || nodes === null || typeof nodes.values !== "function") return null;
-  var best = null;
+  if (nodes === undefined || nodes === null || typeof nodes.values !== "function") return [];
   var iter = nodes.values();
-  for (var entry = iter.next(); entry.done !== true; entry = iter.next()) {
-    var node = entry.value;
+  if (iter === null || iter === undefined) return [];
+  var entries;
+  if (typeof iter.next === "function") {
+    entries = [];
+    for (var entry = iter.next(); entry.done !== true; entry = iter.next()) entries.push(entry.value);
+  } else {
+    entries = Array.isArray(iter) ? iter : [];
+  }
+  var out = [];
+  for (var i = 0; i < entries.length; i++) {
+    var node = entries[i];
     if (node === undefined || node === null || node.kind !== "tool-call") continue;
     var block = node.data !== undefined && node.data !== null ? node.data.root : undefined;
     if (block === undefined || block === null) continue;
@@ -530,12 +754,18 @@ function latestReadText(snapshot, path, beforeTime, cwd) {
     if (readPath === undefined || !matchesPath(readPath, path, cwd)) continue;
     var text = resultTextOf(block);
     if (text === null || text === "") continue;
-    if (best === null || time > best.time) best = { time: time, text: text };
+    out.push({ time: time, text: text, args: args });
   }
-  return best === null ? null : best.text;
+  out.sort(function (a, b) { return b.time - a.time; });
+  return out;
 }
 
-function extractHunk(readText, removeFrom, removeTo, replacementText) {
+function latestReadText(snapshot, path, beforeTime, cwd) {
+  var reads = readsOf(snapshot, path, beforeTime, cwd);
+  return reads.length === 0 ? null : reads[0].text;
+}
+
+function extractHunk(readText, removeFrom, removeTo, replacementText, startLine) {
   if (typeof readText !== "string" || readText === "") return null;
   var rows = [];
   var lines = readText.split("\n");
@@ -562,7 +792,8 @@ function extractHunk(readText, removeFrom, removeTo, replacementText) {
   }
   var before = [];
   for (var n = from; n <= to; n++) before.push(rows[n].content);
-  return { before: before.join("\n"), after: typeof replacementText === "string" ? replacementText : "" };
+  var base = typeof startLine === "number" && startLine >= 1 ? startLine : readStartLine(null, readText);
+  return { before: before.join("\n"), after: typeof replacementText === "string" ? replacementText : "", oldStart: base + from };
 }
 
 // ---- Line diff (LCS over lines) for the write row body. ----
@@ -676,16 +907,22 @@ function resolveEditDiffs(block, requests, useSession, cwd) {
   for (var i = 0; i < requests.length; i++) {
     var req = requests[i];
     var oldText = req.oldText;
+    var oldStart;
     if (oldText === null && useSession !== undefined) {
-      var readText = useSession(function (snapshot) {
-        return latestReadText(snapshot, req.path, filter, cwd);
+      var recovered = useSession(function (snapshot) {
+        var reads = readsOf(snapshot, req.path, filter, cwd);
+        for (var r = 0; r < reads.length; r++) {
+          var hunk = extractHunk(reads[r].text, req.removeFrom, req.removeTo, req.newText, readStartLine(reads[r].args, reads[r].text));
+          if (hunk !== null) return hunk;
+        }
+        return null;
       });
-      if (readText !== null) {
-        var hunk = extractHunk(readText, req.removeFrom, req.removeTo, req.newText);
-        if (hunk !== null) oldText = hunk.before;
+      if (recovered !== null) {
+        oldText = recovered.before;
+        oldStart = recovered.oldStart;
       }
     }
-    out.push({ path: req.path, oldText: oldText, newText: req.newText });
+    out.push({ path: req.path, oldText: oldText, newText: req.newText, startOld: oldStart });
   }
   return out;
 }
@@ -697,16 +934,35 @@ function allHunksNull(diffs) {
   return true;
 }
 
-function diffFallbackBody(diffs) {
-  var children = [
-    createElement("div", { className: "tool-render-fallback-note" }, "Before text unavailable")
-  ];
+function diffFallbackBody(diffs, language) {
+  // A fallback hunk has no old text. When the after text is empty too,
+  // the edit is a pure deletion with nothing to show, so the note says
+  // so instead of claiming the before text is missing. Both branches
+  // render one inline stream, never the paired side-by-side layout.
+  var onlyDels = true;
   for (var i = 0; i < diffs.length; i++) {
-    var newText = typeof diffs[i].newText === "string" ? diffs[i].newText : "";
-    var lines = newText.split("\n");
-    for (var j = 0; j < lines.length; j++) {
-      children.push(createElement("div", { className: "tool-render-fallback-add" }, "+ " + lines[j]));
+    if (typeof diffs[i].newText === "string" && diffs[i].newText !== "") {
+      onlyDels = false;
+      break;
     }
+  }
+  var children = [
+    createElement("div", { className: "tool-render-fallback-note" },
+      onlyDels ? "After text unavailable" : "Before text unavailable")
+  ];
+  var lines = [];
+  for (var i = 0; i < diffs.length; i++) {
+    var text = onlyDels
+      ? deIndent(typeof diffs[i].oldText === "string" ? diffs[i].oldText : "")
+      : deIndent(typeof diffs[i].newText === "string" ? diffs[i].newText : "");
+    var parts = splitLines(text);
+    for (var j = 0; j < parts.length; j++) lines.push(parts[j]);
+  }
+  var numbers = [];
+  for (var i = 0; i < lines.length; i++) numbers.push(null);
+  var width = gutterWidthCh(numbers);
+  for (var i = 0; i < lines.length; i++) {
+    children.push(diffLineRow(onlyDels ? "del" : "add", lines[i], null, width, language));
   }
   return createElement("div", { className: "tool-render-diff-fallback" }, children);
 }
@@ -750,18 +1006,35 @@ function makeEditRow(toolTitle) {
     var expanded = expandedState[0];
     var setExpanded = expandedState[1];
     var block = props.block;
+    if (block === null || typeof block !== "object") {
+      return toolRenderRow({
+        icon: createElement(IconEditOutline16, { size: 14 }),
+        title: toolTitle,
+        summary: toolTitle,
+        state: "ok",
+        expandable: false,
+        expanded: false,
+        onToggle: function () {},
+        body: null,
+        inspect: props.inspect
+      });
+    }
     var done = doneOf(block);
     var args = parseArgs(argsRawOf(block));
     var argsObject = args !== null ? args : {};
     var effectiveCwd = resolveEffectiveCwd(props);
     var wire = wireDiffs(block);
-    var diffs;
-    if (wire !== null) {
-      diffs = wire.diffs;
-    } else {
-      var requests = collectEditRequests(argsObject);
-      diffs = resolveEditDiffs(block, requests, props.useSession, effectiveCwd);
-      if (diffs.length === 0) diffs = null;
+    var diffs = null;
+    try {
+      if (wire !== null) {
+        diffs = wire.diffs;
+      } else {
+        var requests = collectEditRequests(argsObject);
+        var resolved = resolveEditDiffs(block, requests, props.useSession, effectiveCwd);
+        if (resolved.length > 0) diffs = resolved;
+      }
+    } catch (error) {
+      diffs = null;
     }
     var output = done ? resultTextOf(block) : null;
     var state = rowStateOf(block);
@@ -771,9 +1044,9 @@ function makeEditRow(toolTitle) {
     var body = null;
     if (diffs !== null && diffs.length > 0) {
       if (wire === null && done && state === "ok" && allHunksNull(diffs)) {
-        body = diffFallbackBody(diffs);
+        body = diffFallbackBody(diffs, languageFor(summaryPath !== undefined ? summaryPath : ""));
       } else {
-        body = createElement(DiffBlock, { diffs: diffs, className: "tool-render-diff" });
+        body = editDiffBody(diffs);
       }
     } else if (output !== null && output !== "") {
       body = createElement("pre", { className: "tool-render-output", "tool-render-error": state === "error" || undefined }, output);
@@ -798,36 +1071,221 @@ function makeEditRow(toolTitle) {
 var EditRow = makeEditRow("Edit");
 var BatchEditRow = makeEditRow("Batch edit");
 
+// ---- Line-number gutter. ----
+// One number per content line, right-aligned in a column of uniform width
+// (ch units track the monospace digit width). Numbers come from real file
+// positions when known, else sequentially within the block. Rows without a
+// position (hints, added lines) get an empty cell.
+function gutterWidthCh(numbers) {
+  var max = 1;
+  for (var i = 0; i < numbers.length; i++) {
+    if (numbers[i] === null || numbers[i] === undefined) continue;
+    var len = String(numbers[i]).length;
+    if (len > max) max = len;
+  }
+  return (max + 2) + "ch";
+}
+
+function gutterSpan(number, width) {
+  return createElement("span", {
+    className: "tool-render-gutter",
+    "aria-hidden": true,
+    style: { width: width }
+  }, number === null || number === undefined ? "" : String(number));
+}
+
+function readLineRows(rows, language) {
+  var numbers = [];
+  for (var i = 0; i < rows.length; i++) numbers.push(rows[i].number);
+  var width = gutterWidthCh(numbers);
+  var out = [];
+  for (var i = 0; i < rows.length; i++) {
+    out.push(createElement("div", { className: "tool-render-code-row" },
+      gutterSpan(rows[i].number, width),
+      createElement("code", { className: "hljs", "data-highlighted": "yes", dangerouslySetInnerHTML: { __html: highlightCode(rows[i].text, language) } })
+    ));
+  }
+  return out;
+}
+
+function diffLineRow(type, text, number, width, language) {
+  return createElement("div", {
+    className: "tool-render-diff-row" + (type === "same" ? "" : " tool-render-line-" + type)
+  },
+    diffMarker(type === "same" ? null : type),
+    gutterSpan(number, width),
+    createElement("code", {
+      className: "tool-render-line-cell hljs",
+      "data-highlighted": "yes",
+      dangerouslySetInnerHTML: { __html: highlightCode(text, language) }
+    })
+  );
+}
+
+// Diff body for edit and batch_edit rows: a side-by-side before/after
+// layout, one row per LCS-aligned pair of old/new lines. Changed lines
+// carry -/+ markers with orange/blue tints; unchanged context fills both
+// columns. The container reuses the write-diff block styling.
+function alignDiffOps(ops, startOld) {
+  var rows = [];
+  var oldNum = typeof startOld === "number" ? startOld : 1;
+  var newNum = typeof startOld === "number" ? startOld : 1;
+  var i = 0;
+  while (i < ops.length) {
+    var op = ops[i];
+    if (op.type === "same") {
+      rows.push({ left: { text: op.text, kind: "same" }, right: { text: op.text, kind: "same" }, oldNum: oldNum++, newNum: newNum++ });
+      i++;
+      continue;
+    }
+    var dels = [];
+    var adds = [];
+    while (i < ops.length && ops[i].type !== "same") {
+      if (ops[i].type === "del") dels.push(ops[i].text); else adds.push(ops[i].text);
+      i++;
+    }
+    var n = Math.max(dels.length, adds.length);
+    for (var k = 0; k < n; k++) {
+      rows.push({
+        left: dels[k] === undefined ? null : { text: dels[k], kind: "del" },
+        right: adds[k] === undefined ? null : { text: adds[k], kind: "add" },
+        oldNum: dels[k] === undefined ? null : oldNum++,
+        newNum: adds[k] === undefined ? null : newNum++
+      });
+    }
+  }
+  return rows;
+}
+
+function diffMarker(kind) {
+  return createElement("span", {
+    className: "tool-render-diff-marker" + (kind === null ? "" : " tool-render-diff-marker-" + kind),
+    "aria-hidden": true
+  }, kind === "del" ? "-" : kind === "add" ? "+" : "");
+}
+
+function diffCell(kind, text, number, width, language) {
+  return createElement("div", {
+    className: "tool-render-diff-cell" + (kind === "same" ? "" : " tool-render-line-" + kind)
+  },
+    diffMarker(kind === "same" ? null : kind),
+    gutterSpan(number, width),
+    createElement("code", {
+      className: "tool-render-line-cell hljs",
+      "data-highlighted": "yes",
+      dangerouslySetInnerHTML: { __html: highlightCode(text, language) }
+    })
+  );
+}
+
+function diffPairRow(row, leftWidth, rightWidth, language) {
+  var left = row.left === null
+    ? createElement("div", { className: "tool-render-diff-cell" }, diffMarker(null), gutterSpan(null, leftWidth))
+    : diffCell(row.left.kind, row.left.text, row.oldNum, leftWidth, language);
+  var right = row.right === null
+    ? createElement("div", { className: "tool-render-diff-cell" }, diffMarker(null), gutterSpan(null, rightWidth))
+    : diffCell(row.right.kind, row.right.text, row.newNum, rightWidth, language);
+  return createElement("div", { className: "tool-render-diff-pair" }, left, right);
+}
+
+function editDiffBody(diffs) {
+  var children = [];
+  var previousPath = null;
+  for (var i = 0; i < diffs.length; i++) {
+    var file = diffs[i];
+    var filePath = typeof file.path === "string" ? file.path : "";
+    var language = languageFor(filePath);
+    if (filePath !== previousPath) {
+      children.push(createElement("div", { className: "tool-render-diff-path" }, filePath));
+      previousPath = filePath;
+    } else {
+      children.push(createElement("div", { className: "tool-render-diff-sep", "aria-hidden": true }, "⋯"));
+    }
+    var oldText = deIndent(typeof file.oldText === "string" ? file.oldText : "");
+    var newText = deIndent(typeof file.newText === "string" ? file.newText : "");
+    var ops = diffLines(oldText, newText);
+    // Only a hunk with both del and add ops needs the paired side-by-side
+    // layout. A pure addition or pure deletion renders as one inline
+    // stream; an unchanged hunk renders as plain same rows. writeBody
+    // makes the same call.
+    var hasDel = false;
+    var hasAdd = false;
+    for (var o = 0; o < ops.length; o++) {
+      if (ops[o].type === "del") hasDel = true;
+      else if (ops[o].type === "add") hasAdd = true;
+      if (hasDel && hasAdd) break;
+    }
+    if (hasDel && hasAdd) {
+      var rows = alignDiffOps(ops, typeof file.startOld === "number" ? file.startOld : 1);
+      var leftNumbers = [];
+      var rightNumbers = [];
+      for (var r = 0; r < rows.length; r++) { leftNumbers.push(rows[r].oldNum); rightNumbers.push(rows[r].newNum); }
+      var leftWidth = gutterWidthCh(leftNumbers);
+      var rightWidth = gutterWidthCh(rightNumbers);
+      for (var r = 0; r < rows.length; r++) {
+        children.push(diffPairRow(rows[r], leftWidth, rightWidth, language));
+      }
+    } else {
+      var type = hasDel ? "del" : hasAdd ? "add" : "same";
+      var text = hasDel ? oldText : hasAdd ? newText : oldText;
+      var parts = splitLines(text);
+      var numbers = [];
+      for (var l = 0; l < parts.length; l++) numbers.push(null);
+      var width = gutterWidthCh(numbers);
+      for (var l = 0; l < parts.length; l++) {
+        children.push(diffLineRow(type, parts[l], null, width, language));
+      }
+    }
+  }
+  return createElement("div", { className: "tool-render-write-diff" }, children);
+}
+
 // ---- Write row: before/after line diff with syntax highlighting. ----
 // Args are { file_path, content }. The before text comes from the
 // conversation's own read history, exactly like the edit reconstruction.
 // A real before text yields a per-line diff. A blind write shows only
 // the new content, fully highlighted, with a muted note above it.
-function writeLineClass(type) {
-  if (type === "del") return "tool-render-line-del";
-  if (type === "add") return "tool-render-line-add";
-  return "tool-render-line-same";
-}
 
 function writeBody(path, before, newText) {
+  var language = languageFor(path !== undefined ? path : "");
   if (before === null || before === "") {
-    var html = highlightCode(newText, languageFor(path !== undefined ? path : ""));
     return createElement(
       "div",
       { className: "tool-render-write" },
       createElement("div", { className: "tool-render-write-note" }, "No earlier version on record; new content below"),
-      createElement(
-        "pre",
-        { className: "tool-render-code" },
-        createElement("code", { className: "hljs", dangerouslySetInnerHTML: { __html: html } })
-      )
+      createElement("div", { className: "tool-render-code" }, readLineRows(numberedReadRows(newText, 1), language))
     );
   }
-  var ops = diffLines(before, newText);
-  var lines = [];
+  var cleaned = cleanReadTextForDiff(before);
+  var ops = diffLines(deIndent(cleaned.content), deIndent(newText));
+  var hasDel = false;
+  var hasAdd = false;
   for (var i = 0; i < ops.length; i++) {
-    var op = ops[i];
-    lines.push(createElement("div", { className: writeLineClass(op.type), dangerouslySetInnerHTML: { __html: highlightCode(op.text, languageFor(path !== undefined ? path : "")) } }));
+    if (ops[i].type === "del") hasDel = true;
+    else if (ops[i].type === "add") hasAdd = true;
+    if (hasDel && hasAdd) break;
+  }
+  var lines = [];
+  if (hasDel && hasAdd) {
+    var rows = alignDiffOps(ops, cleaned.start);
+    var leftNumbers = [];
+    var rightNumbers = [];
+    for (var i = 0; i < rows.length; i++) { leftNumbers.push(rows[i].oldNum); rightNumbers.push(rows[i].newNum); }
+    var leftWidth = gutterWidthCh(leftNumbers);
+    var rightWidth = gutterWidthCh(rightNumbers);
+    for (var i = 0; i < rows.length; i++) {
+      lines.push(diffPairRow(rows[i], leftWidth, rightWidth, language));
+    }
+  } else {
+    var type = hasDel ? "del" : hasAdd ? "add" : "same";
+    var text = hasDel ? deIndent(cleaned.content) : hasAdd ? deIndent(newText) : deIndent(cleaned.content);
+    var parts = splitLines(text);
+    var numbers = [];
+    for (var i = 0; i < parts.length; i++) numbers.push(null);
+    var width = gutterWidthCh(numbers);
+    for (var i = 0; i < parts.length; i++) {
+      lines.push(diffLineRow(type, parts[i], null, width, language));
+    }
   }
   return createElement("div", { className: "tool-render-write-diff" }, lines);
 }
@@ -847,14 +1305,14 @@ function WriteRow(props) {
   var state = rowStateOf(block);
   var errorSummary = state === "error" && output !== null && output !== "" ? firstLine(output) : undefined;
   var summary = path !== undefined ? relativizeToCwd(firstLine(path), effectiveCwd) : "Write";
+  var before = null;
+  if (path !== undefined && props.useSession !== undefined) {
+    before = props.useSession(function (snapshot) {
+      return latestReadText(snapshot, path, undefined, effectiveCwd);
+    });
+  }
   var body = null;
   if (done && state === "ok") {
-    var before = null;
-    if (path !== undefined && props.useSession !== undefined) {
-      before = props.useSession(function (snapshot) {
-        return latestReadText(snapshot, path, undefined, effectiveCwd);
-      });
-    }
     body = writeBody(path, before, newText);
   } else if (output !== null && output !== "") {
     body = createElement("pre", { className: "tool-render-output", "tool-render-error": state === "error" || undefined }, output);
@@ -876,6 +1334,7 @@ function WriteRow(props) {
 }
 // ---- Cordis plugin face. ----
 var inject = ["slots"];
+var name = PLUGIN_NAME;
 
 function apply(ctx) {
   ctx.slots.inject("tool.call.toolview", function* () {
@@ -907,4 +1366,4 @@ function apply(ctx) {
   });
 }
 
-module.exports = { apply: apply, inject: inject, name: PLUGIN_NAME };
+export { apply, inject, name };

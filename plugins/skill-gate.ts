@@ -53,13 +53,24 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { resolveDshHome } from "@deepseek-ai/dsh-home-paths";
-import type { Context } from "@deepseek-ai/cordis";
+import type { Context, Events } from "@deepseek-ai/cordis";
 import type { Agent } from "@deepseek-ai/dsh-agent";
 import z from "@deepseek-ai/schemastery";
 
 export const name = "skill-gate";
 
 export const inject = ["tools"] as const;
+/**
+ * Tools every child agent is hard-denied, matching the deployed cordis
+ * toolset. Keep in sync with the registered cordis_* names (dsh-tool-cordis).
+ */
+const DEFAULT_SUBAGENT_DENY = [
+  "cordis_inspect_self",
+  "cordis_define",
+  "cordis_run",
+  "cordis_stop",
+  "cordis_undefine",
+];
 
 export const Config = z.object({
   /** Extra skill roots to scan for `tools-gated` declarations, in addition to `$DSH_HOME/skills`. */
@@ -155,17 +166,6 @@ const activeById = new Map<string, Set<string>>();
 const appliedById = new Map<string, string>();
 const disposerById = new Map<string, () => void>();
 
-/**
- * Tools every child agent is hard-denied, matching the deployed cordis
- * toolset. Keep in sync with the registered cordis_* names (dsh-tool-cordis).
- */
-const DEFAULT_SUBAGENT_DENY = [
-  "cordis_inspect_self",
-  "cordis_define",
-  "cordis_run",
-  "cordis_stop",
-  "cordis_undefine",
-];
 
 /**
  * An agent's delegation depth: the persisted header count, or the runtime
@@ -199,7 +199,7 @@ export function apply(ctx: Context, config: unknown): void {
   const skillDirs = cfg.skillDirs ?? [];
   const subagentDeny = cfg.subagentDeny ?? DEFAULT_SUBAGENT_DENY;
 
-  ctx.on("skills/change", () => {
+  ctx.on("skills/change" as keyof Events, () => {
     gatesCache = undefined;
   });
 
@@ -209,8 +209,9 @@ export function apply(ctx: Context, config: unknown): void {
   ctx.on("agent/pre-step", (payload, next) => {
     try {
       enforce(payload.agent);
-    } catch {
-      // Observe only.
+    } catch (err) {
+      // Observe only: never break stepping, but surface the fault in the journal.
+      console.error("[skill-gate] pre-step enforcement failed:", err);
     }
     return next();
   });
@@ -231,7 +232,7 @@ export function apply(ctx: Context, config: unknown): void {
     return proceed();
   });
 
-  ctx.on("compaction/start", () => {
+  ctx.on("compaction/start" as keyof Events, () => {
     clearAll();
   });
 
@@ -318,10 +319,23 @@ export function apply(ctx: Context, config: unknown): void {
     if (appliedById.get(agent.id) === mark) return;
     disposerById.get(agent.id)?.();
     disposerById.delete(agent.id);
+    if (deny.length === 0) {
+      appliedById.set(agent.id, mark);
+      return;
+    }
+    let disposer: (() => void) | undefined;
+    try {
+      disposer = restrictKnown(agent, deny);
+    } catch (err) {
+      appliedById.delete(agent.id);
+      throw err;
+    }
+    if (!disposer) {
+      appliedById.delete(agent.id);
+      return;
+    }
     appliedById.set(agent.id, mark);
-    if (deny.length === 0) return;
-    const disposer = restrictKnown(agent, deny);
-    if (disposer) disposerById.set(agent.id, disposer);
+    disposerById.set(agent.id, disposer);
   }
 
   function clearAll(): void {
@@ -379,7 +393,10 @@ export function apply(ctx: Context, config: unknown): void {
     if (!match) return undefined;
     const list = match[1].trim();
     if (list === "(none)") return new Set();
-    const names = [...list.matchAll(/"([^"]*)"/g)].map((m) => m[1]);
+    const names = list
+      .split(",")
+      .map((name) => name.trim())
+      .filter((name) => name.length > 0);
     return new Set(names);
   }
 

@@ -26,14 +26,15 @@
 /** highlight.js: core plus the bash grammar, INLINED by esbuild. The
  * browser module table cannot resolve npm deps, so the bundle carries
  * the grammar itself. One language keeps the bundle small. */
-var hljs = require("highlight.js/lib/core");
-hljs.registerLanguage("bash", require("highlight.js/lib/languages/bash"));
+import hljs from "highlight.js/lib/core";
+import bashGrammar from "highlight.js/lib/languages/bash";
+hljs.registerLanguage("bash", bashGrammar);
 
 /** The browser module table resolves these platform modules. */
-var react = require("react");
-var _primitives = require("@deepseek-ai/dsh-client-ui-primitives");
+import react from "react";
+import * as _primitives from "@deepseek-ai/dsh-client-ui-primitives";
 var Button = _primitives.Button;
-var _runtime = require("@deepseek-ai/dsh-client-runtime/client");
+import * as _runtime from "@deepseek-ai/dsh-client-runtime/client";
 var conversationContextKey = _runtime.conversationContextKey;
 
 /** Stable plugin identity, also the loader entry id in cordis.patch.yml. */
@@ -343,4 +344,4 @@ function apply(ctx) {
   });
 }
 
-module.exports = { apply: apply, inject: inject, name: name };
+export { apply, inject, name };

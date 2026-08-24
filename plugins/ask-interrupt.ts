@@ -61,7 +61,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-tools'
-import type {} from '@deepseek-ai/dsh-agent'
+import type { AgentCancelCause } from '@deepseek-ai/dsh-agent'
 
 export const name = 'ask-interrupt'
 
@@ -98,7 +98,7 @@ export function apply(ctx: Context, config: AskInterruptConfig): void {
     const agent = exec.agent
     if (agent === undefined) return outcome // agentless call: nothing to cancel
 
-    agent.cancel('user-dismissed-question', { keepInbox: true })
+    agent.cancel('user-dismissed-question' as unknown as AgentCancelCause, { keepInbox: true })
 
     return outcome
   })

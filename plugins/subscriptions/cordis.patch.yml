@@ -6,3 +6,9 @@
 - insert:
     - id: subscriptions
       name: subscriptions
+      config:
+        providers:
+          commandcode: true
+          claude: true
+          deepseek: true
+          opencode: false

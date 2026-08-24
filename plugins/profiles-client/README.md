@@ -1,7 +1,7 @@
 # profiles-client
 
 W6 client plugin. It replaces the shipped model seat in the composer with a
-profile-aware one, and adds three small extras.
+profile-aware one, and adds two small extras.
 
 ## What it mounts
 
@@ -14,24 +14,11 @@ profile-aware one, and adds three small extras.
   the same `sessions.selectModel` wire call the shipped selector uses.
 - A green dot next to the trigger shows when the live session selection
   equals the active profile's head. Any manual override hides it.
-- A small cost figure on the `conversation.input.right` list slot, beside
-  the context ring in the composer trailing row. It folds settled assistant
-  usage per model and prices it with the `prices` namespace this package
-  owns. Any used model without a rate row hides the figure. The ring's own
-  hover tooltip is a bare string prop with no extension seam, so the figure
-  sits next to the ring instead of inside its tooltip.
+- A title rewriter keeps `document.title` at `dsh | <session title>`.
 
-## Settings example
-
-```yaml
-prices:
-  rates:
-    meridian/claude-opus-5:
-      input: 3
-      output: 15
-```
-
-Rates are USD per million tokens.
+The W24 cost chip is gone. The subscriptions panel owns usage and cost now,
+so the composer chip was redundant. Its `prices` settings namespace was
+removed with it.
 
 ## Mount
 
