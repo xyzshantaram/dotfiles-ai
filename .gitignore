@@ -5,3 +5,5 @@ server.env
 /plugins/*/package-lock.json
 # Workspace paste storage (dsh-paste-to-path attachments)
 /.dsh/
+# sync.sh run log
+/.sync-run.log
