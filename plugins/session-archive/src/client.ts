@@ -22,31 +22,33 @@
  */
 
 import react from "react";
+import { DESIGN_TOKENS, CONTROLS_CSS, mergeCss } from "../../design-system";
 
 /** Stable plugin identity, also the loader entry id in cordis.patch.yml. */
 var PLUGIN_NAME = "session-archive";
 
 /** One stylesheet for this panel. Class names are kebab-case only. */
 var STYLE_TAG_ID = "session-archive/settings.css";
-var CSS_TEXT = [
-  ".sarch-root{box-sizing:border-box;display:flex;flex-direction:column;gap:14px;padding:6px 2px;color:var(--dsw-alias-label-primary)}",
-  ".sarch-head{display:flex;align-items:center;justify-content:space-between;gap:8px}",
-  ".sarch-title{font-size:16px;font-weight:600;margin:0}",
-  ".sarch-refresh{cursor:pointer;border:none;background:none;padding:0;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:16px}",
+var CSS_TEXT = mergeCss(DESIGN_TOKENS, CONTROLS_CSS, [
+  ".sarch-root{box-sizing:border-box;display:flex;flex-direction:column;gap:12px;padding:0;color:var(--dsw-alias-label-primary)}",
+  ".sarch-head{display:flex;align-items:center;justify-content:space-between;gap:12px}",
+  ".sarch-title{font-size:24px;font-weight:700;margin:0;line-height:1.2;color:var(--dsw-alias-label-primary)}",
+  ".sarch-refresh{cursor:pointer;border:none;background:none;padding:0;color:var(--dsw-alias-label-secondary);font-size:15px;line-height:20px}",
   ".sarch-refresh:hover{color:var(--dsw-alias-label-primary)}",
-  ".sarch-section{display:flex;flex-direction:column;gap:10px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;padding:12px 14px}",
-  ".sarch-rows{display:flex;flex-direction:column;gap:8px}",
-  ".sarch-row{display:flex;align-items:center;gap:10px;min-width:0}",
+  ".sarch-section{display:flex;flex-direction:column;gap:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:20px;padding:20px;background:var(--dsw-alias-bg-tertiary)}",
+  ".sarch-rows{display:flex;flex-direction:column;gap:12px}",
+  ".sarch-row{display:flex;align-items:center;gap:12px;min-width:0}",
   ".sarch-row-main{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}",
-  ".sarch-row-id{font-size:12px;line-height:16px;font-weight:600;color:var(--dsw-alias-label-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
-  ".sarch-row-meta{display:flex;align-items:center;gap:6px;min-width:0}",
-  ".sarch-row-meta>span{font-size:10px;line-height:14px;color:var(--dsw-alias-label-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
-  ".sarch-live{font-size:11px;line-height:15px;color:var(--dsw-alias-state-success-primary);font-weight:600;flex:none}",
-  ".sarch-btn{color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:999px;font-size:12px;line-height:20px;padding:2px 10px;cursor:pointer;flex:none}",
+  ".sarch-row-id{font-size:16px;line-height:22px;font-weight:600;color:var(--dsw-alias-label-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
+  ".sarch-row-meta{display:flex;align-items:center;gap:12px;min-width:0}",
+  ".sarch-row-meta>span{font-size:14px;line-height:22px;color:var(--dsw-alias-label-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
+  ".sarch-live{font-size:15px;line-height:20px;color:var(--dsw-alias-state-success-primary);font-weight:600;flex:none}",
+  ".sarch-btn{box-sizing:border-box;width:40px;height:40px;display:inline-grid;place-items:center;flex:none;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);font-size:28px;padding:0;cursor:pointer}",
+  ".sarch-btn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}",
   ".sarch-btn:disabled{opacity:.5;cursor:default}",
-  ".sarch-empty{font-size:12px;line-height:16px;color:var(--dsw-alias-label-secondary);font-style:italic}",
-  ".sarch-err{font-size:12px;line-height:16px;color:var(--dsw-alias-state-error-primary)}",
-].join("");
+  ".sarch-empty{font-size:14px;line-height:22px;color:var(--dsw-alias-label-secondary);font-style:italic}",
+  ".sarch-err{font-size:15px;line-height:22px;color:var(--dsw-alias-state-error-primary)}",
+].join(""));
 
 /** Fetch one same-origin route and always resolve to a plain object. */
 function fetchJson(url) {
@@ -180,13 +182,15 @@ function makePanel() {
               {
                 className: "sarch-btn",
                 disabled: busy === session.id,
+                title: "Delete archived session",
+                "aria-label": "Delete archived session",
                 onClick: (function (id) {
                   return function () {
                     remove(id);
                   };
                 })(session.id),
               },
-              busy === session.id ? "Deleting…" : "Delete",
+              busy === session.id ? "…" : "×",
             );
         var label = session.title ? session.title : shortId(session.id);
         rows.push(

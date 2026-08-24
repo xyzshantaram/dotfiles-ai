@@ -2002,6 +2002,60 @@ function bash(hljs) {
 
 // plugins/approval-comment/src/client.ts
 var import_react = __toESM(require("react"), 1);
+
+// plugins/design-system.ts
+var DESIGN_TOKENS = `:root {
+  --bg: #2c2c2e;
+  --surface: #232324;
+  --surface-hover: #303032;
+  --surface-active: #43454a;
+
+  --border: #3e3e3f;
+  --border-subtle: #303031;
+  --border-focus: #66676b;
+
+  --text-primary: #f9fafb;
+  --text-secondary: #adb2b8;
+  --text-muted: #88898a;
+
+  --radius-sm: 7px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-5: 40px;
+  --space-6: 48px;
+}`;
+var CONTROLS_CSS = `
+.setting-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--space-3);display:grid;grid-template-columns:28px 1fr;gap:20px;align-items:start}
+.setting-checkbox{width:28px;height:28px;flex:0 0 28px;border-radius:3px}
+.segmented-control{display:flex;padding:4px;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
+.segment{min-width:175px;height:48px;border:0;border-radius:10px;background:transparent;color:var(--text-secondary);font-size:20px}
+.segment[data-active="true"]{background:var(--surface-active);color:var(--text-primary);font-weight:600}
+.control-list{overflow:hidden;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
+.control-list-row{min-height:64px;padding:0 20px;display:flex;align-items:center;gap:12px}
+.control-list-row + .control-list-row{border-top:1px solid var(--border-subtle)}
+.pill{height:36px;padding-inline:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--text-secondary);font-size:16px}
+.pill[data-active="true"]{background:var(--surface-active);color:var(--text-primary)}
+.icon-button{width:40px;height:40px;display:inline-grid;place-items:center;border:0;border-radius:8px;background:transparent;color:var(--text-secondary);font-size:28px}
+.icon-button:hover{background:var(--surface-hover);color:var(--text-primary)}
+.mode-switch{display:inline-flex;padding:4px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface)}
+.mode-switch>button{height:44px;padding-inline:32px;border:0;border-radius:9px;background:transparent;color:var(--text-secondary);font-size:18px}
+.mode-switch>button[data-active="true"]{background:var(--surface-active);color:var(--text-primary);font-weight:600}
+.text-input{height:56px;width:100%;padding-inline:16px;border:1px solid var(--border);border-radius:14px;background:var(--surface);color:var(--text-primary);font-size:18px;outline:none}
+.text-input::placeholder{color:var(--text-muted)}
+.text-input:focus{border-color:var(--border-focus)}
+.primary-button{height:56px;padding-inline:20px;border:0;border-radius:28px;background:#adb2b8;color:#232324;font-size:18px;font-weight:600}
+.primary-button:disabled{opacity:.45;cursor:not-allowed}
+.checkbox-field{display:flex;align-items:center;gap:12px;color:var(--text-secondary);font-size:18px}
+`.trim();
+var mergeCss = (...parts) => parts.filter(Boolean).join("\n");
+
+// plugins/approval-comment/src/client.ts
 var _primitives = __toESM(require("@deepseek-ai/dsh-client-ui-primitives"), 1);
 var _runtime = __toESM(require("@deepseek-ai/dsh-client-runtime/client"), 1);
 core_default.registerLanguage("bash", bash);
@@ -2010,12 +2064,12 @@ var conversationContextKey2 = _runtime.conversationContextKey;
 var PLUGIN_NAME = "approval-comment";
 var LOCALE_NS = "approval-comment";
 var STYLE_TAG_ID = "approval-comment/ApprovalComment.module.css";
-var CSS_TEXT = [
+var CSS_TEXT = mergeCss(DESIGN_TOKENS, CONTROLS_CSS, [
   ".approval-comment-root{padding:8px calc(var(--dsh-composer-side-clearance) + 16px) 12px;flex-direction:column;align-items:center;display:flex}",
   ".approval-comment-card{width:100%;max-width:var(--dsh-chat-content-width);border:1px solid var(--dsw-alias-state-warn-secondary);background:var(--dsw-specific-input-major);box-shadow:var(--dsw-shadow-lv2);--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2);border-radius:20px;overflow:hidden}",
-  ".approval-comment-strip{background:var(--dsw-alias-state-warn-tertiary);color:var(--dsw-alias-state-warn-primary);align-items:center;gap:8px;padding:10px 16px;font-size:13px;line-height:18px;display:flex}",
+  ".approval-comment-strip{background:var(--dsw-alias-state-warn-tertiary);color:var(--dsw-alias-state-warn-primary);align-items:center;gap:8px;padding:8px 13px;font-size:13px;line-height:18px;display:flex}",
   ".approval-comment-dot{background:var(--dsw-alias-state-warn-primary);border-radius:50%;width:8px;height:8px}",
-  ".approval-comment-body{box-sizing:border-box;max-height:var(--dsh-composer-text-max-height);flex-direction:column;gap:6px;padding:12px 16px 0;display:flex;overflow-y:auto}",
+  ".approval-comment-body{box-sizing:border-box;max-height:var(--dsh-composer-text-max-height);flex-direction:column;gap:6px;padding:10px 13px 0;display:flex;overflow-y:auto}",
   ".approval-comment-headline{color:var(--dsw-alias-label-primary);font-size:15px;font-weight:500;line-height:24px}",
   ".approval-comment-command{color:var(--dsw-alias-label-tertiary);font-family:var(--ds-font-family-code);overflow-wrap:anywhere;font-size:13px;line-height:20px}",
   ".approval-comment-command code.hljs{background:transparent;padding:0;font-family:inherit;font-size:inherit;line-height:inherit;overflow-wrap:inherit}",
@@ -2026,17 +2080,17 @@ var CSS_TEXT = [
   ".approval-comment-command .hljs-number,.approval-comment-command .hljs-symbol,.approval-comment-command .hljs-bullet{color:#79c0ff}",
   ".approval-comment-command .hljs-attr,.approval-comment-command .hljs-attribute,.approval-comment-command .hljs-variable{color:#ffa657}",
   ".approval-comment-command .hljs-name,.approval-comment-command .hljs-tag,.approval-comment-command .hljs-built_in,.approval-comment-command .hljs-type{color:#7ee787}",
-  ".approval-comment-action-row{justify-content:flex-end;gap:8px;padding:14px 16px;display:flex}",
+  ".approval-comment-action-row{justify-content:flex-end;gap:8px;padding:11px 13px;display:flex}",
   ".approval-comment-reject:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover-danger);color:var(--dsw-alias-state-error-primary);border-color:#0000}",
   ".approval-comment-comment-toggle{align-self:flex-start;background:none;border:0;padding:2px 0;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:18px;cursor:pointer}",
   ".approval-comment-comment-toggle:hover:not(:disabled){color:var(--dsw-alias-label-primary)}",
   ".approval-comment-comment-toggle:disabled{opacity:.5;cursor:default}",
   ".approval-comment-comment-field{flex-direction:column;gap:6px;display:flex}",
-  ".approval-comment-comment-input{box-sizing:border-box;width:100%;min-height:56px;resize:vertical;border:1px solid var(--dsw-alias-line-secondary);border-radius:8px;padding:8px 10px;background:var(--dsw-specific-input-major);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:13px;line-height:20px}",
+  ".approval-comment-comment-input{box-sizing:border-box;width:100%;min-height:56px;resize:vertical;border:1px solid var(--dsw-alias-line-secondary);border-radius:8px;padding:6px 8px;background:var(--dsw-specific-input-major);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:13px;line-height:20px}",
   ".approval-comment-comment-input:focus{outline:0;border-color:var(--dsw-alias-state-warn-secondary)}",
   ".approval-comment-comment-input:disabled{opacity:.5}",
   ".approval-comment-comment-hint{color:var(--dsw-alias-label-caption);font-size:12px;line-height:16px;margin:0}"
-].join("");
+].join(""));
 if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(STYLE_TAG_ID) + "]") === null) {
   tag = document.createElement("style");
   tag.dataset.plugin = PLUGIN_NAME;

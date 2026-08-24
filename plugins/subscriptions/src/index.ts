@@ -4,6 +4,10 @@
  * Owns the same-origin proxy routes the browser panel polls:
  *   - GET /subscriptions/meridian-quota      — meridian quota (cached 30s)
  *   - GET /subscriptions/meridian-telemetry  — meridian telemetry (cached 60s)
+ *   - GET /subscriptions/meridian-quota-single — single-profile meridian quota (cached 30s)
+ *   - GET /subscriptions/meridian-telemetry-requests — recent meridian requests (cached 60s)
+ *   - GET /subscriptions/meridian-logs        — recent meridian logs (cached 15s)
+ *   - GET /subscriptions/meridian-health      — meridian auth + renewal info (cached 60s)
  *   - GET /subscriptions/opencode-balance    — cookie-based OpenCode GO balance
  *   - GET /subscriptions/opencode-usage      — GO windows via the zen API key
  *   - GET /subscriptions/opencode-zen-balance — OpenCode Zen balance (same
@@ -425,6 +429,74 @@ export function apply(ctx, config) {
     }
   };
 
+  // ── meridian quota (single profile, enriched buckets) ─────────────────
+  const quotaSingleOnce = cachedOnce(async () => {
+    const res = await fetch("http://localhost:9000/v1/usage/quota", {
+      signal: AbortSignal.timeout(MERIDIAN_TIMEOUT_MS),
+    });
+    if (!res.ok) throw new Error(`meridian quota HTTP ${res.status}`);
+    return res.json();
+  }, 30_000);
+
+  const handleQuotaSingle = async (_req, res) => {
+    try {
+      sendJson(res, 200, await quotaSingleOnce());
+    } catch (error) {
+      sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) });
+    }
+  };
+
+  // ── meridian telemetry: recent requests ───────────────────────────────
+  const telemetryRequestsOnce = cachedOnce(async () => {
+    const res = await fetch("http://localhost:9000/telemetry/requests?limit=20", {
+      signal: AbortSignal.timeout(MERIDIAN_TIMEOUT_MS),
+    });
+    if (!res.ok) throw new Error(`meridian requests HTTP ${res.status}`);
+    return res.json();
+  }, 60_000);
+
+  const handleTelemetryRequests = async (_req, res) => {
+    try {
+      sendJson(res, 200, await telemetryRequestsOnce());
+    } catch (error) {
+      sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) });
+    }
+  };
+
+  // ── meridian recent logs ──────────────────────────────────────────────
+  const meridianLogsOnce = cachedOnce(async () => {
+    const res = await fetch("http://localhost:9000/telemetry/logs?limit=10", {
+      signal: AbortSignal.timeout(MERIDIAN_TIMEOUT_MS),
+    });
+    if (!res.ok) throw new Error(`meridian logs HTTP ${res.status}`);
+    return res.json();
+  }, 15_000);
+
+  const handleMeridianLogs = async (_req, res) => {
+    try {
+      sendJson(res, 200, await meridianLogsOnce());
+    } catch (error) {
+      sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) });
+    }
+  };
+
+  // ── meridian health / auth ────────────────────────────────────────────
+  const meridianHealthOnce = cachedOnce(async () => {
+    const res = await fetch("http://localhost:9000/health", {
+      signal: AbortSignal.timeout(MERIDIAN_TIMEOUT_MS),
+    });
+    if (!res.ok) throw new Error(`meridian health HTTP ${res.status}`);
+    return res.json();
+  }, 60_000);
+
+  const handleMeridianHealth = async (_req, res) => {
+    try {
+      sendJson(res, 200, await meridianHealthOnce());
+    } catch (error) {
+      sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) });
+    }
+  };
+
   // ── cookie-based OpenCode GO balance ───────────────────────────────────
   // The cookie comes from the credentials domain. A missing credential or a
   // signed-out/parse failure both answer with 200 and a JSON error object so
@@ -651,7 +723,8 @@ export function apply(ctx, config) {
       }
       const raw = await dsUsageCostOnce(token, month, year);
       // Transform nested cost shape -> flat array with cost per model
-      const biz = raw?.data?.biz_data || {};
+      const bizRaw = raw?.data?.biz_data;
+      const biz = Array.isArray(bizRaw) ? (bizRaw[0] || {}) : (bizRaw || {});
       const total = Array.isArray(biz.total) ? biz.total : [];
       const transformed = total.map((m) => {
         const usage = Array.isArray(m.usage) ? m.usage : [];
@@ -940,6 +1013,26 @@ export function apply(ctx, config) {
     kind: "exact",
     path: "/subscriptions/meridian-telemetry",
     handler: handleTelemetry,
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/meridian-quota-single",
+    handler: handleQuotaSingle,
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/meridian-telemetry-requests",
+    handler: handleTelemetryRequests,
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/meridian-logs",
+    handler: handleMeridianLogs,
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/meridian-health",
+    handler: handleMeridianHealth,
   });
   ctx.webServer.register({
     kind: "exact",

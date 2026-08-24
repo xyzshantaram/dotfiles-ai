@@ -734,6 +734,62 @@ function apply(ctx, config) {
       sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) });
     }
   };
+  const quotaSingleOnce = cachedOnce(async () => {
+    const res = await fetch("http://localhost:9000/v1/usage/quota", {
+      signal: AbortSignal.timeout(MERIDIAN_TIMEOUT_MS)
+    });
+    if (!res.ok) throw new Error(`meridian quota HTTP ${res.status}`);
+    return res.json();
+  }, 3e4);
+  const handleQuotaSingle = async (_req, res) => {
+    try {
+      sendJson(res, 200, await quotaSingleOnce());
+    } catch (error) {
+      sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) });
+    }
+  };
+  const telemetryRequestsOnce = cachedOnce(async () => {
+    const res = await fetch("http://localhost:9000/telemetry/requests?limit=20", {
+      signal: AbortSignal.timeout(MERIDIAN_TIMEOUT_MS)
+    });
+    if (!res.ok) throw new Error(`meridian requests HTTP ${res.status}`);
+    return res.json();
+  }, 6e4);
+  const handleTelemetryRequests = async (_req, res) => {
+    try {
+      sendJson(res, 200, await telemetryRequestsOnce());
+    } catch (error) {
+      sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) });
+    }
+  };
+  const meridianLogsOnce = cachedOnce(async () => {
+    const res = await fetch("http://localhost:9000/telemetry/logs?limit=10", {
+      signal: AbortSignal.timeout(MERIDIAN_TIMEOUT_MS)
+    });
+    if (!res.ok) throw new Error(`meridian logs HTTP ${res.status}`);
+    return res.json();
+  }, 15e3);
+  const handleMeridianLogs = async (_req, res) => {
+    try {
+      sendJson(res, 200, await meridianLogsOnce());
+    } catch (error) {
+      sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) });
+    }
+  };
+  const meridianHealthOnce = cachedOnce(async () => {
+    const res = await fetch("http://localhost:9000/health", {
+      signal: AbortSignal.timeout(MERIDIAN_TIMEOUT_MS)
+    });
+    if (!res.ok) throw new Error(`meridian health HTTP ${res.status}`);
+    return res.json();
+  }, 6e4);
+  const handleMeridianHealth = async (_req, res) => {
+    try {
+      sendJson(res, 200, await meridianHealthOnce());
+    } catch (error) {
+      sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) });
+    }
+  };
   let balanceCache = null;
   const cachedBalance = (cookie) => {
     const now = Date.now();
@@ -908,7 +964,8 @@ function apply(ctx, config) {
         return;
       }
       const raw = await dsUsageCostOnce(token, month, year);
-      const biz = raw?.data?.biz_data || {};
+      const bizRaw = raw?.data?.biz_data;
+      const biz = Array.isArray(bizRaw) ? bizRaw[0] || {} : bizRaw || {};
       const total = Array.isArray(biz.total) ? biz.total : [];
       const transformed = total.map((m) => {
         const usage = Array.isArray(m.usage) ? m.usage : [];
@@ -1147,6 +1204,26 @@ function apply(ctx, config) {
     kind: "exact",
     path: "/subscriptions/meridian-telemetry",
     handler: handleTelemetry
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/meridian-quota-single",
+    handler: handleQuotaSingle
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/meridian-telemetry-requests",
+    handler: handleTelemetryRequests
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/meridian-logs",
+    handler: handleMeridianLogs
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/meridian-health",
+    handler: handleMeridianHealth
   });
   ctx.webServer.register({
     kind: "exact",

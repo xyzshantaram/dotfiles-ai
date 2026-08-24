@@ -32,6 +32,7 @@ hljs.registerLanguage("bash", bashGrammar);
 
 /** The browser module table resolves these platform modules. */
 import react from "react";
+import { DESIGN_TOKENS, CONTROLS_CSS, mergeCss } from "../../design-system";
 import * as _primitives from "@deepseek-ai/dsh-client-ui-primitives";
 var Button = _primitives.Button;
 import * as _runtime from "@deepseek-ai/dsh-client-runtime/client";
@@ -48,12 +49,12 @@ var LOCALE_NS = "approval-comment";
  * the shipped modules (`data-plugin-css` guard, one tag per bundle).
  */
 var STYLE_TAG_ID = "approval-comment/ApprovalComment.module.css";
-var CSS_TEXT = [
+var CSS_TEXT = mergeCss(DESIGN_TOKENS, CONTROLS_CSS, [
   ".approval-comment-root{padding:8px calc(var(--dsh-composer-side-clearance) + 16px) 12px;flex-direction:column;align-items:center;display:flex}",
   ".approval-comment-card{width:100%;max-width:var(--dsh-chat-content-width);border:1px solid var(--dsw-alias-state-warn-secondary);background:var(--dsw-specific-input-major);box-shadow:var(--dsw-shadow-lv2);--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2);border-radius:20px;overflow:hidden}",
-  ".approval-comment-strip{background:var(--dsw-alias-state-warn-tertiary);color:var(--dsw-alias-state-warn-primary);align-items:center;gap:8px;padding:10px 16px;font-size:13px;line-height:18px;display:flex}",
+  ".approval-comment-strip{background:var(--dsw-alias-state-warn-tertiary);color:var(--dsw-alias-state-warn-primary);align-items:center;gap:8px;padding:8px 13px;font-size:13px;line-height:18px;display:flex}",
   ".approval-comment-dot{background:var(--dsw-alias-state-warn-primary);border-radius:50%;width:8px;height:8px}",
-  ".approval-comment-body{box-sizing:border-box;max-height:var(--dsh-composer-text-max-height);flex-direction:column;gap:6px;padding:12px 16px 0;display:flex;overflow-y:auto}",
+  ".approval-comment-body{box-sizing:border-box;max-height:var(--dsh-composer-text-max-height);flex-direction:column;gap:6px;padding:10px 13px 0;display:flex;overflow-y:auto}",
   ".approval-comment-headline{color:var(--dsw-alias-label-primary);font-size:15px;font-weight:500;line-height:24px}",
   ".approval-comment-command{color:var(--dsw-alias-label-tertiary);font-family:var(--ds-font-family-code);overflow-wrap:anywhere;font-size:13px;line-height:20px}",
   ".approval-comment-command code.hljs{background:transparent;padding:0;font-family:inherit;font-size:inherit;line-height:inherit;overflow-wrap:inherit}",
@@ -64,17 +65,17 @@ var CSS_TEXT = [
   ".approval-comment-command .hljs-number,.approval-comment-command .hljs-symbol,.approval-comment-command .hljs-bullet{color:#79c0ff}",
   ".approval-comment-command .hljs-attr,.approval-comment-command .hljs-attribute,.approval-comment-command .hljs-variable{color:#ffa657}",
   ".approval-comment-command .hljs-name,.approval-comment-command .hljs-tag,.approval-comment-command .hljs-built_in,.approval-comment-command .hljs-type{color:#7ee787}",
-  ".approval-comment-action-row{justify-content:flex-end;gap:8px;padding:14px 16px;display:flex}",
+  ".approval-comment-action-row{justify-content:flex-end;gap:8px;padding:11px 13px;display:flex}",
   ".approval-comment-reject:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover-danger);color:var(--dsw-alias-state-error-primary);border-color:#0000}",
   ".approval-comment-comment-toggle{align-self:flex-start;background:none;border:0;padding:2px 0;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:18px;cursor:pointer}",
   ".approval-comment-comment-toggle:hover:not(:disabled){color:var(--dsw-alias-label-primary)}",
   ".approval-comment-comment-toggle:disabled{opacity:.5;cursor:default}",
   ".approval-comment-comment-field{flex-direction:column;gap:6px;display:flex}",
-  ".approval-comment-comment-input{box-sizing:border-box;width:100%;min-height:56px;resize:vertical;border:1px solid var(--dsw-alias-line-secondary);border-radius:8px;padding:8px 10px;background:var(--dsw-specific-input-major);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:13px;line-height:20px}",
+  ".approval-comment-comment-input{box-sizing:border-box;width:100%;min-height:56px;resize:vertical;border:1px solid var(--dsw-alias-line-secondary);border-radius:8px;padding:6px 8px;background:var(--dsw-specific-input-major);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:13px;line-height:20px}",
   ".approval-comment-comment-input:focus{outline:0;border-color:var(--dsw-alias-state-warn-secondary)}",
   ".approval-comment-comment-input:disabled{opacity:.5}",
   ".approval-comment-comment-hint{color:var(--dsw-alias-label-caption);font-size:12px;line-height:16px;margin:0}",
-].join("");
+].join(""));
 if (
   typeof document !== "undefined" &&
   document.querySelector("style[data-plugin-css=" + JSON.stringify(STYLE_TAG_ID) + "]") === null

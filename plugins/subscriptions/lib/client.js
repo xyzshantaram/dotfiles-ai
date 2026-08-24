@@ -42,72 +42,81 @@ __export(client_exports, {
 module.exports = __toCommonJS(client_exports);
 var import_react = __toESM(require("react"), 1);
 var PLUGIN_NAME = "subscriptions";
-var STYLE_TAG_ID = "subscriptions/settings.css";
+var STYLE_TAG_ID = "subscriptions/client.css";
 var CSS_TEXT = [
-  ".ocgs-root{box-sizing:border-box;display:flex;flex-direction:column;gap:14px;padding:6px 2px;color:var(--dsw-alias-label-primary)}",
-  ".ocgs-head{display:flex;align-items:center;justify-content:space-between;gap:8px}",
-  ".ocgs-title{font-size:16px;font-weight:600;margin:0}",
-  ".ocgs-head-title{display:flex;align-items:baseline;gap:8px;min-width:0;flex:1;overflow:hidden}",
-  ".ocgs-stale{font-size:11px;line-height:15px;color:var(--dsw-alias-label-secondary);white-space:nowrap}",
-  ".ocgs-refresh{cursor:pointer;border:none;background:none;padding:0;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:16px}",
-  ".ocgs-refresh:hover{color:var(--dsw-alias-label-primary)}",
-  ".ocgs-section{display:flex;flex-direction:column;gap:10px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;padding:12px 14px}",
-  ".ocgs-section-title{font-size:13px;font-weight:600;margin:0}",
-  ".ocgs-balance{font-size:13px;font-weight:600}",
-  ".ocgs-telemetry{font-size:11px;line-height:15px;color:var(--dsw-alias-label-secondary)}",
-  ".ocgs-rows{display:flex;flex-direction:column;gap:8px}",
-  ".ocgs-row{display:flex;flex-direction:column;gap:4px;min-width:0}",
-  ".ocgs-row-label{display:flex;align-items:baseline;gap:8px;font-size:12px;line-height:16px;color:var(--dsw-alias-label-secondary)}",
-  ".ocgs-row-label b{font-weight:600;color:var(--dsw-alias-label-primary)}",
+  // Page-level container: airy vertical rhythm, no own box.
+  ".ocgs-root{box-sizing:border-box;display:flex;flex-direction:column;gap:13px;padding:0;color:var(--dsw-alias-label-primary)}",
+  // Header row (title + refresh).
+  ".ocgs-head{display:flex;align-items:center;justify-content:space-between;gap:10px}",
+  ".ocgs-title{font-size:24px;font-weight:700;margin:0;line-height:1.2;color:var(--dsw-alias-label-primary)}",
+  ".ocgs-head-title{display:flex;align-items:baseline;gap:10px;min-width:0;flex:1;overflow:hidden}",
+  ".ocgs-stale{font-size:14px;line-height:20px;color:var(--dsw-alias-label-secondary);white-space:nowrap}",
+  ".ocgs-refresh{cursor:pointer;border:none;background:none;padding:5px 5px;border-radius:7px;color:var(--dsw-alias-label-secondary);font-size:15px;line-height:20px}",
+  ".ocgs-refresh:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}",
+  // Large setting card: 20px radius, generous 24px padding, single subtle border.
+  ".ocgs-section{display:flex;flex-direction:column;gap:13px;border:1px solid var(--dsw-alias-border-l2);border-radius:20px;padding:24px;background:var(--dsw-alias-bg-tertiary)}",
+  ".ocgs-section-title{font-size:24px;font-weight:700;margin:0;line-height:1.2;color:var(--dsw-alias-label-primary)}",
+  ".ocgs-balance{font-size:18px;font-weight:600;color:var(--dsw-alias-label-primary)}",
+  ".ocgs-telemetry{font-size:15px;line-height:22px;color:var(--dsw-alias-label-secondary)}",
+  ".ocgs-rows{display:flex;flex-direction:column;gap:13px}",
+  ".ocgs-row{display:flex;flex-direction:column;gap:5px;min-width:0}",
+  ".ocgs-row-label{display:flex;align-items:baseline;gap:10px;font-size:16px;line-height:22px;color:var(--dsw-alias-label-secondary)}",
+  ".ocgs-row-label b{font-weight:600;color:var(--dsw-alias-label-primary);font-size:16px}",
   ".ocgs-row-label b:last-child{margin-left:auto}",
-  ".ocgs-meta{display:flex;align-items:center;gap:6px;min-width:0}",
-  ".ocgs-meta>span{font-size:10px;line-height:14px;color:var(--dsw-alias-label-secondary);white-space:nowrap;flex:none}",
-  ".ocgs-track{box-sizing:border-box;flex:1;min-width:0;height:6px;border-radius:3px;background:var(--dsw-alias-border-l2);overflow:hidden}",
-  ".ocgs-fill{height:100%;border-radius:3px;transition:width .4s ease}",
-  ".ocgs-pace{font-size:11px;line-height:15px;color:var(--dsw-alias-label-secondary)}",
-  ".ocgs-err{font-size:12px;line-height:16px;color:var(--dsw-alias-state-error-primary)}",
-  ".ocgs-cookie{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0 6px}",
-  ".ocgs-btn{color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:999px;font-size:12px;line-height:20px;padding:2px 10px;cursor:pointer}",
+  ".ocgs-meta{display:flex;align-items:center;gap:10px;min-width:0}",
+  ".ocgs-meta>span{font-size:13px;line-height:18px;color:var(--dsw-alias-label-secondary);white-space:nowrap;flex:none}",
+  // Progress track: thin, soft, rounded.
+  ".ocgs-track{box-sizing:border-box;flex:1;min-width:0;height:8px;border-radius:7px;background:var(--dsw-alias-border-l2);overflow:hidden}",
+  ".ocgs-fill{height:100%;border-radius:7px;transition:width .4s ease}",
+  ".ocgs-pace{font-size:15px;line-height:22px;color:var(--dsw-alias-label-secondary)}",
+  ".ocgs-err{font-size:15px;line-height:22px;color:var(--dsw-alias-state-error-primary)}",
+  // Action row (fetch cookie / token buttons + note).
+  ".ocgs-cookie{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:3px 0 6px}",
+  // Secondary / pill button.
+  ".ocgs-btn{display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:999px;font-size:15px;line-height:20px;padding:7px 15px;cursor:pointer;min-height:36px}",
+  ".ocgs-btn:hover{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-border-l3)}",
   ".ocgs-btn:disabled{opacity:.5;cursor:default}",
-  ".ocgs-cookie-note{font-size:11px;line-height:15px;color:var(--dsw-alias-label-secondary)}",
-  // Provider visibility toggles
-  // Provider visibility toggles
-  ".ocgs-toggles{display:flex;flex-direction:column;gap:8px}",
-  ".ocgs-toggle{display:flex;align-items:center;gap:8px;min-width:0}",
-  ".ocgs-toggle-label{flex:1;min-width:0;font-size:12px;line-height:16px;color:var(--dsw-alias-label-primary)}",
-  ".ocgs-toggle input{flex:none;cursor:pointer}",
-  ".ocgs-details{border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-tertiary);padding:8px 12px;margin-top:4px}",
-  ".ocgs-summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary);list-style:none}",
+  ".ocgs-cookie-note{font-size:14px;line-height:18px;color:var(--dsw-alias-label-secondary)}",
+  // Provider visibility toggles — checkbox field language.
+  ".ocgs-toggles{display:flex;flex-direction:column;gap:10px}",
+  ".ocgs-toggle{display:flex;align-items:center;gap:10px;min-width:0;cursor:pointer}",
+  ".ocgs-toggle-label{flex:1;min-width:0;font-size:18px;line-height:24px;color:var(--dsw-alias-label-secondary)}",
+  ".ocgs-toggle input{flex:none;width:24px;height:24px;cursor:pointer;accent-color:var(--dsw-alias-state-business-primary)}",
+  // Details disclosure for the toggle list.
+  ".ocgs-details{border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-tertiary);padding:13px;margin-top:4px}",
+  ".ocgs-summary{cursor:pointer;font-size:18px;font-weight:600;color:var(--dsw-alias-label-primary);list-style:none}",
   ".ocgs-summary::-webkit-details-marker{display:none}",
-  ".ocgs-details[open] .ocgs-toggles{padding-top:8px}",
-  // DeepSeek dashboard
-  ".ds-dashboard{display:flex;flex-direction:column;gap:12px}",
-  ".ds-hero{display:flex;flex-direction:column;gap:4px;padding:8px;background:var(--dsw-alias-bg-tertiary);border-radius:8px;border:1px solid var(--dsw-alias-border-l2)}",
-  ".ds-hero-total{font-size:28px;font-weight:700;color:var(--dsw-alias-label-primary);line-height:1.2}",
-  ".ds-hero-breakdown{font-size:12px;color:var(--dsw-alias-label-secondary)}",
-  ".ds-usage-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}",
-  ".ds-usage-card{padding:10px;background:var(--dsw-alias-bg-tertiary);border-radius:8px;border:1px solid var(--dsw-alias-border-l2)}",
-  ".ds-usage-label{font-size:10px;color:var(--dsw-alias-label-secondary);text-transform:uppercase;letter-spacing:0.5px}",
-  ".ds-usage-value{font-size:18px;font-weight:600;color:var(--dsw-alias-label-primary);margin-top:4px}",
-  ".ds-usage-sub{font-size:11px;color:var(--dsw-alias-label-secondary);margin-top:2px}",
-  ".ds-token-row{display:flex;gap:12px;flex-wrap:wrap}",
-  ".ds-token-card{flex:1;min-width:120px;padding:8px;background:var(--dsw-alias-bg-tertiary);border-radius:6px;border:1px solid var(--dsw-alias-border-l2)}",
-  ".ds-token-label{font-size:10px;color:var(--dsw-alias-label-secondary)}",
-  ".ds-token-value{font-size:16px;font-weight:600;color:var(--dsw-alias-state-success-primary)}",
+  ".ocgs-details[open] .ocgs-toggles{padding-top:10px}",
+  // DeepSeek dashboard — nested grouped controls.
+  ".ds-dashboard{display:flex;flex-direction:column;gap:13px}",
+  ".ds-hero{display:flex;flex-direction:column;gap:5px;padding:13px;background:var(--dsw-alias-bg-tertiary);border-radius:12px;border:1px solid var(--dsw-alias-border-l2)}",
+  ".ds-hero-total{font-size:32px;font-weight:700;color:var(--dsw-alias-label-primary);line-height:1.2}",
+  ".ds-hero-breakdown{font-size:15px;color:var(--dsw-alias-label-secondary)}",
+  ".ds-usage-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}",
+  ".ds-usage-card{padding:13px;background:var(--dsw-alias-bg-tertiary);border-radius:12px;border:1px solid var(--dsw-alias-border-l2)}",
+  ".ds-usage-label{font-size:12px;color:var(--dsw-alias-label-secondary);text-transform:uppercase;letter-spacing:0.5px}",
+  ".ds-usage-value{font-size:20px;font-weight:600;color:var(--dsw-alias-label-primary);margin-top:6px}",
+  ".ds-usage-sub{font-size:14px;color:var(--dsw-alias-label-secondary);margin-top:4px}",
+  ".ds-token-row{display:flex;gap:10px;flex-wrap:wrap}",
+  ".ds-token-card{flex:1;min-width:140px;padding:11px;background:var(--dsw-alias-bg-tertiary);border-radius:12px;border:1px solid var(--dsw-alias-border-l2)}",
+  ".ds-token-label{font-size:12px;color:var(--dsw-alias-label-secondary)}",
+  ".ds-token-value{font-size:18px;font-weight:600;color:var(--dsw-alias-state-success-primary)}",
   ".ds-token-value.out{color:var(--dsw-alias-state-error-primary)}",
-  ".ds-empty{font-size:12px;color:var(--dsw-alias-label-secondary);font-style:italic}",
-  ".ocgs-note{font-size:12px;line-height:16px;color:var(--dsw-alias-label-secondary)}"
+  ".ds-empty{font-size:14px;color:var(--dsw-alias-label-secondary);font-style:italic}",
+  ".ocgs-note{font-size:15px;line-height:22px;color:var(--dsw-alias-label-secondary)}",
+  // Visible focus ring on every interactive control.
+  ":focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}"
 ].join("");
 var GO_WINDOWS = [
   { key: "rolling", label: "Rolling (5h)", hint: "5h" },
   { key: "weekly", label: "Weekly", hint: null },
   { key: "monthly", label: "Monthly", hint: null }
 ];
-var CLAUDE_WINDOWS = [
-  { key: "five_hour", label: "5-hour", hint: null },
-  { key: "seven_day", label: "7-day", hint: null },
-  { key: "seven_day_fable", label: "7-day fable", hint: null }
-];
+function windowLabel(type) {
+  return String(type || "").split("_").filter(Boolean).map(function(word) {
+    return word.charAt(0).toUpperCase() + word.slice(1);
+  }).join(" ") || "Window";
+}
 var PROVIDER_TOGGLES = [
   { key: "commandcode", label: "Command Code" },
   { key: "claude", label: "Claude (meridian)" },
@@ -145,7 +154,49 @@ function renderTelemetry(t) {
   var totalTokens = (usage.totalInputTokens || 0) + (usage.totalOutputTokens || 0) + (usage.totalCacheReadTokens || 0) + (usage.totalCacheCreationTokens || 0);
   var usd = t.costEstimate && typeof t.costEstimate.totalUsd === "number" ? "$" + t.costEstimate.totalUsd.toFixed(2) + " est" : "\u2014 est";
   var req = typeof t.totalRequests === "number" ? String(t.totalRequests) : "\u2014";
-  return "24h: " + req + " req \xB7 " + usd + " \xB7 " + fmtCount(totalTokens) + " tokens";
+  var parts = ["24h: " + req + " req"];
+  if (typeof t.requestsPerMinute === "number")
+    parts.push(t.requestsPerMinute.toFixed(1) + "/min");
+  parts.push(usd);
+  parts.push(fmtCount(totalTokens) + " tokens");
+  if (typeof usage.avgCacheHitRate === "number")
+    parts.push("cache " + Math.round(usage.avgCacheHitRate * 100) + "%");
+  if (typeof t.errorCount === "number" && t.errorCount > 0)
+    parts.push(t.errorCount + " errors");
+  return parts.join(" \xB7 ");
+}
+function renderHealth(h) {
+  var auth = h && typeof h === "object" ? h.auth || {} : {};
+  var parts = [];
+  if (typeof auth.subscriptionType === "string" && auth.subscriptionType.length > 0)
+    parts.push(auth.subscriptionType);
+  if (typeof auth.daysUntilRenewal === "number")
+    parts.push("renews in " + auth.daysUntilRenewal + "d");
+  if (auth.renewalRequiredSoon === true) parts.push("renewal required soon");
+  return parts.length > 0 ? parts.join(" \xB7 ") : null;
+}
+function renderLogSummary(logs) {
+  var arr = Array.isArray(logs) ? logs : logs && (Array.isArray(logs.logs) ? logs.logs : Array.isArray(logs.entries) ? logs.entries : null);
+  if (!arr || arr.length === 0) return null;
+  var errors = 0, warnings = 0, first = null;
+  for (var i = 0; i < arr.length; i++) {
+    var entry = arr[i];
+    var lvl = entry && typeof entry.level === "string" ? entry.level.toLowerCase() : "";
+    var isErr = lvl === "error" || lvl === "err";
+    var isWarn = lvl === "warn" || lvl === "warning";
+    if (isErr) errors++;
+    else if (isWarn) warnings++;
+    if ((isErr || isWarn) && first === null && entry)
+      first = typeof entry.message === "string" ? entry.message : entry.msg || entry.text || "";
+  }
+  var n = errors + warnings;
+  if (n === 0) return null;
+  var counts = [];
+  if (errors > 0) counts.push(errors + " error" + (errors > 1 ? "s" : ""));
+  if (warnings > 0) counts.push(warnings + " warning" + (warnings > 1 ? "s" : ""));
+  var line = "recent logs: " + counts.join(" \xB7 ");
+  if (first && first.length > 0) line += " \u2014 " + first;
+  return line;
 }
 function windowPercent(win) {
   if (typeof win.percent === "number") return win.percent;
@@ -242,26 +293,33 @@ function putJson(url, body) {
     return { data: null, error: String(e && e.message || e) };
   });
 }
-function buildRows(defs, windows) {
+function buildRows(defs, windows, labelOf) {
   var rows = [];
-  for (var i = 0; i < defs.length; i++) {
-    var def = defs[i];
-    var win = windows ? windows[def.key] : null;
+  var keys = defs ? defs.map(function(d) {
+    return d.key;
+  }) : Object.keys(windows || {});
+  for (var i = 0; i < keys.length; i++) {
+    var key = keys[i];
+    var def = defs ? defs[i] : null;
+    var win = windows ? windows[key] : null;
     if (!win) continue;
     var percent = windowPercent(win);
     if (percent === null) continue;
+    var label = def ? def.label : labelOf ? labelOf(key) : key;
+    var hint = def ? def.hint : null;
+    var status = statusText(win, hint);
     rows.push(
       import_react.default.createElement(
         "div",
-        { className: "ocgs-row", key: def.key },
+        { className: "ocgs-row", key },
         import_react.default.createElement(
           "div",
           { className: "ocgs-row-label" },
-          import_react.default.createElement("b", null, def.label),
-          statusText(win, def.hint) ? import_react.default.createElement(
+          import_react.default.createElement("b", null, label),
+          status ? import_react.default.createElement(
             "span",
             { className: "ocgs-stale" },
-            "resets in " + statusText(win, def.hint)
+            "resets in " + status
           ) : null,
           import_react.default.createElement("b", null, percent + "%")
         ),
@@ -628,6 +686,8 @@ function makePanel(ctx, config) {
         fetchJson("/subscriptions/commandcode-credits"),
         fetchJson("/subscriptions/commandcode-usage"),
         fetchJson("/subscriptions/opencode-zen-balance"),
+        fetchJson("/subscriptions/meridian-health"),
+        fetchJson("/subscriptions/meridian-logs"),
         fetchJson("/profiles/config")
       ]);
       var snapData = {
@@ -641,7 +701,9 @@ function makePanel(ctx, config) {
         cc: results[7],
         ccUsage: results[8],
         oz: results[9],
-        profiles: results[10]
+        health: results[10],
+        logs: results[11],
+        profiles: results[12]
       };
       setSnap(snapData);
       setStaleTs(Date.now());
@@ -674,6 +736,8 @@ function makePanel(ctx, config) {
     var ccUsage = snap ? snap.ccUsage : null;
     var profiles = snap ? snap.profiles : null;
     var oz = snap ? snap.oz : null;
+    var health = snap ? snap.health : null;
+    var logs = snap ? snap.logs : null;
     var cookieState = import_react.default.useState({ busy: false, note: null, showLogin: false });
     var cookie = cookieState[0];
     var setCookie = cookieState[1];
@@ -811,6 +875,13 @@ function makePanel(ctx, config) {
       if (telemetry.error) telemetryLine = "telemetry: " + telemetry.error;
       else if (telemetry.data) telemetryLine = renderTelemetry(telemetry.data);
     }
+    var healthLine = null;
+    if (health) {
+      if (health.error) healthLine = "meridian: " + health.error;
+      else if (health.data) healthLine = renderHealth(health.data);
+    }
+    var logsLine = null;
+    if (logs && !logs.error && logs.data) logsLine = renderLogSummary(logs.data);
     var goPaceLine = null;
     var goWeekly = goUsage ? goUsage.weekly : null;
     if (goWeekly && windowPercent(goWeekly) !== null) {
@@ -856,7 +927,7 @@ function makePanel(ctx, config) {
       var ccPickRows = buildCcMeters(cc);
       if (ccPickRows.length > 0) quotaPick = { rows: ccPickRows, pace: null };
     } else if (headProvider === "meridian" && claudeWindows) {
-      quotaPick = { rows: buildRows(CLAUDE_WINDOWS, claudeWindows), pace: claudePaceLine };
+      quotaPick = { rows: buildRows(null, claudeWindows, windowLabel), pace: claudePaceLine };
     } else if ((headProvider === "opencode-zen" || headProvider === "opencode-go") && goUsage) {
       quotaPick = { rows: buildRows(GO_WINDOWS, goUsage), pace: goPaceLine };
     }
@@ -878,6 +949,8 @@ function makePanel(ctx, config) {
         "cc",
         "ccUsage",
         "oz",
+        "health",
+        "logs",
         "profiles"
       ];
       var failCount = 0;
@@ -936,7 +1009,7 @@ function makePanel(ctx, config) {
         { className: "ocgs-err" },
         "Could not load subscription data. " + (firstError || "Check that the subscriptions plugin is mounted.")
       ) : null,
-      profileInfo || quotaPick || telemetryLine ? import_react.default.createElement(
+      profileInfo || quotaPick || telemetryLine || healthLine || logsLine ? import_react.default.createElement(
         "div",
         { className: "ocgs-section" },
         import_react.default.createElement("h4", { className: "ocgs-section-title" }, "Quota"),
@@ -960,7 +1033,9 @@ function makePanel(ctx, config) {
         ) : null,
         quotaPick ? import_react.default.createElement("div", { className: "ocgs-rows" }, quotaPick.rows) : null,
         quotaPick && quotaPick.pace ? import_react.default.createElement("div", { className: "ocgs-pace" }, quotaPick.pace) : null,
-        telemetryLine ? import_react.default.createElement("div", { className: "ocgs-telemetry" }, telemetryLine) : null
+        telemetryLine ? import_react.default.createElement("div", { className: "ocgs-telemetry" }, telemetryLine) : null,
+        healthLine ? import_react.default.createElement("div", { className: "ocgs-telemetry" }, healthLine) : null,
+        logsLine ? import_react.default.createElement("div", { className: "ocgs-telemetry" }, logsLine) : null
       ) : null,
       providerVisible(cfg, "commandcode") ? renderCcSection(cc, ccUsage) : null,
       providerVisible(cfg, "claude") ? import_react.default.createElement(
@@ -975,7 +1050,7 @@ function makePanel(ctx, config) {
         import_react.default.createElement(
           "div",
           { className: "ocgs-rows" },
-          buildRows(CLAUDE_WINDOWS, claudeWindows)
+          buildRows(null, claudeWindows, windowLabel)
         ),
         claudePaceLine ? import_react.default.createElement("div", { className: "ocgs-pace" }, claudePaceLine) : null
       ) : null,

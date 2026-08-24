@@ -34,6 +34,9 @@
  * export, executed by the browser module loader; the factory's `require`
  * resolves through the browser module table (react is a platform module).
  */
+
+import { DESIGN_TOKENS, CONTROLS_CSS, mergeCss } from "../../design-system";
+
 window.__ModuleLoader__.load({
   id: "profiles-client",
   factory: function (require) {
@@ -62,22 +65,22 @@ window.__ModuleLoader__.load({
      * use the kebab-case plugin prefix so they cannot collide.
      */
     var STYLE_TAG_ID = "profiles-client/client.module.css";
-    var CSS_TEXT = [
+    var CSS_TEXT = mergeCss(DESIGN_TOKENS, CONTROLS_CSS, [
       ".profiles-client-root{min-width:0;position:relative}",
-      ".profiles-client-trigger{min-width:0;max-width:min(360px,45cqw);height:28px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:24px;outline:none;align-items:center;gap:5px;padding:0 8px;font-size:13px;font-weight:500;line-height:20px;display:flex}",
+      ".profiles-client-trigger{min-width:0;max-width:min(360px,45cqw);height:28px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:12px;outline:none;align-items:center;gap:5px;padding:0 7px;font-size:13px;font-weight:500;line-height:20px;display:flex}",
       ".profiles-client-trigger:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}",
       ".profiles-client-trigger:focus-visible{box-shadow:0 0 0 2px var(--dsw-alias-border-l3)}",
       ".profiles-client-trigger:disabled{color:var(--dsw-alias-label-dimmed);cursor:default}",
-      ".profiles-client-profile-pill{flex:none;box-sizing:border-box;display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 7px;border-radius:999px;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);font-size:12px;font-weight:500;line-height:18px;white-space:nowrap}",
+      ".profiles-client-profile-pill{flex:none;box-sizing:border-box;display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 6px;border-radius:7px;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);font-size:12px;font-weight:500;line-height:18px;white-space:nowrap}",
       ".profiles-client-pill-dot{flex:none;width:6px;height:6px;border-radius:50%}",
       ".profiles-client-pill-dot.profiles-client-pill-dot-matched{background:var(--dsw-alias-state-info-primary,#3b82f6)}",
       ".profiles-client-pill-dot.profiles-client-pill-dot-changed{background:#f59e0b}",
       ".profiles-client-model-label{text-overflow:ellipsis;white-space:nowrap;min-width:0;overflow:hidden}",
       ".profiles-client-chevron{color:var(--dsw-alias-label-caption);flex:none}",
       ".profiles-client-menu{z-index:20;border:1px solid var(--dsw-alias-border-inverted);background:var(--dsw-specific-menu);width:max-content;min-width:220px;max-width:min(420px,100vw - 32px);max-height:min(400px,100vh - 96px);box-shadow:var(--dsw-shadow-lv3);color:var(--dsw-alias-label-primary);border-radius:12px;flex-direction:column;padding:4px;display:flex;position:absolute;bottom:calc(100% + 8px);right:0;overflow-x:hidden;overflow-y:auto}",
-      ".profiles-client-section-label{color:var(--dsw-alias-label-secondary);padding:6px 8px 2px;font-size:11px;font-weight:600;line-height:16px;letter-spacing:.05em;text-transform:uppercase}",
+      ".profiles-client-menu{z-index:20;border:1px solid var(--dsw-alias-border-inverted);background:var(--dsw-specific-menu);width:max-content;min-width:220px;max-width:min(420px,100vw - 32px);max-height:min(400px,100vh - 96px);box-shadow:var(--dsw-shadow-lv3);color:var(--dsw-alias-label-primary);border-radius:8px;flex-direction:column;padding:3px;display:flex;position:absolute;bottom:calc(100% + 8px);right:0;overflow-x:hidden;overflow-y:auto}",
       ".profiles-client-option{box-sizing:border-box;width:auto;min-width:100%;min-height:34px;color:inherit;text-align:left;cursor:pointer;background:0 0;border:none;border-radius:10px;outline:none;align-items:center;gap:8px;padding:5px 8px;display:flex}",
-      ".profiles-client-option:hover:not(:disabled),.profiles-client-option:focus-visible{background:var(--dsw-alias-interactive-bg-hover)}",
+      ".profiles-client-option{box-sizing:border-box;width:auto;min-width:100%;min-height:34px;color:inherit;text-align:left;cursor:pointer;background:0 0;border:none;border-radius:8px;outline:none;align-items:center;gap:8px;padding:4px 7px;display:flex}",
       ".profiles-client-option-copy{flex-direction:column;flex:1;min-width:0;display:flex}",
       ".profiles-client-option-name{color:inherit;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:500;line-height:20px;overflow:hidden}",
       ".profiles-client-option-profile{font-weight:700}",
@@ -87,41 +90,40 @@ window.__ModuleLoader__.load({
       ".profiles-client-model-row{display:flex;flex-direction:column;gap:2px}",
       ".profiles-client-effort{box-sizing:border-box;width:calc(100% - 16px);min-width:0;margin-left:8px;height:24px;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:0 6px;font-size:11px;line-height:16px}",
       ".profiles-client-strip{color:var(--dsw-alias-label-tertiary);padding:10px;font-size:13px;line-height:20px}",
-      // W24 settings panel. pf- prefixed, themed alias tokens only.
-      ".pf-panel-root{box-sizing:border-box;display:flex;flex-direction:column;gap:14px;padding:6px 2px;color:var(--dsw-alias-label-primary)}",
-      ".pf-panel-head{display:flex;align-items:center;justify-content:space-between;gap:8px}",
-      ".pf-panel-title{font-size:16px;font-weight:600;margin:0}",
-      ".pf-panel-refresh{cursor:pointer;border:none;background:none;padding:0;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:16px}",
+      ".pf-panel-root{box-sizing:border-box;display:flex;flex-direction:column;gap:12px;padding:0;color:var(--dsw-alias-label-primary)}",
+      ".pf-panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px}",
+      ".pf-panel-title{font-size:24px;font-weight:700;margin:0;line-height:1.2;color:var(--dsw-alias-label-primary)}",
+      ".pf-panel-refresh{cursor:pointer;border:none;background:none;padding:0;color:var(--dsw-alias-label-secondary);font-size:15px;line-height:20px}",
       ".pf-panel-refresh:hover{color:var(--dsw-alias-label-primary)}",
-      ".pf-panel-err{font-size:12px;line-height:16px;color:var(--dsw-alias-state-error-primary)}",
-      ".pf-panel-active{display:flex;gap:6px;flex-wrap:wrap}",
-      ".pf-panel-active-btn{color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:999px;font-size:12px;line-height:20px;padding:2px 10px;cursor:pointer}",
+      ".pf-panel-err{font-size:15px;line-height:22px;color:var(--dsw-alias-state-error-primary)}",
+      ".pf-panel-active{display:flex;gap:12px;flex-wrap:wrap}",
+      ".pf-panel-active-btn{display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:12px;font-size:15px;line-height:20px;padding:6px 11px;min-height:40px;cursor:pointer}",
       ".pf-panel-active-btn-on{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-border-l3)}",
-      ".pf-panel-entry{display:flex;flex-direction:column;gap:6px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;padding:8px 12px}",
-      ".pf-panel-entry-title{font-size:13px;font-weight:600;margin:0}",
-      ".pf-panel-chain{display:flex;flex-direction:column;gap:6px}",
-      ".pf-panel-chain-title{font-size:11px;line-height:15px;color:var(--dsw-alias-label-secondary);margin:0}",
-      ".pf-panel-row{display:flex;gap:6px;align-items:center;min-width:0}",
-      ".pf-panel-input{box-sizing:border-box;flex:1;min-width:0;height:26px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:0 8px;font-size:12px;line-height:18px}",
-      ".pf-panel-del{flex:none;cursor:pointer;border:none;background:none;padding:0 4px;color:var(--dsw-alias-label-secondary);font-size:14px;line-height:18px}",
-      ".pf-panel-del:hover{color:var(--dsw-alias-state-error-primary)}",
-      ".pf-panel-add{align-self:flex-start;color:var(--dsw-alias-label-secondary);background:none;border:1px dashed var(--dsw-alias-border-l2);border-radius:999px;font-size:11px;line-height:18px;padding:1px 10px;cursor:pointer}",
+      ".pf-panel-entry{display:flex;flex-direction:column;gap:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;padding:16px;background:var(--dsw-alias-bg-tertiary)}",
+      ".pf-panel-entry-title{font-size:16px;font-weight:600;margin:0;color:var(--dsw-alias-label-primary)}",
+      ".pf-panel-chain{display:flex;flex-direction:column;gap:12px}",
+      ".pf-panel-chain-title{font-size:16px;line-height:22px;color:var(--dsw-alias-label-secondary);margin:0}",
+      ".pf-panel-row{display:flex;gap:12px;align-items:center;min-width:0}",
+      ".pf-panel-input{box-sizing:border-box;flex:1;min-width:0;height:40px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:0 8px;font-size:15px;line-height:20px}",
+      ".pf-panel-input:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}",
+      ".pf-panel-del{flex:none;cursor:pointer;border:none;background:none;padding:0 4px;color:var(--dsw-alias-label-secondary);font-size:16px;line-height:20px}",
+      ".pf-panel-add{align-self:flex-start;color:var(--dsw-alias-label-secondary);background:none;border:1px dashed var(--dsw-alias-border-l2);border-radius:7px;font-size:15px;line-height:20px;padding:3px 11px;cursor:pointer}",
       ".pf-panel-add:hover{color:var(--dsw-alias-label-primary)}",
-      ".pf-panel-meta{font-size:11px;line-height:15px;color:var(--dsw-alias-label-secondary)}",
-      ".pf-panel-ref{flex:none;color:var(--dsw-alias-label-tertiary);background:var(--dsw-alias-interactive-bg-hover);border-radius:999px;font-size:10px;line-height:14px;padding:1px 8px}",
-      ".pf-panel-actions{display:flex;align-items:center;gap:10px}",
-      ".pf-panel-save{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l3);border-radius:999px;font-size:12px;line-height:20px;padding:2px 14px;cursor:pointer}",
+      ".pf-panel-meta{font-size:14px;line-height:22px;color:var(--dsw-alias-label-secondary)}",
+      ".pf-panel-ref{flex:none;color:var(--dsw-alias-label-tertiary);background:var(--dsw-alias-interactive-bg-hover);border-radius:7px;font-size:13px;line-height:20px;padding:1px 8px}",
+      ".pf-panel-actions{display:flex;align-items:center;gap:12px}",
+      ".pf-panel-save{display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l3);border-radius:12px;font-size:15px;line-height:20px;padding:6px 11px;min-height:40px;cursor:pointer}",
       ".pf-panel-save:disabled{opacity:.5;cursor:default}",
-      ".pf-panel-status{font-size:12px;line-height:16px}",
+      ".pf-panel-status{font-size:15px;line-height:22px}",
       ".pf-panel-ok{color:var(--dsw-alias-state-success-primary)}",
       ".pf-panel-bad{color:var(--dsw-alias-state-error-primary)}",
-      ".pf-panel-select{box-sizing:border-box;flex:1;min-width:0;height:26px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:0 6px;font-size:12px;line-height:18px;cursor:pointer}",
+      ".pf-panel-select{box-sizing:border-box;flex:1;min-width:0;height:40px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:0 8px;font-size:15px;line-height:20px;cursor:pointer}",
       ".pf-panel-select:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}",
-      ".pf-panel-effort{box-sizing:border-box;flex:0 0 auto;min-width:0;margin-left:8px;height:22px;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:0 6px;font-size:11px;line-height:16px;cursor:pointer}",
+      ".pf-panel-effort{box-sizing:border-box;flex:0 0 auto;min-width:0;margin-left:8px;height:40px;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:0 8px;font-size:15px;line-height:20px;cursor:pointer}",
       ".pf-panel-select option,.pf-panel-effort option{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}",
       ".pf-panel-model-row{display:flex;flex-direction:column;gap:2px}",
       ".pf-panel-add-select{align-self:flex-start;border-style:dashed}",
-    ].join("");
+    ].join(""));
     if (
       typeof document !== "undefined" &&
       document.querySelector("style[data-plugin-css=" + JSON.stringify(STYLE_TAG_ID) + "]") === null
@@ -937,10 +939,7 @@ window.__ModuleLoader__.load({
         var setEntryChain = function (name, chainKey, chainName) {
           setDraft(function (prev) {
             var next = cloneConfig(prev);
-            next[name][chainKey] =
-              chainName === ""
-                ? { routes: [] }
-                : { routes: resolveChain(next.chains[chainName], next.chains) };
+            next[name][chainKey] = chainName === "" ? { routes: [] } : chainName;
             return next;
           });
         };
@@ -1315,6 +1314,7 @@ window.__ModuleLoader__.load({
                 var label = chainKey === "orchestrator" ? "orchestrator" : "subagent";
                 var summary = fieldSummary(field, config.chains);
                 var currentRef = refNameOf(field);
+                if (currentRef === void 0) currentRef = chainNameOf(field, config.chains);
                 return createElement(
                   "div",
                   { className: "pf-panel-chain", key: chainKey },
