@@ -66,10 +66,15 @@ var CSS_TEXT = [
   ".ocgs-btn:disabled{opacity:.5;cursor:default}",
   ".ocgs-cookie-note{font-size:11px;line-height:15px;color:var(--dsw-alias-label-secondary)}",
   // Provider visibility toggles
+// Provider visibility toggles
   ".ocgs-toggles{display:flex;flex-direction:column;gap:8px}",
   ".ocgs-toggle{display:flex;align-items:center;gap:8px;min-width:0}",
   ".ocgs-toggle-label{flex:1;min-width:0;font-size:12px;line-height:16px;color:var(--dsw-alias-label-primary)}",
   ".ocgs-toggle input{flex:none;cursor:pointer}",
+  ".ocgs-details{border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-tertiary);padding:8px 12px;margin-top:4px}",
+  ".ocgs-summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary);list-style:none}",
+  ".ocgs-summary::-webkit-details-marker{display:none}",
+  ".ocgs-details[open] .ocgs-toggles{padding-top:8px}",
   // DeepSeek dashboard
   ".ds-dashboard{display:flex;flex-direction:column;gap:12px}",
   ".ds-hero{display:flex;flex-direction:column;gap:4px;padding:8px;background:var(--dsw-alias-bg-tertiary);border-radius:8px;border:1px solid var(--dsw-alias-border-l2)}",
@@ -1101,10 +1106,10 @@ function makePanel(ctx, config) {
         react.createElement("button", { className: "ocgs-refresh", onClick: load }, "Refresh"),
       ),
 
-      react.createElement(
-        "div",
-        { className: "ocgs-section" },
-        react.createElement("h4", { className: "ocgs-section-title" }, "Show sections"),
+react.createElement(
+        "details",
+        { className: "ocgs-details" },
+        react.createElement("summary", { className: "ocgs-summary" }, "Show sections"),
         react.createElement(
           "div",
           { className: "ocgs-toggles" },
@@ -1294,6 +1299,25 @@ function makePanel(ctx, config) {
             oz && oz.error
               ? react.createElement("div", { className: "ocgs-err" }, "OpenCode Zen: " + oz.error)
               : null,
+            react.createElement(
+              "div",
+              { className: "ocgs-cookie" },
+              react.createElement(
+                "button",
+                { className: "ocgs-btn", disabled: cookie.busy, onClick: fetchCookie },
+                cookie.busy ? "Fetching…" : "Fetch cookie from Firefox",
+              ),
+              cookie.showLogin
+                ? react.createElement(
+                    "button",
+                    { className: "ocgs-btn", onClick: openLogin },
+                    "Open opencode.ai",
+                  )
+                : null,
+              cookie.note
+                ? react.createElement("span", { className: "ocgs-cookie-note" }, cookie.note)
+                : null,
+            ),
           )
         : null,
     );
