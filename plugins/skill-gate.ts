@@ -166,7 +166,6 @@ const activeById = new Map<string, Set<string>>();
 const appliedById = new Map<string, string>();
 const disposerById = new Map<string, () => void>();
 
-
 /**
  * An agent's delegation depth: the persisted header count, or the runtime
  * AgentOptions override, whichever is deeper. Mirrors dsh-subagent's
@@ -179,8 +178,10 @@ function delegationDepth(agent: Agent): number {
     const header = (agent as { session?: { header?: { delegationDepth?: unknown } } }).session
       ?.header?.delegationDepth;
     const runtime = (agent as { options?: { subagentDepth?: unknown } }).options?.subagentDepth;
-    const h = typeof header === "number" && Number.isSafeInteger(header) && header >= 0 ? header : 0;
-    const r = typeof runtime === "number" && Number.isSafeInteger(runtime) && runtime >= 0 ? runtime : 0;
+    const h =
+      typeof header === "number" && Number.isSafeInteger(header) && header >= 0 ? header : 0;
+    const r =
+      typeof runtime === "number" && Number.isSafeInteger(runtime) && runtime >= 0 ? runtime : 0;
     return Math.max(h, r);
   } catch {
     return 0;
@@ -266,11 +267,7 @@ export function apply(ctx: Context, config: unknown): void {
    * reconcile picks it up once schemas are readable (the snapshot mark then
    * differs, forcing the rewrite).
    */
-  function expandDeny(
-    agent: Agent,
-    patterns: string[],
-    active: Set<string>,
-  ): string[] {
+  function expandDeny(agent: Agent, patterns: string[], active: Set<string>): string[] {
     const exact: string[] = [];
     const prefixes: string[] = [];
     for (const pattern of patterns) {
@@ -358,9 +355,7 @@ export function apply(ctx: Context, config: unknown): void {
   function notifySkillLoaded(exec: unknown, result: unknown): void {
     const agent = (exec as { agent?: Agent }).agent;
     if (!agent) return;
-    const args = (exec as { arguments?: unknown }).arguments as
-      | { name?: string }
-      | undefined;
+    const args = (exec as { arguments?: unknown }).arguments as { name?: string } | undefined;
     const skillName = args?.name;
     if (!skillName) return;
     // Only treat a successful load as activation.

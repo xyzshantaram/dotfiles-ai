@@ -27,7 +27,7 @@
  *   so it never names a tool the registry does not hold.
  *
  * NOT-VERIFIED: the `profile` settings namespace contract.
- * No shipped dsh source defines it. The field names and the "qwen3.7-plus"
+ * No shipped dsh source defines it. The field names and the "x-preview-f-free"
  * personal route are authored from SPEC-W W2 only. TODO: confirm the final
  * settings.yaml shape and the personal provider/model route with the
  * orchestrator, then adjust PROFILE_SCHEMA and the defaults below.
@@ -95,7 +95,7 @@ interface ProfileSettings {
 /** Default route when no settings value resolves. */
 const DEFAULT_ROUTES: Record<string, ProfileRoute> = {
   work: { provider: "meridian", model: "claude-haiku-4-5" },
-  personal: { provider: "opencode-go", model: "qwen3.7-plus" },
+  personal: { provider: "opencode-zen", model: "x-preview-f-free" },
 };
 
 /** The vision-only tools the see child may use. */
@@ -117,18 +117,18 @@ Write all your prose (the report back to the orchestrator) in STE-flavored Simpl
 function readProfile(source: () => ProfileSettings | undefined): ProfileRoute[] {
   const settings = source();
   const active = settings?.active ?? "work";
-  // A named `see-<active>` chain wins (per-profile vision routing; work's
-  // chain composes the haiku prefix + the base `see` chain in settings).
-  // Fall back to the profile's orchestrator chain when absent.
-  const seeRoutes = chainOf({ orchestrator: "see-" + active }, "orchestrator", settings?.chains);
+  // Work rides the named `see-work` chain (it composes the haiku prefix +
+  // the base `see` chain in settings). Personal has no dedicated chain, so
+  // it uses the base `see` chain directly. Fall back to the profile's
+  // orchestrator chain when absent.
+  const seeChainKey = active === "personal" ? "see" : "see-" + active;
+  const seeRoutes = chainOf({ orchestrator: seeChainKey }, "orchestrator", settings?.chains);
   if (seeRoutes.length > 0) return seeRoutes;
   const entry = active === "personal" ? settings?.personal : settings?.work;
-  const head = chainOf(entry, "orchestrator", settings?.chains)[0];
-  if (head) return [head];
+  const chain = chainOf(entry, "orchestrator", settings?.chains);
+  if (chain.length > 0) return chain;
   return active === "personal" ? [DEFAULT_ROUTES.personal] : [DEFAULT_ROUTES.work];
 }
-
-
 
 /** Register the `see` tool on a context. */
 function registerSeeTool(ctx: Context, source: () => ProfileSettings | undefined): void {
@@ -197,15 +197,23 @@ function registerSeeTool(ctx: Context, source: () => ProfileSettings | undefined
               return outputText(result.output);
             }
             const diagnostic = result.diagnostic ? `: ${result.diagnostic}` : "";
-lastError = new Error(`see: child ended with stop reason "${result.stopReason}"${diagnostic}`);
+            ctx.logger.warn(
+              "see: route %s/%s ended with %s%s",
+              route.provider,
+              route.model,
+              result.stopReason,
+              diagnostic,
+            );
+            lastError = new Error(
+              `see: child ended with stop reason "${result.stopReason}"${diagnostic}`,
+            );
           } catch (err) {
             lastError = err instanceof Error ? err : new Error(String(err));
           } finally {
             await run.dispose().catch(() => {});
           }
-}
+        }
         throw lastError ?? new Error("see: all vision routes failed");
-
       },
       presentCall: (args) => ({
         card: "generic",

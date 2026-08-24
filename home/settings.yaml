@@ -1,0 +1,149 @@
+ui-onboarding:
+  welcomeNoticeVersion: 2026-08-13.1
+agent-default-model:
+  provider: deepseek-official
+  model: deepseek-v4-flash
+  reasoningEffort: false
+llm-pi-ai:
+  providers:
+    command-code:
+      displayName: Command Code
+      apiKeyEnv: CMD_API_KEY
+      api: openai-completions
+      baseURL: https://api.commandcode.ai/provider/v1
+      defaultInput:
+      - text
+      - image
+      models:
+      - id: stealth/ox-alpha
+        name: Stealth Ox Alpha
+        contextWindow: 1048576
+        maxTokens: 131072
+      - id: xiaomi/mimo-v2.5-pro
+        name: Xiaomi MiMo V2.5 Pro
+        contextWindow: 1000000
+        maxTokens: 131072
+      - id: deepseek/deepseek-v4-pro
+        name: DeepSeek V4 Pro
+        contextWindow: 1000000
+        maxTokens: 384000
+      - id: deepseek/deepseek-v4-flash
+        name: DeepSeek V4 Flash
+        contextWindow: 1000000
+        maxTokens: 384000
+      - id: qwen/qwen3.7-flash
+        name: Qwen 3.7 Flash
+        contextWindow: 262144
+        maxTokens: 65536
+        defaultInput:
+        - text
+        - image
+    meridian:
+      displayName: Meridian
+      apiKeyEnv: MERIDIAN_API_KEY
+      api: anthropic-messages
+      baseURL: http://localhost:9000
+      defaultInput:
+      - text
+      - image
+      models:
+      - id: claude-sonnet-5
+        name: Claude Sonnet 5
+        contextWindow: 1000000
+      - id: claude-sonnet-4-6
+        name: Claude Sonnet 4.6
+        contextWindow: 200000
+      - id: claude-opus-5
+        name: Claude Opus 5
+        contextWindow: 1000000
+      - id: claude-opus-4-6
+        name: Claude Opus 4.6
+        contextWindow: 1000000
+      - id: claude-haiku-4-5
+        name: Claude Haiku 4.5
+        contextWindow: 200000
+      - id: claude-fable-5
+        name: Claude Fable 5
+        contextWindow: 1000000
+    opencode-zen:
+      displayName: Opencode Zen
+      apiKeyEnv: OPENCODE_ZEN_API_KEY
+      api: openai-completions
+      baseURL: https://opencode.ai/zen/v1/
+      models:
+      - id: big-pickle
+        name: Big Pickle
+      - id: deepseek-v4-flash-free
+        name: DeepSeek V4 Flash (free)
+      - id: x-preview-f-free
+        name: Preview (Ox Alpha Free)
+        contextWindow: 1000000
+      - id: muse-spark-1.2-contributor-free
+        name: Muse Spark 1.2 Contrib Free
+      - id: mimo-v2.5-free
+        name: MiMo v2.5 Free
+      - id: hy3-free
+        name: Hy3 Free
+      - id: nemotron-3-ultra-free
+        name: Nemotron 3 Ultra Free
+      - id: qwen-3.7-plus
+        name: Qwen 3.7 Plus
+        contextWindow: 262144
+        maxTokens: 65536
+        defaultInput:
+        - text
+        - image
+agent-presets:
+  default: standard
+profile:
+  active: personal
+  chains:
+    work-orchestrator:
+      routes:
+      - provider: meridian
+        model: claude-opus-5
+      - provider: meridian
+        model: claude-sonnet-5
+      - provider: opencode-zen
+        model: x-preview-f-free
+      - provider: deepseek-official
+        model: deepseek-v4-flash
+      - provider: opencode-zen
+        model: deepseek-v4-flash-free
+    personal-orchestrator:
+      routes:
+      - provider: command-code
+        model: stealth/ox-alpha
+      - provider: command-code
+        model: xiaomi/mimo-v2.5-pro
+      - provider: command-code
+        model: deepseek/deepseek-v4-pro
+      - provider: opencode-zen
+        model: deepseek-v4-flash-free
+      - provider: deepseek-official
+        model: deepseek-v4-flash
+    worker:
+      routes:
+      - provider: opencode-zen
+        model: deepseek-v4-flash-free
+      - provider: command-code
+        model: deepseek/deepseek-v4-flash
+      - provider: deepseek-official
+        model: deepseek-v4-flash
+      - provider: opencode-zen
+        model: deepseek-v4-flash-free
+    see:
+      routes:
+      - provider: command-code
+        model: qwen/qwen3.7-flash
+      - provider: opencode-zen
+        model: qwen-3.7-plus
+    see-work:
+      - meridian/claude-haiku-4-5
+      - chain:see
+  work:
+    orchestrator: work-orchestrator
+    subagent: worker
+  personal:
+    orchestrator: personal-orchestrator
+    subagent: worker

@@ -32,6 +32,39 @@ for (const [entry, outfile] of entries) {
   });
 }
 
+// CLIENT plugin halves bundle to a temp file, then get wrapped in the
+// module-loader facade and written to their final path. The esbuild
+// options are identical for every client half (browser CJS, react and
+// @deepseek-ai external), so they live here rather than at each call site.
+async function wrapClientBundle(entryPath, outPath, id) {
+  const bundlePath = join(dirname(entryPath), "..", "dist", "_client.bundle.js");
+  await build({
+    entryPoints: [entryPath],
+    bundle: true,
+    platform: "browser",
+    format: "cjs",
+    target: "es2022",
+    external: ["react", "react/jsx-runtime", "react-dom/client", "@deepseek-ai/*"],
+    outfile: bundlePath,
+    logLevel: "info",
+  });
+  const bundled = (await readFile(bundlePath, "utf8")).replace(/\s+$/, "");
+  await writeFile(
+    outPath,
+    `window.__ModuleLoader__.load({
+	id: "${id}",
+	factory: (require) => {
+		var module = { exports: {} };
+		var exports = module.exports;
+		Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
+${bundled}
+		return module.exports;
+	}
+});
+`,
+  );
+  await rm(bundlePath);
+}
 
 // W8: the approval reject-with-comment CLIENT plugin package. The host
 // half now bundles via esbuild like the TS host plugins. The client half
@@ -48,26 +81,11 @@ await build({
   logLevel: "info",
 });
 
-await build({
-  entryPoints: [join(here, "plugins/approval-comment/src/client.ts")],
-  bundle: true,
-  platform: "browser",
-  format: "cjs",
-  target: "es2022",
-  external: ["react", "react/jsx-runtime", "react-dom/client", "@deepseek-ai/*"],
-  outfile: join(here, "plugins/approval-comment/dist/_client.bundle.js"),
-  logLevel: "info",
-});
-{
-  const bundled = (
-    await readFile(join(here, "plugins/approval-comment/dist/_client.bundle.js"), "utf8")
-  ).replace(/\s+$/, "");
-  await writeFile(
-    join(here, "plugins/approval-comment/lib/client.js"),
-    `window.__ModuleLoader__.load({\n\tid: "approval-comment",\n\tfactory: (require) => {\n\t\tvar module = { exports: {} };\n\t\tvar exports = module.exports;\n\t\tObject.defineProperty(exports, Symbol.toStringTag, { value: "Module" });\n${bundled}\n\t\treturn module.exports;\n\t}\n});\n`,
-  );
-  await rm(join(here, "plugins/approval-comment/dist/_client.bundle.js"));
-}
+await wrapClientBundle(
+  join(here, "plugins/approval-comment/src/client.ts"),
+  join(here, "plugins/approval-comment/lib/client.js"),
+  "approval-comment",
+);
 
 // W18: combined subscription panel (OpenCode GO + Claude/meridian) CLIENT
 // plugin package. The host half bundles via esbuild; lz4 stays
@@ -83,59 +101,46 @@ await build({
   outfile: join(here, "plugins/subscriptions/lib/index.js"),
   logLevel: "info",
 });
+await wrapClientBundle(
+  join(here, "plugins/subscriptions/src/client.ts"),
+  join(here, "plugins/subscriptions/lib/client.js"),
+  "subscriptions",
+);
+// session-archive: archived-session cleanup panel CLIENT plugin package.
+// The host half bundles via esbuild; the client half bundles as factory-form
+// CJS (react external) and gets wrapped in the module-loader facade.
 await build({
-  entryPoints: [join(here, "plugins/subscriptions/src/client.ts")],
+  entryPoints: [join(here, "plugins/session-archive/src/index.ts")],
   bundle: true,
-  platform: "browser",
-  format: "cjs",
-  target: "es2022",
-  external: ["react", "react/jsx-runtime", "react-dom/client", "@deepseek-ai/*"],
-  outfile: join(here, "plugins/subscriptions/dist/_client.bundle.js"),
+  platform: "node",
+  format: "esm",
+  external: ["@deepseek-ai/*", "node:*"],
+  outfile: join(here, "plugins/session-archive/lib/index.js"),
   logLevel: "info",
 });
-{
-  const bundled = (
-    await readFile(join(here, "plugins/subscriptions/dist/_client.bundle.js"), "utf8")
-  ).replace(/\s+$/, "");
-  await writeFile(
-    join(here, "plugins/subscriptions/lib/client.js"),
-    `window.__ModuleLoader__.load({\n\tid: "subscriptions",\n\tfactory: (require) => {\n\t\tvar module = { exports: {} };\n\t\tvar exports = module.exports;\n\t\tObject.defineProperty(exports, Symbol.toStringTag, { value: "Module" });\n${bundled}\n\t\treturn module.exports;\n\t}\n});\n`,
-  );
-  await rm(join(here, "plugins/subscriptions/dist/_client.bundle.js"));
-}
-
+await wrapClientBundle(
+  join(here, "plugins/session-archive/src/client.ts"),
+  join(here, "plugins/session-archive/lib/client.js"),
+  "session-archive",
+);
 // W8/W13 family: H2+H3 tool-render CLIENT plugin package. The client half
 // bundles as factory-form CJS (highlight.js inlined; the browser loader
 // table cannot resolve npm deps) and gets wrapped in the module-loader
 // facade. react and @deepseek-ai stay external. The host half bundles
 // via esbuild like the TS plugins.
-await build({
-  entryPoints: [join(here, "plugins/tool-render/src/client.ts")],
-  bundle: true,
-  platform: "browser",
-  format: "cjs",
-  target: "es2022",
-  external: ["react", "react/jsx-runtime", "react-dom/client", "@deepseek-ai/*"],
-  outfile: join(here, "plugins/tool-render/dist/_client.bundle.js"),
-  logLevel: "info",
-});
-// Why the wrapper asymmetry (review nit, 2026-08-22): tool-render bundles CJS
-// with npm deps inlined, so esbuild's CJS output needs the module-loader facade
-// with Symbol.toStringTag to expose a shape the loader accepts. profiles-client
-// has no npm deps, so it emits a plain IIFE that calls window.__ModuleLoader__.
-// load itself; no facade is needed. Not unifying on one wrapper: the IIFE form
-// is simpler, and the facade form exists only because esbuild cannot emit a bare
-// load call around an inlined bundle without it.
-{
-  const bundled = (
-    await readFile(join(here, "plugins/tool-render/dist/_client.bundle.js"), "utf8")
-  ).replace(/\s+$/, "");
-  await writeFile(
-    join(here, "plugins/tool-render/dist/client.js"),
-    `window.__ModuleLoader__.load({\n\tid: "tool-render",\n\tfactory: (require) => {\n\t\tvar module = { exports: {} };\n\t\tvar exports = module.exports;\n\t\tObject.defineProperty(exports, Symbol.toStringTag, { value: "Module" });\n${bundled}\n\t\treturn module.exports;\n\t}\n});\n`,
-  );
-  await rm(join(here, "plugins/tool-render/dist/_client.bundle.js"));
-}
+// Why the wrapper asymmetry (review nit, 2026-08-22): the client halves
+// bundle CJS with npm deps inlined, so esbuild's CJS output needs the
+// module-loader facade with Symbol.toStringTag to expose a shape the loader
+// accepts. profiles-client has no npm deps, so it emits a plain IIFE that
+// calls window.__ModuleLoader__.load itself; no facade is needed. Not
+// unifying on one wrapper: the IIFE form is simpler, and the facade form
+// exists only because esbuild cannot emit a bare load call around an
+// inlined bundle without it.
+await wrapClientBundle(
+  join(here, "plugins/tool-render/src/client.ts"),
+  join(here, "plugins/tool-render/dist/client.js"),
+  "tool-render",
+);
 await build({
   entryPoints: [join(here, "plugins/tool-render/src/index.ts")],
   bundle: true,

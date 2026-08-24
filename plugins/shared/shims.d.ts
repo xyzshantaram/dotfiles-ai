@@ -1,0 +1,38 @@
+/**
+ * W26 — ambient declarations for browser-half modules the shell loader
+ * provides at runtime. tsc cannot see them because they are not installed
+ * packages in this repo: esbuild keeps them external and the dsh web shell
+ * resolves them through its loader seed at runtime. These shims type each
+ * module as `any` on purpose — they only need to make the type-check pass,
+ * never to describe the real API. Do not import types from them.
+ */
+declare module "react" {
+  const React: any;
+  export default React;
+}
+
+declare module "@deepseek-ai/dsh-client-ui-primitives" {
+  export const Button: any;
+  export const StateDot: any;
+  export const IconBrowseOutline16: any;
+  export const IconEditOutline16: any;
+  export const IconApiOutline14: any;
+  export const IconChevronDownOutline14: any;
+  export const IconInspectOutline12: any;
+}
+
+declare module "@deepseek-ai/dsh-client-runtime/client" {
+  export const conversationContextKey: any;
+}
+
+declare module "snappyjs" {
+  export function uncompress(input: Buffer | Uint8Array): Buffer;
+  export function compress(input: Buffer | Uint8Array): Buffer;
+}
+
+interface Window {
+  /** Browser module loader facade installed by the dsh-remote web shell. */
+  __ModuleLoader__: any;
+  /** Set once tool-render has installed its highlight.js pass. */
+  __toolRenderHljsPass?: boolean | undefined;
+}

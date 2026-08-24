@@ -17,6 +17,7 @@ It holds the personal configuration and tooling for the AI workstation.
 - `home/` — the files that sync into `$DSH_HOME` (default `~/.dsh`), such as
   the personal skills and settings.
 - `sync.sh` — the idempotent installer.
+
 ## Install and sync
 
 Clone the repo, then run the sync script from the repo root.

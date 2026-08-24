@@ -22,12 +22,12 @@ The four tools come from four independent sub-packages of the
 `omdsh-dev/dsh-toolkit` collection (a ten-tool zero-dependency collection;
 this bundle installs only the four this skill needs, not the full set):
 
-| Tool | Package | Capability |
-|---|---|---|
-| `time` | `github:omdsh-dev/dsh-tool-time` | ISO 8601 parsing, timezone conversion, calendar arithmetic, duration difference |
-| `regex` | `github:omdsh-dev/dsh-tool-regex` | Test, extract, replace, static interpretation; runs under a worker with a hard timeout |
+| Tool       | Package                              | Capability                                                                                                     |
+| ---------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `time`     | `github:omdsh-dev/dsh-tool-time`     | ISO 8601 parsing, timezone conversion, calendar arithmetic, duration difference                                |
+| `regex`    | `github:omdsh-dev/dsh-tool-regex`    | Test, extract, replace, static interpretation; runs under a worker with a hard timeout                         |
 | `markdown` | `github:omdsh-dev/dsh-tool-markdown` | HTML-to-Markdown and Markdown-to-HTML, GFM tables, table-of-contents generation, allow-list-based sanitization |
-| `encoding` | `github:omdsh-dev/dsh-tool-encoding` | base64, URL encoding, hex, hash functions, UUID generation |
+| `encoding` | `github:omdsh-dev/dsh-tool-encoding` | base64, URL encoding, hex, hash functions, UUID generation                                                     |
 
 Each sub-package installs and registers independently. None of the four
 overlaps an existing tool in this bundle.

@@ -1,8 +1,8 @@
 {
-  "name": "subscriptions",
+  "name": "session-archive",
   "version": "0.1.0",
   "type": "module",
-  "description": "W18: settings-page panel showing subscription usage (Command Code, Claude/meridian, DeepSeek, OpenCode GO, OpenCode Zen) via same-origin /subscriptions/* proxy routes.",
+  "description": "Settings-page panel listing archived session logs with a per-row delete action to free disk space.",
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",

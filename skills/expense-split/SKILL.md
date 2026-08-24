@@ -21,9 +21,9 @@ so the process is crash-safe and resumable.
 
 ## Tools involved
 
-| File | Purpose |
-|------|---------|
-| `dashboard.py` | Tkinter GUI: load orders.json, split items by person, export output.json |
+| File                   | Purpose                                                                  |
+| ---------------------- | ------------------------------------------------------------------------ |
+| `dashboard.py`         | Tkinter GUI: load orders.json, split items by person, export output.json |
 | `push_to_splitwise.py` | CLI: read output.json, OAuth to Splitwise, create expenses interactively |
 
 Resolve `dashboard.py` and `push_to_splitwise.py` against this skill's base
@@ -37,12 +37,12 @@ Run these tool calls in parallel via the agent. The MCP tool prefix in dsh is
 `mcp__<serverName>__<rawName>`. The raw suffix follows each server's
 advertised tools:
 
-| Platform | Tool | Notes |
-|----------|------|-------|
-| Blinkit | `mcp__blinkit__blinkit_order_history` | Needs `mcp__blinkit__blinkit_send_otp` + `mcp__blinkit__blinkit_verify_otp` login first. No address param needed. |
-| Zepto | `mcp__zepto__list_order_history` | Returns UUID order ids. Follow up with `mcp__zepto__get_order_detail` for each order to get per-item prices (in paise). |
-| Swiggy Instamart | `mcp__swiggy-instamart__get_orders` (orderType: "DASH" then "INSTAMART") | Returns per-item prices and bill breakdown directly. No addressId needed. |
-| Swiggy Food | `mcp__swiggy-food__get_addresses` then `mcp__swiggy-food__get_food_orders` | Needs addressId from get_addresses. Per-item prices require `mcp__swiggy-food__get_food_order_details` for each orderId. |
+| Platform         | Tool                                                                       | Notes                                                                                                                    |
+| ---------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Blinkit          | `mcp__blinkit__blinkit_order_history`                                      | Needs `mcp__blinkit__blinkit_send_otp` + `mcp__blinkit__blinkit_verify_otp` login first. No address param needed.        |
+| Zepto            | `mcp__zepto__list_order_history`                                           | Returns UUID order ids. Follow up with `mcp__zepto__get_order_detail` for each order to get per-item prices (in paise).  |
+| Swiggy Instamart | `mcp__swiggy-instamart__get_orders` (orderType: "DASH" then "INSTAMART")   | Returns per-item prices and bill breakdown directly. No addressId needed.                                                |
+| Swiggy Food      | `mcp__swiggy-food__get_addresses` then `mcp__swiggy-food__get_food_orders` | Needs addressId from get_addresses. Per-item prices require `mcp__swiggy-food__get_food_order_details` for each orderId. |
 
 #### MCP configuration
 
@@ -60,22 +60,22 @@ composition (see SPEC-W W3):
     "swiggy-food": {
       "type": "remote",
       "url": "https://mcp.swiggy.com/food",
-      "enabled": true
+      "enabled": true,
     },
     "swiggy-instamart": {
       "type": "remote",
       "url": "https://mcp.swiggy.com/im",
-      "enabled": true
+      "enabled": true,
     },
     "blinkit": {
       "type": "local",
-      "command": ["sh", "-c", "node ~/installs/blinkit-mcp/dist/index.js"]
+      "command": ["sh", "-c", "node ~/installs/blinkit-mcp/dist/index.js"],
     },
     "zepto": {
       "type": "local",
-      "command": ["sh", "-c", "npx mcp-remote https://mcp.zepto.co.in/mcp"]
-    }
-  }
+      "command": ["sh", "-c", "npx mcp-remote https://mcp.zepto.co.in/mcp"],
+    },
+  },
 }
 ```
 
@@ -200,12 +200,12 @@ python dashboard.py ~/ai-scratch/orders.json
 
 #### Keyboard shortcuts
 
-| Key | Action |
-|-----|--------|
-| `Ctrl+S` | Force save |
-| `Ctrl+Q` | Save and quit |
-| `Ctrl+N` | Next item |
-| `Ctrl+P` | Previous item |
+| Key      | Action                   |
+| -------- | ------------------------ |
+| `Ctrl+S` | Force save               |
+| `Ctrl+Q` | Save and quit            |
+| `Ctrl+N` | Next item                |
+| `Ctrl+P` | Previous item            |
 | `Escape` | Go back to previous item |
 
 ### Step 4: Review the output
@@ -216,19 +216,21 @@ python dashboard.py ~/ai-scratch/orders.json
 {
   "split_at": "ISO-8601",
   "people": ["Name1", "Name2", "Name3"],
-  "splits": [{
-    "item": "Product Name",
-    "platform": "blinkit",
-    "date": "2026-07-23 3:19 PM",
-    "price": 240.00,
-    "split_type": "equal",
-    "assignments": { "Name1": 120.00, "Name2": 120.00 }
-  }],
+  "splits": [
+    {
+      "item": "Product Name",
+      "platform": "blinkit",
+      "date": "2026-07-23 3:19 PM",
+      "price": 240.0,
+      "split_type": "equal",
+      "assignments": { "Name1": 120.0, "Name2": 120.0 },
+    },
+  ],
   "totals": { "Name1": 8370.91, "Name2": 2663.28, "Name3": 2026.84 },
   "settlements": [
     { "from": "Name2", "to": "Name1", "amount": 2663.28 },
-    { "from": "Name3", "to": "Name1", "amount": 2026.84 }
-  ]
+    { "from": "Name3", "to": "Name1", "amount": 2026.84 },
+  ],
 }
 ```
 
@@ -281,6 +283,7 @@ python push_to_splitwise.py --env ~/ai-scratch/splitwise.env
 #### Expense format on Splitwise
 
 Each order becomes one expense with:
+
 - **Cost**: the full order total
 - **Paid by**: the payer (from output.json settlements)
 - **Split**: per-person owed shares from the dashboard assignments
@@ -301,12 +304,12 @@ Splitwise. Does not use or create pushed tracking files.
 
 All in `~/.cache/ordersplit/`:
 
-| File | Purpose |
-|------|---------|
-| `cache.json` | Dashboard progress: current index, assignments, skipped items, people names, payer |
-| `output.json` | Final split results with per-person totals and settlements |
-| `splitwise_token.json` | OAuth1 access token (consumer key, secret, oauth token) |
-| `splitwise_pushed.json` | Map of order fingerprints to Splitwise expense IDs |
+| File                    | Purpose                                                                            |
+| ----------------------- | ---------------------------------------------------------------------------------- |
+| `cache.json`            | Dashboard progress: current index, assignments, skipped items, people names, payer |
+| `output.json`           | Final split results with per-person totals and settlements                         |
+| `splitwise_token.json`  | OAuth1 access token (consumer key, secret, oauth token)                            |
+| `splitwise_pushed.json` | Map of order fingerprints to Splitwise expense IDs                                 |
 
 ## Dependencies
 

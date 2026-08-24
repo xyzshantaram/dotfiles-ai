@@ -14,10 +14,10 @@ loads. See `plugins/skill-gate.ts` for the gating mechanism.
 
 ## What the tools do
 
-| Tool | Description |
-|---|---|
+| Tool                   | Description                                                                                                                                                                                                     |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `agent_session_search` | Case-insensitive literal search across current session log files. Returns, per matching session: the strongest message, a snippet, and a message window. Accepts `sources`, `cwd`, `sort`, and `limit` filters. |
-| `agent_session_read` | Reads one discovered session's metadata and a message window, targeted with `aroundSeq`. |
+| `agent_session_read`   | Reads one discovered session's metadata and a message window, targeted with `aroundSeq`.                                                                                                                        |
 
 Supported sources: `dsh`, `codex`, `claude`, `pi`, `opencode`. Every source
 is read-only. The plugin builds no index and no derived database; each call
@@ -32,7 +32,6 @@ dsh's own sessions into Codex, Claude Code, pi, and OpenCode logs. The two
 tools overlap on dsh sessions. Gating this skill keeps the plugin's broader
 but slower cross-agent search available on demand, without adding it to
 every session's default tool set.
-
 
 ## Rules
 

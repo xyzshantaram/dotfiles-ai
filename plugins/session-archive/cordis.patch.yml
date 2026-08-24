@@ -1,0 +1,8 @@
+# session-archive — archived-session cleanup panel (client plugin).
+# The panel lives in the ./client bundle. The host row exists so the
+# client-module registry mounts this package in the web profile and serves
+# the bundle; the host half (./lib) registers the /sessions/archived and
+# /sessions/archived/delete same-origin routes.
+- insert:
+    - id: session-archive
+      name: session-archive

@@ -2,7 +2,7 @@
  * Shared route-chain model for the `profile` settings namespace.
  *
  * Used by plugins/profiles.ts (role-tool dispatch with fallback) and
- * plugins/see.ts (namespace owner; takes the chain head). One data model in
+ * plugins/see.ts (namespace owner; walks the chain with retry). One data model in
  * one file so the two bundles cannot drift.
  *
  * Since W21 a profile entry carries TWO named chains, one per agent depth:
@@ -24,20 +24,21 @@
  *
  * The FIRST entry of a chain is its head; later entries are fallbacks tried
  * in order when a route fails (start error, or a foreground child ending
- * with stopReason "error"). Consumers that cannot retry (see) take the head.
+ * with stopReason "error"). Consumers walk the chain in order, retrying the
+ * next route on failure.
  */
 
 /** One routable provider/model pair. */
 export interface RouteCandidate {
   provider: string;
   model: string;
+  /** Adapter-owned reasoning effort for this route; absence preserves the adapter default. */
+  reasoningEffort?: string;
 }
 
 /** Shape of one work/personal entry in the `profile` namespace section. */
 export type ProfileEntry =
-  | RouteCandidate
-  | { routes?: RouteCandidate[] }
-  | { orchestrator?: unknown; subagent?: unknown };
+  RouteCandidate | { routes?: RouteCandidate[] } | { orchestrator?: unknown; subagent?: unknown };
 
 /** The two named chains of a profile entry (W21). */
 export type ChainName = "orchestrator" | "subagent";
@@ -60,12 +61,15 @@ function isRouteCandidate(value: unknown): value is RouteCandidate {
  * and "chain:<name>" refs — flattened in order. A malformed or unknown step
  * resolves to [] for that step.
  */
-export function normalizeEntry(entry: unknown, chains?: Record<string, unknown>, seen?: Set<string>): RouteCandidate[] {
+export function normalizeEntry(
+  entry: unknown,
+  chains?: Record<string, unknown>,
+  seen?: Set<string>,
+): RouteCandidate[] {
   if (isRouteCandidate(entry)) return [entry];
   if (typeof entry === "string") {
     // "chain:<name>" extends another chain; "provider/model" is one route.
     if (entry.startsWith("chain:")) {
-
       const name = entry.slice("chain:".length);
       if (chains?.[name] === undefined) return [];
       const guard = new Set(seen ?? []);
@@ -86,7 +90,6 @@ export function normalizeEntry(entry: unknown, chains?: Record<string, unknown>,
       return normalizeEntry(chains[entry], chains, guard);
     }
     return [];
-
   }
   if (typeof entry === "object" && entry !== null) {
     if (Array.isArray((entry as { routes?: unknown }).routes)) {
@@ -122,7 +125,6 @@ export function normalizeEntry(entry: unknown, chains?: Record<string, unknown>,
   return [];
 }
 
-
 /**
  * Resolve one named chain of a profile entry. A nested entry (W21 shape)
  * yields its own chain first, then the other named chain, then []. Either
@@ -131,13 +133,23 @@ export function normalizeEntry(entry: unknown, chains?: Record<string, unknown>,
  * normalizeEntry(entry). This keeps see.ts and the pre-W21 settings shape
  * working unchanged.
  */
-export function chainOf(entry: unknown, chainName: ChainName, chains?: Record<string, unknown>): RouteCandidate[] {
+export function chainOf(
+  entry: unknown,
+  chainName: ChainName,
+  chains?: Record<string, unknown>,
+): RouteCandidate[] {
   if (typeof entry === "object" && entry !== null) {
     const obj = entry as Record<string, unknown>;
     if ("orchestrator" in obj || "subagent" in obj) {
-      const own = normalizeEntry(chainName === "orchestrator" ? obj.orchestrator : obj.subagent, chains);
+      const own = normalizeEntry(
+        chainName === "orchestrator" ? obj.orchestrator : obj.subagent,
+        chains,
+      );
       if (own.length > 0) return own;
-      const other = normalizeEntry(chainName === "orchestrator" ? obj.subagent : obj.orchestrator, chains);
+      const other = normalizeEntry(
+        chainName === "orchestrator" ? obj.subagent : obj.orchestrator,
+        chains,
+      );
       if (other.length > 0) return other;
       return [];
     }

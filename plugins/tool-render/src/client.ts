@@ -1,47 +1,48 @@
 /**
-* H2+H3 — tool-render, the browser half.
-*
-* The seam. The keyed slot that governs tool-call render cells is
-* `conversation.chat.node` with key `tool-call`, registered by
-* dsh-client-ui-tool at the default priority 0 (dsh-client-ui-tool
-* lib/client.js:1641). That node dispatches each atomic Tool call to the
-* child keyed slot `tool.call.toolview`, declared by the same entry
-* (lib/client.js:1647-1650: `children: { "tool.call.toolview": { kind:
-* "keyed", scope: "session" } }`), keyed by tool name. The shipped rows sit
-* at priority 0: bash (bashToolviewSample), read (readToolview), edit and
-* write (fileMutationToolview).
-*
-* Shadowing the whole `tool-call` node at a lower priority is impossible:
-* SlotCore.register() throws when a second entry declares the same child
-* slot name (`slot "tool.call.toolview" is already declared`, verified by
-* running the shipped SlotCore). So this bundle shadows the per-tool ROWS:
-* it registers the `read`, `bash`, `edit`, `write`, and `batch_edit` keys
-* of `tool.call.toolview` at priority -100. Keyed slots sort ascending by
-* priority and the lowest live entry renders (dsh-client-ui-slots SlotCore:
-* entries sort by `options.priority ?? 0`; `entriesOfSlot` keeps the first
-* entry per key); a same key at a different priority never throws; there is
-* no origin privilege for shipped entries. `batch_edit` has no shipped row
-* at all, so it previously fell through to the generic JSON card.
-*
-* The requirements. edit, batch_edit, and write render real before/after
-* diffs. edit and batch_edit use the tool-declared `card: "diff"` views
-* when present, else a diff reconstructed from the args and the
-* conversation's own read history — the personal dsh-better-edit tools
-* declare no views and their args carry only 3-char anchors. write
-* rebuilds the before text from read history and shows a per-line diff
-* with syntax highlighting, or only the new content when no prior read
-* exists. read output is syntax-highlighted by file extension through
-* highlight.js. bash output stays plain text, styled as a monospace
-* block with preserved whitespace.
-*
-* The mount. This file is the package's `./client` export: esbuild bundles
-* it (browser, cjs) with react and the @deepseek-ai packages external —
-* those resolve through the shell loader seed — and highlight.js inlined,
-* because the loader table cannot resolve npm deps (the R3 pattern from the
-* dsh-remote fork; a non-inlined build fails with `require("highlight.js")
-* missed the module table`). The build step wraps the bundle in
-* `window.__ModuleLoader__.load({ id: "tool-render", factory })`.
-*/
+ * H2+H3 — tool-render, the browser half.
+ *
+ * The seam. The keyed slot that governs tool-call render cells is
+ * `conversation.chat.node` with key `tool-call`, registered by
+ * dsh-client-ui-tool at the default priority 0 (dsh-client-ui-tool
+ * lib/client.js:1641). That node dispatches each atomic Tool call to the
+ * child keyed slot `tool.call.toolview`, declared by the same entry
+ * (lib/client.js:1647-1650: `children: { "tool.call.toolview": { kind:
+ * "keyed", scope: "session" } }`), keyed by tool name. The shipped rows sit
+ * at priority 0: bash (bashToolviewSample), read (readToolview), edit and
+ * write (fileMutationToolview).
+ *
+ * Shadowing the whole `tool-call` node at a lower priority is impossible:
+ * SlotCore.register() throws when a second entry declares the same child
+ * slot name (`slot "tool.call.toolview" is already declared`, verified by
+ * running the shipped SlotCore). So this bundle shadows the per-tool ROWS:
+ * it registers the `read`, `bash`, `edit`, `batch_edit`, `write`,
+ * `undo_edit`, and `undo_last_edit` keys of `tool.call.toolview` at
+ * priority -100. Keyed slots sort ascending by
+ * priority and the lowest live entry renders (dsh-client-ui-slots SlotCore:
+ * entries sort by `options.priority ?? 0`; `entriesOfSlot` keeps the first
+ * entry per key); a same key at a different priority never throws; there is
+ * no origin privilege for shipped entries. `batch_edit` has no shipped row
+ * at all, so it previously fell through to the generic JSON card.
+ *
+ * The requirements. edit, batch_edit, and write render real before/after
+ * diffs. edit and batch_edit use the tool-declared `card: "diff"` views
+ * when present, else a diff reconstructed from the args and the
+ * conversation's own read history — the personal dsh-better-edit tools
+ * declare no views and their args carry only 3-char anchors. write
+ * rebuilds the before text from read history and shows a per-line diff
+ * with syntax highlighting, or only the new content when no prior read
+ * exists. read output is syntax-highlighted by file extension through
+ * highlight.js. bash output stays plain text, styled as a monospace
+ * block with preserved whitespace.
+ *
+ * The mount. This file is the package's `./client` export: esbuild bundles
+ * it (browser, cjs) with react and the @deepseek-ai packages external —
+ * those resolve through the shell loader seed — and highlight.js inlined,
+ * because the loader table cannot resolve npm deps (the R3 pattern from the
+ * dsh-remote fork; a non-inlined build fails with `require("highlight.js")
+ * missed the module table`). The build step wraps the bundle in
+ * `window.__ModuleLoader__.load({ id: "tool-render", factory })`.
+ */
 
 // ---- highlight.js: core + a curated language set, INLINED by esbuild. ----
 // Registered lazily (on first use) from an extension map, so the bundle
@@ -73,14 +74,14 @@ var languageModules = {
   markdown: mdGrammar,
   css: cssGrammar,
   xml: xmlGrammar,
-  html: xmlGrammar, /* xml grammar covers html */
+  html: xmlGrammar /* xml grammar covers html */,
   sql: sqlGrammar,
   go: goGrammar,
   rust: rustGrammar,
   java: javaGrammar,
   c: cGrammar,
   cpp: cppGrammar,
-  diff: diffGrammar
+  diff: diffGrammar,
 };
 var registeredLanguages = new Set();
 
@@ -93,23 +94,45 @@ function ensureLanguage(name) {
 
 /** File extension -> highlight.js language name. */
 var EXTENSION_LANGUAGE = {
-  js: "javascript", mjs: "javascript", cjs: "javascript", jsx: "javascript",
-  ts: "typescript", mts: "typescript", cts: "typescript", tsx: "typescript",
-  json: "json", jsonc: "json", jsonl: "json",
-  py: "python", pyi: "python",
-  sh: "bash", bash: "bash", zsh: "bash",
-  yaml: "yaml", yml: "yaml",
-  md: "markdown", markdown: "markdown",
+  js: "javascript",
+  mjs: "javascript",
+  cjs: "javascript",
+  jsx: "javascript",
+  ts: "typescript",
+  mts: "typescript",
+  cts: "typescript",
+  tsx: "typescript",
+  json: "json",
+  jsonc: "json",
+  jsonl: "json",
+  py: "python",
+  pyi: "python",
+  sh: "bash",
+  bash: "bash",
+  zsh: "bash",
+  yaml: "yaml",
+  yml: "yaml",
+  md: "markdown",
+  markdown: "markdown",
   css: "css",
-  html: "xml", htm: "xml", xml: "xml", svg: "xml",
+  html: "xml",
+  htm: "xml",
+  xml: "xml",
+  svg: "xml",
   sql: "sql",
   go: "go",
   rs: "rust",
   java: "java",
-  c: "c", h: "c",
-  cpp: "cpp", cc: "cpp", hpp: "cpp", hh: "cpp",
-  diff: "diff", patch: "diff",
-  ini: "ini", cfg: "ini"
+  c: "c",
+  h: "c",
+  cpp: "cpp",
+  cc: "cpp",
+  hpp: "cpp",
+  hh: "cpp",
+  diff: "diff",
+  patch: "diff",
+  ini: "ini",
+  cfg: "ini",
 };
 
 // ---- Platform modules: resolved by the shell loader seed at runtime. ----
@@ -150,7 +173,7 @@ var HLJS_THEME_CSS = [
   ".hljs-emphasis{color:#c9d1d9;font-style:italic}",
   ".hljs-strong{color:#c9d1d9;font-weight:bold}",
   ".hljs-addition{color:#aff5b4;background-color:#033a16}",
-  ".hljs-deletion{color:#ffdcd7;background-color:#67060c}"
+  ".hljs-deletion{color:#ffdcd7;background-color:#67060c}",
 ].join("");
 
 var CSS_TEXT = [
@@ -161,7 +184,7 @@ var CSS_TEXT = [
   ".tool-render-title{color:var(--dsw-alias-label-secondary);flex:none;font-size:14px;line-height:24px}",
   ".tool-render-sep{background:var(--dsw-alias-label-caption);border-radius:1px;flex:none;width:2px;height:2px;margin:0 8px}",
   ".tool-render-summary{text-overflow:ellipsis;white-space:nowrap;min-width:0;color:var(--dsw-alias-label-tertiary);flex:auto;font-size:14px;line-height:24px;overflow:hidden}",
-  ".tool-render-summary[tool-render-error]{color:var(--dsw-alias-state-error-primary)}",
+  ".tool-render-summary[tool-render-error]{color:var(--dsw-alias-state-error-primary);font-weight:500}",
   ".tool-render-path{color:var(--dsw-alias-label-tertiary);cursor:pointer;min-width:0;max-width:100%;display:inline-block;vertical-align:bottom;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;line-height:24px}",
 
   ".tool-render-path:hover{color:var(--dsw-alias-label-primary);text-decoration:underline}",
@@ -170,9 +193,11 @@ var CSS_TEXT = [
   ".tool-render-command{font-family:var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-tertiary);margin:4px 0 0 4px;padding:2px 0;font-size:13px;line-height:20px}",
   ".tool-render-command code.hljs{background:transparent;padding:0;font-family:inherit;font-size:inherit;line-height:inherit;white-space:inherit}",
   ".tool-render-output{box-sizing:border-box;background:var(--dsw-alias-markdown-code-block);font-family:var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-primary);border-radius:12px;margin:4px 0 4px 4px;padding:12px 16px;font-size:13px;line-height:22px;max-height:280px;overflow-y:auto}",
-  ".tool-render-output[tool-render-error]{color:var(--dsw-alias-state-error-primary)}",
+  ".tool-render-output[tool-render-error]{color:var(--dsw-alias-state-error-primary);border-color:rgba(255,85,85,.45);background:rgba(255,85,85,.08);font-weight:500}",
+  ".tool-render-row[data-state=error]{background:rgba(255,85,85,.07);box-shadow:inset 3px 0 0 var(--dsw-alias-state-error-primary);padding-left:8px}",
+  ".tool-render-row[data-state=error] .tool-render-leading{transform:scale(1.3)}",
+  ".tool-render-row[data-state=error] .tool-render-title{color:var(--dsw-alias-state-error-primary);font-weight:500}",
   ".tool-render-code{box-sizing:border-box;background:var(--dsw-alias-markdown-code-block);font-family:var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-primary);border-radius:12px;margin:4px 0 4px 4px;padding:12px 16px;font-size:13px;line-height:22px;max-height:400px;overflow-y:auto}",
-  ".tool-render-code code.hljs{background:transparent;padding:0;font-family:inherit;font-size:inherit;line-height:inherit;white-space:inherit;display:block;flex:auto;min-width:0}",
   ".tool-render-inspect{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-secondary);cursor:pointer;opacity:0;border-radius:999px;align-self:flex-start;align-items:center;gap:4px;margin:4px 0 2px 4px;padding:2px 8px;font-size:11px;line-height:16px;transition:opacity .1s;display:inline-flex}",
   ".tool-render-card:hover .tool-render-inspect,.tool-render-inspect:focus-visible{opacity:1}",
   ".tool-render-inspect:hover{background:var(--dsw-alias-interactive-bg-hover-solid);color:var(--dsw-alias-label-primary)}",
@@ -187,8 +212,7 @@ var CSS_TEXT = [
   ".tool-render-diff-marker-del{color:#ffb86c}",
   ".tool-render-diff-marker-add{color:#7db4ff}",
   ".tool-render-write-note{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px;margin-bottom:6px}",
-  ".tool-render-code-row{display:flex;align-items:flex-start;min-width:0}",
-  ".tool-render-diff-row{display:flex;align-items:flex-start;min-width:0}",
+  ".tool-render-code-row,.tool-render-diff-row{display:flex;align-items:flex-start;min-width:0}",
   ".tool-render-diff-pair{display:flex;align-items:stretch;min-width:0}",
   ".tool-render-diff-cell{flex:1 1 0;min-width:0;display:flex;align-items:flex-start}",
   ".tool-render-diff-cell + .tool-render-diff-cell{border-left:1px solid var(--dsw-alias-border-l2)}",
@@ -203,9 +227,12 @@ var CSS_TEXT = [
   ".tool-render-title{font-weight:500}",
   ".tool-render-summary,.tool-render-path{font-size:13px}",
   ".tool-render-output,.tool-render-code,.tool-render-write-diff,.tool-render-diff-fallback{border:1px solid var(--dsw-alias-border-l1)}",
-  ".tool-render-row:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}"
+  ".tool-render-row:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}",
 ].join("");
-if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(STYLE_TAG_ID) + "]") === null) {
+if (
+  typeof document !== "undefined" &&
+  document.querySelector("style[data-plugin-css=" + JSON.stringify(STYLE_TAG_ID) + "]") === null
+) {
   var tag = document.createElement("style");
   tag.dataset.plugin = PLUGIN_NAME;
   tag.dataset.pluginCss = STYLE_TAG_ID;
@@ -258,7 +285,7 @@ function ensureHljsPass() {
       var added = mutations[m].addedNodes;
       if (!added || added.length === 0) continue;
       for (var i = 0; i < added.length; i++) {
-        var node = added[i];
+        var node = added[i] as HTMLElement;
         if (!node || node.nodeType !== 1) continue;
         if (typeof node.matches === "function" && node.matches(HLJS_SCOPE_SELECTOR)) {
           if (hljsPassEligible(node)) {
@@ -273,7 +300,7 @@ function ensureHljsPass() {
         if (typeof node.querySelectorAll === "function") {
           var blocks = node.querySelectorAll(HLJS_SCOPE_SELECTOR);
           for (var b = 0; b < blocks.length; b++) {
-            var el = blocks[b];
+            var el = blocks[b] as HTMLElement;
             if (!hljsPassEligible(el)) continue;
             try {
               hljs.highlightElement(el);
@@ -308,14 +335,22 @@ function doneOf(block) {
 
 function argsRawOf(block) {
   return doneOf(block)
-    ? (block.call && typeof block.call.argsRaw === "string" ? block.call.argsRaw : "")
-    : (block !== null && typeof block === "object" && typeof block.argsRaw === "string" ? block.argsRaw : "");
+    ? block.call && typeof block.call.argsRaw === "string"
+      ? block.call.argsRaw
+      : ""
+    : block !== null && typeof block === "object" && typeof block.argsRaw === "string"
+      ? block.argsRaw
+      : "";
 }
 
 function callNameOf(block) {
   return doneOf(block)
-    ? (block.call && typeof block.call.name === "string" ? block.call.name : "")
-    : (block !== null && typeof block === "object" && typeof block.name === "string" ? block.name : "");
+    ? block.call && typeof block.call.name === "string"
+      ? block.call.name
+      : ""
+    : block !== null && typeof block === "object" && typeof block.name === "string"
+      ? block.name
+      : "";
 }
 
 function rowStateOf(block) {
@@ -339,15 +374,51 @@ function resultTextOf(block) {
       }
     }
   }
-  if (parts.length === 0 && block.error !== undefined && block.error !== null) {
-    parts.push((block.error.name || "Error") + ": " + (block.error.code || ""));
-  }
   return parts.join("\n");
+}
+
+// A settled failed block usually carries its message in content[].text
+// ("Error: " + message), but several error shapes keep the real message in
+// block.error.message instead: sandbox denials, manifest edit restrictions,
+// hashline/stale-anchor failures, write failures, batch edits. Fall back to
+// error.message, then the error code, when content carries no text.
+function errorTextOf(block) {
+  if (!doneOf(block)) return null;
+  var text = resultTextOf(block); // joins content[].text items
+  if (text !== null && text !== "") return text;
+  if (block.error && block.error.message) return String(block.error.message);
+  if (block.error && block.error.code) return String(block.error.code);
+  return null;
 }
 
 function firstLine(text) {
   var at = text.indexOf("\n");
   return at === -1 ? text : text.slice(0, at);
+}
+
+// Error summaries prefer a line that names the failure (a bracketed token
+// like [E_RANGE_STALE] or [sandbox: ...]) over the first line, which may
+// be an unhelpful wrapper such as "Error: ".
+var ERROR_TOKEN_RE = /\[(?:E_|exit code:|sandbox:)/;
+function firstLineOfError(text) {
+  if (typeof text !== "string" || text === "") return text;
+  var lines = text.split("\n");
+  for (var i = 0; i < lines.length; i++) {
+    if (ERROR_TOKEN_RE.test(lines[i])) return lines[i];
+  }
+  return firstLine(text);
+}
+
+// Bash sandbox denials and failed commands surface as SUCCESSFUL blocks
+// (isError false): the text body carries "[sandbox: file access denied
+// under <mode> mode]" and/or "[exit code: N]". Elevate those settled rows
+// to the error state so the error tint, dot, and uncondensed body apply.
+// Running rows keep their own state.
+var BASH_ERROR_MARKERS = /\[sandbox: file access denied under|\[exit code: [1-9]/;
+function bashErrorState(state, output) {
+  if (state === "running") return state;
+  if (typeof output !== "string" || output === "") return state;
+  return BASH_ERROR_MARKERS.test(output) ? "error" : state;
 }
 
 function relativizeToCwd(text, cwd) {
@@ -376,7 +447,8 @@ function escapeHtml(text) {
     .replace(/'/g, "&#39;");
 }
 
-var ANSI_RE = /\x1B(?:\[[0-9;?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1B\\)|\([A-Z0-9]|\)[A-Z0-9])|[\r\u0008]/g;
+var ANSI_RE =
+  /\x1B(?:\[[0-9;?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1B\\)|\([A-Z0-9]|\)[A-Z0-9])|[\r\u0008]/g;
 function stripAnsi(text) {
   return String(text).replace(ANSI_RE, "");
 }
@@ -385,7 +457,8 @@ function stripAnsi(text) {
 // Strip the common leading whitespace from a snippet. The minimum indent
 // comes from the non-empty lines; all-whitespace lines collapse to empty.
 // The line count never changes, so callers keep their line numbers. This
-// is display-only: stored block data is never rewritten.
+// is display-only: stored block data is never rewritten. A leading
+// tab counts as one indent unit, same as one space.
 function deIndent(text) {
   if (typeof text !== "string" || text === "") return text;
   var lines = text.split("\n");
@@ -393,7 +466,11 @@ function deIndent(text) {
   for (var i = 0; i < lines.length; i++) {
     if (lines[i].trim() === "") continue;
     var count = 0;
-    while (count < lines[i].length && lines[i].charAt(count) === " ") count++;
+    while (
+      count < lines[i].length &&
+      (lines[i].charAt(count) === " " || lines[i].charAt(count) === "\t")
+    )
+      count++;
     if (min === -1 || count < min) min = count;
   }
   if (min <= 0) return text;
@@ -403,7 +480,6 @@ function deIndent(text) {
   }
   return out.join("\n");
 }
-
 
 // ---- hashline row parsing (the personal dsh-better-edit read format). ----
 // A served row is `HASH│content` with HASH in [A-Za-z0-9]{3}
@@ -415,8 +491,13 @@ var HASH_ROW_RE = /^([A-Za-z0-9]{3})│/;
 // to partial reads. A plain read carries neither; rows then number
 // sequentially from 1.
 function readStartLine(args, output) {
-  if (args !== null && typeof args === "object" &&
-      typeof args.offset === "number" && Number.isInteger(args.offset) && args.offset >= 1) {
+  if (
+    args !== null &&
+    typeof args === "object" &&
+    typeof args.offset === "number" &&
+    Number.isInteger(args.offset) &&
+    args.offset >= 1
+  ) {
     return args.offset;
   }
   var lines = String(output).split("\n");
@@ -501,7 +582,11 @@ function highlightCode(text, language) {
 
 // ---- Row chrome (shared look, mirrors the shipped ToolRow seating). ----
 function toolRenderRow(options) {
-  var open = options.expanded === true && options.expandable === true;
+  // Error rows show their error body unconditionally below the row, so
+  // they never need the expand toggle. Non-error rows keep the shipped
+  // expand behavior.
+  var interactive = options.expandable === true && options.state !== "error";
+  var open = options.expanded === true && interactive;
   var leading;
   if (open) {
     leading = createElement(IconChevronDownOutline14, { className: "tool-render-chevron" });
@@ -531,15 +616,18 @@ function toolRenderRow(options) {
             event.stopPropagation();
             options.onOpenFile(options.path);
           }
-        }
+        },
       },
-      options.summary
+      options.summary,
     );
   } else {
     summary = createElement(
       "span",
-      { className: "tool-render-summary", "tool-render-error": options.errorSummary !== undefined || undefined },
-      options.errorSummary !== undefined ? options.errorSummary : options.summary
+      {
+        className: "tool-render-summary",
+        "tool-render-error": options.errorSummary !== undefined || undefined,
+      },
+      options.errorSummary !== undefined ? options.errorSummary : options.summary,
     );
   }
   return createElement(
@@ -550,24 +638,26 @@ function toolRenderRow(options) {
       {
         className: "tool-render-row",
         "data-state": options.state,
-        "data-expandable": options.expandable === true || undefined,
-        role: options.expandable === true ? "button" : undefined,
-        tabIndex: options.expandable === true ? 0 : undefined,
-        "aria-expanded": options.expandable === true ? open : undefined,
-        onClick: options.expandable === true ? options.onToggle : undefined,
-        onKeyDown: options.expandable === true ? function (event) {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            options.onToggle();
-          }
-        } : undefined
+        "data-expandable": interactive || undefined,
+        role: interactive ? "button" : undefined,
+        tabIndex: interactive ? 0 : undefined,
+        "aria-expanded": interactive ? open : undefined,
+        onClick: interactive ? options.onToggle : undefined,
+        onKeyDown: interactive
+          ? function (event) {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                options.onToggle();
+              }
+            }
+          : undefined,
       },
       createElement("span", { className: "tool-render-leading" }, leading),
       createElement("span", { className: "tool-render-title" }, options.title),
       createElement("span", { className: "tool-render-sep", "aria-hidden": true }),
-      summary
+      summary,
     ),
-    open === true
+    open === true || (options.state === "error" && options.body !== null)
       ? createElement(
           "div",
           { className: "tool-render-body" },
@@ -577,11 +667,11 @@ function toolRenderRow(options) {
                 "button",
                 { type: "button", className: "tool-render-inspect", onClick: options.inspect },
                 createElement(IconInspectOutline12, {}),
-                " Inspect"
+                " Inspect",
               )
-            : null
+            : null,
         )
-      : null
+      : null,
   );
 }
 
@@ -595,21 +685,25 @@ function ReadRow(props) {
   var args = parseArgs(argsRawOf(block));
   var path = args !== null ? pickString(args, ["path", "file_path"]) : undefined;
   var output = done ? resultTextOf(block) : null;
+  var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary = state === "error" && output !== null && output !== "" ? firstLine(output) : undefined;
+  var errorSummary =
+    state === "error" && errorText !== null && errorText !== ""
+      ? firstLineOfError(errorText)
+      : undefined;
   var summary = path !== undefined ? relativizeToCwd(firstLine(path), props.cwd) : "Read";
   var body = null;
   if (output !== null && output !== "") {
     if (state === "error") {
-      body = createElement("pre", { className: "tool-render-output", "tool-render-error": true }, output);
+      body = createElement(
+        "pre",
+        { className: "tool-render-output", "tool-render-error": true },
+        output,
+      );
     } else {
       var rows = numberedReadRows(output, readStartLine(args, output));
       var language = languageFor(path !== undefined ? path : "");
-      body = createElement(
-        "div",
-        { className: "tool-render-code" },
-        readLineRows(rows, language)
-      );
+      body = createElement("div", { className: "tool-render-code" }, readLineRows(rows, language));
     }
   }
   return toolRenderRow({
@@ -621,10 +715,12 @@ function ReadRow(props) {
     state: state,
     expandable: body !== null,
     expanded: expanded,
-    onToggle: function () { setExpanded(!expanded); },
+    onToggle: function () {
+      setExpanded(!expanded);
+    },
     body: body,
     errorSummary: errorSummary,
-    inspect: props.inspect
+    inspect: props.inspect,
   });
 }
 
@@ -638,23 +734,38 @@ function BashRow(props) {
   var args = parseArgs(argsRawOf(block));
   var command = args !== null ? pickString(args, ["command", "description"]) : undefined;
   var output = done ? resultTextOf(block) : null;
-  var state = rowStateOf(block);
-  var errorSummary = state === "error" && output !== null && output !== "" ? firstLine(output) : undefined;
+  var errorText = done ? errorTextOf(block) : null;
+  var state = bashErrorState(rowStateOf(block), output);
+  var errorSummary =
+    state === "error" && errorText !== null && errorText !== ""
+      ? firstLineOfError(errorText)
+      : undefined;
   var summary = command !== undefined ? firstLine(command) : "Bash";
   var body = null;
   if (command !== undefined || (output !== null && output !== "")) {
     var inner = [];
     if (command !== undefined) {
       var commandHtml = highlightCode(command, "bash");
-      inner.push(createElement("div", { className: "tool-render-command" }, "$ ", createElement("code", { className: "hljs", "data-highlighted": "yes", dangerouslySetInnerHTML: { __html: commandHtml } })));
+      inner.push(
+        createElement(
+          "div",
+          { className: "tool-render-command" },
+          "$ ",
+          createElement("code", {
+            className: "hljs",
+            "data-highlighted": "yes",
+            dangerouslySetInnerHTML: { __html: commandHtml },
+          }),
+        ),
+      );
     }
     if (output !== null && output !== "") {
       inner.push(
         createElement(
           "pre",
           { className: "tool-render-output", "tool-render-error": state === "error" || undefined },
-          stripAnsi(output)
-        )
+          stripAnsi(output),
+        ),
       );
     }
     body = createElement("div", { className: "tool-render-io" }, inner);
@@ -666,10 +777,12 @@ function BashRow(props) {
     state: state,
     expandable: body !== null,
     expanded: expanded,
-    onToggle: function () { setExpanded(!expanded); },
+    onToggle: function () {
+      setExpanded(!expanded);
+    },
     body: body,
     errorSummary: errorSummary,
-    inspect: props.inspect
+    inspect: props.inspect,
   });
 }
 
@@ -700,18 +813,26 @@ function narrowDiffs(diffs) {
 function wireDiffs(block) {
   if (block === null || typeof block !== "object") return null;
   if (!doneOf(block)) {
-    var call = block.callView !== undefined && block.callView !== null && block.callView.card === "diff" ? block.callView : null;
+    var call =
+      block.callView !== undefined && block.callView !== null && block.callView.card === "diff"
+        ? block.callView
+        : null;
     var callDiffs = call === null ? null : narrowDiffs(call.diffs);
     return callDiffs === null ? null : { diffs: callDiffs };
   }
-  var result = block.resultView !== undefined && block.resultView !== null && block.resultView.card === "diff" ? block.resultView : null;
+  var result =
+    block.resultView !== undefined && block.resultView !== null && block.resultView.card === "diff"
+      ? block.resultView
+      : null;
   var resultDiffs = result === null ? null : narrowDiffs(result.diffs);
   return resultDiffs === null ? null : { diffs: resultDiffs };
 }
 
 function matchesPath(a, b, cwd) {
   if (typeof a !== "string" || typeof b !== "string") return false;
-  var strip = function (p) { return p.replace(/[/\\]+$/, ""); };
+  var strip = function (p) {
+    return p.replace(/[/\\]+$/, "");
+  };
   if (strip(a) === strip(b)) return true;
   if (typeof cwd !== "string" || cwd === "") return false;
   // The model can pass the same file as absolute or repo-relative.
@@ -733,7 +854,8 @@ function readsOf(snapshot, path, beforeTime, cwd) {
   var entries;
   if (typeof iter.next === "function") {
     entries = [];
-    for (var entry = iter.next(); entry.done !== true; entry = iter.next()) entries.push(entry.value);
+    for (var entry = iter.next(); entry.done !== true; entry = iter.next())
+      entries.push(entry.value);
   } else {
     entries = Array.isArray(iter) ? iter : [];
   }
@@ -756,7 +878,9 @@ function readsOf(snapshot, path, beforeTime, cwd) {
     if (text === null || text === "") continue;
     out.push({ time: time, text: text, args: args });
   }
-  out.sort(function (a, b) { return b.time - a.time; });
+  out.sort(function (a, b) {
+    return b.time - a.time;
+  });
   return out;
 }
 
@@ -776,7 +900,10 @@ function extractHunk(readText, removeFrom, removeTo, replacementText, startLine)
   if (rows.length === 0) return null;
   var from = -1;
   for (var k = 0; k < rows.length; k++) {
-    if (rows[k].hash === removeFrom) { from = k; break; }
+    if (rows[k].hash === removeFrom) {
+      from = k;
+      break;
+    }
   }
   if (from === -1) return null;
   var to = from;
@@ -786,14 +913,22 @@ function extractHunk(readText, removeFrom, removeTo, replacementText, startLine)
     // showing a silently truncated range.
     to = -1;
     for (var j = from; j < rows.length; j++) {
-      if (rows[j].hash === removeTo) { to = j; break; }
+      if (rows[j].hash === removeTo) {
+        to = j;
+        break;
+      }
     }
     if (to === -1) return null;
   }
   var before = [];
   for (var n = from; n <= to; n++) before.push(rows[n].content);
-  var base = typeof startLine === "number" && startLine >= 1 ? startLine : readStartLine(null, readText);
-  return { before: before.join("\n"), after: typeof replacementText === "string" ? replacementText : "", oldStart: base + from };
+  var base =
+    typeof startLine === "number" && startLine >= 1 ? startLine : readStartLine(null, readText);
+  return {
+    before: before.join("\n"),
+    after: typeof replacementText === "string" ? replacementText : "",
+    oldStart: base + from,
+  };
 }
 
 // ---- Line diff (LCS over lines) for the write row body. ----
@@ -853,7 +988,7 @@ function collectEditRequests(args) {
     out.push({
       path: args.file_path,
       oldText: typeof args.old_string === "string" ? args.old_string : null,
-      newText: typeof args.new_string === "string" ? args.new_string : ""
+      newText: typeof args.new_string === "string" ? args.new_string : "",
     });
   }
   if (typeof args.path === "string" && args.path !== "" && typeof args.remove_from === "string") {
@@ -862,7 +997,7 @@ function collectEditRequests(args) {
       oldText: null,
       newText: typeof args.replacement_text === "string" ? args.replacement_text : "",
       removeFrom: args.remove_from,
-      removeTo: typeof args.remove_to === "string" ? args.remove_to : undefined
+      removeTo: typeof args.remove_to === "string" ? args.remove_to : undefined,
     });
   }
   if (Array.isArray(args.edits)) {
@@ -877,13 +1012,13 @@ function collectEditRequests(args) {
           oldText: null,
           newText: typeof item.replacement_text === "string" ? item.replacement_text : "",
           removeFrom: item.remove_from,
-          removeTo: typeof item.remove_to === "string" ? item.remove_to : undefined
+          removeTo: typeof item.remove_to === "string" ? item.remove_to : undefined,
         });
       } else if (typeof item.old_string === "string") {
         out.push({
           path: itemPath,
           oldText: item.old_string,
-          newText: typeof item.new_string === "string" ? item.new_string : ""
+          newText: typeof item.new_string === "string" ? item.new_string : "",
         });
       }
     }
@@ -901,7 +1036,9 @@ function resolveEditDiffs(block, requests, useSession, cwd) {
   var running = !doneOf(block);
   var beforeTime = running
     ? block.time
-    : (typeof block.callTime === "number" ? block.callTime : undefined);
+    : typeof block.callTime === "number"
+      ? block.callTime
+      : undefined;
   var filter = typeof beforeTime === "number" ? beforeTime : undefined;
   var out = [];
   for (var i = 0; i < requests.length; i++) {
@@ -912,7 +1049,13 @@ function resolveEditDiffs(block, requests, useSession, cwd) {
       var recovered = useSession(function (snapshot) {
         var reads = readsOf(snapshot, req.path, filter, cwd);
         for (var r = 0; r < reads.length; r++) {
-          var hunk = extractHunk(reads[r].text, req.removeFrom, req.removeTo, req.newText, readStartLine(reads[r].args, reads[r].text));
+          var hunk = extractHunk(
+            reads[r].text,
+            req.removeFrom,
+            req.removeTo,
+            req.newText,
+            readStartLine(reads[r].args, reads[r].text),
+          );
           if (hunk !== null) return hunk;
         }
         return null;
@@ -947,22 +1090,32 @@ function diffFallbackBody(diffs, language) {
     }
   }
   var children = [
-    createElement("div", { className: "tool-render-fallback-note" },
-      onlyDels ? "After text unavailable" : "Before text unavailable")
+    createElement(
+      "div",
+      { className: "tool-render-fallback-note" },
+      onlyDels ? "After text unavailable" : "Before text unavailable",
+    ),
   ];
   var lines = [];
-  for (var i = 0; i < diffs.length; i++) {
-    var text = onlyDels
-      ? deIndent(typeof diffs[i].oldText === "string" ? diffs[i].oldText : "")
-      : deIndent(typeof diffs[i].newText === "string" ? diffs[i].newText : "");
-    var parts = splitLines(text);
-    for (var j = 0; j < parts.length; j++) lines.push(parts[j]);
-  }
   var numbers = [];
-  for (var i = 0; i < lines.length; i++) numbers.push(null);
+  for (var i = 0; i < diffs.length; i++) {
+    var d = diffs[i];
+    var text = onlyDels
+      ? deIndent(typeof d.oldText === "string" ? d.oldText : "")
+      : deIndent(typeof d.newText === "string" ? d.newText : "");
+    var parts = splitLines(text);
+    var startBase = typeof d.startOld === "number" ? d.startOld : 1;
+    for (var j = 0; j < parts.length; j++) {
+      lines.push(parts[j]);
+      // Added lines number from the file position when one is known
+      // (recovered from read history), else sequentially from 1.
+      // Deleted lines have no known position, so they keep an empty gutter.
+      numbers.push(onlyDels ? null : startBase + j);
+    }
+  }
   var width = gutterWidthCh(numbers);
   for (var i = 0; i < lines.length; i++) {
-    children.push(diffLineRow(onlyDels ? "del" : "add", lines[i], null, width, language));
+    children.push(diffLineRow(onlyDels ? "del" : "add", lines[i], numbers[i], width, language));
   }
   return createElement("div", { className: "tool-render-diff-fallback" }, children);
 }
@@ -983,9 +1136,12 @@ function resolveEffectiveCwd(props) {
     try {
       var cwd = props.useSessions(function (list) {
         if (list === null || typeof list !== "object") return undefined;
-        var id = typeof props.sessionId === "string" && props.sessionId !== ""
-          ? props.sessionId
-          : (typeof list.current === "string" ? list.current : undefined);
+        var id =
+          typeof props.sessionId === "string" && props.sessionId !== ""
+            ? props.sessionId
+            : typeof list.current === "string"
+              ? list.current
+              : undefined;
         if (id === undefined) return undefined;
         var row = list.byId === undefined || list.byId === null ? undefined : list.byId[id];
         if (row === undefined || row === null) return undefined;
@@ -1016,7 +1172,7 @@ function makeEditRow(toolTitle) {
         expanded: false,
         onToggle: function () {},
         body: null,
-        inspect: props.inspect
+        inspect: props.inspect,
       });
     }
     var done = doneOf(block);
@@ -1037,19 +1193,28 @@ function makeEditRow(toolTitle) {
       diffs = null;
     }
     var output = done ? resultTextOf(block) : null;
+    var errorText = done ? errorTextOf(block) : null;
     var state = rowStateOf(block);
-    var errorSummary = state === "error" && output !== null && output !== "" ? firstLine(output) : undefined;
+    var errorSummary =
+      state === "error" && errorText !== null && errorText !== ""
+        ? firstLineOfError(errorText)
+        : undefined;
     var summaryPath = pickString(argsObject, ["path", "file_path"]);
-    var summary = summaryPath !== undefined ? relativizeToCwd(firstLine(summaryPath), effectiveCwd) : toolTitle;
+    var summary =
+      summaryPath !== undefined ? relativizeToCwd(firstLine(summaryPath), effectiveCwd) : toolTitle;
     var body = null;
-    if (diffs !== null && diffs.length > 0) {
+    if (state !== "error" && diffs !== null && diffs.length > 0) {
       if (wire === null && done && state === "ok" && allHunksNull(diffs)) {
         body = diffFallbackBody(diffs, languageFor(summaryPath !== undefined ? summaryPath : ""));
       } else {
         body = editDiffBody(diffs);
       }
     } else if (output !== null && output !== "") {
-      body = createElement("pre", { className: "tool-render-output", "tool-render-error": state === "error" || undefined }, output);
+      body = createElement(
+        "pre",
+        { className: "tool-render-output", "tool-render-error": state === "error" || undefined },
+        output,
+      );
     }
     return toolRenderRow({
       icon: createElement(IconEditOutline16, { size: 14 }),
@@ -1060,16 +1225,19 @@ function makeEditRow(toolTitle) {
       state: state,
       expandable: body !== null,
       expanded: expanded,
-      onToggle: function () { setExpanded(!expanded); },
+      onToggle: function () {
+        setExpanded(!expanded);
+      },
       body: body,
       errorSummary: errorSummary,
-      inspect: props.inspect
+      inspect: props.inspect,
     });
   };
 }
 
 var EditRow = makeEditRow("Edit");
 var BatchEditRow = makeEditRow("Batch edit");
+var UndoEditRow = makeEditRow("Undo edit");
 
 // ---- Line-number gutter. ----
 // One number per content line, right-aligned in a column of uniform width
@@ -1083,15 +1251,19 @@ function gutterWidthCh(numbers) {
     var len = String(numbers[i]).length;
     if (len > max) max = len;
   }
-  return (max + 2) + "ch";
+  return max + 2 + "ch";
 }
 
 function gutterSpan(number, width) {
-  return createElement("span", {
-    className: "tool-render-gutter",
-    "aria-hidden": true,
-    style: { width: width }
-  }, number === null || number === undefined ? "" : String(number));
+  return createElement(
+    "span",
+    {
+      className: "tool-render-gutter",
+      "aria-hidden": true,
+      style: { width: width },
+    },
+    number === null || number === undefined ? "" : String(number),
+  );
 }
 
 function readLineRows(rows, language) {
@@ -1100,25 +1272,35 @@ function readLineRows(rows, language) {
   var width = gutterWidthCh(numbers);
   var out = [];
   for (var i = 0; i < rows.length; i++) {
-    out.push(createElement("div", { className: "tool-render-code-row" },
-      gutterSpan(rows[i].number, width),
-      createElement("code", { className: "hljs", "data-highlighted": "yes", dangerouslySetInnerHTML: { __html: highlightCode(rows[i].text, language) } })
-    ));
+    out.push(
+      createElement(
+        "div",
+        { className: "tool-render-code-row" },
+        gutterSpan(rows[i].number, width),
+        createElement("code", {
+          className: "tool-render-line-cell hljs",
+          "data-highlighted": "yes",
+          dangerouslySetInnerHTML: { __html: highlightCode(rows[i].text, language) },
+        }),
+      ),
+    );
   }
   return out;
 }
 
 function diffLineRow(type, text, number, width, language) {
-  return createElement("div", {
-    className: "tool-render-diff-row" + (type === "same" ? "" : " tool-render-line-" + type)
-  },
+  return createElement(
+    "div",
+    {
+      className: "tool-render-diff-row" + (type === "same" ? "" : " tool-render-line-" + type),
+    },
     diffMarker(type === "same" ? null : type),
     gutterSpan(number, width),
     createElement("code", {
       className: "tool-render-line-cell hljs",
       "data-highlighted": "yes",
-      dangerouslySetInnerHTML: { __html: highlightCode(text, language) }
-    })
+      dangerouslySetInnerHTML: { __html: highlightCode(text, language) },
+    }),
   );
 }
 
@@ -1134,14 +1316,20 @@ function alignDiffOps(ops, startOld) {
   while (i < ops.length) {
     var op = ops[i];
     if (op.type === "same") {
-      rows.push({ left: { text: op.text, kind: "same" }, right: { text: op.text, kind: "same" }, oldNum: oldNum++, newNum: newNum++ });
+      rows.push({
+        left: { text: op.text, kind: "same" },
+        right: { text: op.text, kind: "same" },
+        oldNum: oldNum++,
+        newNum: newNum++,
+      });
       i++;
       continue;
     }
     var dels = [];
     var adds = [];
     while (i < ops.length && ops[i].type !== "same") {
-      if (ops[i].type === "del") dels.push(ops[i].text); else adds.push(ops[i].text);
+      if (ops[i].type === "del") dels.push(ops[i].text);
+      else adds.push(ops[i].text);
       i++;
     }
     var n = Math.max(dels.length, adds.length);
@@ -1150,7 +1338,7 @@ function alignDiffOps(ops, startOld) {
         left: dels[k] === undefined ? null : { text: dels[k], kind: "del" },
         right: adds[k] === undefined ? null : { text: adds[k], kind: "add" },
         oldNum: dels[k] === undefined ? null : oldNum++,
-        newNum: adds[k] === undefined ? null : newNum++
+        newNum: adds[k] === undefined ? null : newNum++,
       });
     }
   }
@@ -1158,33 +1346,52 @@ function alignDiffOps(ops, startOld) {
 }
 
 function diffMarker(kind) {
-  return createElement("span", {
-    className: "tool-render-diff-marker" + (kind === null ? "" : " tool-render-diff-marker-" + kind),
-    "aria-hidden": true
-  }, kind === "del" ? "-" : kind === "add" ? "+" : "");
+  return createElement(
+    "span",
+    {
+      className:
+        "tool-render-diff-marker" + (kind === null ? "" : " tool-render-diff-marker-" + kind),
+      "aria-hidden": true,
+    },
+    kind === "del" ? "-" : kind === "add" ? "+" : "",
+  );
 }
 
 function diffCell(kind, text, number, width, language) {
-  return createElement("div", {
-    className: "tool-render-diff-cell" + (kind === "same" ? "" : " tool-render-line-" + kind)
-  },
+  return createElement(
+    "div",
+    {
+      className: "tool-render-diff-cell" + (kind === "same" ? "" : " tool-render-line-" + kind),
+    },
     diffMarker(kind === "same" ? null : kind),
     gutterSpan(number, width),
     createElement("code", {
       className: "tool-render-line-cell hljs",
       "data-highlighted": "yes",
-      dangerouslySetInnerHTML: { __html: highlightCode(text, language) }
-    })
+      dangerouslySetInnerHTML: { __html: highlightCode(text, language) },
+    }),
   );
 }
 
 function diffPairRow(row, leftWidth, rightWidth, language) {
-  var left = row.left === null
-    ? createElement("div", { className: "tool-render-diff-cell" }, diffMarker(null), gutterSpan(null, leftWidth))
-    : diffCell(row.left.kind, row.left.text, row.oldNum, leftWidth, language);
-  var right = row.right === null
-    ? createElement("div", { className: "tool-render-diff-cell" }, diffMarker(null), gutterSpan(null, rightWidth))
-    : diffCell(row.right.kind, row.right.text, row.newNum, rightWidth, language);
+  var left =
+    row.left === null
+      ? createElement(
+          "div",
+          { className: "tool-render-diff-cell" },
+          diffMarker(null),
+          gutterSpan(null, leftWidth),
+        )
+      : diffCell(row.left.kind, row.left.text, row.oldNum, leftWidth, language);
+  var right =
+    row.right === null
+      ? createElement(
+          "div",
+          { className: "tool-render-diff-cell" },
+          diffMarker(null),
+          gutterSpan(null, rightWidth),
+        )
+      : diffCell(row.right.kind, row.right.text, row.newNum, rightWidth, language);
   return createElement("div", { className: "tool-render-diff-pair" }, left, right);
 }
 
@@ -1199,7 +1406,9 @@ function editDiffBody(diffs) {
       children.push(createElement("div", { className: "tool-render-diff-path" }, filePath));
       previousPath = filePath;
     } else {
-      children.push(createElement("div", { className: "tool-render-diff-sep", "aria-hidden": true }, "⋯"));
+      children.push(
+        createElement("div", { className: "tool-render-diff-sep", "aria-hidden": true }, "⋯"),
+      );
     }
     var oldText = deIndent(typeof file.oldText === "string" ? file.oldText : "");
     var newText = deIndent(typeof file.newText === "string" ? file.newText : "");
@@ -1219,7 +1428,10 @@ function editDiffBody(diffs) {
       var rows = alignDiffOps(ops, typeof file.startOld === "number" ? file.startOld : 1);
       var leftNumbers = [];
       var rightNumbers = [];
-      for (var r = 0; r < rows.length; r++) { leftNumbers.push(rows[r].oldNum); rightNumbers.push(rows[r].newNum); }
+      for (var r = 0; r < rows.length; r++) {
+        leftNumbers.push(rows[r].oldNum);
+        rightNumbers.push(rows[r].newNum);
+      }
       var leftWidth = gutterWidthCh(leftNumbers);
       var rightWidth = gutterWidthCh(rightNumbers);
       for (var r = 0; r < rows.length; r++) {
@@ -1229,11 +1441,17 @@ function editDiffBody(diffs) {
       var type = hasDel ? "del" : hasAdd ? "add" : "same";
       var text = hasDel ? oldText : hasAdd ? newText : oldText;
       var parts = splitLines(text);
+      // Single-sided hunks (only adds or only dels) number from the file
+      // position when one is known: deleted lines sit at file.startOld, and
+      // lines replacing a removed range start at that same position. With no
+      // position (wire diffs) fall back to sequential numbering from 1 so the
+      // gutter always shows a number.
+      var startBase = typeof file.startOld === "number" ? file.startOld : 1;
       var numbers = [];
-      for (var l = 0; l < parts.length; l++) numbers.push(null);
+      for (var l = 0; l < parts.length; l++) numbers.push(startBase + l);
       var width = gutterWidthCh(numbers);
       for (var l = 0; l < parts.length; l++) {
-        children.push(diffLineRow(type, parts[l], null, width, language));
+        children.push(diffLineRow(type, parts[l], numbers[l], width, language));
       }
     }
   }
@@ -1252,8 +1470,16 @@ function writeBody(path, before, newText) {
     return createElement(
       "div",
       { className: "tool-render-write" },
-      createElement("div", { className: "tool-render-write-note" }, "No earlier version on record; new content below"),
-      createElement("div", { className: "tool-render-code" }, readLineRows(numberedReadRows(newText, 1), language))
+      createElement(
+        "div",
+        { className: "tool-render-write-note" },
+        "No earlier version on record; new content below",
+      ),
+      createElement(
+        "div",
+        { className: "tool-render-code" },
+        readLineRows(numberedReadRows(newText, 1), language),
+      ),
     );
   }
   var cleaned = cleanReadTextForDiff(before);
@@ -1270,7 +1496,10 @@ function writeBody(path, before, newText) {
     var rows = alignDiffOps(ops, cleaned.start);
     var leftNumbers = [];
     var rightNumbers = [];
-    for (var i = 0; i < rows.length; i++) { leftNumbers.push(rows[i].oldNum); rightNumbers.push(rows[i].newNum); }
+    for (var i = 0; i < rows.length; i++) {
+      leftNumbers.push(rows[i].oldNum);
+      rightNumbers.push(rows[i].newNum);
+    }
     var leftWidth = gutterWidthCh(leftNumbers);
     var rightWidth = gutterWidthCh(rightNumbers);
     for (var i = 0; i < rows.length; i++) {
@@ -1278,13 +1507,18 @@ function writeBody(path, before, newText) {
     }
   } else {
     var type = hasDel ? "del" : hasAdd ? "add" : "same";
-    var text = hasDel ? deIndent(cleaned.content) : hasAdd ? deIndent(newText) : deIndent(cleaned.content);
+    var text = hasDel
+      ? deIndent(cleaned.content)
+      : hasAdd
+        ? deIndent(newText)
+        : deIndent(cleaned.content);
     var parts = splitLines(text);
+    var startBase = typeof cleaned.start === "number" ? cleaned.start : 1;
     var numbers = [];
-    for (var i = 0; i < parts.length; i++) numbers.push(null);
+    for (var i = 0; i < parts.length; i++) numbers.push(startBase + i);
     var width = gutterWidthCh(numbers);
     for (var i = 0; i < parts.length; i++) {
-      lines.push(diffLineRow(type, parts[i], null, width, language));
+      lines.push(diffLineRow(type, parts[i], numbers[i], width, language));
     }
   }
   return createElement("div", { className: "tool-render-write-diff" }, lines);
@@ -1302,8 +1536,12 @@ function WriteRow(props) {
   var path = pickString(argsObject, ["file_path", "path"]);
   var newText = typeof argsObject.content === "string" ? argsObject.content : "";
   var output = done ? resultTextOf(block) : null;
+  var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary = state === "error" && output !== null && output !== "" ? firstLine(output) : undefined;
+  var errorSummary =
+    state === "error" && errorText !== null && errorText !== ""
+      ? firstLineOfError(errorText)
+      : undefined;
   var summary = path !== undefined ? relativizeToCwd(firstLine(path), effectiveCwd) : "Write";
   var before = null;
   if (path !== undefined && props.useSession !== undefined) {
@@ -1315,7 +1553,11 @@ function WriteRow(props) {
   if (done && state === "ok") {
     body = writeBody(path, before, newText);
   } else if (output !== null && output !== "") {
-    body = createElement("pre", { className: "tool-render-output", "tool-render-error": state === "error" || undefined }, output);
+    body = createElement(
+      "pre",
+      { className: "tool-render-output", "tool-render-error": state === "error" || undefined },
+      output,
+    );
   }
   return toolRenderRow({
     icon: createElement(IconEditOutline16, { size: 14 }),
@@ -1326,10 +1568,12 @@ function WriteRow(props) {
     state: state,
     expandable: body !== null,
     expanded: expanded,
-    onToggle: function () { setExpanded(!expanded); },
+    onToggle: function () {
+      setExpanded(!expanded);
+    },
     body: body,
     errorSummary: errorSummary,
-    inspect: props.inspect
+    inspect: props.inspect,
   });
 }
 // ---- Cordis plugin face. ----
@@ -1338,31 +1582,62 @@ var name = PLUGIN_NAME;
 
 function apply(ctx) {
   ctx.slots.inject("tool.call.toolview", function* () {
-    yield ctx.slots.register({
-      name: "tool.call.toolview",
-      key: "read",
-      priority: -100
-    }, ReadRow);
-    yield ctx.slots.register({
-      name: "tool.call.toolview",
-      key: "bash",
-      priority: -100
-    }, BashRow);
-    yield ctx.slots.register({
-      name: "tool.call.toolview",
-      key: "edit",
-      priority: -100
-    }, EditRow);
-    yield ctx.slots.register({
-      name: "tool.call.toolview",
-      key: "batch_edit",
-      priority: -100
-    }, BatchEditRow);
-    yield ctx.slots.register({
-      name: "tool.call.toolview",
-      key: "write",
-      priority: -100
-    }, WriteRow);
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "read",
+        priority: -100,
+      },
+      ReadRow,
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "bash",
+        priority: -100,
+      },
+      BashRow,
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "edit",
+        priority: -100,
+      },
+      EditRow,
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "batch_edit",
+        priority: -100,
+      },
+      BatchEditRow,
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "write",
+        priority: -100,
+      },
+      WriteRow,
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "undo_edit",
+        priority: -100,
+      },
+      UndoEditRow,
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "undo_last_edit",
+        priority: -100,
+      },
+      UndoEditRow,
+    );
   });
 }
 

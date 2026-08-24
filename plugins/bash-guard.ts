@@ -59,41 +59,47 @@
  *     name: /path/to/plugins/bash-guard.js
  *     config: {}                # rules come from the drop-in files
  */
-import { readdir, readFile } from 'node:fs/promises'
-import { join } from 'node:path'
-import { parse, extractAllCommandsFromAST, expandWrapperCommands, getBasename, getCommandArgs } from '@cad0p/unbash-walker'
-import type { CommandRef } from '@cad0p/unbash-walker'
-import type { Context } from '@deepseek-ai/cordis'
-import z from '@deepseek-ai/schemastery'
-import type {} from '@deepseek-ai/dsh-tools'
+import { readdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
+import {
+  parse,
+  extractAllCommandsFromAST,
+  expandWrapperCommands,
+  getBasename,
+  getCommandArgs,
+} from "@cad0p/unbash-walker";
+import type { CommandRef } from "@cad0p/unbash-walker";
+import type { Context } from "@deepseek-ai/cordis";
+import z from "@deepseek-ai/schemastery";
+import type {} from "@deepseek-ai/dsh-tools";
 
-export const name = 'bash-guard'
+export const name = "bash-guard";
 
-export const inject = []
+export const inject = [];
 
 export const Config = z.object({
-  guardsDir: z.string().default('$DSH_HOME/plugins/guards'),
-})
+  guardsDir: z.string().default("$DSH_HOME/plugins/guards"),
+});
 
 type BashGuardConfig = {
-  guardsDir?: string
-}
+  guardsDir?: string;
+};
 
-type Verdict = 'deny' | 'ask' | 'allow' | 'none'
+type Verdict = "deny" | "ask" | "allow" | "none";
 
 interface GuardEntry {
-  commands: string[]
-  verdict: 'deny' | 'ask' | 'allow'
-  reason?: string
+  commands: string[];
+  verdict: "deny" | "ask" | "allow";
+  reason?: string;
   /** Optional per-subcommand refinement; unnamed subcommands inherit verdict. */
-  subcommands?: Record<string, 'deny' | 'ask' | 'allow'>
+  subcommands?: Record<string, "deny" | "ask" | "allow">;
 }
 
 /** Resolve $DSH_HOME in a configured path. */
 function resolveHome(path: string): string {
-  if (!path.includes('$DSH_HOME')) return path
-  const home = process.env.DSH_HOME ?? join(process.env.HOME ?? '', '.dsh')
-  return path.replaceAll('$DSH_HOME', home)
+  if (!path.includes("$DSH_HOME")) return path;
+  const home = process.env.DSH_HOME ?? join(process.env.HOME ?? "", ".dsh");
+  return path.replaceAll("$DSH_HOME", home);
 }
 
 /**
@@ -101,61 +107,70 @@ function resolveHome(path: string): string {
  * basename -> { verdict, reason }. A malformed file is logged and skipped.
  */
 async function loadRules(ctx: Context, dir: string): Promise<Map<string, GuardEntry>> {
-  const rules = new Map<string, GuardEntry>()
-  let names: string[]
+  const rules = new Map<string, GuardEntry>();
+  let names: string[];
   try {
-    names = await readdir(dir)
+    names = await readdir(dir);
   } catch {
-    return rules // no dir yet => no rules => everything allowed
+    return rules; // no dir yet => no rules => everything allowed
   }
   for (const name of names) {
-    if (!name.endsWith('.json')) continue
+    if (!name.endsWith(".json")) continue;
     try {
-      const text = await readFile(join(dir, name), 'utf8')
-      const parsed: unknown = JSON.parse(text)
-      if (typeof parsed !== 'object' || parsed === null) throw new Error('not an object')
-      const entry = parsed as Partial<GuardEntry>
-      if (!Array.isArray(entry.commands) || entry.commands.length === 0) throw new Error('missing commands[]')
-      if (entry.verdict !== 'deny' && entry.verdict !== 'ask' && entry.verdict !== 'allow') {
-        throw new Error(`bad verdict: ${String(entry.verdict)}`)
+      const text = await readFile(join(dir, name), "utf8");
+      const parsed: unknown = JSON.parse(text);
+      if (typeof parsed !== "object" || parsed === null) throw new Error("not an object");
+      const entry = parsed as Partial<GuardEntry>;
+      if (!Array.isArray(entry.commands) || entry.commands.length === 0)
+        throw new Error("missing commands[]");
+      if (entry.verdict !== "deny" && entry.verdict !== "ask" && entry.verdict !== "allow") {
+        throw new Error(`bad verdict: ${String(entry.verdict)}`);
       }
-      const clean = entry.commands.filter((c) => typeof c === 'string' && c.length > 0)
-      let subcommands: Record<string, 'deny' | 'ask' | 'allow'> | undefined
+      const clean = entry.commands.filter((c) => typeof c === "string" && c.length > 0);
+      let subcommands: Record<string, "deny" | "ask" | "allow"> | undefined;
       if (entry.subcommands !== undefined) {
-        if (typeof entry.subcommands !== 'object' || entry.subcommands === null) throw new Error('bad subcommands')
-        subcommands = {}
+        if (typeof entry.subcommands !== "object" || entry.subcommands === null)
+          throw new Error("bad subcommands");
+        subcommands = {};
         for (const [sub, verdict] of Object.entries(entry.subcommands)) {
-          if (verdict !== 'deny' && verdict !== 'ask' && verdict !== 'allow') {
-            throw new Error(`bad subcommand verdict for "${sub}": ${String(verdict)}`)
+          if (verdict !== "deny" && verdict !== "ask" && verdict !== "allow") {
+            throw new Error(`bad subcommand verdict for "${sub}": ${String(verdict)}`);
           }
-          subcommands[sub] = verdict
+          subcommands[sub] = verdict;
         }
       }
       for (const cmd of clean) {
-        rules.set(cmd, { commands: entry.commands, verdict: entry.verdict, reason: entry.reason, subcommands })
+        rules.set(cmd, {
+          commands: entry.commands,
+          verdict: entry.verdict,
+          reason: entry.reason,
+          subcommands,
+        });
       }
     } catch (error) {
-      ctx.logger.warn(`bash-guard: skipping malformed rule file ${name}: ${error instanceof Error ? error.message : String(error)}`)
+      ctx.logger.warn(
+        `bash-guard: skipping malformed rule file ${name}: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
-  return rules
+  return rules;
 }
 
 /** The default deny reason for a listed command without its own. */
 const DEFAULT_DENY = (name: string): string =>
   `The command "${name}" is denied in the personal bundle. ` +
-  'Use the sanctioned tool or ask the user to run it.'
+  "Use the sanctioned tool or ask the user to run it.";
 
 /** The default ask reason for a listed command. */
 const DEFAULT_ASK = (name: string): string =>
-  `The command "${name}" needs approval. Confirm or reject.`
+  `The command "${name}" needs approval. Confirm or reject.`;
 
 /** Most restrictive wins: deny > ask > allow > none. */
 function mostRestrictive(verdicts: Verdict[]): Verdict {
-  if (verdicts.includes('deny')) return 'deny'
-  if (verdicts.includes('ask')) return 'ask'
-  if (verdicts.includes('allow')) return 'allow'
-  return 'none'
+  if (verdicts.includes("deny")) return "deny";
+  if (verdicts.includes("ask")) return "ask";
+  if (verdicts.includes("allow")) return "allow";
+  return "none";
 }
 
 /**
@@ -167,11 +182,11 @@ function mostRestrictive(verdicts: Verdict[]): Verdict {
  */
 function firstSubcommand(args: string[]): string | undefined {
   for (const arg of args) {
-    if (arg === '--') break
-    if (arg.startsWith('-')) continue
-    return arg
+    if (arg === "--") break;
+    if (arg.startsWith("-")) continue;
+    return arg;
   }
-  return undefined
+  return undefined;
 }
 
 /**
@@ -179,71 +194,74 @@ function firstSubcommand(args: string[]): string | undefined {
  * names the invoked subcommand, else the rule's base verdict.
  */
 function verdictFor(rule: GuardEntry, ref: CommandRef): Verdict {
-  if (rule.subcommands === undefined) return rule.verdict
-  const sub = firstSubcommand(getCommandArgs(ref))
-  const refined = sub !== undefined ? rule.subcommands[sub] : undefined
-  return refined ?? rule.verdict
+  if (rule.subcommands === undefined) return rule.verdict;
+  const sub = firstSubcommand(getCommandArgs(ref));
+  const refined = sub !== undefined ? rule.subcommands[sub] : undefined;
+  return refined ?? rule.verdict;
 }
 
 export function apply(ctx: Context, config: BashGuardConfig): void {
-  const dir = resolveHome(config.guardsDir ?? '$DSH_HOME/plugins/guards')
+  const dir = resolveHome(config.guardsDir ?? "$DSH_HOME/plugins/guards");
 
-  ctx.on('tools/pre-execute', async (exec, next) => {
-    if (exec.name !== 'bash') return next()
-    const command = (exec.arguments as { command?: string } | undefined)?.command
-    if (typeof command !== 'string' || command.trim().length === 0) return next()
+  ctx.on("tools/pre-execute", async (exec, next) => {
+    if (exec.name !== "bash") return next();
+    const command = (exec.arguments as { command?: string } | undefined)?.command;
+    if (typeof command !== "string" || command.trim().length === 0) return next();
 
-    let script
+    let script;
     try {
-      script = parse(command)
+      script = parse(command);
     } catch (error) {
       // Parse threw outright: fail closed.
       return {
-        kind: 'deny',
+        kind: "deny",
         reason: `bash-guard: could not parse the command; refusing to run it unparsed. ${
           error instanceof Error ? error.message : String(error)
         }`,
-      }
+      };
     }
     // unbash returns a best-effort partial AST with errors for malformed
     // input; a partial tree is not trustworthy for gating.
     if (script.errors && script.errors.length > 0) {
-      const messages = script.errors.map((e) => e.message).join('; ')
-      return { kind: 'deny', reason: `bash-guard: parse errors in command; refusing to run it unparsed. ${messages}` }
+      const messages = script.errors.map((e) => e.message).join("; ");
+      return {
+        kind: "deny",
+        reason: `bash-guard: parse errors in command; refusing to run it unparsed. ${messages}`,
+      };
     }
 
-    const refs = extractAllCommandsFromAST(script, command)
-    const { commands } = expandWrapperCommands(refs)
-    const all = [...refs, ...commands]
-    if (all.length === 0) return next()
+    const refs = extractAllCommandsFromAST(script, command);
+    const { commands } = expandWrapperCommands(refs);
+    const all = [...refs, ...commands];
+    if (all.length === 0) return next();
 
-    const rules = await loadRules(ctx, dir)
+    const rules = await loadRules(ctx, dir);
     const hits = all
       .map((ref) => {
-        const name = getBasename(ref)
-        const rule = rules.get(name)
-        if (rule === undefined) return undefined
-        return { name, rule, verdict: verdictFor(rule, ref) }
+        const name = getBasename(ref);
+        const rule = rules.get(name);
+        if (rule === undefined) return undefined;
+        return { name, rule, verdict: verdictFor(rule, ref) };
       })
-      .filter((h): h is { name: string; rule: GuardEntry; verdict: Verdict } => h !== undefined)
+      .filter((h): h is { name: string; rule: GuardEntry; verdict: Verdict } => h !== undefined);
 
-    if (hits.length === 0) return next()
-    const verdicts = hits.map((h) => h.verdict)
-    const overall = mostRestrictive(verdicts)
+    if (hits.length === 0) return next();
+    const verdicts = hits.map((h) => h.verdict);
+    const overall = mostRestrictive(verdicts);
     switch (overall) {
-      case 'deny': {
-        const hit = hits.find((h) => h.verdict === 'deny')
-        const reason = hit?.rule.reason ?? DEFAULT_DENY(hit?.name ?? 'unknown')
-        return { kind: 'deny', reason }
+      case "deny": {
+        const hit = hits.find((h) => h.verdict === "deny");
+        const reason = hit?.rule.reason ?? DEFAULT_DENY(hit?.name ?? "unknown");
+        return { kind: "deny", reason };
       }
-      case 'ask': {
-        const hit = hits.find((h) => h.verdict === 'ask')
-        return { kind: 'ask', reason: hit?.rule.reason ?? DEFAULT_ASK(hit?.name ?? 'unknown') }
+      case "ask": {
+        const hit = hits.find((h) => h.verdict === "ask");
+        return { kind: "ask", reason: hit?.rule.reason ?? DEFAULT_ASK(hit?.name ?? "unknown") };
       }
-      case 'allow':
-      case 'none':
+      case "allow":
+      case "none":
       default:
-        return next()
+        return next();
     }
-  })
+  });
 }
