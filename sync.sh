@@ -278,6 +278,35 @@ for key in (proj.get("dependencies") or {}):
 	[ "$extra" -eq 0 ] && echo "  no extra plugins."
 }
 
+step_allow_aidos_build() {
+	# pnpm refuses to run a package's install/build scripts unless its exact
+	# resolved tarball URL is listed under `allowBuilds` in the web profile's
+	# pnpm-workspace.yaml. aidos needs its postinstall, so add the entry for the
+	# CURRENT pin (AIDOS_PLUGIN_SPEC) idempotently. The pin changes per bump, so
+	# we reconstruct the codeload tarball URL the same way pnpm does from the
+	# github spec (owner/repo#ref -> tarball, name = repo basename).
+	local ws="$DSH_HOME/profiles/web/pnpm-workspace.yaml"
+	local spec="${AIDOS_PLUGIN_SPEC}"
+	local path ref name tarball key
+	path="${spec#github:}"
+	ref="${spec##*#}"
+	path="${path%#*}"
+	name="$(basename "$path")"
+	tarball="https://codeload.github.com/${path}/tar.gz/${ref}"
+	key="${name}@${tarball}"
+	mkdir -p "$(dirname "$ws")"
+	touch "$ws"
+	if ! grep -qxF "  ${key}: true" "$ws"; then
+		grep -q '^allowBuilds:' "$ws" || printf 'allowBuilds:\n' >> "$ws"
+		awk -v k="  ${key}: true" '
+			BEGIN { done=0 }
+			/^allowBuilds:/ && !done { print; print k; done=1; next }
+			{ print }
+		' "$ws" > "$ws.tmp" && mv "$ws.tmp" "$ws"
+		echo "    added allowBuilds: ${key}"
+	fi
+}
+
 step_install_aidos() {
 	# The aidos preset's tools run against a host-plane `aidos` core service
 	# that the package's own dsh.bundle.patch mounts; `dsh plugin add`
@@ -293,17 +322,21 @@ step_install_aidos() {
 step_register_aidos_preset() {
 	mkdir -p "$DSH_HOME/.agent-presets/aidos"
 	cat > "$DSH_HOME/.agent-presets/aidos/agent.cordis.yml" <<'EOF'
-# The aidos agent preset composition (installed by $REPO/sync.sh).
+# The aidos agent preset composition (installed by sync.sh).
 # The loader re-exports the aidos-tools bundle from the installed aidos
-# package (resolved as a bare specifier against the web profile's
-# node_modules, the same way @deepseek-ai/* rows resolve), so the plugin's
-# own @deepseek-ai/* imports resolve from that same install.
+# package by absolute path. Preset rows resolve bare specifiers against
+# the installed harness, which has no aidos package; only an absolute
+# path reaches the web profile's node_modules.
 - name: ./aidos-loader.js
 EOF
-	cat > "$DSH_HOME/.agent-presets/aidos/aidos-loader.js" <<'EOF'
-// Installed by $REPO/sync.sh. Re-exports the aidos-tools plugin bundle from
-// the aidos package installed via `dsh plugin add`.
-export { name, inject, Config, apply } from "aidos/presets/aidos/aidos-tools.js";
+	cat > "$DSH_HOME/.agent-presets/aidos/aidos-loader.js" <<EOF
+// Installed by sync.sh. Re-exports the aidos-tools plugin bundle from the
+// aidos package installed via `dsh plugin add`.
+//
+// The import path is templated to an absolute path on purpose: preset
+// compositions resolve bare specifiers against the installed harness, not
+// the web profile, so a bare "aidos/..." specifier cannot load here.
+export { name, inject, Config, apply } from "$DSH_HOME/profiles/web/node_modules/aidos/presets/aidos/aidos-tools.js";
 EOF
 	cat > "$DSH_HOME/.agent-presets/aidos/preset.yml" <<'EOF'
 name: Aidos
@@ -383,6 +416,7 @@ STEPS=(
 	"Write the web-profile patch (host-plane rows)|step_write_web_patch"
 	"Install the third-party plugin set on the web profile|step_install_plugins"
 	"Report extra plugins (removal commands)|step_report_extra_plugins"
+	"Allow aidos build scripts in web pnpm-workspace.yaml|step_allow_aidos_build"
 	"Install the aidos plugin from git|step_install_aidos"
 	"Register the aidos agent preset|step_register_aidos_preset"
 	"Regenerate settings.yaml from the repo template|step_set_defaults"
