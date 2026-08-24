@@ -100,6 +100,8 @@ step_write_web_patch() {
       name: $HERE/plugins/see.js
     - id: tmp-dsh-shared
       name: $HERE/plugins/tmp-dsh-shared.js
+    - id: grant
+      name: $HERE/plugins/grant.js
 
     - id: ask-interrupt
       name: $HERE/plugins/ask-interrupt.js
@@ -107,40 +109,16 @@ step_write_web_patch() {
 
     - id: profiles
       name: $HERE/plugins/profiles.js
-      # Worker-tier pins (coder/tester/researcher) fix each role's HEAD;
-      # failover walks the DEPTH chain (orchestrator / subagent) of the
-      # ACTIVE 'profile' namespace in ~/.dsh/settings.yaml. Keep that file's
-      # chains carrying the same tail rungs.
-      config:
-        roles:
-          coder:
-            routes:
-            - provider: opencode-zen
-              model: deepseek-v4-flash-free
-            - provider: opencode-go
-              model: deepseek-v4-flash
-            - provider: deepseek-official
-              model: deepseek-v4-flash
-          tester:
-            routes:
-            - provider: opencode-zen
-              model: deepseek-v4-flash-free
-            - provider: opencode-go
-              model: deepseek-v4-flash
-            - provider: deepseek-official
-              model: deepseek-v4-flash
-          researcher:
-            routes:
-            - provider: opencode-zen
-              model: deepseek-v4-flash-free
-            - provider: opencode-go
-              model: deepseek-v4-flash
-            - provider: deepseek-official
-              model: deepseek-v4-flash
-
     # The cordis_* tools, gated behind the two cordis skills via skill-gate.
     - id: tool-cordis
       name: '@deepseek-ai/dsh-tool-cordis'
+    - id: compaction-instant
+      name: '@deepseek-ai/dsh-compaction-basic'
+    - id: tool-recall
+      name: '@deepseek-ai/dsh-compaction-basic/tool'
+    - id: command-recall
+      name: '@deepseek-ai/dsh-compaction-basic/command'
+
 
 # Config override for the self-mounting dsh-remote plugin (the plugin
 # install step pins our fork). The plugin creates the remote row from its
@@ -195,7 +173,6 @@ step_install_plugins() {
 			if [ "$rc" -ne 0 ]; then printf '%s\n' "$out"; return "$rc"; fi
 			printf '%s\n' "$out" | rg -i 'warn|error' || true
 		}
-		pnpm_ins "github:xiyue718/dsh-ui-file-browser#44e769f90f7c"
 		pnpm_ins "github:sunshaobei/dsh-input-history#9b5b7a494a5c"
 		pnpm_ins "github:omdsh-dev/dsh-tool-calculator#05090e946113"
 		pnpm_ins "github:omdsh-dev/dsh-tool-diff#d4afd6e2de0b"
@@ -250,8 +227,8 @@ step_report_extra_plugins() {
 		"@deepseek-ai/dsh-tool-markdown"
 		"@deepseek-ai/dsh-tool-regex"
 		"@deepseek-ai/dsh-tool-time"
+        "@deepseek-ai/dsh-compaction-basic"
 		"@dsh-external/dsh-session-search"
-		"@dsh-external/ui-file-browser"
 		"@xgone/dsh-remote"
 		"aidos"
 		"approval-comment"
@@ -333,58 +310,29 @@ EOF
 }
 
 step_set_defaults() {
-	python3 - "$DSH_HOME/settings.yaml" <<'PY'
-import sys
-import yaml
-p = sys.argv[1]
-d = yaml.safe_load(open(p)) or {}
-# Owned sections, replaced on EVERY run. The local settings.yaml is
-# stateless: it holds no secrets, so sync.sh may overwrite freely.
-d.setdefault('agent-presets', {})['default'] = 'standard'
-meridian = d.setdefault('llm-pi-ai', {}).setdefault('providers', {}).setdefault('meridian', {})
-meridian['defaultInput'] = ['text', 'image']
-# The `profile` namespace is owned by plugins/see.ts and the profiles plugin.
-# `active` is a runtime decision (the profiles tool flips it), so sync
-# PRESERVES the current value while replacing the chains themselves. Each
-# entry holds two named chains: `orchestrator` for depth-0 agents and
-# `subagent` for spawned children (W21). The profiles plugin picks the chain
-# by agent depth, reorders the go/ds tail by quota at selection time, skips
-# error-cached rungs, and pushes the active head into agent-default-model on
-# every flip.
-prof = d.get('profile') or {}
-active = prof.get('active', 'personal')
-d['profile'] = {
-    'active': active,
-    'work': {
-        'orchestrator': {'routes': [
-            {'provider': 'meridian', 'model': 'claude-opus-5'},
-            {'provider': 'meridian', 'model': 'claude-sonnet-5'},
-            {'provider': 'opencode-zen', 'model': 'x-preview-f-free'},
-            {'provider': 'deepseek-official', 'model': 'deepseek-v4-flash'},
-        ]},
-        'subagent': {'routes': [
-            {'provider': 'opencode-zen', 'model': 'deepseek-v4-flash-free'},
-            {'provider': 'opencode-go', 'model': 'deepseek-v4-flash'},
-            {'provider': 'deepseek-official', 'model': 'deepseek-v4-flash'},
-        ]},
-    },
-    'personal': {
-        'orchestrator': {'routes': [
-            {'provider': 'opencode-zen', 'model': 'x-preview-f-free'},
-            {'provider': 'opencode-zen', 'model': 'deepseek-v4-flash-free'},
-            {'provider': 'opencode-go', 'model': 'deepseek-v4-flash'},
-            {'provider': 'deepseek-official', 'model': 'deepseek-v4-flash'},
-        ]},
-        'subagent': {'routes': [
-            {'provider': 'opencode-zen', 'model': 'deepseek-v4-flash-free'},
-            {'provider': 'opencode-go', 'model': 'deepseek-v4-flash'},
-            {'provider': 'deepseek-official', 'model': 'deepseek-v4-flash'},
-        ]},
-    },
-}
+	# Regenerate $DSH_HOME/settings.yaml from the known-good repo template
+	# ($HERE/home/settings.yaml). The local file is stateless: it holds no
+	# secrets, so sync may overwrite it freely. profile.active is the one
+	# runtime decision (the profiles tool flips it), so preserve the current
+	# value; every other section comes from the template.
+	local active
+	active="$(python3 - "$DSH_HOME/settings.yaml" <<'PY'
+import sys, yaml
+try:
+    d = yaml.safe_load(open(sys.argv[1])) or {}
+except Exception:
+    d = {}
+print(d.get('profile', {}).get('active', 'personal'))
+PY
+)"
+	cp "$HERE/home/settings.yaml" "$DSH_HOME/settings.yaml"
+	python3 - "$DSH_HOME/settings.yaml" "$active" <<'PY'
+import sys, yaml
+p, active = sys.argv[1], sys.argv[2]
+d = yaml.safe_load(open(p))
+d['profile']['active'] = active
 with open(p, 'w') as f:
     yaml.safe_dump(d, f, sort_keys=False)
-print(open(p).read())
 PY
 }
 
@@ -434,7 +382,7 @@ STEPS=(
 	"Report extra plugins (removal commands)|step_report_extra_plugins"
 	"Install the aidos plugin from git|step_install_aidos"
 	"Register the aidos agent preset|step_register_aidos_preset"
-	"Set agent-presets default + meridian image input + profile routes|step_set_defaults"
+	"Regenerate settings.yaml from the repo template|step_set_defaults"
 	"Ensure .dsh_better_edit/ is ignored by git machine-wide|step_ignore_better_edit_dir"
 )
 

@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "strict": false,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"]
+  },
+  "include": [
+    "plugins/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "plugins/**/node_modules",
+    "plugins/**/dist",
+    "plugins/**/lib",
+    "plugins/**/src/client.ts"
+  ]
+}

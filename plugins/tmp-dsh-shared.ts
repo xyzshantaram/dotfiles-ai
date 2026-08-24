@@ -27,7 +27,7 @@
  * wrapper behind.
  */
 
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Context } from "@deepseek-ai/cordis";
@@ -73,24 +73,62 @@ export function bindDurableTmp(
   return { ...confined, argv: next };
 }
 
+/** Apply-time marker so a restart can prove this plugin ran at all. */
+function markApplied(hostTmpDsh: string): void {
+  try {
+    mkdirSync(hostTmpDsh, { recursive: true });
+    writeFileSync(join(hostTmpDsh, ".applied"), `${process.pid} ${Date.now()}`);
+  } catch {
+    // fail open: the marker is diagnostic only
+  }
+}
+
 export function apply(ctx: Context): void {
   const sandbox = ctx.sandbox as unknown as {
     confine(argv: readonly string[], policy: unknown): ConfinedArgvLike;
   };
 
-  const original = sandbox.confine.bind(sandbox);
   const hostTmpDsh = join(tmpdir(), "dsh");
+  markApplied(hostTmpDsh);
 
+  // Patch the concrete instance first (the shared root-singleton path).
+  const original = sandbox.confine.bind(sandbox);
   sandbox.confine = (argv, policy) => {
     const confined = original(argv, policy);
     return bindDurableTmp(confined, hostTmpDsh);
   };
 
-  ctx.effect(() => {
-    // Restore the original method on dispose. If another instance already
-    // replaced confine after us, do not clobber its wrapper.
+  // Patch the provider prototype too. If the runtime instantiates a
+  // sandbox provider per session AFTER this plugin applied, the instance
+  // patch above misses it; the prototype patch covers every instance,
+  // current and future.
+  let proto: { confine(...args: unknown[]): ConfinedArgvLike } | null = null;
+  try {
+    proto = Object.getPrototypeOf(sandbox) as typeof proto;
+  } catch {
+    proto = null;
+  }
+  let protoOriginal: ((...args: unknown[]) => ConfinedArgvLike) | null = null;
+  if (proto !== null && typeof proto.confine === "function") {
+    protoOriginal = proto.confine;
+    proto.confine = function (this: unknown, ...args: unknown[]): ConfinedArgvLike {
+      return bindDurableTmp((protoOriginal as (...a: unknown[]) => ConfinedArgvLike).apply(this, args), hostTmpDsh);
+    };
+  }
+
+  // Cordis runs the effect BODY immediately and collects its RETURN VALUE as
+  // the dispose callback. A bare `ctx.effect(() => { restore })` therefore
+  // restores the originals right here, at apply time, undoing both patches
+  // before any bash call. Return the cleanup function so it runs only on
+  // dispose.
+  ctx.effect(() => () => {
+    // Restore both seams on dispose. If another instance already replaced
+    // confine after us, do not clobber its wrapper.
     if (sandbox.confine !== undefined) {
       sandbox.confine = original;
+    }
+    if (proto !== null && protoOriginal !== null && proto.confine !== undefined) {
+      proto.confine = protoOriginal;
     }
   });
 }
