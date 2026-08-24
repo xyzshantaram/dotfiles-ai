@@ -264,6 +264,55 @@ export function apply(ctx: Context, config: unknown): void {
     const live = settings?.get(PROFILE_NS) as ProfileSettings | undefined;
     return live ?? source();
   };
+  // Gate read_image and see by each agent's image-input capability. A
+  // vision-capable agent keeps read_image and loses see; a non-vision agent
+  // keeps see (which delegates to a vision model) and loses read_image. The see
+  // tool spawns its child on a vision model, so the child is restricted from see
+  // too — that is what stops see from recursing into itself.
+  const llm = ctx.get("llm") as
+    | {
+        resolveModelInfo(
+          provider: string,
+          model: string,
+          signal?: AbortSignal,
+        ): Promise<{
+          input?: { inputModalities?: readonly string[] };
+          inputModalities?: readonly string[];
+        }>;
+      }
+    | undefined;
+  if (llm !== undefined) {
+    ctx.on("agent/created", async ({ agent }: { agent: any }) => {
+      const opts = agent.options;
+      // The live routed provider/model comes from the session request header
+      // (EpochHeader.config). agent.options is only the creation-time fallback.
+      const routed = agent.session?.requestHeader?.()?.config;
+      const provider = routed?.provider ?? opts?.provider;
+      const model = routed?.model ?? opts?.model;
+      if (provider === undefined || model === undefined) return;
+      // Default to no vision. When the image capability is unknown (the adapter
+      // omitted the modalities or resolveModelInfo threw), treat the model as
+      // non-vision and hide read_image. Only a model that explicitly declares
+      // image input keeps read_image. See DESIGN.md Appendix A.
+      let hasVision = false;
+      try {
+        const info = await llm.resolveModelInfo(provider, model);
+        // dsh-llm 0.1.0-rc.8 exposes inputModalities at the top level. Check the
+        // nested input.inputModalities shape first for forward compatibility.
+        const mods = info?.input?.inputModalities ?? info?.inputModalities;
+        if (Array.isArray(mods)) hasVision = mods.includes("image");
+      } catch {
+        // Unknown capability; keep the default-deny choice above (read_image hidden).
+      }
+      const deny = hasVision ? ["see"] : ["read_image"];
+      try {
+        agent.ctx.tools.restrict({ deny });
+      } catch {
+        // Agent scope or tool surface not ready; leave both tools available.
+      }
+    });
+  }
+
   registerSeeTool(ctx, getProfile);
   void config;
 }
