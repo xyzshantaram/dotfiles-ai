@@ -728,6 +728,15 @@ function validateChain(value: unknown, path: string): Validated<unknown> {
   return { ok: false, error: `${path} must be an object ({routes}) or array (composition)` };
 }
 
+/** Like validateChain, but a non-empty string (naming a `chains` key) is also valid. W24 field-level refs; see plugins/profile-routes.ts normalizeEntry. */
+function validateEntryField(value: unknown, path: string): Validated<unknown> {
+  if (typeof value === "string") {
+    if (value.length === 0) return { ok: false, error: `${path} must be a non-empty string` };
+    return { ok: true, value };
+  }
+  return validateChain(value, path);
+}
+
 function validateEntry(
   value: unknown,
   path: string,
@@ -738,9 +747,9 @@ function validateEntry(
       return { ok: false, error: `${path} has unknown key "${key}"` };
     }
   }
-  const orchestrator = validateChain(value.orchestrator, `${path}.orchestrator`);
+  const orchestrator = validateEntryField(value.orchestrator, `${path}.orchestrator`);
   if (orchestrator.ok === false) return orchestrator;
-  const subagent = validateChain(value.subagent, `${path}.subagent`);
+  const subagent = validateEntryField(value.subagent, `${path}.subagent`);
   if (subagent.ok === false) return subagent;
   return { ok: true, value: { orchestrator: orchestrator.value, subagent: subagent.value } };
 }
@@ -918,6 +927,21 @@ export function apply(ctx: Context, config: unknown): void {
     if (ns !== PROFILE_NS) return;
     downCache.clear();
     syncDefaultModel(ctx, next as ProfileSettings);
+  });
+
+  // W-new-project: reset the default model to the active profile's head on
+  // every new TOP-LEVEL session (role/see children have delegationDepth >= 1
+  // and must not trigger this — mirrors depthOf()'s ?? 0 pattern). Undoes a
+  // stale manual pick (session.selectModel also saves it as the global
+  // default) leaking into new projects/sessions.
+  ctx.on("session/created", (session: unknown) => {
+    const depth =
+      (session as { header?: { delegationDepth?: number } } | null | undefined)?.header
+        ?.delegationDepth ?? 0;
+    if (depth > 0) return;
+    const settings = service<SettingsService>(ctx, "settings");
+    const profile = settings?.get(PROFILE_NS) as ProfileSettings | undefined;
+    syncDefaultModel(ctx, profile);
   });
 
   ctx.systemPrompt.section({

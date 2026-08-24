@@ -480,6 +480,13 @@ function validateChain(value, path) {
   }
   return { ok: false, error: `${path} must be an object ({routes}) or array (composition)` };
 }
+function validateEntryField(value, path) {
+  if (typeof value === "string") {
+    if (value.length === 0) return { ok: false, error: `${path} must be a non-empty string` };
+    return { ok: true, value };
+  }
+  return validateChain(value, path);
+}
 function validateEntry(value, path) {
   if (!isPlainObject(value)) return { ok: false, error: `${path} must be an object` };
   for (const key of Object.keys(value)) {
@@ -487,9 +494,9 @@ function validateEntry(value, path) {
       return { ok: false, error: `${path} has unknown key "${key}"` };
     }
   }
-  const orchestrator = validateChain(value.orchestrator, `${path}.orchestrator`);
+  const orchestrator = validateEntryField(value.orchestrator, `${path}.orchestrator`);
   if (orchestrator.ok === false) return orchestrator;
-  const subagent = validateChain(value.subagent, `${path}.subagent`);
+  const subagent = validateEntryField(value.subagent, `${path}.subagent`);
   if (subagent.ok === false) return subagent;
   return { ok: true, value: { orchestrator: orchestrator.value, subagent: subagent.value } };
 }
@@ -647,6 +654,13 @@ function apply(ctx, config) {
     if (ns !== PROFILE_NS) return;
     downCache.clear();
     syncDefaultModel(ctx, next);
+  });
+  ctx.on("session/created", (session) => {
+    const depth = session?.header?.delegationDepth ?? 0;
+    if (depth > 0) return;
+    const settings = service(ctx, "settings");
+    const profile = settings?.get(PROFILE_NS);
+    syncDefaultModel(ctx, profile);
   });
   ctx.systemPrompt.section({
     name: "tool:profiles",
