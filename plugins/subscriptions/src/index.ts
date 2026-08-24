@@ -579,16 +579,47 @@ export function apply(ctx, config) {
       const token = authHeader.startsWith("Bearer ")
         ? authHeader.slice(7).trim()
         : credentials === undefined
-          ? null
-          : (await credentials.resolve("DEEPSEEK_PLATFORM_TOKEN"))?.value;
+        ? null
+        : (await credentials.resolve("DEEPSEEK_PLATFORM_TOKEN"))?.value;
       if (!token) {
         sendJson(res, 200, {
           error: "DEEPSEEK_PLATFORM_TOKEN not configured; sign in to platform.deepseek.com",
         });
         return;
       }
-      const data = await dsUsageAmountOnce(token, month, year);
-      sendJson(res, 200, data);
+      const raw = await dsUsageAmountOnce(token, month, year);
+      // Transform platform.deepseek.com nested shape -> flat array the client expects
+      const biz = raw?.data?.biz_data || {};
+      const total = Array.isArray(biz.total) ? biz.total : [];
+      const transformed = total.map((m) => {
+        const usage = Array.isArray(m.usage) ? m.usage : [];
+        let input = 0, output = 0, cacheRead = 0, cacheWrite = 0;
+        for (const item of usage) {
+          const n = Number(item.amount) || 0;
+          switch (item.type) {
+            case "PROMPT_CACHE_HIT_TOKEN":
+              cacheRead += n;
+              break;
+            case "PROMPT_CACHE_MISS_TOKEN":
+              input += n;
+              break;
+            case "RESPONSE_TOKEN":
+              output += n;
+              break;
+            case "PROMPT_TOKEN":
+              // total prompt tokens; don't double-count
+              break;
+          }
+        }
+        return {
+          model: m.model || "(unknown)",
+          input_tokens: input,
+          output_tokens: output,
+          cache_read_tokens: cacheRead,
+          cache_write_tokens: cacheWrite,
+        };
+      });
+      sendJson(res, 200, { data: transformed });
     } catch (error) {
       sendJson(res, 200, { error: error instanceof Error ? error.message : String(error) });
     }
@@ -610,16 +641,27 @@ export function apply(ctx, config) {
       const token = authHeader.startsWith("Bearer ")
         ? authHeader.slice(7).trim()
         : credentials === undefined
-          ? null
-          : (await credentials.resolve("DEEPSEEK_PLATFORM_TOKEN"))?.value;
+        ? null
+        : (await credentials.resolve("DEEPSEEK_PLATFORM_TOKEN"))?.value;
       if (!token) {
         sendJson(res, 200, {
           error: "DEEPSEEK_PLATFORM_TOKEN not configured; sign in to platform.deepseek.com",
         });
         return;
       }
-      const data = await dsUsageCostOnce(token, month, year);
-      sendJson(res, 200, data);
+      const raw = await dsUsageCostOnce(token, month, year);
+      // Transform nested cost shape -> flat array with cost per model
+      const biz = raw?.data?.biz_data || {};
+      const total = Array.isArray(biz.total) ? biz.total : [];
+      const transformed = total.map((m) => {
+        const usage = Array.isArray(m.usage) ? m.usage : [];
+        let cost = 0;
+        for (const item of usage) {
+          if (item.type !== "REQUEST") cost += Number(item.amount) || 0;
+        }
+        return { model: m.model || "(unknown)", cost };
+      }).filter((m) => m.cost > 0);
+      sendJson(res, 200, { data: transformed });
     } catch (error) {
       sendJson(res, 200, { error: error instanceof Error ? error.message : String(error) });
     }
