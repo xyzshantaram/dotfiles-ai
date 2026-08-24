@@ -1,0 +1,1407 @@
+(() => {
+  // plugins/profiles-client/src/client.ts
+  window.__ModuleLoader__.load({
+    id: "profiles-client",
+    factory: function(require2) {
+      var module = { exports: {} };
+      var exports = module.exports;
+      var react = require2("react");
+      var createElement = react.createElement;
+      var useSyncExternalStore = react.useSyncExternalStore;
+      var useState = react.useState;
+      var useEffect = react.useEffect;
+      var useRef = react.useRef;
+      var PLUGIN_NAME = "profiles-client";
+      var LOCALE_NS = "profiles-client";
+      var MODEL_SEAT_SLOT = "conversation.input.model";
+      var SEAT_PRIORITY = -100;
+      var STYLE_TAG_ID = "profiles-client/client.module.css";
+      var CSS_TEXT = [
+        ".profiles-client-root{min-width:0;position:relative}",
+        ".profiles-client-trigger{min-width:0;max-width:min(360px,45cqw);height:28px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:24px;outline:none;align-items:center;gap:5px;padding:0 8px;font-size:13px;font-weight:500;line-height:20px;display:flex}",
+        ".profiles-client-trigger:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}",
+        ".profiles-client-trigger:focus-visible{box-shadow:0 0 0 2px var(--dsw-alias-border-l3)}",
+        ".profiles-client-trigger:disabled{color:var(--dsw-alias-label-dimmed);cursor:default}",
+        ".profiles-client-profile-pill{flex:none;box-sizing:border-box;display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 7px;border-radius:999px;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);font-size:12px;font-weight:500;line-height:18px;white-space:nowrap}",
+        ".profiles-client-pill-dot{flex:none;width:6px;height:6px;border-radius:50%}",
+        ".profiles-client-pill-dot.profiles-client-pill-dot-matched{background:var(--dsw-alias-state-info-primary,#3b82f6)}",
+        ".profiles-client-pill-dot.profiles-client-pill-dot-changed{background:#f59e0b}",
+        ".profiles-client-model-label{text-overflow:ellipsis;white-space:nowrap;min-width:0;overflow:hidden}",
+        ".profiles-client-chevron{color:var(--dsw-alias-label-caption);flex:none}",
+        ".profiles-client-menu{z-index:20;border:1px solid var(--dsw-alias-border-inverted);background:var(--dsw-specific-menu);width:max-content;min-width:220px;max-width:min(420px,100vw - 32px);max-height:min(400px,100vh - 96px);box-shadow:var(--dsw-shadow-lv3);color:var(--dsw-alias-label-primary);border-radius:12px;flex-direction:column;padding:4px;display:flex;position:absolute;bottom:calc(100% + 8px);right:0;overflow-x:hidden;overflow-y:auto}",
+        ".profiles-client-section-label{color:var(--dsw-alias-label-secondary);padding:6px 8px 2px;font-size:11px;font-weight:600;line-height:16px;letter-spacing:.05em;text-transform:uppercase}",
+        ".profiles-client-option{box-sizing:border-box;width:auto;min-width:100%;min-height:34px;color:inherit;text-align:left;cursor:pointer;background:0 0;border:none;border-radius:10px;outline:none;align-items:center;gap:8px;padding:5px 8px;display:flex}",
+        ".profiles-client-option:hover:not(:disabled),.profiles-client-option:focus-visible{background:var(--dsw-alias-interactive-bg-hover)}",
+        ".profiles-client-option-copy{flex-direction:column;flex:1;min-width:0;display:flex}",
+        ".profiles-client-option-name{color:inherit;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:500;line-height:20px;overflow:hidden}",
+        ".profiles-client-option-profile{font-weight:700}",
+        ".profiles-client-option-model{font-size:12px;font-weight:500}",
+        ".profiles-client-option-detail{color:var(--dsw-alias-label-tertiary);text-overflow:ellipsis;white-space:nowrap;font-size:12px;line-height:16px;overflow:hidden}",
+        ".profiles-client-check{color:var(--dsw-alias-label-primary);flex:0 0 14px}",
+        ".profiles-client-model-row{display:flex;flex-direction:column;gap:2px}",
+        ".profiles-client-effort{box-sizing:border-box;width:calc(100% - 16px);min-width:0;margin-left:8px;height:24px;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:0 6px;font-size:11px;line-height:16px}",
+        ".profiles-client-strip{color:var(--dsw-alias-label-tertiary);padding:10px;font-size:13px;line-height:20px}",
+        // W24 settings panel. pf- prefixed, themed alias tokens only.
+        ".pf-panel-root{box-sizing:border-box;display:flex;flex-direction:column;gap:14px;padding:6px 2px;color:var(--dsw-alias-label-primary)}",
+        ".pf-panel-head{display:flex;align-items:center;justify-content:space-between;gap:8px}",
+        ".pf-panel-title{font-size:16px;font-weight:600;margin:0}",
+        ".pf-panel-refresh{cursor:pointer;border:none;background:none;padding:0;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:16px}",
+        ".pf-panel-refresh:hover{color:var(--dsw-alias-label-primary)}",
+        ".pf-panel-err{font-size:12px;line-height:16px;color:var(--dsw-alias-state-error-primary)}",
+        ".pf-panel-active{display:flex;gap:6px;flex-wrap:wrap}",
+        ".pf-panel-active-btn{color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:999px;font-size:12px;line-height:20px;padding:2px 10px;cursor:pointer}",
+        ".pf-panel-active-btn-on{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-border-l3)}",
+        ".pf-panel-entry{display:flex;flex-direction:column;gap:6px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;padding:8px 12px}",
+        ".pf-panel-entry-title{font-size:13px;font-weight:600;margin:0}",
+        ".pf-panel-chain{display:flex;flex-direction:column;gap:6px}",
+        ".pf-panel-chain-title{font-size:11px;line-height:15px;color:var(--dsw-alias-label-secondary);margin:0}",
+        ".pf-panel-row{display:flex;gap:6px;align-items:center;min-width:0}",
+        ".pf-panel-input{box-sizing:border-box;flex:1;min-width:0;height:26px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:0 8px;font-size:12px;line-height:18px}",
+        ".pf-panel-del{flex:none;cursor:pointer;border:none;background:none;padding:0 4px;color:var(--dsw-alias-label-secondary);font-size:14px;line-height:18px}",
+        ".pf-panel-del:hover{color:var(--dsw-alias-state-error-primary)}",
+        ".pf-panel-add{align-self:flex-start;color:var(--dsw-alias-label-secondary);background:none;border:1px dashed var(--dsw-alias-border-l2);border-radius:999px;font-size:11px;line-height:18px;padding:1px 10px;cursor:pointer}",
+        ".pf-panel-add:hover{color:var(--dsw-alias-label-primary)}",
+        ".pf-panel-meta{font-size:11px;line-height:15px;color:var(--dsw-alias-label-secondary)}",
+        ".pf-panel-ref{flex:none;color:var(--dsw-alias-label-tertiary);background:var(--dsw-alias-interactive-bg-hover);border-radius:999px;font-size:10px;line-height:14px;padding:1px 8px}",
+        ".pf-panel-actions{display:flex;align-items:center;gap:10px}",
+        ".pf-panel-save{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l3);border-radius:999px;font-size:12px;line-height:20px;padding:2px 14px;cursor:pointer}",
+        ".pf-panel-save:disabled{opacity:.5;cursor:default}",
+        ".pf-panel-status{font-size:12px;line-height:16px}",
+        ".pf-panel-ok{color:var(--dsw-alias-state-success-primary)}",
+        ".pf-panel-bad{color:var(--dsw-alias-state-error-primary)}",
+        ".pf-panel-select{box-sizing:border-box;flex:1;min-width:0;height:26px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:0 6px;font-size:12px;line-height:18px;cursor:pointer}",
+        ".pf-panel-select:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}",
+        ".pf-panel-effort{box-sizing:border-box;flex:0 0 auto;min-width:0;margin-left:8px;height:22px;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:0 6px;font-size:11px;line-height:16px;cursor:pointer}",
+        ".pf-panel-select option,.pf-panel-effort option{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}",
+        ".pf-panel-model-row{display:flex;flex-direction:column;gap:2px}",
+        ".pf-panel-add-select{align-self:flex-start;border-style:dashed}"
+      ].join("");
+      if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(STYLE_TAG_ID) + "]") === null) {
+        var tag = document.createElement("style");
+        tag.dataset.plugin = PLUGIN_NAME;
+        tag.dataset.pluginCss = STYLE_TAG_ID;
+        tag.textContent = CSS_TEXT;
+        document.head.appendChild(tag);
+      }
+      var EN = {
+        "seat.fallback": "Model",
+        "seat.aria": "Select model or profile",
+        "menu.profiles": "Profiles",
+        "menu.default": "Default",
+        "menu.models": "Models"
+      };
+      var ZH = {
+        "seat.fallback": "\u6A21\u578B",
+        "seat.aria": "\u9009\u62E9\u6A21\u578B\u6216\u914D\u7F6E",
+        "menu.profiles": "\u914D\u7F6E",
+        "menu.default": "\u9ED8\u8BA4",
+        "menu.models": "\u6A21\u578B"
+      };
+      function inertScope() {
+        var snapshot = Object.freeze({
+          status: "unavailable",
+          value: void 0,
+          base: void 0,
+          user: void 0,
+          revision: void 0,
+          writable: false
+        });
+        return {
+          store: {
+            subscribe: function() {
+              return function() {
+              };
+            },
+            getSnapshot: function() {
+              return snapshot;
+            }
+          }
+        };
+      }
+      function headOf(entry, chains) {
+        function isPair(value) {
+          return typeof value === "object" && value !== null && typeof value.provider === "string" && typeof value.model === "string";
+        }
+        if (typeof entry === "string") {
+          if (chains !== void 0 && chains !== null && chains[entry] !== void 0) {
+            return headOf(chains[entry], chains);
+          }
+          return void 0;
+        }
+        if (typeof entry === "object" && entry !== null && ("orchestrator" in entry || "subagent" in entry)) {
+          return headOf(entry.orchestrator, chains) ?? headOf(entry.subagent, chains);
+        }
+        if (isPair(entry)) return { provider: entry.provider, model: entry.model };
+        if (Array.isArray(entry)) {
+          var resolved = resolveChain(entry, chains);
+          return resolved.length > 0 ? resolved[0] : void 0;
+        }
+        if (typeof entry === "object" && entry !== null && Array.isArray(entry.routes)) {
+          for (var i = 0; i < entry.routes.length; i++) {
+            if (isPair(entry.routes[i]))
+              return { provider: entry.routes[i].provider, model: entry.routes[i].model };
+          }
+        }
+        return void 0;
+      }
+      function activeFace(profileValue) {
+        var active = profileValue && typeof profileValue.active === "string" ? profileValue.active : "work";
+        var chains = profileValue === void 0 || profileValue === null ? void 0 : profileValue.chains;
+        var entry = profileValue === void 0 || profileValue === null ? void 0 : active === "personal" ? profileValue.personal : profileValue.work;
+        return { active, head: headOf(entry, chains) };
+      }
+      function refNameOf(field) {
+        return typeof field === "string" ? field : void 0;
+      }
+      function resolveChain(value, chains, seen) {
+        function isPair(v) {
+          return typeof v === "object" && v !== null && typeof v.provider === "string" && typeof v.model === "string";
+        }
+        var out = [];
+        if (Array.isArray(value)) {
+          var guard = new Set(seen || []);
+          for (var i = 0; i < value.length; i++) {
+            var step = value[i];
+            if (typeof step === "string") {
+              if (step.indexOf("chain:") === 0) {
+                var name = step.slice(6);
+                if (chains !== void 0 && chains !== null && chains[name] !== void 0 && !guard.has(name)) {
+                  guard.add(name);
+                  out = out.concat(resolveChain(chains[name], chains, guard));
+                }
+              } else {
+                var slash = step.indexOf("/");
+                if (slash > 0) {
+                  out.push({ provider: step.slice(0, slash), model: step.slice(slash + 1) });
+                }
+              }
+            } else if (isPair(step)) {
+              out.push({ provider: step.provider, model: step.model });
+            } else if (Array.isArray(step)) {
+              out = out.concat(resolveChain(step, chains, guard));
+            }
+          }
+          return out;
+        }
+        if (typeof value === "object" && value !== null && Array.isArray(value.routes)) {
+          for (var j = 0; j < value.routes.length; j++) {
+            if (isPair(value.routes[j])) {
+              out.push({ provider: value.routes[j].provider, model: value.routes[j].model });
+            }
+          }
+        }
+        return out;
+      }
+      function isCompositionChain(value) {
+        return Array.isArray(value);
+      }
+      function stepTextOf(step) {
+        if (typeof step === "string") return step;
+        if (step !== void 0 && step !== null && typeof step.provider === "string" && typeof step.model === "string") {
+          return step.provider + "/" + step.model;
+        }
+        return "";
+      }
+      function routesEqual(a, b) {
+        if (a === b) return true;
+        if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+        for (var i = 0; i < a.length; i++) {
+          if (a[i].provider !== b[i].provider || a[i].model !== b[i].model) return false;
+        }
+        return true;
+      }
+      function chainNameOf(field, chains) {
+        if (chains === void 0 || chains === null) return void 0;
+        var names = Object.keys(chains);
+        for (var i = 0; i < names.length; i++) {
+          if (routesEqual(resolveChain(chains[names[i]], chains), field.routes)) return names[i];
+        }
+        return void 0;
+      }
+      function fieldSummary(field, chains) {
+        var refName = refNameOf(field);
+        if (refName !== void 0) return refName;
+        if (Array.isArray(field)) {
+          var steps = field.map(stepTextOf).filter(function(t) {
+            return t !== "";
+          });
+          return steps.length > 0 ? steps.join(", ") : "(empty)";
+        }
+        if (field !== void 0 && field !== null && Array.isArray(field.routes)) {
+          var name = chainNameOf(field, chains);
+          if (name !== void 0) return name;
+          var count = field.routes.length;
+          return "inline (" + count + " route" + (count === 1 ? "" : "s") + ")";
+        }
+        return "inline (0 routes)";
+      }
+      function installTitleRewriter(ctx) {
+        if (typeof document === "undefined" || typeof MutationObserver === "undefined") return;
+        function desired() {
+          try {
+            var snap = ctx.sessions.list.getSnapshot();
+            var id = snap.current;
+            var row = id === void 0 ? void 0 : snap.byId[id];
+            var title = row !== void 0 && row !== null && typeof row.title === "string" ? row.title : void 0;
+            return title === void 0 ? "dsh" : "dsh | " + title;
+          } catch (error) {
+            return null;
+          }
+        }
+        ctx.effect(function() {
+          function enforce() {
+            var want = desired();
+            if (want !== null && document.title !== want) document.title = want;
+          }
+          enforce();
+          var stopList = void 0;
+          try {
+            stopList = ctx.sessions.list.subscribe(enforce);
+          } catch (error) {
+            stopList = void 0;
+          }
+          var observer = new MutationObserver(enforce);
+          observer.observe(document.head, { subtree: true, childList: true, characterData: true });
+          return function() {
+            if (stopList !== void 0) stopList();
+            observer.disconnect();
+          };
+        }, "profiles-client: title rewriter");
+      }
+      function makeModelSeat(profileScope) {
+        function ProfileModelSeat(props) {
+          var locked = props.locked;
+          var available = props.available;
+          var directory = props.directory;
+          var load = props.load;
+          var select = props.select;
+          var t = props.t;
+          var state = useSyncExternalStore(
+            function(fn) {
+              return directory.subscribe(fn);
+            },
+            function() {
+              return directory.getSnapshot();
+            }
+          );
+          var profileSnap = useSyncExternalStore(
+            profileScope.store.subscribe,
+            profileScope.store.getSnapshot
+          );
+          var profileValue = profileSnap.value;
+          var openState = useState(false);
+          var open = openState[0];
+          var setOpen = openState[1];
+          var rootRef = useRef(null);
+          var profileConfigState = useState(null);
+          var profileConfig = profileConfigState[0];
+          var setProfileConfig = profileConfigState[1];
+          useEffect(
+            function() {
+              if (available) load();
+            },
+            [available, load]
+          );
+          useEffect(
+            function() {
+              if (!open) return;
+              var closeOutside = function(event) {
+                if (rootRef.current !== null && !rootRef.current.contains(event.target))
+                  setOpen(false);
+              };
+              document.addEventListener("mousedown", closeOutside);
+              return function() {
+                document.removeEventListener("mousedown", closeOutside);
+              };
+            },
+            [open]
+          );
+          var fetchProfiles = function() {
+            fetchJson("/profiles/config").then(function(result) {
+              if (result.error) return;
+              if (result.data !== null && result.data !== void 0 && result.data.config !== null && result.data.config !== void 0) {
+                setProfileConfig(result.data.config);
+              }
+            });
+          };
+          useEffect(
+            function() {
+              if (available) fetchProfiles();
+            },
+            [available]
+          );
+          if (!available) return null;
+          var current = state.current;
+          var liveProfile = profileConfig !== null ? profileConfig : profileValue;
+          var face = activeFace(liveProfile);
+          var matched = current !== void 0 && current !== null && face.head !== void 0 && current.provider === face.head.provider && current.model === face.head.model;
+          var profileRows = [];
+          if (liveProfile !== void 0 && liveProfile !== null) {
+            var known = ["work", "personal"];
+            for (var i = 0; i < known.length; i++) {
+              var key = known[i];
+              var head = headOf(liveProfile[key], liveProfile.chains);
+              if (head !== void 0) profileRows.push({ key, head });
+            }
+          }
+          var prettyOf = function(provider, model) {
+            for (var g2 = 0; g2 < state.groups.length; g2++) {
+              if (state.groups[g2].id !== provider) continue;
+              var plabel = typeof state.groups[g2].name === "string" && state.groups[g2].name !== "" ? state.groups[g2].name : provider;
+              for (var m2 = 0; m2 < state.groups[g2].models.length; m2++) {
+                if (state.groups[g2].models[m2].id === model) {
+                  return { provider: plabel, model: state.groups[g2].models[m2].name };
+                }
+              }
+              return { provider: plabel, model };
+            }
+            return { provider, model };
+          };
+          var modelGroups = [];
+          for (var g = 0; g < state.groups.length; g++) {
+            var group = state.groups[g];
+            if (group.models === void 0 || group.models.length === 0) continue;
+            var models = [];
+            for (var m = 0; m < group.models.length; m++) {
+              models.push({
+                id: group.models[m].id,
+                name: group.models[m].name
+              });
+            }
+            modelGroups.push({
+              id: group.id,
+              label: typeof group.name === "string" && group.name !== "" ? group.name : group.id,
+              models
+            });
+          }
+          var pick = function(selection) {
+            select(selection).then(
+              function(accepted) {
+                if (accepted) setOpen(false);
+              },
+              function() {
+              }
+            );
+          };
+          var onKeyDown = function(event) {
+            if (event.key === "Escape" && open) {
+              event.preventDefault();
+              setOpen(false);
+            }
+          };
+          var currentPretty = current !== void 0 && current !== null ? prettyOf(current.provider, current.model) : null;
+          var hasProfile = face.active !== void 0 && face.active !== "";
+          var modelText = currentPretty !== null ? currentPretty.model + " (" + currentPretty.provider + ")" : t("seat.fallback");
+          return createElement(
+            "div",
+            { className: "profiles-client-root", ref: rootRef, onKeyDown },
+            createElement(
+              "button",
+              {
+                type: "button",
+                className: "profiles-client-trigger",
+                "aria-haspopup": "listbox",
+                "aria-expanded": open,
+                "aria-label": t("seat.aria"),
+                disabled: locked === true,
+                onClick: function() {
+                  var next = !open;
+                  setOpen(next);
+                  if (next) fetchProfiles();
+                  load();
+                }
+              },
+              hasProfile ? createElement(
+                "span",
+                { className: "profiles-client-profile-pill" },
+                face.active,
+                createElement("span", {
+                  className: "profiles-client-pill-dot" + (matched ? " profiles-client-pill-dot-matched" : " profiles-client-pill-dot-changed"),
+                  "aria-hidden": true
+                })
+              ) : null,
+              createElement("span", { className: "profiles-client-model-label" }, modelText),
+              createElement(
+                "span",
+                { className: "profiles-client-chevron", "aria-hidden": true },
+                "\u25BE"
+              )
+            ),
+            open ? createElement(
+              "div",
+              { className: "profiles-client-menu", role: "listbox" },
+              createElement(
+                "button",
+                {
+                  type: "button",
+                  className: "profiles-client-option",
+                  onClick: function() {
+                    if (face.head !== void 0) pick(face.head);
+                  }
+                },
+                createElement(
+                  "span",
+                  { className: "profiles-client-option-copy" },
+                  createElement(
+                    "span",
+                    { className: "profiles-client-option-name profiles-client-option-profile" },
+                    t("menu.default")
+                  ),
+                  createElement(
+                    "span",
+                    { className: "profiles-client-option-detail" },
+                    face.head !== void 0 ? prettyOf(face.head.provider, face.head.model).provider + "/" + prettyOf(face.head.provider, face.head.model).model : ""
+                  )
+                )
+              ),
+              profileRows.length > 0 ? createElement(
+                "div",
+                null,
+                createElement(
+                  "div",
+                  { className: "profiles-client-section-label" },
+                  t("menu.profiles")
+                ),
+                profileRows.map(function(row) {
+                  var isActive = row.key === face.active;
+                  var headPretty = prettyOf(row.head.provider, row.head.model);
+                  return createElement(
+                    "button",
+                    {
+                      key: row.key,
+                      type: "button",
+                      className: "profiles-client-option",
+                      onClick: function() {
+                        putJson("/profiles/switch", { active: row.key }).then(
+                          function(result) {
+                            if (!result.error) setOpen(false);
+                          }
+                        );
+                      }
+                    },
+                    createElement(
+                      "span",
+                      { className: "profiles-client-option-copy" },
+                      createElement(
+                        "span",
+                        {
+                          className: "profiles-client-option-name profiles-client-option-profile"
+                        },
+                        row.key + (isActive ? " \xB7" : "")
+                      ),
+                      createElement(
+                        "span",
+                        { className: "profiles-client-option-detail" },
+                        headPretty.provider + "/" + headPretty.model
+                      )
+                    ),
+                    isActive ? createElement(
+                      "span",
+                      { className: "profiles-client-check", "aria-hidden": true },
+                      "\u2713"
+                    ) : null
+                  );
+                })
+              ) : null,
+              createElement(
+                "div",
+                null,
+                createElement(
+                  "div",
+                  { className: "profiles-client-section-label" },
+                  t("menu.models")
+                ),
+                state.status === "error" && state.error ? createElement("div", { className: "profiles-client-strip" }, state.error) : null,
+                modelGroups.map(function(grp) {
+                  return createElement(
+                    "div",
+                    { key: grp.id },
+                    createElement(
+                      "div",
+                      { className: "profiles-client-section-label" },
+                      grp.label
+                    ),
+                    grp.models.map(function(row) {
+                      var isActive = current !== void 0 && current !== null && current.provider === grp.id && current.model === row.id;
+                      return createElement(
+                        "div",
+                        { key: grp.id + "/" + row.id, className: "profiles-client-model-row" },
+                        createElement(
+                          "button",
+                          {
+                            type: "button",
+                            className: "profiles-client-option",
+                            onClick: function() {
+                              pick({ provider: grp.id, model: row.id });
+                            }
+                          },
+                          createElement(
+                            "span",
+                            { className: "profiles-client-option-copy" },
+                            createElement(
+                              "span",
+                              {
+                                className: "profiles-client-option-name profiles-client-option-model"
+                              },
+                              row.name
+                            ),
+                            createElement(
+                              "span",
+                              { className: "profiles-client-option-detail" },
+                              grp.label
+                            )
+                          ),
+                          isActive ? createElement(
+                            "span",
+                            { className: "profiles-client-check", "aria-hidden": true },
+                            "\u2713"
+                          ) : null
+                        )
+                      );
+                    })
+                  );
+                })
+              )
+            ) : null
+          );
+        }
+        return ProfileModelSeat;
+      }
+      function fetchJson(url) {
+        return fetch(url, { cache: "no-store" }).then(function(res) {
+          return res.json().catch(function() {
+            return null;
+          }).then(function(json) {
+            return { ok: res.ok, status: res.status, json };
+          });
+        }).then(function(result) {
+          if (result.json !== null && result.json.error) {
+            return { data: null, error: String(result.json.error) };
+          }
+          if (!result.ok) return { data: null, error: "HTTP " + result.status };
+          return { data: result.json, error: null };
+        }).catch(function(e) {
+          return { data: null, error: String(e && e.message || e) };
+        });
+      }
+      function putJson(url, body) {
+        return fetch(url, {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+          cache: "no-store"
+        }).then(function(res) {
+          return res.json().catch(function() {
+            return null;
+          }).then(function(json) {
+            return { ok: res.ok, status: res.status, json };
+          });
+        }).then(function(result) {
+          if (result.json !== null && result.json.error) {
+            return { data: null, error: String(result.json.error) };
+          }
+          if (!result.ok) return { data: null, error: "HTTP " + result.status };
+          return { data: result.json, error: null };
+        }).catch(function(e) {
+          return { data: null, error: String(e && e.message || e) };
+        });
+      }
+      function cloneConfig(config) {
+        function cloneRoutes(routes) {
+          return (routes || []).map(function(r) {
+            return { provider: r.provider, model: r.model };
+          });
+        }
+        function cloneEntry(entry) {
+          return {
+            orchestrator: cloneEntryField(entry && entry.orchestrator),
+            subagent: cloneEntryField(entry && entry.subagent)
+          };
+        }
+        function cloneEntryField(field) {
+          if (typeof field === "string") return field;
+          return { routes: cloneRoutes(field && field.routes) };
+        }
+        function cloneChains(chains) {
+          var out = {};
+          if (chains === void 0 || chains === null) return out;
+          Object.keys(chains).forEach(function(name) {
+            var value = chains[name];
+            if (Array.isArray(value)) {
+              out[name] = value.slice();
+            } else {
+              out[name] = { routes: cloneRoutes(value && value.routes) };
+            }
+          });
+          return out;
+        }
+        return {
+          active: config && config.active ? config.active : "work",
+          chains: cloneChains(config && config.chains),
+          work: cloneEntry(config && config.work),
+          personal: cloneEntry(config && config.personal)
+        };
+      }
+      function makeProfilesPanel(models, sessions) {
+        function ProfilesPanel() {
+          var sessionSnap = useSyncExternalStore(sessions.list.subscribe, sessions.list.getSnapshot);
+          var sessionId = sessionSnap !== null && sessionSnap !== void 0 ? sessionSnap.current : null;
+          var usable = sessionId !== null && sessionId !== void 0 ? sessions.subagentAddress(sessionId) === void 0 : false;
+          var directory = sessionId !== null && sessionId !== void 0 ? models.directoryFor(sessionId) : null;
+          var catalogState = useSyncExternalStore(
+            directory ? directory.store.subscribe : function() {
+              return function() {
+              };
+            },
+            directory ? directory.store.getSnapshot : function() {
+              return null;
+            }
+          );
+          useEffect(
+            function() {
+              if (directory && usable) directory.load().catch(function() {
+              });
+            },
+            [directory, usable]
+          );
+          var catalogGroups = catalogState !== null && catalogState !== void 0 && Array.isArray(catalogState.groups) ? catalogState.groups : [];
+          var loadState = useState(null);
+          var load = loadState[0];
+          var setLoad = loadState[1];
+          var draftState = useState(null);
+          var draft = draftState[0];
+          var setDraft = draftState[1];
+          var saveState = useState(null);
+          var save = saveState[0];
+          var setSave = saveState[1];
+          var catalogModels = [];
+          for (var cg = 0; cg < catalogGroups.length; cg++) {
+            var cgrp = catalogGroups[cg];
+            var cmodels = cgrp.models !== void 0 && cgrp.models !== null ? cgrp.models : [];
+            for (var cm = 0; cm < cmodels.length; cm++) {
+              var cmod = cmodels[cm];
+              catalogModels.push({
+                provider: cgrp.id,
+                model: cmod.id,
+                label: (typeof cgrp.name === "string" && cgrp.name !== "" ? cgrp.name : cgrp.id) + " / " + cmod.name,
+                reasoning: cmod.reasoning
+              });
+            }
+          }
+          function effortsOf(reasoning) {
+            if (reasoning !== void 0 && reasoning !== null && Array.isArray(reasoning.efforts)) {
+              return reasoning.efforts;
+            }
+            return [];
+          }
+          var setEntryChain = function(name, chainKey, chainName) {
+            setDraft(function(prev) {
+              var next = cloneConfig(prev);
+              next[name][chainKey] = chainName === "" ? { routes: [] } : { routes: resolveChain(next.chains[chainName], next.chains) };
+              return next;
+            });
+          };
+          var detachEntryField = function(name, chainKey) {
+            setDraft(function(prev) {
+              var next = cloneConfig(prev);
+              next[name][chainKey] = { routes: [] };
+              return next;
+            });
+          };
+          var setChainRungModel = function(chainName, index, value) {
+            setDraft(function(prev) {
+              var next = cloneConfig(prev);
+              var chain = next.chains[chainName];
+              if (chain === void 0) return next;
+              if (Array.isArray(chain)) {
+                chain[index] = value === "" ? "" : value;
+              } else if (chain.routes !== void 0) {
+                if (value === "") {
+                  chain.routes[index] = { provider: "", model: "" };
+                } else {
+                  var slash = value.indexOf("/");
+                  if (slash > 0) {
+                    chain.routes[index] = {
+                      provider: value.slice(0, slash),
+                      model: value.slice(slash + 1)
+                    };
+                  }
+                }
+              }
+              return next;
+            });
+          };
+          var setChainRungEffort = function(chainName, index, effort) {
+            setDraft(function(prev) {
+              var next = cloneConfig(prev);
+              var chain = next.chains[chainName];
+              if (chain === void 0) return next;
+              if (Array.isArray(chain)) {
+                return next;
+              }
+              if (chain.routes !== void 0 && chain.routes[index] !== void 0) {
+                if (effort === "") {
+                  delete chain.routes[index].reasoningEffort;
+                } else {
+                  chain.routes[index].reasoningEffort = effort;
+                }
+              }
+              return next;
+            });
+          };
+          var appendChainRung = function(chainName, value) {
+            setDraft(function(prev) {
+              var next = cloneConfig(prev);
+              var chain = next.chains[chainName];
+              if (chain === void 0) return next;
+              if (value === "__new__") {
+                var name = window.prompt("New named chain name", "new-chain");
+                if (name === null) return next;
+                var key = name.trim();
+                if (key === "") return next;
+                if (next.chains[key] === void 0) {
+                  next.chains[key] = { routes: [] };
+                }
+                if (Array.isArray(chain)) {
+                  chain.push("chain:" + key);
+                } else if (chain.routes !== void 0) {
+                  var composed = chain.routes.map(function(r) {
+                    return r.provider + "/" + r.model;
+                  });
+                  composed.push("chain:" + key);
+                  next.chains[chainName] = composed;
+                }
+                return next;
+              }
+              if (value.indexOf("chain:") === 0) {
+                if (Array.isArray(chain)) {
+                  chain.push(value);
+                } else if (chain.routes !== void 0) {
+                  var composed2 = chain.routes.map(function(r) {
+                    return r.provider + "/" + r.model;
+                  });
+                  composed2.push(value);
+                  next.chains[chainName] = composed2;
+                }
+                return next;
+              }
+              var slash = value.indexOf("/");
+              if (slash <= 0) return next;
+              var rung = { provider: value.slice(0, slash), model: value.slice(slash + 1) };
+              if (Array.isArray(chain)) {
+                chain.push(value);
+              } else if (chain.routes !== void 0) {
+                chain.routes.push(rung);
+              }
+              return next;
+            });
+          };
+          var fetchConfig = function() {
+            setSave({ busy: false, note: null, ok: true });
+            fetchJson("/profiles/config").then(function(result) {
+              if (result.error) {
+                setLoad({ error: result.error });
+                return;
+              }
+              setLoad(result.data);
+              setDraft(cloneConfig(result.data.config));
+            });
+          };
+          useEffect(function() {
+            fetchConfig();
+          }, []);
+          if (load === null) {
+            return createElement(
+              "div",
+              { className: "pf-panel-root" },
+              createElement(
+                "div",
+                { className: "pf-panel-head" },
+                createElement("h3", { className: "pf-panel-title" }, "Profiles"),
+                createElement(
+                  "button",
+                  { className: "pf-panel-refresh", onClick: fetchConfig },
+                  "Refresh"
+                )
+              )
+            );
+          }
+          if (load.error) {
+            return createElement(
+              "div",
+              { className: "pf-panel-root" },
+              createElement(
+                "div",
+                { className: "pf-panel-head" },
+                createElement("h3", { className: "pf-panel-title" }, "Profiles"),
+                createElement(
+                  "button",
+                  { className: "pf-panel-refresh", onClick: fetchConfig },
+                  "Refresh"
+                )
+              ),
+              createElement("div", { className: "pf-panel-err" }, "Profiles: " + load.error)
+            );
+          }
+          var config = draft;
+          var errorCache = load.errorCache || {};
+          var setActive = function(name) {
+            setDraft(function(prev) {
+              var next = cloneConfig(prev);
+              next.active = name;
+              return next;
+            });
+          };
+          var setChainField = function(chainName, index, field, value) {
+            setDraft(function(prev) {
+              var next = cloneConfig(prev);
+              var chain = next.chains[chainName];
+              if (chain === void 0) return next;
+              if (Array.isArray(chain)) {
+                chain[index] = value;
+              } else if (chain.routes !== void 0) {
+                chain.routes[index][field] = value;
+              }
+              return next;
+            });
+          };
+          var addChainRung = function(chainName) {
+            setDraft(function(prev) {
+              var next = cloneConfig(prev);
+              var chain = next.chains[chainName];
+              if (chain === void 0) return next;
+              if (Array.isArray(chain)) {
+                chain.push("");
+              } else if (chain.routes !== void 0) {
+                chain.routes.push({ provider: "", model: "" });
+              }
+              return next;
+            });
+          };
+          var removeChainRung = function(chainName, index) {
+            setDraft(function(prev) {
+              var next = cloneConfig(prev);
+              var chain = next.chains[chainName];
+              if (chain === void 0) return next;
+              if (Array.isArray(chain)) {
+                chain.splice(index, 1);
+              } else if (chain.routes !== void 0) {
+                chain.routes.splice(index, 1);
+              }
+              return next;
+            });
+          };
+          var addChain = function() {
+            var name = window.prompt("New named chain name", "new-chain");
+            if (name === null) return;
+            var key = name.trim();
+            if (key === "") return;
+            setDraft(function(prev) {
+              var next = cloneConfig(prev);
+              if (next.chains[key] === void 0) {
+                next.chains[key] = { routes: [{ provider: "", model: "" }] };
+              }
+              return next;
+            });
+          };
+          var removeChain = function(chainName) {
+            setDraft(function(prev) {
+              var next = cloneConfig(prev);
+              delete next.chains[chainName];
+              return next;
+            });
+          };
+          var saveConfig = function() {
+            var body = {
+              active: config.active,
+              chains: config.chains,
+              work: {
+                orchestrator: config.work.orchestrator,
+                subagent: config.work.subagent
+              },
+              personal: {
+                orchestrator: config.personal.orchestrator,
+                subagent: config.personal.subagent
+              }
+            };
+            setSave({ busy: true, note: null, ok: true });
+            putJson("/profiles/config", body).then(function(result) {
+              if (result.error) {
+                setSave({ busy: false, note: result.error, ok: false });
+                return;
+              }
+              setSave({ busy: false, note: "Saved", ok: true });
+              setLoad(result.data);
+              setDraft(cloneConfig(result.data.config));
+            });
+          };
+          var downRungs = (errorCache.down || []).length;
+          var chainKeys = Object.keys(config.chains);
+          var entries = ["work", "personal"];
+          var currentModel = catalogState !== void 0 && catalogState !== null ? catalogState.current : void 0;
+          var currentCat = null;
+          if (currentModel !== void 0 && currentModel !== null) {
+            for (var cmi = 0; cmi < catalogModels.length; cmi++) {
+              if (catalogModels[cmi].provider === currentModel.provider && catalogModels[cmi].model === currentModel.model) {
+                currentCat = catalogModels[cmi];
+                break;
+              }
+            }
+          }
+          var currentEffortList = currentCat !== null ? effortsOf(currentCat.reasoning) : [];
+          var currentEffortValue = currentModel !== void 0 && currentModel !== null && typeof currentModel.reasoningEffort === "string" && currentModel.reasoningEffort !== "" ? currentModel.reasoningEffort : currentCat !== null && currentCat.reasoning !== void 0 && currentCat.reasoning !== null && typeof currentCat.reasoning.defaultEffort === "string" ? currentCat.reasoning.defaultEffort : "";
+          return createElement(
+            "div",
+            { className: "pf-panel-root" },
+            createElement(
+              "div",
+              { className: "pf-panel-head" },
+              createElement("h3", { className: "pf-panel-title" }, "Profiles"),
+              createElement(
+                "button",
+                { className: "pf-panel-refresh", onClick: fetchConfig },
+                "Refresh"
+              )
+            ),
+            createElement(
+              "div",
+              { className: "pf-panel-active" },
+              entries.map(function(name) {
+                return createElement(
+                  "button",
+                  {
+                    key: name,
+                    type: "button",
+                    className: "pf-panel-active-btn" + (config.active === name ? " pf-panel-active-btn-on" : ""),
+                    onClick: function() {
+                      setActive(name);
+                    }
+                  },
+                  name
+                );
+              })
+            ),
+            currentEffortList.length > 0 && currentModel !== void 0 && currentModel !== null ? createElement(
+              "div",
+              { className: "pf-panel-model-row" },
+              createElement(
+                "div",
+                { className: "pf-panel-row" },
+                createElement(
+                  "span",
+                  { className: "pf-panel-ref", title: "Current model" },
+                  currentCat !== null ? currentCat.label : currentModel.provider + "/" + currentModel.model
+                ),
+                createElement(
+                  "select",
+                  {
+                    className: "pf-panel-effort",
+                    value: currentEffortValue,
+                    "aria-label": "Current model reasoning effort",
+                    onChange: function(event) {
+                      var effort = event.target.value;
+                      directory.select({
+                        provider: currentModel.provider,
+                        model: currentModel.model,
+                        reasoningEffort: effort === "" ? void 0 : effort
+                      });
+                    }
+                  },
+                  createElement("option", { value: "" }, "Default"),
+                  currentEffortList.map(function(eff) {
+                    return createElement(
+                      "option",
+                      {
+                        key: eff.id,
+                        value: eff.id,
+                        title: eff.description !== void 0 ? eff.description : void 0
+                      },
+                      eff.name
+                    );
+                  })
+                )
+              )
+            ) : null,
+            entries.map(function(name) {
+              var entry = config[name];
+              return createElement(
+                "div",
+                { className: "pf-panel-entry", key: name },
+                createElement(
+                  "h4",
+                  { className: "pf-panel-entry-title" },
+                  name === "work" ? "Work" : "Personal"
+                ),
+                ["orchestrator", "subagent"].map(function(chainKey) {
+                  var field = entry[chainKey];
+                  var label = chainKey === "orchestrator" ? "orchestrator" : "subagent";
+                  var summary = fieldSummary(field, config.chains);
+                  var currentRef = refNameOf(field);
+                  return createElement(
+                    "div",
+                    { className: "pf-panel-chain", key: chainKey },
+                    createElement(
+                      "div",
+                      { className: "pf-panel-row" },
+                      createElement("h5", { className: "pf-panel-chain-title" }, label),
+                      createElement(
+                        "select",
+                        {
+                          className: "pf-panel-select",
+                          value: currentRef !== void 0 ? currentRef : "",
+                          onChange: function(event) {
+                            var val = event.target.value;
+                            if (val === "__detach__") {
+                              detachEntryField(name, chainKey);
+                            } else {
+                              setEntryChain(name, chainKey, val);
+                            }
+                          }
+                        },
+                        createElement("option", { value: "__detach__" }, "\u2014 none \u2014"),
+                        chainKeys.map(function(key) {
+                          return createElement("option", { key, value: key }, key);
+                        })
+                      ),
+                      createElement(
+                        "button",
+                        {
+                          type: "button",
+                          className: "pf-panel-del",
+                          title: "Detach",
+                          onClick: function() {
+                            detachEntryField(name, chainKey);
+                          }
+                        },
+                        "\xD7"
+                      )
+                    ),
+                    createElement(
+                      "div",
+                      { className: "pf-panel-meta" },
+                      label + " \u2192 " + summary
+                    )
+                  );
+                })
+              );
+            }),
+            createElement(
+              "div",
+              { className: "pf-panel-entry" },
+              createElement(
+                "div",
+                { className: "pf-panel-head" },
+                createElement("h4", { className: "pf-panel-entry-title" }, "Named chains"),
+                createElement(
+                  "button",
+                  {
+                    type: "button",
+                    className: "pf-panel-add",
+                    onClick: addChain
+                  },
+                  "+ Add chain"
+                )
+              ),
+              Object.keys(config.chains).length === 0 ? createElement("div", { className: "pf-panel-meta" }, "No named chains") : Object.keys(config.chains).map(function(chainName) {
+                var chain = config.chains[chainName];
+                var isComposition = isCompositionChain(chain);
+                var resolved = resolveChain(chain, config.chains);
+                var steps = isComposition ? chain.map(function(step) {
+                  return { step };
+                }) : chain !== void 0 && Array.isArray(chain.routes) ? chain.routes : [];
+                return createElement(
+                  "div",
+                  { className: "pf-panel-chain", key: chainName },
+                  createElement(
+                    "div",
+                    { className: "pf-panel-row" },
+                    createElement("h5", { className: "pf-panel-chain-title" }, chainName),
+                    createElement(
+                      "button",
+                      {
+                        type: "button",
+                        className: "pf-panel-del",
+                        title: "Remove chain",
+                        onClick: function() {
+                          removeChain(chainName);
+                        }
+                      },
+                      "\xD7"
+                    )
+                  ),
+                  isComposition ? steps.map(function(row, index) {
+                    var stepText = typeof row.step === "string" ? row.step : "";
+                    var isRef = stepText.indexOf("chain:") === 0;
+                    return createElement(
+                      "div",
+                      { className: "pf-panel-row", key: index },
+                      isRef ? createElement(
+                        "select",
+                        {
+                          className: "pf-panel-select",
+                          value: stepText,
+                          onChange: function(event) {
+                            setChainField(chainName, index, null, event.target.value);
+                          }
+                        },
+                        chainKeys.map(function(key) {
+                          return createElement(
+                            "option",
+                            { key, value: "chain:" + key },
+                            "chain:" + key
+                          );
+                        })
+                      ) : createElement("input", {
+                        className: "pf-panel-input",
+                        value: stepText,
+                        placeholder: "provider/model",
+                        onChange: function(event) {
+                          setChainField(chainName, index, null, event.target.value);
+                        }
+                      }),
+                      createElement(
+                        "button",
+                        {
+                          type: "button",
+                          className: "pf-panel-del",
+                          title: "Remove step",
+                          onClick: function() {
+                            removeChainRung(chainName, index);
+                          }
+                        },
+                        "\xD7"
+                      )
+                    );
+                  }) : steps.map(function(rung, index) {
+                    var rungKey = rung.provider + "/" + rung.model;
+                    var catModel = null;
+                    for (var ci = 0; ci < catalogModels.length; ci++) {
+                      if (catalogModels[ci].provider === rung.provider && catalogModels[ci].model === rung.model) {
+                        catModel = catalogModels[ci];
+                        break;
+                      }
+                    }
+                    var efforts = catModel !== null ? effortsOf(catModel.reasoning) : [];
+                    var currentEffort = typeof rung.reasoningEffort === "string" ? rung.reasoningEffort : "";
+                    return createElement(
+                      "div",
+                      { className: "pf-panel-model-row", key: index },
+                      createElement(
+                        "div",
+                        { className: "pf-panel-row" },
+                        createElement(
+                          "select",
+                          {
+                            className: "pf-panel-select",
+                            value: rungKey,
+                            onChange: function(event) {
+                              setChainRungModel(chainName, index, event.target.value);
+                            }
+                          },
+                          createElement(
+                            "option",
+                            { value: "" },
+                            "\u2014 select model \u2014"
+                          ),
+                          catalogModels.map(function(m) {
+                            return createElement(
+                              "option",
+                              {
+                                key: m.provider + "/" + m.model,
+                                value: m.provider + "/" + m.model
+                              },
+                              m.label
+                            );
+                          })
+                        ),
+                        efforts.length > 0 ? createElement(
+                          "select",
+                          {
+                            className: "pf-panel-effort",
+                            value: currentEffort,
+                            onChange: function(event) {
+                              setChainRungEffort(chainName, index, event.target.value);
+                            }
+                          },
+                          createElement("option", { value: "" }, "Default effort"),
+                          efforts.map(function(eff) {
+                            return createElement(
+                              "option",
+                              {
+                                key: eff.id,
+                                value: eff.id,
+                                title: eff.description !== void 0 ? eff.description : void 0
+                              },
+                              eff.name
+                            );
+                          })
+                        ) : null,
+                        createElement(
+                          "button",
+                          {
+                            type: "button",
+                            className: "pf-panel-del",
+                            title: "Remove rung",
+                            onClick: function() {
+                              removeChainRung(chainName, index);
+                            }
+                          },
+                          "\xD7"
+                        )
+                      )
+                    );
+                  }),
+                  createElement(
+                    "div",
+                    { className: "pf-panel-row" },
+                    createElement(
+                      "select",
+                      {
+                        className: "pf-panel-select pf-panel-add-select",
+                        value: "",
+                        onChange: function(event) {
+                          var val = event.target.value;
+                          if (val !== "") appendChainRung(chainName, val);
+                          event.target.value = "";
+                        }
+                      },
+                      createElement(
+                        "option",
+                        { value: "" },
+                        "+ Add " + (isComposition ? "step" : "rung") + " \u25BE"
+                      ),
+                      isComposition ? chainKeys.map(function(key) {
+                        return createElement(
+                          "option",
+                          { key, value: "chain:" + key },
+                          "chain:" + key
+                        );
+                      }) : catalogModels.map(function(m) {
+                        return createElement(
+                          "option",
+                          {
+                            key: m.provider + "/" + m.model,
+                            value: m.provider + "/" + m.model
+                          },
+                          m.label
+                        );
+                      }),
+                      createElement("option", { value: "__new__" }, "New named chain\u2026")
+                    )
+                  ),
+                  resolved.length > 0 ? createElement(
+                    "div",
+                    { className: "pf-panel-meta" },
+                    "Resolves to " + resolved.length + " route" + (resolved.length === 1 ? "" : "s") + ": " + resolved[0].provider + "/" + resolved[0].model + (resolved.length > 1 ? " \u2026" : "")
+                  ) : null
+                );
+              })
+            ),
+            createElement(
+              "div",
+              { className: "pf-panel-meta" },
+              downRungs > 0 ? createElement(
+                "span",
+                null,
+                downRungs + " rung" + (downRungs === 1 ? "" : "s") + " cached down ",
+                createElement(
+                  "button",
+                  {
+                    type: "button",
+                    className: "pf-panel-refresh",
+                    onClick: fetchConfig
+                  },
+                  "Retry now"
+                )
+              ) : null
+            ),
+            createElement(
+              "div",
+              { className: "pf-panel-actions" },
+              createElement(
+                "button",
+                {
+                  type: "button",
+                  className: "pf-panel-save",
+                  disabled: save.busy === true,
+                  onClick: saveConfig
+                },
+                save.busy === true ? "Saving\u2026" : "Save"
+              ),
+              save.note ? createElement(
+                "span",
+                {
+                  className: "pf-panel-status " + (save.ok ? "pf-panel-ok" : "pf-panel-bad")
+                },
+                save.note
+              ) : null
+            )
+          );
+        }
+        return ProfilesPanel;
+      }
+      var inject = ["slots", "sessions", "locale", "connection"];
+      function apply(ctx) {
+        ctx.effect(function() {
+          return ctx.locale.register(LOCALE_NS, { en: EN, zh: ZH });
+        }, "profiles-client: dictionaries");
+        var profileScope;
+        try {
+          profileScope = ctx.settingsScope.bind({ namespace: "profile" });
+        } catch (error) {
+          profileScope = inertScope();
+        }
+        installTitleRewriter(ctx);
+        var seat = makeModelSeat(profileScope);
+        ctx.inject(["slots", "sessions", "modelDirectories"], function(scope) {
+          var models = scope.modelDirectories;
+          var sessions = scope.sessions;
+          scope.slots.inject(MODEL_SEAT_SLOT, function() {
+            return scope.slots.register(
+              {
+                name: MODEL_SEAT_SLOT,
+                locale: LOCALE_NS,
+                priority: SEAT_PRIORITY,
+                registrant: PLUGIN_NAME,
+                inject: function(sessionId) {
+                  var directory = models.directoryFor(sessionId);
+                  var usable = sessions.subagentAddress(sessionId) === void 0;
+                  return {
+                    available: usable,
+                    directory: directory.store,
+                    load: function() {
+                      if (usable) directory.load().catch(function() {
+                      });
+                    },
+                    select: function(selection) {
+                      return usable ? directory.select(selection).then(
+                        function() {
+                          return true;
+                        },
+                        function() {
+                          return false;
+                        }
+                      ) : Promise.resolve(false);
+                    }
+                  };
+                }
+              },
+              seat
+            );
+          });
+          var panel = makeProfilesPanel(models, sessions);
+          ctx.slots.inject("settings.section", function() {
+            return ctx.slots.register(
+              { name: "settings.section", id: PLUGIN_NAME, order: 27, label: "Profiles" },
+              function() {
+                return createElement(panel);
+              }
+            );
+          });
+        });
+      }
+      module.exports = { apply, inject, name: PLUGIN_NAME };
+      return module.exports;
+    }
+  });
+})();
