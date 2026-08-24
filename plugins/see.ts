@@ -58,7 +58,9 @@ const PROFILE_NS = settingsNamespace("profile");
  * comes from the ORCHESTRATOR chain: that chain is byte-identical to the
  * pre-W21 flat chain for both profiles, so the vision route does not move.
  * Since W24 either field may be a STRING naming a key in the `chains` map.
- * The map itself is kept raw: unknown schema keys pass through untouched.
+ * The `chains` map is preserved by listing it in PROFILE_SCHEMA as z.any()
+ * (schematry strips unknown object keys, so the earlier "passes through
+ * untouched" assumption dropped the map from the normalized namespace).
  */
 const ROUTE_ENTRY = z.object({ provider: z.string(), model: z.string() });
 const CHAIN_ENTRY = z.object({ routes: z.array(ROUTE_ENTRY) });
@@ -73,6 +75,10 @@ const PROFILE_ENTRY = z.union([
 ]);
 const PROFILE_SCHEMA = z.object({
   active: z.string().default("work"),
+  // Named-chain library: name -> { routes: [...] } or a chain-ref string.
+  // Listed explicitly: schematry strips unknown object keys, and without it
+  // chainOf() inside readProfile() could never resolve the `see`/`see-work` chains.
+  chains: z.any().default(void 0),
   work: PROFILE_ENTRY,
   personal: PROFILE_ENTRY,
 });
@@ -248,6 +254,16 @@ export function apply(ctx: Context, config: unknown): void {
       "It does not edit files or run commands.",
   });
 
-  registerSeeTool(ctx, source);
+  // Read the profile from the LIVE settings store (it carries the full `chains`
+  // map and the current `active` selection, and is what profiles.ts uses for
+  // role routing). installSettingsSection normalizes the namespace through
+  // PROFILE_SCHEMA, which previously stripped `chains` and could lag the live
+  // active flip; fall back to that source only if no settings service is mounted.
+  const settings = ctx.get("settings") as { get(ns: string): unknown } | undefined;
+  const getProfile = (): ProfileSettings | undefined => {
+    const live = settings?.get(PROFILE_NS) as ProfileSettings | undefined;
+    return live ?? source();
+  };
+  registerSeeTool(ctx, getProfile);
   void config;
 }
