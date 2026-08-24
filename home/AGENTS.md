@@ -11,6 +11,10 @@
   of a file.
 * If the user is vague about a request, ask questions until any potential ambiguity is
   resolved before beginning the implementation. A good plan is worth its weight in gold.
+* Plan the change in full before you dispatch a subagent. You own the design. The subagent implements only. Do not let a subagent design the change or discover scope by reading files. That loops and burns its context and tokens.
+* Keep each dispatch small. A small, well-bounded unit means a failed dispatch wastes little time and few tokens. Split large work into several small dispatches.
+* Resolve every planning ambiguity before you dispatch. You may use the grilling skill and direct questions to the user. Subagents cannot ask the user and cannot use grilling. Settle the contract, then dispatch.
+* Full up-front design keeps the code style consistent and makes review simple.
 * When you dispatch a subagent whose brief needs a library, service, or harness API, verify the
   API shape YOURSELF first (read the `.d.ts`/source, or send `researcher` for it) and paste the
   exact facts into the brief — types, field names, signatures, return shapes, with citations.
