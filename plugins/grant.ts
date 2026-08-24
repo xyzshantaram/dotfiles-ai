@@ -100,10 +100,7 @@ interface FsLike {
     signal: unknown,
     sandboxPolicy?: SandboxPolicyLike,
   ): Promise<unknown>;
-  checkedTarget(
-    target: FsTargetLike,
-    sandboxPolicy?: SandboxPolicyLike,
-  ): Promise<FsTargetLike>;
+  checkedTarget(target: FsTargetLike, sandboxPolicy?: SandboxPolicyLike): Promise<FsTargetLike>;
 }
 
 /** The prototype object that owns the three fenced methods. */

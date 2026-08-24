@@ -61,10 +61,10 @@ tracker. Checking the tracker first would have surfaced #229 instead.
 
 `CONTRIBUTING.md` in `soapbox-pub/ditto` documents an 11-step contribution
 workflow starting at line 67, and seven close-without-review triggers
-starting at line 166. *These two line numbers come from the project plan,
+starting at line 166. _These two line numbers come from the project plan,
 not from a live read of the file in this session (the GitLab MCP tools
 stopped responding partway through research). Confirm both against the
-current file before you cite them to someone else.* Read `CONTRIBUTING.md`
+current file before you cite them to someone else._ Read `CONTRIBUTING.md`
 directly before you open an MR, since the exact steps and triggers may have
 shifted.
 
@@ -73,8 +73,8 @@ shifted.
 - **One bug, one MR.** Do not bundle two unrelated fixes into one MR.
 - **`Regression-of:` trailer.** Commits that fix a regression carry a
   `Regression-of:` trailer pointing at the commit or MR that introduced it.
-  *This convention is plan-sourced. Confirm the exact trailer format against
-  a real recent commit before you rely on it.*
+  _This convention is plan-sourced. Confirm the exact trailer format against
+  a real recent commit before you rely on it._
 - **Reviewer.** `dirkrost` (Dirk Rost) is a real, active reviewer on this
   project. Confirmed directly: he filed issue #320 and issue #321, and
   authored MR !255. Expect his review on process and template compliance

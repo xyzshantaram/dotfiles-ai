@@ -1,0 +1,7 @@
+node_modules
+.dsh
+**/dist
+**/lib
+pnpm-lock.yaml
+home
+*.log

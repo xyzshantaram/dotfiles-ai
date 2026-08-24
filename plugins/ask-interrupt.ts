@@ -58,48 +58,48 @@
  *   - id: ask-interrupt
  *     name: /path/to/plugins/ask-interrupt.js
  */
-import type { Context } from '@deepseek-ai/cordis'
-import z from '@deepseek-ai/schemastery'
-import type {} from '@deepseek-ai/dsh-tools'
-import type { AgentCancelCause } from '@deepseek-ai/dsh-agent'
+import type { Context } from "@deepseek-ai/cordis";
+import z from "@deepseek-ai/schemastery";
+import type {} from "@deepseek-ai/dsh-tools";
+import type { AgentCancelCause } from "@deepseek-ai/dsh-agent";
 
-export const name = 'ask-interrupt'
+export const name = "ask-interrupt";
 
-export const inject = ['tools']
+export const inject = ["tools"];
 
-export const Config = z.object({})
+export const Config = z.object({});
 
-type AskInterruptConfig = Record<string, never>
+type AskInterruptConfig = Record<string, never>;
 
-const ASK_CANCELLED_CODE = 'ASK_CANCELLED'
-const ASK_USER_QUESTION_TOOL = 'ask_user_question'
+const ASK_CANCELLED_CODE = "ASK_CANCELLED";
+const ASK_USER_QUESTION_TOOL = "ask_user_question";
 
 /** Shape of the one field this plugin reads off a failed ToolExecutionResult. */
 interface FailedResultInfo {
-  isError?: boolean
-  error?: { info?: { code?: string } }
+  isError?: boolean;
+  error?: { info?: { code?: string } };
 }
 
 export function apply(ctx: Context, config: AskInterruptConfig): void {
-  void config
+  void config;
 
-  ctx.on('tools/post-execute', async (exec, result, next) => {
+  ctx.on("tools/post-execute", async (exec, result, next) => {
     // Observe only: never rewrite the outcome the model sees. The pass-through
     // calls next() so the waterfall's own default (`{ kind: 'accept' }`) or a
     // later listener's decision still applies.
-    const outcome = await next()
+    const outcome = await next();
 
-    if (exec.name !== ASK_USER_QUESTION_TOOL) return outcome
+    if (exec.name !== ASK_USER_QUESTION_TOOL) return outcome;
 
-    const failed = result as FailedResultInfo
-    if (!failed.isError) return outcome
-    if (failed.error?.info?.code !== ASK_CANCELLED_CODE) return outcome
+    const failed = result as FailedResultInfo;
+    if (!failed.isError) return outcome;
+    if (failed.error?.info?.code !== ASK_CANCELLED_CODE) return outcome;
 
-    const agent = exec.agent
-    if (agent === undefined) return outcome // agentless call: nothing to cancel
+    const agent = exec.agent;
+    if (agent === undefined) return outcome; // agentless call: nothing to cancel
 
-    agent.cancel('user-dismissed-question' as unknown as AgentCancelCause, { keepInbox: true })
+    agent.cancel("user-dismissed-question" as unknown as AgentCancelCause, { keepInbox: true });
 
-    return outcome
-  })
+    return outcome;
+  });
 }

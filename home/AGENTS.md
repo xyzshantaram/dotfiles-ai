@@ -11,6 +11,17 @@
   of a file.
 * If the user is vague about a request, ask questions until any potential ambiguity is
   resolved before beginning the implementation. A good plan is worth its weight in gold.
+* `rg` is recursive by default — `rg -r` is `--replace`, NOT recursion. To restrict a search
+  to one file or pattern, pass the path or a glob (`rg pattern path/`, `rg pattern -g '*.ts'`),
+  never `-r`. Every agent (main session and subagents) makes this mistake; do not.
+* When you dispatch a subagent whose brief needs a library, service, or harness API, verify the
+  API shape YOURSELF first (read the `.d.ts`/source, or send `researcher` for it) and paste the
+  exact facts into the brief — types, field names, signatures, return shapes, with citations.
+  The subagent must NOT read library code to discover APIs; reading `node_modules` / installed
+  dsh packages is the single biggest context bloat for a leaf worker. Tell it in the brief:
+  "API facts verified, do not re-research; report the gap if you need a fact not in this brief."
+  A subagent session should cost hundreds of thousands of tokens at most, not millions —
+  if it blows past that, the scope or the API-handoff was too lazy, fix the brief.
 * When reviewing, assume the persona of a senior reviewer. Be especially wary of
   common AI slop patterns like dead code, unused imports, code which is duplicated
   between files, code which is almost the same but with only a few parameters tweaked,

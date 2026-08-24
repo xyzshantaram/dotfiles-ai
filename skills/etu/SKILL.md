@@ -10,7 +10,6 @@ whenToUse: The user wants time-tracking data or actions. Trigger phrases are "tr
 confirmation logic. Present your plan, then run the command. The harness
 shows an approval prompt when policy requires it.
 
-
 ## Rules
 
 - **Present a plan before you run anything.** State the exact `etu` command and what it does. Then run it. The harness shows an approval prompt to the human before it executes.
@@ -29,6 +28,7 @@ shows an approval prompt when policy requires it.
 _Generated 2026-07-31T11:06:07.201Z from `etu 0.0.1`._
 
 ### Global usage
+
 ```
 Usage: etu [options] [command]
 
@@ -54,6 +54,7 @@ Commands:
 ```
 
 ### `etu config`
+
 ```
 Usage: etu config [options] [key] [value]
 
@@ -70,6 +71,7 @@ Options:
 ```
 
 ### `etu log`
+
 ```
 Usage: etu log [options]
 
@@ -96,6 +98,7 @@ Options:
 ```
 
 ### `etu session`
+
 ```
 Usage: etu session [options] [command]
 
@@ -114,6 +117,7 @@ Commands:
 ```
 
 #### `etu session continue`
+
 ```
 Usage: etu session continue [options]
 
@@ -126,6 +130,7 @@ Options:
 ```
 
 #### `etu session delete`
+
 ```
 Usage: etu session delete [options]
 
@@ -140,6 +145,7 @@ Options:
 ```
 
 #### `etu session edit`
+
 ```
 Usage: etu session edit [options]
 
@@ -158,6 +164,7 @@ Options:
 ```
 
 #### `etu session start`
+
 ```
 Usage: etu session start [options] [session-name]
 
@@ -173,6 +180,7 @@ Options:
 ```
 
 #### `etu session stop`
+
 ```
 Usage: etu session stop [options]
 
@@ -185,6 +193,7 @@ Options:
 ```
 
 ### `etu project`
+
 ```
 Usage: etu project [options] [command]
 
@@ -203,6 +212,7 @@ Commands:
 ```
 
 #### `etu project new`
+
 ```
 Usage: etu project new [options] <name> <rate> [initial-hours]
 
@@ -222,6 +232,7 @@ Options:
 ```
 
 #### `etu project default`
+
 ```
 Usage: etu project default [options] <id>
 
@@ -235,6 +246,7 @@ Options:
 ```
 
 #### `etu project list`
+
 ```
 Usage: etu project list [options]
 
@@ -247,6 +259,7 @@ Options:
 ```
 
 #### `etu project edit`
+
 ```
 Usage: etu project edit [options]
 
@@ -262,6 +275,7 @@ Options:
 ```
 
 #### `etu project delete`
+
 ```
 Usage: etu project delete [options]
 
@@ -274,6 +288,7 @@ Options:
 ```
 
 ### `etu status`
+
 ```
 Usage: etu status [options]
 
@@ -291,6 +306,7 @@ Options:
 ```
 
 ### `etu memo`
+
 ```
 Usage: etu memo [options] [command]
 
@@ -308,6 +324,7 @@ Commands:
 ```
 
 #### `etu memo add`
+
 ```
 Usage: etu memo add [options] <name>
 
@@ -327,6 +344,7 @@ Options:
 ```
 
 #### `etu memo delete`
+
 ```
 Usage: etu memo delete [options]
 
@@ -340,6 +358,7 @@ Options:
 ```
 
 #### `etu memo edit`
+
 ```
 Usage: etu memo edit [options]
 
@@ -369,6 +388,7 @@ Options:
 ## Examples
 
 ### Checking status
+
 ```
 User: "am i tracking anything?"
 AI: "Let me check. Running: etu --structured status"
@@ -376,18 +396,21 @@ AI: "Let me check. Running: etu --structured status"
 ```
 
 ### Starting a session
+
 ```
 User: "start tracking for client X"
 AI: "I will start a new session named 'client X'. Running: etu --structured session start 'client X' --project client-x. OK?"
 ```
 
 ### Stopping a session
+
 ```
 User: "stop the clock"
 AI: "I will stop the current session. Running: etu --structured session stop --project client-x."
 ```
 
 ### Reviewing logs
+
 ```
 User: "how many hours this week?"
 AI: "Running: etu --structured log -s --time-only"
@@ -395,6 +418,7 @@ AI: "Running: etu --structured log -s --time-only"
 ```
 
 ### Editing without prompts
+
 ```
 User: "make Acme $50/hour, with 2 hours advanced"
 AI: "Running: etu --structured project edit --project acme --rate 50 --advance 2"

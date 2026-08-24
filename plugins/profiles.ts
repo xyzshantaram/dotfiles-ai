@@ -34,15 +34,11 @@
  *
  * W21 named chains: each profile entry holds TWO chains, one per agent
  * depth. Depth-0 agents ride the orchestrator chain; any spawned child
- * (depth >= 1) rides the subagent chain. The go/ds tail is reordered
- * live-first at selection time by quota (opencode-go monthly usage, then
- * deepseek balance, then opencode-go usage billing). A persistent fault
- * (no-credits / model-unavailable / auth / bad-request) marks the rung down
- * in a host-side cache for >= 10 minutes; selections inside the window skip
- * the dead rung. The cache clears on a `profile` namespace update. Command
- * Code rungs are skipped while either Command Code window (5-hour or
- * weekly) is exhausted; the flag is cached from the same-origin
- * /subscriptions/commandcode-credits route for 5 minutes and fails open.
+ * (depth >= 1) rides the subagent chain. The chains are ordered failover
+ * lists. A persistent fault (no-credits / model-unavailable / auth /
+ * bad-request) marks the rung down in a host-side cache for >= 10 minutes;
+ * selections inside the window skip the dead rung. Any `profile` namespace
+ * update clears the cache: a manual switch or save allows immediate retry.
  *
  * There is NO second config surface: the chains ARE the `profile` namespace
  * entries (see.ts owns the namespace; this plugin reads it live). Flipping
@@ -224,7 +220,10 @@ function normalizeErrorClass(code: string | undefined, message: string): ErrorCl
   const hit = (...needles: string[]) => needles.some((n) => c.includes(n) || m.includes(n));
   if (hit("401", "unauthorized", "authentication", "invalid api key")) return "auth";
   if (hit("400", "bad request", "bad_request", "invalid request")) return "bad-request";
-  if (hit("quota", "balance", "insufficient", "credit", "usage limit", "billing", "429", "rate limit")) return "no-credits";
+  if (
+    hit("quota", "balance", "insufficient", "credit", "usage limit", "billing", "429", "rate limit")
+  )
+    return "no-credits";
   if (hit("model", "not found", "unavailable", "404", "no such model")) return "model-unavailable";
   return undefined;
 }
@@ -259,218 +258,6 @@ function depthOf(agent: unknown): number {
   return Math.max(header, options);
 }
 
-// ── Quota probes (W21) ─────────────────────────────────────────────────────
-// The pick reads cached probe results only. A stale cache starts a background
-// refresh and the request never waits on a probe: fail-open keeps the
-// declared chain order, and the error cache catches real failures. A
-// missing/unknown value also fails open (the rung is tried once).
-const PROBE_TTL_MS = 30_000;
-interface ProbeSlot {
-  at: number;
-  live: boolean;
-  busy: boolean;
-}
-const probes: { go: ProbeSlot; ds: ProbeSlot } = {
-  go: { at: 0, live: true, busy: false },
-  ds: { at: 0, live: true, busy: false },
-};
-
-/** OpenCode GO subscription quota: live while monthly usage percent < 100. */
-async function fetchGoLive(ctx: Context): Promise<boolean> {
-  try {
-    const credentials = service<{ resolve(name: string): Promise<{ value?: string } | null | undefined> }>(
-      ctx,
-      "credentials",
-    );
-    const key = (await credentials?.resolve("OPENCODE_GO_API_KEY"))?.value;
-    if (!key) return true; // no key: assume quota remains, the error cache catches
-    const res = await fetch("https://opencode.ai/zen/go/v1/usage", {
-      headers: { Authorization: `Bearer ${key}` },
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!res.ok) return true;
-    const data = (await res.json()) as { usage?: { monthly?: { percent?: unknown } } };
-    const percent = data?.usage?.monthly?.percent;
-    if (typeof percent !== "number") return true; // unknown window: fail open
-    return percent < 100;
-  } catch {
-    return true; // a probe must never break a request
-  }
-}
-
-/** DeepSeek balance: live while total_balance > 0 (curl via subprocess). */
-async function fetchDsLive(ctx: Context): Promise<boolean> {
-  try {
-    const credentials = service<{ resolve(name: string): Promise<{ value?: string } | null | undefined> }>(
-      ctx,
-      "credentials",
-    );
-    const subprocess = service<{
-      spawn(options: unknown): {
-        done: Promise<{ exitCode: number }>;
-        collected?: { stdout?: { readFrom(offset: number): { text: string } } };
-      };
-    }>(ctx, "subprocess");
-    const cred = await credentials?.resolve("DEEPSEEK_API_KEY");
-    if (!cred?.value || !subprocess) return true;
-    const sandboxPolicy = service<{ workspaceRoot?: string }>(ctx, "sandboxPolicy");
-    const handle = subprocess.spawn({
-      argv: [
-        "curl", "-sS", "--max-time", "15",
-        "-H", `Authorization: Bearer ${cred.value}`,
-        "https://api.deepseek.com/user/balance",
-      ],
-      cwd: sandboxPolicy?.workspaceRoot ?? "/",
-      stdio: {
-        stdin: "ignore",
-        stdout: { maxBytes: 65536 },
-        stderr: { maxBytes: 4096 },
-      },
-      graceMs: 20_000,
-    });
-    const outcome = await handle.done;
-    const out = handle.collected?.stdout ? handle.collected.stdout.readFrom(0).text : "";
-    if (outcome.exitCode !== 0 || !out) return true;
-    const json = JSON.parse(out) as { balance_infos?: Array<{ total_balance?: unknown }> };
-    const total = json?.balance_infos?.[0]?.total_balance;
-    if (typeof total !== "number") return true; // unknown: fail open
-    return total > 0;
-  } catch {
-    return true; // a probe must never break a request
-  }
-}
-
-/** Read one probe slot; refresh it in the background when stale. */
-function liveNow(slot: ProbeSlot, fetchLive: () => Promise<boolean>): boolean {
-  if (slot.at !== 0 && Date.now() - slot.at < PROBE_TTL_MS) return slot.live;
-  if (!slot.busy) {
-    slot.busy = true;
-    void fetchLive()
-      .then((live) => {
-        slot.at = Date.now();
-        slot.live = live;
-      })
-      .catch(() => {})
-      .finally(() => {
-        slot.busy = false;
-      });
-  }
-  return slot.live; // stale or never fetched: fail open
-}
-
-function goLiveNow(ctx: Context): boolean {
-  return liveNow(probes.go, () => fetchGoLive(ctx));
-}
-
-function dsLiveNow(ctx: Context): boolean {
-  return liveNow(probes.ds, () => fetchDsLive(ctx));
-}
-
-// ── Command Code quota (W29) ───────────────────────────────────────────────
-// Command Code enforces two rolling windows (5 hours and weekly), each with
-// a hard cap. When either window is exhausted the provider rejects new
-// requests, so failover should skip command-code rungs BEFORE trying them
-// rather than after one fails. The quota comes from the same-origin
-// /subscriptions/commandcode-credits route the subscriptions plugin serves.
-// The result is cached for 5 minutes and refreshed in the background, so a
-// request never waits on the check. Any failure (route absent, no web
-// server, network) treats Command Code as available: fail-open, and the
-// error cache still catches real failures. A window reset clears the flag
-// on the next check, because the fresh fetch then reports used < cap.
-const COMMAND_CODE_QUOTA_TTL_MS = 300_000; // 5 minutes
-const COMMAND_CODE_PROVIDER = "command-code";
-const COMMAND_CODE_QUOTA_PATH = "/subscriptions/commandcode-credits";
-
-interface CommandCodeWindow {
-  used?: unknown;
-  cap?: unknown;
-  resetAt?: unknown;
-}
-
-/** True when a window's used is a number at or past its cap. */
-function windowExhausted(window: CommandCodeWindow | undefined): boolean {
-  if (!window || typeof window !== "object") return false;
-  const { used, cap } = window;
-  return typeof used === "number" && typeof cap === "number" && used >= cap;
-}
-
-/**
- * Fetch Command Code quota from the same-origin route. Fail-open: any
- * error reports the provider as available.
- */
-async function fetchCommandCodeExhausted(ctx: Context): Promise<boolean> {
-  try {
-    const server = service<{ host?: string; port?: number }>(ctx, "webServer");
-    const port = server?.port;
-    if (!port) return false; // no web server mounted: fail open
-    const host = server?.host && server.host !== "0.0.0.0" ? server.host : "127.0.0.1";
-    const res = await fetch(`http://${host}:${port}${COMMAND_CODE_QUOTA_PATH}`, {
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!res.ok) return false;
-    const data = (await res.json()) as {
-      ok?: boolean;
-      windows?: { fiveHour?: CommandCodeWindow; weekly?: CommandCodeWindow };
-    };
-    if (data?.ok === false) return false; // route answered: no key configured
-    const windows = data?.windows;
-    return Boolean(windows) && (windowExhausted(windows.fiveHour) || windowExhausted(windows.weekly));
-  } catch {
-    return false; // a quota check must never break a request
-  }
-}
-
-let commandCodeQuotaAt = 0;
-let commandCodeExhaustedFlag = false;
-let commandCodeQuotaBusy = false;
-
-/** Read the cached flag; refresh in the background when stale. */
-function commandCodeExhaustedNow(ctx: Context): boolean {
-  if (commandCodeQuotaAt !== 0 && Date.now() - commandCodeQuotaAt < COMMAND_CODE_QUOTA_TTL_MS) {
-    return commandCodeExhaustedFlag;
-  }
-  if (!commandCodeQuotaBusy) {
-    commandCodeQuotaBusy = true;
-    void fetchCommandCodeExhausted(ctx)
-      .then((exhausted) => {
-        commandCodeQuotaAt = Date.now();
-        commandCodeExhaustedFlag = exhausted;
-      })
-      .catch(() => {})
-      .finally(() => {
-        commandCodeQuotaBusy = false;
-      });
-  }
-  return commandCodeExhaustedFlag; // stale or never fetched: fail open
-}
-
-/** A level is skipped when it rides command-code and the quota is out. */
-function isQuotaExhausted(level: Level, ctx: Context): boolean {
-  return level.provider === COMMAND_CODE_PROVIDER && commandCodeExhaustedNow(ctx);
-}
-
-/**
- * Order a chain's go/ds tail live-first at selection time. The opencode-zen
- * free tier and every other rung keep their order. Among the quota-checked
- * rungs (opencode-go, deepseek-official) the live choice is go-sub while
- * monthly usage percent < 100, else deepseek-official while balance > 0,
- * else opencode-go usage billing. A chain with fewer than two quota rungs
- * (or none) passes through unchanged.
- */
-function quotaAwareChain(ctx: Context, chain: Level[]): Level[] {
-  const goIdx = chain.findIndex((level) => level.provider === "opencode-go");
-  const dsIdx = chain.findIndex((level) => level.provider === "deepseek-official");
-  if (goIdx < 0 || dsIdx < 0) return chain;
-  const goLive = goLiveNow(ctx);
-  const dsLive = goLive ? true : dsLiveNow(ctx);
-  const liveFirstGo = goLive || !dsLive;
-  if (liveFirstGo === goIdx < dsIdx) return chain; // the live choice is already first
-  const result = chain.slice();
-  result[goIdx] = chain[dsIdx];
-  result[dsIdx] = chain[goIdx];
-  return result;
-}
-
 /**
  * The active profile entry's chain for one agent depth. Depth-0 rides the
  * orchestrator chain; any spawned child (depth >= 1) rides the subagent
@@ -484,9 +271,9 @@ function chainForDepth(ctx: Context, depth: number): Level[] {
   return chainOf(activeEntry(profile), depth >= 1 ? "subagent" : "orchestrator", profile?.chains);
 }
 
-/** The quota-ordered chain for one depth. The error cache filters at walk time. */
+/** The ordered failover chain for one depth. The error cache filters at walk time. */
 function effectiveChain(ctx: Context, depth: number): Level[] {
-  return quotaAwareChain(ctx, chainForDepth(ctx, depth));
+  return chainForDepth(ctx, depth);
 }
 
 interface RoleSpec {
@@ -525,7 +312,7 @@ function resolveHead(ctx: Context, pin: unknown): RouteCandidate | undefined {
   const pinned = normalizeEntry(pin, profile?.chains);
   if (pinned.length > 0) return pinned[0];
   const chain = effectiveChain(ctx, 1);
-  return chain.find((level) => !isCachedDown(level) && !isQuotaExhausted(level, ctx));
+  return chain.find((level) => !isCachedDown(level));
 }
 
 /** Human-readable name of the route a dispatch used. */
@@ -533,11 +320,7 @@ function via(route: RouteCandidate | undefined): string {
   return route ? ` via ${route.provider}/${route.model}` : "";
 }
 
-function registerRoleTool(
-  ctx: Context,
-  spec: RoleSpec,
-  config: ProfilesConfig,
-): void {
+function registerRoleTool(ctx: Context, spec: RoleSpec, config: ProfilesConfig): void {
   ctx.tools.register(
     defineTool({
       name: spec.toolName,
@@ -568,11 +351,15 @@ function registerRoleTool(
       },
       async execute(args, exec) {
         const parent = exec.agent;
-        if (!parent) throw new Error(`${spec.toolName} requires a calling agent (exec.agent was undefined)`);
+        if (!parent)
+          throw new Error(`${spec.toolName} requires a calling agent (exec.agent was undefined)`);
 
         // Lazy lookup at call time: the head must reflect the CURRENT
         // settings value, and the plugin must load with no provider mounted.
-        const head = resolveHead(ctx, config.roles?.[spec.toolName as keyof NonNullable<ProfilesConfig["roles"]>]);
+        const head = resolveHead(
+          ctx,
+          config.roles?.[spec.toolName as keyof NonNullable<ProfilesConfig["roles"]>],
+        );
         const provider = config.provider ?? "spawn";
         const request: Omit<SubagentStartRequest, "signal"> = {
           label: args.description,
@@ -628,27 +415,29 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
     if (!p.agent) return proposal;
 
     // W21: the chain rides the agent's DEPTH (0 -> orchestrator, child ->
-    // subagent) and the go/ds tail is reordered by quota. The error cache is
-    // honored while walking below.
-      const chain = effectiveChain(ctx, depthOf(p.agent));
-      // A manual picker choice leads the levels: it is tried first, then the
-      // chain's remaining rungs. The choice may be the chain head (the list
-      // keeps every rung once) or off-chain (it prefixes the chain).
-      const agentDefaultModel = service<{
-        currentSelection(): { provider: string; model: string } | undefined;
-      }>(ctx, "agentDefaultModel");
-      const selection = agentDefaultModel?.currentSelection?.();
-      const levels = selection
-        ? [selection, ...chain.filter(
+    // subagent). The error cache is honored while walking below.
+    const chain = effectiveChain(ctx, depthOf(p.agent));
+    // A manual picker choice leads the levels: it is tried first, then the
+    // chain's remaining rungs. The choice may be the chain head (the list
+    // keeps every rung once) or off-chain (it prefixes the chain).
+    const agentDefaultModel = service<{
+      currentSelection(): { provider: string; model: string } | undefined;
+    }>(ctx, "agentDefaultModel");
+    const selection = agentDefaultModel?.currentSelection?.();
+    const levels = selection
+      ? [
+          selection,
+          ...chain.filter(
             (level) => !(level.provider === selection.provider && level.model === selection.model),
-          )]
-        : chain;
-      // Failover applies from the matched level onward; unmatched requests
-      // (a pick for another rung, an unrelated provider) pass through.
-      const matched = levels.findIndex(
-        (level) => level.provider === proposal.provider && level.model === proposal.model,
-      );
-      if (matched < 0) return proposal;
+          ),
+        ]
+      : chain;
+    // Failover applies from the matched level onward; unmatched requests
+    // (a pick for another rung, an unrelated provider) pass through.
+    const matched = levels.findIndex(
+      (level) => level.provider === proposal.provider && level.model === proposal.model,
+    );
+    if (matched < 0) return proposal;
 
     const stepKey = keyOf(p.turn, p.step);
     let s = state.get(p.agent);
@@ -663,7 +452,7 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
     // before streaming. An abort during the probe must surface as an abort.
     while (s.cursor < s.levels.length) {
       const candidate = s.levels[s.cursor];
-      if (isCachedDown(candidate) || isQuotaExhausted(candidate, ctx)) {
+      if (isCachedDown(candidate)) {
         s.cursor += 1;
         continue;
       }
@@ -688,13 +477,22 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
 
     if (!s || s.cursor >= s.levels.length) {
       const tried = s
-        ? s.failures.map((f) => `  - ${f.level.provider}/${f.level.model}: ${f.code} — ${f.message}`).join("\n")
+        ? s.failures
+            .map((f) => `  - ${f.level.provider}/${f.level.model}: ${f.code} — ${f.message}`)
+            .join("\n")
         : "(no levels)";
       throw new Error(`profiles: no level can serve the active chain:\n${tried}`);
     }
 
     const level = s.levels[s.cursor];
-    return { ...proposal, provider: level.provider, model: level.model };
+    return {
+      ...proposal,
+      provider: level.provider,
+      model: level.model,
+      ...(level.reasoningEffort
+        ? { reasoningEffort: level.reasoningEffort as LlmCallConfig["reasoningEffort"] }
+        : {}),
+    };
   });
 
   ctx.on("agent/request-error", (payload: unknown, next: () => Promise<RequestErrorAction>) => {
@@ -724,7 +522,11 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
       last.code = failure.code ?? "UNKNOWN";
       last.message = failure.message ?? "";
     } else {
-      s.failures.push({ level: cur, code: failure.code ?? "UNKNOWN", message: failure.message ?? "" });
+      s.failures.push({
+        level: cur,
+        code: failure.code ?? "UNKNOWN",
+        message: failure.message ?? "",
+      });
     }
 
     // W21: a persistent fault marks the rung down so later selections skip it.
@@ -739,10 +541,7 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
 
     s.cursor += 1;
     // Skip rungs the error cache has down while walking the chain.
-    while (
-      s.cursor < s.levels.length &&
-      (isCachedDown(s.levels[s.cursor]) || isQuotaExhausted(s.levels[s.cursor], ctx))
-    ) s.cursor += 1;
+    while (s.cursor < s.levels.length && isCachedDown(s.levels[s.cursor])) s.cursor += 1;
 
     if (s.cursor < s.levels.length) {
       const nxt = s.levels[s.cursor];
@@ -775,15 +574,25 @@ function syncDefaultModel(ctx: Context, profile: ProfileSettings | undefined): v
   const head = chainOf(activeEntry(profile), "orchestrator", profile?.chains)[0];
   if (!head) return;
   const agentDefaultModel = service<{
-    saveSelection(next: { provider: string; model: string }): Promise<void>;
+    saveSelection(next: {
+      provider: string;
+      model: string;
+      reasoningEffort?: string;
+    }): Promise<void>;
   }>(ctx, "agentDefaultModel");
-  void agentDefaultModel?.saveSelection({ provider: head.provider, model: head.model }).catch(() => {});
+  void agentDefaultModel
+    ?.saveSelection({
+      provider: head.provider,
+      model: head.model,
+      ...(head.reasoningEffort ? { reasoningEffort: head.reasoningEffort } : {}),
+    })
+    .catch(() => {});
 }
 
 // ── W24: settings panel routes ────────────────────────────────────────────
 // GET /profiles/config returns the resolved `profile` namespace: string chain
 // refs resolve through profile.chains, then the entry normalizes to the
-// canonical nested shape plus live quota/error-cache info. PUT validates
+// canonical nested shape plus error-cache info. PUT validates
 // strictly and writes through the SAME settings service this plugin reads
 // (settings.replace on the registered namespace), so the write hot-applies:
 // the settings/updated listener below clears the error cache and re-syncs the
@@ -855,7 +664,9 @@ type Validated<T> = { ok: true; value: T } | { ok: false; error: string };
 function validateRouteRow(value: unknown, path: string): Validated<RouteCandidate> {
   if (!isPlainObject(value)) return { ok: false, error: `${path} must be an object` };
   for (const key of Object.keys(value)) {
-    if (key !== "provider" && key !== "model") return { ok: false, error: `${path} has unknown key "${key}"` };
+    if (key !== "provider" && key !== "model" && key !== "reasoningEffort") {
+      return { ok: false, error: `${path} has unknown key "${key}"` };
+    }
   }
   const provider = value.provider;
   const model = value.model;
@@ -865,7 +676,22 @@ function validateRouteRow(value: unknown, path: string): Validated<RouteCandidat
   if (typeof model !== "string" || model.length === 0) {
     return { ok: false, error: `${path}.model must be a non-empty string` };
   }
-  return { ok: true, value: { provider, model } };
+  const rawEffort = value.reasoningEffort;
+  let reasoningEffort: string | undefined;
+  if (rawEffort !== undefined) {
+    if (typeof rawEffort !== "string" || rawEffort.length === 0) {
+      return { ok: false, error: `${path}.reasoningEffort must be a non-empty string` };
+    }
+    reasoningEffort = rawEffort;
+  }
+  return {
+    ok: true,
+    value: {
+      provider,
+      model,
+      ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
+    },
+  };
 }
 
 function validateChain(value: unknown, path: string): Validated<unknown> {
@@ -874,7 +700,8 @@ function validateChain(value: unknown, path: string): Validated<unknown> {
     for (const key of Object.keys(value)) {
       if (key !== "routes") return { ok: false, error: `${path} has unknown key "${key}"` };
     }
-    if (!Array.isArray(value.routes)) return { ok: false, error: `${path}.routes must be an array` };
+    if (!Array.isArray(value.routes))
+      return { ok: false, error: `${path}.routes must be an array` };
     for (let i = 0; i < value.routes.length; i++) {
       const row = validateRouteRow(value.routes[i], `${path}.routes[${i}]`);
       if (row.ok === false) return row;
@@ -887,7 +714,8 @@ function validateChain(value: unknown, path: string): Validated<unknown> {
     for (let i = 0; i < value.length; i++) {
       const step = value[i];
       if (typeof step === "string") {
-        if (step.length === 0) return { ok: false, error: `${path}[${i}] must be a non-empty string` };
+        if (step.length === 0)
+          return { ok: false, error: `${path}[${i}] must be a non-empty string` };
       } else if (isPlainObject(step)) {
         const row = validateRouteRow(step, `${path}[${i}]`);
         if (row.ok === false) return row;
@@ -900,8 +728,10 @@ function validateChain(value: unknown, path: string): Validated<unknown> {
   return { ok: false, error: `${path} must be an object ({routes}) or array (composition)` };
 }
 
-
-function validateEntry(value: unknown, path: string): Validated<{ orchestrator: unknown; subagent: unknown }> {
+function validateEntry(
+  value: unknown,
+  path: string,
+): Validated<{ orchestrator: unknown; subagent: unknown }> {
   if (!isPlainObject(value)) return { ok: false, error: `${path} must be an object` };
   for (const key of Object.keys(value)) {
     if (key !== "orchestrator" && key !== "subagent") {
@@ -962,12 +792,9 @@ function makeConfigHandler(ctx: Context) {
     if (req.method === "GET") {
       const settings = service<SettingsService>(ctx, "settings");
       const profile = settings?.get(PROFILE_NS) as ProfileSettings | undefined;
-      const goLive = goLiveNow(ctx);
-      const dsLive = goLive ? true : dsLiveNow(ctx);
       sendJson(res, 200, {
         ok: true,
         config: canonicalConfig(profile),
-        quota: { goLive, dsLive },
         errorCache: { ttlMs: ERROR_WINDOW_MS, down: [...downCache.keys()] },
       });
       return;
@@ -982,7 +809,10 @@ function makeConfigHandler(ctx: Context) {
       try {
         body = await readBody(req);
       } catch (error) {
-        sendJson(res, 400, { ok: false, error: error instanceof Error ? error.message : String(error) });
+        sendJson(res, 400, {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
         return;
       }
       const validated = validateSection(body);
@@ -993,16 +823,16 @@ function makeConfigHandler(ctx: Context) {
       try {
         await settings.replace(PROFILE_NS, validated.value);
       } catch (error) {
-        sendJson(res, 400, { ok: false, error: error instanceof Error ? error.message : String(error) });
+        sendJson(res, 400, {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
         return;
       }
-      const goLive = goLiveNow(ctx);
-      const dsLive = goLive ? true : dsLiveNow(ctx);
       const profile = settings.get(PROFILE_NS) as ProfileSettings | undefined;
       sendJson(res, 200, {
         ok: true,
         config: canonicalConfig(profile),
-        quota: { goLive, dsLive },
         errorCache: { ttlMs: ERROR_WINDOW_MS, down: [...downCache.keys()] },
       });
       return;
@@ -1026,7 +856,10 @@ function makeSwitchHandler(ctx: Context) {
     try {
       body = await readBody(req);
     } catch (error) {
-      sendJson(res, 400, { ok: false, error: error instanceof Error ? error.message : String(error) });
+      sendJson(res, 400, {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return;
     }
     const rawActive = isPlainObject(body) ? body.active : undefined;
@@ -1039,21 +872,20 @@ function makeSwitchHandler(ctx: Context) {
     try {
       await settings.replace(PROFILE_NS, next);
     } catch (error) {
-      sendJson(res, 400, { ok: false, error: error instanceof Error ? error.message : String(error) });
+      sendJson(res, 400, {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return;
     }
-    const goLive = goLiveNow(ctx);
-    const dsLive = goLive ? true : dsLiveNow(ctx);
     const after = settings.get(PROFILE_NS) as ProfileSettings | undefined;
     sendJson(res, 200, {
       ok: true,
       config: canonicalConfig(after),
-      quota: { goLive, dsLive },
       errorCache: { ttlMs: ERROR_WINDOW_MS, down: [...downCache.keys()] },
     });
   };
 }
-
 
 export function apply(ctx: Context, config: unknown): void {
   const cfg = (config ?? {}) as ProfilesConfig;
@@ -1066,7 +898,8 @@ export function apply(ctx: Context, config: unknown): void {
   // W24: the settings panel reads/writes the profile namespace over these
   // routes. Lazy inject so the plugin still loads where no web server mounts.
   ctx.inject(["webServer"], (scope) => {
-    const server = (scope as unknown as { webServer: { register(options: unknown): unknown } }).webServer;
+    const server = (scope as unknown as { webServer: { register(options: unknown): unknown } })
+      .webServer;
     server.register({
       kind: "exact",
       path: "/profiles/config",

@@ -88,4 +88,3 @@ Blanking is always paired with the inhibitor, not a standalone action.
   Every subcommand (`on`, `off`, `blank`, `toggle`) needs this. `status` also
   needs it to read the real inhibitor PID and DPMS state, though a failed
   read there degrades to an "unknown" report rather than erroring.
-

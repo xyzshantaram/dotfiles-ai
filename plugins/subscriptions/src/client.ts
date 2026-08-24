@@ -39,7 +39,7 @@ var PLUGIN_NAME = "subscriptions";
 /** One stylesheet for this panel. Class names are kebab-case only. */
 var STYLE_TAG_ID = "subscriptions/settings.css";
 var CSS_TEXT = [
-".ocgs-root{box-sizing:border-box;display:flex;flex-direction:column;gap:14px;padding:6px 2px;color:var(--dsw-alias-label-primary)}",
+  ".ocgs-root{box-sizing:border-box;display:flex;flex-direction:column;gap:14px;padding:6px 2px;color:var(--dsw-alias-label-primary)}",
   ".ocgs-head{display:flex;align-items:center;justify-content:space-between;gap:8px}",
   ".ocgs-title{font-size:16px;font-weight:600;margin:0}",
   ".ocgs-head-title{display:flex;align-items:baseline;gap:8px;min-width:0;flex:1;overflow:hidden}",
@@ -65,6 +65,11 @@ var CSS_TEXT = [
   ".ocgs-btn{color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:999px;font-size:12px;line-height:20px;padding:2px 10px;cursor:pointer}",
   ".ocgs-btn:disabled{opacity:.5;cursor:default}",
   ".ocgs-cookie-note{font-size:11px;line-height:15px;color:var(--dsw-alias-label-secondary)}",
+  // Provider visibility toggles
+  ".ocgs-toggles{display:flex;flex-direction:column;gap:8px}",
+  ".ocgs-toggle{display:flex;align-items:center;gap:8px;min-width:0}",
+  ".ocgs-toggle-label{flex:1;min-width:0;font-size:12px;line-height:16px;color:var(--dsw-alias-label-primary)}",
+  ".ocgs-toggle input{flex:none;cursor:pointer}",
   // DeepSeek dashboard
   ".ds-dashboard{display:flex;flex-direction:column;gap:12px}",
   ".ds-hero{display:flex;flex-direction:column;gap:4px;padding:8px;background:var(--dsw-alias-bg-tertiary);border-radius:8px;border:1px solid var(--dsw-alias-border-l2)}",
@@ -81,20 +86,30 @@ var CSS_TEXT = [
   ".ds-token-value{font-size:16px;font-weight:600;color:var(--dsw-alias-state-success-primary)}",
   ".ds-token-value.out{color:var(--dsw-alias-state-error-primary)}",
   ".ds-empty{font-size:12px;color:var(--dsw-alias-label-secondary);font-style:italic}",
+  ".ocgs-note{font-size:12px;line-height:16px;color:var(--dsw-alias-label-secondary)}",
 ].join("");
 
 /** OpenCode GO windows, in the same order as the sidebar widget. */
 var GO_WINDOWS = [
   { key: "rolling", label: "Rolling (5h)", hint: "5h" },
   { key: "weekly", label: "Weekly", hint: null },
-  { key: "monthly", label: "Monthly", hint: null }
+  { key: "monthly", label: "Monthly", hint: null },
 ];
 
 /** Claude (meridian) windows from the localhost quota service. */
 var CLAUDE_WINDOWS = [
   { key: "five_hour", label: "5-hour", hint: null },
   { key: "seven_day", label: "7-day", hint: null },
-  { key: "seven_day_fable", label: "7-day fable", hint: null }
+  { key: "seven_day_fable", label: "7-day fable", hint: null },
+];
+
+/** Provider visibility toggles, in the order they render in the panel. */
+var PROVIDER_TOGGLES = [
+  { key: "commandcode", label: "Command Code" },
+  { key: "claude", label: "Claude (meridian)" },
+  { key: "deepseek", label: "DeepSeek" },
+  { key: "opencode", label: "OpenCode GO" },
+  { key: "opencode-zen", label: "OpenCode Zen" },
 ];
 
 /** Fill color by usage percent — themed alias tokens, light/dark safe. */
@@ -133,13 +148,15 @@ function fmtCount(n) {
 /** The 24h telemetry summary line. */
 function renderTelemetry(t) {
   var usage = t.tokenUsage || {};
-  var totalTokens = (usage.totalInputTokens || 0)
-    + (usage.totalOutputTokens || 0)
-    + (usage.totalCacheReadTokens || 0)
-    + (usage.totalCacheCreationTokens || 0);
-  var usd = t.costEstimate && typeof t.costEstimate.totalUsd === "number"
-    ? "$" + t.costEstimate.totalUsd.toFixed(2) + " est"
-    : "— est";
+  var totalTokens =
+    (usage.totalInputTokens || 0) +
+    (usage.totalOutputTokens || 0) +
+    (usage.totalCacheReadTokens || 0) +
+    (usage.totalCacheCreationTokens || 0);
+  var usd =
+    t.costEstimate && typeof t.costEstimate.totalUsd === "number"
+      ? "$" + t.costEstimate.totalUsd.toFixed(2) + " est"
+      : "— est";
   var req = typeof t.totalRequests === "number" ? String(t.totalRequests) : "—";
   return "24h: " + req + " req · " + usd + " · " + fmtCount(totalTokens) + " tokens";
 }
@@ -158,23 +175,24 @@ function statusText(win, hint) {
   return hint || "";
 }
 
-const SEVEN_DAYS_MS = 7 * 86400000
-const PACE_ON_BAND = 5          // delta percentage points that still count as "on pace"
-const PROJECT_MIN_ELAPSED = 0.1 // only project run-out after >=10% of window elapsed
+const SEVEN_DAYS_MS = 7 * 86400000;
+const PACE_ON_BAND = 5; // delta percentage points that still count as "on pace"
+const PROJECT_MIN_ELAPSED = 0.1; // only project run-out after >=10% of window elapsed
 
 function computeWeeklyPace(utilization, resetsAt, now = Date.now()) {
-  if (utilization == null || !Number.isFinite(utilization)) return null
-  if (resetsAt == null || !Number.isFinite(resetsAt)) return null
-  const windowStart = resetsAt - SEVEN_DAYS_MS
-  const elapsedFraction = Math.max(0, Math.min(1, (now - windowStart) / SEVEN_DAYS_MS))
-  const actualPct = Math.round(Math.max(0, utilization) * 100)
-  const expectedPct = Math.round(elapsedFraction * 100)
-  const deltaPct = actualPct - expectedPct
-  const status = deltaPct > PACE_ON_BAND ? "ahead" : deltaPct < -PACE_ON_BAND ? "under" : "on"
-  const projectedPct = elapsedFraction >= PROJECT_MIN_ELAPSED
-    ? Math.round((Math.max(0, utilization) / elapsedFraction) * 100)
-    : null
-  return { actualPct, expectedPct, deltaPct, projectedPct, status, elapsedFraction }
+  if (utilization == null || !Number.isFinite(utilization)) return null;
+  if (resetsAt == null || !Number.isFinite(resetsAt)) return null;
+  const windowStart = resetsAt - SEVEN_DAYS_MS;
+  const elapsedFraction = Math.max(0, Math.min(1, (now - windowStart) / SEVEN_DAYS_MS));
+  const actualPct = Math.round(Math.max(0, utilization) * 100);
+  const expectedPct = Math.round(elapsedFraction * 100);
+  const deltaPct = actualPct - expectedPct;
+  const status = deltaPct > PACE_ON_BAND ? "ahead" : deltaPct < -PACE_ON_BAND ? "under" : "on";
+  const projectedPct =
+    elapsedFraction >= PROJECT_MIN_ELAPSED
+      ? Math.round((Math.max(0, utilization) / elapsedFraction) * 100)
+      : null;
+  return { actualPct, expectedPct, deltaPct, projectedPct, status, elapsedFraction };
 }
 
 /**
@@ -201,9 +219,14 @@ function renderPaceLine(label, pace, resetsAtMs, utilization) {
 function fetchJson(url) {
   return fetch(url, { cache: "no-store" })
     .then(function (res) {
-      return res.json().catch(function () { return null; }).then(function (json) {
-        return { ok: res.ok, status: res.status, json: json };
-      });
+      return res
+        .json()
+        .catch(function () {
+          return null;
+        })
+        .then(function (json) {
+          return { ok: res.ok, status: res.status, json: json };
+        });
     })
     .then(function (result) {
       if (result.json !== null && result.json.error) {
@@ -214,15 +237,51 @@ function fetchJson(url) {
     })
     .catch(function (e) {
       return { data: null, error: String((e && e.message) || e) };
-    });}
+    });
+}
 
 /** POST one same-origin route (cookie extract/login), same {data,error} shape. */
 function postJson(url) {
   return fetch(url, { method: "POST", cache: "no-store" })
     .then(function (res) {
-      return res.json().catch(function () { return null; }).then(function (json) {
-        return { ok: res.ok, status: res.status, json: json };
-      });
+      return res
+        .json()
+        .catch(function () {
+          return null;
+        })
+        .then(function (json) {
+          return { ok: res.ok, status: res.status, json: json };
+        });
+    })
+    .then(function (result) {
+      if (result.json !== null && result.json.error) {
+        return { data: null, error: String(result.json.error) };
+      }
+      if (!result.ok) return { data: null, error: "HTTP " + result.status };
+      return { data: result.json, error: null };
+    })
+    .catch(function (e) {
+      return { data: null, error: String((e && e.message) || e) };
+    });
+}
+
+/** PUT one same-origin route with a JSON body; same {data,error} shape. */
+function putJson(url, body) {
+  return fetch(url, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  })
+    .then(function (res) {
+      return res
+        .json()
+        .catch(function () {
+          return null;
+        })
+        .then(function (json) {
+          return { ok: res.ok, status: res.status, json: json };
+        });
     })
     .then(function (result) {
       if (result.json !== null && result.json.error) {
@@ -245,24 +304,40 @@ function buildRows(defs, windows) {
     if (!win) continue;
     var percent = windowPercent(win);
     if (percent === null) continue;
-    rows.push(react.createElement("div", { className: "ocgs-row", key: def.key },
-      react.createElement("div", { className: "ocgs-row-label" },
-        react.createElement("b", null, def.label),
-        statusText(win, def.hint) ? react.createElement("span", { className: "ocgs-stale" }, "resets in " + statusText(win, def.hint)) : null,
-        react.createElement("b", null, percent + "%")
+    rows.push(
+      react.createElement(
+        "div",
+        { className: "ocgs-row", key: def.key },
+        react.createElement(
+          "div",
+          { className: "ocgs-row-label" },
+          react.createElement("b", null, def.label),
+          statusText(win, def.hint)
+            ? react.createElement(
+                "span",
+                { className: "ocgs-stale" },
+                "resets in " + statusText(win, def.hint),
+              )
+            : null,
+          react.createElement("b", null, percent + "%"),
+        ),
+        react.createElement(
+          "div",
+          { className: "ocgs-meta" },
+          react.createElement(
+            "div",
+            { className: "ocgs-track" },
+            react.createElement("div", {
+              className: "ocgs-fill",
+              style: {
+                width: Math.max(0, Math.min(100, percent)) + "%",
+                background: fillColor(percent),
+              },
+            }),
+          ),
+        ),
       ),
-      react.createElement("div", { className: "ocgs-meta" },
-        react.createElement("div", { className: "ocgs-track" },
-          react.createElement("div", {
-            className: "ocgs-fill",
-            style: {
-              width: Math.max(0, Math.min(100, percent)) + "%",
-              background: fillColor(percent)
-            }
-          })
-        )
-      )
-    ));
+    );
   }
   return rows;
 }
@@ -288,7 +363,11 @@ function renderDsDashboard(bal, amount, cost) {
   var currency = bal.currency || "USD";
 
   // Parse monthly usage amount (tokens)
-  var inTokens = 0, outTokens = 0, cacheRead = 0, cacheWrite = 0, totalTokens = 0;
+  var inTokens = 0,
+    outTokens = 0,
+    cacheRead = 0,
+    cacheWrite = 0,
+    totalTokens = 0;
   var perModel = [];
   if (amount && !amount.error && amount.data) {
     // Expected shape: array of {model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens}
@@ -296,11 +375,24 @@ function renderDsDashboard(bal, amount, cost) {
     if (Array.isArray(data)) {
       for (var mi = 0; mi < data.length; mi++) {
         var m = data[mi];
-        var it = Number(m.input_tokens || 0), ot = Number(m.output_tokens || 0);
-        var cr = Number(m.cache_read_tokens || 0), cw = Number(m.cache_write_tokens || 0);
-        inTokens += it; outTokens += ot; cacheRead += cr; cacheWrite += cw;
+        var it = Number(m.input_tokens || 0),
+          ot = Number(m.output_tokens || 0);
+        var cr = Number(m.cache_read_tokens || 0),
+          cw = Number(m.cache_write_tokens || 0);
+        inTokens += it;
+        outTokens += ot;
+        cacheRead += cr;
+        cacheWrite += cw;
         var mt = it + ot + cr + cw;
-        if (mt > 0 && m.model) perModel.push({ model: m.model, total: mt, input: it, output: ot, cacheRead: cr, cacheWrite: cw });
+        if (mt > 0 && m.model)
+          perModel.push({
+            model: m.model,
+            total: mt,
+            input: it,
+            output: ot,
+            cacheRead: cr,
+            cacheWrite: cw,
+          });
       }
     }
   }
@@ -330,40 +422,63 @@ function renderDsDashboard(bal, amount, cost) {
   var usageCards = [];
   if (totalTokens > 0 || totalCost > 0) {
     usageCards.push(
-      react.createElement("div", { className: "ds-usage-card" },
+      react.createElement(
+        "div",
+        { className: "ds-usage-card" },
         react.createElement("div", { className: "ds-usage-label" }, "Total Cost"),
-        react.createElement("div", { className: "ds-usage-value" }, "$" + totalCost.toFixed(2))
-      )
+        react.createElement("div", { className: "ds-usage-value" }, "$" + totalCost.toFixed(2)),
+      ),
     );
     usageCards.push(
-      react.createElement("div", { className: "ds-usage-card" },
+      react.createElement(
+        "div",
+        { className: "ds-usage-card" },
         react.createElement("div", { className: "ds-usage-label" }, "Total Tokens"),
         react.createElement("div", { className: "ds-usage-value" }, fmtCount(totalTokens)),
-        react.createElement("div", { className: "ds-usage-sub" }, "in " + fmtCount(inTokens) + " · out " + fmtCount(outTokens) + " · cache " + fmtCount(cacheRead + cacheWrite))
-      )
+        react.createElement(
+          "div",
+          { className: "ds-usage-sub" },
+          "in " +
+            fmtCount(inTokens) +
+            " · out " +
+            fmtCount(outTokens) +
+            " · cache " +
+            fmtCount(cacheRead + cacheWrite),
+        ),
+      ),
     );
     // Per-model cost
     for (var cmi = 0; cmi < costByModel.length; cmi++) {
       var cm = costByModel[cmi];
       usageCards.push(
-        react.createElement("div", { className: "ds-usage-card" },
+        react.createElement(
+          "div",
+          { className: "ds-usage-card" },
           react.createElement("div", { className: "ds-usage-label" }, cm.model),
-          react.createElement("div", { className: "ds-usage-value" }, "$" + cm.cost.toFixed(2))
-        )
+          react.createElement("div", { className: "ds-usage-value" }, "$" + cm.cost.toFixed(2)),
+        ),
       );
     }
   } else {
     usageCards.push(
-      react.createElement("div", { className: "ds-usage-card ds-empty" }, "No usage data (sign in to platform.deepseek.com)")
+      react.createElement(
+        "div",
+        { className: "ds-usage-card ds-empty" },
+        "No usage data (sign in to platform.deepseek.com)",
+      ),
     );
   }
 
-  return react.createElement("div", { className: "ds-dashboard" },
-    react.createElement("div", { className: "ds-hero" },
+  return react.createElement(
+    "div",
+    { className: "ds-dashboard" },
+    react.createElement(
+      "div",
+      { className: "ds-hero" },
       react.createElement("div", { className: "ds-hero-total" }, heroLines[0]),
-      react.createElement("div", { className: "ds-hero-breakdown" }, subLines.join(" · "))
+      react.createElement("div", { className: "ds-hero-breakdown" }, subLines.join(" · ")),
     ),
-    react.createElement("div", { className: "ds-usage-grid" }, usageCards)
+    react.createElement("div", { className: "ds-usage-grid" }, usageCards),
   );
 }
 
@@ -395,7 +510,8 @@ function chainRoutes(value, chains, seen) {
     return out;
   }
   if (Array.isArray(value)) {
-    for (var ci = 0; ci < value.length; ci++) out = out.concat(chainRoutes(value[ci], chains, seen));
+    for (var ci = 0; ci < value.length; ci++)
+      out = out.concat(chainRoutes(value[ci], chains, seen));
     return out;
   }
   if (value && typeof value === "object" && Array.isArray(value.routes)) {
@@ -436,7 +552,7 @@ function buildCcMeters(cc) {
   var wins = cc.data.windows || null;
   var ccDefs = [
     { key: "fiveHour", label: "5-hour" },
-    { key: "weekly", label: "Weekly" }
+    { key: "weekly", label: "Weekly" },
   ];
   for (var mi = 0; mi < ccDefs.length; mi++) {
     var def = ccDefs[mi];
@@ -446,21 +562,37 @@ function buildCcMeters(cc) {
     var cap = typeof win.cap === "number" ? win.cap : null;
     if (used === null || cap === null || cap <= 0) continue;
     var pct = Math.round((used / cap) * 100);
-    meters.push(react.createElement("div", { className: "ocgs-row", key: def.key },
-      react.createElement("div", { className: "ocgs-row-label" },
-        react.createElement("b", null, def.label),
-        win.resetAt ? react.createElement("span", { className: "ocgs-stale" }, "resets in " + timeUntil(win.resetAt)) : null,
-        react.createElement("b", null, pct + "%")
+    meters.push(
+      react.createElement(
+        "div",
+        { className: "ocgs-row", key: def.key },
+        react.createElement(
+          "div",
+          { className: "ocgs-row-label" },
+          react.createElement("b", null, def.label),
+          win.resetAt
+            ? react.createElement(
+                "span",
+                { className: "ocgs-stale" },
+                "resets in " + timeUntil(win.resetAt),
+              )
+            : null,
+          react.createElement("b", null, pct + "%"),
+        ),
+        react.createElement(
+          "div",
+          { className: "ocgs-meta" },
+          react.createElement(
+            "div",
+            { className: "ocgs-track" },
+            react.createElement("div", {
+              className: "ocgs-fill",
+              style: { width: Math.max(0, Math.min(100, pct)) + "%", background: fillColor(pct) },
+            }),
+          ),
+        ),
       ),
-      react.createElement("div", { className: "ocgs-meta" },
-        react.createElement("div", { className: "ocgs-track" },
-          react.createElement("div", {
-            className: "ocgs-fill",
-            style: { width: Math.max(0, Math.min(100, pct)) + "%", background: fillColor(pct) }
-          })
-        )
-      )
-    ));
+    );
   }
   return meters;
 }
@@ -489,7 +621,8 @@ function readLastSnap() {
     var raw = localStorage.getItem(SNAP_KEY);
     if (!raw) return null;
     var parsed = JSON.parse(raw);
-    if (!parsed || !Number.isFinite(parsed.ts) || !parsed.data || typeof parsed.data !== "object") return null;
+    if (!parsed || !Number.isFinite(parsed.ts) || !parsed.data || typeof parsed.data !== "object")
+      return null;
     return { ts: parsed.ts, data: parsed.data };
   } catch (e) {
     return null;
@@ -541,14 +674,25 @@ function renderCcSection(cc, ccUsage) {
   var total = 0;
   var breakdown = [];
   if (creds) {
-    if (typeof creds.monthly === "number") { total += creds.monthly; breakdown.push("monthly $" + creds.monthly.toFixed(2)); }
-    if (typeof creds.purchased === "number") { total += creds.purchased; breakdown.push("purchased $" + creds.purchased.toFixed(2)); }
-    if (typeof creds.free === "number") { total += creds.free; breakdown.push("free $" + creds.free.toFixed(2)); }
+    if (typeof creds.monthly === "number") {
+      total += creds.monthly;
+      breakdown.push("monthly $" + creds.monthly.toFixed(2));
+    }
+    if (typeof creds.purchased === "number") {
+      total += creds.purchased;
+      breakdown.push("purchased $" + creds.purchased.toFixed(2));
+    }
+    if (typeof creds.free === "number") {
+      total += creds.free;
+      breakdown.push("free $" + creds.free.toFixed(2));
+    }
   }
   if (breakdown.length > 0) {
-    hero = react.createElement("div", { className: "ds-hero" },
+    hero = react.createElement(
+      "div",
+      { className: "ds-hero" },
       react.createElement("div", { className: "ds-hero-total" }, "$" + total.toFixed(2)),
-      react.createElement("div", { className: "ds-hero-breakdown" }, breakdown.join(" · "))
+      react.createElement("div", { className: "ds-hero-breakdown" }, breakdown.join(" · ")),
     );
   }
 
@@ -559,19 +703,23 @@ function renderCcSection(cc, ccUsage) {
     var period = usage.periodStart
       ? fmtDate(usage.periodStart) + (usage.periodEnd ? " – " + fmtDate(usage.periodEnd) : "")
       : "this period";
-    costCard = react.createElement("div", { className: "ds-usage-card" },
+    costCard = react.createElement(
+      "div",
+      { className: "ds-usage-card" },
       react.createElement("div", { className: "ds-usage-label" }, "Monthly cost"),
       react.createElement("div", { className: "ds-usage-value" }, "$" + usage.totalCost.toFixed(2)),
-      react.createElement("div", { className: "ds-usage-sub" }, period)
+      react.createElement("div", { className: "ds-usage-sub" }, period),
     );
   }
 
-  return react.createElement("div", { className: "ocgs-section" },
+  return react.createElement(
+    "div",
+    { className: "ocgs-section" },
     react.createElement("h4", { className: "ocgs-section-title" }, "Command Code"),
     errorLine ? react.createElement("div", { className: "ocgs-err" }, errorLine) : null,
     hero,
     meters.length > 0 ? react.createElement("div", { className: "ocgs-rows" }, meters) : null,
-    costCard ? react.createElement("div", { className: "ds-usage-grid" }, costCard) : null
+    costCard ? react.createElement("div", { className: "ds-usage-grid" }, costCard) : null,
   );
 }
 
@@ -589,16 +737,18 @@ function makePanel(ctx, config) {
     var cacheOk = cacheOkState[0];
     var setCacheOk = cacheOkState[1];
 
-    // Cordis does not pass config to client halves without a Config export.
-    // Fetch it from the host via RPC if missing.
+    // Cordis passes the composition entry config to client halves; when it is
+    // absent, fetch the resolved namespace through the same-origin web route.
     var cfgState = react.useState(config);
     var cfg = cfgState[0];
     var setCfg = cfgState[1];
     react.useEffect(function () {
-      if (config == null && ctx.host) {
-        ctx.host.call("subscriptions.config").then(function (c) {
-          if (c != null) setCfg(c);
-        }).catch(function () {});
+      if (config == null) {
+        fetchJson("/subscriptions/config")
+          .then(function (result) {
+            if (result.data && result.data.config) setCfg(result.data.config);
+          })
+          .catch(function () {});
       }
     }, []);
     var load = async function () {
@@ -616,7 +766,7 @@ function makePanel(ctx, config) {
         fetchJson("/subscriptions/commandcode-credits"),
         fetchJson("/subscriptions/commandcode-usage"),
         fetchJson("/subscriptions/opencode-zen-balance"),
-        fetchJson("/profiles/config")
+        fetchJson("/profiles/config"),
       ]);
       var snapData = {
         go: results[0],
@@ -629,7 +779,7 @@ function makePanel(ctx, config) {
         cc: results[7],
         ccUsage: results[8],
         oz: results[9],
-        profiles: results[10]
+        profiles: results[10],
       };
       setSnap(snapData);
       setStaleTs(Date.now());
@@ -647,8 +797,10 @@ function makePanel(ctx, config) {
         }
       }
       load();
-      var dispose = ctx.interval(load, 60000);
-      return function () { dispose(); };
+      var timer = window.setInterval(load, 60000);
+      return function () {
+        window.clearInterval(timer);
+      };
     }, []);
 
     var go = snap ? snap.go : null;
@@ -689,10 +841,11 @@ function makePanel(ctx, config) {
       var result = await postJson("/subscriptions/opencode-cookie/login");
       setCookie({
         busy: false,
-        note: result.data && result.data.ok
-          ? "Login page opened in Firefox; sign in, then fetch the cookie again"
-          : (result.error || "Could not open Firefox"),
-        showLogin: false
+        note:
+          result.data && result.data.ok
+            ? "Login page opened in Firefox; sign in, then fetch the cookie again"
+            : result.error || "Could not open Firefox",
+        showLogin: false,
       });
     };
 
@@ -711,10 +864,11 @@ function makePanel(ctx, config) {
       var result = await postJson("/subscriptions/deepseek-token/login");
       setDsToken({
         busy: false,
-        note: result.data && result.data.ok
-          ? "Login page opened in Firefox; sign in, then fetch the token again"
-          : (result.error || "Could not open Firefox"),
-        showLogin: false
+        note:
+          result.data && result.data.ok
+            ? "Login page opened in Firefox; sign in, then fetch the token again"
+            : result.error || "Could not open Firefox",
+        showLogin: false,
       });
     };
 
@@ -722,6 +876,25 @@ function makePanel(ctx, config) {
       var result = await fetchJson("/subscriptions/opencode-zen-balance");
       setSnap(Object.assign({}, snap, { oz: result }));
       setStaleTs(Date.now());
+    };
+
+    // Provider visibility toggle state and persistence.
+    var toggleState = react.useState(null);
+    var toggleBusy = toggleState[0];
+    var setToggleBusy = toggleState[1];
+
+    var toggleProvider = function (key) {
+      var providers = (cfg && cfg.providers) || {};
+      var next = Object.assign({}, providers, { [key]: !(providers[key] !== false) });
+      setToggleBusy(key);
+      putJson("/subscriptions/config", { providers: next }).then(function (result) {
+        setToggleBusy(null);
+        if (result.data && result.data.config) {
+          setCfg(result.data.config);
+        } else if (result.error) {
+          // Keep the local map unchanged on failure.
+        }
+      });
     };
 
     // OpenCode GO windows
@@ -735,16 +908,23 @@ function makePanel(ctx, config) {
     var claudeWindows = null;
     if (quota && !quota.error && quota.data && Array.isArray(quota.data.profiles)) {
       var quotaProfiles = quota.data.profiles;
-      var activeQuotaId = typeof quota.data.activeProfile === "string" ? quota.data.activeProfile : null;
+      var activeQuotaId =
+        typeof quota.data.activeProfile === "string" ? quota.data.activeProfile : null;
       var pickedProfile = null;
       if (activeQuotaId) {
         for (var pj = 0; pj < quotaProfiles.length; pj++) {
-          if (quotaProfiles[pj] && quotaProfiles[pj].id === activeQuotaId) { pickedProfile = quotaProfiles[pj]; break; }
+          if (quotaProfiles[pj] && quotaProfiles[pj].id === activeQuotaId) {
+            pickedProfile = quotaProfiles[pj];
+            break;
+          }
         }
       }
       if (pickedProfile === null) {
         for (var pk = 0; pk < quotaProfiles.length; pk++) {
-          if (quotaProfiles[pk] && quotaProfiles[pk].isActive === true) { pickedProfile = quotaProfiles[pk]; break; }
+          if (quotaProfiles[pk] && quotaProfiles[pk].isActive === true) {
+            pickedProfile = quotaProfiles[pk];
+            break;
+          }
         }
       }
       if (pickedProfile === null && quotaProfiles.length > 0) pickedProfile = quotaProfiles[0];
@@ -784,7 +964,11 @@ function makePanel(ctx, config) {
     if (balance) {
       if (balance.error) {
         balanceLine = "Balance: " + balance.error;
-      } else if (balance.data && balance.data.ok === true && typeof balance.data.balance === "number") {
+      } else if (
+        balance.data &&
+        balance.data.ok === true &&
+        typeof balance.data.balance === "number"
+      ) {
         balanceLine = "$" + balance.data.balance.toFixed(2) + " balance";
       }
     }
@@ -814,7 +998,12 @@ function makePanel(ctx, config) {
       var goResetsMs = new Date(goWeekly.resetsAt).getTime();
       if (Number.isFinite(goResetsMs)) {
         var goUtil = windowPercent(goWeekly) / 100;
-        goPaceLine = renderPaceLine("weekly", computeWeeklyPace(goUtil, goResetsMs), goResetsMs, goUtil);
+        goPaceLine = renderPaceLine(
+          "weekly",
+          computeWeeklyPace(goUtil, goResetsMs),
+          goResetsMs,
+          goUtil,
+        );
       }
     }
 
@@ -825,7 +1014,10 @@ function makePanel(ctx, config) {
       var claudeResetsMs = new Date(claudeSeven.resetsAt).getTime();
       if (Number.isFinite(claudeResetsMs)) {
         claudePaceLine = renderPaceLine(
-          "7d", computeWeeklyPace(claudeSeven.utilization, claudeResetsMs), claudeResetsMs, claudeSeven.utilization
+          "7d",
+          computeWeeklyPace(claudeSeven.utilization, claudeResetsMs),
+          claudeResetsMs,
+          claudeSeven.utilization,
         );
       }
     }
@@ -837,13 +1029,14 @@ function makePanel(ctx, config) {
       var pcfg = profiles.data.config;
       var activeName = typeof pcfg.active === "string" ? pcfg.active : "work";
       var profileEntry = activeName === "personal" ? pcfg.personal : pcfg.work;
-      var orcRoutes = (profileEntry && profileEntry.orchestrator && Array.isArray(profileEntry.orchestrator.routes))
-        ? profileEntry.orchestrator.routes
-        : [];
+      var orcRoutes =
+        profileEntry && profileEntry.orchestrator && Array.isArray(profileEntry.orchestrator.routes)
+          ? profileEntry.orchestrator.routes
+          : [];
       profileInfo = {
         active: activeName,
         chain: chainNameFor(orcRoutes, pcfg.chains),
-        head: orcRoutes.length > 0 ? orcRoutes[0] : null
+        head: orcRoutes.length > 0 ? orcRoutes[0] : null,
       };
     }
 
@@ -864,79 +1057,245 @@ function makePanel(ctx, config) {
       staleText = "Last fetched " + fmtStale(staleTs);
     }
 
-    return react.createElement("div", { className: "ocgs-root" },
-      react.createElement("div", { className: "ocgs-head" },
-        react.createElement("div", { className: "ocgs-head-title" },
+    // Data health: when every fetch failed, tell the user instead of showing
+    // a body of empty section shells.
+    var allFailed = false;
+    var firstError = null;
+    if (snap) {
+      var dataKeys = [
+        "go",
+        "quota",
+        "telemetry",
+        "balance",
+        "ds",
+        "dsUsageAmount",
+        "dsUsageCost",
+        "cc",
+        "ccUsage",
+        "oz",
+        "profiles",
+      ];
+      var failCount = 0;
+      for (var di = 0; di < dataKeys.length; di++) {
+        var entry = snap[dataKeys[di]];
+        if (entry && entry.error) {
+          failCount++;
+          if (firstError === null) firstError = entry.error;
+        }
+      }
+      allFailed = failCount === dataKeys.length;
+    }
+
+    return react.createElement(
+      "div",
+      { className: "ocgs-root" },
+      react.createElement(
+        "div",
+        { className: "ocgs-head" },
+        react.createElement(
+          "div",
+          { className: "ocgs-head-title" },
           react.createElement("h3", { className: "ocgs-title" }, "Subscriptions"),
-          staleText ? react.createElement("span", { className: "ocgs-stale" }, staleText) : null
+          staleText ? react.createElement("span", { className: "ocgs-stale" }, staleText) : null,
         ),
-        react.createElement("button", { className: "ocgs-refresh", onClick: load }, "Refresh")
+        react.createElement("button", { className: "ocgs-refresh", onClick: load }, "Refresh"),
       ),
 
-      (profileInfo || quotaPick || telemetryLine) ? react.createElement("div", { className: "ocgs-section" },
-        react.createElement("h4", { className: "ocgs-section-title" }, "Quota"),
-        profileInfo ? react.createElement("div", { className: "ocgs-rows" },
-          react.createElement("div", { className: "ocgs-row" },
-            react.createElement("div", { className: "ocgs-row-label" },
-              react.createElement("b", null, "Profile: " + profileInfo.active),
-              profileInfo.chain ? react.createElement("span", { className: "ocgs-stale" }, "chain: " + profileInfo.chain) : null
-            )
-          ),
-          profileInfo.head ? react.createElement("div", { className: "ocgs-row-label" },
-            react.createElement("b", null, "Quota model"),
-            react.createElement("span", null, profileInfo.head.provider + "/" + profileInfo.head.model)
-          ) : null
-        ) : null,
-        quotaPick ? react.createElement("div", { className: "ocgs-rows" }, quotaPick.rows) : null,
-        quotaPick && quotaPick.pace ? react.createElement("div", { className: "ocgs-pace" }, quotaPick.pace) : null,
-        telemetryLine ? react.createElement("div", { className: "ocgs-telemetry" }, telemetryLine) : null
-      ) : null,
+      react.createElement(
+        "div",
+        { className: "ocgs-section" },
+        react.createElement("h4", { className: "ocgs-section-title" }, "Show sections"),
+        react.createElement(
+          "div",
+          { className: "ocgs-toggles" },
+          PROVIDER_TOGGLES.map(function (def) {
+            var providers = (cfg && cfg.providers) || {};
+            var visible = providers[def.key] !== false;
+            return react.createElement(
+              "label",
+              { className: "ocgs-toggle", key: def.key },
+              react.createElement("input", {
+                type: "checkbox",
+                checked: visible,
+                disabled: toggleBusy !== null,
+                onChange: function () {
+                  toggleProvider(def.key);
+                },
+              }),
+              react.createElement("span", { className: "ocgs-toggle-label" }, def.label),
+            );
+          }),
+        ),
+      ),
+      snap === null
+        ? react.createElement("div", { className: "ocgs-note" }, "Loading subscription data…")
+        : null,
+      allFailed
+        ? react.createElement(
+            "div",
+            { className: "ocgs-err" },
+            "Could not load subscription data. " +
+              (firstError || "Check that the subscriptions plugin is mounted."),
+          )
+        : null,
+
+      profileInfo || quotaPick || telemetryLine
+        ? react.createElement(
+            "div",
+            { className: "ocgs-section" },
+            react.createElement("h4", { className: "ocgs-section-title" }, "Quota"),
+            profileInfo
+              ? react.createElement(
+                  "div",
+                  { className: "ocgs-rows" },
+                  react.createElement(
+                    "div",
+                    { className: "ocgs-row" },
+                    react.createElement(
+                      "div",
+                      { className: "ocgs-row-label" },
+                      react.createElement("b", null, "Profile: " + profileInfo.active),
+                      profileInfo.chain
+                        ? react.createElement(
+                            "span",
+                            { className: "ocgs-stale" },
+                            "chain: " + profileInfo.chain,
+                          )
+                        : null,
+                    ),
+                  ),
+                )
+              : null,
+            quotaPick
+              ? react.createElement("div", { className: "ocgs-rows" }, quotaPick.rows)
+              : null,
+            quotaPick && quotaPick.pace
+              ? react.createElement("div", { className: "ocgs-pace" }, quotaPick.pace)
+              : null,
+            telemetryLine
+              ? react.createElement("div", { className: "ocgs-telemetry" }, telemetryLine)
+              : null,
+          )
+        : null,
 
       providerVisible(cfg, "commandcode") ? renderCcSection(cc, ccUsage) : null,
 
-      providerVisible(cfg, "claude") ? react.createElement("div", { className: "ocgs-section" },
-        react.createElement("h4", { className: "ocgs-section-title" }, "Claude (meridian)"),
-        quota && quota.error ? react.createElement("div", { className: "ocgs-err" }, "Claude (meridian): " + quota.error) : null,
-        react.createElement("div", { className: "ocgs-rows" }, buildRows(CLAUDE_WINDOWS, claudeWindows)),
-        claudePaceLine ? react.createElement("div", { className: "ocgs-pace" }, claudePaceLine) : null
-      ) : null,
+      providerVisible(cfg, "claude")
+        ? react.createElement(
+            "div",
+            { className: "ocgs-section" },
+            react.createElement("h4", { className: "ocgs-section-title" }, "Claude (meridian)"),
+            quota && quota.error
+              ? react.createElement(
+                  "div",
+                  { className: "ocgs-err" },
+                  "Claude (meridian): " + quota.error,
+                )
+              : null,
+            react.createElement(
+              "div",
+              { className: "ocgs-rows" },
+              buildRows(CLAUDE_WINDOWS, claudeWindows),
+            ),
+            claudePaceLine
+              ? react.createElement("div", { className: "ocgs-pace" }, claudePaceLine)
+              : null,
+          )
+        : null,
 
-      providerVisible(cfg, "deepseek") ? react.createElement("div", { className: "ocgs-section" },
-        react.createElement("h4", { className: "ocgs-section-title" }, "DeepSeek"),
-        ds && ds.error ? react.createElement("div", { className: "ocgs-err" }, "DeepSeek: " + ds.error) : null,
-        ds && ds.data && Array.isArray(ds.data.balance_infos) && ds.data.balance_infos.length > 0
-          ? renderDsDashboard(ds.data.balance_infos[0], dsUsageAmount, dsUsageCost)
-          : null,
-        react.createElement("div", { className: "ocgs-cookie" },
-          react.createElement("button", { className: "ocgs-btn", disabled: dsToken.busy, onClick: fetchDsToken },
-            dsToken.busy ? "Fetching…" : "Fetch token from Firefox"),
-          dsToken.showLogin ? react.createElement("button", { className: "ocgs-btn", onClick: openDsLogin }, "Open platform.deepseek.com") : null,
-          dsToken.note ? react.createElement("span", { className: "ocgs-cookie-note" }, dsToken.note) : null
-        )
-      ) : null,
+      providerVisible(cfg, "deepseek")
+        ? react.createElement(
+            "div",
+            { className: "ocgs-section" },
+            react.createElement("h4", { className: "ocgs-section-title" }, "DeepSeek"),
+            ds && ds.error
+              ? react.createElement("div", { className: "ocgs-err" }, "DeepSeek: " + ds.error)
+              : null,
+            ds &&
+              ds.data &&
+              Array.isArray(ds.data.balance_infos) &&
+              ds.data.balance_infos.length > 0
+              ? renderDsDashboard(ds.data.balance_infos[0], dsUsageAmount, dsUsageCost)
+              : null,
+            react.createElement(
+              "div",
+              { className: "ocgs-cookie" },
+              react.createElement(
+                "button",
+                { className: "ocgs-btn", disabled: dsToken.busy, onClick: fetchDsToken },
+                dsToken.busy ? "Fetching…" : "Fetch token from Firefox",
+              ),
+              dsToken.showLogin
+                ? react.createElement(
+                    "button",
+                    { className: "ocgs-btn", onClick: openDsLogin },
+                    "Open platform.deepseek.com",
+                  )
+                : null,
+              dsToken.note
+                ? react.createElement("span", { className: "ocgs-cookie-note" }, dsToken.note)
+                : null,
+            ),
+          )
+        : null,
 
-      providerVisible(cfg, "opencode") ? react.createElement("div", { className: "ocgs-section" },
-        react.createElement("h4", { className: "ocgs-section-title" }, "OpenCode GO"),
-        balanceLine ? react.createElement("div", { className: "ocgs-balance" }, balanceLine) : null,
-        go && go.error ? react.createElement("div", { className: "ocgs-err" }, "OpenCode GO: " + go.error) : null,
-        react.createElement("div", { className: "ocgs-rows" }, buildRows(GO_WINDOWS, goUsage)),
-        goPaceLine ? react.createElement("div", { className: "ocgs-pace" }, goPaceLine) : null,
-        react.createElement("div", { className: "ocgs-cookie" },
-          react.createElement("button", { className: "ocgs-btn", disabled: cookie.busy, onClick: fetchCookie },
-            cookie.busy ? "Fetching…" : "Fetch cookie from Firefox"),
-          cookie.showLogin ? react.createElement("button", { className: "ocgs-btn", onClick: openLogin }, "Open login page") : null,
-          cookie.note ? react.createElement("span", { className: "ocgs-cookie-note" }, cookie.note) : null
-        )
-      ) : null,
+      providerVisible(cfg, "opencode")
+        ? react.createElement(
+            "div",
+            { className: "ocgs-section" },
+            react.createElement("h4", { className: "ocgs-section-title" }, "OpenCode GO"),
+            balanceLine
+              ? react.createElement("div", { className: "ocgs-balance" }, balanceLine)
+              : null,
+            go && go.error
+              ? react.createElement("div", { className: "ocgs-err" }, "OpenCode GO: " + go.error)
+              : null,
+            react.createElement("div", { className: "ocgs-rows" }, buildRows(GO_WINDOWS, goUsage)),
+            goPaceLine ? react.createElement("div", { className: "ocgs-pace" }, goPaceLine) : null,
+            react.createElement(
+              "div",
+              { className: "ocgs-cookie" },
+              react.createElement(
+                "button",
+                { className: "ocgs-btn", disabled: cookie.busy, onClick: fetchCookie },
+                cookie.busy ? "Fetching…" : "Fetch cookie from Firefox",
+              ),
+              cookie.showLogin
+                ? react.createElement(
+                    "button",
+                    { className: "ocgs-btn", onClick: openLogin },
+                    "Open login page",
+                  )
+                : null,
+              cookie.note
+                ? react.createElement("span", { className: "ocgs-cookie-note" }, cookie.note)
+                : null,
+            ),
+          )
+        : null,
 
-      providerVisible(cfg, "opencode-zen") ? react.createElement("div", { className: "ocgs-section" },
-        react.createElement("div", { className: "ocgs-head" },
-          react.createElement("h4", { className: "ocgs-section-title" }, "OpenCode Zen"),
-          react.createElement("button", { className: "ocgs-refresh", onClick: refreshOz }, "Refresh")
-        ),
-        ozBalanceLine ? react.createElement("div", { className: "ocgs-balance" }, ozBalanceLine) : null,
-        oz && oz.error ? react.createElement("div", { className: "ocgs-err" }, "OpenCode Zen: " + oz.error) : null
-      ) : null
+      providerVisible(cfg, "opencode-zen")
+        ? react.createElement(
+            "div",
+            { className: "ocgs-section" },
+            react.createElement(
+              "div",
+              { className: "ocgs-head" },
+              react.createElement("h4", { className: "ocgs-section-title" }, "OpenCode Zen"),
+              react.createElement(
+                "button",
+                { className: "ocgs-refresh", onClick: refreshOz },
+                "Refresh",
+              ),
+            ),
+            ozBalanceLine
+              ? react.createElement("div", { className: "ocgs-balance" }, ozBalanceLine)
+              : null,
+            oz && oz.error
+              ? react.createElement("div", { className: "ocgs-err" }, "OpenCode Zen: " + oz.error)
+              : null,
+          )
+        : null,
     );
   };
 }
@@ -944,13 +1303,12 @@ function makePanel(ctx, config) {
 /** Stable Cordis plugin name. */
 var name = PLUGIN_NAME;
 /** Services this bundle reaches through the plugin context. */
-var inject = ["slots", "timer"];
-
+var inject = ["slots"];
 /** Plugin body: inject the styles once and register the settings section. */
 function apply(ctx, config) {
   ctx.effect(function () {
     if (typeof document === "undefined") return;
-    if (document.querySelector("style[data-plugin-css=\"" + STYLE_TAG_ID + "\"]") !== null) return;
+    if (document.querySelector('style[data-plugin-css="' + STYLE_TAG_ID + '"]') !== null) return;
     var tag = document.createElement("style");
     tag.dataset.plugin = PLUGIN_NAME;
     tag.dataset.pluginCss = STYLE_TAG_ID;
@@ -964,7 +1322,9 @@ function apply(ctx, config) {
   ctx.slots.inject("settings.section", function () {
     return ctx.slots.register(
       { name: "settings.section", id: PLUGIN_NAME, order: 26, label: "Subscriptions" },
-      function () { return react.createElement(Panel); }
+      function () {
+        return react.createElement(Panel);
+      },
     );
   });
 }

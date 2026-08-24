@@ -35,7 +35,7 @@ Do not start non-trivial work without a plan file on disk. Settle scope first (u
 
 - The checklist is a ticket list, not a list of loose to-dos. Use the `grilling` skill to decompose non-trivial work into tickets before you record it. Do not write loose bullet points and refine them later.
 - Narrow tickets exist for **accountability and interruptibility**, not for parallel throughput. A ticket is a checkpoint: a clear boundary where work stops, gets reviewed, and can be discussed, redirected, or interrupted by the user. Without this, the model drifts through a large undifferentiated task and loses track of what it did versus what it assumed. Optimize ticket boundaries for "can I check in on this and close it out cleanly", not for "can several of these run at once."
-- Each ticket must be **narrow enough to close out on its own**: scoped to one unit of work you can complete and review as a standalone checkpoint (for example "add the BIP21 receive QR to the bitcoin-wallet tile", not "redesign the bitcoin wallet tile" and not "add a QR library import"). If a ticket needs its own sub-checklist to be understood, split it into two tickets.
+- Each ticket must be **narrow enough to close out on its own**: scoped to one unit of work you can complete and review as a standalone checkpoint (for example "add the BIP21 receive QR to the bitcoin-wallet tile", not "redesign the bitcoin wallet tile" and not "add a QR library import"). If a ticket needs its own sub-checklist to be understood, split it into two tickets. Ticket scope is also the dispatch scope: a ticket that would cost a subagent millions of tokens (see the software-engineering skill's narrow-dispatch rule) is too big — split it until one dispatch touches one file (or a few closely related files) with a decided design.
 - **Exception — one large ticket, staged internally:** a change that is genuinely one cohesive unit of work (the same mechanical treatment applied uniformly across many files, for example a repository-wide restyle sweep) does not always benefit from a split by an arbitrary boundary like "one ticket per file." Splitting that way multiplies overhead without adding real accountability. In that case keep it as a single ticket with explicit internal stages: **research** (survey the full scope, propose the mapping — dispatch to `researcher`), then **implement** (apply it — dispatch to `coder`), then **review** (dispatch to `researcher` via the `review` skill). Each stage is still its own checkpoint. Most tickets should still default to narrow-and-many.
 - Each ticket must state explicit **evaluation criteria** next to its description. State how to verify it was done correctly, not just "looks done." Prefer concrete, checkable criteria: a test or build command that must pass, a specific behavior to exercise manually, a file or output artifact to inspect. **Arrive at these criteria with the user, via the `grilling` skill.** Do not author them alone and present them as final. Static checks (typecheck, build, `cargo check`) rarely cover anything with a UI or runtime surface. Ask the user what manual or runtime behavior they will check before they call the ticket done. A ticket without evaluation criteria the user has weighed in on is not ready to dispatch.
 - A ticket is the unit of work, not automatically the unit of dispatch. Implement it with the appropriate subagent (`coder`, `tester`, `researcher`) per the primary dispatch rule. A genuinely trivial ticket (small, low-risk diff) may fall under the existing carve-out for direct edits in the primary session.
@@ -52,6 +52,7 @@ The model's own independent check (the review contract above) does not replace t
 - When you close out a ticket that needs the user's own hands-on check, add a line to the `## Human review queue` section:
   ```markdown
   ## Human review queue
+
   - [ ] BIP21 QR code — scan with a wallet app, confirm amount and address decode correctly
   - [ ] Dark mode toggle — check both themes for contrast issues
   ```
@@ -68,12 +69,12 @@ If enabled, append a `## Benchmarking` section to PLAN.md. It is a running log, 
 ```markdown
 ## Benchmarking
 
-| Metric | Count / Value | Notes |
-|---|---|---|
-| Verification catch rate | 0 / 0 | independent checks (per the review contract) that caught a real discrepancy, vs. total checks performed |
-| Escaped defect rate | 0 / 0 | bugs/regressions found after a ticket was marked `done`, vs. tickets closed |
-| Rework/reopen rate | 0 / 0 | tickets reopened or rescoped after grilling had already settled them, vs. tickets grilled |
-| Rough cost | — | approximate turns/tokens spent on grilling + planning + dispatch + review per ticket, vs. a rough estimate of direct-implementation cost |
+| Metric                  | Count / Value | Notes                                                                                                                                    |
+| ----------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Verification catch rate | 0 / 0         | independent checks (per the review contract) that caught a real discrepancy, vs. total checks performed                                  |
+| Escaped defect rate     | 0 / 0         | bugs/regressions found after a ticket was marked `done`, vs. tickets closed                                                              |
+| Rework/reopen rate      | 0 / 0         | tickets reopened or rescoped after grilling had already settled them, vs. tickets grilled                                                |
+| Rough cost              | —             | approximate turns/tokens spent on grilling + planning + dispatch + review per ticket, vs. a rough estimate of direct-implementation cost |
 ```
 
 - Update these numbers after every commit that closes or touches a ticket. Do not wait for a milestone. This way they show what actually happened.

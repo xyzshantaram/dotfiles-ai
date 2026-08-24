@@ -9,7 +9,7 @@ whenToUse: The user wants a dev server reachable from another LAN device, or a r
 Run a local dev server and expose it over HTTPS on the LAN at
 `https://potato.local:<port>/`, using `~/.local/bin/devtunnel`. Built on the
 same Caddy + local-CA + mDNS setup (see also the `share-caddy-cert`
-skill, for getting a *new* device to trust that CA in the first place).
+skill, for getting a _new_ device to trust that CA in the first place).
 device to trust that CA in the first place).
 
 The live script this skill drives is `~/.local/bin/devtunnel` (on `PATH`,
@@ -53,7 +53,7 @@ tunnel or exposed server.
   sudo firewall-cmd --permanent --add-service=mdns
   sudo firewall-cmd --reload
   ```
-  If a direct LAN-IP connection *also* fails, that's not this script or
+  If a direct LAN-IP connection _also_ fails, that's not this script or
   Caddy/avahi/firewalld at all — it's a network-layer block (most often
   AP/client isolation on the router). That's not fixable from this
   machine's shell; the user needs to check their router's admin panel.

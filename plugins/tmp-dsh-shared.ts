@@ -48,10 +48,7 @@ interface ConfinedArgvLike {
  * Returns the input untouched when the pair is absent (read-only mode,
  * Landlock, Seatbelt), so non-bwrap backends are never altered.
  */
-export function bindDurableTmp(
-  confined: ConfinedArgvLike,
-  hostTmpDsh: string,
-): ConfinedArgvLike {
+export function bindDurableTmp(confined: ConfinedArgvLike, hostTmpDsh: string): ConfinedArgvLike {
   const argv = confined.argv;
   const idx = argv.findIndex((arg, i) => arg === "--tmpfs" && argv[i + 1] === "/tmp");
   if (idx < 0) return confined;
@@ -112,7 +109,10 @@ export function apply(ctx: Context): void {
   if (proto !== null && typeof proto.confine === "function") {
     protoOriginal = proto.confine;
     proto.confine = function (this: unknown, ...args: unknown[]): ConfinedArgvLike {
-      return bindDurableTmp((protoOriginal as (...a: unknown[]) => ConfinedArgvLike).apply(this, args), hostTmpDsh);
+      return bindDurableTmp(
+        (protoOriginal as (...a: unknown[]) => ConfinedArgvLike).apply(this, args),
+        hostTmpDsh,
+      );
     };
   }
 

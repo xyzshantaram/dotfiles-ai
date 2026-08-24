@@ -44,75 +44,81 @@
  *   - id: manifest-guard
  *     name: /path/to/plugins/manifest-guard.js
  */
-import { basename } from 'node:path'
-import type { Context } from '@deepseek-ai/cordis'
-import z from '@deepseek-ai/schemastery'
-import { FsError } from '@deepseek-ai/dsh-fs'
-import type {} from '@deepseek-ai/dsh-fs'
-import type {} from '@deepseek-ai/dsh-tools'
-import type {} from '@deepseek-ai/dsh-agent'
+import { basename } from "node:path";
+import type { Context } from "@deepseek-ai/cordis";
+import z from "@deepseek-ai/schemastery";
+import { FsError } from "@deepseek-ai/dsh-fs";
+import type {} from "@deepseek-ai/dsh-fs";
+import type {} from "@deepseek-ai/dsh-tools";
+import type {} from "@deepseek-ai/dsh-agent";
 
-export const name = 'manifest-guard'
+export const name = "manifest-guard";
 
-export const inject = []
+export const inject = [];
 
-export const Config = z.object({})
+export const Config = z.object({});
 
-type ManifestGuardConfig = Record<string, never>
+type ManifestGuardConfig = Record<string, never>;
 
 /** SPEC-W.md W11 list, matched case-insensitively against the basename. */
 const MANIFEST_NAMES = new Set([
-  'package.json',
-  'package-lock.json',
-  'npm-shrinkwrap.json',
-  'yarn.lock',
-  'pnpm-lock.yaml',
-  'bun.lock',
-  'cargo.toml',
-  'Cargo.lock',
-  'pyproject.toml',
-  'poetry.lock',
-  'Pipfile',
-  'go.mod',
-  'go.sum',
-  'Gemfile',
-])
+  "package.json",
+  "package-lock.json",
+  "npm-shrinkwrap.json",
+  "yarn.lock",
+  "pnpm-lock.yaml",
+  "bun.lock",
+  "cargo.toml",
+  "Cargo.lock",
+  "pyproject.toml",
+  "poetry.lock",
+  "Pipfile",
+  "go.mod",
+  "go.sum",
+  "Gemfile",
+]);
 
 const DENY_MESSAGE = (name: string): string =>
   `Direct edits to ${name} are denied. ` +
-  'Use the package tool for dependency changes. ' +
-  'Ask the user to run the change when the tool cannot.'
+  "Use the package tool for dependency changes. " +
+  "Ask the user to run the change when the tool cannot.";
 
 function isManifestPath(displayPath: string): boolean {
-  const name = basename(displayPath)
-  return MANIFEST_NAMES.has(name.toLowerCase()) || MANIFEST_NAMES.has(name)
+  const name = basename(displayPath);
+  return MANIFEST_NAMES.has(name.toLowerCase()) || MANIFEST_NAMES.has(name);
 }
 
 export function apply(ctx: Context, config: ManifestGuardConfig): void {
-  void config
+  void config;
   // The guard is HOST-PLANE (personal bundle): it applies to every agent in
   // every preset, because dependency changes go through the package tool
   // everywhere (W11). No preset scoping: a manifest path is denied for any
   // agent that touches it directly.
 
   // Deny core: throws for a manifest path, else no-op.
-  const denyIfManifest = (
-    target: { displayPath: string },
-  ): void => {
-    if (!isManifestPath(target.displayPath)) return
-    throw new FsError(DENY_MESSAGE(basename(target.displayPath)), 'FS_PERMISSION_DENIED')
-  }
+  const denyIfManifest = (target: { displayPath: string }): void => {
+    if (!isManifestPath(target.displayPath)) return;
+    throw new FsError(DENY_MESSAGE(basename(target.displayPath)), "FS_PERMISSION_DENIED");
+  };
 
   // prepend: the observation policy vetoes the chain by returning an intent;
   // without prepend this guard would never run (see header note). Listeners
   // that return without calling next() veto the chain, so the pass-through
   // calls next() to let the policy decide.
-  ctx.on('fs/write-intent', async (target, _actor, next) => {
-    denyIfManifest(target)
-    return next()
-  }, { prepend: true })
-  ctx.on('fs/edit-intent', async (target, _actor, next) => {
-    denyIfManifest(target)
-    return next()
-  }, { prepend: true })
+  ctx.on(
+    "fs/write-intent",
+    async (target, _actor, next) => {
+      denyIfManifest(target);
+      return next();
+    },
+    { prepend: true },
+  );
+  ctx.on(
+    "fs/edit-intent",
+    async (target, _actor, next) => {
+      denyIfManifest(target);
+      return next();
+    },
+    { prepend: true },
+  );
 }

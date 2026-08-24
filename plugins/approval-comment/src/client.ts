@@ -73,9 +73,12 @@ var CSS_TEXT = [
   ".approval-comment-comment-input{box-sizing:border-box;width:100%;min-height:56px;resize:vertical;border:1px solid var(--dsw-alias-line-secondary);border-radius:8px;padding:8px 10px;background:var(--dsw-specific-input-major);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:13px;line-height:20px}",
   ".approval-comment-comment-input:focus{outline:0;border-color:var(--dsw-alias-state-warn-secondary)}",
   ".approval-comment-comment-input:disabled{opacity:.5}",
-  ".approval-comment-comment-hint{color:var(--dsw-alias-label-caption);font-size:12px;line-height:16px;margin:0}"
+  ".approval-comment-comment-hint{color:var(--dsw-alias-label-caption);font-size:12px;line-height:16px;margin:0}",
 ].join("");
-if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(STYLE_TAG_ID) + "]") === null) {
+if (
+  typeof document !== "undefined" &&
+  document.querySelector("style[data-plugin-css=" + JSON.stringify(STYLE_TAG_ID) + "]") === null
+) {
   var tag = document.createElement("style");
   tag.dataset.plugin = PLUGIN_NAME;
   tag.dataset.pluginCss = STYLE_TAG_ID;
@@ -94,7 +97,7 @@ var EN = {
   "comment.hide": "Hide comment",
   "comment.label": "Comment for the agent",
   "comment.placeholder": "Optional comment for the agent",
-  "comment.hint": "This comment steers the next action."
+  "comment.hint": "This comment steers the next action.",
 };
 
 /** Chinese dictionary. Approval strings match the shipped text. */
@@ -108,14 +111,16 @@ var ZH = {
   "comment.hide": "收起评论",
   "comment.label": "给智能体的评论",
   "comment.placeholder": "给智能体的可选评论",
-  "comment.hint": "该评论将指导下一步行动。"
+  "comment.hint": "该评论将指导下一步行动。",
 };
 
 /** Chain routing: claim the composer while an approval wait is pending. */
 function selectApproval(owner) {
-  return owner.interactions.find(function (interaction) {
-    return interaction.kind === "approval";
-  }) || null;
+  return (
+    owner.interactions.find(function (interaction) {
+      return interaction.kind === "approval";
+    }) || null
+  );
 }
 
 /** Extract the shell command from an approval's paired running call. */
@@ -163,7 +168,12 @@ function highlightCommand(command) {
  */
 function buildSteerTo(sessions) {
   return function steerTo(sessionId, toolName, comment) {
-    var text = "The user rejected the " + toolName + " call. Comment: " + comment + " Adjust your next action.";
+    var text =
+      "The user rejected the " +
+      toolName +
+      " call. Comment: " +
+      comment +
+      " Adjust your next action.";
     var binding = sessions.binding(sessionId);
     if (binding === undefined || binding.session === undefined) {
       console.warn("[approval-comment] steering skipped, session binding is gone", sessionId);
@@ -171,13 +181,18 @@ function buildSteerTo(sessions) {
     }
     return binding.session.prompt([{ type: "text", text: text }], "steer").then(
       function (result) {
-        if (!result.ok) console.warn("[approval-comment] steering failed", result.error && result.error.code, result.error && result.error.message);
+        if (!result.ok)
+          console.warn(
+            "[approval-comment] steering failed",
+            result.error && result.error.code,
+            result.error && result.error.message,
+          );
         return result.ok === true;
       },
       function (error) {
         console.warn("[approval-comment] steering threw", error);
         return false;
-      }
+      },
     );
   };
 }
@@ -215,23 +230,31 @@ function makeApprovalCommentCard(steerTo) {
       if (answered) return;
       setAnswered(true);
       var commentText = draft.trim();
-      matched.respond({
-        ok: true,
-        value: {
-          sessionId: matched.sessionId,
-          approvalId: matched.payload.approvalId,
-          outcome: outcome
-        }
-      }).then(function (receipt) {
-        if (receipt === undefined || receipt === null || !receipt.accepted) {
-          throw new Error("approval response rejected: " + (receipt === undefined || receipt === null || receipt.reason === undefined ? "unknown" : receipt.reason));
-        }
-        if (outcome === "rejected" && commentText !== "") {
-          steerTo(matched.sessionId, matched.payload.toolName, commentText);
-        }
-      }).catch(function () {
-        setAnswered(false);
-      });
+      matched
+        .respond({
+          ok: true,
+          value: {
+            sessionId: matched.sessionId,
+            approvalId: matched.payload.approvalId,
+            outcome: outcome,
+          },
+        })
+        .then(function (receipt) {
+          if (receipt === undefined || receipt === null || !receipt.accepted) {
+            throw new Error(
+              "approval response rejected: " +
+                (receipt === undefined || receipt === null || receipt.reason === undefined
+                  ? "unknown"
+                  : receipt.reason),
+            );
+          }
+          if (outcome === "rejected" && commentText !== "") {
+            steerTo(matched.sessionId, matched.payload.toolName, commentText);
+          }
+        })
+        .catch(function () {
+          setAnswered(false);
+        });
     };
 
     var onCommentKeyDown = function (event) {
@@ -240,7 +263,11 @@ function makeApprovalCommentCard(steerTo) {
         setShowComment(false);
         return;
       }
-      if (event.key === "Enter" && !event.shiftKey && !(event.nativeEvent && event.nativeEvent.isComposing)) {
+      if (
+        event.key === "Enter" &&
+        !event.shiftKey &&
+        !(event.nativeEvent && event.nativeEvent.isComposing)
+      ) {
         event.preventDefault();
         answer("rejected");
       }
@@ -256,17 +283,34 @@ function makeApprovalCommentCard(steerTo) {
           "div",
           { className: "approval-comment-strip" },
           react.createElement("span", { className: "approval-comment-dot" }),
-          t("approval.waiting")
+          t("approval.waiting"),
         ),
         react.createElement(
           "div",
-          { className: "approval-comment-body", "data-approval-scroll": "", tabIndex: 0, role: "group", "aria-label": t("approval.detail.aria") },
+          {
+            className: "approval-comment-body",
+            "data-approval-scroll": "",
+            tabIndex: 0,
+            role: "group",
+            "aria-label": t("approval.detail.aria"),
+          },
           react.createElement(
             "div",
             { className: "approval-comment-headline" },
-            matched.payload.reason || t("approval.escalation", { toolName: matched.payload.toolName })
+            matched.payload.reason ||
+              t("approval.escalation", { toolName: matched.payload.toolName }),
           ),
-          command !== undefined ? react.createElement("div", { className: "approval-comment-command" }, "$ ", react.createElement("code", { className: "hljs", dangerouslySetInnerHTML: { __html: highlightCommand(command) } })) : null,
+          command !== undefined
+            ? react.createElement(
+                "div",
+                { className: "approval-comment-command" },
+                "$ ",
+                react.createElement("code", {
+                  className: "hljs",
+                  dangerouslySetInnerHTML: { __html: highlightCommand(command) },
+                }),
+              )
+            : null,
           react.createElement(
             "button",
             {
@@ -276,44 +320,63 @@ function makeApprovalCommentCard(steerTo) {
               "aria-expanded": showComment,
               onClick: function () {
                 setShowComment(!showComment);
-              }
-            },
-            showComment ? t("comment.hide") : t("comment.toggle")
-          ),
-          showComment ? react.createElement(
-            "div",
-            { className: "approval-comment-comment-field" },
-            react.createElement("textarea", {
-              className: "approval-comment-comment-input",
-              value: draft,
-              disabled: answered,
-              rows: 2,
-              autoFocus: true,
-              "aria-label": t("comment.label"),
-              placeholder: t("comment.placeholder"),
-              onChange: function (event) {
-                setDraft(event.target.value);
               },
-              onKeyDown: onCommentKeyDown
-            }),
-            react.createElement("p", { className: "approval-comment-comment-hint" }, t("comment.hint"))
-          ) : null
+            },
+            showComment ? t("comment.hide") : t("comment.toggle"),
+          ),
+          showComment
+            ? react.createElement(
+                "div",
+                { className: "approval-comment-comment-field" },
+                react.createElement("textarea", {
+                  className: "approval-comment-comment-input",
+                  value: draft,
+                  disabled: answered,
+                  rows: 2,
+                  autoFocus: true,
+                  "aria-label": t("comment.label"),
+                  placeholder: t("comment.placeholder"),
+                  onChange: function (event) {
+                    setDraft(event.target.value);
+                  },
+                  onKeyDown: onCommentKeyDown,
+                }),
+                react.createElement(
+                  "p",
+                  { className: "approval-comment-comment-hint" },
+                  t("comment.hint"),
+                ),
+              )
+            : null,
         ),
         react.createElement(
           "div",
           { className: "approval-comment-action-row" },
           react.createElement(
             Button,
-            { variant: "outline", className: "approval-comment-reject", disabled: answered, onClick: function () { answer("rejected"); } },
-            t("approval.reject")
+            {
+              variant: "outline",
+              className: "approval-comment-reject",
+              disabled: answered,
+              onClick: function () {
+                answer("rejected");
+              },
+            },
+            t("approval.reject"),
           ),
           react.createElement(
             Button,
-            { variant: "primary", disabled: answered, onClick: function () { answer("allowed-once"); } },
-            t("approval.allowOnce")
-          )
-        )
-      )
+            {
+              variant: "primary",
+              disabled: answered,
+              onClick: function () {
+                answer("allowed-once");
+              },
+            },
+            t("approval.allowOnce"),
+          ),
+        ),
+      ),
     );
   };
 }
@@ -334,13 +397,16 @@ function apply(ctx) {
     return ctx.locale.register(LOCALE_NS, { en: EN, zh: ZH });
   }, "approval-comment: dictionaries");
   ctx.slots.inject("conversation.composer", function () {
-    return ctx.slots.register({
-      name: "conversation.composer",
-      select: selectApproval,
-      priority: 0,
-      locale: LOCALE_NS,
-      registrant: PLUGIN_NAME
-    }, card);
+    return ctx.slots.register(
+      {
+        name: "conversation.composer",
+        select: selectApproval,
+        priority: 0,
+        locale: LOCALE_NS,
+        registrant: PLUGIN_NAME,
+      },
+      card,
+    );
   });
 }
 

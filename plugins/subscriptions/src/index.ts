@@ -24,25 +24,48 @@
  * (`OPENCODE_SESSION_COOKIE`), never in settings.
  */
 import { randomUUID } from "node:crypto";
-import { execFile, spawn } from "node:child_process";
-import { copyFileSync, existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { execFile, execFileSync, spawn } from "node:child_process";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import z from "@deepseek-ai/schemastery";
+import { installSettingsSection, settingsNamespace } from "@deepseek-ai/dsh-settings";
+import type {} from "@deepseek-ai/dsh-settings";
+import { uncompress } from "snappyjs";
 
 /** Stable Cordis plugin name. */
 export const name = "subscriptions";
 
 /** Required services: web routes and credentials. */
-export const inject = ["webServer", "credentials", "harness"];
+export const inject = ["webServer", "credentials"];
 
 /**
  * Optional section gating. providers[<key>] === false hides that provider
  * section in the browser panel; absent keys and an absent config show all.
+ * The same map is the `subscriptions` settings namespace: the browser panel
+ * reads it through GET /subscriptions/config and writes it through PUT.
  */
 export const Config = z.object({
-  providers: z.dict(z.boolean()).default({})
+  providers: z.dict(z.boolean()).default({}),
 });
+
+/** The `subscriptions` settings namespace, owned by this plugin. */
+const CONFIG_NS = settingsNamespace("subscriptions");
+
+/** Read side of the settings service this plugin registers. */
+interface SettingsService {
+  get(ns: string): unknown;
+}
+
+/** Write side: replaces one namespace's user section wholesale. */
+interface SettingsWriteService extends SettingsService {
+  replace(ns: string, section: unknown): Promise<void>;
+}
+
+/** Minimal structural service lookup, matching profiles.ts. */
+function service<T>(ctx: unknown, name: string): T | undefined {
+  return (ctx as { get(name: string): unknown }).get(name) as T | undefined;
+}
 
 /** opencode.ai reports balance and monthlyUsage as fixed-point scaled by 1e8. */
 const USD_SCALE = 100_000_000;
@@ -72,7 +95,9 @@ function cachedOnce(fn, ttlMs) {
     if (cache !== null && now - cache.at < ttlMs && cache.key === key) return cache.promise;
     const promise = Promise.resolve().then(() => fn(...args));
     cache = { at: now, promise, key };
-    promise.catch(() => { if (cache?.promise === promise) cache = null; });
+    promise.catch(() => {
+      if (cache?.promise === promise) cache = null;
+    });
     return promise;
   };
 }
@@ -86,7 +111,7 @@ function makeHeaders(cookie, serverId, referer) {
     "user-agent": USER_AGENT,
     origin: "https://opencode.ai",
     referer,
-    accept: "text/javascript, application/json;q=0.9, */*;q=0.8"
+    accept: "text/javascript, application/json;q=0.9, */*;q=0.8",
   };
 }
 
@@ -100,9 +125,7 @@ async function fetchServerText(url, options) {
 /** A signed-out session page contains one of these markers. */
 function looksSignedOut(text) {
   const lower = String(text).toLowerCase();
-  return lower.includes("login")
-    || lower.includes("sign in")
-    || lower.includes("auth/authorize");
+  return lower.includes("login") || lower.includes("sign in") || lower.includes("auth/authorize");
 }
 
 /** First workspace id from the SolidStart payload, then a JSON walk. */
@@ -136,14 +159,17 @@ function findWorkspaceId(value) {
 async function resolveWorkspaceId(cookie) {
   const url = `https://opencode.ai/_server?id=${WORKSPACES_SERVER_ID}`;
   let text = await fetchServerText(url, {
-    headers: makeHeaders(cookie, WORKSPACES_SERVER_ID, "https://opencode.ai")
+    headers: makeHeaders(cookie, WORKSPACES_SERVER_ID, "https://opencode.ai"),
   });
   let id = parseWorkspaceId(text);
   if (id !== null) return id;
   text = await fetchServerText(url, {
     method: "POST",
-    headers: { ...makeHeaders(cookie, WORKSPACES_SERVER_ID, "https://opencode.ai"), "content-type": "application/json" },
-    body: "[]"
+    headers: {
+      ...makeHeaders(cookie, WORKSPACES_SERVER_ID, "https://opencode.ai"),
+      "content-type": "application/json",
+    },
+    body: "[]",
   });
   id = parseWorkspaceId(text);
   if (id === null) throw new Error("no workspace id");
@@ -155,20 +181,20 @@ async function fetchBillingPayload(cookie, workspaceId) {
   const args = encodeURIComponent(JSON.stringify([workspaceId]));
   const url = `https://opencode.ai/_server?id=${BILLING_SERVER_ID}&args=${args}`;
   return fetchServerText(url, {
-    headers: makeHeaders(cookie, BILLING_SERVER_ID, `https://opencode.ai/workspace/${workspaceId}`)
+    headers: makeHeaders(cookie, BILLING_SERVER_ID, `https://opencode.ai/workspace/${workspaceId}`),
   });
 }
 
-/** Step 2a: fetch the workspace dashboard page, which embeds the balance. */
-async function fetchDashboardText(cookie, workspaceId) {
-  return fetchServerText(`https://opencode.ai/workspace/${workspaceId}`, {
+/** Step 2a: fetch the workspace billing page, which embeds the balance. */
+async function fetchBillingText(cookie, workspaceId) {
+  return fetchServerText(`https://opencode.ai/workspace/${workspaceId}/billing`, {
     headers: {
       cookie,
       "user-agent": USER_AGENT,
       accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       origin: "https://opencode.ai",
-      referer: "https://opencode.ai"
-    }
+      referer: "https://opencode.ai",
+    },
   });
 }
 
@@ -192,7 +218,9 @@ function findCustomer(value) {
 
 /** Tolerant field scan: matches `monthlyUsage:123` and `"monthlyUsage":$R[3]=123`. */
 function numberField(text, field) {
-  const regex = new RegExp(`(?:["']?${field}["']?\\s*:\\s*)(?:\\$R\\[\\d+\\]\\s*=\\s*)?(-?[0-9]+(?:\\.[0-9]+)?)`);
+  const regex = new RegExp(
+    `(?:["']?${field}["']?\\s*:\\s*)(?:\\$R\\[\\d+\\]\\s*=\\s*)?(-?[0-9]+(?:\\.[0-9]+)?)`,
+  );
   const match = regex.exec(text);
   if (match === null) return null;
   const value = Number(match[1]);
@@ -212,7 +240,7 @@ function parseBilling(text) {
       return {
         monthlyUsage: customer.monthlyUsage / USD_SCALE,
         monthlyLimit: typeof customer.monthlyLimit === "number" ? customer.monthlyLimit : null,
-        balance: typeof customer.balance === "number" ? customer.balance / USD_SCALE : null
+        balance: typeof customer.balance === "number" ? customer.balance / USD_SCALE : null,
       };
     }
   } catch {
@@ -226,7 +254,7 @@ function parseBilling(text) {
   return {
     monthlyUsage: usage / USD_SCALE,
     monthlyLimit: limit,
-    balance: balance === null ? null : balance / USD_SCALE
+    balance: balance === null ? null : balance / USD_SCALE,
   };
 }
 
@@ -238,6 +266,12 @@ function parseBilling(text) {
  * dollar figure. Returns null when no balance is found.
  */
 function parseZenBalanceText(text) {
+  text = String(text).replace(/<!--[\s\S]*?-->/g, "");
+  const slot = /data-slot="balance-value"[^>]*>\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i.exec(text);
+  if (slot !== null) {
+    const v = Number(slot[1].replace(/,/g, ""));
+    if (Number.isFinite(v) && v >= 0) return v;
+  }
   try {
     const object = JSON.parse(text);
     const customer = findCustomer(object);
@@ -247,17 +281,22 @@ function parseZenBalanceText(text) {
   } catch {
     // not JSON; fall through to the regex paths
   }
-  const solid = /(?:^|[,{])\s*(?:"customerID"|customerID)\s*:\s*(?:\$R\[\d+\]\s*=\s*)?"[^"]+"[^{}]{0,512}?(?:"balance"|balance)\s*:\s*(?:\$R\[\d+\]\s*=\s*)?(-?[0-9]+(?:\.[0-9]+)?)/.exec(text);
+  const solid =
+    /(?:^|[,{])\s*(?:"customerID"|customerID)\s*:\s*(?:\$R\[\d+\]\s*=\s*)?"[^"]+"[^{}]{0,512}?(?:"balance"|balance)\s*:\s*(?:\$R\[\d+\]\s*=\s*)?(-?[0-9]+(?:\.[0-9]+)?)/.exec(
+      text,
+    );
   if (solid !== null && solid[1] !== undefined) {
     const raw = Number(solid[1]);
     if (Number.isFinite(raw)) return raw / USD_SCALE;
   }
-  const after = /(?:current\s+balance|zen\s+balance)[\s\S]{0,160}?\$\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i.exec(text);
+  const after =
+    /(?:current\s+balance|zen\s+balance)[\s\S]{0,160}?\$\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i.exec(text);
   if (after !== null && after[1] !== undefined) {
     const value = Number(after[1].replace(/,/g, ""));
     if (Number.isFinite(value) && value >= 0) return value;
   }
-  const before = /\$\s*([0-9][0-9,]*(?:\.[0-9]+)?)[\s\S]{0,160}?(?:current\s+balance|zen\s+balance)/i.exec(text);
+  const before =
+    /\$\s*([0-9][0-9,]*(?:\.[0-9]+)?)[\s\S]{0,160}?(?:current\s+balance|zen\s+balance)/i.exec(text);
   if (before !== null && before[1] !== undefined) {
     const value = Number(before[1].replace(/,/g, ""));
     if (Number.isFinite(value) && value >= 0) return value;
@@ -271,7 +310,8 @@ function parseZenBalanceText(text) {
  * before reading fields.
  */
 function unwrapData(json) {
-  if (json !== null && typeof json === "object" && !Array.isArray(json) && "data" in json) return json.data;
+  if (json !== null && typeof json === "object" && !Array.isArray(json) && "data" in json)
+    return json.data;
   return json;
 }
 
@@ -285,12 +325,13 @@ function commandCodeStatusError(status) {
 /** GET one Command Code endpoint; orgId is appended only when present. */
 async function commandCodeGet(key, base, path, orgId) {
   const sep = path.includes("?") ? "&" : "?";
-  const url = orgId === null || orgId === undefined
-    ? `${base}${path}`
-    : `${base}${path}${sep}orgId=${encodeURIComponent(orgId)}`;
+  const url =
+    orgId === null || orgId === undefined
+      ? `${base}${path}`
+      : `${base}${path}${sep}orgId=${encodeURIComponent(orgId)}`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
-    signal: AbortSignal.timeout(OPENCODE_TIMEOUT_MS)
+    signal: AbortSignal.timeout(OPENCODE_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(commandCodeStatusError(res.status));
   return unwrapData(await res.json());
@@ -299,28 +340,28 @@ async function commandCodeGet(key, base, path, orgId) {
 /** Credits payload -> the panel hero and window shape. */
 export function parseCommandCodeCredits(json) {
   const data = unwrapData(json);
-  const credits = data !== null && typeof data === "object" ? (data.credits || {}) : {};
-  const windows = data !== null && typeof data === "object" ? (data.windowLimits || {}) : {};
+  const credits = data !== null && typeof data === "object" ? data.credits || {} : {};
+  const windows = data !== null && typeof data === "object" ? data.windowLimits || {} : {};
   const fiveHour = windows.fiveHour || {};
   const weekly = windows.weekly || {};
   return {
     credits: {
       monthly: credits.monthlyCredits ?? null,
       purchased: credits.purchasedCredits ?? null,
-      free: credits.freeCredits ?? null
+      free: credits.freeCredits ?? null,
     },
     windows: {
       fiveHour: {
         used: fiveHour.used ?? null,
         cap: fiveHour.cap ?? null,
-        resetAt: fiveHour.resetAt ?? null
+        resetAt: fiveHour.resetAt ?? null,
       },
       weekly: {
         used: weekly.used ?? null,
         cap: weekly.cap ?? null,
-        resetAt: weekly.resetAt ?? null
-      }
-    }
+        resetAt: weekly.resetAt ?? null,
+      },
+    },
   };
 }
 
@@ -343,10 +384,17 @@ export function parseCommandCodeUsage(subJson, usageJson) {
 export function apply(ctx, config) {
   const credentials = ctx.get("credentials");
 
+  // The `subscriptions` settings namespace holds the provider visibility map.
+  // The composition entry (patch row config) is the base layer; a user write
+  // through PUT /subscriptions/config overrides it until reset.
+  installSettingsSection(ctx, CONFIG_NS, Config, config ?? {}, {
+    setSource: () => {},
+    onChange: () => {},
+  });
   // ── meridian quota (localhost service, no auth) ────────────────────────
   const quotaOnce = cachedOnce(async () => {
     const res = await fetch("http://localhost:9000/v1/usage/quota/all", {
-      signal: AbortSignal.timeout(MERIDIAN_TIMEOUT_MS)
+      signal: AbortSignal.timeout(MERIDIAN_TIMEOUT_MS),
     });
     if (!res.ok) throw new Error(`meridian quota HTTP ${res.status}`);
     return res.json();
@@ -363,7 +411,7 @@ export function apply(ctx, config) {
   // ── meridian telemetry (localhost service, no auth) ────────────────────
   const telemetryOnce = cachedOnce(async () => {
     const res = await fetch("http://localhost:9000/telemetry/summary?window=86400000", {
-      signal: AbortSignal.timeout(MERIDIAN_TIMEOUT_MS)
+      signal: AbortSignal.timeout(MERIDIAN_TIMEOUT_MS),
     });
     if (!res.ok) throw new Error(`meridian telemetry HTTP ${res.status}`);
     return res.json();
@@ -384,9 +432,12 @@ export function apply(ctx, config) {
   let balanceCache = null;
   const cachedBalance = (cookie) => {
     const now = Date.now();
-    if (balanceCache !== null
-      && now - balanceCache.at < BALANCE_CACHE_MS
-      && balanceCache.cookie === cookie) return balanceCache.promise;
+    if (
+      balanceCache !== null &&
+      now - balanceCache.at < BALANCE_CACHE_MS &&
+      balanceCache.cookie === cookie
+    )
+      return balanceCache.promise;
     const promise = (async () => {
       const workspaceId = await resolveWorkspaceId(cookie);
       const text = await fetchBillingPayload(cookie, workspaceId);
@@ -397,7 +448,7 @@ export function apply(ctx, config) {
       // pattern used by CodexBar and pi-sub-limits); keep the billing RPC
       // payload for monthly usage and as the fallback. Best-effort only.
       try {
-        const dashboard = await fetchDashboardText(cookie, workspaceId);
+        const dashboard = await fetchBillingText(cookie, workspaceId);
         if (!looksSignedOut(dashboard)) {
           const dashBalance = parseZenBalanceText(dashboard);
           if (dashBalance !== null) parsed.balance = dashBalance;
@@ -408,14 +459,17 @@ export function apply(ctx, config) {
       return parsed;
     })();
     balanceCache = { at: now, promise, cookie };
-    promise.catch(() => { if (balanceCache?.promise === promise) balanceCache = null; });
+    promise.catch(() => {
+      if (balanceCache?.promise === promise) balanceCache = null;
+    });
     return promise;
   };
 
   const handleBalance = async (_req, res) => {
     let cookie = null;
     try {
-      const hit = credentials === undefined ? null : await credentials.resolve("OPENCODE_SESSION_COOKIE");
+      const hit =
+        credentials === undefined ? null : await credentials.resolve("OPENCODE_SESSION_COOKIE");
       cookie = hit?.value ?? null;
     } catch {
       cookie = null;
@@ -431,7 +485,7 @@ export function apply(ctx, config) {
         balance: data.balance,
         monthlyUsage: data.monthlyUsage,
         monthlyLimit: data.monthlyLimit,
-        currency: "USD"
+        currency: "USD",
       });
     } catch {
       sendJson(res, 200, { ok: false, error: "cookie invalid or expired" });
@@ -449,11 +503,12 @@ export function apply(ctx, config) {
 
   // ── OpenCode GO windows (zen API key, no cookie) ────────────────────────
   const goUsageOnce = cachedOnce(async () => {
-    const key = credentials === undefined ? null : (await credentials.resolve("OPENCODE_GO_API_KEY"))?.value;
+    const key =
+      credentials === undefined ? null : (await credentials.resolve("OPENCODE_GO_API_KEY"))?.value;
     if (!key) throw new Error("OPENCODE_GO_API_KEY credential not configured");
     const res = await fetch("https://opencode.ai/zen/go/v1/usage", {
       headers: { Authorization: `Bearer ${key}` },
-      signal: AbortSignal.timeout(OPENCODE_TIMEOUT_MS)
+      signal: AbortSignal.timeout(OPENCODE_TIMEOUT_MS),
     });
     if (!res.ok) throw new Error(`go usage HTTP ${res.status}`);
     return res.json();
@@ -469,11 +524,12 @@ export function apply(ctx, config) {
 
   // ── DeepSeek platform balance (DS API key) ────────────────────────────
   const dsBalanceOnce = cachedOnce(async () => {
-    const key = credentials === undefined ? null : (await credentials.resolve("DEEPSEEK_API_KEY"))?.value;
+    const key =
+      credentials === undefined ? null : (await credentials.resolve("DEEPSEEK_API_KEY"))?.value;
     if (!key) throw new Error("DEEPSEEK_API_KEY credential not configured");
     const res = await fetch("https://api.deepseek.com/user/balance", {
       headers: { Authorization: `Bearer ${key}` },
-      signal: AbortSignal.timeout(OPENCODE_TIMEOUT_MS)
+      signal: AbortSignal.timeout(OPENCODE_TIMEOUT_MS),
     });
     if (!res.ok) throw new Error(`deepseek balance HTTP ${res.status}`);
     return res.json();
@@ -492,7 +548,7 @@ export function apply(ctx, config) {
   const dsUsageAmountOnce = cachedOnce(async (token, month, year) => {
     const res = await fetch(`${DS_PLATFORM_BASE}/usage/amount?month=${month}&year=${year}`, {
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-      signal: AbortSignal.timeout(OPENCODE_TIMEOUT_MS)
+      signal: AbortSignal.timeout(OPENCODE_TIMEOUT_MS),
     });
     if (!res.ok) throw new Error(`deepseek usage amount HTTP ${res.status}`);
     return res.json();
@@ -501,7 +557,7 @@ export function apply(ctx, config) {
   const dsUsageCostOnce = cachedOnce(async (token, month, year) => {
     const res = await fetch(`${DS_PLATFORM_BASE}/usage/cost?month=${month}&year=${year}`, {
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-      signal: AbortSignal.timeout(OPENCODE_TIMEOUT_MS)
+      signal: AbortSignal.timeout(OPENCODE_TIMEOUT_MS),
     });
     if (!res.ok) throw new Error(`deepseek usage cost HTTP ${res.status}`);
     return res.json();
@@ -516,12 +572,19 @@ export function apply(ctx, config) {
         sendJson(res, 400, { error: "month and year query params required" });
         return;
       }
-      const authHeader = req.headers && typeof req.headers.authorization === "string" ? req.headers.authorization : "";
+      const authHeader =
+        req.headers && typeof req.headers.authorization === "string"
+          ? req.headers.authorization
+          : "";
       const token = authHeader.startsWith("Bearer ")
         ? authHeader.slice(7).trim()
-        : (credentials === undefined ? null : (await credentials.resolve("DEEPSEEK_PLATFORM_TOKEN"))?.value);
+        : credentials === undefined
+          ? null
+          : (await credentials.resolve("DEEPSEEK_PLATFORM_TOKEN"))?.value;
       if (!token) {
-        sendJson(res, 200, { error: "DEEPSEEK_PLATFORM_TOKEN not configured; sign in to platform.deepseek.com" });
+        sendJson(res, 200, {
+          error: "DEEPSEEK_PLATFORM_TOKEN not configured; sign in to platform.deepseek.com",
+        });
         return;
       }
       const data = await dsUsageAmountOnce(token, month, year);
@@ -540,12 +603,19 @@ export function apply(ctx, config) {
         sendJson(res, 400, { error: "month and year query params required" });
         return;
       }
-      const authHeader = req.headers && typeof req.headers.authorization === "string" ? req.headers.authorization : "";
+      const authHeader =
+        req.headers && typeof req.headers.authorization === "string"
+          ? req.headers.authorization
+          : "";
       const token = authHeader.startsWith("Bearer ")
         ? authHeader.slice(7).trim()
-        : (credentials === undefined ? null : (await credentials.resolve("DEEPSEEK_PLATFORM_TOKEN"))?.value);
+        : credentials === undefined
+          ? null
+          : (await credentials.resolve("DEEPSEEK_PLATFORM_TOKEN"))?.value;
       if (!token) {
-        sendJson(res, 200, { error: "DEEPSEEK_PLATFORM_TOKEN not configured; sign in to platform.deepseek.com" });
+        sendJson(res, 200, {
+          error: "DEEPSEEK_PLATFORM_TOKEN not configured; sign in to platform.deepseek.com",
+        });
         return;
       }
       const data = await dsUsageCostOnce(token, month, year);
@@ -569,44 +639,84 @@ export function apply(ctx, config) {
   };
 
   // Read Firefox Storage v2 (ls/data.sqlite) for platform.deepseek.com userToken
-  // Firefox localStorage compression is 0 = raw or 1 = SNAPPY. Snappy is not
-  // supported here, so a non-zero compression_type resolves to null.
+  // Firefox localStorage compression is 0 = raw or 1 = SNAPPY (snappyjs).
   const readDeepSeekToken = (profileDir) => {
     const storeDir = join(profileDir, "storage", "default", "https+++platform.deepseek.com", "ls");
     const dbPath = join(storeDir, "data.sqlite");
     if (!existsSync(dbPath)) return Promise.resolve(null);
     const scratch = mkdtempSync(join(tmpdir(), "ds-token-"));
+    const dest = join(scratch, "data.sqlite");
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      try {
+        rmSync(scratch, { recursive: true, force: true });
+      } catch {
+        /* best effort */
+      }
+    };
+    // Snapshot the live Firefox DB via sqlite's backup API. We open the source
+    // with immutable=1 so sqlite takes NO lock; Firefox holds a persistent lock
+    // on this file, so a normal .backup fails with "database is locked". This
+    // reads through the sqlite engine (a consistent point-in-time snapshot) and
+    // never copies the user's browser DB files by hand.
     try {
-      copyFileSync(dbPath, join(scratch, "data.sqlite"));
-      try { copyFileSync(dbPath + "-wal", join(scratch, "data.sqlite-wal")); } catch { /* no wal */ }
-      try { copyFileSync(dbPath + "-shm", join(scratch, "data.sqlite-shm")); } catch { /* no shm */ }
-      const sql = "SELECT hex(value), compression_type FROM data WHERE key = 'userToken' LIMIT 1";
-      return new Promise((resolve) => {
-        execFile("/usr/bin/sqlite3", ["-readonly", "-noheader", join(scratch, "data.sqlite"), sql], { timeout: 10_000 }, (error, stdout) => {
-          if (error) return resolve(null);
-          const raw = String(stdout).trim();
-          if (!raw) return resolve(null);
-          const [hex, compressionType] = raw.split("|");
-          if (compressionType !== "0") return resolve(null);
-          let token = Buffer.from(hex, "hex").toString("utf8");
-          // appKit stores the token as {"value":"<token>","__version":"0"}; unwrap it
-          try {
-            const parsed = JSON.parse(token);
-            if (parsed !== null && typeof parsed === "object" && typeof parsed.value === "string") token = parsed.value;
-          } catch { /* not JSON */ }
-          resolve(token);
-        });
+      execFileSync("/usr/bin/sqlite3", [`file:${dbPath}?mode=ro&immutable=1`, ".backup " + dest], {
+        timeout: 15_000,
+        killSignal: "SIGKILL",
       });
     } catch {
+      cleanup();
       return Promise.resolve(null);
-    } finally {
-      try { rmSync(scratch, { recursive: true, force: true }); } catch { /* best effort */ }
     }
+    const sql = "SELECT hex(value), compression_type FROM data WHERE key = 'userToken' LIMIT 1";
+    return new Promise((resolve) => {
+      execFile(
+        "/usr/bin/sqlite3",
+        ["-readonly", "-noheader", dest, sql],
+        { timeout: 10_000 },
+        (error, stdout) => {
+          try {
+            if (error) return resolve(null);
+            const raw = String(stdout).trim();
+            if (!raw) return resolve(null);
+            const [hex, compressionType] = raw.split("|");
+            if (compressionType !== "0" && compressionType !== "1") return resolve(null);
+            let token;
+            try {
+              token =
+                compressionType === "1"
+                  ? uncompress(Buffer.from(hex, "hex")).toString("utf8")
+                  : Buffer.from(hex, "hex").toString("utf8");
+            } catch {
+              return resolve(null);
+            }
+            // appKit stores the token as {"value":"<token>","__version":"0"}; unwrap it
+            try {
+              const parsed = JSON.parse(token);
+              if (parsed !== null && typeof parsed === "object" && typeof parsed.value === "string")
+                token = parsed.value;
+            } catch {
+              /* not JSON */
+            }
+            resolve(token);
+          } finally {
+            cleanup();
+          }
+        },
+      );
+    });
   };
 
   const extractDeepSeekToken = async () => {
     for (const dir of firefoxDeepSeekProfileDirs()) {
-      if (!existsSync(join(dir, "storage", "default", "https+++platform.deepseek.com", "ls", "data.sqlite"))) continue;
+      if (
+        !existsSync(
+          join(dir, "storage", "default", "https+++platform.deepseek.com", "ls", "data.sqlite"),
+        )
+      )
+        continue;
       const token = await readDeepSeekToken(dir);
       if (token === null) continue;
       return { token };
@@ -617,20 +727,31 @@ export function apply(ctx, config) {
   const handleDeepSeekTokenExtract = async (_req, res) => {
     const found = await extractDeepSeekToken();
     if (found === null) {
-      sendJson(res, 200, { ok: false, error: "no platform.deepseek.com session found in any Firefox profile" });
+      sendJson(res, 200, {
+        ok: false,
+        error: "no platform.deepseek.com session found in any Firefox profile",
+      });
       return;
     }
     try {
       if (credentials !== undefined) await credentials.set("DEEPSEEK_PLATFORM_TOKEN", found.token);
       sendJson(res, 200, { ok: true, saved: true });
     } catch (error) {
-      sendJson(res, 200, { ok: false, error: "token valid but save failed: " + (error instanceof Error ? error.message : String(error)) });
+      sendJson(res, 200, {
+        ok: false,
+        error:
+          "token valid but save failed: " +
+          (error instanceof Error ? error.message : String(error)),
+      });
     }
   };
 
   const handleDeepSeekTokenLogin = async (_req, res) => {
     try {
-      const child = spawn("firefox", ["--new-window", "https://platform.deepseek.com"], { detached: true, stdio: "ignore" });
+      const child = spawn("firefox", ["--new-window", "https://platform.deepseek.com"], {
+        detached: true,
+        stdio: "ignore",
+      });
       child.unref();
       sendJson(res, 200, { ok: true });
     } catch (error) {
@@ -654,29 +775,59 @@ export function apply(ctx, config) {
   // scratch dir so the read never contends with the live writer, then query
   // the copies read-only. Returns the opencode.ai cookie header string.
   const readCookieString = (dbDir) => {
+    const src = join(dbDir, "cookies.sqlite");
+    if (!existsSync(src)) return Promise.resolve(null);
     const scratch = mkdtempSync(join(tmpdir(), "oc-cookies-"));
+    const dest = join(scratch, "cookies.sqlite");
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      try {
+        rmSync(scratch, { recursive: true, force: true });
+      } catch {
+        /* best effort */
+      }
+    };
+    // Snapshot the live Firefox DB via sqlite's backup API. We open the source
+    // with immutable=1 so sqlite takes NO lock; Firefox holds a persistent lock
+    // on this file, so a normal .backup fails with "database is locked". This
+    // reads through the sqlite engine (a consistent point-in-time snapshot) and
+    // never copies the user's browser DB files by hand.
     try {
-      copyFileSync(join(dbDir, "cookies.sqlite"), join(scratch, "cookies.sqlite"));
-      try { copyFileSync(join(dbDir, "cookies.sqlite-wal"), join(scratch, "cookies.sqlite-wal")); } catch { /* no wal */ }
-      try { copyFileSync(join(dbDir, "cookies.sqlite-shm"), join(scratch, "cookies.sqlite-shm")); } catch { /* no shm */ }
-      const sql = "SELECT name || char(9) || value FROM moz_cookies WHERE host IN ('opencode.ai', '.opencode.ai') AND name != 'oc_locale'";
-      return new Promise((resolve) => {
-        execFile("/usr/bin/sqlite3", ["-readonly", "-noheader", join(scratch, "cookies.sqlite"), sql], { timeout: 10_000 }, (error, stdout) => {
-          if (error) return resolve(null);
-          const parts = String(stdout).trim().split("\n")
-            .map((line) => {
-              const tab = line.indexOf("\t");
-              return tab === -1 ? null : line.slice(0, tab) + "=" + line.slice(tab + 1);
-            })
-            .filter((part) => part !== null && part.includes("="));
-          resolve(parts.length > 0 ? parts.join("; ") : null);
-        });
+      execFileSync("/usr/bin/sqlite3", [`file:${src}?mode=ro&immutable=1`, ".backup " + dest], {
+        timeout: 15_000,
+        killSignal: "SIGKILL",
       });
     } catch {
+      cleanup();
       return Promise.resolve(null);
-    } finally {
-      try { rmSync(scratch, { recursive: true, force: true }); } catch { /* best effort */ }
     }
+    const sql =
+      "SELECT name || char(9) || value FROM moz_cookies WHERE host LIKE '%opencode.ai' AND name = 'auth'";
+    return new Promise((resolve) => {
+      execFile(
+        "/usr/bin/sqlite3",
+        ["-readonly", "-noheader", dest, sql],
+        { timeout: 10_000 },
+        (error, stdout) => {
+          try {
+            if (error) return resolve(null);
+            const parts = String(stdout)
+              .trim()
+              .split("\n")
+              .map((line) => {
+                const tab = line.indexOf("\t");
+                return tab === -1 ? null : line.slice(0, tab) + "=" + line.slice(tab + 1);
+              })
+              .filter((part) => part !== null && part.includes("="));
+            resolve(parts.length > 0 ? parts.join("; ") : null);
+          } finally {
+            cleanup();
+          }
+        },
+      );
+    });
   };
 
   // Validate the cookie against the real `_server` RPC before saving.
@@ -698,68 +849,129 @@ export function apply(ctx, config) {
   const handleCookieExtract = async (_req, res) => {
     const found = await extractCookie();
     if (found === null) {
-      sendJson(res, 200, { ok: false, error: "no opencode.ai session cookie found in any Firefox profile" });
+      sendJson(res, 200, {
+        ok: false,
+        error: "no opencode.ai session cookie found in any Firefox profile",
+      });
       return;
     }
     if (found.stale) {
-      sendJson(res, 200, { ok: false, invalid: true, error: "firefox cookie is stale; sign in and retry" });
+      sendJson(res, 200, {
+        ok: false,
+        invalid: true,
+        error: "firefox cookie is stale; sign in and retry",
+      });
       return;
     }
     try {
       if (credentials !== undefined) await credentials.set("OPENCODE_SESSION_COOKIE", found.cookie);
       sendJson(res, 200, { ok: true, saved: true });
     } catch (error) {
-      sendJson(res, 200, { ok: false, error: "cookie valid but save failed: " + (error instanceof Error ? error.message : String(error)) });
+      sendJson(res, 200, {
+        ok: false,
+        error:
+          "cookie valid but save failed: " +
+          (error instanceof Error ? error.message : String(error)),
+      });
     }
   };
 
   // Open the browser (visible, detached) so the user can sign in.
   const handleCookieLogin = async (_req, res) => {
     try {
-      const child = spawn("firefox", ["--new-window", "https://opencode.ai"], { detached: true, stdio: "ignore" });
+      const child = spawn("firefox", ["--new-window", "https://opencode.ai"], {
+        detached: true,
+        stdio: "ignore",
+      });
       child.unref();
       sendJson(res, 200, { ok: true });
     } catch (error) {
       sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) });
     }
   };
-  ctx.webServer.register({ kind: "exact", path: "/subscriptions/meridian-quota", handler: handleQuota });
-  ctx.webServer.register({ kind: "exact", path: "/subscriptions/meridian-telemetry", handler: handleTelemetry });
-  ctx.webServer.register({ kind: "exact", path: "/subscriptions/opencode-balance", handler: handleBalance });
-  ctx.webServer.register({ kind: "exact", path: "/subscriptions/opencode-zen-balance", handler: handleOzBalance });
-  ctx.webServer.register({ kind: "exact", path: "/subscriptions/opencode-usage", handler: handleGoUsage });
-  ctx.webServer.register({ kind: "exact", path: "/subscriptions/deepseek-balance", handler: handleDsBalance });
-  ctx.webServer.register({ kind: "exact", path: "/subscriptions/deepseek-usage/amount", handler: handleDsUsageAmount });
-  ctx.webServer.register({ kind: "exact", path: "/subscriptions/deepseek-usage/cost", handler: handleDsUsageCost });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/meridian-quota",
+    handler: handleQuota,
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/meridian-telemetry",
+    handler: handleTelemetry,
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/opencode-balance",
+    handler: handleBalance,
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/opencode-zen-balance",
+    handler: handleOzBalance,
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/opencode-usage",
+    handler: handleGoUsage,
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/deepseek-balance",
+    handler: handleDsBalance,
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/deepseek-usage/amount",
+    handler: handleDsUsageAmount,
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/deepseek-usage/cost",
+    handler: handleDsUsageCost,
+  });
   // ── Command Code (api.commandcode.ai) balance + usage ─────────────────────
   const CMD_API_BASE = "https://api.commandcode.ai/alpha";
   const commandCodeOrgOnce = cachedOnce(async (key) => {
     const whoami = await commandCodeGet(key, CMD_API_BASE, "/whoami", null);
     const org = whoami !== null && typeof whoami === "object" ? whoami.org : null;
-    return org !== null && typeof org === "object" && typeof org.id === "string" && org.id.length > 0 ? org.id : null;
+    return org !== null &&
+      typeof org === "object" &&
+      typeof org.id === "string" &&
+      org.id.length > 0
+      ? org.id
+      : null;
   }, 30_000);
 
   const commandCodeCreditsOnce = cachedOnce(async (key) => {
     const orgId = await commandCodeOrgOnce(key);
-    return parseCommandCodeCredits(await commandCodeGet(key, CMD_API_BASE, "/billing/credits", orgId));
+    return parseCommandCodeCredits(
+      await commandCodeGet(key, CMD_API_BASE, "/billing/credits", orgId),
+    );
   }, 30_000);
 
   const commandCodeUsageOnce = cachedOnce(async (key) => {
     const orgId = await commandCodeOrgOnce(key);
     const sub = await commandCodeGet(key, CMD_API_BASE, "/billing/subscriptions", orgId);
-    const periodStart = sub !== null && typeof sub === "object" && typeof sub.currentPeriodStart === "string"
-      ? sub.currentPeriodStart
-      : null;
+    const periodStart =
+      sub !== null && typeof sub === "object" && typeof sub.currentPeriodStart === "string"
+        ? sub.currentPeriodStart
+        : null;
     let usage = {};
     if (periodStart !== null) {
-      usage = await commandCodeGet(key, CMD_API_BASE, `/usage/summary?since=${encodeURIComponent(periodStart)}`, null);
+      usage = await commandCodeGet(
+        key,
+        CMD_API_BASE,
+        `/usage/summary?since=${encodeURIComponent(periodStart)}`,
+        null,
+      );
     }
     return parseCommandCodeUsage(sub, usage);
   }, 30_000);
 
   /** Resolve the CMD_API_KEY the same way the DeepSeek routes do. */
   const resolveCommandCodeKey = async (req) => {
-    const authHeader = req.headers && typeof req.headers.authorization === "string" ? req.headers.authorization : "";
+    const authHeader =
+      req.headers && typeof req.headers.authorization === "string" ? req.headers.authorization : "";
     if (authHeader.startsWith("Bearer ")) return authHeader.slice(7).trim();
     return credentials === undefined ? null : (await credentials.resolve("CMD_API_KEY"))?.value;
   };
@@ -773,7 +985,10 @@ export function apply(ctx, config) {
       }
       sendJson(res, 200, { ok: true, ...(await commandCodeCreditsOnce(key)) });
     } catch (error) {
-      sendJson(res, 200, { ok: false, error: error instanceof Error ? error.message : String(error) });
+      sendJson(res, 200, {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   };
 
@@ -786,20 +1001,134 @@ export function apply(ctx, config) {
       }
       sendJson(res, 200, { ok: true, ...(await commandCodeUsageOnce(key)) });
     } catch (error) {
-      sendJson(res, 200, { ok: false, error: error instanceof Error ? error.message : String(error) });
+      sendJson(res, 200, {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   };
 
-  ctx.webServer.register({ kind: "exact", path: "/subscriptions/commandcode-credits", handler: handleCommandCodeCredits });
-  ctx.webServer.register({ kind: "exact", path: "/subscriptions/commandcode-usage", handler: handleCommandCodeUsage });
-  ctx.webServer.register({ kind: "exact", path: "/subscriptions/opencode-cookie/extract", handler: handleCookieExtract });
-  ctx.webServer.register({ kind: "exact", path: "/subscriptions/opencode-cookie/login", handler: handleCookieLogin });
-  ctx.webServer.register({ kind: "exact", path: "/subscriptions/deepseek-token/extract", handler: handleDeepSeekTokenExtract });
-  ctx.webServer.register({ kind: "exact", path: "/subscriptions/deepseek-token/login", handler: handleDeepSeekTokenLogin });
-// Expose plugin config to client half via web route (Cordis does not pass
-  // config to client halves without a Config export of their own).
-const handleConfig = (_req: unknown, res: unknown) => {
-    sendJson(res, 200, { ok: true, config: config ?? {} });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/commandcode-credits",
+    handler: handleCommandCodeCredits,
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/commandcode-usage",
+    handler: handleCommandCodeUsage,
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/opencode-cookie/extract",
+    handler: handleCookieExtract,
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/opencode-cookie/login",
+    handler: handleCookieLogin,
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/deepseek-token/extract",
+    handler: handleDeepSeekTokenExtract,
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/deepseek-token/login",
+    handler: handleDeepSeekTokenLogin,
+  });
+  // ── /subscriptions/config: the provider visibility map ──────────────────────
+  // GET returns the resolved `subscriptions` namespace (user layer over the
+  // composition base). PUT validates and writes through the same settings
+  // service installSettingsSection registered, so a toggle hot-applies.
+  const MAX_BODY_BYTES = 64 * 1024;
+
+  async function readBody(req: unknown): Promise<unknown> {
+    const chunks: Buffer[] = [];
+    for await (const chunk of req as AsyncIterable<Buffer>) {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      chunks.push(buffer);
+      if (Buffer.concat(chunks).byteLength > MAX_BODY_BYTES) {
+        throw new Error("request body too large");
+      }
+    }
+    const text = Buffer.concat(chunks).toString("utf8");
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error("body is not valid JSON");
+    }
+  }
+
+  function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+
+  function validateProviders(
+    value: unknown,
+  ): { ok: true; value: Record<string, boolean> } | { ok: false; error: string } {
+    if (!isPlainObject(value)) return { ok: false, error: "providers must be an object" };
+    const out: Record<string, boolean> = {};
+    for (const key of Object.keys(value)) {
+      if (typeof value[key] !== "boolean") {
+        return { ok: false, error: `providers.${key} must be a boolean` };
+      }
+      out[key] = value[key];
+    }
+    return { ok: true, value: out };
+  }
+
+  function canonicalConfig(raw: unknown): unknown {
+    const map = isPlainObject(raw) && isPlainObject(raw.providers) ? raw.providers : {};
+    return { providers: map };
+  }
+
+  const handleConfig = async (req: unknown, res: unknown) => {
+    const sendJsonRes = sendJson as (res: unknown, status: number, body: unknown) => void;
+    if ((req as { method?: string }).method === "GET") {
+      const settings = service<SettingsService>(ctx, "settings");
+      const raw = settings?.get(CONFIG_NS);
+      sendJsonRes(res, 200, { ok: true, config: canonicalConfig(raw) });
+      return;
+    }
+    if ((req as { method?: string }).method === "PUT") {
+      const settings = service<SettingsWriteService>(ctx, "settings");
+      if (settings === undefined) {
+        sendJsonRes(res, 503, { ok: false, error: "settings service unavailable" });
+        return;
+      }
+      let body: unknown;
+      try {
+        body = await readBody(req);
+      } catch (error) {
+        sendJsonRes(res, 400, {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return;
+      }
+      const rawProviders = isPlainObject(body) ? body.providers : undefined;
+      const validated = validateProviders(rawProviders);
+      if (validated.ok === false) {
+        sendJsonRes(res, 400, { ok: false, error: validated.error });
+        return;
+      }
+      try {
+        await settings.replace(CONFIG_NS, { providers: validated.value });
+      } catch (error) {
+        sendJsonRes(res, 400, {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return;
+      }
+      const after = settings.get(CONFIG_NS);
+      sendJsonRes(res, 200, { ok: true, config: canonicalConfig(after) });
+      return;
+    }
+    sendJsonRes(res, 405, { ok: false, error: "method not allowed" });
   };
+
   ctx.webServer.register({ kind: "exact", path: "/subscriptions/config", handler: handleConfig });
 }
