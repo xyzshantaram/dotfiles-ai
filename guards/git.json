@@ -31,6 +31,13 @@
     "checkout": "ask",
     "switch": "ask",
     "restore": "ask",
-    "apply": "ask"
+    "apply": "ask",
+    "push": "ask",
+    "commit": "ask",
+    "reset": "ask",
+    "merge": "ask",
+    "rebase": "ask",
+    "cherry-pick": "ask",
+    "clean": "ask"
   }
 }

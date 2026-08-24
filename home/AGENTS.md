@@ -11,9 +11,6 @@
   of a file.
 * If the user is vague about a request, ask questions until any potential ambiguity is
   resolved before beginning the implementation. A good plan is worth its weight in gold.
-* `rg` is recursive by default — `rg -r` is `--replace`, NOT recursion. To restrict a search
-  to one file or pattern, pass the path or a glob (`rg pattern path/`, `rg pattern -g '*.ts'`),
-  never `-r`. Every agent (main session and subagents) makes this mistake; do not.
 * When you dispatch a subagent whose brief needs a library, service, or harness API, verify the
   API shape YOURSELF first (read the `.d.ts`/source, or send `researcher` for it) and paste the
   exact facts into the brief — types, field names, signatures, return shapes, with citations.

@@ -1,0 +1,11 @@
+{
+  "commands": ["rg"],
+  "verdict": "allow",
+  "rewrites": [
+    {
+      "drop": ["-r", "--replace"],
+      "value": true,
+      "because": "rg recurses by default; -r/--replace is substitution, not recursion"
+    }
+  ]
+}

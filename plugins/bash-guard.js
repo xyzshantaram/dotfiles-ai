@@ -4542,13 +4542,45 @@ async function loadRules(ctx, dir) {
           subcommands[sub] = verdict;
         }
       }
+      let rewrites;
+      if (entry.rewrites !== void 0) {
+        if (!Array.isArray(entry.rewrites)) throw new Error("bad rewrites");
+        rewrites = [];
+        for (const r of entry.rewrites) {
+          if (typeof r !== "object" || r === null) throw new Error("bad rewrite");
+          if (!Array.isArray(r.drop) || r.drop.length === 0) throw new Error("bad rewrite drop");
+          for (const d of r.drop) {
+            if (typeof d !== "string" || d.length === 0) throw new Error("bad rewrite drop entry");
+          }
+          const cleanRewrite = { drop: r.drop.filter((d) => typeof d === "string" && d.length > 0) };
+          if (r.value !== void 0) {
+            if (typeof r.value !== "boolean") throw new Error("bad rewrite value");
+            cleanRewrite.value = r.value;
+          }
+          if (r.because !== void 0) {
+            if (typeof r.because !== "string") throw new Error("bad rewrite because");
+            cleanRewrite.because = r.because;
+          }
+          rewrites.push(cleanRewrite);
+        }
+      }
       for (const cmd of clean) {
-        rules.set(cmd, {
-          commands: entry.commands,
-          verdict: entry.verdict,
-          reason: entry.reason,
-          subcommands
-        });
+        if (!rewrites) {
+          rules.set(cmd, {
+            commands: entry.commands,
+            verdict: entry.verdict,
+            reason: entry.reason,
+            subcommands
+          });
+        } else {
+          rules.set(cmd, {
+            commands: entry.commands,
+            verdict: entry.verdict,
+            reason: entry.reason,
+            subcommands,
+            rewrites
+          });
+        }
       }
     } catch (error) {
       ctx.logger.warn(
@@ -4580,57 +4612,133 @@ function verdictFor(rule, ref) {
   const refined = sub !== void 0 ? rule.subcommands[sub] : void 0;
   return refined ?? rule.verdict;
 }
+async function evaluate(ctx, dir, command, depth) {
+  let script;
+  try {
+    script = parse(command);
+  } catch (error) {
+    return {
+      command,
+      decision: {
+        kind: "deny",
+        reason: `bash-guard: could not parse the command; refusing to run it unparsed. ${error instanceof Error ? error.message : String(error)}`
+      }
+    };
+  }
+  if (script.errors && script.errors.length > 0) {
+    const messages = script.errors.map((e) => e.message).join("; ");
+    return {
+      command,
+      decision: {
+        kind: "deny",
+        reason: `bash-guard: parse errors in command; refusing to run it unparsed. ${messages}`
+      }
+    };
+  }
+  const refs = extractAllCommandsFromAST(script, command);
+  const { commands } = expandWrapperCommands(refs);
+  const all = [...refs, ...commands];
+  const rules = await loadRules(ctx, dir);
+  const hits = all.map((ref) => {
+    const name2 = getBasename(ref);
+    const rule = rules.get(name2);
+    if (rule === void 0) return void 0;
+    return { name: name2, rule, ref, verdict: verdictFor(rule, ref) };
+  }).filter((h) => h !== void 0);
+  if (depth === 0 && hits.some((h) => h.rule.rewrites)) {
+    let rewritten = command;
+    let changed = false;
+    for (const hit of hits) {
+      if (!hit.rule.rewrites || hit.ref.source !== command) {
+        if (hit.rule.rewrites && hit.ref.source !== command) {
+          ctx.logger.debug(`bash-guard: skipping rewrite for wrapper-internal ref to ${hit.name}`);
+        }
+        continue;
+      }
+      const ranges = [];
+      for (const rw of hit.rule.rewrites) {
+        for (let i = 0; i < hit.ref.node.suffix.length; i++) {
+          const word = hit.ref.node.suffix[i];
+          for (const flag of rw.drop) {
+            if (word.text === flag) {
+              ranges.push([word.pos, word.end, rw.because]);
+              if (rw.value && i + 1 < hit.ref.node.suffix.length) {
+                const next = hit.ref.node.suffix[i + 1];
+                if (!next.text.startsWith("-")) {
+                  ranges.push([next.pos, next.end, void 0]);
+                }
+              }
+            } else if (word.text.startsWith(flag + "=")) {
+              ranges.push([word.pos, word.end, rw.because]);
+            }
+          }
+        }
+      }
+      if (ranges.length > 0) {
+        ranges.sort((a, b) => a[0] - b[0]);
+        let segment = "";
+        let lastEnd = 0;
+        const logBecauses = [];
+        for (const [start, end, because] of ranges) {
+          if (start < lastEnd) continue;
+          segment += command.slice(lastEnd, start);
+          lastEnd = end;
+          if (because && logBecauses.indexOf(because) === -1) {
+            logBecauses.push(because);
+          }
+        }
+        segment += command.slice(lastEnd);
+        rewritten = segment;
+        changed = true;
+        ctx.logger.debug(
+          `bash-guard: rewrite (${logBecauses.join("; ")}) ${command} -> ${rewritten}`
+        );
+      }
+    }
+    if (changed) {
+      if (depth < 5) {
+        return evaluate(ctx, dir, rewritten, depth + 1);
+      }
+      command = rewritten;
+    }
+  }
+  if (all.length === 0) {
+    return { command, decision: null };
+  }
+  if (hits.length === 0) {
+    return { command, decision: null };
+  }
+  const verdicts = hits.map((h) => h.verdict);
+  const overall = mostRestrictive(verdicts);
+  switch (overall) {
+    case "deny": {
+      const hit = hits.find((h) => h.verdict === "deny");
+      const reason = hit?.rule.reason ?? DEFAULT_DENY(hit?.name ?? "unknown");
+      return { command, decision: { kind: "deny", reason } };
+    }
+    case "ask": {
+      const hit = hits.find((h) => h.verdict === "ask");
+      return {
+        command,
+        decision: { kind: "ask", reason: hit?.rule.reason ?? DEFAULT_ASK(hit?.name ?? "unknown") }
+      };
+    }
+    case "allow":
+    case "none":
+    default:
+      return { command, decision: null };
+  }
+}
 function apply(ctx, config) {
   const dir = resolveHome(config.guardsDir ?? "$DSH_HOME/plugins/guards");
   ctx.on("tools/pre-execute", async (exec, next) => {
     if (exec.name !== "bash") return next();
     const command = exec.arguments?.command;
     if (typeof command !== "string" || command.trim().length === 0) return next();
-    let script;
-    try {
-      script = parse(command);
-    } catch (error) {
-      return {
-        kind: "deny",
-        reason: `bash-guard: could not parse the command; refusing to run it unparsed. ${error instanceof Error ? error.message : String(error)}`
-      };
-    }
-    if (script.errors && script.errors.length > 0) {
-      const messages = script.errors.map((e) => e.message).join("; ");
-      return {
-        kind: "deny",
-        reason: `bash-guard: parse errors in command; refusing to run it unparsed. ${messages}`
-      };
-    }
-    const refs = extractAllCommandsFromAST(script, command);
-    const { commands } = expandWrapperCommands(refs);
-    const all = [...refs, ...commands];
-    if (all.length === 0) return next();
-    const rules = await loadRules(ctx, dir);
-    const hits = all.map((ref) => {
-      const name2 = getBasename(ref);
-      const rule = rules.get(name2);
-      if (rule === void 0) return void 0;
-      return { name: name2, rule, verdict: verdictFor(rule, ref) };
-    }).filter((h) => h !== void 0);
-    if (hits.length === 0) return next();
-    const verdicts = hits.map((h) => h.verdict);
-    const overall = mostRestrictive(verdicts);
-    switch (overall) {
-      case "deny": {
-        const hit = hits.find((h) => h.verdict === "deny");
-        const reason = hit?.rule.reason ?? DEFAULT_DENY(hit?.name ?? "unknown");
-        return { kind: "deny", reason };
-      }
-      case "ask": {
-        const hit = hits.find((h) => h.verdict === "ask");
-        return { kind: "ask", reason: hit?.rule.reason ?? DEFAULT_ASK(hit?.name ?? "unknown") };
-      }
-      case "allow":
-      case "none":
-      default:
-        return next();
-    }
+    const result = await evaluate(ctx, dir, command, 0);
+    exec.arguments.command = result.command;
+    if (result.decision === null) return next();
+    return result.decision;
   });
 }
 export {
