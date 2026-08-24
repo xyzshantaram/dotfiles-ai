@@ -41,27 +41,82 @@ __export(client_exports, {
 });
 module.exports = __toCommonJS(client_exports);
 var import_react = __toESM(require("react"), 1);
+
+// plugins/design-system.ts
+var DESIGN_TOKENS = `:root {
+  --bg: #2c2c2e;
+  --surface: #232324;
+  --surface-hover: #303032;
+  --surface-active: #43454a;
+
+  --border: #3e3e3f;
+  --border-subtle: #303031;
+  --border-focus: #66676b;
+
+  --text-primary: #f9fafb;
+  --text-secondary: #adb2b8;
+  --text-muted: #88898a;
+
+  --radius-sm: 7px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-5: 40px;
+  --space-6: 48px;
+}`;
+var CONTROLS_CSS = `
+.setting-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--space-3);display:grid;grid-template-columns:28px 1fr;gap:20px;align-items:start}
+.setting-checkbox{width:28px;height:28px;flex:0 0 28px;border-radius:3px}
+.segmented-control{display:flex;padding:4px;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
+.segment{min-width:175px;height:48px;border:0;border-radius:10px;background:transparent;color:var(--text-secondary);font-size:20px}
+.segment[data-active="true"]{background:var(--surface-active);color:var(--text-primary);font-weight:600}
+.control-list{overflow:hidden;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
+.control-list-row{min-height:64px;padding:0 20px;display:flex;align-items:center;gap:12px}
+.control-list-row + .control-list-row{border-top:1px solid var(--border-subtle)}
+.pill{height:36px;padding-inline:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--text-secondary);font-size:16px}
+.pill[data-active="true"]{background:var(--surface-active);color:var(--text-primary)}
+.icon-button{width:40px;height:40px;display:inline-grid;place-items:center;border:0;border-radius:8px;background:transparent;color:var(--text-secondary);font-size:28px}
+.icon-button:hover{background:var(--surface-hover);color:var(--text-primary)}
+.mode-switch{display:inline-flex;padding:4px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface)}
+.mode-switch>button{height:44px;padding-inline:32px;border:0;border-radius:9px;background:transparent;color:var(--text-secondary);font-size:18px}
+.mode-switch>button[data-active="true"]{background:var(--surface-active);color:var(--text-primary);font-weight:600}
+.text-input{height:56px;width:100%;padding-inline:16px;border:1px solid var(--border);border-radius:14px;background:var(--surface);color:var(--text-primary);font-size:18px;outline:none}
+.text-input::placeholder{color:var(--text-muted)}
+.text-input:focus{border-color:var(--border-focus)}
+.primary-button{height:56px;padding-inline:20px;border:0;border-radius:28px;background:#adb2b8;color:#232324;font-size:18px;font-weight:600}
+.primary-button:disabled{opacity:.45;cursor:not-allowed}
+.checkbox-field{display:flex;align-items:center;gap:12px;color:var(--text-secondary);font-size:18px}
+`.trim();
+var mergeCss = (...parts) => parts.filter(Boolean).join("\n");
+
+// plugins/session-archive/src/client.ts
 var PLUGIN_NAME = "session-archive";
 var STYLE_TAG_ID = "session-archive/settings.css";
-var CSS_TEXT = [
-  ".sarch-root{box-sizing:border-box;display:flex;flex-direction:column;gap:14px;padding:6px 2px;color:var(--dsw-alias-label-primary)}",
-  ".sarch-head{display:flex;align-items:center;justify-content:space-between;gap:8px}",
-  ".sarch-title{font-size:16px;font-weight:600;margin:0}",
-  ".sarch-refresh{cursor:pointer;border:none;background:none;padding:0;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:16px}",
+var CSS_TEXT = mergeCss(DESIGN_TOKENS, CONTROLS_CSS, [
+  ".sarch-root{box-sizing:border-box;display:flex;flex-direction:column;gap:12px;padding:0;color:var(--dsw-alias-label-primary)}",
+  ".sarch-head{display:flex;align-items:center;justify-content:space-between;gap:12px}",
+  ".sarch-title{font-size:24px;font-weight:700;margin:0;line-height:1.2;color:var(--dsw-alias-label-primary)}",
+  ".sarch-refresh{cursor:pointer;border:none;background:none;padding:0;color:var(--dsw-alias-label-secondary);font-size:15px;line-height:20px}",
   ".sarch-refresh:hover{color:var(--dsw-alias-label-primary)}",
-  ".sarch-section{display:flex;flex-direction:column;gap:10px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;padding:12px 14px}",
-  ".sarch-rows{display:flex;flex-direction:column;gap:8px}",
-  ".sarch-row{display:flex;align-items:center;gap:10px;min-width:0}",
+  ".sarch-section{display:flex;flex-direction:column;gap:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:20px;padding:20px;background:var(--dsw-alias-bg-tertiary)}",
+  ".sarch-rows{display:flex;flex-direction:column;gap:12px}",
+  ".sarch-row{display:flex;align-items:center;gap:12px;min-width:0}",
   ".sarch-row-main{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}",
-  ".sarch-row-id{font-size:12px;line-height:16px;font-weight:600;color:var(--dsw-alias-label-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
-  ".sarch-row-meta{display:flex;align-items:center;gap:6px;min-width:0}",
-  ".sarch-row-meta>span{font-size:10px;line-height:14px;color:var(--dsw-alias-label-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
-  ".sarch-live{font-size:11px;line-height:15px;color:var(--dsw-alias-state-success-primary);font-weight:600;flex:none}",
-  ".sarch-btn{color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:999px;font-size:12px;line-height:20px;padding:2px 10px;cursor:pointer;flex:none}",
+  ".sarch-row-id{font-size:16px;line-height:22px;font-weight:600;color:var(--dsw-alias-label-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
+  ".sarch-row-meta{display:flex;align-items:center;gap:12px;min-width:0}",
+  ".sarch-row-meta>span{font-size:14px;line-height:22px;color:var(--dsw-alias-label-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
+  ".sarch-live{font-size:15px;line-height:20px;color:var(--dsw-alias-state-success-primary);font-weight:600;flex:none}",
+  ".sarch-btn{box-sizing:border-box;width:40px;height:40px;display:inline-grid;place-items:center;flex:none;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);font-size:28px;padding:0;cursor:pointer}",
+  ".sarch-btn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}",
   ".sarch-btn:disabled{opacity:.5;cursor:default}",
-  ".sarch-empty{font-size:12px;line-height:16px;color:var(--dsw-alias-label-secondary);font-style:italic}",
-  ".sarch-err{font-size:12px;line-height:16px;color:var(--dsw-alias-state-error-primary)}"
-].join("");
+  ".sarch-empty{font-size:14px;line-height:22px;color:var(--dsw-alias-label-secondary);font-style:italic}",
+  ".sarch-err{font-size:15px;line-height:22px;color:var(--dsw-alias-state-error-primary)}"
+].join(""));
 function fetchJson(url) {
   return fetch(url, { cache: "no-store" }).then(function(res) {
     return res.json().catch(function() {
@@ -163,13 +218,15 @@ function makePanel() {
           {
             className: "sarch-btn",
             disabled: busy === session.id,
+            title: "Delete archived session",
+            "aria-label": "Delete archived session",
             onClick: /* @__PURE__ */ (function(id) {
               return function() {
                 remove(id);
               };
             })(session.id)
           },
-          busy === session.id ? "Deleting\u2026" : "Delete"
+          busy === session.id ? "\u2026" : "\xD7"
         );
         var label = session.title ? session.title : shortId(session.id);
         rows.push(
