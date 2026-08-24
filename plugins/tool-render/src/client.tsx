@@ -49,6 +49,7 @@
 // carries only the languages that read calls can actually produce.
 import hljs from "highlight.js/lib/core";
 import { DESIGN_TOKENS, CONTROLS_CSS, mergeCss } from "../../design-system";
+import localCss from "./client.module.css";
 import jsGrammar from "highlight.js/lib/languages/javascript";
 import tsGrammar from "highlight.js/lib/languages/typescript";
 import jsonGrammar from "highlight.js/lib/languages/json";
@@ -137,10 +138,9 @@ var EXTENSION_LANGUAGE = {
 };
 
 // ---- Platform modules: resolved by the shell loader seed at runtime. ----
-import React from "react";
+import react from "react";
 import * as primitives from "@deepseek-ai/dsh-client-ui-primitives";
-var createElement = React.createElement;
-var useState = React.useState;
+var useState = react.useState;
 var StateDot = primitives.StateDot;
 var IconBrowseOutline16 = primitives.IconBrowseOutline16;
 var IconEditOutline16 = primitives.IconEditOutline16;
@@ -177,59 +177,7 @@ var HLJS_THEME_CSS = [
   ".hljs-deletion{color:#ffdcd7;background-color:#67060c}",
 ].join("");
 
-var CSS_TEXT = mergeCss(DESIGN_TOKENS, CONTROLS_CSS, [
-  ".tool-render-row{align-items:center;min-width:0;height:24px;display:flex;position:relative;overflow:hidden}",
-  ".tool-render-row[data-expandable]{cursor:pointer}",
-  ".tool-render-leading{width:16px;height:16px;color:var(--dsw-alias-label-tertiary);flex:none;justify-content:center;align-items:center;margin-right:6px;display:inline-flex}",
-  ".tool-render-chevron{color:var(--dsw-alias-label-secondary)}",
-  ".tool-render-title{color:var(--dsw-alias-label-secondary);flex:none;font-size:14px;line-height:24px}",
-  ".tool-render-sep{background:var(--dsw-alias-label-caption);border-radius:1px;flex:none;width:2px;height:2px;margin:0 8px}",
-  ".tool-render-summary{text-overflow:ellipsis;white-space:nowrap;min-width:0;color:var(--dsw-alias-label-tertiary);flex:auto;font-size:14px;line-height:24px;overflow:hidden}",
-  ".tool-render-summary[tool-render-error]{color:var(--dsw-alias-state-error-primary);font-weight:500}",
-  ".tool-render-path{color:var(--dsw-alias-label-tertiary);cursor:pointer;min-width:0;max-width:100%;display:inline-block;vertical-align:bottom;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;line-height:24px}",
-
-  ".tool-render-path:hover{color:var(--dsw-alias-label-primary);text-decoration:underline}",
-  ".tool-render-body{flex-direction:column;display:flex}",
-  ".tool-render-io{flex-direction:column;display:flex}",
-  ".tool-render-command{font-family:var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-tertiary);margin:4px 0 0 4px;padding:2px 0;font-size:13px;line-height:20px}",
-  ".tool-render-command code.hljs{background:transparent;padding:0;font-family:inherit;font-size:inherit;line-height:inherit;white-space:inherit}",
-  ".tool-render-output{box-sizing:border-box;background:var(--dsw-alias-markdown-code-block);font-family:var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-primary);border-radius:12px;margin:4px 0 4px 4px;padding:10px 13px;font-size:13px;line-height:22px;max-height:280px;overflow-y:auto}",
-  ".tool-render-output[tool-render-error]{color:var(--dsw-alias-state-error-primary);border-color:rgba(255,85,85,.45);background:rgba(255,85,85,.08);font-weight:500}",
-  ".tool-render-row[data-state=error]{background:rgba(255,85,85,.07);box-shadow:inset 3px 0 0 var(--dsw-alias-state-error-primary);padding-left:8px}",
-  ".tool-render-row[data-state=error] .tool-render-leading{transform:scale(1.3)}",
-  ".tool-render-row[data-state=error] .tool-render-title{color:var(--dsw-alias-state-error-primary);font-weight:500}",
-  ".tool-render-code{box-sizing:border-box;background:var(--dsw-alias-markdown-code-block);font-family:var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-primary);border-radius:12px;margin:4px 0 4px 4px;padding:10px 13px;font-size:13px;line-height:22px;max-height:400px;overflow-y:auto}",
-  ".tool-render-inspect{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-secondary);cursor:pointer;opacity:0;border-radius:7px;align-self:flex-start;align-items:center;gap:4px;margin:4px 0 2px 4px;padding:2px 6px;font-size:11px;line-height:16px;transition:opacity .1s;display:inline-flex}",
-  ".tool-render-card:hover .tool-render-inspect,.tool-render-inspect:focus-visible{opacity:1}",
-  ".tool-render-inspect:hover{background:var(--dsw-alias-interactive-bg-hover-solid);color:var(--dsw-alias-label-primary)}",
-  ".tool-render-diff-fallback{box-sizing:border-box;background:var(--dsw-alias-markdown-code-block);font-family:var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-primary);border-radius:12px;margin:4px 0 4px 4px;padding:10px 13px;font-size:13px;line-height:22px;max-height:400px;overflow-y:auto}",
-  ".tool-render-fallback-note{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px;margin-bottom:6px}",
-  ".tool-render-write{flex-direction:column;display:flex}",
-  ".tool-render-write-diff{box-sizing:border-box;background:var(--dsw-alias-markdown-code-block);font-family:var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-primary);border-radius:12px;margin:4px 0 4px 4px;padding:10px 13px;font-size:13px;line-height:22px;max-height:400px;overflow-y:auto}",
-  ".tool-render-line-same{color:var(--dsw-alias-label-primary)}",
-  ".tool-render-diff-row.tool-render-line-del,.tool-render-diff-cell.tool-render-line-del{background:rgba(255,166,87,.16)}",
-  ".tool-render-diff-row.tool-render-line-add,.tool-render-diff-cell.tool-render-line-add{background:rgba(125,180,255,.16)}",
-  ".tool-render-diff-marker{flex:none;width:2ch;text-align:center;align-self:flex-start;user-select:none;color:var(--dsw-alias-label-tertiary)}",
-  ".tool-render-diff-marker-del{color:#ffb86c}",
-  ".tool-render-diff-marker-add{color:#7db4ff}",
-  ".tool-render-write-note{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px;margin-bottom:6px}",
-  ".tool-render-code-row,.tool-render-diff-row{display:flex;align-items:flex-start;min-width:0}",
-  ".tool-render-diff-pair{display:flex;align-items:stretch;min-width:0}",
-  ".tool-render-diff-cell{flex:1 1 0;min-width:0;display:flex;align-items:flex-start}",
-  ".tool-render-diff-cell + .tool-render-diff-cell{border-left:1px solid var(--dsw-alias-border-l2)}",
-  ".tool-render-gutter{flex:none;align-self:flex-start;padding-right:12px;text-align:right;color:var(--dsw-alias-label-tertiary);user-select:none;font-family:var(--ds-font-family-code);font-size:13px;line-height:22px}",
-  ".tool-render-line-cell{flex:auto;min-width:0;display:block;font-family:var(--ds-font-family-code);font-size:13px;line-height:22px;white-space:pre-wrap;word-break:break-word}",
-  ".tool-render-line-cell.hljs{background:transparent;padding:0;font-family:inherit;font-size:inherit;line-height:inherit;white-space:inherit}",
-  ".tool-render-diff-path{color:var(--dsw-alias-label-secondary);font-family:var(--ds-font-family-code);font-size:13px;line-height:22px;border-bottom:1px solid var(--dsw-alias-border-l2);padding-bottom:4px;margin-bottom:6px}",
-  ".tool-render-diff-sep{display:flex;align-items:center;gap:10px;color:var(--dsw-alias-label-caption);font-family:var(--ds-font-family-code);font-size:12px;line-height:18px;margin:8px 0}",
-  ".tool-render-diff-sep::before,.tool-render-diff-sep::after{content:'';flex:1;height:1px;background:var(--dsw-alias-border-l2)}",
-  ".tool-render-card{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-layer-1);padding:5px 8px}",
-  ".tool-render-card:hover{border-color:var(--dsw-alias-border-l3)}",
-  ".tool-render-title{font-weight:500}",
-  ".tool-render-summary,.tool-render-path{font-size:13px}",
-  ".tool-render-output,.tool-render-code,.tool-render-write-diff,.tool-render-diff-fallback{border:1px solid var(--dsw-alias-border-l1)}",
-  ".tool-render-row:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}",
-].join(""));
+var CSS_TEXT = mergeCss(DESIGN_TOKENS, CONTROLS_CSS, [localCss]);
 if (
   typeof document !== "undefined" &&
   document.querySelector("style[data-plugin-css=" + JSON.stringify(STYLE_TAG_ID) + "]") === null
@@ -237,7 +185,7 @@ if (
   var tag = document.createElement("style");
   tag.dataset.plugin = PLUGIN_NAME;
   tag.dataset.pluginCss = STYLE_TAG_ID;
-  tag.textContent = mergeCss(DESIGN_TOKENS, CONTROLS_CSS, HLJS_THEME_CSS, CSS_TEXT);
+  tag.textContent = mergeCss(CSS_TEXT, HLJS_THEME_CSS);
   document.head.appendChild(tag);
 }
 
@@ -590,89 +538,85 @@ function toolRenderRow(options) {
   var open = options.expanded === true && interactive;
   var leading;
   if (open) {
-    leading = createElement(IconChevronDownOutline14, { className: "tool-render-chevron" });
+    leading = <IconChevronDownOutline14 className="tool-render-chevron" />;
   } else if (options.state === "error") {
-    leading = createElement(StateDot, { state: "error" });
+    leading = <StateDot state="error" />;
   } else if (options.state === "stopped") {
-    leading = createElement(StateDot, { state: "warning" });
+    leading = <StateDot state="warning" />;
   } else {
     leading = options.icon;
   }
   var summary;
   if (options.path !== undefined && options.path !== null && options.onOpenFile !== undefined) {
-    summary = createElement(
-      "span",
-      {
-        className: "tool-render-path",
-        role: "link",
-        tabIndex: 0,
-        title: options.path,
-        onClick: function (event) {
+    summary = (
+      <span
+        className="tool-render-path"
+        role="link"
+        tabIndex={0}
+        title={options.path}
+        onClick={function (event) {
           event.stopPropagation();
           options.onOpenFile(options.path);
-        },
-        onKeyDown: function (event) {
+        }}
+        onKeyDown={function (event) {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
             event.stopPropagation();
             options.onOpenFile(options.path);
           }
-        },
-      },
-      options.summary,
+        }}
+      >
+        {options.summary}
+      </span>
     );
   } else {
-    summary = createElement(
-      "span",
-      {
-        className: "tool-render-summary",
-        "tool-render-error": options.errorSummary !== undefined || undefined,
-      },
-      options.errorSummary !== undefined ? options.errorSummary : options.summary,
+    summary = (
+      <span
+        className="tool-render-summary"
+        tool-render-error={options.errorSummary !== undefined || undefined}
+      >
+        {options.errorSummary !== undefined ? options.errorSummary : options.summary}
+      </span>
     );
   }
-  return createElement(
-    "div",
-    { className: "tool-render-card" },
-    createElement(
-      "div",
-      {
-        className: "tool-render-row",
-        "data-state": options.state,
-        "data-expandable": interactive || undefined,
-        role: interactive ? "button" : undefined,
-        tabIndex: interactive ? 0 : undefined,
-        "aria-expanded": interactive ? open : undefined,
-        onClick: interactive ? options.onToggle : undefined,
-        onKeyDown: interactive
-          ? function (event) {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                options.onToggle();
+  return (
+    <div className="tool-render-card">
+      <div
+        className="tool-render-row"
+        data-state={options.state}
+        data-expandable={interactive || undefined}
+        role={interactive ? "button" : undefined}
+        tabIndex={interactive ? 0 : undefined}
+        aria-expanded={interactive ? open : undefined}
+        onClick={interactive ? options.onToggle : undefined}
+        onKeyDown={
+          interactive
+            ? function (event) {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  options.onToggle();
+                }
               }
-            }
-          : undefined,
-      },
-      createElement("span", { className: "tool-render-leading" }, leading),
-      createElement("span", { className: "tool-render-title" }, options.title),
-      createElement("span", { className: "tool-render-sep", "aria-hidden": true }),
-      summary,
-    ),
-    open === true || (options.state === "error" && options.body !== null)
-      ? createElement(
-          "div",
-          { className: "tool-render-body" },
-          options.body,
-          options.inspect !== undefined
-            ? createElement(
-                "button",
-                { type: "button", className: "tool-render-inspect", onClick: options.inspect },
-                createElement(IconInspectOutline12, {}),
-                " Inspect",
-              )
-            : null,
-        )
-      : null,
+            : undefined
+        }
+      >
+        <span className="tool-render-leading">{leading}</span>
+        <span className="tool-render-title">{options.title}</span>
+        <span className="tool-render-sep" aria-hidden={true} />
+        {summary}
+      </div>
+      {open === true || (options.state === "error" && options.body !== null) ? (
+        <div className="tool-render-body">
+          {options.body}
+          {options.inspect !== undefined ? (
+            <button type="button" className="tool-render-inspect" onClick={options.inspect}>
+              <IconInspectOutline12 />
+              {" Inspect"}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -696,19 +640,19 @@ function ReadRow(props) {
   var body = null;
   if (output !== null && output !== "") {
     if (state === "error") {
-      body = createElement(
-        "pre",
-        { className: "tool-render-output", "tool-render-error": true },
-        output,
+      body = (
+        <pre className="tool-render-output" tool-render-error={true}>
+          {output}
+        </pre>
       );
     } else {
       var rows = numberedReadRows(output, readStartLine(args, output));
       var language = languageFor(path !== undefined ? path : "");
-      body = createElement("div", { className: "tool-render-code" }, readLineRows(rows, language));
+      body = <div className="tool-render-code">{readLineRows(rows, language)}</div>;
     }
   }
   return toolRenderRow({
-    icon: createElement(IconBrowseOutline16, { size: 14 }),
+    icon: <IconBrowseOutline16 size={14} />,
     title: "Read",
     summary: summary,
     path: path,
@@ -748,31 +692,27 @@ function BashRow(props) {
     if (command !== undefined) {
       var commandHtml = highlightCode(command, "bash");
       inner.push(
-        createElement(
-          "div",
-          { className: "tool-render-command" },
-          "$ ",
-          createElement("code", {
-            className: "hljs",
-            "data-highlighted": "yes",
-            dangerouslySetInnerHTML: { __html: commandHtml },
-          }),
-        ),
+        <div className="tool-render-command">
+          {"$ "}
+          <code
+            className="hljs"
+            data-highlighted="yes"
+            dangerouslySetInnerHTML={{ __html: commandHtml }}
+          />
+        </div>,
       );
     }
     if (output !== null && output !== "") {
       inner.push(
-        createElement(
-          "pre",
-          { className: "tool-render-output", "tool-render-error": state === "error" || undefined },
-          stripAnsi(output),
-        ),
+        <pre className="tool-render-output" tool-render-error={state === "error" || undefined}>
+          {stripAnsi(output)}
+        </pre>,
       );
     }
-    body = createElement("div", { className: "tool-render-io" }, inner);
+    body = <div className="tool-render-io">{inner}</div>;
   }
   return toolRenderRow({
-    icon: createElement(IconApiOutline14, { size: 14 }),
+    icon: <IconApiOutline14 size={14} />,
     title: "Bash",
     summary: summary,
     state: state,
@@ -1091,11 +1031,9 @@ function diffFallbackBody(diffs, language) {
     }
   }
   var children = [
-    createElement(
-      "div",
-      { className: "tool-render-fallback-note" },
-      onlyDels ? "After text unavailable" : "Before text unavailable",
-    ),
+    <div className="tool-render-fallback-note">
+      {onlyDels ? "After text unavailable" : "Before text unavailable"}
+    </div>,
   ];
   var lines = [];
   var numbers = [];
@@ -1118,7 +1056,7 @@ function diffFallbackBody(diffs, language) {
   for (var i = 0; i < lines.length; i++) {
     children.push(diffLineRow(onlyDels ? "del" : "add", lines[i], numbers[i], width, language));
   }
-  return createElement("div", { className: "tool-render-diff-fallback" }, children);
+  return <div className="tool-render-diff-fallback">{children}</div>;
 }
 
 // ---- Effective cwd for diff reconstruction. ----
@@ -1165,7 +1103,7 @@ function makeEditRow(toolTitle) {
     var block = props.block;
     if (block === null || typeof block !== "object") {
       return toolRenderRow({
-        icon: createElement(IconEditOutline16, { size: 14 }),
+        icon: <IconEditOutline16 size={14} />,
         title: toolTitle,
         summary: toolTitle,
         state: "ok",
@@ -1211,14 +1149,14 @@ function makeEditRow(toolTitle) {
         body = editDiffBody(diffs);
       }
     } else if (output !== null && output !== "") {
-      body = createElement(
-        "pre",
-        { className: "tool-render-output", "tool-render-error": state === "error" || undefined },
-        output,
+      body = (
+        <pre className="tool-render-output" tool-render-error={state === "error" || undefined}>
+          {output}
+        </pre>
       );
     }
     return toolRenderRow({
-      icon: createElement(IconEditOutline16, { size: 14 }),
+      icon: <IconEditOutline16 size={14} />,
       title: toolTitle,
       summary: summary,
       path: summaryPath,
@@ -1256,14 +1194,10 @@ function gutterWidthCh(numbers) {
 }
 
 function gutterSpan(number, width) {
-  return createElement(
-    "span",
-    {
-      className: "tool-render-gutter",
-      "aria-hidden": true,
-      style: { width: width },
-    },
-    number === null || number === undefined ? "" : String(number),
+  return (
+    <span className="tool-render-gutter" aria-hidden={true} style={{ width: width }}>
+      {number === null || number === undefined ? "" : String(number)}
+    </span>
   );
 }
 
@@ -1274,34 +1208,30 @@ function readLineRows(rows, language) {
   var out = [];
   for (var i = 0; i < rows.length; i++) {
     out.push(
-      createElement(
-        "div",
-        { className: "tool-render-code-row" },
-        gutterSpan(rows[i].number, width),
-        createElement("code", {
-          className: "tool-render-line-cell hljs",
-          "data-highlighted": "yes",
-          dangerouslySetInnerHTML: { __html: highlightCode(rows[i].text, language) },
-        }),
-      ),
+      <div className="tool-render-code-row">
+        {gutterSpan(rows[i].number, width)}
+        <code
+          className="tool-render-line-cell hljs"
+          data-highlighted="yes"
+          dangerouslySetInnerHTML={{ __html: highlightCode(rows[i].text, language) }}
+        />
+      </div>,
     );
   }
   return out;
 }
 
 function diffLineRow(type, text, number, width, language) {
-  return createElement(
-    "div",
-    {
-      className: "tool-render-diff-row" + (type === "same" ? "" : " tool-render-line-" + type),
-    },
-    diffMarker(type === "same" ? null : type),
-    gutterSpan(number, width),
-    createElement("code", {
-      className: "tool-render-line-cell hljs",
-      "data-highlighted": "yes",
-      dangerouslySetInnerHTML: { __html: highlightCode(text, language) },
-    }),
+  return (
+    <div className={"tool-render-diff-row" + (type === "same" ? "" : " tool-render-line-" + type)}>
+      {diffMarker(type === "same" ? null : type)}
+      {gutterSpan(number, width)}
+      <code
+        className="tool-render-line-cell hljs"
+        data-highlighted="yes"
+        dangerouslySetInnerHTML={{ __html: highlightCode(text, language) }}
+      />
+    </div>
   );
 }
 
@@ -1347,53 +1277,57 @@ function alignDiffOps(ops, startOld) {
 }
 
 function diffMarker(kind) {
-  return createElement(
-    "span",
-    {
-      className:
-        "tool-render-diff-marker" + (kind === null ? "" : " tool-render-diff-marker-" + kind),
-      "aria-hidden": true,
-    },
-    kind === "del" ? "-" : kind === "add" ? "+" : "",
+  return (
+    <span
+      className={
+        "tool-render-diff-marker" + (kind === null ? "" : " tool-render-diff-marker-" + kind)
+      }
+      aria-hidden={true}
+    >
+      {kind === "del" ? "-" : kind === "add" ? "+" : ""}
+    </span>
   );
 }
 
 function diffCell(kind, text, number, width, language) {
-  return createElement(
-    "div",
-    {
-      className: "tool-render-diff-cell" + (kind === "same" ? "" : " tool-render-line-" + kind),
-    },
-    diffMarker(kind === "same" ? null : kind),
-    gutterSpan(number, width),
-    createElement("code", {
-      className: "tool-render-line-cell hljs",
-      "data-highlighted": "yes",
-      dangerouslySetInnerHTML: { __html: highlightCode(text, language) },
-    }),
+  return (
+    <div className={"tool-render-diff-cell" + (kind === "same" ? "" : " tool-render-line-" + kind)}>
+      {diffMarker(kind === "same" ? null : kind)}
+      {gutterSpan(number, width)}
+      <code
+        className="tool-render-line-cell hljs"
+        data-highlighted="yes"
+        dangerouslySetInnerHTML={{ __html: highlightCode(text, language) }}
+      />
+    </div>
   );
 }
 
 function diffPairRow(row, leftWidth, rightWidth, language) {
   var left =
-    row.left === null
-      ? createElement(
-          "div",
-          { className: "tool-render-diff-cell" },
-          diffMarker(null),
-          gutterSpan(null, leftWidth),
-        )
-      : diffCell(row.left.kind, row.left.text, row.oldNum, leftWidth, language);
+    row.left === null ? (
+      <div className="tool-render-diff-cell">
+        {diffMarker(null)}
+        {gutterSpan(null, leftWidth)}
+      </div>
+    ) : (
+      diffCell(row.left.kind, row.left.text, row.oldNum, leftWidth, language)
+    );
   var right =
-    row.right === null
-      ? createElement(
-          "div",
-          { className: "tool-render-diff-cell" },
-          diffMarker(null),
-          gutterSpan(null, rightWidth),
-        )
-      : diffCell(row.right.kind, row.right.text, row.newNum, rightWidth, language);
-  return createElement("div", { className: "tool-render-diff-pair" }, left, right);
+    row.right === null ? (
+      <div className="tool-render-diff-cell">
+        {diffMarker(null)}
+        {gutterSpan(null, rightWidth)}
+      </div>
+    ) : (
+      diffCell(row.right.kind, row.right.text, row.newNum, rightWidth, language)
+    );
+  return (
+    <div className="tool-render-diff-pair">
+      {left}
+      {right}
+    </div>
+  );
 }
 
 function editDiffBody(diffs) {
@@ -1404,11 +1338,13 @@ function editDiffBody(diffs) {
     var filePath = typeof file.path === "string" ? file.path : "";
     var language = languageFor(filePath);
     if (filePath !== previousPath) {
-      children.push(createElement("div", { className: "tool-render-diff-path" }, filePath));
+      children.push(<div className="tool-render-diff-path">{filePath}</div>);
       previousPath = filePath;
     } else {
       children.push(
-        createElement("div", { className: "tool-render-diff-sep", "aria-hidden": true }, "⋯"),
+        <div className="tool-render-diff-sep" aria-hidden={true}>
+          {"⋯"}
+        </div>,
       );
     }
     var oldText = deIndent(typeof file.oldText === "string" ? file.oldText : "");
@@ -1456,7 +1392,7 @@ function editDiffBody(diffs) {
       }
     }
   }
-  return createElement("div", { className: "tool-render-write-diff" }, children);
+  return <div className="tool-render-write-diff">{children}</div>;
 }
 
 // ---- Write row: before/after line diff with syntax highlighting. ----
@@ -1468,19 +1404,11 @@ function editDiffBody(diffs) {
 function writeBody(path, before, newText) {
   var language = languageFor(path !== undefined ? path : "");
   if (before === null || before === "") {
-    return createElement(
-      "div",
-      { className: "tool-render-write" },
-      createElement(
-        "div",
-        { className: "tool-render-write-note" },
-        "No earlier version on record; new content below",
-      ),
-      createElement(
-        "div",
-        { className: "tool-render-code" },
-        readLineRows(numberedReadRows(newText, 1), language),
-      ),
+    return (
+      <div className="tool-render-write">
+        <div className="tool-render-write-note">{"No earlier version on record; new content below"}</div>
+        <div className="tool-render-code">{readLineRows(numberedReadRows(newText, 1), language)}</div>
+      </div>
     );
   }
   var cleaned = cleanReadTextForDiff(before);
@@ -1522,7 +1450,7 @@ function writeBody(path, before, newText) {
       lines.push(diffLineRow(type, parts[i], numbers[i], width, language));
     }
   }
-  return createElement("div", { className: "tool-render-write-diff" }, lines);
+  return <div className="tool-render-write-diff">{lines}</div>;
 }
 
 function WriteRow(props) {
@@ -1554,14 +1482,14 @@ function WriteRow(props) {
   if (done && state === "ok") {
     body = writeBody(path, before, newText);
   } else if (output !== null && output !== "") {
-    body = createElement(
-      "pre",
-      { className: "tool-render-output", "tool-render-error": state === "error" || undefined },
-      output,
+    body = (
+      <pre className="tool-render-output" tool-render-error={state === "error" || undefined}>
+        {output}
+      </pre>
     );
   }
   return toolRenderRow({
-    icon: createElement(IconEditOutline16, { size: 14 }),
+    icon: <IconEditOutline16 size={14} />,
     title: "Write",
     summary: summary,
     path: path,

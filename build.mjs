@@ -1,11 +1,25 @@
 import { build } from "esbuild";
 import { readFile, writeFile, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 // The personal bundle's host-plane plugins, each bundled so the plugin is
 // self-contained. The dsh packages stay external: the loader resolves them
 // from the host base (the profile's node_modules) at runtime.
+const cssTextPlugin = {
+  name: "css-text",
+  setup(build) {
+    build.onResolve({ filter: /\.css$/ }, (args) => ({
+      path: resolve(args.resolveDir, args.path),
+      namespace: "css-text",
+    }));
+    build.onLoad({ filter: /.*/, namespace: "css-text" }, async (args) => {
+      const text = await readFile(args.path, "utf8");
+      return { contents: `export default ${JSON.stringify(text)};`, loader: "js" };
+    });
+  },
+};
+
 const here = dirname(fileURLToPath(import.meta.url));
 
 const entries = [
@@ -44,7 +58,11 @@ async function wrapClientBundle(entryPath, outPath, id) {
     platform: "browser",
     format: "cjs",
     target: "es2022",
-    external: ["react", "react/jsx-runtime", "react-dom/client", "@deepseek-ai/*"],
+    external: ["react", "react-dom/client", "@deepseek-ai/*"],
+    jsx: "transform",
+    jsxFactory: "react.createElement",
+    jsxFragment: "react.Fragment",
+    plugins: [cssTextPlugin],
     outfile: bundlePath,
     logLevel: "info",
   });
@@ -82,7 +100,7 @@ await build({
 });
 
 await wrapClientBundle(
-  join(here, "plugins/approval-comment/src/client.ts"),
+  join(here, "plugins/approval-comment/src/client.tsx"),
   join(here, "plugins/approval-comment/lib/client.js"),
   "approval-comment",
 );
@@ -102,7 +120,7 @@ await build({
   logLevel: "info",
 });
 await wrapClientBundle(
-  join(here, "plugins/subscriptions/src/client.ts"),
+  join(here, "plugins/subscriptions/src/client.tsx"),
   join(here, "plugins/subscriptions/lib/client.js"),
   "subscriptions",
 );
@@ -119,7 +137,7 @@ await build({
   logLevel: "info",
 });
 await wrapClientBundle(
-  join(here, "plugins/session-archive/src/client.ts"),
+  join(here, "plugins/session-archive/src/client.tsx"),
   join(here, "plugins/session-archive/lib/client.js"),
   "session-archive",
 );
@@ -137,7 +155,7 @@ await wrapClientBundle(
 // exists only because esbuild cannot emit a bare load call around an
 // inlined bundle without it.
 await wrapClientBundle(
-  join(here, "plugins/tool-render/src/client.ts"),
+  join(here, "plugins/tool-render/src/client.tsx"),
   join(here, "plugins/tool-render/dist/client.js"),
   "tool-render",
 );
@@ -156,10 +174,15 @@ await build({
 // browser half bundles as a plain IIFE that calls window.__ModuleLoader__.load
 // itself at evaluation.
 await build({
-  entryPoints: [join(here, "plugins/profiles-client/src/client.ts")],
+  entryPoints: [join(here, "plugins/profiles-client/src/client.tsx")],
   bundle: true,
   platform: "browser",
   format: "iife",
+  external: ["react"],
+  jsx: "transform",
+  jsxFactory: "react.createElement",
+  jsxFragment: "react.Fragment",
+  plugins: [cssTextPlugin],
   outfile: join(here, "plugins/profiles-client/dist/client.js"),
   logLevel: "info",
 });

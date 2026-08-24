@@ -32,7 +32,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// plugins/session-archive/src/client.ts
+// plugins/session-archive/src/client.tsx
 var client_exports = {};
 __export(client_exports, {
   apply: () => apply,
@@ -94,29 +94,13 @@ var CONTROLS_CSS = `
 `.trim();
 var mergeCss = (...parts) => parts.filter(Boolean).join("\n");
 
-// plugins/session-archive/src/client.ts
+// css-text:/home/sid/repos/dotfiles-ai/plugins/session-archive/src/client.module.css
+var client_default = ".sarch-root{box-sizing:border-box;display:flex;flex-direction:column;gap:12px;padding:0;color:var(--dsw-alias-label-primary)}\n.sarch-head{display:flex;align-items:center;justify-content:space-between;gap:12px}\n.sarch-title{font-size:24px;font-weight:700;margin:0;line-height:1.2;color:var(--dsw-alias-label-primary)}\n.sarch-refresh{cursor:pointer;border:none;background:none;padding:0;color:var(--dsw-alias-label-secondary);font-size:15px;line-height:20px}\n.sarch-refresh:hover{color:var(--dsw-alias-label-primary)}\n.sarch-section{display:flex;flex-direction:column;gap:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:20px;padding:20px;background:var(--dsw-alias-bg-tertiary)}\n.sarch-rows{display:flex;flex-direction:column;gap:12px}\n.sarch-row{display:flex;align-items:center;gap:12px;min-width:0}\n.sarch-row-main{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}\n.sarch-row-id{font-size:16px;line-height:22px;font-weight:600;color:var(--dsw-alias-label-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n.sarch-row-meta{display:flex;align-items:center;gap:12px;min-width:0}\n.sarch-row-meta>span{font-size:14px;line-height:22px;color:var(--dsw-alias-label-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n.sarch-live{font-size:15px;line-height:20px;color:var(--dsw-alias-state-success-primary);font-weight:600;flex:none}\n.sarch-btn{box-sizing:border-box;width:40px;height:40px;display:inline-grid;place-items:center;flex:none;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);font-size:28px;padding:0;cursor:pointer}\n.sarch-btn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}\n.sarch-btn:disabled{opacity:.5;cursor:default}\n.sarch-empty{font-size:14px;line-height:22px;color:var(--dsw-alias-label-secondary);font-style:italic}\n.sarch-err{font-size:15px;line-height:22px;color:var(--dsw-alias-state-error-primary)}\n";
+
+// plugins/session-archive/src/client.tsx
 var PLUGIN_NAME = "session-archive";
 var STYLE_TAG_ID = "session-archive/settings.css";
-var CSS_TEXT = mergeCss(DESIGN_TOKENS, CONTROLS_CSS, [
-  ".sarch-root{box-sizing:border-box;display:flex;flex-direction:column;gap:12px;padding:0;color:var(--dsw-alias-label-primary)}",
-  ".sarch-head{display:flex;align-items:center;justify-content:space-between;gap:12px}",
-  ".sarch-title{font-size:24px;font-weight:700;margin:0;line-height:1.2;color:var(--dsw-alias-label-primary)}",
-  ".sarch-refresh{cursor:pointer;border:none;background:none;padding:0;color:var(--dsw-alias-label-secondary);font-size:15px;line-height:20px}",
-  ".sarch-refresh:hover{color:var(--dsw-alias-label-primary)}",
-  ".sarch-section{display:flex;flex-direction:column;gap:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:20px;padding:20px;background:var(--dsw-alias-bg-tertiary)}",
-  ".sarch-rows{display:flex;flex-direction:column;gap:12px}",
-  ".sarch-row{display:flex;align-items:center;gap:12px;min-width:0}",
-  ".sarch-row-main{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}",
-  ".sarch-row-id{font-size:16px;line-height:22px;font-weight:600;color:var(--dsw-alias-label-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
-  ".sarch-row-meta{display:flex;align-items:center;gap:12px;min-width:0}",
-  ".sarch-row-meta>span{font-size:14px;line-height:22px;color:var(--dsw-alias-label-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
-  ".sarch-live{font-size:15px;line-height:20px;color:var(--dsw-alias-state-success-primary);font-weight:600;flex:none}",
-  ".sarch-btn{box-sizing:border-box;width:40px;height:40px;display:inline-grid;place-items:center;flex:none;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);font-size:28px;padding:0;cursor:pointer}",
-  ".sarch-btn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}",
-  ".sarch-btn:disabled{opacity:.5;cursor:default}",
-  ".sarch-empty{font-size:14px;line-height:22px;color:var(--dsw-alias-label-secondary);font-style:italic}",
-  ".sarch-err{font-size:15px;line-height:22px;color:var(--dsw-alias-state-error-primary)}"
-].join(""));
+var CSS_TEXT = mergeCss(DESIGN_TOKENS, CONTROLS_CSS, [client_default]);
 function fetchJson(url) {
   return fetch(url, { cache: "no-store" }).then(function(res) {
     return res.json().catch(function() {
@@ -213,7 +197,7 @@ function makePanel() {
       for (var i = 0; i < list.data.length; i++) {
         var session = list.data[i];
         var live = session.live === true;
-        var action = live ? import_react.default.createElement("span", { className: "sarch-live" }, "live") : import_react.default.createElement(
+        var action = live ? /* @__PURE__ */ import_react.default.createElement("span", { className: "sarch-live" }, "live") : /* @__PURE__ */ import_react.default.createElement(
           "button",
           {
             className: "sarch-btn",
@@ -230,52 +214,21 @@ function makePanel() {
         );
         var label = session.title ? session.title : shortId(session.id);
         rows.push(
-          import_react.default.createElement(
-            "div",
-            { className: "sarch-row", key: session.id },
-            import_react.default.createElement(
-              "div",
-              { className: "sarch-row-main" },
-              import_react.default.createElement("div", { className: "sarch-row-id" }, label),
-              import_react.default.createElement(
-                "div",
-                { className: "sarch-row-meta" },
-                import_react.default.createElement("span", null, session.cwd ? session.cwd : "no cwd"),
-                import_react.default.createElement("span", null, fmtDate(session.createdAt)),
-                import_react.default.createElement("span", null, fmtSize(session.size))
-              )
-            ),
-            action
-          )
+          /* @__PURE__ */ import_react.default.createElement("div", { className: "sarch-row", key: session.id }, /* @__PURE__ */ import_react.default.createElement("div", { className: "sarch-row-main" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "sarch-row-id" }, label), /* @__PURE__ */ import_react.default.createElement("div", { className: "sarch-row-meta" }, /* @__PURE__ */ import_react.default.createElement("span", null, session.cwd ? session.cwd : "no cwd"), /* @__PURE__ */ import_react.default.createElement("span", null, fmtDate(session.createdAt)), /* @__PURE__ */ import_react.default.createElement("span", null, fmtSize(session.size)))), action)
         );
       }
     }
     var body = null;
     if (list === null) {
-      body = import_react.default.createElement("div", { className: "sarch-empty" }, "Loading\u2026");
+      body = /* @__PURE__ */ import_react.default.createElement("div", { className: "sarch-empty" }, "Loading\u2026");
     } else if (list.error && (!list.data || list.data.length === 0)) {
-      body = import_react.default.createElement("div", { className: "sarch-err" }, list.error);
+      body = /* @__PURE__ */ import_react.default.createElement("div", { className: "sarch-err" }, list.error);
     } else if (rows.length === 0) {
-      body = import_react.default.createElement("div", { className: "sarch-empty" }, "No archived sessions");
+      body = /* @__PURE__ */ import_react.default.createElement("div", { className: "sarch-empty" }, "No archived sessions");
     } else {
-      body = import_react.default.createElement(
-        "div",
-        { className: "sarch-section" },
-        import_react.default.createElement("div", { className: "sarch-rows" }, rows),
-        list.error ? import_react.default.createElement("div", { className: "sarch-err" }, list.error) : null
-      );
+      body = /* @__PURE__ */ import_react.default.createElement("div", { className: "sarch-section" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "sarch-rows" }, rows), list.error ? /* @__PURE__ */ import_react.default.createElement("div", { className: "sarch-err" }, list.error) : null);
     }
-    return import_react.default.createElement(
-      "div",
-      { className: "sarch-root" },
-      import_react.default.createElement(
-        "div",
-        { className: "sarch-head" },
-        import_react.default.createElement("h3", { className: "sarch-title" }, "Archive"),
-        import_react.default.createElement("button", { className: "sarch-refresh", onClick: load }, "Refresh")
-      ),
-      body
-    );
+    return /* @__PURE__ */ import_react.default.createElement("div", { className: "sarch-root" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "sarch-head" }, /* @__PURE__ */ import_react.default.createElement("h3", { className: "sarch-title" }, "Archive"), /* @__PURE__ */ import_react.default.createElement("button", { className: "sarch-refresh", onClick: load }, "Refresh")), body);
   };
 }
 var name = PLUGIN_NAME;
@@ -295,7 +248,7 @@ function apply(ctx) {
     return ctx.slots.register(
       { name: "settings.section", id: PLUGIN_NAME, order: 28, label: "Archive" },
       function() {
-        return import_react.default.createElement(Panel);
+        return /* @__PURE__ */ import_react.default.createElement(Panel, null);
       }
     );
   });

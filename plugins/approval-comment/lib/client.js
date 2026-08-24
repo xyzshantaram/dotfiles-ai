@@ -1593,7 +1593,7 @@ var require_core = __commonJS({
   }
 });
 
-// plugins/approval-comment/src/client.ts
+// plugins/approval-comment/src/client.tsx
 var client_exports = {};
 __export(client_exports, {
   apply: () => apply,
@@ -2000,7 +2000,7 @@ function bash(hljs) {
   };
 }
 
-// plugins/approval-comment/src/client.ts
+// plugins/approval-comment/src/client.tsx
 var import_react = __toESM(require("react"), 1);
 
 // plugins/design-system.ts
@@ -2055,7 +2055,10 @@ var CONTROLS_CSS = `
 `.trim();
 var mergeCss = (...parts) => parts.filter(Boolean).join("\n");
 
-// plugins/approval-comment/src/client.ts
+// css-text:/home/sid/repos/dotfiles-ai/plugins/approval-comment/src/client.module.css
+var client_default = ".approval-comment-root{padding:8px calc(var(--dsh-composer-side-clearance) + 16px) 12px;flex-direction:column;align-items:center;display:flex}\n.approval-comment-card{width:100%;max-width:var(--dsh-chat-content-width);border:1px solid var(--dsw-alias-state-warn-secondary);background:var(--dsw-specific-input-major);box-shadow:var(--dsw-shadow-lv2);--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2);border-radius:20px;overflow:hidden}\n.approval-comment-strip{background:var(--dsw-alias-state-warn-tertiary);color:var(--dsw-alias-state-warn-primary);align-items:center;gap:8px;padding:8px 13px;font-size:13px;line-height:18px;display:flex}\n.approval-comment-dot{background:var(--dsw-alias-state-warn-primary);border-radius:50%;width:8px;height:8px}\n.approval-comment-body{box-sizing:border-box;max-height:var(--dsh-composer-text-max-height);flex-direction:column;gap:6px;padding:10px 13px 0;display:flex;overflow-y:auto}\n.approval-comment-headline{color:var(--dsw-alias-label-primary);font-size:15px;font-weight:500;line-height:24px}\n.approval-comment-command{color:var(--dsw-alias-label-tertiary);font-family:var(--ds-font-family-code);overflow-wrap:anywhere;font-size:13px;line-height:20px}\n.approval-comment-command code.hljs{background:transparent;padding:0;font-family:inherit;font-size:inherit;line-height:inherit;overflow-wrap:inherit}\n.approval-comment-command .hljs-comment,.approval-comment-command .hljs-quote{color:#8b949e;font-style:italic}\n.approval-comment-command .hljs-keyword,.approval-comment-command .hljs-literal,.approval-comment-command .hljs-section{color:#ff7b72}\n.approval-comment-command .hljs-string,.approval-comment-command .hljs-regexp{color:#a5d6ff}\n.approval-comment-command .hljs-title,.approval-comment-command .hljs-title.function_,.approval-comment-command .hljs-title.class_{color:#d2a8ff}\n.approval-comment-command .hljs-number,.approval-comment-command .hljs-symbol,.approval-comment-command .hljs-bullet{color:#79c0ff}\n.approval-comment-command .hljs-attr,.approval-comment-command .hljs-attribute,.approval-comment-command .hljs-variable{color:#ffa657}\n.approval-comment-command .hljs-name,.approval-comment-command .hljs-tag,.approval-comment-command .hljs-built_in,.approval-comment-command .hljs-type{color:#7ee787}\n.approval-comment-action-row{justify-content:flex-end;gap:8px;padding:11px 13px;display:flex}\n.approval-comment-reject:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover-danger);color:var(--dsw-alias-state-error-primary);border-color:#0000}\n.approval-comment-comment-toggle{align-self:flex-start;background:none;border:0;padding:2px 0;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:18px;cursor:pointer}\n.approval-comment-comment-toggle:hover:not(:disabled){color:var(--dsw-alias-label-primary)}\n.approval-comment-comment-toggle:disabled{opacity:.5;cursor:default}\n.approval-comment-comment-field{flex-direction:column;gap:6px;display:flex}\n.approval-comment-comment-input{box-sizing:border-box;width:100%;min-height:56px;resize:vertical;border:1px solid var(--dsw-alias-line-secondary);border-radius:8px;padding:6px 8px;background:var(--dsw-specific-input-major);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:13px;line-height:20px}\n.approval-comment-comment-input:focus{outline:0;border-color:var(--dsw-alias-state-warn-secondary)}\n.approval-comment-comment-input:disabled{opacity:.5}\n.approval-comment-comment-hint{color:var(--dsw-alias-label-caption);font-size:12px;line-height:16px;margin:0}\n";
+
+// plugins/approval-comment/src/client.tsx
 var _primitives = __toESM(require("@deepseek-ai/dsh-client-ui-primitives"), 1);
 var _runtime = __toESM(require("@deepseek-ai/dsh-client-runtime/client"), 1);
 core_default.registerLanguage("bash", bash);
@@ -2064,33 +2067,7 @@ var conversationContextKey2 = _runtime.conversationContextKey;
 var PLUGIN_NAME = "approval-comment";
 var LOCALE_NS = "approval-comment";
 var STYLE_TAG_ID = "approval-comment/ApprovalComment.module.css";
-var CSS_TEXT = mergeCss(DESIGN_TOKENS, CONTROLS_CSS, [
-  ".approval-comment-root{padding:8px calc(var(--dsh-composer-side-clearance) + 16px) 12px;flex-direction:column;align-items:center;display:flex}",
-  ".approval-comment-card{width:100%;max-width:var(--dsh-chat-content-width);border:1px solid var(--dsw-alias-state-warn-secondary);background:var(--dsw-specific-input-major);box-shadow:var(--dsw-shadow-lv2);--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2);border-radius:20px;overflow:hidden}",
-  ".approval-comment-strip{background:var(--dsw-alias-state-warn-tertiary);color:var(--dsw-alias-state-warn-primary);align-items:center;gap:8px;padding:8px 13px;font-size:13px;line-height:18px;display:flex}",
-  ".approval-comment-dot{background:var(--dsw-alias-state-warn-primary);border-radius:50%;width:8px;height:8px}",
-  ".approval-comment-body{box-sizing:border-box;max-height:var(--dsh-composer-text-max-height);flex-direction:column;gap:6px;padding:10px 13px 0;display:flex;overflow-y:auto}",
-  ".approval-comment-headline{color:var(--dsw-alias-label-primary);font-size:15px;font-weight:500;line-height:24px}",
-  ".approval-comment-command{color:var(--dsw-alias-label-tertiary);font-family:var(--ds-font-family-code);overflow-wrap:anywhere;font-size:13px;line-height:20px}",
-  ".approval-comment-command code.hljs{background:transparent;padding:0;font-family:inherit;font-size:inherit;line-height:inherit;overflow-wrap:inherit}",
-  ".approval-comment-command .hljs-comment,.approval-comment-command .hljs-quote{color:#8b949e;font-style:italic}",
-  ".approval-comment-command .hljs-keyword,.approval-comment-command .hljs-literal,.approval-comment-command .hljs-section{color:#ff7b72}",
-  ".approval-comment-command .hljs-string,.approval-comment-command .hljs-regexp{color:#a5d6ff}",
-  ".approval-comment-command .hljs-title,.approval-comment-command .hljs-title.function_,.approval-comment-command .hljs-title.class_{color:#d2a8ff}",
-  ".approval-comment-command .hljs-number,.approval-comment-command .hljs-symbol,.approval-comment-command .hljs-bullet{color:#79c0ff}",
-  ".approval-comment-command .hljs-attr,.approval-comment-command .hljs-attribute,.approval-comment-command .hljs-variable{color:#ffa657}",
-  ".approval-comment-command .hljs-name,.approval-comment-command .hljs-tag,.approval-comment-command .hljs-built_in,.approval-comment-command .hljs-type{color:#7ee787}",
-  ".approval-comment-action-row{justify-content:flex-end;gap:8px;padding:11px 13px;display:flex}",
-  ".approval-comment-reject:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover-danger);color:var(--dsw-alias-state-error-primary);border-color:#0000}",
-  ".approval-comment-comment-toggle{align-self:flex-start;background:none;border:0;padding:2px 0;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:18px;cursor:pointer}",
-  ".approval-comment-comment-toggle:hover:not(:disabled){color:var(--dsw-alias-label-primary)}",
-  ".approval-comment-comment-toggle:disabled{opacity:.5;cursor:default}",
-  ".approval-comment-comment-field{flex-direction:column;gap:6px;display:flex}",
-  ".approval-comment-comment-input{box-sizing:border-box;width:100%;min-height:56px;resize:vertical;border:1px solid var(--dsw-alias-line-secondary);border-radius:8px;padding:6px 8px;background:var(--dsw-specific-input-major);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:13px;line-height:20px}",
-  ".approval-comment-comment-input:focus{outline:0;border-color:var(--dsw-alias-state-warn-secondary)}",
-  ".approval-comment-comment-input:disabled{opacity:.5}",
-  ".approval-comment-comment-hint{color:var(--dsw-alias-label-caption);font-size:12px;line-height:16px;margin:0}"
-].join(""));
+var CSS_TEXT = mergeCss(DESIGN_TOKENS, CONTROLS_CSS, [client_default]);
 if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(STYLE_TAG_ID) + "]") === null) {
   tag = document.createElement("style");
   tag.dataset.plugin = PLUGIN_NAME;
@@ -2231,106 +2208,74 @@ function makeApprovalCommentCard(steerTo) {
         answer("rejected");
       }
     };
-    return import_react.default.createElement(
+    return /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-root", "data-approval-key": matched.key }, /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-card" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-strip" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "approval-comment-dot" }), t("approval.waiting")), /* @__PURE__ */ import_react.default.createElement(
       "div",
-      { className: "approval-comment-root", "data-approval-key": matched.key },
-      import_react.default.createElement(
-        "div",
-        { className: "approval-comment-card" },
-        import_react.default.createElement(
-          "div",
-          { className: "approval-comment-strip" },
-          import_react.default.createElement("span", { className: "approval-comment-dot" }),
-          t("approval.waiting")
-        ),
-        import_react.default.createElement(
-          "div",
-          {
-            className: "approval-comment-body",
-            "data-approval-scroll": "",
-            tabIndex: 0,
-            role: "group",
-            "aria-label": t("approval.detail.aria")
+      {
+        className: "approval-comment-body",
+        "data-approval-scroll": "",
+        tabIndex: 0,
+        role: "group",
+        "aria-label": t("approval.detail.aria")
+      },
+      /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-headline" }, matched.payload.reason || t("approval.escalation", { toolName: matched.payload.toolName })),
+      command !== void 0 ? /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-command" }, "$ ", /* @__PURE__ */ import_react.default.createElement(
+        "code",
+        {
+          className: "hljs",
+          dangerouslySetInnerHTML: { __html: highlightCommand(command) }
+        }
+      )) : null,
+      /* @__PURE__ */ import_react.default.createElement(
+        "button",
+        {
+          type: "button",
+          className: "approval-comment-comment-toggle",
+          disabled: answered,
+          "aria-expanded": showComment,
+          onClick: function() {
+            setShowComment(!showComment);
+          }
+        },
+        showComment ? t("comment.hide") : t("comment.toggle")
+      ),
+      showComment ? /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-comment-field" }, /* @__PURE__ */ import_react.default.createElement(
+        "textarea",
+        {
+          className: "approval-comment-comment-input",
+          value: draft,
+          disabled: answered,
+          rows: 2,
+          autoFocus: true,
+          "aria-label": t("comment.label"),
+          placeholder: t("comment.placeholder"),
+          onChange: function(event) {
+            setDraft(event.target.value);
           },
-          import_react.default.createElement(
-            "div",
-            { className: "approval-comment-headline" },
-            matched.payload.reason || t("approval.escalation", { toolName: matched.payload.toolName })
-          ),
-          command !== void 0 ? import_react.default.createElement(
-            "div",
-            { className: "approval-comment-command" },
-            "$ ",
-            import_react.default.createElement("code", {
-              className: "hljs",
-              dangerouslySetInnerHTML: { __html: highlightCommand(command) }
-            })
-          ) : null,
-          import_react.default.createElement(
-            "button",
-            {
-              type: "button",
-              className: "approval-comment-comment-toggle",
-              disabled: answered,
-              "aria-expanded": showComment,
-              onClick: function() {
-                setShowComment(!showComment);
-              }
-            },
-            showComment ? t("comment.hide") : t("comment.toggle")
-          ),
-          showComment ? import_react.default.createElement(
-            "div",
-            { className: "approval-comment-comment-field" },
-            import_react.default.createElement("textarea", {
-              className: "approval-comment-comment-input",
-              value: draft,
-              disabled: answered,
-              rows: 2,
-              autoFocus: true,
-              "aria-label": t("comment.label"),
-              placeholder: t("comment.placeholder"),
-              onChange: function(event) {
-                setDraft(event.target.value);
-              },
-              onKeyDown: onCommentKeyDown
-            }),
-            import_react.default.createElement(
-              "p",
-              { className: "approval-comment-comment-hint" },
-              t("comment.hint")
-            )
-          ) : null
-        ),
-        import_react.default.createElement(
-          "div",
-          { className: "approval-comment-action-row" },
-          import_react.default.createElement(
-            Button2,
-            {
-              variant: "outline",
-              className: "approval-comment-reject",
-              disabled: answered,
-              onClick: function() {
-                answer("rejected");
-              }
-            },
-            t("approval.reject")
-          ),
-          import_react.default.createElement(
-            Button2,
-            {
-              variant: "primary",
-              disabled: answered,
-              onClick: function() {
-                answer("allowed-once");
-              }
-            },
-            t("approval.allowOnce")
-          )
-        )
-      )
-    );
+          onKeyDown: onCommentKeyDown
+        }
+      ), /* @__PURE__ */ import_react.default.createElement("p", { className: "approval-comment-comment-hint" }, t("comment.hint"))) : null
+    ), /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-action-row" }, /* @__PURE__ */ import_react.default.createElement(
+      Button2,
+      {
+        variant: "outline",
+        className: "approval-comment-reject",
+        disabled: answered,
+        onClick: function() {
+          answer("rejected");
+        }
+      },
+      t("approval.reject")
+    ), /* @__PURE__ */ import_react.default.createElement(
+      Button2,
+      {
+        variant: "primary",
+        disabled: answered,
+        onClick: function() {
+          answer("allowed-once");
+        }
+      },
+      t("approval.allowOnce")
+    ))));
   };
 }
 var name = PLUGIN_NAME;

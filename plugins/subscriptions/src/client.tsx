@@ -32,6 +32,7 @@
  * alive so the client-module registry serves this bundle.
  */
 import react from "react";
+import localCss from "./client.module.css";
 
 /** Stable plugin identity, also the loader entry id in cordis.patch.yml. */
 var PLUGIN_NAME = "subscriptions";
@@ -41,70 +42,7 @@ var STYLE_TAG_ID = "subscriptions/client.css";
 
 
 /** One stylesheet for this panel. Class names are kebab-case only. */
-var CSS_TEXT = [
-  // Page-level container: airy vertical rhythm, no own box.
-  ".ocgs-root{box-sizing:border-box;display:flex;flex-direction:column;gap:13px;padding:0;color:var(--dsw-alias-label-primary)}",
-  // Header row (title + refresh).
-  ".ocgs-head{display:flex;align-items:center;justify-content:space-between;gap:10px}",
-  ".ocgs-title{font-size:24px;font-weight:700;margin:0;line-height:1.2;color:var(--dsw-alias-label-primary)}",
-  ".ocgs-head-title{display:flex;align-items:baseline;gap:10px;min-width:0;flex:1;overflow:hidden}",
-  ".ocgs-stale{font-size:14px;line-height:20px;color:var(--dsw-alias-label-secondary);white-space:nowrap}",
-  ".ocgs-refresh{cursor:pointer;border:none;background:none;padding:5px 5px;border-radius:7px;color:var(--dsw-alias-label-secondary);font-size:15px;line-height:20px}",
-  ".ocgs-refresh:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}",
-  // Large setting card: 20px radius, generous 24px padding, single subtle border.
-  ".ocgs-section{display:flex;flex-direction:column;gap:13px;border:1px solid var(--dsw-alias-border-l2);border-radius:20px;padding:24px;background:var(--dsw-alias-bg-tertiary)}",
-  ".ocgs-section-title{font-size:24px;font-weight:700;margin:0;line-height:1.2;color:var(--dsw-alias-label-primary)}",
-  ".ocgs-balance{font-size:18px;font-weight:600;color:var(--dsw-alias-label-primary)}",
-  ".ocgs-telemetry{font-size:15px;line-height:22px;color:var(--dsw-alias-label-secondary)}",
-  ".ocgs-rows{display:flex;flex-direction:column;gap:13px}",
-  ".ocgs-row{display:flex;flex-direction:column;gap:5px;min-width:0}",
-  ".ocgs-row-label{display:flex;align-items:baseline;gap:10px;font-size:16px;line-height:22px;color:var(--dsw-alias-label-secondary)}",
-  ".ocgs-row-label b{font-weight:600;color:var(--dsw-alias-label-primary);font-size:16px}",
-  ".ocgs-row-label b:last-child{margin-left:auto}",
-  ".ocgs-meta{display:flex;align-items:center;gap:10px;min-width:0}",
-  ".ocgs-meta>span{font-size:13px;line-height:18px;color:var(--dsw-alias-label-secondary);white-space:nowrap;flex:none}",
-  // Progress track: thin, soft, rounded.
-  ".ocgs-track{box-sizing:border-box;flex:1;min-width:0;height:8px;border-radius:7px;background:var(--dsw-alias-border-l2);overflow:hidden}",
-  ".ocgs-fill{height:100%;border-radius:7px;transition:width .4s ease}",
-  ".ocgs-pace{font-size:15px;line-height:22px;color:var(--dsw-alias-label-secondary)}",
-  ".ocgs-err{font-size:15px;line-height:22px;color:var(--dsw-alias-state-error-primary)}",
-  // Action row (fetch cookie / token buttons + note).
-  ".ocgs-cookie{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:3px 0 6px}",
-  // Secondary / pill button.
-  ".ocgs-btn{display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:999px;font-size:15px;line-height:20px;padding:7px 15px;cursor:pointer;min-height:36px}",
-  ".ocgs-btn:hover{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-border-l3)}",
-  ".ocgs-btn:disabled{opacity:.5;cursor:default}",
-  ".ocgs-cookie-note{font-size:14px;line-height:18px;color:var(--dsw-alias-label-secondary)}",
-  // Provider visibility toggles — checkbox field language.
-  ".ocgs-toggles{display:flex;flex-direction:column;gap:10px}",
-  ".ocgs-toggle{display:flex;align-items:center;gap:10px;min-width:0;cursor:pointer}",
-  ".ocgs-toggle-label{flex:1;min-width:0;font-size:18px;line-height:24px;color:var(--dsw-alias-label-secondary)}",
-  ".ocgs-toggle input{flex:none;width:24px;height:24px;cursor:pointer;accent-color:var(--dsw-alias-state-business-primary)}",
-  // Details disclosure for the toggle list.
-  ".ocgs-details{border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-tertiary);padding:13px;margin-top:4px}",
-  ".ocgs-summary{cursor:pointer;font-size:18px;font-weight:600;color:var(--dsw-alias-label-primary);list-style:none}",
-  ".ocgs-summary::-webkit-details-marker{display:none}",
-  ".ocgs-details[open] .ocgs-toggles{padding-top:10px}",
-  // DeepSeek dashboard — nested grouped controls.
-  ".ds-dashboard{display:flex;flex-direction:column;gap:13px}",
-  ".ds-hero{display:flex;flex-direction:column;gap:5px;padding:13px;background:var(--dsw-alias-bg-tertiary);border-radius:12px;border:1px solid var(--dsw-alias-border-l2)}",
-  ".ds-hero-total{font-size:32px;font-weight:700;color:var(--dsw-alias-label-primary);line-height:1.2}",
-  ".ds-hero-breakdown{font-size:15px;color:var(--dsw-alias-label-secondary)}",
-  ".ds-usage-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}",
-  ".ds-usage-card{padding:13px;background:var(--dsw-alias-bg-tertiary);border-radius:12px;border:1px solid var(--dsw-alias-border-l2)}",
-  ".ds-usage-label{font-size:12px;color:var(--dsw-alias-label-secondary);text-transform:uppercase;letter-spacing:0.5px}",
-  ".ds-usage-value{font-size:20px;font-weight:600;color:var(--dsw-alias-label-primary);margin-top:6px}",
-  ".ds-usage-sub{font-size:14px;color:var(--dsw-alias-label-secondary);margin-top:4px}",
-  ".ds-token-row{display:flex;gap:10px;flex-wrap:wrap}",
-  ".ds-token-card{flex:1;min-width:140px;padding:11px;background:var(--dsw-alias-bg-tertiary);border-radius:12px;border:1px solid var(--dsw-alias-border-l2)}",
-  ".ds-token-label{font-size:12px;color:var(--dsw-alias-label-secondary)}",
-  ".ds-token-value{font-size:18px;font-weight:600;color:var(--dsw-alias-state-success-primary)}",
-  ".ds-token-value.out{color:var(--dsw-alias-state-error-primary)}",
-  ".ds-empty{font-size:14px;color:var(--dsw-alias-label-secondary);font-style:italic}",
-  ".ocgs-note{font-size:15px;line-height:22px;color:var(--dsw-alias-label-secondary)}",
-  // Visible focus ring on every interactive control.
-  ":focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}",
-].join("");
+var CSS_TEXT = [localCss].join("");
 
 /** OpenCode GO windows, in the same order as the sidebar widget. */
 var GO_WINDOWS = [
@@ -384,38 +322,24 @@ function buildRows(defs, windows, labelOf) {
     var hint = def ? def.hint : null;
     var status = statusText(win, hint);
     rows.push(
-      react.createElement(
-        "div",
-        { className: "ocgs-row", key: key },
-        react.createElement(
-          "div",
-          { className: "ocgs-row-label" },
-          react.createElement("b", null, label),
-          status
-            ? react.createElement(
-                "span",
-                { className: "ocgs-stale" },
-                "resets in " + status,
-              )
-            : null,
-          react.createElement("b", null, percent + "%"),
-        ),
-        react.createElement(
-          "div",
-          { className: "ocgs-meta" },
-          react.createElement(
-            "div",
-            { className: "ocgs-track" },
-            react.createElement("div", {
-              className: "ocgs-fill",
-              style: {
+      <div className="ocgs-row" key={key}>
+        <div className="ocgs-row-label">
+          <b>{label}</b>
+          {status ? <span className="ocgs-stale">{"resets in " + status}</span> : null}
+          <b>{percent + "%"}</b>
+        </div>
+        <div className="ocgs-meta">
+          <div className="ocgs-track">
+            <div
+              className="ocgs-fill"
+              style={{
                 width: Math.max(0, Math.min(100, percent)) + "%",
                 background: fillColor(percent),
-              },
-            }),
-          ),
-        ),
-      ),
+              }}
+            />
+          </div>
+        </div>
+      </div>,
     );
   }
   return rows;
@@ -501,63 +425,46 @@ function renderDsDashboard(bal, amount, cost) {
   var usageCards = [];
   if (totalTokens > 0 || totalCost > 0) {
     usageCards.push(
-      react.createElement(
-        "div",
-        { className: "ds-usage-card" },
-        react.createElement("div", { className: "ds-usage-label" }, "Total Cost"),
-        react.createElement("div", { className: "ds-usage-value" }, "$" + totalCost.toFixed(2)),
-      ),
+      <div className="ds-usage-card">
+        <div className="ds-usage-label">Total Cost</div>
+        <div className="ds-usage-value">{"$" + totalCost.toFixed(2)}</div>
+      </div>,
     );
     usageCards.push(
-      react.createElement(
-        "div",
-        { className: "ds-usage-card" },
-        react.createElement("div", { className: "ds-usage-label" }, "Total Tokens"),
-        react.createElement("div", { className: "ds-usage-value" }, fmtCount(totalTokens)),
-        react.createElement(
-          "div",
-          { className: "ds-usage-sub" },
-          "in " +
-            fmtCount(inTokens) +
-            " · out " +
-            fmtCount(outTokens) +
-            " · cache " +
-            fmtCount(cacheRead + cacheWrite),
-        ),
-      ),
+      <div className="ds-usage-card">
+        <div className="ds-usage-label">Total Tokens</div>
+        <div className="ds-usage-value">{fmtCount(totalTokens)}</div>
+        <div className="ds-usage-sub">
+          {"in " + fmtCount(inTokens) + " · out " + fmtCount(outTokens) + " · cache " + fmtCount(cacheRead + cacheWrite)}
+        </div>
+      </div>,
     );
     // Per-model cost
     for (var cmi = 0; cmi < costByModel.length; cmi++) {
       var cm = costByModel[cmi];
       usageCards.push(
-        react.createElement(
-          "div",
-          { className: "ds-usage-card" },
-          react.createElement("div", { className: "ds-usage-label" }, cm.model),
-          react.createElement("div", { className: "ds-usage-value" }, "$" + cm.cost.toFixed(2)),
-        ),
+        <div className="ds-usage-card">
+          <div className="ds-usage-label">{cm.model}</div>
+          <div className="ds-usage-value">{"$" + cm.cost.toFixed(2)}</div>
+        </div>,
       );
     }
   } else {
     usageCards.push(
-      react.createElement(
-        "div",
-        { className: "ds-usage-card ds-empty" },
-        "No usage data (sign in to platform.deepseek.com)",
-      ),
+      <div className="ds-usage-card ds-empty">
+        No usage data (sign in to platform.deepseek.com)
+      </div>,
     );
   }
 
-  return react.createElement(
-    "div",
-    { className: "ds-dashboard" },
-    react.createElement(
-      "div",
-      { className: "ds-hero" },
-      react.createElement("div", { className: "ds-hero-total" }, heroLines[0]),
-      react.createElement("div", { className: "ds-hero-breakdown" }, subLines.join(" · ")),
-    ),
-    react.createElement("div", { className: "ds-usage-grid" }, usageCards),
+  return (
+    <div className="ds-dashboard">
+      <div className="ds-hero">
+        <div className="ds-hero-total">{heroLines[0]}</div>
+        <div className="ds-hero-breakdown">{subLines.join(" · ")}</div>
+      </div>
+      <div className="ds-usage-grid">{usageCards}</div>
+    </div>
   );
 }
 
@@ -642,35 +549,21 @@ function buildCcMeters(cc) {
     if (used === null || cap === null || cap <= 0) continue;
     var pct = Math.round((used / cap) * 100);
     meters.push(
-      react.createElement(
-        "div",
-        { className: "ocgs-row", key: def.key },
-        react.createElement(
-          "div",
-          { className: "ocgs-row-label" },
-          react.createElement("b", null, def.label),
-          win.resetAt
-            ? react.createElement(
-                "span",
-                { className: "ocgs-stale" },
-                "resets in " + timeUntil(win.resetAt),
-              )
-            : null,
-          react.createElement("b", null, pct + "%"),
-        ),
-        react.createElement(
-          "div",
-          { className: "ocgs-meta" },
-          react.createElement(
-            "div",
-            { className: "ocgs-track" },
-            react.createElement("div", {
-              className: "ocgs-fill",
-              style: { width: Math.max(0, Math.min(100, pct)) + "%", background: fillColor(pct) },
-            }),
-          ),
-        ),
-      ),
+      <div className="ocgs-row" key={def.key}>
+        <div className="ocgs-row-label">
+          <b>{def.label}</b>
+          {win.resetAt ? <span className="ocgs-stale">{"resets in " + timeUntil(win.resetAt)}</span> : null}
+          <b>{pct + "%"}</b>
+        </div>
+        <div className="ocgs-meta">
+          <div className="ocgs-track">
+            <div
+              className="ocgs-fill"
+              style={{ width: Math.max(0, Math.min(100, pct)) + "%", background: fillColor(pct) }}
+            />
+          </div>
+        </div>
+      </div>,
     );
   }
   return meters;
@@ -767,11 +660,11 @@ function renderCcSection(cc, ccUsage) {
     }
   }
   if (breakdown.length > 0) {
-    hero = react.createElement(
-      "div",
-      { className: "ds-hero" },
-      react.createElement("div", { className: "ds-hero-total" }, "$" + total.toFixed(2)),
-      react.createElement("div", { className: "ds-hero-breakdown" }, breakdown.join(" · ")),
+    hero = (
+      <div className="ds-hero">
+        <div className="ds-hero-total">{"$" + total.toFixed(2)}</div>
+        <div className="ds-hero-breakdown">{breakdown.join(" · ")}</div>
+      </div>
     );
   }
 
@@ -782,23 +675,23 @@ function renderCcSection(cc, ccUsage) {
     var period = usage.periodStart
       ? fmtDate(usage.periodStart) + (usage.periodEnd ? " – " + fmtDate(usage.periodEnd) : "")
       : "this period";
-    costCard = react.createElement(
-      "div",
-      { className: "ds-usage-card" },
-      react.createElement("div", { className: "ds-usage-label" }, "Monthly cost"),
-      react.createElement("div", { className: "ds-usage-value" }, "$" + usage.totalCost.toFixed(2)),
-      react.createElement("div", { className: "ds-usage-sub" }, period),
+    costCard = (
+      <div className="ds-usage-card">
+        <div className="ds-usage-label">Monthly cost</div>
+        <div className="ds-usage-value">{"$" + usage.totalCost.toFixed(2)}</div>
+        <div className="ds-usage-sub">{period}</div>
+      </div>
     );
   }
 
-  return react.createElement(
-    "div",
-    { className: "ocgs-section" },
-    react.createElement("h4", { className: "ocgs-section-title" }, "Command Code"),
-    errorLine ? react.createElement("div", { className: "ocgs-err" }, errorLine) : null,
-    hero,
-    meters.length > 0 ? react.createElement("div", { className: "ocgs-rows" }, meters) : null,
-    costCard ? react.createElement("div", { className: "ds-usage-grid" }, costCard) : null,
+  return (
+    <div className="ocgs-section">
+      <h4 className="ocgs-section-title">Command Code</h4>
+      {errorLine ? <div className="ocgs-err">{errorLine}</div> : null}
+      {hero}
+      {meters.length > 0 ? <div className="ocgs-rows">{meters}</div> : null}
+      {costCard ? <div className="ds-usage-grid">{costCard}</div> : null}
+    </div>
   );
 }
 
@@ -1183,241 +1076,147 @@ function makePanel(ctx, config) {
       allFailed = failCount === dataKeys.length;
     }
 
-    return react.createElement(
-      "div",
-      { className: "ocgs-root" },
-      react.createElement(
-        "div",
-        { className: "ocgs-head" },
-        react.createElement(
-          "div",
-          { className: "ocgs-head-title" },
-          react.createElement("h3", { className: "ocgs-title" }, "Subscriptions"),
-          staleText ? react.createElement("span", { className: "ocgs-stale" }, staleText) : null,
-        ),
-        react.createElement("button", { className: "ocgs-refresh", onClick: load }, "Refresh"),
-      ),
+    return (
+      <div className="ocgs-root">
+        <div className="ocgs-head">
+          <div className="ocgs-head-title">
+            <h3 className="ocgs-title">Subscriptions</h3>
+            {staleText ? <span className="ocgs-stale">{staleText}</span> : null}
+          </div>
+          <button className="ocgs-refresh" onClick={load}>Refresh</button>
+        </div>
 
-react.createElement(
-        "details",
-        { className: "ocgs-details" },
-        react.createElement("summary", { className: "ocgs-summary" }, "Show sections"),
-        react.createElement(
-          "div",
-          { className: "ocgs-toggles" },
-          PROVIDER_TOGGLES.map(function (def) {
-            var providers = (cfg && cfg.providers) || {};
-            var visible = providers[def.key] !== false;
-            return react.createElement(
-              "label",
-              { className: "ocgs-toggle", key: def.key },
-              react.createElement("input", {
-                type: "checkbox",
-                checked: visible,
-                disabled: toggleBusy !== null,
-                onChange: function () {
-                  toggleProvider(def.key);
-                },
-              }),
-              react.createElement("span", { className: "ocgs-toggle-label" }, def.label),
-            );
-          }),
-        ),
-      ),
-      snap === null
-        ? react.createElement("div", { className: "ocgs-note" }, "Loading subscription data…")
-        : null,
-      allFailed
-        ? react.createElement(
-            "div",
-            { className: "ocgs-err" },
-            "Could not load subscription data. " +
-              (firstError || "Check that the subscriptions plugin is mounted."),
-          )
-        : null,
+        <details className="ocgs-details">
+          <summary className="ocgs-summary">Show sections</summary>
+          <div className="ocgs-toggles">
+            {PROVIDER_TOGGLES.map(function (def) {
+              var providers = (cfg && cfg.providers) || {};
+              var visible = providers[def.key] !== false;
+              return (
+                <label className="ocgs-toggle" key={def.key}>
+                  <input
+                    type="checkbox"
+                    checked={visible}
+                    disabled={toggleBusy !== null}
+                    onChange={function () {
+                      toggleProvider(def.key);
+                    }}
+                  />
+                  <span className="ocgs-toggle-label">{def.label}</span>
+                </label>
+              );
+            })}
+          </div>
+        </details>
 
-      profileInfo || quotaPick || telemetryLine || healthLine || logsLine
-        ? react.createElement(
-            "div",
-            { className: "ocgs-section" },
-            react.createElement("h4", { className: "ocgs-section-title" }, "Quota"),
-            profileInfo
-              ? react.createElement(
-                  "div",
-                  { className: "ocgs-rows" },
-                  react.createElement(
-                    "div",
-                    { className: "ocgs-row" },
-                    react.createElement(
-                      "div",
-                      { className: "ocgs-row-label" },
-                      react.createElement("b", null, "Profile: " + profileInfo.active),
-                      profileInfo.chain
-                        ? react.createElement(
-                            "span",
-                            { className: "ocgs-stale" },
-                            "chain: " + profileInfo.chain,
-                          )
-                        : null,
-                    ),
-                  ),
-                )
-              : null,
-            quotaPick
-              ? react.createElement("div", { className: "ocgs-rows" }, quotaPick.rows)
-              : null,
-            quotaPick && quotaPick.pace
-              ? react.createElement("div", { className: "ocgs-pace" }, quotaPick.pace)
-              : null,
-            telemetryLine
-              ? react.createElement("div", { className: "ocgs-telemetry" }, telemetryLine)
-              : null,
-            healthLine
-              ? react.createElement("div", { className: "ocgs-telemetry" }, healthLine)
-              : null,
-            logsLine
-              ? react.createElement("div", { className: "ocgs-telemetry" }, logsLine)
-              : null,
-          )
-        : null,
+        {snap === null ? <div className="ocgs-note">Loading subscription data…</div> : null}
 
-      providerVisible(cfg, "commandcode") ? renderCcSection(cc, ccUsage) : null,
+        {allFailed ? (
+          <div className="ocgs-err">
+            {"Could not load subscription data. " + (firstError || "Check that the subscriptions plugin is mounted.")}
+          </div>
+        ) : null}
 
-      providerVisible(cfg, "claude")
-        ? react.createElement(
-            "div",
-            { className: "ocgs-section" },
-            react.createElement("h4", { className: "ocgs-section-title" }, "Claude (meridian)"),
-            quota && quota.error
-              ? react.createElement(
-                  "div",
-                  { className: "ocgs-err" },
-                  "Claude (meridian): " + quota.error,
-                )
-              : null,
-            react.createElement(
-              "div",
-              { className: "ocgs-rows" },
-              buildRows(null, claudeWindows, windowLabel),
-            ),
-            claudePaceLine
-              ? react.createElement("div", { className: "ocgs-pace" }, claudePaceLine)
-              : null,
-          )
-        : null,
+        {profileInfo || quotaPick || telemetryLine || healthLine || logsLine ? (
+          <div className="ocgs-section">
+            <h4 className="ocgs-section-title">Quota</h4>
+            {profileInfo ? (
+              <div className="ocgs-rows">
+                <div className="ocgs-row">
+                  <div className="ocgs-row-label">
+                    <b>{"Profile: " + profileInfo.active}</b>
+                    {profileInfo.chain ? (
+                      <span className="ocgs-stale">{"chain: " + profileInfo.chain}</span>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+            {quotaPick ? <div className="ocgs-rows">{quotaPick.rows}</div> : null}
+            {quotaPick && quotaPick.pace ? <div className="ocgs-pace">{quotaPick.pace}</div> : null}
+            {telemetryLine ? <div className="ocgs-telemetry">{telemetryLine}</div> : null}
+            {healthLine ? <div className="ocgs-telemetry">{healthLine}</div> : null}
+            {logsLine ? <div className="ocgs-telemetry">{logsLine}</div> : null}
+          </div>
+        ) : null}
 
-      providerVisible(cfg, "deepseek")
-        ? react.createElement(
-            "div",
-            { className: "ocgs-section" },
-            react.createElement("h4", { className: "ocgs-section-title" }, "DeepSeek"),
-            ds && ds.error
-              ? react.createElement("div", { className: "ocgs-err" }, "DeepSeek: " + ds.error)
-              : null,
-            ds &&
-              ds.data &&
-              Array.isArray(ds.data.balance_infos) &&
-              ds.data.balance_infos.length > 0
+        {providerVisible(cfg, "commandcode") ? renderCcSection(cc, ccUsage) : null}
+
+        {providerVisible(cfg, "claude") ? (
+          <div className="ocgs-section">
+            <h4 className="ocgs-section-title">Claude (meridian)</h4>
+            {quota && quota.error ? <div className="ocgs-err">{"Claude (meridian): " + quota.error}</div> : null}
+            <div className="ocgs-rows">{buildRows(null, claudeWindows, windowLabel)}</div>
+            {claudePaceLine ? <div className="ocgs-pace">{claudePaceLine}</div> : null}
+          </div>
+        ) : null}
+
+        {providerVisible(cfg, "deepseek") ? (
+          <div className="ocgs-section">
+            <h4 className="ocgs-section-title">DeepSeek</h4>
+            {ds && ds.error ? <div className="ocgs-err">{"DeepSeek: " + ds.error}</div> : null}
+            {ds && ds.data && Array.isArray(ds.data.balance_infos) && ds.data.balance_infos.length > 0
               ? renderDsDashboard(ds.data.balance_infos[0], dsUsageAmount, dsUsageCost)
-              : null,
-            react.createElement(
-              "div",
-              { className: "ocgs-cookie" },
-              react.createElement(
-                "button",
-                { className: "ocgs-btn", disabled: dsToken.busy, onClick: fetchDsToken },
-                dsToken.busy ? "Fetching…" : "Fetch token from Firefox",
-              ),
-              dsToken.showLogin
-                ? react.createElement(
-                    "button",
-                    { className: "ocgs-btn", onClick: openDsLogin },
-                    "Open platform.deepseek.com",
-                  )
-                : null,
-              dsToken.note
-                ? react.createElement("span", { className: "ocgs-cookie-note" }, dsToken.note)
-                : null,
-            ),
-          )
-        : null,
+              : null}
+            <div className="ocgs-cookie">
+              <button className="ocgs-btn" disabled={dsToken.busy} onClick={fetchDsToken}>
+                {dsToken.busy ? "Fetching…" : "Fetch token from Firefox"}
+              </button>
+              {dsToken.showLogin ? (
+                <button className="ocgs-btn" onClick={openDsLogin}>
+                  Open platform.deepseek.com
+                </button>
+              ) : null}
+              {dsToken.note ? <span className="ocgs-cookie-note">{dsToken.note}</span> : null}
+            </div>
+          </div>
+        ) : null}
 
-      providerVisible(cfg, "opencode")
-        ? react.createElement(
-            "div",
-            { className: "ocgs-section" },
-            react.createElement("h4", { className: "ocgs-section-title" }, "OpenCode GO"),
-            balanceLine
-              ? react.createElement("div", { className: "ocgs-balance" }, balanceLine)
-              : null,
-            go && go.error
-              ? react.createElement("div", { className: "ocgs-err" }, "OpenCode GO: " + go.error)
-              : null,
-            react.createElement("div", { className: "ocgs-rows" }, buildRows(GO_WINDOWS, goUsage)),
-            goPaceLine ? react.createElement("div", { className: "ocgs-pace" }, goPaceLine) : null,
-            react.createElement(
-              "div",
-              { className: "ocgs-cookie" },
-              react.createElement(
-                "button",
-                { className: "ocgs-btn", disabled: cookie.busy, onClick: fetchCookie },
-                cookie.busy ? "Fetching…" : "Fetch cookie from Firefox",
-              ),
-              cookie.showLogin
-                ? react.createElement(
-                    "button",
-                    { className: "ocgs-btn", onClick: openLogin },
-                    "Open login page",
-                  )
-                : null,
-              cookie.note
-                ? react.createElement("span", { className: "ocgs-cookie-note" }, cookie.note)
-                : null,
-            ),
-          )
-        : null,
+        {providerVisible(cfg, "opencode") ? (
+          <div className="ocgs-section">
+            <h4 className="ocgs-section-title">OpenCode GO</h4>
+            {balanceLine ? <div className="ocgs-balance">{balanceLine}</div> : null}
+            {go && go.error ? <div className="ocgs-err">{"OpenCode GO: " + go.error}</div> : null}
+            <div className="ocgs-rows">{buildRows(GO_WINDOWS, goUsage)}</div>
+            {goPaceLine ? <div className="ocgs-pace">{goPaceLine}</div> : null}
+            <div className="ocgs-cookie">
+              <button className="ocgs-btn" disabled={cookie.busy} onClick={fetchCookie}>
+                {cookie.busy ? "Fetching…" : "Fetch cookie from Firefox"}
+              </button>
+              {cookie.showLogin ? (
+                <button className="ocgs-btn" onClick={openLogin}>
+                  Open login page
+                </button>
+              ) : null}
+              {cookie.note ? <span className="ocgs-cookie-note">{cookie.note}</span> : null}
+            </div>
+          </div>
+        ) : null}
 
-      providerVisible(cfg, "opencode-zen")
-        ? react.createElement(
-            "div",
-            { className: "ocgs-section" },
-            react.createElement(
-              "div",
-              { className: "ocgs-head" },
-              react.createElement("h4", { className: "ocgs-section-title" }, "OpenCode Zen"),
-              react.createElement(
-                "button",
-                { className: "ocgs-refresh", onClick: refreshOz },
-                "Refresh",
-              ),
-            ),
-            ozBalanceLine
-              ? react.createElement("div", { className: "ocgs-balance" }, ozBalanceLine)
-              : null,
-            oz && oz.error
-              ? react.createElement("div", { className: "ocgs-err" }, "OpenCode Zen: " + oz.error)
-              : null,
-            react.createElement(
-              "div",
-              { className: "ocgs-cookie" },
-              react.createElement(
-                "button",
-                { className: "ocgs-btn", disabled: cookie.busy, onClick: fetchCookie },
-                cookie.busy ? "Fetching…" : "Fetch cookie from Firefox",
-              ),
-              cookie.showLogin
-                ? react.createElement(
-                    "button",
-                    { className: "ocgs-btn", onClick: openLogin },
-                    "Open opencode.ai",
-                  )
-                : null,
-              cookie.note
-                ? react.createElement("span", { className: "ocgs-cookie-note" }, cookie.note)
-                : null,
-            ),
-          )
-        : null,
+        {providerVisible(cfg, "opencode-zen") ? (
+          <div className="ocgs-section">
+            <div className="ocgs-head">
+              <h4 className="ocgs-section-title">OpenCode Zen</h4>
+              <button className="ocgs-refresh" onClick={refreshOz}>
+                Refresh
+              </button>
+            </div>
+            {ozBalanceLine ? <div className="ocgs-balance">{ozBalanceLine}</div> : null}
+            {oz && oz.error ? <div className="ocgs-err">{"OpenCode Zen: " + oz.error}</div> : null}
+            <div className="ocgs-cookie">
+              <button className="ocgs-btn" disabled={cookie.busy} onClick={fetchCookie}>
+                {cookie.busy ? "Fetching…" : "Fetch cookie from Firefox"}
+              </button>
+              {cookie.showLogin ? (
+                <button className="ocgs-btn" onClick={openLogin}>
+                  Open opencode.ai
+                </button>
+              ) : null}
+              {cookie.note ? <span className="ocgs-cookie-note">{cookie.note}</span> : null}
+            </div>
+          </div>
+        ) : null}
+      </div>
     );
   };
 }
@@ -1445,7 +1244,7 @@ function apply(ctx, config) {
     return ctx.slots.register(
       { name: "settings.section", id: PLUGIN_NAME, order: 26, label: "Subscriptions" },
       function () {
-        return react.createElement(Panel);
+        return <Panel />;
       },
     );
   });

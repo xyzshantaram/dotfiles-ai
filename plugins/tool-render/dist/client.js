@@ -1593,7 +1593,7 @@ var require_core = __commonJS({
   }
 });
 
-// plugins/tool-render/src/client.ts
+// plugins/tool-render/src/client.tsx
 var client_exports = {};
 __export(client_exports, {
   apply: () => apply,
@@ -1657,6 +1657,9 @@ var CONTROLS_CSS = `
 .checkbox-field{display:flex;align-items:center;gap:12px;color:var(--text-secondary);font-size:18px}
 `.trim();
 var mergeCss = (...parts) => parts.filter(Boolean).join("\n");
+
+// css-text:/home/sid/repos/dotfiles-ai/plugins/tool-render/src/client.module.css
+var client_default = ".tool-render-row{align-items:center;min-width:0;height:24px;display:flex;position:relative;overflow:hidden}\n.tool-render-row[data-expandable]{cursor:pointer}\n.tool-render-leading{width:16px;height:16px;color:var(--dsw-alias-label-tertiary);flex:none;justify-content:center;align-items:center;margin-right:6px;display:inline-flex}\n.tool-render-chevron{color:var(--dsw-alias-label-secondary)}\n.tool-render-title{color:var(--dsw-alias-label-secondary);flex:none;font-size:14px;line-height:24px}\n.tool-render-sep{background:var(--dsw-alias-label-caption);border-radius:1px;flex:none;width:2px;height:2px;margin:0 8px}\n.tool-render-summary{text-overflow:ellipsis;white-space:nowrap;min-width:0;color:var(--dsw-alias-label-tertiary);flex:auto;font-size:14px;line-height:24px;overflow:hidden}\n.tool-render-summary[tool-render-error]{color:var(--dsw-alias-state-error-primary);font-weight:500}\n.tool-render-path{color:var(--dsw-alias-label-tertiary);cursor:pointer;min-width:0;max-width:100%;display:inline-block;vertical-align:bottom;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;line-height:24px}\n.tool-render-path:hover{color:var(--dsw-alias-label-primary);text-decoration:underline}\n.tool-render-body{flex-direction:column;display:flex}\n.tool-render-io{flex-direction:column;display:flex}\n.tool-render-command{font-family:var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-tertiary);margin:4px 0 0 4px;padding:2px 0;font-size:13px;line-height:20px}\n.tool-render-command code.hljs{background:transparent;padding:0;font-family:inherit;font-size:inherit;line-height:inherit;white-space:inherit}\n.tool-render-output{box-sizing:border-box;background:var(--dsw-alias-markdown-code-block);font-family:var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-primary);border-radius:12px;margin:4px 0 4px 4px;padding:10px 13px;font-size:13px;line-height:22px;max-height:280px;overflow-y:auto}\n.tool-render-output[tool-render-error]{color:var(--dsw-alias-state-error-primary);border-color:rgba(255,85,85,.45);background:rgba(255,85,85,.08);font-weight:500}\n.tool-render-row[data-state=error]{background:rgba(255,85,85,.07);box-shadow:inset 3px 0 0 var(--dsw-alias-state-error-primary);padding-left:8px}\n.tool-render-row[data-state=error] .tool-render-leading{transform:scale(1.3)}\n.tool-render-row[data-state=error] .tool-render-title{color:var(--dsw-alias-state-error-primary);font-weight:500}\n.tool-render-code{box-sizing:border-box;background:var(--dsw-alias-markdown-code-block);font-family:var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-primary);border-radius:12px;margin:4px 0 4px 4px;padding:10px 13px;font-size:13px;line-height:22px;max-height:400px;overflow-y:auto}\n.tool-render-inspect{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-secondary);cursor:pointer;opacity:0;border-radius:7px;align-self:flex-start;align-items:center;gap:4px;margin:4px 0 2px 4px;padding:2px 6px;font-size:11px;line-height:16px;transition:opacity .1s;display:inline-flex}\n.tool-render-card:hover .tool-render-inspect,.tool-render-inspect:focus-visible{opacity:1}\n.tool-render-inspect:hover{background:var(--dsw-alias-interactive-bg-hover-solid);color:var(--dsw-alias-label-primary)}\n.tool-render-diff-fallback{box-sizing:border-box;background:var(--dsw-alias-markdown-code-block);font-family:var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-primary);border-radius:12px;margin:4px 0 4px 4px;padding:10px 13px;font-size:13px;line-height:22px;max-height:400px;overflow-y:auto}\n.tool-render-fallback-note{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px;margin-bottom:6px}\n.tool-render-write{flex-direction:column;display:flex}\n.tool-render-write-diff{box-sizing:border-box;background:var(--dsw-alias-markdown-code-block);font-family:var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-primary);border-radius:12px;margin:4px 0 4px 4px;padding:10px 13px;font-size:13px;line-height:22px;max-height:400px;overflow-y:auto}\n.tool-render-line-same{color:var(--dsw-alias-label-primary)}\n.tool-render-diff-row.tool-render-line-del,.tool-render-diff-cell.tool-render-line-del{background:rgba(255,166,87,.16)}\n.tool-render-diff-row.tool-render-line-add,.tool-render-diff-cell.tool-render-line-add{background:rgba(125,180,255,.16)}\n.tool-render-diff-marker{flex:none;width:2ch;text-align:center;align-self:flex-start;user-select:none;color:var(--dsw-alias-label-tertiary)}\n.tool-render-diff-marker-del{color:#ffb86c}\n.tool-render-diff-marker-add{color:#7db4ff}\n.tool-render-write-note{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px;margin-bottom:6px}\n.tool-render-code-row,.tool-render-diff-row{display:flex;align-items:flex-start;min-width:0}\n.tool-render-diff-pair{display:flex;align-items:stretch;min-width:0}\n.tool-render-diff-cell{flex:1 1 0;min-width:0;display:flex;align-items:flex-start}\n.tool-render-diff-cell + .tool-render-diff-cell{border-left:1px solid var(--dsw-alias-border-l2)}\n.tool-render-gutter{flex:none;align-self:flex-start;padding-right:12px;text-align:right;color:var(--dsw-alias-label-tertiary);user-select:none;font-family:var(--ds-font-family-code);font-size:13px;line-height:22px}\n.tool-render-line-cell{flex:auto;min-width:0;display:block;font-family:var(--ds-font-family-code);font-size:13px;line-height:22px;white-space:pre-wrap;word-break:break-word}\n.tool-render-line-cell.hljs{background:transparent;padding:0;font-family:inherit;font-size:inherit;line-height:inherit;white-space:inherit}\n.tool-render-diff-path{color:var(--dsw-alias-label-secondary);font-family:var(--ds-font-family-code);font-size:13px;line-height:22px;border-bottom:1px solid var(--dsw-alias-border-l2);padding-bottom:4px;margin-bottom:6px}\n.tool-render-diff-sep{display:flex;align-items:center;gap:10px;color:var(--dsw-alias-label-caption);font-family:var(--ds-font-family-code);font-size:12px;line-height:18px;margin:8px 0}\n.tool-render-diff-sep::before,.tool-render-diff-sep::after{content:'';flex:1;height:1px;background:var(--dsw-alias-border-l2)}\n.tool-render-card{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-layer-1);padding:5px 8px}\n.tool-render-card:hover{border-color:var(--dsw-alias-border-l3)}\n.tool-render-title{font-weight:500}\n.tool-render-summary,.tool-render-path{font-size:13px}\n.tool-render-output,.tool-render-code,.tool-render-write-diff,.tool-render-diff-fallback{border:1px solid var(--dsw-alias-border-l1)}\n.tool-render-row:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}\n";
 
 // node_modules/.pnpm/highlight.js@11.12.0/node_modules/highlight.js/es/languages/javascript.js
 var IDENT_RE = "[A-Za-z$_][0-9A-Za-z$_]*";
@@ -8013,7 +8016,7 @@ function diff(hljs) {
   };
 }
 
-// plugins/tool-render/src/client.ts
+// plugins/tool-render/src/client.tsx
 var import_react = __toESM(require("react"), 1);
 var primitives = __toESM(require("@deepseek-ai/dsh-client-ui-primitives"), 1);
 var languageModules = {
@@ -8083,7 +8086,6 @@ var EXTENSION_LANGUAGE = {
   ini: "ini",
   cfg: "ini"
 };
-var createElement = import_react.default.createElement;
 var useState = import_react.default.useState;
 var StateDot2 = primitives.StateDot;
 var IconBrowseOutline162 = primitives.IconBrowseOutline16;
@@ -8112,63 +8114,12 @@ var HLJS_THEME_CSS = [
   ".hljs-addition{color:#aff5b4;background-color:#033a16}",
   ".hljs-deletion{color:#ffdcd7;background-color:#67060c}"
 ].join("");
-var CSS_TEXT = mergeCss(DESIGN_TOKENS, CONTROLS_CSS, [
-  ".tool-render-row{align-items:center;min-width:0;height:24px;display:flex;position:relative;overflow:hidden}",
-  ".tool-render-row[data-expandable]{cursor:pointer}",
-  ".tool-render-leading{width:16px;height:16px;color:var(--dsw-alias-label-tertiary);flex:none;justify-content:center;align-items:center;margin-right:6px;display:inline-flex}",
-  ".tool-render-chevron{color:var(--dsw-alias-label-secondary)}",
-  ".tool-render-title{color:var(--dsw-alias-label-secondary);flex:none;font-size:14px;line-height:24px}",
-  ".tool-render-sep{background:var(--dsw-alias-label-caption);border-radius:1px;flex:none;width:2px;height:2px;margin:0 8px}",
-  ".tool-render-summary{text-overflow:ellipsis;white-space:nowrap;min-width:0;color:var(--dsw-alias-label-tertiary);flex:auto;font-size:14px;line-height:24px;overflow:hidden}",
-  ".tool-render-summary[tool-render-error]{color:var(--dsw-alias-state-error-primary);font-weight:500}",
-  ".tool-render-path{color:var(--dsw-alias-label-tertiary);cursor:pointer;min-width:0;max-width:100%;display:inline-block;vertical-align:bottom;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;line-height:24px}",
-  ".tool-render-path:hover{color:var(--dsw-alias-label-primary);text-decoration:underline}",
-  ".tool-render-body{flex-direction:column;display:flex}",
-  ".tool-render-io{flex-direction:column;display:flex}",
-  ".tool-render-command{font-family:var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-tertiary);margin:4px 0 0 4px;padding:2px 0;font-size:13px;line-height:20px}",
-  ".tool-render-command code.hljs{background:transparent;padding:0;font-family:inherit;font-size:inherit;line-height:inherit;white-space:inherit}",
-  ".tool-render-output{box-sizing:border-box;background:var(--dsw-alias-markdown-code-block);font-family:var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-primary);border-radius:12px;margin:4px 0 4px 4px;padding:10px 13px;font-size:13px;line-height:22px;max-height:280px;overflow-y:auto}",
-  ".tool-render-output[tool-render-error]{color:var(--dsw-alias-state-error-primary);border-color:rgba(255,85,85,.45);background:rgba(255,85,85,.08);font-weight:500}",
-  ".tool-render-row[data-state=error]{background:rgba(255,85,85,.07);box-shadow:inset 3px 0 0 var(--dsw-alias-state-error-primary);padding-left:8px}",
-  ".tool-render-row[data-state=error] .tool-render-leading{transform:scale(1.3)}",
-  ".tool-render-row[data-state=error] .tool-render-title{color:var(--dsw-alias-state-error-primary);font-weight:500}",
-  ".tool-render-code{box-sizing:border-box;background:var(--dsw-alias-markdown-code-block);font-family:var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-primary);border-radius:12px;margin:4px 0 4px 4px;padding:10px 13px;font-size:13px;line-height:22px;max-height:400px;overflow-y:auto}",
-  ".tool-render-inspect{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-secondary);cursor:pointer;opacity:0;border-radius:7px;align-self:flex-start;align-items:center;gap:4px;margin:4px 0 2px 4px;padding:2px 6px;font-size:11px;line-height:16px;transition:opacity .1s;display:inline-flex}",
-  ".tool-render-card:hover .tool-render-inspect,.tool-render-inspect:focus-visible{opacity:1}",
-  ".tool-render-inspect:hover{background:var(--dsw-alias-interactive-bg-hover-solid);color:var(--dsw-alias-label-primary)}",
-  ".tool-render-diff-fallback{box-sizing:border-box;background:var(--dsw-alias-markdown-code-block);font-family:var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-primary);border-radius:12px;margin:4px 0 4px 4px;padding:10px 13px;font-size:13px;line-height:22px;max-height:400px;overflow-y:auto}",
-  ".tool-render-fallback-note{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px;margin-bottom:6px}",
-  ".tool-render-write{flex-direction:column;display:flex}",
-  ".tool-render-write-diff{box-sizing:border-box;background:var(--dsw-alias-markdown-code-block);font-family:var(--ds-font-family-code);white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-primary);border-radius:12px;margin:4px 0 4px 4px;padding:10px 13px;font-size:13px;line-height:22px;max-height:400px;overflow-y:auto}",
-  ".tool-render-line-same{color:var(--dsw-alias-label-primary)}",
-  ".tool-render-diff-row.tool-render-line-del,.tool-render-diff-cell.tool-render-line-del{background:rgba(255,166,87,.16)}",
-  ".tool-render-diff-row.tool-render-line-add,.tool-render-diff-cell.tool-render-line-add{background:rgba(125,180,255,.16)}",
-  ".tool-render-diff-marker{flex:none;width:2ch;text-align:center;align-self:flex-start;user-select:none;color:var(--dsw-alias-label-tertiary)}",
-  ".tool-render-diff-marker-del{color:#ffb86c}",
-  ".tool-render-diff-marker-add{color:#7db4ff}",
-  ".tool-render-write-note{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px;margin-bottom:6px}",
-  ".tool-render-code-row,.tool-render-diff-row{display:flex;align-items:flex-start;min-width:0}",
-  ".tool-render-diff-pair{display:flex;align-items:stretch;min-width:0}",
-  ".tool-render-diff-cell{flex:1 1 0;min-width:0;display:flex;align-items:flex-start}",
-  ".tool-render-diff-cell + .tool-render-diff-cell{border-left:1px solid var(--dsw-alias-border-l2)}",
-  ".tool-render-gutter{flex:none;align-self:flex-start;padding-right:12px;text-align:right;color:var(--dsw-alias-label-tertiary);user-select:none;font-family:var(--ds-font-family-code);font-size:13px;line-height:22px}",
-  ".tool-render-line-cell{flex:auto;min-width:0;display:block;font-family:var(--ds-font-family-code);font-size:13px;line-height:22px;white-space:pre-wrap;word-break:break-word}",
-  ".tool-render-line-cell.hljs{background:transparent;padding:0;font-family:inherit;font-size:inherit;line-height:inherit;white-space:inherit}",
-  ".tool-render-diff-path{color:var(--dsw-alias-label-secondary);font-family:var(--ds-font-family-code);font-size:13px;line-height:22px;border-bottom:1px solid var(--dsw-alias-border-l2);padding-bottom:4px;margin-bottom:6px}",
-  ".tool-render-diff-sep{display:flex;align-items:center;gap:10px;color:var(--dsw-alias-label-caption);font-family:var(--ds-font-family-code);font-size:12px;line-height:18px;margin:8px 0}",
-  ".tool-render-diff-sep::before,.tool-render-diff-sep::after{content:'';flex:1;height:1px;background:var(--dsw-alias-border-l2)}",
-  ".tool-render-card{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-layer-1);padding:5px 8px}",
-  ".tool-render-card:hover{border-color:var(--dsw-alias-border-l3)}",
-  ".tool-render-title{font-weight:500}",
-  ".tool-render-summary,.tool-render-path{font-size:13px}",
-  ".tool-render-output,.tool-render-code,.tool-render-write-diff,.tool-render-diff-fallback{border:1px solid var(--dsw-alias-border-l1)}",
-  ".tool-render-row:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}"
-].join(""));
+var CSS_TEXT = mergeCss(DESIGN_TOKENS, CONTROLS_CSS, [client_default]);
 if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(STYLE_TAG_ID) + "]") === null) {
   tag = document.createElement("style");
   tag.dataset.plugin = PLUGIN_NAME;
   tag.dataset.pluginCss = STYLE_TAG_ID;
-  tag.textContent = mergeCss(DESIGN_TOKENS, CONTROLS_CSS, HLJS_THEME_CSS, CSS_TEXT);
+  tag.textContent = mergeCss(CSS_TEXT, HLJS_THEME_CSS);
   document.head.appendChild(tag);
 }
 var tag;
@@ -8412,17 +8363,17 @@ function toolRenderRow(options) {
   var open = options.expanded === true && interactive;
   var leading;
   if (open) {
-    leading = createElement(IconChevronDownOutline142, { className: "tool-render-chevron" });
+    leading = /* @__PURE__ */ import_react.default.createElement(IconChevronDownOutline142, { className: "tool-render-chevron" });
   } else if (options.state === "error") {
-    leading = createElement(StateDot2, { state: "error" });
+    leading = /* @__PURE__ */ import_react.default.createElement(StateDot2, { state: "error" });
   } else if (options.state === "stopped") {
-    leading = createElement(StateDot2, { state: "warning" });
+    leading = /* @__PURE__ */ import_react.default.createElement(StateDot2, { state: "warning" });
   } else {
     leading = options.icon;
   }
   var summary;
   if (options.path !== void 0 && options.path !== null && options.onOpenFile !== void 0) {
-    summary = createElement(
+    summary = /* @__PURE__ */ import_react.default.createElement(
       "span",
       {
         className: "tool-render-path",
@@ -8444,7 +8395,7 @@ function toolRenderRow(options) {
       options.summary
     );
   } else {
-    summary = createElement(
+    summary = /* @__PURE__ */ import_react.default.createElement(
       "span",
       {
         className: "tool-render-summary",
@@ -8453,43 +8404,28 @@ function toolRenderRow(options) {
       options.errorSummary !== void 0 ? options.errorSummary : options.summary
     );
   }
-  return createElement(
+  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-card" }, /* @__PURE__ */ import_react.default.createElement(
     "div",
-    { className: "tool-render-card" },
-    createElement(
-      "div",
-      {
-        className: "tool-render-row",
-        "data-state": options.state,
-        "data-expandable": interactive || void 0,
-        role: interactive ? "button" : void 0,
-        tabIndex: interactive ? 0 : void 0,
-        "aria-expanded": interactive ? open : void 0,
-        onClick: interactive ? options.onToggle : void 0,
-        onKeyDown: interactive ? function(event) {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            options.onToggle();
-          }
-        } : void 0
-      },
-      createElement("span", { className: "tool-render-leading" }, leading),
-      createElement("span", { className: "tool-render-title" }, options.title),
-      createElement("span", { className: "tool-render-sep", "aria-hidden": true }),
-      summary
-    ),
-    open === true || options.state === "error" && options.body !== null ? createElement(
-      "div",
-      { className: "tool-render-body" },
-      options.body,
-      options.inspect !== void 0 ? createElement(
-        "button",
-        { type: "button", className: "tool-render-inspect", onClick: options.inspect },
-        createElement(IconInspectOutline122, {}),
-        " Inspect"
-      ) : null
-    ) : null
-  );
+    {
+      className: "tool-render-row",
+      "data-state": options.state,
+      "data-expandable": interactive || void 0,
+      role: interactive ? "button" : void 0,
+      tabIndex: interactive ? 0 : void 0,
+      "aria-expanded": interactive ? open : void 0,
+      onClick: interactive ? options.onToggle : void 0,
+      onKeyDown: interactive ? function(event) {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          options.onToggle();
+        }
+      } : void 0
+    },
+    /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-leading" }, leading),
+    /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-title" }, options.title),
+    /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-sep", "aria-hidden": true }),
+    summary
+  ), open === true || options.state === "error" && options.body !== null ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-body" }, options.body, options.inspect !== void 0 ? /* @__PURE__ */ import_react.default.createElement("button", { type: "button", className: "tool-render-inspect", onClick: options.inspect }, /* @__PURE__ */ import_react.default.createElement(IconInspectOutline122, null), " Inspect") : null) : null);
 }
 function ReadRow(props) {
   var expandedState = useState(false);
@@ -8507,19 +8443,15 @@ function ReadRow(props) {
   var body = null;
   if (output !== null && output !== "") {
     if (state === "error") {
-      body = createElement(
-        "pre",
-        { className: "tool-render-output", "tool-render-error": true },
-        output
-      );
+      body = /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output", "tool-render-error": true }, output);
     } else {
       var rows = numberedReadRows(output, readStartLine(args, output));
       var language = languageFor(path !== void 0 ? path : "");
-      body = createElement("div", { className: "tool-render-code" }, readLineRows(rows, language));
+      body = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-code" }, readLineRows(rows, language));
     }
   }
   return toolRenderRow({
-    icon: createElement(IconBrowseOutline162, { size: 14 }),
+    icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
     title: "Read",
     summary,
     path,
@@ -8554,31 +8486,25 @@ function BashRow(props) {
     if (command !== void 0) {
       var commandHtml = highlightCode(command, "bash");
       inner.push(
-        createElement(
-          "div",
-          { className: "tool-render-command" },
-          "$ ",
-          createElement("code", {
+        /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-command" }, "$ ", /* @__PURE__ */ import_react.default.createElement(
+          "code",
+          {
             className: "hljs",
             "data-highlighted": "yes",
             dangerouslySetInnerHTML: { __html: commandHtml }
-          })
-        )
+          }
+        ))
       );
     }
     if (output !== null && output !== "") {
       inner.push(
-        createElement(
-          "pre",
-          { className: "tool-render-output", "tool-render-error": state === "error" || void 0 },
-          stripAnsi(output)
-        )
+        /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output", "tool-render-error": state === "error" || void 0 }, stripAnsi(output))
       );
     }
-    body = createElement("div", { className: "tool-render-io" }, inner);
+    body = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-io" }, inner);
   }
   return toolRenderRow({
-    icon: createElement(IconApiOutline142, { size: 14 }),
+    icon: /* @__PURE__ */ import_react.default.createElement(IconApiOutline142, { size: 14 }),
     title: "Bash",
     summary,
     state,
@@ -8846,11 +8772,7 @@ function diffFallbackBody(diffs, language) {
     }
   }
   var children = [
-    createElement(
-      "div",
-      { className: "tool-render-fallback-note" },
-      onlyDels ? "After text unavailable" : "Before text unavailable"
-    )
+    /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-fallback-note" }, onlyDels ? "After text unavailable" : "Before text unavailable")
   ];
   var lines = [];
   var numbers = [];
@@ -8868,7 +8790,7 @@ function diffFallbackBody(diffs, language) {
   for (var i = 0; i < lines.length; i++) {
     children.push(diffLineRow(onlyDels ? "del" : "add", lines[i], numbers[i], width, language));
   }
-  return createElement("div", { className: "tool-render-diff-fallback" }, children);
+  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-diff-fallback" }, children);
 }
 function resolveEffectiveCwd(props) {
   if (typeof props.useSessions === "function") {
@@ -8896,7 +8818,7 @@ function makeEditRow(toolTitle) {
     var block = props.block;
     if (block === null || typeof block !== "object") {
       return toolRenderRow({
-        icon: createElement(IconEditOutline162, { size: 14 }),
+        icon: /* @__PURE__ */ import_react.default.createElement(IconEditOutline162, { size: 14 }),
         title: toolTitle,
         summary: toolTitle,
         state: "ok",
@@ -8939,14 +8861,10 @@ function makeEditRow(toolTitle) {
         body = editDiffBody(diffs);
       }
     } else if (output !== null && output !== "") {
-      body = createElement(
-        "pre",
-        { className: "tool-render-output", "tool-render-error": state === "error" || void 0 },
-        output
-      );
+      body = /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output", "tool-render-error": state === "error" || void 0 }, output);
     }
     return toolRenderRow({
-      icon: createElement(IconEditOutline162, { size: 14 }),
+      icon: /* @__PURE__ */ import_react.default.createElement(IconEditOutline162, { size: 14 }),
       title: toolTitle,
       summary,
       path: summaryPath,
@@ -8976,15 +8894,7 @@ function gutterWidthCh(numbers) {
   return max + 2 + "ch";
 }
 function gutterSpan(number, width) {
-  return createElement(
-    "span",
-    {
-      className: "tool-render-gutter",
-      "aria-hidden": true,
-      style: { width }
-    },
-    number === null || number === void 0 ? "" : String(number)
-  );
+  return /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-gutter", "aria-hidden": true, style: { width } }, number === null || number === void 0 ? "" : String(number));
 }
 function readLineRows(rows, language) {
   var numbers = [];
@@ -8993,34 +8903,27 @@ function readLineRows(rows, language) {
   var out = [];
   for (var i = 0; i < rows.length; i++) {
     out.push(
-      createElement(
-        "div",
-        { className: "tool-render-code-row" },
-        gutterSpan(rows[i].number, width),
-        createElement("code", {
+      /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-code-row" }, gutterSpan(rows[i].number, width), /* @__PURE__ */ import_react.default.createElement(
+        "code",
+        {
           className: "tool-render-line-cell hljs",
           "data-highlighted": "yes",
           dangerouslySetInnerHTML: { __html: highlightCode(rows[i].text, language) }
-        })
-      )
+        }
+      ))
     );
   }
   return out;
 }
 function diffLineRow(type, text, number, width, language) {
-  return createElement(
-    "div",
+  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-diff-row" + (type === "same" ? "" : " tool-render-line-" + type) }, diffMarker(type === "same" ? null : type), gutterSpan(number, width), /* @__PURE__ */ import_react.default.createElement(
+    "code",
     {
-      className: "tool-render-diff-row" + (type === "same" ? "" : " tool-render-line-" + type)
-    },
-    diffMarker(type === "same" ? null : type),
-    gutterSpan(number, width),
-    createElement("code", {
       className: "tool-render-line-cell hljs",
       "data-highlighted": "yes",
       dangerouslySetInnerHTML: { __html: highlightCode(text, language) }
-    })
-  );
+    }
+  ));
 }
 function alignDiffOps(ops, startOld) {
   var rows = [];
@@ -9059,7 +8962,7 @@ function alignDiffOps(ops, startOld) {
   return rows;
 }
 function diffMarker(kind) {
-  return createElement(
+  return /* @__PURE__ */ import_react.default.createElement(
     "span",
     {
       className: "tool-render-diff-marker" + (kind === null ? "" : " tool-render-diff-marker-" + kind),
@@ -9069,34 +8972,19 @@ function diffMarker(kind) {
   );
 }
 function diffCell(kind, text, number, width, language) {
-  return createElement(
-    "div",
+  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-diff-cell" + (kind === "same" ? "" : " tool-render-line-" + kind) }, diffMarker(kind === "same" ? null : kind), gutterSpan(number, width), /* @__PURE__ */ import_react.default.createElement(
+    "code",
     {
-      className: "tool-render-diff-cell" + (kind === "same" ? "" : " tool-render-line-" + kind)
-    },
-    diffMarker(kind === "same" ? null : kind),
-    gutterSpan(number, width),
-    createElement("code", {
       className: "tool-render-line-cell hljs",
       "data-highlighted": "yes",
       dangerouslySetInnerHTML: { __html: highlightCode(text, language) }
-    })
-  );
+    }
+  ));
 }
 function diffPairRow(row, leftWidth, rightWidth, language) {
-  var left = row.left === null ? createElement(
-    "div",
-    { className: "tool-render-diff-cell" },
-    diffMarker(null),
-    gutterSpan(null, leftWidth)
-  ) : diffCell(row.left.kind, row.left.text, row.oldNum, leftWidth, language);
-  var right = row.right === null ? createElement(
-    "div",
-    { className: "tool-render-diff-cell" },
-    diffMarker(null),
-    gutterSpan(null, rightWidth)
-  ) : diffCell(row.right.kind, row.right.text, row.newNum, rightWidth, language);
-  return createElement("div", { className: "tool-render-diff-pair" }, left, right);
+  var left = row.left === null ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-diff-cell" }, diffMarker(null), gutterSpan(null, leftWidth)) : diffCell(row.left.kind, row.left.text, row.oldNum, leftWidth, language);
+  var right = row.right === null ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-diff-cell" }, diffMarker(null), gutterSpan(null, rightWidth)) : diffCell(row.right.kind, row.right.text, row.newNum, rightWidth, language);
+  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-diff-pair" }, left, right);
 }
 function editDiffBody(diffs) {
   var children = [];
@@ -9106,11 +8994,11 @@ function editDiffBody(diffs) {
     var filePath = typeof file.path === "string" ? file.path : "";
     var language = languageFor(filePath);
     if (filePath !== previousPath) {
-      children.push(createElement("div", { className: "tool-render-diff-path" }, filePath));
+      children.push(/* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-diff-path" }, filePath));
       previousPath = filePath;
     } else {
       children.push(
-        createElement("div", { className: "tool-render-diff-sep", "aria-hidden": true }, "\u22EF")
+        /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-diff-sep", "aria-hidden": true }, "\u22EF")
       );
     }
     var oldText = deIndent(typeof file.oldText === "string" ? file.oldText : "");
@@ -9149,25 +9037,12 @@ function editDiffBody(diffs) {
       }
     }
   }
-  return createElement("div", { className: "tool-render-write-diff" }, children);
+  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-write-diff" }, children);
 }
 function writeBody(path, before, newText) {
   var language = languageFor(path !== void 0 ? path : "");
   if (before === null || before === "") {
-    return createElement(
-      "div",
-      { className: "tool-render-write" },
-      createElement(
-        "div",
-        { className: "tool-render-write-note" },
-        "No earlier version on record; new content below"
-      ),
-      createElement(
-        "div",
-        { className: "tool-render-code" },
-        readLineRows(numberedReadRows(newText, 1), language)
-      )
-    );
+    return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-write" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-write-note" }, "No earlier version on record; new content below"), /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-code" }, readLineRows(numberedReadRows(newText, 1), language)));
   }
   var cleaned = cleanReadTextForDiff(before);
   var ops = diffLines(deIndent(cleaned.content), deIndent(newText));
@@ -9204,7 +9079,7 @@ function writeBody(path, before, newText) {
       lines.push(diffLineRow(type, parts[i], numbers[i], width, language));
     }
   }
-  return createElement("div", { className: "tool-render-write-diff" }, lines);
+  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-write-diff" }, lines);
 }
 function WriteRow(props) {
   var expandedState = useState(false);
@@ -9232,14 +9107,10 @@ function WriteRow(props) {
   if (done && state === "ok") {
     body = writeBody(path, before, newText);
   } else if (output !== null && output !== "") {
-    body = createElement(
-      "pre",
-      { className: "tool-render-output", "tool-render-error": state === "error" || void 0 },
-      output
-    );
+    body = /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output", "tool-render-error": state === "error" || void 0 }, output);
   }
   return toolRenderRow({
-    icon: createElement(IconEditOutline162, { size: 14 }),
+    icon: /* @__PURE__ */ import_react.default.createElement(IconEditOutline162, { size: 14 }),
     title: "Write",
     summary,
     path,
