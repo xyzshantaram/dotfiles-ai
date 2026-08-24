@@ -15,6 +15,20 @@ llm-pi-ai:
       - text
       - image
       models:
+      - id: poolside/laguna-s-2.1-free
+        name: Poolside Laguna S 2.1 Free
+        contextWindow: 262144
+        maxTokens: 32768
+      - id: minimaxai/minimax-m3
+        contextWindow: 1000000
+        maxTokens: 262144
+      - id: zai-org/glm-5.3
+        name: Z.ai GLM 5.3
+        contextWindow: 262144
+        maxTokens: 32768
+      - id: meta/muse-spark-1.2-contributor
+        contextWindow: 1048576
+        maxTokens: 131072
       - id: stealth/ox-alpha
         name: Stealth Ox Alpha
         contextWindow: 1048576
@@ -124,6 +138,8 @@ profile:
         model: deepseek-v4-flash
     worker:
       routes:
+      - provider: command-code
+        model: poolside/laguna-s-2.1-free
       - provider: opencode-zen
         model: deepseek-v4-flash-free
       - provider: command-code
