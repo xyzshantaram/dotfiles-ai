@@ -117,7 +117,7 @@ window.__ModuleLoader__.load({
       ".pf-panel-bad{color:var(--dsw-alias-state-error-primary)}",
       ".pf-panel-select{box-sizing:border-box;flex:1;min-width:0;height:26px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:0 6px;font-size:12px;line-height:18px;cursor:pointer}",
       ".pf-panel-select:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}",
-      ".pf-panel-effort{box-sizing:border-box;flex:1;min-width:0;margin-left:8px;height:22px;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:0 6px;font-size:11px;line-height:16px;cursor:pointer}",
+      ".pf-panel-effort{box-sizing:border-box;flex:0 0 auto;min-width:0;margin-left:8px;height:22px;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:0 6px;font-size:11px;line-height:16px;cursor:pointer}",
       ".pf-panel-select option,.pf-panel-effort option{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}",
       ".pf-panel-model-row{display:flex;flex-direction:column;gap:2px}",
       ".pf-panel-add-select{align-self:flex-start;border-style:dashed}",
@@ -1506,19 +1506,6 @@ window.__ModuleLoader__.load({
                                   );
                                 }),
                               ),
-                              createElement(
-                                "button",
-                                {
-                                  type: "button",
-                                  className: "pf-panel-del",
-                                  title: "Remove rung",
-                                  onClick: function () {
-                                    removeChainRung(chainName, index);
-                                  },
-                                },
-                                "\u00d7",
-                              ),
-                            ),
                             efforts.length > 0
                               ? createElement(
                                   "select",
@@ -1544,6 +1531,19 @@ window.__ModuleLoader__.load({
                                   }),
                                 )
                               : null,
+                              createElement(
+                                "button",
+                                {
+                                  type: "button",
+                                  className: "pf-panel-del",
+                                  title: "Remove rung",
+                                  onClick: function () {
+                                    removeChainRung(chainName, index);
+                                  },
+                                },
+                                "\u00d7",
+                              ),
+                            ),
                           );
                         }),
                     createElement(
