@@ -240,6 +240,28 @@ function apply(ctx, config) {
     const live = settings?.get(PROFILE_NS);
     return live ?? source();
   };
+  const llm = ctx.get("llm");
+  if (llm !== void 0) {
+    ctx.on("agent/created", async ({ agent }) => {
+      const opts = agent.options;
+      const routed = agent.session?.requestHeader?.()?.config;
+      const provider = routed?.provider ?? opts?.provider;
+      const model = routed?.model ?? opts?.model;
+      if (provider === void 0 || model === void 0) return;
+      let hasVision = false;
+      try {
+        const info = await llm.resolveModelInfo(provider, model);
+        const mods = info?.input?.inputModalities ?? info?.inputModalities;
+        if (Array.isArray(mods)) hasVision = mods.includes("image");
+      } catch {
+      }
+      const deny = hasVision ? ["see"] : ["read_image"];
+      try {
+        agent.ctx.tools.restrict({ deny });
+      } catch {
+      }
+    });
+  }
   registerSeeTool(ctx, getProfile);
   void config;
 }
