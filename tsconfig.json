@@ -6,8 +6,11 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "types": ["node"]
+    "types": ["node"],
+    "jsx": "react",
+    "jsxFactory": "react.createElement",
+    "jsxFragment": "react.Fragment",
   },
-  "include": ["plugins/**/*.ts"],
+  "include": ["plugins/**/*.ts", "plugins/**/*.tsx"],
   "exclude": ["node_modules", "plugins/**/node_modules", "plugins/**/dist", "plugins/**/lib"]
 }

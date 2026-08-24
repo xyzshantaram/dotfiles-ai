@@ -36,6 +36,7 @@
  */
 
 import { DESIGN_TOKENS, CONTROLS_CSS, mergeCss } from "../../design-system";
+import localCss from "./client.module.css";
 
 window.__ModuleLoader__.load({
   id: "profiles-client",
@@ -65,65 +66,7 @@ window.__ModuleLoader__.load({
      * use the kebab-case plugin prefix so they cannot collide.
      */
     var STYLE_TAG_ID = "profiles-client/client.module.css";
-    var CSS_TEXT = mergeCss(DESIGN_TOKENS, CONTROLS_CSS, [
-      ".profiles-client-root{min-width:0;position:relative}",
-      ".profiles-client-trigger{min-width:0;max-width:min(360px,45cqw);height:28px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:12px;outline:none;align-items:center;gap:5px;padding:0 7px;font-size:13px;font-weight:500;line-height:20px;display:flex}",
-      ".profiles-client-trigger:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}",
-      ".profiles-client-trigger:focus-visible{box-shadow:0 0 0 2px var(--dsw-alias-border-l3)}",
-      ".profiles-client-trigger:disabled{color:var(--dsw-alias-label-dimmed);cursor:default}",
-      ".profiles-client-profile-pill{flex:none;box-sizing:border-box;display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 6px;border-radius:7px;background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);font-size:12px;font-weight:500;line-height:18px;white-space:nowrap}",
-      ".profiles-client-pill-dot{flex:none;width:6px;height:6px;border-radius:50%}",
-      ".profiles-client-pill-dot.profiles-client-pill-dot-matched{background:var(--dsw-alias-state-info-primary,#3b82f6)}",
-      ".profiles-client-pill-dot.profiles-client-pill-dot-changed{background:#f59e0b}",
-      ".profiles-client-model-label{text-overflow:ellipsis;white-space:nowrap;min-width:0;overflow:hidden}",
-      ".profiles-client-chevron{color:var(--dsw-alias-label-caption);flex:none}",
-      ".profiles-client-menu{z-index:20;border:1px solid var(--dsw-alias-border-inverted);background:var(--dsw-specific-menu);width:max-content;min-width:220px;max-width:min(420px,100vw - 32px);max-height:min(400px,100vh - 96px);box-shadow:var(--dsw-shadow-lv3);color:var(--dsw-alias-label-primary);border-radius:12px;flex-direction:column;padding:4px;display:flex;position:absolute;bottom:calc(100% + 8px);right:0;overflow-x:hidden;overflow-y:auto}",
-      ".profiles-client-menu{z-index:20;border:1px solid var(--dsw-alias-border-inverted);background:var(--dsw-specific-menu);width:max-content;min-width:220px;max-width:min(420px,100vw - 32px);max-height:min(400px,100vh - 96px);box-shadow:var(--dsw-shadow-lv3);color:var(--dsw-alias-label-primary);border-radius:8px;flex-direction:column;padding:3px;display:flex;position:absolute;bottom:calc(100% + 8px);right:0;overflow-x:hidden;overflow-y:auto}",
-      ".profiles-client-option{box-sizing:border-box;width:auto;min-width:100%;min-height:34px;color:inherit;text-align:left;cursor:pointer;background:0 0;border:none;border-radius:10px;outline:none;align-items:center;gap:8px;padding:5px 8px;display:flex}",
-      ".profiles-client-option{box-sizing:border-box;width:auto;min-width:100%;min-height:34px;color:inherit;text-align:left;cursor:pointer;background:0 0;border:none;border-radius:8px;outline:none;align-items:center;gap:8px;padding:4px 7px;display:flex}",
-      ".profiles-client-option-copy{flex-direction:column;flex:1;min-width:0;display:flex}",
-      ".profiles-client-option-name{color:inherit;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:500;line-height:20px;overflow:hidden}",
-      ".profiles-client-option-profile{font-weight:700}",
-      ".profiles-client-option-model{font-size:12px;font-weight:500}",
-      ".profiles-client-option-detail{color:var(--dsw-alias-label-tertiary);text-overflow:ellipsis;white-space:nowrap;font-size:12px;line-height:16px;overflow:hidden}",
-      ".profiles-client-check{color:var(--dsw-alias-label-primary);flex:0 0 14px}",
-      ".profiles-client-model-row{display:flex;flex-direction:column;gap:2px}",
-      ".profiles-client-effort{box-sizing:border-box;width:calc(100% - 16px);min-width:0;margin-left:8px;height:24px;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:0 6px;font-size:11px;line-height:16px}",
-      ".profiles-client-strip{color:var(--dsw-alias-label-tertiary);padding:10px;font-size:13px;line-height:20px}",
-      ".pf-panel-root{box-sizing:border-box;display:flex;flex-direction:column;gap:12px;padding:0;color:var(--dsw-alias-label-primary)}",
-      ".pf-panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px}",
-      ".pf-panel-title{font-size:24px;font-weight:700;margin:0;line-height:1.2;color:var(--dsw-alias-label-primary)}",
-      ".pf-panel-refresh{cursor:pointer;border:none;background:none;padding:0;color:var(--dsw-alias-label-secondary);font-size:15px;line-height:20px}",
-      ".pf-panel-refresh:hover{color:var(--dsw-alias-label-primary)}",
-      ".pf-panel-err{font-size:15px;line-height:22px;color:var(--dsw-alias-state-error-primary)}",
-      ".pf-panel-active{display:flex;gap:12px;flex-wrap:wrap}",
-      ".pf-panel-active-btn{display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:12px;font-size:15px;line-height:20px;padding:6px 11px;min-height:40px;cursor:pointer}",
-      ".pf-panel-active-btn-on{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-border-l3)}",
-      ".pf-panel-entry{display:flex;flex-direction:column;gap:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;padding:16px;background:var(--dsw-alias-bg-tertiary)}",
-      ".pf-panel-entry-title{font-size:16px;font-weight:600;margin:0;color:var(--dsw-alias-label-primary)}",
-      ".pf-panel-chain{display:flex;flex-direction:column;gap:12px}",
-      ".pf-panel-chain-title{font-size:16px;line-height:22px;color:var(--dsw-alias-label-secondary);margin:0}",
-      ".pf-panel-row{display:flex;gap:12px;align-items:center;min-width:0}",
-      ".pf-panel-input{box-sizing:border-box;flex:1;min-width:0;height:40px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:0 8px;font-size:15px;line-height:20px}",
-      ".pf-panel-input:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}",
-      ".pf-panel-del{flex:none;cursor:pointer;border:none;background:none;padding:0 4px;color:var(--dsw-alias-label-secondary);font-size:16px;line-height:20px}",
-      ".pf-panel-add{align-self:flex-start;color:var(--dsw-alias-label-secondary);background:none;border:1px dashed var(--dsw-alias-border-l2);border-radius:7px;font-size:15px;line-height:20px;padding:3px 11px;cursor:pointer}",
-      ".pf-panel-add:hover{color:var(--dsw-alias-label-primary)}",
-      ".pf-panel-meta{font-size:14px;line-height:22px;color:var(--dsw-alias-label-secondary)}",
-      ".pf-panel-ref{flex:none;color:var(--dsw-alias-label-tertiary);background:var(--dsw-alias-interactive-bg-hover);border-radius:7px;font-size:13px;line-height:20px;padding:1px 8px}",
-      ".pf-panel-actions{display:flex;align-items:center;gap:12px}",
-      ".pf-panel-save{display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l3);border-radius:12px;font-size:15px;line-height:20px;padding:6px 11px;min-height:40px;cursor:pointer}",
-      ".pf-panel-save:disabled{opacity:.5;cursor:default}",
-      ".pf-panel-status{font-size:15px;line-height:22px}",
-      ".pf-panel-ok{color:var(--dsw-alias-state-success-primary)}",
-      ".pf-panel-bad{color:var(--dsw-alias-state-error-primary)}",
-      ".pf-panel-select{box-sizing:border-box;flex:1;min-width:0;height:40px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:0 8px;font-size:15px;line-height:20px;cursor:pointer}",
-      ".pf-panel-select:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}",
-      ".pf-panel-effort{box-sizing:border-box;flex:0 0 auto;min-width:0;margin-left:8px;height:40px;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:0 8px;font-size:15px;line-height:20px;cursor:pointer}",
-      ".pf-panel-select option,.pf-panel-effort option{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}",
-      ".pf-panel-model-row{display:flex;flex-direction:column;gap:2px}",
-      ".pf-panel-add-select{align-self:flex-start;border-style:dashed}",
-    ].join(""));
+    var CSS_TEXT = mergeCss(DESIGN_TOKENS, CONTROLS_CSS, [localCss]);
     if (
       typeof document !== "undefined" &&
       document.querySelector("style[data-plugin-css=" + JSON.stringify(STYLE_TAG_ID) + "]") === null
@@ -564,203 +507,157 @@ window.__ModuleLoader__.load({
             ? currentPretty.model + " (" + currentPretty.provider + ")"
             : t("seat.fallback");
 
-        return createElement(
-          "div",
-          { className: "profiles-client-root", ref: rootRef, onKeyDown: onKeyDown },
-          createElement(
-            "button",
-            {
-              type: "button",
-              className: "profiles-client-trigger",
-              "aria-haspopup": "listbox",
-              "aria-expanded": open,
-              "aria-label": t("seat.aria"),
-              disabled: locked === true,
-              onClick: function () {
+        return (
+          <div className="profiles-client-root" ref={rootRef} onKeyDown={onKeyDown}>
+            <button
+              type="button"
+              className="profiles-client-trigger"
+              aria-haspopup="listbox"
+              aria-expanded={open}
+              aria-label={t("seat.aria")}
+              disabled={locked === true}
+              onClick={function () {
                 var next = !open;
                 setOpen(next);
                 if (next) fetchProfiles();
                 load();
-              },
-            },
-            hasProfile
-              ? createElement(
-                  "span",
-                  { className: "profiles-client-profile-pill" },
-                  face.active,
-                  createElement("span", {
-                    className:
+              }}
+            >
+              {hasProfile ? (
+                <span className="profiles-client-profile-pill">
+                  {face.active}
+                  <span
+                    className={
                       "profiles-client-pill-dot" +
                       (matched
                         ? " profiles-client-pill-dot-matched"
-                        : " profiles-client-pill-dot-changed"),
-                    "aria-hidden": true,
-                  }),
-                )
-              : null,
-            createElement("span", { className: "profiles-client-model-label" }, modelText),
-            createElement(
-              "span",
-              { className: "profiles-client-chevron", "aria-hidden": true },
-              "▾",
-            ),
-          ),
-          open
-            ? createElement(
-                "div",
-                { className: "profiles-client-menu", role: "listbox" },
-                createElement(
-                  "button",
-                  {
-                    type: "button",
-                    className: "profiles-client-option",
-                    onClick: function () {
-                      if (face.head !== void 0) pick(face.head);
-                    },
-                  },
-                  createElement(
-                    "span",
-                    { className: "profiles-client-option-copy" },
-                    createElement(
-                      "span",
-                      { className: "profiles-client-option-name profiles-client-option-profile" },
-                      t("menu.default"),
-                    ),
-                    createElement(
-                      "span",
-                      { className: "profiles-client-option-detail" },
-                      face.head !== void 0
+                        : " profiles-client-pill-dot-changed")
+                    }
+                    aria-hidden={true}
+                  />
+                </span>
+              ) : null}
+              <span className="profiles-client-model-label">{modelText}</span>
+              <span className="profiles-client-chevron" aria-hidden={true}>
+                ▾
+              </span>
+            </button>
+            {open ? (
+              <div className="profiles-client-menu" role="listbox">
+                <button
+                  type="button"
+                  className="profiles-client-option"
+                  onClick={function () {
+                    if (face.head !== void 0) pick(face.head);
+                  }}
+                >
+                  <span className="profiles-client-option-copy">
+                    <span className="profiles-client-option-name profiles-client-option-profile">
+                      {t("menu.default")}
+                    </span>
+                    <span className="profiles-client-option-detail">
+                      {face.head !== void 0
                         ? prettyOf(face.head.provider, face.head.model).provider +
-                            "/" +
-                            prettyOf(face.head.provider, face.head.model).model
-                        : "",
-                    ),
-                  ),
-                ),
-                profileRows.length > 0
-                  ? createElement(
-                      "div",
-                      null,
-                      createElement(
-                        "div",
-                        { className: "profiles-client-section-label" },
-                        t("menu.profiles"),
-                      ),
-                      profileRows.map(function (row) {
-                        var isActive = row.key === face.active;
-                        var headPretty = prettyOf(row.head.provider, row.head.model);
-                        return createElement(
-                          "button",
-                          {
-                            key: row.key,
-                            type: "button",
-                            className: "profiles-client-option",
-                            onClick: function () {
-                              putJson("/profiles/switch", { active: row.key }).then(
-                                function (result) {
-                                  if (!result.error) setOpen(false);
-                                },
-                              );
-                            },
-                          },
-                          createElement(
-                            "span",
-                            { className: "profiles-client-option-copy" },
-                            createElement(
-                              "span",
-                              {
-                                className:
-                                  "profiles-client-option-name profiles-client-option-profile",
+                          "/" +
+                          prettyOf(face.head.provider, face.head.model).model
+                        : ""}
+                    </span>
+                  </span>
+                </button>
+                {profileRows.length > 0 ? (
+                  <div>
+                    <div className="profiles-client-section-label">
+                      {t("menu.profiles")}
+                    </div>
+                    {profileRows.map(function (row) {
+                      var isActive = row.key === face.active;
+                      var headPretty = prettyOf(row.head.provider, row.head.model);
+                      return (
+                        <button
+                          key={row.key}
+                          type="button"
+                          className="profiles-client-option"
+                          onClick={function () {
+                            putJson("/profiles/switch", { active: row.key }).then(
+                              function (result) {
+                                if (!result.error) setOpen(false);
                               },
-                              row.key + (isActive ? " ·" : ""),
-                            ),
-                            createElement(
-                              "span",
-                              { className: "profiles-client-option-detail" },
-                              headPretty.provider + "/" + headPretty.model,
-                            ),
-                          ),
-                          isActive
-                            ? createElement(
-                                "span",
-                                { className: "profiles-client-check", "aria-hidden": true },
-                                "✓",
-                              )
-                            : null,
-                        );
-                      }),
-                    )
-                  : null,
-                createElement(
-                  "div",
-                  null,
-                  createElement(
-                    "div",
-                    { className: "profiles-client-section-label" },
-                    t("menu.models"),
-                  ),
-                  state.status === "error" && state.error
-                    ? createElement("div", { className: "profiles-client-strip" }, state.error)
-                    : null,
-                  modelGroups.map(function (grp) {
-                    return createElement(
-                      "div",
-                      { key: grp.id },
-                      createElement(
-                        "div",
-                        { className: "profiles-client-section-label" },
-                        grp.label,
-                      ),
-                      grp.models.map(function (row) {
-                        var isActive =
-                          current !== void 0 &&
-                          current !== null &&
-                          current.provider === grp.id &&
-                          current.model === row.id;
-                        return createElement(
-                          "div",
-                          { key: grp.id + "/" + row.id, className: "profiles-client-model-row" },
-                          createElement(
-                            "button",
-                            {
-                              type: "button",
-                              className: "profiles-client-option",
-                              onClick: function () {
-                                pick({ provider: grp.id, model: row.id });
-                              },
-                            },
-                            createElement(
-                              "span",
-                              { className: "profiles-client-option-copy" },
-                              createElement(
-                                "span",
-                                {
-                                  className:
-                                    "profiles-client-option-name profiles-client-option-model",
-                                },
-                                row.name,
-                              ),
-                              createElement(
-                                "span",
-                                { className: "profiles-client-option-detail" },
-                                grp.label,
-                              ),
-                            ),
-                            isActive
-                              ? createElement(
-                                  "span",
-                                  { className: "profiles-client-check", "aria-hidden": true },
-                                  "✓",
-                                )
-                              : null,
-                          ),
-                        );
-                      }),
+                            );
+                          }}
+                        >
+                          <span className="profiles-client-option-copy">
+                            <span className="profiles-client-option-name profiles-client-option-profile">
+                              {row.key + (isActive ? " ·" : "")}
+                            </span>
+                            <span className="profiles-client-option-detail">
+                              {headPretty.provider + "/" + headPretty.model}
+                            </span>
+                          </span>
+                          {isActive ? (
+                            <span className="profiles-client-check" aria-hidden={true}>
+                              ✓
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+                <div>
+                  <div className="profiles-client-section-label">
+                    {t("menu.models")}
+                  </div>
+                  {state.status === "error" && state.error ? (
+                    <div className="profiles-client-strip">{state.error}</div>
+                  ) : null}
+                  {modelGroups.map(function (grp) {
+                    return (
+                      <div key={grp.id}>
+                        <div className="profiles-client-section-label">
+                          {grp.label}
+                        </div>
+                        {grp.models.map(function (row) {
+                          var isActive =
+                            current !== void 0 &&
+                            current !== null &&
+                            current.provider === grp.id &&
+                            current.model === row.id;
+                          return (
+                            <div
+                              key={grp.id + "/" + row.id}
+                              className="profiles-client-model-row"
+                            >
+                              <button
+                                type="button"
+                                className="profiles-client-option"
+                                onClick={function () {
+                                  pick({ provider: grp.id, model: row.id });
+                                }}
+                              >
+                                <span className="profiles-client-option-copy">
+                                  <span className="profiles-client-option-name profiles-client-option-model">
+                                    {row.name}
+                                  </span>
+                                  <span className="profiles-client-option-detail">
+                                    {grp.label}
+                                  </span>
+                                </span>
+                                {isActive ? (
+                                  <span className="profiles-client-check" aria-hidden={true}>
+                                    ✓
+                                  </span>
+                                ) : null}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
                     );
-                  }),
-                ),
-              )
-            : null,
+                  })}
+                </div>
+              </div>
+            ) : null}
+          </div>
         );
       }
       return ProfileModelSeat;
@@ -1063,36 +960,28 @@ window.__ModuleLoader__.load({
         }, []);
 
         if (load === null) {
-          return createElement(
-            "div",
-            { className: "pf-panel-root" },
-            createElement(
-              "div",
-              { className: "pf-panel-head" },
-              createElement("h3", { className: "pf-panel-title" }, "Profiles"),
-              createElement(
-                "button",
-                { className: "pf-panel-refresh", onClick: fetchConfig },
-                "Refresh",
-              ),
-            ),
+          return (
+            <div className="pf-panel-root">
+              <div className="pf-panel-head">
+                <h3 className="pf-panel-title">Profiles</h3>
+                <button className="pf-panel-refresh" onClick={fetchConfig}>
+                  Refresh
+                </button>
+              </div>
+            </div>
           );
         }
         if (load.error) {
-          return createElement(
-            "div",
-            { className: "pf-panel-root" },
-            createElement(
-              "div",
-              { className: "pf-panel-head" },
-              createElement("h3", { className: "pf-panel-title" }, "Profiles"),
-              createElement(
-                "button",
-                { className: "pf-panel-refresh", onClick: fetchConfig },
-                "Refresh",
-              ),
-            ),
-            createElement("div", { className: "pf-panel-err" }, "Profiles: " + load.error),
+          return (
+            <div className="pf-panel-root">
+              <div className="pf-panel-head">
+                <h3 className="pf-panel-title">Profiles</h3>
+                <button className="pf-panel-refresh" onClick={fetchConfig}>
+                  Refresh
+                </button>
+              </div>
+              <div className="pf-panel-err">{"Profiles: " + load.error}</div>
+            </div>
           );
         }
 
@@ -1221,168 +1110,142 @@ window.__ModuleLoader__.load({
                 typeof currentCat.reasoning.defaultEffort === "string"
               ? currentCat.reasoning.defaultEffort
               : "";
-        return createElement(
-          "div",
-          { className: "pf-panel-root" },
-          createElement(
-            "div",
-            { className: "pf-panel-head" },
-            createElement("h3", { className: "pf-panel-title" }, "Profiles"),
-            createElement(
-              "button",
-              { className: "pf-panel-refresh", onClick: fetchConfig },
-              "Refresh",
-            ),
-          ),
-          createElement(
-            "div",
-            { className: "pf-panel-active" },
-            entries.map(function (name) {
-              return createElement(
-                "button",
-                {
-                  key: name,
-                  type: "button",
-                  className:
-                    "pf-panel-active-btn" +
-                    (config.active === name ? " pf-panel-active-btn-on" : ""),
-                  onClick: function () {
-                    setActive(name);
-                  },
-                },
-                name,
-              );
-            }),
-          ),
-          currentEffortList.length > 0 && currentModel !== void 0 && currentModel !== null
-            ? createElement(
-                "div",
-                { className: "pf-panel-model-row" },
-                createElement(
-                  "div",
-                  { className: "pf-panel-row" },
-                  createElement(
-                    "span",
-                    { className: "pf-panel-ref", title: "Current model" },
-                    currentCat !== null
-                      ? currentCat.label
-                      : currentModel.provider + "/" + currentModel.model,
-                  ),
-                  createElement(
-                    "select",
-                    {
-                      className: "pf-panel-effort",
-                      value: currentEffortValue,
-                      "aria-label": "Current model reasoning effort",
-                      onChange: function (event) {
-                        var effort = event.target.value;
-                        directory.select({
-                          provider: currentModel.provider,
-                          model: currentModel.model,
-                          reasoningEffort: effort === "" ? undefined : effort,
-                        });
-                      },
-                    },
-                    createElement("option", { value: "" }, "Default"),
-                    currentEffortList.map(function (eff) {
-                      return createElement(
-                        "option",
-                        {
-                          key: eff.id,
-                          value: eff.id,
-                          title: eff.description !== void 0 ? eff.description : undefined,
-                        },
-                        eff.name,
-                      );
-                    }),
-                  ),
-                ),
-              )
-            : null,
-          entries.map(function (name) {
-            var entry = config[name];
-            return createElement(
-              "div",
-              { className: "pf-panel-entry", key: name },
-              createElement(
-                "h4",
-                { className: "pf-panel-entry-title" },
-                name === "work" ? "Work" : "Personal",
-              ),
-              ["orchestrator", "subagent"].map(function (chainKey) {
-                var field = entry[chainKey];
-                var label = chainKey === "orchestrator" ? "orchestrator" : "subagent";
-                var summary = fieldSummary(field, config.chains);
-                var currentRef = refNameOf(field);
-                if (currentRef === void 0) currentRef = chainNameOf(field, config.chains);
-                return createElement(
-                  "div",
-                  { className: "pf-panel-chain", key: chainKey },
-                  createElement(
-                    "div",
-                    { className: "pf-panel-row" },
-                    createElement("h5", { className: "pf-panel-chain-title" }, label),
-                    createElement(
-                      "select",
-                      {
-                        className: "pf-panel-select",
-                        value: currentRef !== void 0 ? currentRef : "",
-                        onChange: function (event) {
-                          var val = event.target.value;
-                          if (val === "__detach__") {
-                            detachEntryField(name, chainKey);
-                          } else {
-                            setEntryChain(name, chainKey, val);
-                          }
-                        },
-                      },
-                      createElement("option", { value: "__detach__" }, "— none —"),
-                      chainKeys.map(function (key) {
-                        return createElement("option", { key: key, value: key }, key);
-                      }),
-                    ),
-                    createElement(
-                      "button",
-                      {
-                        type: "button",
-                        className: "pf-panel-del",
-                        title: "Detach",
-                        onClick: function () {
-                          detachEntryField(name, chainKey);
-                        },
-                      },
-                      "\u00d7",
-                    ),
-                  ),
-                  createElement(
-                    "div",
-                    { className: "pf-panel-meta" },
-                    label + " \u2192 " + summary,
-                  ),
+        return (
+          <div className="pf-panel-root">
+            <div className="pf-panel-head">
+              <h3 className="pf-panel-title">Profiles</h3>
+              <button className="pf-panel-refresh" onClick={fetchConfig}>
+                Refresh
+              </button>
+            </div>
+            <div className="pf-panel-active">
+              {entries.map(function (name) {
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    className={
+                      "pf-panel-active-btn" +
+                      (config.active === name ? " pf-panel-active-btn-on" : "")
+                    }
+                    onClick={function () {
+                      setActive(name);
+                    }}
+                  >
+                    {name}
+                  </button>
                 );
-              }),
-            );
-          }),
-          createElement(
-            "div",
-            { className: "pf-panel-entry" },
-            createElement(
-              "div",
-              { className: "pf-panel-head" },
-              createElement("h4", { className: "pf-panel-entry-title" }, "Named chains"),
-              createElement(
-                "button",
-                {
-                  type: "button",
-                  className: "pf-panel-add",
-                  onClick: addChain,
-                },
-                "+ Add chain",
-              ),
-            ),
-            Object.keys(config.chains).length === 0
-              ? createElement("div", { className: "pf-panel-meta" }, "No named chains")
-              : Object.keys(config.chains).map(function (chainName) {
+              })}
+            </div>
+            {currentEffortList.length > 0 &&
+            currentModel !== void 0 &&
+            currentModel !== null ? (
+              <div className="pf-panel-model-row">
+                <div className="pf-panel-row">
+                  <span className="pf-panel-ref" title="Current model">
+                    {currentCat !== null
+                      ? currentCat.label
+                      : currentModel.provider + "/" + currentModel.model}
+                  </span>
+                  <select
+                    className="pf-panel-effort"
+                    value={currentEffortValue}
+                    aria-label="Current model reasoning effort"
+                    onChange={function (event) {
+                      var effort = event.target.value;
+                      directory.select({
+                        provider: currentModel.provider,
+                        model: currentModel.model,
+                        reasoningEffort: effort === "" ? undefined : effort,
+                      });
+                    }}
+                  >
+                    <option value="">Default</option>
+                    {currentEffortList.map(function (eff) {
+                      return (
+                        <option
+                          key={eff.id}
+                          value={eff.id}
+                          title={
+                            eff.description !== void 0 ? eff.description : undefined
+                          }
+                        >
+                          {eff.name}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              </div>
+            ) : null}
+            {entries.map(function (name) {
+              var entry = config[name];
+              return (
+                <div className="pf-panel-entry" key={name}>
+                  <h4 className="pf-panel-entry-title">
+                    {name === "work" ? "Work" : "Personal"}
+                  </h4>
+                  {["orchestrator", "subagent"].map(function (chainKey) {
+                    var field = entry[chainKey];
+                    var label =
+                      chainKey === "orchestrator" ? "orchestrator" : "subagent";
+                    var summary = fieldSummary(field, config.chains);
+                    var currentRef = refNameOf(field);
+                    if (currentRef === void 0) currentRef = chainNameOf(field, config.chains);
+                    return (
+                      <div className="pf-panel-chain" key={chainKey}>
+                        <div className="pf-panel-row">
+                          <h5 className="pf-panel-chain-title">{label}</h5>
+                          <select
+                            className="pf-panel-select"
+                            value={currentRef !== void 0 ? currentRef : ""}
+                            onChange={function (event) {
+                              var val = event.target.value;
+                              if (val === "__detach__") {
+                                detachEntryField(name, chainKey);
+                              } else {
+                                setEntryChain(name, chainKey, val);
+                              }
+                            }}
+                          >
+                            <option value="__detach__">— none —</option>
+                            {chainKeys.map(function (key) {
+                              return (
+                                <option key={key} value={key}>
+                                  {key}
+                                </option>
+                              );
+                            })}
+                          </select>
+                          <button
+                            type="button"
+                            className="pf-panel-del"
+                            title="Detach"
+                            onClick={function () {
+                              detachEntryField(name, chainKey);
+                            }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                        <div className="pf-panel-meta">{label + " → " + summary}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+            <div className="pf-panel-entry">
+              <div className="pf-panel-head">
+                <h4 className="pf-panel-entry-title">Named chains</h4>
+                <button type="button" className="pf-panel-add" onClick={addChain}>
+                  + Add chain
+                </button>
+              </div>
+              {Object.keys(config.chains).length === 0 ? (
+                <div className="pf-panel-meta">No named chains</div>
+              ) : (
+                Object.keys(config.chains).map(function (chainName) {
                   var chain = config.chains[chainName];
                   var isComposition = isCompositionChain(chain);
                   var resolved = resolveChain(chain, config.chains);
@@ -1393,204 +1256,183 @@ window.__ModuleLoader__.load({
                     : chain !== void 0 && Array.isArray(chain.routes)
                       ? chain.routes
                       : [];
-                  return createElement(
-                    "div",
-                    { className: "pf-panel-chain", key: chainName },
-                    createElement(
-                      "div",
-                      { className: "pf-panel-row" },
-                      createElement("h5", { className: "pf-panel-chain-title" }, chainName),
-                      createElement(
-                        "button",
-                        {
-                          type: "button",
-                          className: "pf-panel-del",
-                          title: "Remove chain",
-                          onClick: function () {
+                  return (
+                    <div className="pf-panel-chain" key={chainName}>
+                      <div className="pf-panel-row">
+                        <h5 className="pf-panel-chain-title">{chainName}</h5>
+                        <button
+                          type="button"
+                          className="pf-panel-del"
+                          title="Remove chain"
+                          onClick={function () {
                             removeChain(chainName);
-                          },
-                        },
-                        "\u00d7",
-                      ),
-                    ),
-                    isComposition
-                      ? steps.map(function (row, index) {
-                          var stepText = typeof row.step === "string" ? row.step : "";
-                          var isRef = stepText.indexOf("chain:") === 0;
-                          return createElement(
-                            "div",
-                            { className: "pf-panel-row", key: index },
-                            isRef
-                              ? createElement(
-                                  "select",
-                                  {
-                                    className: "pf-panel-select",
-                                    value: stepText,
-                                    onChange: function (event) {
+                          }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                      {isComposition
+                        ? steps.map(function (row, index) {
+                            var stepText = typeof row.step === "string" ? row.step : "";
+                            var isRef = stepText.indexOf("chain:") === 0;
+                            return (
+                              <div className="pf-panel-row" key={index}>
+                                {isRef ? (
+                                  <select
+                                    className="pf-panel-select"
+                                    value={stepText}
+                                    onChange={function (event) {
                                       setChainField(chainName, index, null, event.target.value);
-                                    },
-                                  },
-                                  chainKeys.map(function (key) {
-                                    return createElement(
-                                      "option",
-                                      { key: key, value: "chain:" + key },
-                                      "chain:" + key,
-                                    );
-                                  }),
-                                )
-                              : createElement("input", {
-                                  className: "pf-panel-input",
-                                  value: stepText,
-                                  placeholder: "provider/model",
-                                  onChange: function (event) {
-                                    setChainField(chainName, index, null, event.target.value);
-                                  },
-                                }),
-                            createElement(
-                              "button",
-                              {
-                                type: "button",
-                                className: "pf-panel-del",
-                                title: "Remove step",
-                                onClick: function () {
-                                  removeChainRung(chainName, index);
-                                },
-                              },
-                              "\u00d7",
-                            ),
-                          );
-                        })
-                      : steps.map(function (rung, index) {
-                          var rungKey = rung.provider + "/" + rung.model;
-                          var catModel = null;
-                          for (var ci = 0; ci < catalogModels.length; ci++) {
-                            if (
-                              catalogModels[ci].provider === rung.provider &&
-                              catalogModels[ci].model === rung.model
-                            ) {
-                              catModel = catalogModels[ci];
-                              break;
-                            }
-                          }
-                          var efforts = catModel !== null ? effortsOf(catModel.reasoning) : [];
-                          var currentEffort =
-                            typeof rung.reasoningEffort === "string" ? rung.reasoningEffort : "";
-                          return createElement(
-                            "div",
-                            { className: "pf-panel-model-row", key: index },
-                            createElement(
-                              "div",
-                              { className: "pf-panel-row" },
-                              createElement(
-                                "select",
-                                {
-                                  className: "pf-panel-select",
-                                  value: rungKey,
-                                  onChange: function (event) {
-                                    setChainRungModel(chainName, index, event.target.value);
-                                  },
-                                },
-                                createElement(
-                                  "option",
-                                  { value: "" },
-                                  "\u2014 select model \u2014",
-                                ),
-                                catalogModels.map(function (m) {
-                                  return createElement(
-                                    "option",
-                                    {
-                                      key: m.provider + "/" + m.model,
-                                      value: m.provider + "/" + m.model,
-                                    },
-                                    m.label,
-                                  );
-                                }),
-                              ),
-                            efforts.length > 0
-                              ? createElement(
-                                  "select",
-                                  {
-                                    className: "pf-panel-effort",
-                                    value: currentEffort,
-                                    onChange: function (event) {
-                                      setChainRungEffort(chainName, index, event.target.value);
-                                    },
-                                  },
-                                  createElement("option", { value: "" }, "Default effort"),
-                                  efforts.map(function (eff) {
-                                    return createElement(
-                                      "option",
-                                      {
-                                        key: eff.id,
-                                        value: eff.id,
-                                        title:
-                                          eff.description !== void 0 ? eff.description : undefined,
-                                      },
-                                      eff.name,
-                                    );
-                                  }),
-                                )
-                              : null,
-                              createElement(
-                                "button",
-                                {
-                                  type: "button",
-                                  className: "pf-panel-del",
-                                  title: "Remove rung",
-                                  onClick: function () {
+                                    }}
+                                  >
+                                    {chainKeys.map(function (key) {
+                                      return (
+                                        <option key={key} value={"chain:" + key}>
+                                          {"chain:" + key}
+                                        </option>
+                                      );
+                                    })}
+                                  </select>
+                                ) : (
+                                  <input
+                                    className="pf-panel-input"
+                                    value={stepText}
+                                    placeholder="provider/model"
+                                    onChange={function (event) {
+                                      setChainField(chainName, index, null, event.target.value);
+                                    }}
+                                  />
+                                )}
+                                <button
+                                  type="button"
+                                  className="pf-panel-del"
+                                  title="Remove step"
+                                  onClick={function () {
                                     removeChainRung(chainName, index);
-                                  },
-                                },
-                                "\u00d7",
-                              ),
-                            ),
-                          );
-                        }),
-                    createElement(
-                      "div",
-                      { className: "pf-panel-row" },
-                      createElement(
-                        "select",
-                        {
-                          className: "pf-panel-select pf-panel-add-select",
-                          value: "",
-                          onChange: function (event) {
+                                  }}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            );
+                          })
+                        : steps.map(function (rung, index) {
+                            var rungKey = rung.provider + "/" + rung.model;
+                            var catModel = null;
+                            for (var ci = 0; ci < catalogModels.length; ci++) {
+                              if (
+                                catalogModels[ci].provider === rung.provider &&
+                                catalogModels[ci].model === rung.model
+                              ) {
+                                catModel = catalogModels[ci];
+                                break;
+                              }
+                            }
+                            var efforts =
+                              catModel !== null ? effortsOf(catModel.reasoning) : [];
+                            var currentEffort =
+                              typeof rung.reasoningEffort === "string"
+                                ? rung.reasoningEffort
+                                : "";
+                            return (
+                              <div className="pf-panel-model-row" key={index}>
+                                <div className="pf-panel-row">
+                                  <select
+                                    className="pf-panel-select"
+                                    value={rungKey}
+                                    onChange={function (event) {
+                                      setChainRungModel(chainName, index, event.target.value);
+                                    }}
+                                  >
+                                    <option value="">— select model —</option>
+                                    {catalogModels.map(function (m) {
+                                      return (
+                                        <option
+                                          key={m.provider + "/" + m.model}
+                                          value={m.provider + "/" + m.model}
+                                        >
+                                          {m.label}
+                                        </option>
+                                      );
+                                    })}
+                                  </select>
+                                  {efforts.length > 0 ? (
+                                    <select
+                                      className="pf-panel-effort"
+                                      value={currentEffort}
+                                      onChange={function (event) {
+                                        setChainRungEffort(chainName, index, event.target.value);
+                                      }}
+                                    >
+                                      <option value="">Default effort</option>
+                                      {efforts.map(function (eff) {
+                                        return (
+                                          <option
+                                            key={eff.id}
+                                            value={eff.id}
+                                            title={
+                                              eff.description !== void 0
+                                                ? eff.description
+                                                : undefined
+                                            }
+                                          >
+                                            {eff.name}
+                                          </option>
+                                        );
+                                      })}
+                                    </select>
+                                  ) : null}
+                                  <button
+                                    type="button"
+                                    className="pf-panel-del"
+                                    title="Remove rung"
+                                    onClick={function () {
+                                      removeChainRung(chainName, index);
+                                    }}
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                      <div className="pf-panel-row">
+                        <select
+                          className="pf-panel-select pf-panel-add-select"
+                          value=""
+                          onChange={function (event) {
                             var val = event.target.value;
                             if (val !== "") appendChainRung(chainName, val);
                             event.target.value = "";
-                          },
-                        },
-                        createElement(
-                          "option",
-                          { value: "" },
-                          "+ Add " + (isComposition ? "step" : "rung") + " \u25be",
-                        ),
-                        isComposition
-                          ? chainKeys.map(function (key) {
-                              return createElement(
-                                "option",
-                                { key: key, value: "chain:" + key },
-                                "chain:" + key,
-                              );
-                            })
-                          : catalogModels.map(function (m) {
-                              return createElement(
-                                "option",
-                                {
-                                  key: m.provider + "/" + m.model,
-                                  value: m.provider + "/" + m.model,
-                                },
-                                m.label,
-                              );
-                            }),
-                        createElement("option", { value: "__new__" }, "New named chain\u2026"),
-                      ),
-                    ),
-                    resolved.length > 0
-                      ? createElement(
-                          "div",
-                          { className: "pf-panel-meta" },
-                          "Resolves to " +
+                          }}
+                        >
+                          <option value="">
+                            {"+ Add " + (isComposition ? "step" : "rung") + " ▾"}
+                          </option>
+                          {isComposition
+                            ? chainKeys.map(function (key) {
+                                return (
+                                  <option key={key} value={"chain:" + key}>
+                                    {"chain:" + key}
+                                  </option>
+                                );
+                              })
+                            : catalogModels.map(function (m) {
+                                return (
+                                  <option
+                                    key={m.provider + "/" + m.model}
+                                    value={m.provider + "/" + m.model}
+                                  >
+                                    {m.label}
+                                  </option>
+                                );
+                              })}
+                          <option value="__new__">New named chain…</option>
+                        </select>
+                      </div>
+                      {resolved.length > 0 ? (
+                        <div className="pf-panel-meta">
+                          {"Resolves to " +
                             resolved.length +
                             " route" +
                             (resolved.length === 1 ? "" : "s") +
@@ -1598,55 +1440,48 @@ window.__ModuleLoader__.load({
                             resolved[0].provider +
                             "/" +
                             resolved[0].model +
-                            (resolved.length > 1 ? " \u2026" : ""),
-                        )
-                      : null,
+                            (resolved.length > 1 ? " …" : "")}
+                        </div>
+                      ) : null}
+                    </div>
                   );
-                }),
-          ),
-          createElement(
-            "div",
-            { className: "pf-panel-meta" },
-            downRungs > 0
-              ? createElement(
-                  "span",
-                  null,
-                  downRungs + " rung" + (downRungs === 1 ? "" : "s") + " cached down ",
-                  createElement(
-                    "button",
-                    {
-                      type: "button",
-                      className: "pf-panel-refresh",
-                      onClick: fetchConfig,
-                    },
-                    "Retry now",
-                  ),
-                )
-              : null,
-          ),
-          createElement(
-            "div",
-            { className: "pf-panel-actions" },
-            createElement(
-              "button",
-              {
-                type: "button",
-                className: "pf-panel-save",
-                disabled: save.busy === true,
-                onClick: saveConfig,
-              },
-              save.busy === true ? "Saving\u2026" : "Save",
-            ),
-            save.note
-              ? createElement(
-                  "span",
-                  {
-                    className: "pf-panel-status " + (save.ok ? "pf-panel-ok" : "pf-panel-bad"),
-                  },
-                  save.note,
-                )
-              : null,
-          ),
+                })
+              )}
+            </div>
+            <div className="pf-panel-meta">
+              {downRungs > 0 ? (
+                <span>
+                  {downRungs + " rung" + (downRungs === 1 ? "" : "s") + " cached down "}
+                  <button
+                    type="button"
+                    className="pf-panel-refresh"
+                    onClick={fetchConfig}
+                  >
+                    Retry now
+                  </button>
+                </span>
+              ) : null}
+            </div>
+            <div className="pf-panel-actions">
+              <button
+                type="button"
+                className="pf-panel-save"
+                disabled={save.busy === true}
+                onClick={saveConfig}
+              >
+                {save.busy === true ? "Saving…" : "Save"}
+              </button>
+              {save.note ? (
+                <span
+                  className={
+                    "pf-panel-status " + (save.ok ? "pf-panel-ok" : "pf-panel-bad")
+                  }
+                >
+                  {save.note}
+                </span>
+              ) : null}
+            </div>
+          </div>
         );
       }
       return ProfilesPanel;

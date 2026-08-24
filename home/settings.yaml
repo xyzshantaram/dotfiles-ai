@@ -138,8 +138,6 @@ profile:
         model: deepseek-v4-flash
     worker:
       routes:
-      - provider: command-code
-        model: poolside/laguna-s-2.1-free
       - provider: opencode-zen
         model: deepseek-v4-flash-free
       - provider: command-code

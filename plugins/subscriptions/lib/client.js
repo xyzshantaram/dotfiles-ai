@@ -32,7 +32,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// plugins/subscriptions/src/client.ts
+// plugins/subscriptions/src/client.tsx
 var client_exports = {};
 __export(client_exports, {
   apply: () => apply,
@@ -41,72 +41,14 @@ __export(client_exports, {
 });
 module.exports = __toCommonJS(client_exports);
 var import_react = __toESM(require("react"), 1);
+
+// css-text:/home/sid/repos/dotfiles-ai/plugins/subscriptions/src/client.module.css
+var client_default = "/* Page-level container: airy vertical rhythm, no own box. */\n.ocgs-root{box-sizing:border-box;display:flex;flex-direction:column;gap:13px;padding:0;color:var(--dsw-alias-label-primary)}\n/* Header row (title + refresh). */\n.ocgs-head{display:flex;align-items:center;justify-content:space-between;gap:10px}\n.ocgs-title{font-size:24px;font-weight:700;margin:0;line-height:1.2;color:var(--dsw-alias-label-primary)}\n.ocgs-head-title{display:flex;align-items:baseline;gap:10px;min-width:0;flex:1;overflow:hidden}\n.ocgs-stale{font-size:14px;line-height:20px;color:var(--dsw-alias-label-secondary);white-space:nowrap}\n.ocgs-refresh{cursor:pointer;border:none;background:none;padding:5px 5px;border-radius:7px;color:var(--dsw-alias-label-secondary);font-size:15px;line-height:20px}\n.ocgs-refresh:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}\n/* Large setting card: 20px radius, generous 24px padding, single subtle border. */\n.ocgs-section{display:flex;flex-direction:column;gap:13px;border:1px solid var(--dsw-alias-border-l2);border-radius:20px;padding:24px;background:var(--dsw-alias-bg-tertiary)}\n.ocgs-section-title{font-size:24px;font-weight:700;margin:0;line-height:1.2;color:var(--dsw-alias-label-primary)}\n.ocgs-balance{font-size:18px;font-weight:600;color:var(--dsw-alias-label-primary)}\n.ocgs-telemetry{font-size:15px;line-height:22px;color:var(--dsw-alias-label-secondary)}\n.ocgs-rows{display:flex;flex-direction:column;gap:13px}\n.ocgs-row{display:flex;flex-direction:column;gap:5px;min-width:0}\n.ocgs-row-label{display:flex;align-items:baseline;gap:10px;font-size:16px;line-height:22px;color:var(--dsw-alias-label-secondary)}\n.ocgs-row-label b{font-weight:600;color:var(--dsw-alias-label-primary);font-size:16px}\n.ocgs-row-label b:last-child{margin-left:auto}\n.ocgs-meta{display:flex;align-items:center;gap:10px;min-width:0}\n.ocgs-meta>span{font-size:13px;line-height:18px;color:var(--dsw-alias-label-secondary);white-space:nowrap;flex:none}\n/* Progress track: thin, soft, rounded. */\n.ocgs-track{box-sizing:border-box;flex:1;min-width:0;height:8px;border-radius:7px;background:var(--dsw-alias-border-l2);overflow:hidden}\n.ocgs-fill{height:100%;border-radius:7px;transition:width .4s ease}\n.ocgs-pace{font-size:15px;line-height:22px;color:var(--dsw-alias-label-secondary)}\n.ocgs-err{font-size:15px;line-height:22px;color:var(--dsw-alias-state-error-primary)}\n/* Action row (fetch cookie / token buttons + note). */\n.ocgs-cookie{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:3px 0 6px}\n/* Secondary / pill button. */\n.ocgs-btn{display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:999px;font-size:15px;line-height:20px;padding:7px 15px;cursor:pointer;min-height:36px}\n.ocgs-btn:hover{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-border-l3)}\n.ocgs-btn:disabled{opacity:.5;cursor:default}\n.ocgs-cookie-note{font-size:14px;line-height:18px;color:var(--dsw-alias-label-secondary)}\n/* Provider visibility toggles \u2014 checkbox field language. */\n.ocgs-toggles{display:flex;flex-direction:column;gap:10px}\n.ocgs-toggle{display:flex;align-items:center;gap:10px;min-width:0;cursor:pointer}\n.ocgs-toggle-label{flex:1;min-width:0;font-size:18px;line-height:24px;color:var(--dsw-alias-label-secondary)}\n.ocgs-toggle input{flex:none;width:24px;height:24px;cursor:pointer;accent-color:var(--dsw-alias-state-business-primary)}\n/* Details disclosure for the toggle list. */\n.ocgs-details{border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-tertiary);padding:13px;margin-top:4px}\n.ocgs-summary{cursor:pointer;font-size:18px;font-weight:600;color:var(--dsw-alias-label-primary);list-style:none}\n.ocgs-summary::-webkit-details-marker{display:none}\n.ocgs-details[open] .ocgs-toggles{padding-top:10px}\n/* DeepSeek dashboard \u2014 nested grouped controls. */\n.ds-dashboard{display:flex;flex-direction:column;gap:13px}\n.ds-hero{display:flex;flex-direction:column;gap:5px;padding:13px;background:var(--dsw-alias-bg-tertiary);border-radius:12px;border:1px solid var(--dsw-alias-border-l2)}\n.ds-hero-total{font-size:32px;font-weight:700;color:var(--dsw-alias-label-primary);line-height:1.2}\n.ds-hero-breakdown{font-size:15px;color:var(--dsw-alias-label-secondary)}\n.ds-usage-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}\n.ds-usage-card{padding:13px;background:var(--dsw-alias-bg-tertiary);border-radius:12px;border:1px solid var(--dsw-alias-border-l2)}\n.ds-usage-label{font-size:12px;color:var(--dsw-alias-label-secondary);text-transform:uppercase;letter-spacing:0.5px}\n.ds-usage-value{font-size:20px;font-weight:600;color:var(--dsw-alias-label-primary);margin-top:6px}\n.ds-usage-sub{font-size:14px;color:var(--dsw-alias-label-secondary);margin-top:4px}\n.ds-token-row{display:flex;gap:10px;flex-wrap:wrap}\n.ds-token-card{flex:1;min-width:140px;padding:11px;background:var(--dsw-alias-bg-tertiary);border-radius:12px;border:1px solid var(--dsw-alias-border-l2)}\n.ds-token-label{font-size:12px;color:var(--dsw-alias-label-secondary)}\n.ds-token-value{font-size:18px;font-weight:600;color:var(--dsw-alias-state-success-primary)}\n.ds-token-value.out{color:var(--dsw-alias-state-error-primary)}\n.ds-empty{font-size:14px;color:var(--dsw-alias-label-secondary);font-style:italic}\n.ocgs-note{font-size:15px;line-height:22px;color:var(--dsw-alias-label-secondary)}\n/* Visible focus ring on every interactive control. */\n:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}\n";
+
+// plugins/subscriptions/src/client.tsx
 var PLUGIN_NAME = "subscriptions";
 var STYLE_TAG_ID = "subscriptions/client.css";
-var CSS_TEXT = [
-  // Page-level container: airy vertical rhythm, no own box.
-  ".ocgs-root{box-sizing:border-box;display:flex;flex-direction:column;gap:13px;padding:0;color:var(--dsw-alias-label-primary)}",
-  // Header row (title + refresh).
-  ".ocgs-head{display:flex;align-items:center;justify-content:space-between;gap:10px}",
-  ".ocgs-title{font-size:24px;font-weight:700;margin:0;line-height:1.2;color:var(--dsw-alias-label-primary)}",
-  ".ocgs-head-title{display:flex;align-items:baseline;gap:10px;min-width:0;flex:1;overflow:hidden}",
-  ".ocgs-stale{font-size:14px;line-height:20px;color:var(--dsw-alias-label-secondary);white-space:nowrap}",
-  ".ocgs-refresh{cursor:pointer;border:none;background:none;padding:5px 5px;border-radius:7px;color:var(--dsw-alias-label-secondary);font-size:15px;line-height:20px}",
-  ".ocgs-refresh:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}",
-  // Large setting card: 20px radius, generous 24px padding, single subtle border.
-  ".ocgs-section{display:flex;flex-direction:column;gap:13px;border:1px solid var(--dsw-alias-border-l2);border-radius:20px;padding:24px;background:var(--dsw-alias-bg-tertiary)}",
-  ".ocgs-section-title{font-size:24px;font-weight:700;margin:0;line-height:1.2;color:var(--dsw-alias-label-primary)}",
-  ".ocgs-balance{font-size:18px;font-weight:600;color:var(--dsw-alias-label-primary)}",
-  ".ocgs-telemetry{font-size:15px;line-height:22px;color:var(--dsw-alias-label-secondary)}",
-  ".ocgs-rows{display:flex;flex-direction:column;gap:13px}",
-  ".ocgs-row{display:flex;flex-direction:column;gap:5px;min-width:0}",
-  ".ocgs-row-label{display:flex;align-items:baseline;gap:10px;font-size:16px;line-height:22px;color:var(--dsw-alias-label-secondary)}",
-  ".ocgs-row-label b{font-weight:600;color:var(--dsw-alias-label-primary);font-size:16px}",
-  ".ocgs-row-label b:last-child{margin-left:auto}",
-  ".ocgs-meta{display:flex;align-items:center;gap:10px;min-width:0}",
-  ".ocgs-meta>span{font-size:13px;line-height:18px;color:var(--dsw-alias-label-secondary);white-space:nowrap;flex:none}",
-  // Progress track: thin, soft, rounded.
-  ".ocgs-track{box-sizing:border-box;flex:1;min-width:0;height:8px;border-radius:7px;background:var(--dsw-alias-border-l2);overflow:hidden}",
-  ".ocgs-fill{height:100%;border-radius:7px;transition:width .4s ease}",
-  ".ocgs-pace{font-size:15px;line-height:22px;color:var(--dsw-alias-label-secondary)}",
-  ".ocgs-err{font-size:15px;line-height:22px;color:var(--dsw-alias-state-error-primary)}",
-  // Action row (fetch cookie / token buttons + note).
-  ".ocgs-cookie{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:3px 0 6px}",
-  // Secondary / pill button.
-  ".ocgs-btn{display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:999px;font-size:15px;line-height:20px;padding:7px 15px;cursor:pointer;min-height:36px}",
-  ".ocgs-btn:hover{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-border-l3)}",
-  ".ocgs-btn:disabled{opacity:.5;cursor:default}",
-  ".ocgs-cookie-note{font-size:14px;line-height:18px;color:var(--dsw-alias-label-secondary)}",
-  // Provider visibility toggles — checkbox field language.
-  ".ocgs-toggles{display:flex;flex-direction:column;gap:10px}",
-  ".ocgs-toggle{display:flex;align-items:center;gap:10px;min-width:0;cursor:pointer}",
-  ".ocgs-toggle-label{flex:1;min-width:0;font-size:18px;line-height:24px;color:var(--dsw-alias-label-secondary)}",
-  ".ocgs-toggle input{flex:none;width:24px;height:24px;cursor:pointer;accent-color:var(--dsw-alias-state-business-primary)}",
-  // Details disclosure for the toggle list.
-  ".ocgs-details{border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-tertiary);padding:13px;margin-top:4px}",
-  ".ocgs-summary{cursor:pointer;font-size:18px;font-weight:600;color:var(--dsw-alias-label-primary);list-style:none}",
-  ".ocgs-summary::-webkit-details-marker{display:none}",
-  ".ocgs-details[open] .ocgs-toggles{padding-top:10px}",
-  // DeepSeek dashboard — nested grouped controls.
-  ".ds-dashboard{display:flex;flex-direction:column;gap:13px}",
-  ".ds-hero{display:flex;flex-direction:column;gap:5px;padding:13px;background:var(--dsw-alias-bg-tertiary);border-radius:12px;border:1px solid var(--dsw-alias-border-l2)}",
-  ".ds-hero-total{font-size:32px;font-weight:700;color:var(--dsw-alias-label-primary);line-height:1.2}",
-  ".ds-hero-breakdown{font-size:15px;color:var(--dsw-alias-label-secondary)}",
-  ".ds-usage-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}",
-  ".ds-usage-card{padding:13px;background:var(--dsw-alias-bg-tertiary);border-radius:12px;border:1px solid var(--dsw-alias-border-l2)}",
-  ".ds-usage-label{font-size:12px;color:var(--dsw-alias-label-secondary);text-transform:uppercase;letter-spacing:0.5px}",
-  ".ds-usage-value{font-size:20px;font-weight:600;color:var(--dsw-alias-label-primary);margin-top:6px}",
-  ".ds-usage-sub{font-size:14px;color:var(--dsw-alias-label-secondary);margin-top:4px}",
-  ".ds-token-row{display:flex;gap:10px;flex-wrap:wrap}",
-  ".ds-token-card{flex:1;min-width:140px;padding:11px;background:var(--dsw-alias-bg-tertiary);border-radius:12px;border:1px solid var(--dsw-alias-border-l2)}",
-  ".ds-token-label{font-size:12px;color:var(--dsw-alias-label-secondary)}",
-  ".ds-token-value{font-size:18px;font-weight:600;color:var(--dsw-alias-state-success-primary)}",
-  ".ds-token-value.out{color:var(--dsw-alias-state-error-primary)}",
-  ".ds-empty{font-size:14px;color:var(--dsw-alias-label-secondary);font-style:italic}",
-  ".ocgs-note{font-size:15px;line-height:22px;color:var(--dsw-alias-label-secondary)}",
-  // Visible focus ring on every interactive control.
-  ":focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}"
-].join("");
+var CSS_TEXT = [client_default].join("");
 var GO_WINDOWS = [
   { key: "rolling", label: "Rolling (5h)", hint: "5h" },
   { key: "weekly", label: "Weekly", hint: null },
@@ -309,36 +251,16 @@ function buildRows(defs, windows, labelOf) {
     var hint = def ? def.hint : null;
     var status = statusText(win, hint);
     rows.push(
-      import_react.default.createElement(
+      /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-row", key }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-row-label" }, /* @__PURE__ */ import_react.default.createElement("b", null, label), status ? /* @__PURE__ */ import_react.default.createElement("span", { className: "ocgs-stale" }, "resets in " + status) : null, /* @__PURE__ */ import_react.default.createElement("b", null, percent + "%")), /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-meta" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-track" }, /* @__PURE__ */ import_react.default.createElement(
         "div",
-        { className: "ocgs-row", key },
-        import_react.default.createElement(
-          "div",
-          { className: "ocgs-row-label" },
-          import_react.default.createElement("b", null, label),
-          status ? import_react.default.createElement(
-            "span",
-            { className: "ocgs-stale" },
-            "resets in " + status
-          ) : null,
-          import_react.default.createElement("b", null, percent + "%")
-        ),
-        import_react.default.createElement(
-          "div",
-          { className: "ocgs-meta" },
-          import_react.default.createElement(
-            "div",
-            { className: "ocgs-track" },
-            import_react.default.createElement("div", {
-              className: "ocgs-fill",
-              style: {
-                width: Math.max(0, Math.min(100, percent)) + "%",
-                background: fillColor(percent)
-              }
-            })
-          )
-        )
-      )
+        {
+          className: "ocgs-fill",
+          style: {
+            width: Math.max(0, Math.min(100, percent)) + "%",
+            background: fillColor(percent)
+          }
+        }
+      ))))
     );
   }
   return rows;
@@ -396,57 +318,23 @@ function renderDsDashboard(bal, amount, cost) {
   var usageCards = [];
   if (totalTokens > 0 || totalCost > 0) {
     usageCards.push(
-      import_react.default.createElement(
-        "div",
-        { className: "ds-usage-card" },
-        import_react.default.createElement("div", { className: "ds-usage-label" }, "Total Cost"),
-        import_react.default.createElement("div", { className: "ds-usage-value" }, "$" + totalCost.toFixed(2))
-      )
+      /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-card" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-label" }, "Total Cost"), /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-value" }, "$" + totalCost.toFixed(2)))
     );
     usageCards.push(
-      import_react.default.createElement(
-        "div",
-        { className: "ds-usage-card" },
-        import_react.default.createElement("div", { className: "ds-usage-label" }, "Total Tokens"),
-        import_react.default.createElement("div", { className: "ds-usage-value" }, fmtCount(totalTokens)),
-        import_react.default.createElement(
-          "div",
-          { className: "ds-usage-sub" },
-          "in " + fmtCount(inTokens) + " \xB7 out " + fmtCount(outTokens) + " \xB7 cache " + fmtCount(cacheRead + cacheWrite)
-        )
-      )
+      /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-card" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-label" }, "Total Tokens"), /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-value" }, fmtCount(totalTokens)), /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-sub" }, "in " + fmtCount(inTokens) + " \xB7 out " + fmtCount(outTokens) + " \xB7 cache " + fmtCount(cacheRead + cacheWrite)))
     );
     for (var cmi = 0; cmi < costByModel.length; cmi++) {
       var cm = costByModel[cmi];
       usageCards.push(
-        import_react.default.createElement(
-          "div",
-          { className: "ds-usage-card" },
-          import_react.default.createElement("div", { className: "ds-usage-label" }, cm.model),
-          import_react.default.createElement("div", { className: "ds-usage-value" }, "$" + cm.cost.toFixed(2))
-        )
+        /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-card" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-label" }, cm.model), /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-value" }, "$" + cm.cost.toFixed(2)))
       );
     }
   } else {
     usageCards.push(
-      import_react.default.createElement(
-        "div",
-        { className: "ds-usage-card ds-empty" },
-        "No usage data (sign in to platform.deepseek.com)"
-      )
+      /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-card ds-empty" }, "No usage data (sign in to platform.deepseek.com)")
     );
   }
-  return import_react.default.createElement(
-    "div",
-    { className: "ds-dashboard" },
-    import_react.default.createElement(
-      "div",
-      { className: "ds-hero" },
-      import_react.default.createElement("div", { className: "ds-hero-total" }, heroLines[0]),
-      import_react.default.createElement("div", { className: "ds-hero-breakdown" }, subLines.join(" \xB7 "))
-    ),
-    import_react.default.createElement("div", { className: "ds-usage-grid" }, usageCards)
-  );
+  return /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-dashboard" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-hero" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-hero-total" }, heroLines[0]), /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-hero-breakdown" }, subLines.join(" \xB7 "))), /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-grid" }, usageCards));
 }
 function chainRoutes(value, chains, seen) {
   var out = [];
@@ -518,33 +406,13 @@ function buildCcMeters(cc) {
     if (used === null || cap === null || cap <= 0) continue;
     var pct = Math.round(used / cap * 100);
     meters.push(
-      import_react.default.createElement(
+      /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-row", key: def.key }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-row-label" }, /* @__PURE__ */ import_react.default.createElement("b", null, def.label), win.resetAt ? /* @__PURE__ */ import_react.default.createElement("span", { className: "ocgs-stale" }, "resets in " + timeUntil(win.resetAt)) : null, /* @__PURE__ */ import_react.default.createElement("b", null, pct + "%")), /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-meta" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-track" }, /* @__PURE__ */ import_react.default.createElement(
         "div",
-        { className: "ocgs-row", key: def.key },
-        import_react.default.createElement(
-          "div",
-          { className: "ocgs-row-label" },
-          import_react.default.createElement("b", null, def.label),
-          win.resetAt ? import_react.default.createElement(
-            "span",
-            { className: "ocgs-stale" },
-            "resets in " + timeUntil(win.resetAt)
-          ) : null,
-          import_react.default.createElement("b", null, pct + "%")
-        ),
-        import_react.default.createElement(
-          "div",
-          { className: "ocgs-meta" },
-          import_react.default.createElement(
-            "div",
-            { className: "ocgs-track" },
-            import_react.default.createElement("div", {
-              className: "ocgs-fill",
-              style: { width: Math.max(0, Math.min(100, pct)) + "%", background: fillColor(pct) }
-            })
-          )
-        )
-      )
+        {
+          className: "ocgs-fill",
+          style: { width: Math.max(0, Math.min(100, pct)) + "%", background: fillColor(pct) }
+        }
+      ))))
     );
   }
   return meters;
@@ -620,34 +488,15 @@ function renderCcSection(cc, ccUsage) {
     }
   }
   if (breakdown.length > 0) {
-    hero = import_react.default.createElement(
-      "div",
-      { className: "ds-hero" },
-      import_react.default.createElement("div", { className: "ds-hero-total" }, "$" + total.toFixed(2)),
-      import_react.default.createElement("div", { className: "ds-hero-breakdown" }, breakdown.join(" \xB7 "))
-    );
+    hero = /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-hero" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-hero-total" }, "$" + total.toFixed(2)), /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-hero-breakdown" }, breakdown.join(" \xB7 ")));
   }
   var meters = buildCcMeters(cc);
   var costCard = null;
   if (usage && typeof usage.totalCost === "number") {
     var period = usage.periodStart ? fmtDate(usage.periodStart) + (usage.periodEnd ? " \u2013 " + fmtDate(usage.periodEnd) : "") : "this period";
-    costCard = import_react.default.createElement(
-      "div",
-      { className: "ds-usage-card" },
-      import_react.default.createElement("div", { className: "ds-usage-label" }, "Monthly cost"),
-      import_react.default.createElement("div", { className: "ds-usage-value" }, "$" + usage.totalCost.toFixed(2)),
-      import_react.default.createElement("div", { className: "ds-usage-sub" }, period)
-    );
+    costCard = /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-card" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-label" }, "Monthly cost"), /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-value" }, "$" + usage.totalCost.toFixed(2)), /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-sub" }, period));
   }
-  return import_react.default.createElement(
-    "div",
-    { className: "ocgs-section" },
-    import_react.default.createElement("h4", { className: "ocgs-section-title" }, "Command Code"),
-    errorLine ? import_react.default.createElement("div", { className: "ocgs-err" }, errorLine) : null,
-    hero,
-    meters.length > 0 ? import_react.default.createElement("div", { className: "ocgs-rows" }, meters) : null,
-    costCard ? import_react.default.createElement("div", { className: "ds-usage-grid" }, costCard) : null
-  );
+  return /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react.default.createElement("h4", { className: "ocgs-section-title" }, "Command Code"), errorLine ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-err" }, errorLine) : null, hero, meters.length > 0 ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-rows" }, meters) : null, costCard ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-grid" }, costCard) : null);
 }
 function makePanel(ctx, config) {
   return function Panel() {
@@ -963,175 +812,21 @@ function makePanel(ctx, config) {
       }
       allFailed = failCount === dataKeys.length;
     }
-    return import_react.default.createElement(
-      "div",
-      { className: "ocgs-root" },
-      import_react.default.createElement(
-        "div",
-        { className: "ocgs-head" },
-        import_react.default.createElement(
-          "div",
-          { className: "ocgs-head-title" },
-          import_react.default.createElement("h3", { className: "ocgs-title" }, "Subscriptions"),
-          staleText ? import_react.default.createElement("span", { className: "ocgs-stale" }, staleText) : null
-        ),
-        import_react.default.createElement("button", { className: "ocgs-refresh", onClick: load }, "Refresh")
-      ),
-      import_react.default.createElement(
-        "details",
-        { className: "ocgs-details" },
-        import_react.default.createElement("summary", { className: "ocgs-summary" }, "Show sections"),
-        import_react.default.createElement(
-          "div",
-          { className: "ocgs-toggles" },
-          PROVIDER_TOGGLES.map(function(def) {
-            var providers = cfg && cfg.providers || {};
-            var visible = providers[def.key] !== false;
-            return import_react.default.createElement(
-              "label",
-              { className: "ocgs-toggle", key: def.key },
-              import_react.default.createElement("input", {
-                type: "checkbox",
-                checked: visible,
-                disabled: toggleBusy !== null,
-                onChange: function() {
-                  toggleProvider(def.key);
-                }
-              }),
-              import_react.default.createElement("span", { className: "ocgs-toggle-label" }, def.label)
-            );
-          })
-        )
-      ),
-      snap === null ? import_react.default.createElement("div", { className: "ocgs-note" }, "Loading subscription data\u2026") : null,
-      allFailed ? import_react.default.createElement(
-        "div",
-        { className: "ocgs-err" },
-        "Could not load subscription data. " + (firstError || "Check that the subscriptions plugin is mounted.")
-      ) : null,
-      profileInfo || quotaPick || telemetryLine || healthLine || logsLine ? import_react.default.createElement(
-        "div",
-        { className: "ocgs-section" },
-        import_react.default.createElement("h4", { className: "ocgs-section-title" }, "Quota"),
-        profileInfo ? import_react.default.createElement(
-          "div",
-          { className: "ocgs-rows" },
-          import_react.default.createElement(
-            "div",
-            { className: "ocgs-row" },
-            import_react.default.createElement(
-              "div",
-              { className: "ocgs-row-label" },
-              import_react.default.createElement("b", null, "Profile: " + profileInfo.active),
-              profileInfo.chain ? import_react.default.createElement(
-                "span",
-                { className: "ocgs-stale" },
-                "chain: " + profileInfo.chain
-              ) : null
-            )
-          )
-        ) : null,
-        quotaPick ? import_react.default.createElement("div", { className: "ocgs-rows" }, quotaPick.rows) : null,
-        quotaPick && quotaPick.pace ? import_react.default.createElement("div", { className: "ocgs-pace" }, quotaPick.pace) : null,
-        telemetryLine ? import_react.default.createElement("div", { className: "ocgs-telemetry" }, telemetryLine) : null,
-        healthLine ? import_react.default.createElement("div", { className: "ocgs-telemetry" }, healthLine) : null,
-        logsLine ? import_react.default.createElement("div", { className: "ocgs-telemetry" }, logsLine) : null
-      ) : null,
-      providerVisible(cfg, "commandcode") ? renderCcSection(cc, ccUsage) : null,
-      providerVisible(cfg, "claude") ? import_react.default.createElement(
-        "div",
-        { className: "ocgs-section" },
-        import_react.default.createElement("h4", { className: "ocgs-section-title" }, "Claude (meridian)"),
-        quota && quota.error ? import_react.default.createElement(
-          "div",
-          { className: "ocgs-err" },
-          "Claude (meridian): " + quota.error
-        ) : null,
-        import_react.default.createElement(
-          "div",
-          { className: "ocgs-rows" },
-          buildRows(null, claudeWindows, windowLabel)
-        ),
-        claudePaceLine ? import_react.default.createElement("div", { className: "ocgs-pace" }, claudePaceLine) : null
-      ) : null,
-      providerVisible(cfg, "deepseek") ? import_react.default.createElement(
-        "div",
-        { className: "ocgs-section" },
-        import_react.default.createElement("h4", { className: "ocgs-section-title" }, "DeepSeek"),
-        ds && ds.error ? import_react.default.createElement("div", { className: "ocgs-err" }, "DeepSeek: " + ds.error) : null,
-        ds && ds.data && Array.isArray(ds.data.balance_infos) && ds.data.balance_infos.length > 0 ? renderDsDashboard(ds.data.balance_infos[0], dsUsageAmount, dsUsageCost) : null,
-        import_react.default.createElement(
-          "div",
-          { className: "ocgs-cookie" },
-          import_react.default.createElement(
-            "button",
-            { className: "ocgs-btn", disabled: dsToken.busy, onClick: fetchDsToken },
-            dsToken.busy ? "Fetching\u2026" : "Fetch token from Firefox"
-          ),
-          dsToken.showLogin ? import_react.default.createElement(
-            "button",
-            { className: "ocgs-btn", onClick: openDsLogin },
-            "Open platform.deepseek.com"
-          ) : null,
-          dsToken.note ? import_react.default.createElement("span", { className: "ocgs-cookie-note" }, dsToken.note) : null
-        )
-      ) : null,
-      providerVisible(cfg, "opencode") ? import_react.default.createElement(
-        "div",
-        { className: "ocgs-section" },
-        import_react.default.createElement("h4", { className: "ocgs-section-title" }, "OpenCode GO"),
-        balanceLine ? import_react.default.createElement("div", { className: "ocgs-balance" }, balanceLine) : null,
-        go && go.error ? import_react.default.createElement("div", { className: "ocgs-err" }, "OpenCode GO: " + go.error) : null,
-        import_react.default.createElement("div", { className: "ocgs-rows" }, buildRows(GO_WINDOWS, goUsage)),
-        goPaceLine ? import_react.default.createElement("div", { className: "ocgs-pace" }, goPaceLine) : null,
-        import_react.default.createElement(
-          "div",
-          { className: "ocgs-cookie" },
-          import_react.default.createElement(
-            "button",
-            { className: "ocgs-btn", disabled: cookie.busy, onClick: fetchCookie },
-            cookie.busy ? "Fetching\u2026" : "Fetch cookie from Firefox"
-          ),
-          cookie.showLogin ? import_react.default.createElement(
-            "button",
-            { className: "ocgs-btn", onClick: openLogin },
-            "Open login page"
-          ) : null,
-          cookie.note ? import_react.default.createElement("span", { className: "ocgs-cookie-note" }, cookie.note) : null
-        )
-      ) : null,
-      providerVisible(cfg, "opencode-zen") ? import_react.default.createElement(
-        "div",
-        { className: "ocgs-section" },
-        import_react.default.createElement(
-          "div",
-          { className: "ocgs-head" },
-          import_react.default.createElement("h4", { className: "ocgs-section-title" }, "OpenCode Zen"),
-          import_react.default.createElement(
-            "button",
-            { className: "ocgs-refresh", onClick: refreshOz },
-            "Refresh"
-          )
-        ),
-        ozBalanceLine ? import_react.default.createElement("div", { className: "ocgs-balance" }, ozBalanceLine) : null,
-        oz && oz.error ? import_react.default.createElement("div", { className: "ocgs-err" }, "OpenCode Zen: " + oz.error) : null,
-        import_react.default.createElement(
-          "div",
-          { className: "ocgs-cookie" },
-          import_react.default.createElement(
-            "button",
-            { className: "ocgs-btn", disabled: cookie.busy, onClick: fetchCookie },
-            cookie.busy ? "Fetching\u2026" : "Fetch cookie from Firefox"
-          ),
-          cookie.showLogin ? import_react.default.createElement(
-            "button",
-            { className: "ocgs-btn", onClick: openLogin },
-            "Open opencode.ai"
-          ) : null,
-          cookie.note ? import_react.default.createElement("span", { className: "ocgs-cookie-note" }, cookie.note) : null
-        )
-      ) : null
-    );
+    return /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-root" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-head" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-head-title" }, /* @__PURE__ */ import_react.default.createElement("h3", { className: "ocgs-title" }, "Subscriptions"), staleText ? /* @__PURE__ */ import_react.default.createElement("span", { className: "ocgs-stale" }, staleText) : null), /* @__PURE__ */ import_react.default.createElement("button", { className: "ocgs-refresh", onClick: load }, "Refresh")), /* @__PURE__ */ import_react.default.createElement("details", { className: "ocgs-details" }, /* @__PURE__ */ import_react.default.createElement("summary", { className: "ocgs-summary" }, "Show sections"), /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-toggles" }, PROVIDER_TOGGLES.map(function(def) {
+      var providers = cfg && cfg.providers || {};
+      var visible = providers[def.key] !== false;
+      return /* @__PURE__ */ import_react.default.createElement("label", { className: "ocgs-toggle", key: def.key }, /* @__PURE__ */ import_react.default.createElement(
+        "input",
+        {
+          type: "checkbox",
+          checked: visible,
+          disabled: toggleBusy !== null,
+          onChange: function() {
+            toggleProvider(def.key);
+          }
+        }
+      ), /* @__PURE__ */ import_react.default.createElement("span", { className: "ocgs-toggle-label" }, def.label));
+    }))), snap === null ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-note" }, "Loading subscription data\u2026") : null, allFailed ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-err" }, "Could not load subscription data. " + (firstError || "Check that the subscriptions plugin is mounted.")) : null, profileInfo || quotaPick || telemetryLine || healthLine || logsLine ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react.default.createElement("h4", { className: "ocgs-section-title" }, "Quota"), profileInfo ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-rows" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-row" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-row-label" }, /* @__PURE__ */ import_react.default.createElement("b", null, "Profile: " + profileInfo.active), profileInfo.chain ? /* @__PURE__ */ import_react.default.createElement("span", { className: "ocgs-stale" }, "chain: " + profileInfo.chain) : null))) : null, quotaPick ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-rows" }, quotaPick.rows) : null, quotaPick && quotaPick.pace ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-pace" }, quotaPick.pace) : null, telemetryLine ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-telemetry" }, telemetryLine) : null, healthLine ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-telemetry" }, healthLine) : null, logsLine ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-telemetry" }, logsLine) : null) : null, providerVisible(cfg, "commandcode") ? renderCcSection(cc, ccUsage) : null, providerVisible(cfg, "claude") ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react.default.createElement("h4", { className: "ocgs-section-title" }, "Claude (meridian)"), quota && quota.error ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-err" }, "Claude (meridian): " + quota.error) : null, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-rows" }, buildRows(null, claudeWindows, windowLabel)), claudePaceLine ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-pace" }, claudePaceLine) : null) : null, providerVisible(cfg, "deepseek") ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react.default.createElement("h4", { className: "ocgs-section-title" }, "DeepSeek"), ds && ds.error ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-err" }, "DeepSeek: " + ds.error) : null, ds && ds.data && Array.isArray(ds.data.balance_infos) && ds.data.balance_infos.length > 0 ? renderDsDashboard(ds.data.balance_infos[0], dsUsageAmount, dsUsageCost) : null, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-cookie" }, /* @__PURE__ */ import_react.default.createElement("button", { className: "ocgs-btn", disabled: dsToken.busy, onClick: fetchDsToken }, dsToken.busy ? "Fetching\u2026" : "Fetch token from Firefox"), dsToken.showLogin ? /* @__PURE__ */ import_react.default.createElement("button", { className: "ocgs-btn", onClick: openDsLogin }, "Open platform.deepseek.com") : null, dsToken.note ? /* @__PURE__ */ import_react.default.createElement("span", { className: "ocgs-cookie-note" }, dsToken.note) : null)) : null, providerVisible(cfg, "opencode") ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react.default.createElement("h4", { className: "ocgs-section-title" }, "OpenCode GO"), balanceLine ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-balance" }, balanceLine) : null, go && go.error ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-err" }, "OpenCode GO: " + go.error) : null, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-rows" }, buildRows(GO_WINDOWS, goUsage)), goPaceLine ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-pace" }, goPaceLine) : null, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-cookie" }, /* @__PURE__ */ import_react.default.createElement("button", { className: "ocgs-btn", disabled: cookie.busy, onClick: fetchCookie }, cookie.busy ? "Fetching\u2026" : "Fetch cookie from Firefox"), cookie.showLogin ? /* @__PURE__ */ import_react.default.createElement("button", { className: "ocgs-btn", onClick: openLogin }, "Open login page") : null, cookie.note ? /* @__PURE__ */ import_react.default.createElement("span", { className: "ocgs-cookie-note" }, cookie.note) : null)) : null, providerVisible(cfg, "opencode-zen") ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-head" }, /* @__PURE__ */ import_react.default.createElement("h4", { className: "ocgs-section-title" }, "OpenCode Zen"), /* @__PURE__ */ import_react.default.createElement("button", { className: "ocgs-refresh", onClick: refreshOz }, "Refresh")), ozBalanceLine ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-balance" }, ozBalanceLine) : null, oz && oz.error ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-err" }, "OpenCode Zen: " + oz.error) : null, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-cookie" }, /* @__PURE__ */ import_react.default.createElement("button", { className: "ocgs-btn", disabled: cookie.busy, onClick: fetchCookie }, cookie.busy ? "Fetching\u2026" : "Fetch cookie from Firefox"), cookie.showLogin ? /* @__PURE__ */ import_react.default.createElement("button", { className: "ocgs-btn", onClick: openLogin }, "Open opencode.ai") : null, cookie.note ? /* @__PURE__ */ import_react.default.createElement("span", { className: "ocgs-cookie-note" }, cookie.note) : null)) : null);
   };
 }
 var name = PLUGIN_NAME;
@@ -1151,7 +846,7 @@ function apply(ctx, config) {
     return ctx.slots.register(
       { name: "settings.section", id: PLUGIN_NAME, order: 26, label: "Subscriptions" },
       function() {
-        return import_react.default.createElement(Panel);
+        return /* @__PURE__ */ import_react.default.createElement(Panel, null);
       }
     );
   });
