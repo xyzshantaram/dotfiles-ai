@@ -113,6 +113,20 @@ function apply(ctx, config) {
     }
     return next();
   });
+  ctx.on("system-prompt/assemble", (assembly, context, next) => {
+    const agent = context.agent;
+    if (!agent) return next();
+    const patterns = gatedPatterns();
+    const lockdown = isSubagent(agent) ? subagentDeny : [];
+    if (patterns.length === 0 && lockdown.length === 0) return next();
+    const active = activeById.get(agent.id) ?? /* @__PURE__ */ new Set();
+    const deny = expandDeny(agent, patterns, active);
+    for (const name2 of lockdown) if (!deny.includes(name2)) deny.push(name2);
+    if (deny.length === 0) return next();
+    const blocked = new Set(deny);
+    assembly.tools = assembly.tools.filter((t) => !blocked.has(t.name));
+    return next();
+  });
   ctx.on("tools/post-execute", (exec, result, next) => {
     const proceed = async () => {
       const outcome = await next();
