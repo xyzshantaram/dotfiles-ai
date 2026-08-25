@@ -2283,8 +2283,8 @@ function apply(ctx) {
             cwd,
             ...signal ? { signal } : {}
           });
-          const text = await ctx.fs.readText(target, signal);
           const info = await ctx.fs.stat(target, signal);
+          const text = await ctx.fs.readText(target, signal);
           const expected = info !== void 0 ? { kind: "replaceIfVersion", version: info.version } : void 0;
           const manifest = JSON.parse(text);
           manifest.scripts = manifest.scripts ?? {};

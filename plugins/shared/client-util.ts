@@ -26,7 +26,15 @@
  */
 export function injectStyle(pluginName: string, styleId: string, cssText: string): void {
   if (typeof document === "undefined") return;
-  if (document.querySelector("style[data-plugin-css=" + JSON.stringify(styleId) + "]") !== null)
+  if (
+    document.querySelector(
+      'style[data-plugin-css="' +
+        (typeof CSS !== "undefined" && (CSS as unknown as { escape(s: string): string }).escape
+          ? (CSS as unknown as { escape(s: string): string }).escape(styleId)
+          : String(styleId).replace(/"/g, '\\"')) +
+        '"]',
+    ) !== null
+  )
     return;
   const tag = document.createElement("style");
   tag.dataset.plugin = pluginName;
@@ -90,11 +98,12 @@ export function postJson(
   url: string,
   body?: unknown,
 ): Promise<{ data: any; error: string | null }> {
+  const hasBody = body !== undefined;
   return fetch(url, {
     method: "POST",
     cache: "no-store",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
+    ...(hasBody ? { headers: { "content-type": "application/json" } } : {}),
+    ...(hasBody ? { body: JSON.stringify(body) } : {}),
   })
     .then(function (res) {
       return res

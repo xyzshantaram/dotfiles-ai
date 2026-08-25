@@ -251,7 +251,11 @@ function registerFailover(ctx, alwaysMaxRetries) {
       };
     }
     const { reasoningEffort: _drop, ...base } = proposal;
-    return { ...base, provider: candidate.provider, model: candidate.model };
+    return {
+      ...base,
+      provider: candidate.provider,
+      model: candidate.model
+    };
   }
   ctx.on("agent/request", async (payload, next) => {
     const proposal = await next();
@@ -259,7 +263,9 @@ function registerFailover(ctx, alwaysMaxRetries) {
     const p = payload;
     const agent = p.agent;
     if (!agent) {
-      ctx.logger.warn("profiles: agent missing from agent/request payload; failing over disabled for this request");
+      ctx.logger.warn(
+        "profiles: agent missing from agent/request payload; failing over disabled for this request"
+      );
       return proposal;
     }
     const stepKey = keyOf(p.turn, p.step);
@@ -272,7 +278,9 @@ function registerFailover(ctx, alwaysMaxRetries) {
     };
     const levels = [
       proposalRoute,
-      ...chain.filter((level2) => !(level2.provider === proposalRoute.provider && level2.model === proposalRoute.model))
+      ...chain.filter(
+        (level2) => !(level2.provider === proposalRoute.provider && level2.model === proposalRoute.model)
+      )
     ];
     const agentMap = getAgentState(agent);
     let s = agentMap.get(stepKey);
@@ -315,12 +323,15 @@ function registerFailover(ctx, alwaysMaxRetries) {
       if (s.cursor < s.levels.length) break;
       if (!ignoredCache && s.failures.length === 0) {
         let anyDown = false;
-        for (const lv of s.levels) if (isCachedDown(lv)) {
-          anyDown = true;
-          break;
-        }
+        for (const lv of s.levels)
+          if (isCachedDown(lv)) {
+            anyDown = true;
+            break;
+          }
         if (anyDown) {
-          ctx.logger.warn("profiles: every level is cached down; retrying while ignoring the cache");
+          ctx.logger.warn(
+            "profiles: every level is cached down; retrying while ignoring the cache"
+          );
           s.cursor = 0;
           ignoredCache = true;
           continue;
@@ -652,8 +663,16 @@ function apply(ctx, config) {
   ctx.on("settings/updated", (ns, next, prev) => {
     if (ns !== PROFILE_NS) return;
     downCache.clear();
-    const nextHead = chainOf(activeEntry(next), "orchestrator", next?.chains)[0];
-    const prevHead = chainOf(activeEntry(prev), "orchestrator", prev?.chains)[0];
+    const nextHead = chainOf(
+      activeEntry(next),
+      "orchestrator",
+      next?.chains
+    )[0];
+    const prevHead = chainOf(
+      activeEntry(prev),
+      "orchestrator",
+      prev?.chains
+    )[0];
     const flipped = (nextHead?.provider ?? "") !== (prevHead?.provider ?? "") || (nextHead?.model ?? "") !== (prevHead?.model ?? "") || (nextHead?.reasoningEffort ?? "") !== (prevHead?.reasoningEffort ?? "");
     if (flipped) syncDefaultModel(ctx, next);
   });

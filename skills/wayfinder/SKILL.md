@@ -135,6 +135,6 @@ In this harness there is no GitHub issue tracker by default. Use the **local-mar
 - **Tickets**: each ticket is `<scratch>/wayfinder/<name>/decisions/<slug>.md` with a `## Question` body (one decision per file). The map's "Decisions so far" lists them as one-line gists linking the file.
 - **Blocking**: express edges as a `depends-on:` line in each decision file (comma-separated slugs). The frontier is the open decisions with no unmet `depends-on`. A short script can compute it; most small maps do not need it.
 - **Fog / Out of scope**: keep both as sections in the map markdown, exactly as above. Do not pre-slice the fog.
-- **Handoff to aidos**: when aidos tools are present in the session, the skill prompts you to create aidos tickets from *resolved* and *in-progress* decisions, pushing `depends-on` as aidos dependencies that aidos enforces. Charting stays in dotfiles-ai; aidos enforces the execution. Never call aidos from inside the skill definition — prompt the user when aidos is available.
+- **Handoff to aidos**: when aidos tools are present in the session, the skill prompts you to create aidos tickets from _resolved_ and _in-progress_ decisions, pushing `depends-on` as aidos dependencies that aidos enforces. Charting stays in dotfiles-ai; aidos enforces the execution. Never call aidos from inside the skill definition — prompt the user when aidos is available.
 
 Invoke with a loose idea. Chart the map, then resolve one ticket per session.

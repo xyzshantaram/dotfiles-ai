@@ -2,7 +2,9 @@
   // plugins/shared/client-util.ts
   function injectStyle(pluginName, styleId, cssText) {
     if (typeof document === "undefined") return;
-    if (document.querySelector("style[data-plugin-css=" + JSON.stringify(styleId) + "]") !== null)
+    if (document.querySelector(
+      'style[data-plugin-css="' + (typeof CSS !== "undefined" && CSS.escape ? CSS.escape(styleId) : String(styleId).replace(/"/g, '\\"')) + '"]'
+    ) !== null)
       return;
     const tag = document.createElement("style");
     tag.dataset.plugin = pluginName;
@@ -273,14 +275,23 @@
           var load = props.load;
           var select = props.select;
           var t = props.t;
-          var seatSubscribe = useCallback(function(fn) {
-            return directory.subscribe(fn);
-          }, [directory]);
-          var seatGetSnapshot = useCallback(function() {
-            return directory.getSnapshot();
-          }, [directory]);
+          var seatSubscribe = useCallback(
+            function(fn) {
+              return directory.subscribe(fn);
+            },
+            [directory]
+          );
+          var seatGetSnapshot = useCallback(
+            function() {
+              return directory.getSnapshot();
+            },
+            [directory]
+          );
           var state = useSyncExternalStore(seatSubscribe, seatGetSnapshot);
-          var profileSnap = useSyncExternalStore(profileScope.store.subscribe, profileScope.store.getSnapshot);
+          var profileSnap = useSyncExternalStore(
+            profileScope.store.subscribe,
+            profileScope.store.getSnapshot
+          );
           var profileValue = profileSnap.value;
           var openState = useState(false);
           var open = openState[0];
@@ -293,13 +304,16 @@
           var profileConfigState = useState(null);
           var profileConfig = profileConfigState[0];
           var setProfileConfig = profileConfigState[1];
-          useEffect(function() {
-            if (open) {
-              if (searchInputRef.current) searchInputRef.current.focus();
-            } else {
-              setModelQuery("");
-            }
-          }, [open]);
+          useEffect(
+            function() {
+              if (open) {
+                if (searchInputRef.current) searchInputRef.current.focus();
+              } else {
+                setModelQuery("");
+              }
+            },
+            [open]
+          );
           useEffect(
             function() {
               if (available) load();
@@ -475,18 +489,25 @@
           ), state.status === "error" && state.error ? /* @__PURE__ */ react.createElement("div", { className: "profiles-client-strip" }, state.error) : null, modelGroups.length === 0 && trimmedQuery !== "" ? /* @__PURE__ */ react.createElement("div", { className: "profiles-client-strip" }, t("menu.noResults")) : modelGroups.map(function(grp) {
             return /* @__PURE__ */ react.createElement("div", { key: grp.id }, /* @__PURE__ */ react.createElement("div", { className: "dsp-section-title" }, grp.label), grp.models.map(function(row) {
               var isActive = current !== void 0 && current !== null && current.provider === grp.id && current.model === row.id;
-              return /* @__PURE__ */ react.createElement("div", { key: grp.id + "/" + row.id, className: "profiles-client-model-row" }, /* @__PURE__ */ react.createElement(
-                "button",
+              return /* @__PURE__ */ react.createElement(
+                "div",
                 {
-                  type: "button",
-                  className: "profiles-client-option",
-                  onClick: function() {
-                    pick({ provider: grp.id, model: row.id });
-                  }
+                  key: grp.id + "/" + row.id,
+                  className: "profiles-client-model-row"
                 },
-                /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-copy" }, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-name profiles-client-option-model" }, row.name), /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-detail" }, grp.label)),
-                isActive ? /* @__PURE__ */ react.createElement("span", { className: "profiles-client-check", "aria-hidden": true }, "\u2713") : null
-              ));
+                /* @__PURE__ */ react.createElement(
+                  "button",
+                  {
+                    type: "button",
+                    className: "profiles-client-option",
+                    onClick: function() {
+                      pick({ provider: grp.id, model: row.id });
+                    }
+                  },
+                  /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-copy" }, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-name profiles-client-option-model" }, row.name), /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-detail" }, grp.label)),
+                  isActive ? /* @__PURE__ */ react.createElement("span", { className: "profiles-client-check", "aria-hidden": true }, "\u2713") : null
+                )
+              );
             }));
           }))) : null);
         }
@@ -498,8 +519,12 @@
       function cloneConfig(config) {
         function cloneRoutes(routes) {
           return (routes || []).map(function(r) {
-            var out = { provider: r.provider, model: r.model };
-            if (typeof r.reasoningEffort === "string" && r.reasoningEffort !== "") out.reasoningEffort = r.reasoningEffort;
+            var out = {
+              provider: r.provider,
+              model: r.model
+            };
+            if (typeof r.reasoningEffort === "string" && r.reasoningEffort !== "")
+              out.reasoningEffort = r.reasoningEffort;
             return out;
           });
         }
@@ -539,12 +564,18 @@
           var sessionId = sessionSnap !== null && sessionSnap !== void 0 ? sessionSnap.current : null;
           var usable = sessionId !== null && sessionId !== void 0 ? sessions.subagentAddress(sessionId) === void 0 : false;
           var directory = sessionId !== null && sessionId !== void 0 ? models.directoryFor(sessionId) : null;
-          var catalogSubscribe = useCallback(function(cb) {
-            return directory ? directory.store.subscribe(cb) : emptySubscribe();
-          }, [directory]);
-          var catalogGetSnapshot = useCallback(function() {
-            return directory ? directory.store.getSnapshot() : null;
-          }, [directory]);
+          var catalogSubscribe = useCallback(
+            function(cb) {
+              return directory ? directory.store.subscribe(cb) : emptySubscribe();
+            },
+            [directory]
+          );
+          var catalogGetSnapshot = useCallback(
+            function() {
+              return directory ? directory.store.getSnapshot() : null;
+            },
+            [directory]
+          );
           var catalogState = useSyncExternalStore(catalogSubscribe, catalogGetSnapshot);
           useEffect(
             function() {
@@ -847,7 +878,8 @@
               var isInline = false;
               if (currentRef === void 0 && field !== void 0 && field !== null) {
                 if (Array.isArray(field) && field.length > 0) isInline = true;
-                else if (typeof field === "object" && Array.isArray(field.routes) && field.routes.length > 0) isInline = true;
+                else if (typeof field === "object" && Array.isArray(field.routes) && field.routes.length > 0)
+                  isInline = true;
               }
               var selectValue = currentRef !== void 0 ? currentRef : isInline ? "__inline__" : "__detach__";
               return /* @__PURE__ */ react.createElement("div", { className: "pf-panel-chain", key: chainKey }, /* @__PURE__ */ react.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ react.createElement("h5", { className: "pf-panel-chain-title" }, label), /* @__PURE__ */ react.createElement(

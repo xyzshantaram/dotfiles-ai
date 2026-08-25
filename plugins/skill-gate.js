@@ -57,7 +57,9 @@ function parseToolsGated(frontmatter) {
     else break;
   }
   if (block.length === 0) {
-    console.warn("[skill-gate] tools-gated key with no value and no block list; gating nothing for this skill");
+    console.warn(
+      "[skill-gate] tools-gated key with no value and no block list; gating nothing for this skill"
+    );
   }
   return block.filter((e) => e.length > 0);
 }

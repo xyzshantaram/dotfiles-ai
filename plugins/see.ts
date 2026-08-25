@@ -167,7 +167,9 @@ function registerSeeTool(ctx: Context, source: () => ProfileSettings | undefined
         // keep set. Computed at call time (B1 mask.ts technique) so the
         // filter never names a tool the registry does not hold.
         const schemas = ctx.tools.schemas(scopeOf(ctx));
-        const deny = schemas.map((schema) => schema.name).filter((toolName) => !SEE_CHILD_KEEP.has(toolName));
+        const deny = schemas
+          .map((schema) => schema.name)
+          .filter((toolName) => !SEE_CHILD_KEEP.has(toolName));
 
         let lastError: Error | null = null;
         for (const route of routes) {

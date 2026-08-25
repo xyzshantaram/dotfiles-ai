@@ -445,8 +445,8 @@ export function apply(ctx: Context): void {
             cwd,
             ...(signal ? { signal } : {}),
           });
-          const text = await ctx.fs.readText(target, signal);
           const info = await ctx.fs.stat(target, signal);
+          const text = await ctx.fs.readText(target, signal);
           const expected =
             info !== undefined
               ? { kind: "replaceIfVersion" as const, version: info.version }
@@ -513,9 +513,10 @@ export function apply(ctx: Context): void {
           }
         }
         if (isDowngrade) {
-          const manualCommand = manager === "pip"
-            ? `pip install ${args.packageName}==${installedVersion}`
-            : buildCommand(manager, "add", `${args.packageName}@${installedVersion}`, dev);
+          const manualCommand =
+            manager === "pip"
+              ? `pip install ${args.packageName}==${installedVersion}`
+              : buildCommand(manager, "add", `${args.packageName}@${installedVersion}`, dev);
           throw new Error(
             `Resolved version ${version} for ${args.packageName} is older than the installed version ` +
               `${installedVersion}. Refusing to downgrade. To do this deliberately, run by hand: ${manualCommand}`,

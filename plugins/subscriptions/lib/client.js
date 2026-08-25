@@ -45,7 +45,9 @@ var import_react2 = __toESM(require("react"), 1);
 // plugins/shared/client-util.ts
 function injectStyle(pluginName, styleId, cssText) {
   if (typeof document === "undefined") return;
-  if (document.querySelector("style[data-plugin-css=" + JSON.stringify(styleId) + "]") !== null)
+  if (document.querySelector(
+    'style[data-plugin-css="' + (typeof CSS !== "undefined" && CSS.escape ? CSS.escape(styleId) : String(styleId).replace(/"/g, '\\"')) + '"]'
+  ) !== null)
     return;
   const tag = document.createElement("style");
   tag.dataset.plugin = pluginName;
@@ -74,11 +76,12 @@ function fetchJson(url) {
   });
 }
 function postJson(url, body) {
+  const hasBody = body !== void 0;
   return fetch(url, {
     method: "POST",
     cache: "no-store",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body)
+    ...hasBody ? { headers: { "content-type": "application/json" } } : {},
+    ...hasBody ? { body: JSON.stringify(body) } : {}
   }).then(function(res) {
     return res.json().catch(function() {
       return null;

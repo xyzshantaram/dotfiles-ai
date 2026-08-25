@@ -8,10 +8,8 @@
  *
  * One source implementation per helper, so host plugins cannot drift.
  * Historical inline copies lived in plugins/profiles.ts,
- * plugins/session-archive/src/index.ts, and plugins/subscriptions/src/index.ts,
- * each with its own body-size cap (64 KiB, 16 KiB, 64 KiB). Those files still
- * carry local copies with a TODO(dedup) pointing here; rewire them to this
- * module in a follow-up, once each route's cap is passed explicitly.
+ * plugins/session-archive/src/index.ts, and plugins/subscriptions/src/index.ts
+ * (rewired in the build-drift batch).
  *
  * `readBody` keeps both historical behaviors: it honors the Content-Length
  * pre-check (profiles and session-archive) and rejects oversized bodies while

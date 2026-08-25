@@ -63,8 +63,12 @@ window.__ModuleLoader__.load({
     var PLUGIN_NAME = "profiles-client";
     /** Locale namespace owned by this bundle. */
     var LOCALE_NS = "profiles-client";
-    function emptySubscribe() { return function () {}; }
-    function emptySnapshot() { return null; }
+    function emptySubscribe() {
+      return function () {};
+    }
+    function emptySnapshot() {
+      return null;
+    }
     /** Slot keys this bundle registers over (shipped owners keep default 0). */
     var MODEL_SEAT_SLOT = "conversation.input.model";
     /** Lower than the shipped seat's default 0; lowest live entry renders. */
@@ -237,10 +241,23 @@ window.__ModuleLoader__.load({
         var select = props.select;
         var t = props.t;
 
-        var seatSubscribe = useCallback(function (fn) { return directory.subscribe(fn); }, [directory]);
-        var seatGetSnapshot = useCallback(function () { return directory.getSnapshot(); }, [directory]);
+        var seatSubscribe = useCallback(
+          function (fn) {
+            return directory.subscribe(fn);
+          },
+          [directory],
+        );
+        var seatGetSnapshot = useCallback(
+          function () {
+            return directory.getSnapshot();
+          },
+          [directory],
+        );
         var state = useSyncExternalStore(seatSubscribe, seatGetSnapshot);
-        var profileSnap = useSyncExternalStore(profileScope.store.subscribe, profileScope.store.getSnapshot);
+        var profileSnap = useSyncExternalStore(
+          profileScope.store.subscribe,
+          profileScope.store.getSnapshot,
+        );
         var profileValue = profileSnap.value;
 
         var openState = useState(false);
@@ -255,13 +272,16 @@ window.__ModuleLoader__.load({
         var profileConfig = profileConfigState[0];
         var setProfileConfig = profileConfigState[1];
 
-        useEffect(function () {
-          if (open) {
-            if (searchInputRef.current) searchInputRef.current.focus();
-          } else {
-            setModelQuery("");
-          }
-        }, [open]);
+        useEffect(
+          function () {
+            if (open) {
+              if (searchInputRef.current) searchInputRef.current.focus();
+            } else {
+              setModelQuery("");
+            }
+          },
+          [open],
+        );
 
         useEffect(
           function () {
@@ -352,12 +372,21 @@ window.__ModuleLoader__.load({
         for (var g = 0; g < state.groups.length; g++) {
           var group = state.groups[g];
           if (group.models === void 0 || group.models.length === 0) continue;
-          var providerLabel = typeof group.name === "string" && group.name !== "" ? group.name : group.id;
+          var providerLabel =
+            typeof group.name === "string" && group.name !== "" ? group.name : group.id;
           var models = [];
           for (var m = 0; m < group.models.length; m++) {
             var gm = group.models[m];
             if (trimmedQuery !== "") {
-              var hay = (gm.name + " " + gm.id + " " + group.id + " " + providerLabel).toLowerCase();
+              var hay = (
+                gm.name +
+                " " +
+                gm.id +
+                " " +
+                group.id +
+                " " +
+                providerLabel
+              ).toLowerCase();
               if (hay.indexOf(trimmedQuery) === -1) continue;
             }
             models.push({ id: gm.id, name: gm.name });
@@ -499,9 +528,15 @@ window.__ModuleLoader__.load({
                     placeholder={t("menu.searchPlaceholder")}
                     value={modelQuery}
                     aria-label={t("menu.searchPlaceholder")}
-                    onChange={function (event) { setModelQuery(event.target.value); }}
-                    onKeyDown={function (event) { event.stopPropagation(); }}
-                    onMouseDown={function (event) { event.stopPropagation(); }}
+                    onChange={function (event) {
+                      setModelQuery(event.target.value);
+                    }}
+                    onKeyDown={function (event) {
+                      event.stopPropagation();
+                    }}
+                    onMouseDown={function (event) {
+                      event.stopPropagation();
+                    }}
                   />
                   {state.status === "error" && state.error ? (
                     <div className="profiles-client-strip">{state.error}</div>
@@ -520,7 +555,10 @@ window.__ModuleLoader__.load({
                               current.provider === grp.id &&
                               current.model === row.id;
                             return (
-                              <div key={grp.id + "/" + row.id} className="profiles-client-model-row">
+                              <div
+                                key={grp.id + "/" + row.id}
+                                className="profiles-client-model-row"
+                              >
                                 <button
                                   type="button"
                                   className="profiles-client-option"
@@ -532,7 +570,9 @@ window.__ModuleLoader__.load({
                                     <span className="profiles-client-option-name profiles-client-option-model">
                                       {row.name}
                                     </span>
-                                    <span className="profiles-client-option-detail">{grp.label}</span>
+                                    <span className="profiles-client-option-detail">
+                                      {grp.label}
+                                    </span>
                                   </span>
                                   {isActive ? (
                                     <span className="profiles-client-check" aria-hidden={true}>
@@ -547,7 +587,6 @@ window.__ModuleLoader__.load({
                       );
                     })
                   )}
-
                 </div>
               </div>
             ) : null}
@@ -585,8 +624,16 @@ window.__ModuleLoader__.load({
     function cloneConfig(config) {
       function cloneRoutes(routes) {
         return (routes || []).map(function (r) {
-          var out: Record<string, unknown> = { provider: (r as unknown as Record<string, unknown>).provider as string, model: (r as unknown as Record<string, unknown>).model as string };
-          if (typeof (r as unknown as Record<string, unknown>).reasoningEffort === "string" && ((r as unknown as Record<string, unknown>).reasoningEffort as string) !== "") out.reasoningEffort = (r as unknown as Record<string, unknown>).reasoningEffort as string;
+          var out: Record<string, unknown> = {
+            provider: (r as unknown as Record<string, unknown>).provider as string,
+            model: (r as unknown as Record<string, unknown>).model as string,
+          };
+          if (
+            typeof (r as unknown as Record<string, unknown>).reasoningEffort === "string" &&
+            ((r as unknown as Record<string, unknown>).reasoningEffort as string) !== ""
+          )
+            out.reasoningEffort = (r as unknown as Record<string, unknown>)
+              .reasoningEffort as string;
           return out;
         });
       }
@@ -637,8 +684,18 @@ window.__ModuleLoader__.load({
             : false;
         var directory =
           sessionId !== null && sessionId !== void 0 ? models.directoryFor(sessionId) : null;
-        var catalogSubscribe = useCallback(function (cb) { return directory ? directory.store.subscribe(cb) : emptySubscribe(); }, [directory]);
-        var catalogGetSnapshot = useCallback(function () { return directory ? directory.store.getSnapshot() : null; }, [directory]);
+        var catalogSubscribe = useCallback(
+          function (cb) {
+            return directory ? directory.store.subscribe(cb) : emptySubscribe();
+          },
+          [directory],
+        );
+        var catalogGetSnapshot = useCallback(
+          function () {
+            return directory ? directory.store.getSnapshot() : null;
+          },
+          [directory],
+        );
         var catalogState = useSyncExternalStore(catalogSubscribe, catalogGetSnapshot);
         useEffect(
           function () {
@@ -1007,9 +1064,15 @@ window.__ModuleLoader__.load({
                     var isInline = false;
                     if (currentRef === void 0 && field !== void 0 && field !== null) {
                       if (Array.isArray(field) && field.length > 0) isInline = true;
-                      else if (typeof field === "object" && Array.isArray(field.routes) && field.routes.length > 0) isInline = true;
+                      else if (
+                        typeof field === "object" &&
+                        Array.isArray(field.routes) &&
+                        field.routes.length > 0
+                      )
+                        isInline = true;
                     }
-                    var selectValue = currentRef !== void 0 ? currentRef : isInline ? "__inline__" : "__detach__";
+                    var selectValue =
+                      currentRef !== void 0 ? currentRef : isInline ? "__inline__" : "__detach__";
                     return (
                       <div className="pf-panel-chain" key={chainKey}>
                         <div className="pf-panel-row">
@@ -1036,7 +1099,11 @@ window.__ModuleLoader__.load({
                                 </option>
                               );
                             })}
-                            {isInline ? <option value="__inline__">{fieldSummary(field, config.chains)}</option> : null}
+                            {isInline ? (
+                              <option value="__inline__">
+                                {fieldSummary(field, config.chains)}
+                              </option>
+                            ) : null}
                           </select>
                           <button
                             type="button"

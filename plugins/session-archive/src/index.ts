@@ -77,8 +77,6 @@ function service<T>(ctx: Context, name: string): T | undefined {
   return (ctx as { get(name: string): unknown }).get(name) as T | undefined;
 }
 
-
-
 /** The archived sessions list handler. */
 function makeListHandler(ctx: Context) {
   return async (_req: IncomingMessage, res: ServerResponse) => {

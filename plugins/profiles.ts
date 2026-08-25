@@ -347,7 +347,11 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
       } as LlmCallConfig;
     }
     const { reasoningEffort: _drop, ...base } = proposal as unknown as Record<string, unknown>;
-    return { ...(base as object), provider: candidate.provider, model: candidate.model } as LlmCallConfig;
+    return {
+      ...(base as object),
+      provider: candidate.provider,
+      model: candidate.model,
+    } as LlmCallConfig;
   }
 
   ctx.on("agent/request", async (payload: unknown, next: () => Promise<unknown>) => {
@@ -357,7 +361,9 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
     const p = payload as { turn?: unknown; step?: unknown; signal?: AbortSignal; agent?: unknown };
     const agent = p.agent as object | undefined;
     if (!agent) {
-      ctx.logger.warn("profiles: agent missing from agent/request payload; failing over disabled for this request");
+      ctx.logger.warn(
+        "profiles: agent missing from agent/request payload; failing over disabled for this request",
+      );
       return proposal;
     }
     const stepKey = keyOf(p.turn, p.step);
@@ -370,7 +376,10 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
     };
     const levels: Level[] = [
       proposalRoute,
-      ...chain.filter((level) => !(level.provider === proposalRoute.provider && level.model === proposalRoute.model)),
+      ...chain.filter(
+        (level) =>
+          !(level.provider === proposalRoute.provider && level.model === proposalRoute.model),
+      ),
     ];
 
     const agentMap = getAgentState(agent);
@@ -416,9 +425,15 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
       if (s.cursor < s.levels.length) break;
       if (!ignoredCache && s.failures.length === 0) {
         let anyDown = false;
-        for (const lv of s.levels) if (isCachedDown(lv)) { anyDown = true; break; }
+        for (const lv of s.levels)
+          if (isCachedDown(lv)) {
+            anyDown = true;
+            break;
+          }
         if (anyDown) {
-          ctx.logger.warn("profiles: every level is cached down; retrying while ignoring the cache");
+          ctx.logger.warn(
+            "profiles: every level is cached down; retrying while ignoring the cache",
+          );
           s.cursor = 0;
           ignoredCache = true;
           continue;
@@ -577,7 +592,6 @@ function canonicalConfig(profile: ProfileSettings | undefined) {
 }
 
 type Validated<T> = { ok: true; value: T } | { ok: false; error: string };
-
 
 function validateRouteRow(value: unknown, path: string): Validated<RouteCandidate> {
   if (!isPlainObject(value)) return { ok: false, error: `${path} must be an object` };
@@ -839,8 +853,16 @@ export function apply(ctx: Context, config: unknown): void {
   ctx.on("settings/updated", (ns, next, prev) => {
     if (ns !== PROFILE_NS) return;
     downCache.clear();
-    const nextHead = chainOf(activeEntry(next as ProfileSettings), "orchestrator", (next as ProfileSettings)?.chains)[0];
-    const prevHead = chainOf(activeEntry(prev as ProfileSettings), "orchestrator", (prev as ProfileSettings)?.chains)[0];
+    const nextHead = chainOf(
+      activeEntry(next as ProfileSettings),
+      "orchestrator",
+      (next as ProfileSettings)?.chains,
+    )[0];
+    const prevHead = chainOf(
+      activeEntry(prev as ProfileSettings),
+      "orchestrator",
+      (prev as ProfileSettings)?.chains,
+    )[0];
     const flipped =
       (nextHead?.provider ?? "") !== (prevHead?.provider ?? "") ||
       (nextHead?.model ?? "") !== (prevHead?.model ?? "") ||

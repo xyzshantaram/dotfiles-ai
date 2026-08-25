@@ -165,7 +165,6 @@ function canonicalPath(path: string): string {
   try {
     return realpathSync.native(path);
   } catch {
-
     let dir = dirname(path);
     let rest: string[] = [path.slice(dir.length)];
     while (true) {

@@ -1609,7 +1609,9 @@ var core_default = import_core.default;
 // plugins/shared/client-util.ts
 function injectStyle(pluginName, styleId, cssText) {
   if (typeof document === "undefined") return;
-  if (document.querySelector("style[data-plugin-css=" + JSON.stringify(styleId) + "]") !== null)
+  if (document.querySelector(
+    'style[data-plugin-css="' + (typeof CSS !== "undefined" && CSS.escape ? CSS.escape(styleId) : String(styleId).replace(/"/g, '\\"')) + '"]'
+  ) !== null)
     return;
   const tag = document.createElement("style");
   tag.dataset.plugin = pluginName;
@@ -8228,16 +8230,16 @@ function stripAnsi(text) {
 }
 function deIndent(text) {
   if (typeof text !== "string" || text === "") return text;
-  var lines = text.split("\n");
+  var expanded = text.replace(/\t/g, "    ");
+  var lines = expanded.split("\n");
   var min = -1;
   for (var i = 0; i < lines.length; i++) {
     if (lines[i].trim() === "") continue;
     var count = 0;
-    while (count < lines[i].length && (lines[i].charAt(count) === " " || lines[i].charAt(count) === "	"))
-      count++;
+    while (count < lines[i].length && lines[i].charAt(count) === " ") count++;
     if (min === -1 || count < min) min = count;
   }
-  if (min <= 0) return text;
+  if (min <= 0) return expanded;
   var out = [];
   for (var i = 0; i < lines.length; i++) {
     out.push(lines[i].trim() === "" ? "" : lines[i].slice(min));

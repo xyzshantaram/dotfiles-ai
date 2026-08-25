@@ -346,5 +346,3 @@ profile:
     orchestrator: personal-orchestrator
     subagent: worker
 
-modelSync:
-  lastRun: 2026-08-25T15:24:25.242Z
