@@ -375,11 +375,17 @@ window.__ModuleLoader__.load({
 
         var currentPretty =
           current !== void 0 && current !== null ? prettyOf(current.provider, current.model) : null;
+        var headText =
+          face.head !== void 0 && face.head !== null
+            ? face.head.model + " (" + face.head.provider + ")"
+            : null;
         var hasProfile = face.active !== void 0 && face.active !== "";
         var modelText =
           currentPretty !== null
             ? currentPretty.model + " (" + currentPretty.provider + ")"
-            : t("seat.fallback");
+            : headText !== null
+              ? headText
+              : t("seat.fallback");
 
         return (
           <div className="profiles-client-root" ref={rootRef} onKeyDown={onKeyDown}>
