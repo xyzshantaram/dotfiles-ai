@@ -4552,7 +4552,9 @@ async function loadRules(ctx, dir) {
           for (const d of r.drop) {
             if (typeof d !== "string" || d.length === 0) throw new Error("bad rewrite drop entry");
           }
-          const cleanRewrite = { drop: r.drop.filter((d) => typeof d === "string" && d.length > 0) };
+          const cleanRewrite = {
+            drop: r.drop.filter((d) => typeof d === "string" && d.length > 0)
+          };
           if (r.value !== void 0) {
             if (typeof r.value !== "boolean") throw new Error("bad rewrite value");
             cleanRewrite.value = r.value;
@@ -4644,7 +4646,9 @@ async function evaluate(ctx, dir, command, depth) {
     const rule = rules.get(name2);
     if (rule === void 0) return void 0;
     return { name: name2, rule, ref, verdict: verdictFor(rule, ref) };
-  }).filter((h) => h !== void 0);
+  }).filter(
+    (h) => h !== void 0
+  );
   if (depth === 0 && hits.some((h) => h.rule.rewrites)) {
     let rewritten = command;
     let changed = false;
