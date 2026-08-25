@@ -162,4 +162,3 @@ export function escapeHtml(s: string): string {
 export function registerLocale(ctx: any, ns: string, en: unknown, zh: unknown): any {
   return ctx.locale.register(ns, { en: en, zh: zh });
 }
-

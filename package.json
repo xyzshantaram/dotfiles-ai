@@ -31,7 +31,7 @@
   "scripts": {
     "gen:customize-setup": "node generate-customize-setup.mjs",
     "build": "node build.mjs",
-    "format": "prettier",
-    "format:check": "prettier"
+    "format": "prettier --write \"**/*.{ts,tsx,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,css}\""
   }
 }
