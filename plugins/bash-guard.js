@@ -1,6 +1,6 @@
 // plugins/bash-guard.ts
 import { readdir, readFile } from "node:fs/promises";
-import { join as join2 } from "node:path";
+import { join as join2, resolve, sep, isAbsolute as isAbsolute2 } from "node:path";
 
 // node_modules/.pnpm/unbash@3.0.0/node_modules/unbash/dist/chars.js
 var CH_TAB = 9;
@@ -4503,8 +4503,8 @@ var name = "bash-guard";
 var inject = [];
 var Config = z.object({
   guardsDir: z.string().default("$DSH_HOME/plugins/guards"),
-  denyMessage: z.string(),
-  askMessage: z.string()
+  denyMessage: z.string().default(""),
+  askMessage: z.string().default("")
 });
 function resolveHome(path3) {
   if (!path3.includes("$DSH_HOME")) return path3;
@@ -4610,7 +4610,12 @@ function formatMessage(template, ctx) {
     return `  \u2022 ${m.name}${sub}: ${m.reason}`;
   }).join("\n");
   const primary = ctx.matches[0];
-  return template.replaceAll("{command}", ctx.command).replaceAll("{matches}", matchesText).replaceAll("{name}", primary?.name ?? "unknown").replaceAll("{reason}", primary?.reason ?? "");
+  return template.replace(/(\{command\}|\{matches\}|\{name\}|\{reason\})/g, (token) => {
+    if (token === "{command}") return ctx.command;
+    if (token === "{matches}") return matchesText;
+    if (token === "{name}") return primary?.name ?? "unknown";
+    return primary?.reason ?? "";
+  });
 }
 function matchLines(hits) {
   const seen = /* @__PURE__ */ new Set();
@@ -4666,13 +4671,23 @@ function pathLikeArgs(refs) {
   }
   return out;
 }
-function scratchAllowed(refs, safePaths) {
+function normalizeScratchPath(p, workspaceRoot) {
+  if (isAbsolute2(p)) return resolve(p);
+  if (workspaceRoot) return resolve(join2(workspaceRoot, p));
+  return p;
+}
+function isUnderScratch(target, root) {
+  return target === root || target.startsWith(root + sep);
+}
+function scratchAllowed(refs, safePaths, workspaceRoot) {
   const paths = pathLikeArgs(refs);
   if (paths.length === 0) return false;
-  const last = paths[paths.length - 1];
-  return safePaths.some((sp) => last.startsWith(sp));
+  return paths.every((p) => {
+    const n = normalizeScratchPath(p, workspaceRoot);
+    return safePaths.some((sp) => isUnderScratch(n, sp));
+  });
 }
-async function evaluate(ctx, dirs, command, depth, safePaths, templates) {
+async function evaluate(ctx, dirs, command, depth, safePaths, workspaceRoot, templates) {
   let script;
   try {
     script = parse(command);
@@ -4698,7 +4713,7 @@ async function evaluate(ctx, dirs, command, depth, safePaths, templates) {
   const refs = extractAllCommandsFromAST(script, command);
   const { commands } = expandWrapperCommands(refs);
   const all = [...refs, ...commands];
-  if (safePaths.length > 0 && scratchAllowed(all, safePaths)) {
+  if (safePaths.length > 0 && scratchAllowed(all, safePaths, workspaceRoot)) {
     return { command, decision: null };
   }
   const rules = await loadRulesMulti(ctx, dirs);
@@ -4751,7 +4766,7 @@ async function evaluate(ctx, dirs, command, depth, safePaths, templates) {
         `bash-guard: rewrite (${logBecauses.join("; ")}) ${command} -> ${rewritten}`
       );
       if (depth < 5) {
-        return evaluate(ctx, dirs, rewritten, depth + 1, safePaths, templates);
+        return evaluate(ctx, dirs, rewritten, depth + 1, safePaths, workspaceRoot, templates);
       }
       command = rewritten;
     }
@@ -4792,7 +4807,6 @@ async function evaluate(ctx, dirs, command, depth, safePaths, templates) {
 }
 function apply(ctx, config) {
   const baseDir = resolveHome(config.guardsDir ?? "$DSH_HOME/plugins/guards");
-  const aidos = ctx.get("aidos");
   ctx.on("tools/pre-execute", async (exec, next) => {
     if (exec.name !== "bash") return next();
     const command = exec.arguments?.command;
@@ -4800,17 +4814,20 @@ function apply(ctx, config) {
     const agent = exec.agent;
     let profile = "none";
     const safePaths = ["/tmp/dsh"];
+    let workspaceRoot;
+    const aidos = ctx.get("aidos");
     if (aidos && agent) {
       try {
         const bc = aidos.bashContext(agent);
         profile = bc.profile;
+        workspaceRoot = bc.workspaceRoot;
         if (bc.scratchDir) safePaths.push(bc.scratchDir);
       } catch {
       }
     }
     const dirs = profile === "none" ? [baseDir] : [baseDir, join2(baseDir, `profile-${profile}`)];
     const templates = { deny: config.denyMessage, ask: config.askMessage };
-    const result = await evaluate(ctx, dirs, command, 0, safePaths, templates);
+    const result = await evaluate(ctx, dirs, command, 0, safePaths, workspaceRoot, templates);
     if (result.command !== command) {
       try {
         exec.arguments.command = result.command;

@@ -67,7 +67,7 @@
  *     config: {}                # rules come from the drop-in files
  */
 import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve, sep, isAbsolute } from "node:path";
 import {
   parse,
   extractAllCommandsFromAST,
@@ -86,8 +86,8 @@ export const inject = [];
 
 export const Config = z.object({
   guardsDir: z.string().default("$DSH_HOME/plugins/guards"),
-  denyMessage: z.string(),
-  askMessage: z.string(),
+  denyMessage: z.string().default(""),
+  askMessage: z.string().default(""),
 });
 
 type BashGuardConfig = {
@@ -256,18 +256,14 @@ interface MessageContext {
 
 /** Substitute {command}, {name}, {matches}, {reason} in a template. */
 function formatMessage(template: string, ctx: MessageContext): string {
-  const matchesText = ctx.matches
-    .map((m) => {
-      const sub = m.subcommand ? ` (${m.subcommand})` : "";
-      return `  • ${m.name}${sub}: ${m.reason}`;
-    })
-    .join("\n");
+  const matchesText = ctx.matches.map((m) => { const sub = m.subcommand ? ` (${m.subcommand})` : ""; return `  • ${m.name}${sub}: ${m.reason}`; }).join("\n");
   const primary = ctx.matches[0];
-  return template
-    .replaceAll("{command}", ctx.command)
-    .replaceAll("{matches}", matchesText)
-    .replaceAll("{name}", primary?.name ?? "unknown")
-    .replaceAll("{reason}", primary?.reason ?? "");
+  return template.replace(/(\{command\}|\{matches\}|\{name\}|\{reason\})/g, (token) => {
+    if (token === "{command}") return ctx.command;
+    if (token === "{matches}") return matchesText;
+    if (token === "{name}") return primary?.name ?? "unknown";
+    return primary?.reason ?? "";
+  });
 }
 
 /** Build the match lines for a set of hits, deduplicated by (name, subcommand, reason). */
@@ -353,11 +349,21 @@ function pathLikeArgs(refs: CommandRef[]): string[] {
  * safe scratch roots. Used to always allow writes that target scratch, in any
  * phase, while still gating commands whose target is outside scratch.
  */
-function scratchAllowed(refs: CommandRef[], safePaths: string[]): boolean {
+function normalizeScratchPath(p: string, workspaceRoot?: string): string {
+  if (isAbsolute(p)) return resolve(p);
+  if (workspaceRoot) return resolve(join(workspaceRoot, p));
+  return p;
+}
+function isUnderScratch(target: string, root: string): boolean {
+  return target === root || target.startsWith(root + sep);
+}
+function scratchAllowed(refs: CommandRef[], safePaths: string[], workspaceRoot?: string): boolean {
   const paths = pathLikeArgs(refs);
   if (paths.length === 0) return false;
-  const last = paths[paths.length - 1];
-  return safePaths.some((sp) => last.startsWith(sp));
+  return paths.every((p) => {
+    const n = normalizeScratchPath(p, workspaceRoot);
+    return safePaths.some((sp) => isUnderScratch(n, sp));
+  });
 }
 /** Re-evaluate a command for the pre-execute hook. Returns the (possibly rewritten)
  * command string and a decision: null means allow (caller calls next()).
@@ -368,6 +374,7 @@ async function evaluate(
   command: string,
   depth: number,
   safePaths: string[],
+  workspaceRoot: string | undefined,
   templates: { deny?: string; ask?: string },
 ): Promise<{ command: string; decision: PreToolDecision | null }> {
   // Parse (fail-closed)
@@ -405,7 +412,7 @@ async function evaluate(
   // ephemeral and sandbox-bounded, so bash-guard never gates them — the agent
   // (and especially a subagent) can spool to /tmp/dsh or the aidos durable
   // scratch at any time.
-  if (safePaths.length > 0 && scratchAllowed(all, safePaths)) {
+  if (safePaths.length > 0 && scratchAllowed(all, safePaths, workspaceRoot)) {
     return { command, decision: null };
   }
   const rules = await loadRulesMulti(ctx, dirs);
@@ -467,7 +474,7 @@ async function evaluate(
         `bash-guard: rewrite (${logBecauses.join("; ")}) ${command} -> ${rewritten}`,
       );
       if (depth < 5) {
-        return evaluate(ctx, dirs, rewritten, depth + 1, safePaths, templates);
+        return evaluate(ctx, dirs, rewritten, depth + 1, safePaths, workspaceRoot, templates);
       }
       command = rewritten;
     }
@@ -512,14 +519,6 @@ async function evaluate(
 
 export function apply(ctx: Context, config: BashGuardConfig): void {
   const baseDir = resolveHome(config.guardsDir ?? "$DSH_HOME/plugins/guards");
-  // aidos exposes the bash policy (profile + scratch roots) for the executing
-  // agent. When aidos is not mounted, fall back to the base rules and /tmp/dsh
-  // only.
-  const aidos = (ctx as unknown as { get(name: string): unknown }).get("aidos") as
-    | {
-        bashContext(agent: unknown): { profile: string; scratchDir: string; workspaceRoot: string };
-      }
-    | undefined;
 
   ctx.on("tools/pre-execute", async (exec, next) => {
     if (exec.name !== "bash") return next();
@@ -529,19 +528,22 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
     const agent = exec.agent;
     let profile = "none";
     const safePaths: string[] = ["/tmp/dsh"];
+    let workspaceRoot: string | undefined;
+    const aidos = (ctx as unknown as { get(name: string): unknown }).get("aidos") as | { bashContext(agent: unknown): { profile: string; scratchDir: string; workspaceRoot: string } } | undefined;
     if (aidos && agent) {
       try {
         const bc = aidos.bashContext(agent);
         profile = bc.profile;
+        workspaceRoot = bc.workspaceRoot;
         if (bc.scratchDir) safePaths.push(bc.scratchDir);
       } catch {
-        // aidos not ready: base policy + /tmp/dsh only.
+        // aidos not ready
       }
     }
     const dirs = profile === "none" ? [baseDir] : [baseDir, join(baseDir, `profile-${profile}`)];
 
     const templates = { deny: config.denyMessage, ask: config.askMessage };
-    const result = await evaluate(ctx, dirs, command, 0, safePaths, templates);
+    const result = await evaluate(ctx, dirs, command, 0, safePaths, workspaceRoot, templates);
     if (result.command !== command) {
       try {
         (exec.arguments as { command: string }).command = result.command;

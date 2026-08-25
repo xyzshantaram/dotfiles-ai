@@ -133,8 +133,6 @@ var EXTENSION_LANGUAGE = {
   hh: "cpp",
   diff: "diff",
   patch: "diff",
-  ini: "ini",
-  cfg: "ini",
 };
 
 // ---- Platform modules: resolved by the shell loader seed at runtime. ----

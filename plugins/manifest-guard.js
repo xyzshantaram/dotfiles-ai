@@ -17,9 +17,12 @@ var MANIFEST_NAMES = /* @__PURE__ */ new Set([
   "pyproject.toml",
   "poetry.lock",
   "pipfile",
+  "pipfile.lock",
   "go.mod",
   "go.sum",
-  "gemfile"
+  "gemfile",
+  "gemfile.lock",
+  "bun.lockb"
 ]);
 var DENY_MESSAGE = (name2) => `Direct edits to ${name2} are denied. Use the package tool for dependency changes. Ask the user to run the change when the tool cannot.`;
 function isManifestPath(displayPath) {

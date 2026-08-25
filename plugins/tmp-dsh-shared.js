@@ -60,13 +60,11 @@ function apply(ctx) {
       );
     };
   }
+  const wrappedInstance = sandbox.confine;
+  const wrappedProto = proto?.confine;
   ctx.effect(() => () => {
-    if (sandbox.confine !== void 0) {
-      sandbox.confine = original;
-    }
-    if (proto !== null && protoOriginal !== null && proto.confine !== void 0) {
-      proto.confine = protoOriginal;
-    }
+    if (sandbox.confine === wrappedInstance) sandbox.confine = original;
+    if (proto !== null && protoOriginal !== null && proto.confine === wrappedProto) proto.confine = protoOriginal;
   });
 }
 export {

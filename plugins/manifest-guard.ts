@@ -70,9 +70,12 @@ const MANIFEST_NAMES = new Set([
   "pyproject.toml",
   "poetry.lock",
   "pipfile",
+  "pipfile.lock",
   "go.mod",
   "go.sum",
   "gemfile",
+  "gemfile.lock",
+  "bun.lockb",
 ]);
 
 const DENY_MESSAGE = (name: string): string =>

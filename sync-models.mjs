@@ -88,7 +88,7 @@ const indentOf = (line) => {
 //
 // This is a purpose-built parser, not a general YAML reader. It assumes the
 // file keeps a fixed shape: section keys at indent 0, `providers:`/`chains:`
-// at 2, provider/chain names at 4, properties at 6, model entries at 8, and
+// at 2, provider/chain names at 4, properties at 6, model entries at 6/8, and
 // spaces (never tabs) for indentation. It does not handle folded or literal
 // scalars, quoted strings, inline lists, anchors, or comment text that looks
 // like a key. Any formatting drift can silently mis-attribute entries.

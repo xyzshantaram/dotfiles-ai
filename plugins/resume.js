@@ -33,7 +33,13 @@ function eventText(ev) {
   if (t === "tool/result") {
     const r = d?.result;
     if (typeof r === "string") return r;
-    if (r && typeof r === "object") return JSON.stringify(r).slice(0, 200);
+    if (r && typeof r === "object") {
+      try {
+        return JSON.stringify(r).slice(0, 200);
+      } catch {
+        return "[unserializable result]";
+      }
+    }
     return "";
   }
   if (t === "compaction/summary")
@@ -114,7 +120,7 @@ async function executeResume(invocation, ctx) {
     } catch {
       headers = [];
     }
-    const others = headers.filter((h) => h && h.id !== currentId && h.cwd === currentCwd).slice(0, 12);
+    const others = headers.filter((h) => h && h.id !== currentId && h.cwd === currentCwd).sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""))).slice(0, 12);
     for (const h of others) {
       try {
         const insp = await sp.load(h.id);
