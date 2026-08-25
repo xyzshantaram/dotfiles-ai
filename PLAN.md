@@ -9,8 +9,8 @@ This file tracks the bundle's implementation. It is a living record, not a promi
 - Done: settings design system (`DESIGN.md`) and restyle of the Settings panels.
 - Done: `see.ts` vision gating (mutual exclusion, recursion-safe).
 - Done: DeepSeek cost `biz_data` fix in the subscriptions host plugin.
-- In progress: bash-guard rewrites and git mutation ask rules; `rg` rewrite drop-in; `AGENTS.md` cleanup.
-- Next: test bash-guard rewrites, then retire the git MCP in favor of bash-guard.
+- Done: bash-guard rewrites (guards/rg.json rewrite, git.json ask rules, AGENTS.md rg -r warning removed).
+- Next: none; remaining items resolved or dropped (see T7).
 
 ## Tickets
 
@@ -44,22 +44,22 @@ This file tracks the bundle's implementation. It is a living record, not a promi
 - Check: the cost dashboard renders without error.
 
 ### T6 — bash-guard rewrites (in progress)
-
+### T6 — bash-guard rewrites (done)
 - Add a `rewrites` field to `GuardEntry`; splice dropped flags from the command string.
 - Add `push`, `commit`, `reset`, `merge`, `rebase`, `cherry-pick`, `clean` as `ask` in `guards/git.json`.
 - Add `guards/rg.json` to rewrite `rg -r` to `rg`.
 - Remove the `rg -r` warning from `AGENTS.md`.
 - Check: `rg -r` runs as `rg`; `git push` asks; build exits 0.
 
-### T7 — Retire git MCP (next)
+### T7 — Retire git MCP (dropped — keeping mcp__git)
 
-- After T6 tests pass, remove the git MCP server from the preset and `sync.sh`.
+- Dropped: we keep the git MCP (mcp__git); recent commits were made through it, so retiring it is no longer desired.
 - Update the `guards/git.json` reason text (no longer points at `mcp__git__*`).
 - Check: git mutations still ask via bash-guard; no `mcp__git__*` tools load.
 
 ### T8 — aidos pin (done)
 
-- `sync.sh` now pins `AIDOS_PLUGIN_SPEC` to a published hash (`7b1ad76…`).
+- `sync.sh` now pins `AIDOS_PLUGIN_SPEC` to a published hash (`4d2dcdb`).
 - Check: `./sync.sh` installs aidos without a 404.
 
 ## T9 — Slop refactor: dedupe the five converted client bundles (done)
