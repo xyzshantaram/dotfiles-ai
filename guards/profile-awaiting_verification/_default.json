@@ -1,0 +1,6 @@
+{
+  "//": "scratchAllowed() in plugins/bash-guard.ts short-circuits to allow before loadRulesMulti — scratch writes to /tmp/dsh and scratchDir stay allowed in this profile",
+  "commands": ["*"],
+  "verdict": "ask",
+  "reason": "a ticket awaits verification, so this bash call needs approval before it runs"
+}
