@@ -1,6 +1,5 @@
 // plugins/profiles.ts
 import z from "@deepseek-ai/schemastery";
-import { defineTool } from "@deepseek-ai/dsh-tools";
 import { settingsNamespace } from "@deepseek-ai/dsh-settings";
 
 // plugins/profile-routes.ts
@@ -47,6 +46,12 @@ function normalizeEntry(entry, chains, seen) {
                 out.push(...normalizeEntry(chains[name2], chains, guard));
               }
             }
+          } else if (chains?.[step] !== void 0) {
+            const guard = new Set(seen ?? []);
+            if (!guard.has(step)) {
+              guard.add(step);
+              out.push(...normalizeEntry(chains[step], chains, guard));
+            }
           } else if (step.indexOf("/") > 0) {
             const slash = step.indexOf("/");
             out.push({ provider: step.slice(0, slash), model: step.slice(slash + 1) });
@@ -80,34 +85,16 @@ function chainOf(entry, chainName, chains) {
   return normalizeEntry(entry, chains);
 }
 
-// plugins/shared/output-text.ts
-function outputText(output) {
-  return output.filter(
-    (value) => typeof value === "object" && value !== null && value.type === "text" && typeof value.text === "string"
-  ).map((value) => value.text).join("");
-}
-
 // plugins/profiles.ts
 var name = "profiles";
 var inject = ["tools", "subagents", "systemPrompt"];
-var RoutePin = z.union([
-  z.object({ provider: z.string(), model: z.string() }),
-  z.object({ routes: z.array(z.object({ provider: z.string(), model: z.string() })) })
-]);
 var Config = z.object({
   /** The subagents provider to start children on. The standard preset uses spawn. */
   provider: z.string().default("spawn"),
   /** Same-provider retry cap for retryPolicy.mode="always" adapters. */
-  alwaysMaxRetries: z.number().step(1).min(1).default(2),
-  /** Per-role head pins. Any role left unset follows the profile namespace. */
-  roles: z.object({
-    coder: RoutePin.default(void 0),
-    tester: RoutePin.default(void 0),
-    researcher: RoutePin.default(void 0)
-  }).default(void 0)
+  alwaysMaxRetries: z.number().step(1).min(1).default(2)
 });
 var PROFILE_NS = settingsNamespace("profile");
-var ROLE_MAX_DEPTH = 1;
 function service(ctx, name2) {
   return ctx.get(name2);
 }
@@ -149,101 +136,6 @@ function chainForDepth(ctx, depth) {
   const profile = settings?.get(PROFILE_NS);
   return chainOf(activeEntry(profile), depth >= 1 ? "subagent" : "orchestrator", profile?.chains);
 }
-function effectiveChain(ctx, depth) {
-  return chainForDepth(ctx, depth);
-}
-var ROLES = [
-  {
-    toolName: "coder",
-    description: "Delegate ONE well-scoped implementation unit to a coder subagent. Give a self-contained brief: the files involved, the exact change, the constraints, and any test the orchestrator names. It works in its own context and returns a report, not intermediate steps. Leaf worker: it cannot spawn further subagents."
-  },
-  {
-    toolName: "tester",
-    description: "Delegate test, lint, or build verification to a tester subagent. Name the exact commands or scope to run. It runs them and reports pass/fail with failure details. It never fixes code or edits files. Leaf worker: it cannot spawn further subagents."
-  },
-  {
-    toolName: "researcher",
-    description: "Delegate investigation or a code review to a researcher subagent. Give the specific question or the diff to review. It reads, searches, and fetches, then reports findings with references. It never edits files or runs mutating commands. Leaf worker: it cannot spawn further subagents."
-  }
-];
-function resolveHead(ctx, pin) {
-  const settings = service(ctx, "settings");
-  const profile = settings?.get(PROFILE_NS);
-  const pinned = normalizeEntry(pin, profile?.chains);
-  if (pinned.length > 0) return pinned[0];
-  const chain = effectiveChain(ctx, 1);
-  return chain.find((level) => !isCachedDown(level));
-}
-function via(route) {
-  return route ? ` via ${route.provider}/${route.model}` : "";
-}
-function registerRoleTool(ctx, spec, config) {
-  ctx.tools.register(
-    defineTool({
-      name: spec.toolName,
-      description: spec.description + " Runs in the background by default and returns a durable subagent id; send_message continues that conversation. Set run_in_background: false to wait for the result.",
-      parameters: {
-        description: {
-          type: "string",
-          required: true,
-          description: "A short (3-5 word) description of the delegated task, for display."
-        },
-        prompt: {
-          type: "string",
-          required: true,
-          description: "The complete, self-contained task for the subagent. It does not share this conversation's context, so include everything it needs."
-        },
-        run_in_background: {
-          type: "boolean",
-          description: "Whether to run in the background and return a durable subagent id immediately. Defaults to true. Set false to wait for the result when your next action depends on it."
-        }
-      },
-      output: {
-        schema: { type: "string" },
-        render: (_args, value) => [{ type: "text", text: value }]
-      },
-      async execute(args, exec) {
-        const parent = exec.agent;
-        if (!parent)
-          throw new Error(`${spec.toolName} requires a calling agent (exec.agent was undefined)`);
-        const head = resolveHead(
-          ctx,
-          config.roles?.[spec.toolName]
-        );
-        const provider = config.provider ?? "spawn";
-        const request = {
-          label: args.description,
-          prompt: [{ type: "text", text: args.prompt }],
-          parent,
-          ...head !== void 0 ? { agentOptions: head } : {},
-          maxDepth: ROLE_MAX_DEPTH
-        };
-        if (args.run_in_background ?? true) {
-          const { childId } = await ctx.subagents.startContinuable({
-            provider,
-            label: args.description,
-            request,
-            signal: exec.signal
-          });
-          return `started ${spec.toolName} subagent ${childId}${via(head)}. It runs in the background; send_message continues that conversation, and the runtime sends a notice when the run settles.`;
-        }
-        const run = await ctx.subagents.start(provider, { ...request, signal: exec.signal });
-        try {
-          const result = await run.result;
-          if (result.stopReason !== "completed") {
-            const diagnostic = result.diagnostic ? `: ${result.diagnostic}` : "";
-            throw new Error(
-              `${spec.toolName}: child ended with stop reason "${result.stopReason}"${diagnostic}`
-            );
-          }
-          return outputText(result.output);
-        } finally {
-          await run.dispose();
-        }
-      }
-    })
-  );
-}
 function registerFailover(ctx, alwaysMaxRetries) {
   const STATE_CAP = 1024;
   const state = /* @__PURE__ */ new Map();
@@ -270,7 +162,11 @@ function registerFailover(ctx, alwaysMaxRetries) {
     if (!proposal?.provider || !proposal.model) return proposal;
     const p = payload;
     const stepKey = keyOf(p.turn, p.step);
-    const chain = effectiveChain(ctx, 0);
+    const orchestrator = chainForDepth(ctx, 0);
+    const subagentChain = chainForDepth(ctx, 1);
+    const chain = subagentChain.some(
+      (l) => l.provider === proposal.provider && l.model === proposal.model
+    ) ? subagentChain : orchestrator;
     const agentDefaultModel = service(ctx, "agentDefaultModel");
     const selection = agentDefaultModel?.currentSelection?.();
     const levels = selection ? [
@@ -644,9 +540,6 @@ function makeSwitchHandler(ctx) {
 }
 function apply(ctx, config) {
   const cfg = config ?? {};
-  for (const spec of ROLES) {
-    registerRoleTool(ctx, spec, cfg);
-  }
   registerFailover(ctx, cfg.alwaysMaxRetries ?? 2);
   ctx.inject(["webServer"], (scope) => {
     const server = scope.webServer;
@@ -676,7 +569,7 @@ function apply(ctx, config) {
   ctx.systemPrompt.section({
     name: "tool:profiles",
     order: 116.4,
-    text: "Role tools route delegation by job: coder implements one scoped unit, tester runs verification, researcher investigates or reviews. Prefer them over the generic subagent tool for those jobs; each child runs on the profile-routed model with automatic fallback and is a leaf worker. Start independent delegations together in one message."
+    text: "Every subagent runs on the profile-routed worker chain with automatic failover: the subagent tool is pinned to the worker chain head and a fault advances to the next rung (see the profile settings panel). Start independent delegations together in one message."
   });
 }
 export {

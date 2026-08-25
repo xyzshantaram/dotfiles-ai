@@ -60,7 +60,6 @@
  */
 import type { Context } from "@deepseek-ai/cordis";
 import z from "@deepseek-ai/schemastery";
-import type {} from "@deepseek-ai/dsh-tools";
 import type { AgentCancelCause } from "@deepseek-ai/dsh-agent";
 
 export const name = "ask-interrupt";

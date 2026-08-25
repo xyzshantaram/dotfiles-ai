@@ -37,6 +37,13 @@
  * (default-allow) — only listed commands are gated, which is the personal
  * policy: the guard gates the tools the user chose to gate.
  *
+ * Phase profiles: when aidos is mounted, bash-guard loads the base rules plus
+ * a `profile-<phase>/` overlay (e.g. profile-planning) chosen by aidos'
+ * bashContext(). A profile may set a wildcard ["*"] rule to deny-by-default
+ * (read-only planning) and allow-list the few read commands it permits. Scratch
+ * writes always pass: any command whose last path argument lands under /tmp/dsh
+ * or the aidos durable scratch is allowed in every phase.
+ *
  * Verdicts (most-restrictive-wins across the whole command): deny > ask >
  * allow > none. Fail-closed: a command that cannot be parsed (unbash
  * reports errors) is DENIED, never let through unparsed.
@@ -79,10 +86,14 @@ export const inject = [];
 
 export const Config = z.object({
   guardsDir: z.string().default("$DSH_HOME/plugins/guards"),
+  denyMessage: z.string(),
+  askMessage: z.string(),
 });
 
 type BashGuardConfig = {
   guardsDir?: string;
+  denyMessage?: string;
+  askMessage?: string;
 };
 
 type Verdict = "deny" | "ask" | "allow" | "none";
@@ -200,15 +211,82 @@ async function loadRules(ctx: Context, dir: string): Promise<Map<string, GuardEn
   return rules;
 }
 
-/** The default deny reason for a listed command without its own. */
-const DEFAULT_DENY = (name: string): string =>
-  `The command "${name}" is denied in the personal bundle. ` +
-  "Use the sanctioned tool or ask the user to run it.";
+/**
+ * Merge the rule drop-ins from several dirs (base first, then the phase
+ * profile). A later dir overrides an earlier one for the same command, so a
+ * profile can tighten or loosen the base. A rule whose command list is ["*"]
+ * is the wildcard fallback: it matches any command not named by a specific
+ * rule (used by read-only profiles to deny-by-default).
+ */
+async function loadRulesMulti(ctx: Context, dirs: string[]): Promise<Map<string, GuardEntry>> {
+  const merged = new Map<string, GuardEntry>();
+  for (const dir of dirs) {
+    const rules = await loadRules(ctx, dir);
+    for (const [cmd, entry] of rules) merged.set(cmd, entry);
+  }
+  return merged;
+}
 
-/** The default ask reason for a listed command. */
-const DEFAULT_ASK = (name: string): string =>
-  `The command "${name}" needs approval. Confirm or reject.`;
+/**
+ * Default message templates. The formatter substitutes these placeholders:
+ *   {command}  - the full bash command that was evaluated
+ *   {name}     - the primary matched command basename
+ *   {matches}  - a bulleted list of every matched command + subcommand + reason
+ *   {reason}   - the primary match's reason
+ * A config override (denyMessage / askMessage) replaces the default.
+ */
+const DEFAULT_DENY_TEMPLATE =
+  "bash-guard: the following command was denied:\n\n" +
+  "  {command}\n\n" +
+  "Matched rule(s):\n{matches}";
+const DEFAULT_ASK_TEMPLATE =
+  "bash-guard: the following command needs approval:\n\n" +
+  "  {command}\n\n" +
+  "Matched rule(s):\n{matches}";
 
+interface MatchLine {
+  name: string;
+  subcommand?: string;
+  reason: string;
+}
+interface MessageContext {
+  command: string;
+  matches: MatchLine[];
+}
+
+/** Substitute {command}, {name}, {matches}, {reason} in a template. */
+function formatMessage(template: string, ctx: MessageContext): string {
+  const matchesText = ctx.matches
+    .map((m) => {
+      const sub = m.subcommand ? ` (${m.subcommand})` : "";
+      return `  • ${m.name}${sub}: ${m.reason}`;
+    })
+    .join("\n");
+  const primary = ctx.matches[0];
+  return template
+    .replaceAll("{command}", ctx.command)
+    .replaceAll("{matches}", matchesText)
+    .replaceAll("{name}", primary?.name ?? "unknown")
+    .replaceAll("{reason}", primary?.reason ?? "");
+}
+
+/** Build the match lines for a set of hits, deduplicated by (name, subcommand, reason). */
+function matchLines(hits: { name: string; rule: GuardEntry; ref: CommandRef }[]): MatchLine[] {
+  const seen = new Set<string>();
+  const out: MatchLine[] = [];
+  for (const h of hits) {
+    const line: MatchLine = {
+      name: h.name,
+      subcommand: firstSubcommand(getCommandArgs(h.ref)),
+      reason: h.rule.reason ?? "(no reason supplied by the rule)",
+    };
+    const key = `${line.name}\0${line.subcommand ?? ""}\0${line.reason}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(line);
+  }
+  return out;
+}
 /** Most restrictive wins: deny > ask > allow > none. */
 function mostRestrictive(verdicts: Verdict[]): Verdict {
   if (verdicts.includes("deny")) return "deny";
@@ -219,20 +297,26 @@ function mostRestrictive(verdicts: Verdict[]): Verdict {
 
 /**
  * The subcommand token of a parsed command's argv: the first argument that
- * is not an option. Conservative by construction: a global option that takes
- * a separate value (`git -C <path> status`) makes its value read as the
- * subcommand, which will not sit in the rule map, so the stricter base
- * verdict applies instead of anything looser.
+ * is not an option. Git globals that take a separate value (`-C <path>`,
+ * `--git-dir <path>`, `--work-tree <path>`, `--namespace <path>`) would
+ * otherwise make their value read as the subcommand and force the stricter
+ * base verdict. Those values are skipped.
  */
+const GIT_GLOBALS_WITH_VALUE = new Set(["-C", "--git-dir", "--work-tree", "--namespace"]);
+
 function firstSubcommand(args: string[]): string | undefined {
-  for (const arg of args) {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
     if (arg === "--") break;
+    if (GIT_GLOBALS_WITH_VALUE.has(arg)) {
+      i++;
+      continue;
+    }
     if (arg.startsWith("-")) continue;
     return arg;
   }
   return undefined;
 }
-
 /**
  * Verdict for one matched command: the rule's per-subcommand verdict when it
  * names the invoked subcommand, else the rule's base verdict.
@@ -244,14 +328,47 @@ function verdictFor(rule: GuardEntry, ref: CommandRef): Verdict {
   return refined ?? rule.verdict;
 }
 
+/** The path-like arguments of a set of command refs (options excluded). */
+function pathLikeArgs(refs: CommandRef[]): string[] {
+  const out: string[] = [];
+  for (const ref of refs) {
+    for (const arg of getCommandArgs(ref)) {
+      if (arg.startsWith("-")) continue;
+      if (
+        arg.startsWith("/") ||
+        arg.includes("/") ||
+        arg.startsWith("./") ||
+        arg.startsWith("../") ||
+        /\.[A-Za-z0-9]+$/.test(arg)
+      ) {
+        out.push(arg);
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * True when the LAST path-like argument of the command lands under one of the
+ * safe scratch roots. Used to always allow writes that target scratch, in any
+ * phase, while still gating commands whose target is outside scratch.
+ */
+function scratchAllowed(refs: CommandRef[], safePaths: string[]): boolean {
+  const paths = pathLikeArgs(refs);
+  if (paths.length === 0) return false;
+  const last = paths[paths.length - 1];
+  return safePaths.some((sp) => last.startsWith(sp));
+}
 /** Re-evaluate a command for the pre-execute hook. Returns the (possibly rewritten)
  * command string and a decision: null means allow (caller calls next()).
  * depth guards recursion after a rewrite. */
 async function evaluate(
   ctx: Context,
-  dir: string,
+  dirs: string[],
   command: string,
   depth: number,
+  safePaths: string[],
+  templates: { deny?: string; ask?: string },
 ): Promise<{ command: string; decision: PreToolDecision | null }> {
   // Parse (fail-closed)
   let script;
@@ -283,11 +400,19 @@ async function evaluate(
   const { commands } = expandWrapperCommands(refs);
   const all = [...refs, ...commands];
 
-  const rules = await loadRules(ctx, dir);
+  // Scratch escape: a command whose LAST path-like argument lands under a
+  // safe scratch root is always allowed, in every phase. Scratch writes are
+  // ephemeral and sandbox-bounded, so bash-guard never gates them — the agent
+  // (and especially a subagent) can spool to /tmp/dsh or the aidos durable
+  // scratch at any time.
+  if (safePaths.length > 0 && scratchAllowed(all, safePaths)) {
+    return { command, decision: null };
+  }
+  const rules = await loadRulesMulti(ctx, dirs);
   const hits = all
     .map((ref) => {
       const name = getBasename(ref);
-      const rule = rules.get(name);
+      const rule = rules.get(name) ?? rules.get("*");
       if (rule === undefined) return undefined;
       return { name, rule, ref, verdict: verdictFor(rule, ref) };
     })
@@ -298,16 +423,13 @@ async function evaluate(
 
   // Rewrite pass — only at top level (depth 0), top-level commands only
   if (depth === 0 && hits.some((h) => h.rule.rewrites)) {
-    let rewritten = command;
-    let changed = false;
+    // Collect ranges from EVERY hit that carries rewrites, then rebuild the
+    // string once. Positions are absolute offsets into the original command,
+    // so wrapper-internal refs (e.g. sh -c "rg -r foo") apply too: their
+    // suffix words still sit at real offsets inside `command`.
+    const ranges: [number, number, string | undefined][] = [];
     for (const hit of hits) {
-      if (!hit.rule.rewrites || hit.ref.source !== command) {
-        if (hit.rule.rewrites && hit.ref.source !== command) {
-          ctx.logger.debug(`bash-guard: skipping rewrite for wrapper-internal ref to ${hit.name}`);
-        }
-        continue;
-      }
-      const ranges: [number, number, string | undefined][] = [];
+      if (!hit.rule.rewrites) continue;
       for (const rw of hit.rule.rewrites) {
         for (let i = 0; i < hit.ref.node.suffix.length; i++) {
           const word = hit.ref.node.suffix[i];
@@ -326,30 +448,26 @@ async function evaluate(
           }
         }
       }
-      if (ranges.length > 0) {
-        ranges.sort((a, b) => a[0] - b[0]);
-        let segment = "";
-        let lastEnd = 0;
-        const logBecauses: string[] = [];
-        for (const [start, end, because] of ranges) {
-          if (start < lastEnd) continue;
-          segment += command.slice(lastEnd, start);
-          lastEnd = end;
-          if (because && logBecauses.indexOf(because) === -1) {
-            logBecauses.push(because);
-          }
-        }
-        segment += command.slice(lastEnd);
-        rewritten = segment;
-        changed = true;
-        ctx.logger.debug(
-          `bash-guard: rewrite (${logBecauses.join("; ")}) ${command} -> ${rewritten}`,
-        );
-      }
     }
-    if (changed) {
+    if (ranges.length > 0) {
+      ranges.sort((a, b) => a[0] - b[0]);
+      let rewritten = "";
+      let lastEnd = 0;
+      const logBecauses: string[] = [];
+      for (const [start, end, because] of ranges) {
+        if (start < lastEnd) continue;
+        rewritten += command.slice(lastEnd, start);
+        lastEnd = end;
+        if (because && logBecauses.indexOf(because) === -1) {
+          logBecauses.push(because);
+        }
+      }
+      rewritten += command.slice(lastEnd);
+      ctx.logger.debug(
+        `bash-guard: rewrite (${logBecauses.join("; ")}) ${command} -> ${rewritten}`,
+      );
       if (depth < 5) {
-        return evaluate(ctx, dir, rewritten, depth + 1);
+        return evaluate(ctx, dirs, rewritten, depth + 1, safePaths, templates);
       }
       command = rewritten;
     }
@@ -367,15 +485,22 @@ async function evaluate(
   const overall = mostRestrictive(verdicts);
   switch (overall) {
     case "deny": {
-      const hit = hits.find((h) => h.verdict === "deny");
-      const reason = hit?.rule.reason ?? DEFAULT_DENY(hit?.name ?? "unknown");
+      const denying = hits.filter((h) => h.verdict === "deny");
+      const reason = formatMessage(templates.deny ?? DEFAULT_DENY_TEMPLATE, {
+        command,
+        matches: matchLines(denying),
+      });
       return { command, decision: { kind: "deny", reason } };
     }
     case "ask": {
-      const hit = hits.find((h) => h.verdict === "ask");
+      const asking = hits.filter((h) => h.verdict === "ask");
+      const reason = formatMessage(templates.ask ?? DEFAULT_ASK_TEMPLATE, {
+        command,
+        matches: matchLines(asking),
+      });
       return {
         command,
-        decision: { kind: "ask", reason: hit?.rule.reason ?? DEFAULT_ASK(hit?.name ?? "unknown") },
+        decision: { kind: "ask", reason },
       };
     }
     case "allow":
@@ -386,14 +511,37 @@ async function evaluate(
 }
 
 export function apply(ctx: Context, config: BashGuardConfig): void {
-  const dir = resolveHome(config.guardsDir ?? "$DSH_HOME/plugins/guards");
+  const baseDir = resolveHome(config.guardsDir ?? "$DSH_HOME/plugins/guards");
+  // aidos exposes the bash policy (profile + scratch roots) for the executing
+  // agent. When aidos is not mounted, fall back to the base rules and /tmp/dsh
+  // only.
+  const aidos = (ctx as unknown as { get(name: string): unknown }).get("aidos") as
+    | {
+        bashContext(agent: unknown): { profile: string; scratchDir: string; workspaceRoot: string };
+      }
+    | undefined;
 
   ctx.on("tools/pre-execute", async (exec, next) => {
     if (exec.name !== "bash") return next();
     const command = (exec.arguments as { command?: string } | undefined)?.command;
     if (typeof command !== "string" || command.trim().length === 0) return next();
 
-    const result = await evaluate(ctx, dir, command, 0);
+    const agent = exec.agent;
+    let profile = "none";
+    const safePaths: string[] = ["/tmp/dsh"];
+    if (aidos && agent) {
+      try {
+        const bc = aidos.bashContext(agent);
+        profile = bc.profile;
+        if (bc.scratchDir) safePaths.push(bc.scratchDir);
+      } catch {
+        // aidos not ready: base policy + /tmp/dsh only.
+      }
+    }
+    const dirs = profile === "none" ? [baseDir] : [baseDir, join(baseDir, `profile-${profile}`)];
+
+    const templates = { deny: config.denyMessage, ask: config.askMessage };
+    const result = await evaluate(ctx, dirs, command, 0, safePaths, templates);
     if (result.command !== command) {
       try {
         (exec.arguments as { command: string }).command = result.command;

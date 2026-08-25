@@ -1,5 +1,6 @@
 import { build } from "esbuild";
-import { readFile, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 
@@ -52,7 +53,8 @@ for (const [entry, outfile] of entries) {
 // options are identical for every client half (browser CJS, react and
 // @deepseek-ai external), so they live here rather than at each call site.
 async function wrapClientBundle(entryPath, outPath, id) {
-  const bundlePath = join(dirname(entryPath), "..", "dist", "_client.bundle.js");
+  const tmpDir = await mkdtemp(join(tmpdir(), "dsh-wrap-"));
+  const bundlePath = join(tmpDir, "_client.bundle.js");
   await build({
     entryPoints: [entryPath],
     bundle: true,
@@ -83,6 +85,7 @@ ${bundled}
 `,
   );
   await rm(bundlePath);
+  await rm(tmpDir, { recursive: true, force: true });
 }
 
 // W8: the approval reject-with-comment CLIENT plugin package. The host

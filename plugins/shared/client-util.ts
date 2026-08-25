@@ -4,6 +4,15 @@
  * One source implementation per helper, so the client bundles cannot drift.
  * All helpers are side-effect free except `injectStyle`, which guards itself
  * against double-injection. No types from shims, plain constants only.
+ *
+ * Import surface. The three client bundles — plugins/profiles-client/src/
+ * client.tsx, plugins/session-archive/src/client.tsx, and plugins/
+ * subscriptions/src/client.tsx — import `fetchJson`/`postJson`/`putJson`
+ * from here. Any new client bundle must import them from here too, never
+ * re-implement the fetch+parse {data, error} shape inline. These helpers are
+ * browser-only (they call `fetch`): host plugins that answer these routes
+ * over `node:http` use plugins/shared/http.ts (sendJson/readBody/isPlainObject)
+ * instead; the two sides cannot share one implementation.
  */
 
 /**

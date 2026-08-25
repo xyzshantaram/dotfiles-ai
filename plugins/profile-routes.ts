@@ -5,6 +5,13 @@
  * plugins/see.ts (namespace owner; walks the chain with retry). One data model in
  * one file so the two bundles cannot drift.
  *
+ * Client bundles import from here too: plugins/profiles-client/src/client.tsx
+ * pulls `entryHead`/`normalizeEntry`/`chainNameForRoutes`, and plugins/
+ * subscriptions/src/client.tsx pulls `chainNameForRoutes`. esbuild inlines a
+ * copy of this module into each built bundle (profiles-client/dist/client.js,
+ * subscriptions/lib/client.js), so after editing this file, rebuild both
+ * client bundles or the browser half keeps serving the stale copy.
+ *
  * Since W21 a profile entry carries TWO named chains, one per agent depth:
  *
  *   { orchestrator: { routes: [ { provider, model }, ... ] },
@@ -58,7 +65,8 @@ function isRouteCandidate(value: unknown): value is RouteCandidate {
  * defaults instead of throwing on hand-edited settings. A string entry names
  * a chain by name ("chain:<name>"), or one "provider/model" route. An entry
  * may also be an ARRAY of steps — route pairs, "provider/model" strings,
- * and "chain:<name>" refs — flattened in order. A malformed or unknown step
+ * "chain:<name>" refs, and bare chain names — flattened in order. A
+ * malformed or unknown step
  * resolves to [] for that step.
  */
 export function normalizeEntry(
@@ -81,8 +89,8 @@ export function normalizeEntry(
     if (slash > 0) {
       return [{ provider: entry.slice(0, slash), model: entry.slice(slash + 1) }];
     }
-    // A bare string at the FIELD level names a chain key (W24); inside an
-    // array (composition) bare names are skipped instead.
+    // A bare string names a chain key (W24), at the field level or inside a
+    // composition array.
     if (chains?.[entry] !== undefined) {
       const guard = new Set(seen ?? []);
       if (guard.has(entry)) return [];
@@ -96,8 +104,8 @@ export function normalizeEntry(
       return (entry as { routes: unknown[] }).routes.filter(isRouteCandidate);
     }
     // Composition: an array of steps, flattened in order. Strings inside an
-    // array are either "chain:<name>" refs or "provider/model" routes; a bare
-    // name is skipped (no legacy chain references inside composition).
+    // array are "chain:<name>" refs, a bare name keying the `chains` map
+    // (same rule as at field level), or "provider/model" routes.
     if (Array.isArray(entry)) {
       const out: RouteCandidate[] = [];
       for (const step of entry) {
@@ -110,6 +118,12 @@ export function normalizeEntry(
                 guard.add(name);
                 out.push(...normalizeEntry(chains[name], chains, guard));
               }
+            }
+          } else if (chains?.[step] !== undefined) {
+            const guard = new Set(seen ?? []);
+            if (!guard.has(step)) {
+              guard.add(step);
+              out.push(...normalizeEntry(chains[step], chains, guard));
             }
           } else if (step.indexOf("/") > 0) {
             const slash = step.indexOf("/");

@@ -1,20 +1,33 @@
 import type { Context } from "@deepseek-ai/cordis";
 
+// Duck-typed view of the dsh-commands service. The real types live in
+// @deepseek-ai/dsh-commands (a host package, not a repo devDep), so this is
+// the same seam grant.ts uses.
+interface CommandsLike {
+  register(descriptor: {
+    name: string;
+    description: string;
+    input?: { hint: string };
+    handler(invocation: ResumeInvocation): unknown;
+  }): () => void;
+}
+
 // /resume — layered recall over the durable session log.
 //
 // Greps the append-only event log and returns SHORT one-line summaries per
 // match, so the agent can pick seqs to expand with the recall tool. Layers:
 //   1. current session events
-//   2. other sessions in the same workspace (same cwd)
-//   3. past compactions (the durable log keeps shadowed content, so a grep
-//      already reaches past a compaction; compaction/summary events also list
-//      their shadowedSeqs)
-//   4. subagent reports — user/message events whose source.kind is
-//      "subagent-report", plus child sessions (origin: "subagent") whose last
-//      non-empty assistant/message is the report.
+//   2. other sessions in the same workspace (same cwd), loaded via
+//      sessionPersistence.list
 //
-// The harness log is append-only and survives compaction, so every token the
-// compaction step ever elided stays present and grep-able.
+// There is no separate compaction layer. The harness log is append-only and
+// survives compaction. A grep of the events array already reaches past a
+// compaction, because every token the compaction step elided stays present
+// and grep-able.
+//
+// There is no separate subagent-report layer. Reports arrive as user/message
+// events with source.kind "subagent-report" inside the session or peer logs
+// above, so the same grep finds them.
 
 export const name = "resume";
 export const inject = ["commands"] as const;
@@ -35,7 +48,12 @@ function makeMatcher(query: string): Matcher {
   return (text: string) => text.toLowerCase().includes(lower);
 }
 
-interface Hit { source: string; seq: number; role: string; text: string; }
+interface Hit {
+  source: string;
+  seq: number;
+  role: string;
+  text: string;
+}
 
 function eventText(ev: any): string {
   const d = ev?.data ?? {};
@@ -60,7 +78,8 @@ function eventText(ev: any): string {
     if (r && typeof r === "object") return JSON.stringify(r).slice(0, 200);
     return "";
   }
-  if (t === "compaction/summary") return "compaction shadowed " + ((d?.shadowedSeqs as unknown[])?.length ?? 0) + " seqs";
+  if (t === "compaction/summary")
+    return "compaction shadowed " + ((d?.shadowedSeqs as unknown[])?.length ?? 0) + " seqs";
   if (t === "subagent/descriptor") return "subagent " + (d?.label ?? "") + " " + (d?.mode ?? "");
   if (t === "turn/start") return "turn " + (d?.turn ?? "?");
   return "";
@@ -77,7 +96,8 @@ function eventRole(ev: any): string {
   if (t === "assistant/message") return "assistant";
   if (t === "tool/call") return "tool-call";
   if (t === "tool/result") return "tool-result";
-  if (t === "compaction/summary" || t === "compaction/start" || t === "compaction/end") return "compaction";
+  if (t === "compaction/summary" || t === "compaction/start" || t === "compaction/end")
+    return "compaction";
   if (t === "subagent/descriptor") return "subagent";
   return t ?? "?";
 }
@@ -110,17 +130,20 @@ interface ResumeInvocation {
 }
 
 export function apply(ctx: Context): void {
-  ctx.effect(
-    function* () {
-      yield ctx.commands.register({
-        name: "resume",
-        description:
-          "Layered recall over the durable session log. Greps the current session, then other sessions in the same workspace (including past compactions and subagent reports), for a natural-language query. Returns short one-line summaries; expand any with recall using its (seq N) pointer.",
-        handler: (invocation: ResumeInvocation) => executeResume(invocation, ctx),
-      });
-    },
-    "resume command lifecycle",
-  );
+  const commands = ctx.get("commands") as CommandsLike | undefined;
+  if (commands === undefined) {
+    ctx.logger.warn("resume: commands service not mounted; /resume is not registered");
+    return;
+  }
+  ctx.effect(function* () {
+    yield commands.register({
+      name: "resume",
+      description:
+        "Layered recall over the durable session log. Greps the current session, then other sessions in the same workspace (including past compactions and subagent reports), for a natural-language query. Returns short one-line summaries; expand any with recall using its (seq N) pointer.",
+      input: { hint: "<natural-language query>" },
+      handler: (invocation: ResumeInvocation) => executeResume(invocation, ctx),
+    });
+  }, "resume command lifecycle");
 }
 
 async function executeResume(invocation: ResumeInvocation, ctx: Context): Promise<any> {

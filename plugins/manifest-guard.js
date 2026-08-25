@@ -13,18 +13,18 @@ var MANIFEST_NAMES = /* @__PURE__ */ new Set([
   "pnpm-lock.yaml",
   "bun.lock",
   "cargo.toml",
-  "Cargo.lock",
+  "cargo.lock",
   "pyproject.toml",
   "poetry.lock",
-  "Pipfile",
+  "pipfile",
   "go.mod",
   "go.sum",
-  "Gemfile"
+  "gemfile"
 ]);
 var DENY_MESSAGE = (name2) => `Direct edits to ${name2} are denied. Use the package tool for dependency changes. Ask the user to run the change when the tool cannot.`;
 function isManifestPath(displayPath) {
   const name2 = basename(displayPath);
-  return MANIFEST_NAMES.has(name2.toLowerCase()) || MANIFEST_NAMES.has(name2);
+  return MANIFEST_NAMES.has(name2.toLowerCase());
 }
 function apply(ctx, config) {
   void config;

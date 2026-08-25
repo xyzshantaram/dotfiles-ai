@@ -63,7 +63,6 @@
 import { realpathSync } from "node:fs";
 import { isAbsolute, normalize, resolve, sep } from "node:path";
 import type { Context } from "@deepseek-ai/cordis";
-import type {} from "@deepseek-ai/dsh-fs";
 
 export const name = "grant";
 
@@ -172,6 +171,10 @@ function canonicalPath(path: string): string {
 
 /** Prefix-safe containment: root itself or root + separator. */
 function isUnder(root: string, target: string): boolean {
+  // Never treat the filesystem root (or a degenerate root) as a grant
+  // prefix: it would match every absolute target. Defense in depth for
+  // any root that bypasses the /grant handler check.
+  if (root.length <= 1) return false;
   if (target === root) return true;
   const prefix = root.endsWith(sep) ? root : root + sep;
   return target.startsWith(prefix);
@@ -322,6 +325,12 @@ export function apply(ctx: Context): void {
         };
       }
       const root = canonicalPath(normalize(raw));
+      if (root === "/" || root === resolve("/") || root.length <= 1) {
+        return {
+          kind: "error",
+          text: "grant: refusing to grant filesystem root (/); choose a narrower path",
+        };
+      }
       const entry = grants.get(session as object) ?? {
         sessionId: session.id,
         roots: [] as string[],

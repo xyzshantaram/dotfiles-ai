@@ -75,11 +75,8 @@ import { lt as semverLt } from "semver";
 
 import type { Context } from "@deepseek-ai/cordis";
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import type {} from "@deepseek-ai/dsh-tools";
-import type {} from "@deepseek-ai/dsh-agent";
 import type {} from "@deepseek-ai/dsh-shell";
 import type {} from "@deepseek-ai/dsh-fs";
-
 export const name = "package-tool";
 
 export const inject = ["tools", "shell", "fs"];
@@ -286,7 +283,14 @@ async function getInstalledVersion(
         devDependencies?: Record<string, string>;
       };
       const raw = manifest.dependencies?.[packageName] ?? manifest.devDependencies?.[packageName];
-      return raw ? raw.replace(/^[\^~]/, "") : undefined;
+      if (!raw) return undefined;
+      // Manifests can hold ranges and aliases (">=1.0.0", "^1 || ^2",
+      // "workspace:*", "*") that are not comparable semvers. Strip a leading
+      // ^/~ first, then take the first concrete X.Y.Z occurrence. Without one,
+      // treat the installed version as non-comparable and skip the downgrade
+      // check rather than letting a bad range bypass or break it.
+      const stripped = raw.replace(/^[\^~]/, "");
+      return stripped.match(/(\d+\.\d+\.\d+[^,\s|]*)/)?.[1];
     }
     if (ecosystem === "rust") {
       const out = await runCommand(ctx, `cargo pkgid ${packageName}`, cwd, signal);
@@ -316,20 +320,7 @@ async function getInstalledVersion(
   return undefined;
 }
 
-function buildCommand(
-  manager: Manager,
-  action: Action,
-  packageName: string,
-  dev: boolean,
-  taskName?: string,
-  taskCommand?: string,
-): string {
-  if (action === "add_task") {
-    if (manager === "pnpm" || manager === "npm") {
-      return `node -e "const f=require('node:fs');const p=require('./package.json');p.scripts=p.scripts||{};p.scripts[process.argv[1]]=process.argv[2];f.writeFileSync('./package.json',JSON.stringify(p,null,2)+'\\n')" ${taskName} ${taskCommand}`;
-    }
-    throw new Error(`add_task is not supported for manager ${manager}`);
-  }
+function buildCommand(manager: Manager, action: Action, packageName: string, dev: boolean): string {
   switch (manager) {
     case "npm":
       return action === "remove"
@@ -433,27 +424,48 @@ export function apply(ctx: Context): void {
         const sessionCwd = exec.agent?.session.header.cwd ?? process.cwd();
         const cwd = confineCwd(sessionCwd, args.cwd);
         const dev = args.dev ?? false;
-        const manager = args.manager ?? (await detectManager(ctx, args.ecosystem, cwd, signal));
         const action = args.action;
         if (action === "add_task") {
           // Task name is a scripts key; keep it to a safe path-like set.
-          if (!/^[A-Za-z0-9:_\-./]+$/.test(args.taskName ?? "")) {
+          const taskName = args.taskName ?? "";
+          if (!/^[A-Za-z0-9:_\-./]+$/.test(taskName)) {
             throw new Error(`invalid task name: ${args.taskName}`);
           }
-          // Task command is a shell fragment; reject metacharacters that allow injection.
-          if (!/^[A-Za-z0-9 $'"\/\._:\-=]+$/.test(args.taskCommand ?? "")) {
+          // The command is stored verbatim as the scripts value; no shell runs
+          // it here, so shell metacharacters are harmless. Only reject control
+          // characters, which would corrupt the manifest.
+          const taskCommand = args.taskCommand ?? "";
+          if (!/^[^\x00-\x1f\x7f]+$/.test(taskCommand)) {
             throw new Error(`invalid task command: ${args.taskCommand}`);
           }
-          const command = buildCommand(manager, action, "", false, args.taskName, args.taskCommand);
-          const output = await runCommand(ctx, command, cwd, signal);
-          const lines: string[] = [];
-          lines.push(`Registered task "${args.taskName}" = "${args.taskCommand}"`);
-          lines.push(`Package manager: ${manager}.`);
-          lines.push(`Ran: ${command}`);
-          const tail = output.trim().slice(-4000);
-          if (tail) lines.push(`Output:\n${tail}`);
-          return lines.join("\n");
+          // Fail closed (W15): the write needs a real package.json; refuse to
+          // invent one the way npm did on 2026-08-21.
+          await requireManifest(ctx, "nodejs", cwd, signal);
+          const target = await ctx.fs.resolve("package.json", {
+            cwd,
+            ...(signal ? { signal } : {}),
+          });
+          const text = await ctx.fs.readText(target, signal);
+          const info = await ctx.fs.stat(target, signal);
+          const expected =
+            info !== undefined
+              ? { kind: "replaceIfVersion" as const, version: info.version }
+              : undefined;
+          const manifest = JSON.parse(text) as { scripts?: Record<string, string> };
+          manifest.scripts = manifest.scripts ?? {};
+          manifest.scripts[taskName] = taskCommand;
+          await ctx.fs.writeText(
+            target,
+            JSON.stringify(manifest, null, 2) + "\n",
+            expected,
+            signal,
+          );
+          return (
+            `Registered task "${taskName}" = "${taskCommand}"\n` +
+            `Wrote scripts.${taskName} to ${cwd}/package.json`
+          );
         }
+        const manager = args.manager ?? (await detectManager(ctx, args.ecosystem, cwd, signal));
         // Fail closed (W15): refuse when the target directory has no real
         // manifest for the ecosystem, instead of letting the manager invent a
         // project there.
@@ -490,11 +502,17 @@ export function apply(ctx: Context): void {
         // Downgrade refusal (W15): never let a resolved "latest" silently move a
         // package backward, e.g. because the registry's default dist-tag lags
         // behind, or the caller named an older manager/registry mirror.
-        if (
-          version !== undefined &&
-          installedVersion !== undefined &&
-          semverLt(version, installedVersion)
-        ) {
+        let isDowngrade = false;
+        if (version !== undefined && installedVersion !== undefined) {
+          try {
+            isDowngrade = semverLt(version, installedVersion);
+          } catch {
+            // Uncomparable version strings (PEP-440, Go pseudo-versions,
+            // malformed ranges): cannot compare, so allow the install.
+            isDowngrade = false;
+          }
+        }
+        if (isDowngrade) {
           const manualCommand = buildCommand(
             manager,
             "add",
