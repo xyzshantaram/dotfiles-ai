@@ -55,6 +55,7 @@ import { join } from "node:path";
 import { resolveDshHome } from "@deepseek-ai/dsh-home-paths";
 import type { Context, Events } from "@deepseek-ai/cordis";
 import type { Agent } from "@deepseek-ai/dsh-agent";
+import type { AssembleContext, PromptAssembly } from "@deepseek-ai/dsh-system-prompt";
 import z from "@deepseek-ai/schemastery";
 
 export const name = "skill-gate";
@@ -222,7 +223,7 @@ export function apply(ctx: Context, config: unknown): void {
   // after assemble(), so the first (often only) step would otherwise ship every
   // gated tool and waste context. This runs inside assemble() for every step,
   // including the first, and removes schemas from the prompt the request is built from.
-  ctx.on("system-prompt/assemble" as keyof Events, (assembly: { tools: Array<{ name: string }> }, context: { agent?: Agent }, next: () => Promise<unknown>) => {
+  ctx.on("system-prompt/assemble", (assembly: PromptAssembly, context: AssembleContext, next) => {
     const agent = context.agent;
     if (!agent) return next();
     const patterns = gatedPatterns();

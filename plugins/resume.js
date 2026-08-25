@@ -36,7 +36,8 @@ function eventText(ev) {
     if (r && typeof r === "object") return JSON.stringify(r).slice(0, 200);
     return "";
   }
-  if (t === "compaction/summary") return "compaction shadowed " + (d?.shadowedSeqs?.length ?? 0) + " seqs";
+  if (t === "compaction/summary")
+    return "compaction shadowed " + (d?.shadowedSeqs?.length ?? 0) + " seqs";
   if (t === "subagent/descriptor") return "subagent " + (d?.label ?? "") + " " + (d?.mode ?? "");
   if (t === "turn/start") return "turn " + (d?.turn ?? "?");
   return "";
@@ -52,7 +53,8 @@ function eventRole(ev) {
   if (t === "assistant/message") return "assistant";
   if (t === "tool/call") return "tool-call";
   if (t === "tool/result") return "tool-result";
-  if (t === "compaction/summary" || t === "compaction/start" || t === "compaction/end") return "compaction";
+  if (t === "compaction/summary" || t === "compaction/start" || t === "compaction/end")
+    return "compaction";
   if (t === "subagent/descriptor") return "subagent";
   return t ?? "?";
 }
@@ -76,16 +78,19 @@ function shortId(id) {
   return String(id ?? "").slice(0, 8);
 }
 function apply(ctx) {
-  ctx.effect(
-    function* () {
-      yield ctx.commands.register({
-        name: "resume",
-        description: "Layered recall over the durable session log. Greps the current session, then other sessions in the same workspace (including past compactions and subagent reports), for a natural-language query. Returns short one-line summaries; expand any with recall using its (seq N) pointer.",
-        handler: (invocation) => executeResume(invocation, ctx)
-      });
-    },
-    "resume command lifecycle"
-  );
+  const commands = ctx.get("commands");
+  if (commands === void 0) {
+    ctx.logger.warn("resume: commands service not mounted; /resume is not registered");
+    return;
+  }
+  ctx.effect(function* () {
+    yield commands.register({
+      name: "resume",
+      description: "Layered recall over the durable session log. Greps the current session, then other sessions in the same workspace (including past compactions and subagent reports), for a natural-language query. Returns short one-line summaries; expand any with recall using its (seq N) pointer.",
+      input: { hint: "<natural-language query>" },
+      handler: (invocation) => executeResume(invocation, ctx)
+    });
+  }, "resume command lifecycle");
 }
 async function executeResume(invocation, ctx) {
   const query = (invocation?.rawInput ?? "").trim();

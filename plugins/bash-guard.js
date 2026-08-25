@@ -4502,7 +4502,9 @@ import z from "@deepseek-ai/schemastery";
 var name = "bash-guard";
 var inject = [];
 var Config = z.object({
-  guardsDir: z.string().default("$DSH_HOME/plugins/guards")
+  guardsDir: z.string().default("$DSH_HOME/plugins/guards"),
+  denyMessage: z.string(),
+  askMessage: z.string()
 });
 function resolveHome(path3) {
   if (!path3.includes("$DSH_HOME")) return path3;
@@ -4592,17 +4594,55 @@ async function loadRules(ctx, dir) {
   }
   return rules;
 }
-var DEFAULT_DENY = (name2) => `The command "${name2}" is denied in the personal bundle. Use the sanctioned tool or ask the user to run it.`;
-var DEFAULT_ASK = (name2) => `The command "${name2}" needs approval. Confirm or reject.`;
+async function loadRulesMulti(ctx, dirs) {
+  const merged = /* @__PURE__ */ new Map();
+  for (const dir of dirs) {
+    const rules = await loadRules(ctx, dir);
+    for (const [cmd, entry] of rules) merged.set(cmd, entry);
+  }
+  return merged;
+}
+var DEFAULT_DENY_TEMPLATE = "bash-guard: the following command was denied:\n\n  {command}\n\nMatched rule(s):\n{matches}";
+var DEFAULT_ASK_TEMPLATE = "bash-guard: the following command needs approval:\n\n  {command}\n\nMatched rule(s):\n{matches}";
+function formatMessage(template, ctx) {
+  const matchesText = ctx.matches.map((m) => {
+    const sub = m.subcommand ? ` (${m.subcommand})` : "";
+    return `  \u2022 ${m.name}${sub}: ${m.reason}`;
+  }).join("\n");
+  const primary = ctx.matches[0];
+  return template.replaceAll("{command}", ctx.command).replaceAll("{matches}", matchesText).replaceAll("{name}", primary?.name ?? "unknown").replaceAll("{reason}", primary?.reason ?? "");
+}
+function matchLines(hits) {
+  const seen = /* @__PURE__ */ new Set();
+  const out = [];
+  for (const h of hits) {
+    const line = {
+      name: h.name,
+      subcommand: firstSubcommand(getCommandArgs(h.ref)),
+      reason: h.rule.reason ?? "(no reason supplied by the rule)"
+    };
+    const key = `${line.name}\0${line.subcommand ?? ""}\0${line.reason}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(line);
+  }
+  return out;
+}
 function mostRestrictive(verdicts) {
   if (verdicts.includes("deny")) return "deny";
   if (verdicts.includes("ask")) return "ask";
   if (verdicts.includes("allow")) return "allow";
   return "none";
 }
+var GIT_GLOBALS_WITH_VALUE = /* @__PURE__ */ new Set(["-C", "--git-dir", "--work-tree", "--namespace"]);
 function firstSubcommand(args) {
-  for (const arg of args) {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
     if (arg === "--") break;
+    if (GIT_GLOBALS_WITH_VALUE.has(arg)) {
+      i++;
+      continue;
+    }
     if (arg.startsWith("-")) continue;
     return arg;
   }
@@ -4614,7 +4654,25 @@ function verdictFor(rule, ref) {
   const refined = sub !== void 0 ? rule.subcommands[sub] : void 0;
   return refined ?? rule.verdict;
 }
-async function evaluate(ctx, dir, command, depth) {
+function pathLikeArgs(refs) {
+  const out = [];
+  for (const ref of refs) {
+    for (const arg of getCommandArgs(ref)) {
+      if (arg.startsWith("-")) continue;
+      if (arg.startsWith("/") || arg.includes("/") || arg.startsWith("./") || arg.startsWith("../") || /\.[A-Za-z0-9]+$/.test(arg)) {
+        out.push(arg);
+      }
+    }
+  }
+  return out;
+}
+function scratchAllowed(refs, safePaths) {
+  const paths = pathLikeArgs(refs);
+  if (paths.length === 0) return false;
+  const last = paths[paths.length - 1];
+  return safePaths.some((sp) => last.startsWith(sp));
+}
+async function evaluate(ctx, dirs, command, depth, safePaths, templates) {
   let script;
   try {
     script = parse(command);
@@ -4640,26 +4698,22 @@ async function evaluate(ctx, dir, command, depth) {
   const refs = extractAllCommandsFromAST(script, command);
   const { commands } = expandWrapperCommands(refs);
   const all = [...refs, ...commands];
-  const rules = await loadRules(ctx, dir);
+  if (safePaths.length > 0 && scratchAllowed(all, safePaths)) {
+    return { command, decision: null };
+  }
+  const rules = await loadRulesMulti(ctx, dirs);
   const hits = all.map((ref) => {
     const name2 = getBasename(ref);
-    const rule = rules.get(name2);
+    const rule = rules.get(name2) ?? rules.get("*");
     if (rule === void 0) return void 0;
     return { name: name2, rule, ref, verdict: verdictFor(rule, ref) };
   }).filter(
     (h) => h !== void 0
   );
   if (depth === 0 && hits.some((h) => h.rule.rewrites)) {
-    let rewritten = command;
-    let changed = false;
+    const ranges = [];
     for (const hit of hits) {
-      if (!hit.rule.rewrites || hit.ref.source !== command) {
-        if (hit.rule.rewrites && hit.ref.source !== command) {
-          ctx.logger.debug(`bash-guard: skipping rewrite for wrapper-internal ref to ${hit.name}`);
-        }
-        continue;
-      }
-      const ranges = [];
+      if (!hit.rule.rewrites) continue;
       for (const rw of hit.rule.rewrites) {
         for (let i = 0; i < hit.ref.node.suffix.length; i++) {
           const word = hit.ref.node.suffix[i];
@@ -4678,30 +4732,26 @@ async function evaluate(ctx, dir, command, depth) {
           }
         }
       }
-      if (ranges.length > 0) {
-        ranges.sort((a, b) => a[0] - b[0]);
-        let segment = "";
-        let lastEnd = 0;
-        const logBecauses = [];
-        for (const [start, end, because] of ranges) {
-          if (start < lastEnd) continue;
-          segment += command.slice(lastEnd, start);
-          lastEnd = end;
-          if (because && logBecauses.indexOf(because) === -1) {
-            logBecauses.push(because);
-          }
-        }
-        segment += command.slice(lastEnd);
-        rewritten = segment;
-        changed = true;
-        ctx.logger.debug(
-          `bash-guard: rewrite (${logBecauses.join("; ")}) ${command} -> ${rewritten}`
-        );
-      }
     }
-    if (changed) {
+    if (ranges.length > 0) {
+      ranges.sort((a, b) => a[0] - b[0]);
+      let rewritten = "";
+      let lastEnd = 0;
+      const logBecauses = [];
+      for (const [start, end, because] of ranges) {
+        if (start < lastEnd) continue;
+        rewritten += command.slice(lastEnd, start);
+        lastEnd = end;
+        if (because && logBecauses.indexOf(because) === -1) {
+          logBecauses.push(because);
+        }
+      }
+      rewritten += command.slice(lastEnd);
+      ctx.logger.debug(
+        `bash-guard: rewrite (${logBecauses.join("; ")}) ${command} -> ${rewritten}`
+      );
       if (depth < 5) {
-        return evaluate(ctx, dir, rewritten, depth + 1);
+        return evaluate(ctx, dirs, rewritten, depth + 1, safePaths, templates);
       }
       command = rewritten;
     }
@@ -4716,15 +4766,22 @@ async function evaluate(ctx, dir, command, depth) {
   const overall = mostRestrictive(verdicts);
   switch (overall) {
     case "deny": {
-      const hit = hits.find((h) => h.verdict === "deny");
-      const reason = hit?.rule.reason ?? DEFAULT_DENY(hit?.name ?? "unknown");
+      const denying = hits.filter((h) => h.verdict === "deny");
+      const reason = formatMessage(templates.deny ?? DEFAULT_DENY_TEMPLATE, {
+        command,
+        matches: matchLines(denying)
+      });
       return { command, decision: { kind: "deny", reason } };
     }
     case "ask": {
-      const hit = hits.find((h) => h.verdict === "ask");
+      const asking = hits.filter((h) => h.verdict === "ask");
+      const reason = formatMessage(templates.ask ?? DEFAULT_ASK_TEMPLATE, {
+        command,
+        matches: matchLines(asking)
+      });
       return {
         command,
-        decision: { kind: "ask", reason: hit?.rule.reason ?? DEFAULT_ASK(hit?.name ?? "unknown") }
+        decision: { kind: "ask", reason }
       };
     }
     case "allow":
@@ -4734,12 +4791,26 @@ async function evaluate(ctx, dir, command, depth) {
   }
 }
 function apply(ctx, config) {
-  const dir = resolveHome(config.guardsDir ?? "$DSH_HOME/plugins/guards");
+  const baseDir = resolveHome(config.guardsDir ?? "$DSH_HOME/plugins/guards");
+  const aidos = ctx.get("aidos");
   ctx.on("tools/pre-execute", async (exec, next) => {
     if (exec.name !== "bash") return next();
     const command = exec.arguments?.command;
     if (typeof command !== "string" || command.trim().length === 0) return next();
-    const result = await evaluate(ctx, dir, command, 0);
+    const agent = exec.agent;
+    let profile = "none";
+    const safePaths = ["/tmp/dsh"];
+    if (aidos && agent) {
+      try {
+        const bc = aidos.bashContext(agent);
+        profile = bc.profile;
+        if (bc.scratchDir) safePaths.push(bc.scratchDir);
+      } catch {
+      }
+    }
+    const dirs = profile === "none" ? [baseDir] : [baseDir, join2(baseDir, `profile-${profile}`)];
+    const templates = { deny: config.denyMessage, ask: config.askMessage };
+    const result = await evaluate(ctx, dirs, command, 0, safePaths, templates);
     if (result.command !== command) {
       try {
         exec.arguments.command = result.command;

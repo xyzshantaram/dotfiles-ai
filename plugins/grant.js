@@ -20,6 +20,7 @@ function canonicalPath(path) {
   }
 }
 function isUnder(root, target) {
+  if (root.length <= 1) return false;
   if (target === root) return true;
   const prefix = root.endsWith(sep) ? root : root + sep;
   return target.startsWith(prefix);
@@ -108,6 +109,12 @@ function apply(ctx) {
         };
       }
       const root = canonicalPath(normalize(raw));
+      if (root === "/" || root === resolve("/") || root.length <= 1) {
+        return {
+          kind: "error",
+          text: "grant: refusing to grant filesystem root (/); choose a narrower path"
+        };
+      }
       const entry = grants.get(session) ?? {
         sessionId: session.id,
         roots: []

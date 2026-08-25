@@ -171,6 +171,12 @@ function normalizeEntry(entry, chains, seen) {
                 out.push(...normalizeEntry(chains[name2], chains, guard));
               }
             }
+          } else if (chains?.[step] !== void 0) {
+            const guard = new Set(seen ?? []);
+            if (!guard.has(step)) {
+              guard.add(step);
+              out.push(...normalizeEntry(chains[step], chains, guard));
+            }
           } else if (step.indexOf("/") > 0) {
             const slash = step.indexOf("/");
             out.push({ provider: step.slice(0, slash), model: step.slice(slash + 1) });

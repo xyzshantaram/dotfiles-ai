@@ -34,7 +34,6 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import z from "@deepseek-ai/schemastery";
 import { installSettingsSection, settingsNamespace } from "@deepseek-ai/dsh-settings";
-import type {} from "@deepseek-ai/dsh-settings";
 import { uncompress } from "snappyjs";
 
 /** Stable Cordis plugin name. */
@@ -82,6 +81,7 @@ const BALANCE_CACHE_MS = 30_000;
 const MERIDIAN_TIMEOUT_MS = 10_000;
 const OPENCODE_TIMEOUT_MS = 15_000;
 
+// TODO(dedup): use plugins/shared/http.ts sendJson/readBody
 /** Write a small JSON response. */
 function sendJson(res, status, body) {
   res.statusCode = status;
@@ -1182,6 +1182,7 @@ export function apply(ctx, config) {
   // GET returns the resolved `subscriptions` namespace (user layer over the
   // composition base). PUT validates and writes through the same settings
   // service installSettingsSection registered, so a toggle hot-applies.
+  // TODO(dedup): use plugins/shared/http.ts sendJson/readBody
   const MAX_BODY_BYTES = 64 * 1024;
 
   async function readBody(req: unknown): Promise<unknown> {

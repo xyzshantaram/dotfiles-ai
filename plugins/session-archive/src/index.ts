@@ -76,6 +76,7 @@ function service<T>(ctx: Context, name: string): T | undefined {
   return (ctx as { get(name: string): unknown }).get(name) as T | undefined;
 }
 
+// TODO(dedup): use plugins/shared/http.ts sendJson/readBody
 /** Write a small JSON response. */
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.statusCode = status;

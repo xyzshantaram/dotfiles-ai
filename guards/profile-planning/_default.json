@@ -1,0 +1,5 @@
+{
+  "commands": ["*"],
+  "verdict": "deny",
+  "reason": "Planning phase is read-only: claim a ticket (move it to in_progress) to unlock writes. Scratch writes to /tmp/dsh or the aidos durable scratch are always allowed, in every phase."
+}

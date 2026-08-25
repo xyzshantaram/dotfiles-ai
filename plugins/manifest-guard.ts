@@ -48,9 +48,6 @@ import { basename } from "node:path";
 import type { Context } from "@deepseek-ai/cordis";
 import z from "@deepseek-ai/schemastery";
 import { FsError } from "@deepseek-ai/dsh-fs";
-import type {} from "@deepseek-ai/dsh-fs";
-import type {} from "@deepseek-ai/dsh-tools";
-import type {} from "@deepseek-ai/dsh-agent";
 
 export const name = "manifest-guard";
 
@@ -69,13 +66,13 @@ const MANIFEST_NAMES = new Set([
   "pnpm-lock.yaml",
   "bun.lock",
   "cargo.toml",
-  "Cargo.lock",
+  "cargo.lock",
   "pyproject.toml",
   "poetry.lock",
-  "Pipfile",
+  "pipfile",
   "go.mod",
   "go.sum",
-  "Gemfile",
+  "gemfile",
 ]);
 
 const DENY_MESSAGE = (name: string): string =>
@@ -85,7 +82,7 @@ const DENY_MESSAGE = (name: string): string =>
 
 function isManifestPath(displayPath: string): boolean {
   const name = basename(displayPath);
-  return MANIFEST_NAMES.has(name.toLowerCase()) || MANIFEST_NAMES.has(name);
+  return MANIFEST_NAMES.has(name.toLowerCase());
 }
 
 export function apply(ctx: Context, config: ManifestGuardConfig): void {

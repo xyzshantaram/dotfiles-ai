@@ -1,6 +1,10 @@
 {
   "dependencies": {
     "@cad0p/unbash-walker": "0.1.0",
+    "@deepseek-ai/dsh-credentials": "0.0.1-rc.1",
+    "@deepseek-ai/dsh-launch-environment": "0.0.1-rc.3",
+    "@deepseek-ai/dsh-timeout": "0.0.1-rc.1",
+    "@earendil-works/pi-ai": "0.82.1",
     "highlight.js": "11.12.0",
     "snappyjs": "^0.7.0",
     "unbash": "4.0.10"
@@ -32,6 +36,7 @@
     "gen:customize-setup": "node generate-customize-setup.mjs",
     "build": "node build.mjs",
     "format": "prettier --write \"**/*.{ts,tsx,css}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,css}\""
+    "format:check": "prettier --check \"**/*.{ts,tsx,css}\"",
+    "sync-models": "node sync-models.mjs"
   }
 }

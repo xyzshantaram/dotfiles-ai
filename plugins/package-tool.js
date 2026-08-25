@@ -2164,7 +2164,9 @@ async function getInstalledVersion(ctx, ecosystem, manager, packageName, cwd, si
       const text = await ctx.fs.readText(target, signal);
       const manifest = JSON.parse(text);
       const raw = manifest.dependencies?.[packageName] ?? manifest.devDependencies?.[packageName];
-      return raw ? raw.replace(/^[\^~]/, "") : void 0;
+      if (!raw) return void 0;
+      const stripped = raw.replace(/^[\^~]/, "");
+      return stripped.match(/(\d+\.\d+\.\d+[^,\s|]*)/)?.[1];
     }
     if (ecosystem === "rust") {
       const out = await runCommand(ctx, `cargo pkgid ${packageName}`, cwd, signal);
@@ -2191,13 +2193,7 @@ async function getInstalledVersion(ctx, ecosystem, manager, packageName, cwd, si
   }
   return void 0;
 }
-function buildCommand(manager, action, packageName, dev, taskName, taskCommand) {
-  if (action === "add_task") {
-    if (manager === "pnpm" || manager === "npm") {
-      return `node -e "const f=require('node:fs');const p=require('./package.json');p.scripts=p.scripts||{};p.scripts[process.argv[1]]=process.argv[2];f.writeFileSync('./package.json',JSON.stringify(p,null,2)+'\\n')" ${taskName} ${taskCommand}`;
-    }
-    throw new Error(`add_task is not supported for manager ${manager}`);
-  }
+function buildCommand(manager, action, packageName, dev) {
   switch (manager) {
     case "npm":
       return action === "remove" ? `npm uninstall ${packageName}` : `npm install ${dev ? "-D " : ""}${packageName}`;
@@ -2272,26 +2268,37 @@ function apply(ctx) {
         const sessionCwd = exec.agent?.session.header.cwd ?? process.cwd();
         const cwd = confineCwd(sessionCwd, args.cwd);
         const dev = args.dev ?? false;
-        const manager = args.manager ?? await detectManager(ctx, args.ecosystem, cwd, signal);
         const action = args.action;
         if (action === "add_task") {
-          if (!/^[A-Za-z0-9:_\-./]+$/.test(args.taskName ?? "")) {
+          const taskName = args.taskName ?? "";
+          if (!/^[A-Za-z0-9:_\-./]+$/.test(taskName)) {
             throw new Error(`invalid task name: ${args.taskName}`);
           }
-          if (!/^[A-Za-z0-9 $'"\/\._:\-=]+$/.test(args.taskCommand ?? "")) {
+          const taskCommand = args.taskCommand ?? "";
+          if (!/^[^\x00-\x1f\x7f]+$/.test(taskCommand)) {
             throw new Error(`invalid task command: ${args.taskCommand}`);
           }
-          const command2 = buildCommand(manager, action, "", false, args.taskName, args.taskCommand);
-          const output2 = await runCommand(ctx, command2, cwd, signal);
-          const lines2 = [];
-          lines2.push(`Registered task "${args.taskName}" = "${args.taskCommand}"`);
-          lines2.push(`Package manager: ${manager}.`);
-          lines2.push(`Ran: ${command2}`);
-          const tail2 = output2.trim().slice(-4e3);
-          if (tail2) lines2.push(`Output:
-${tail2}`);
-          return lines2.join("\n");
+          await requireManifest(ctx, "nodejs", cwd, signal);
+          const target = await ctx.fs.resolve("package.json", {
+            cwd,
+            ...signal ? { signal } : {}
+          });
+          const text = await ctx.fs.readText(target, signal);
+          const info = await ctx.fs.stat(target, signal);
+          const expected = info !== void 0 ? { kind: "replaceIfVersion", version: info.version } : void 0;
+          const manifest = JSON.parse(text);
+          manifest.scripts = manifest.scripts ?? {};
+          manifest.scripts[taskName] = taskCommand;
+          await ctx.fs.writeText(
+            target,
+            JSON.stringify(manifest, null, 2) + "\n",
+            expected,
+            signal
+          );
+          return `Registered task "${taskName}" = "${taskCommand}"
+Wrote scripts.${taskName} to ${cwd}/package.json`;
         }
+        const manager = args.manager ?? await detectManager(ctx, args.ecosystem, cwd, signal);
         await requireManifest(ctx, args.ecosystem, cwd, signal);
         if (!/^[A-Za-z0-9@._\-/]+$/.test(args.packageName)) {
           throw new Error(`invalid package name: ${args.packageName}`);
@@ -2315,7 +2322,15 @@ ${tail2}`);
           );
         }
         const version = action === "remove" ? void 0 : await resolveLatest(ctx, manager, args.packageName, cwd, signal);
-        if (version !== void 0 && installedVersion !== void 0 && (0, import_semver.lt)(version, installedVersion)) {
+        let isDowngrade = false;
+        if (version !== void 0 && installedVersion !== void 0) {
+          try {
+            isDowngrade = (0, import_semver.lt)(version, installedVersion);
+          } catch {
+            isDowngrade = false;
+          }
+        }
+        if (isDowngrade) {
           const manualCommand = buildCommand(
             manager,
             "add",

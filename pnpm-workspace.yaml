@@ -1,6 +1,8 @@
 allowBuilds:
+  '@google/genai': true
   esbuild: true
   msgpackr-extract: true
+  protobufjs: true
 minimumReleaseAgeExclude:
   - "@deepseek-ai/dsh-agent-presets@0.1.0-rc.8"
   - "@deepseek-ai/dsh-agent@0.1.0-rc.8"

@@ -12,8 +12,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#4d2dcdbec8954d7c3871002550023e43003bfb44}"
-
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#88f654b07f2b0327b8f11c3b6dc5d96ed2adb80c}"
 
 step_install_deps() {
 	(cd "$REPO" && pnpm install)
@@ -116,7 +115,17 @@ step_write_web_patch() {
       name: '@deepseek-ai/dsh-compaction-basic/command'
     - id: ui-better-mobile
       name: dsh-plugin-better-mobile-ui
+    # Vendored llm-pi-ai fork mounts as its own row; the builtin is disabled below.
+    - id: llm-pi-ai-affinity
+      name: '@deepseek-ai/dsh-llm-pi-ai'
 
+
+# Override the builtin llm-pi-ai row: the vendored fork (linked into the
+# web profile under the same package name) is the only pi-ai adapter
+# registrar. Disabling the builtin avoids duplicate adapter registration;
+# the fork mounts as llm-pi-ai-affinity in the insert list above.
+- id: llm-pi-ai
+  disabled: true
 
 # Config override for the self-mounting dsh-remote plugin (the plugin
 # install step pins our fork). The plugin creates the remote row from its
@@ -172,16 +181,16 @@ step_install_plugins() {
 			printf '%s\n' "$out" | rg -i 'warn|error' || true
 		}
 		pnpm_ins "github:sunshaobei/dsh-input-history#9b5b7a494a5c"
-		pnpm_ins "github:omdsh-dev/dsh-tool-calculator#05090e946113"
-		pnpm_ins "github:omdsh-dev/dsh-tool-diff#d4afd6e2de0b"
+		pnpm_ins "github:omdsh-dev/dsh-tool-calculator#05090e946113721c5295518cc20e74f427022c55"
+		pnpm_ins "github:omdsh-dev/dsh-tool-diff#d4afd6e2de0b411151fefc60adebd0973373ec10"
 		# The four tools the `util` skill gates (ticket E4). Installed as
 		# separate repos, NOT through the omdsh-dev/dsh-toolkit monorepo:
 		# that collection also registers calculator and diff, which are
 		# already installed above and would be double-registered.
-		pnpm_ins "github:omdsh-dev/dsh-tool-time#8b7a2137f516"
-		pnpm_ins "github:omdsh-dev/dsh-tool-regex#5afda86cd686"
-		pnpm_ins "github:omdsh-dev/dsh-tool-markdown#267871b115c4"
-		pnpm_ins "github:omdsh-dev/dsh-tool-encoding#dbf829b5a755"
+		pnpm_ins "github:omdsh-dev/dsh-tool-time#8b7a2137f516f9d9179663f5aa58928034c90377"
+		pnpm_ins "github:omdsh-dev/dsh-tool-regex#5afda86cd6862a25f6684056b378c330a5aa86b3"
+		pnpm_ins "github:omdsh-dev/dsh-tool-markdown#267871b115c49c5cde072d05d0d2cef6982ae8f8"
+		pnpm_ins "github:omdsh-dev/dsh-tool-encoding#dbf829b5a755d27ed64a146a4bfa50a62f985f6c"
 		pnpm_ins "https://github.com/omdsh-dev/dsh-at-file/archive/refs/tags/v0.6.7.tar.gz"
 		# dsh plugin --profile web add dsh-worktree
 		pnpm_ins "github:Tieboyh/dsh-session-search#82990a0e9804"
@@ -203,6 +212,7 @@ step_install_plugins() {
 		pnpm_ins "$HERE/plugins/tool-render"
 		pnpm_ins "$HERE/plugins/profiles-client"
 		pnpm_ins "$HERE/plugins/approval-comment"
+		pnpm_ins "$HERE/plugins/llm-pi-ai"
 	else
 		echo "WARNING: dsh not on PATH; skipping third-party plugin installs."
 		echo "         Re-run './sync.sh' from a shell where dsh is installed."
@@ -221,6 +231,7 @@ step_report_extra_plugins() {
 	# Exact package names this bundle installs (the pnpm_ins specs above plus
 	# aidos), and the profile's own base deps that are not extras. Keep this
 	# in sync with the pnpm_ins list when you add or drop a plugin.
+	# Keep in sync with pnpm_ins specs above; see step_install_plugins.
 	local expected=(
 		"@deepseek-ai/dsh-tool-calculator"
 		"@deepseek-ai/dsh-tool-diff"
@@ -229,6 +240,7 @@ step_report_extra_plugins() {
 		"@deepseek-ai/dsh-tool-regex"
 		"@deepseek-ai/dsh-tool-time"
         "@deepseek-ai/dsh-compaction-basic"
+        "@deepseek-ai/dsh-llm-pi-ai"
 		"@dsh-external/dsh-session-search"
 		"@xgone/dsh-remote"
 		"aidos"
@@ -320,30 +332,232 @@ step_install_aidos() {
 	fi
 }
 
+step_sync_aidos_skills() {
+	# Clone aidos at the PINNED commit from GitHub, then copy its skills/ out.
+	# No local checkout is used — that would defeat the point of pinning.
+	# If the pinned commit does not exist, panic and abort the whole sync.
+	local spec="$AIDOS_PLUGIN_SPEC"
+	local path ref owner repo url tmp
+	path="${spec#github:}"
+	ref="${spec##*#}"
+	path="${path%#*}"
+	owner="${path%%/*}"
+	repo="${path##*/}"
+	url="https://github.com/${owner}/${repo}.git"
+	tmp="$(mktemp -d)"
+	echo "=== cloning aidos skills ($url @ ${ref:0:12}) ==="
+	if ! git clone "$url" "$tmp" 2>/dev/null; then
+		echo "PANIC: could not clone $url"
+		rm -rf "$tmp"
+		exit 1
+	fi
+	if ! git -C "$tmp" checkout "$ref" 2>/dev/null; then
+		echo "PANIC: pinned commit $ref does not exist in $url"
+		rm -rf "$tmp"
+		exit 1
+	fi
+	if [ ! -d "$tmp/skills" ]; then
+		echo "WARNING: aidos has no skills/ directory at $ref; skipping skill sync"
+		rm -rf "$tmp"
+		return 0
+	fi
+	mkdir -p "$DSH_HOME/skills"
+	cp -r "$tmp/skills/." "$DSH_HOME/skills/"
+	echo "  synced aidos skills from pinned commit $ref"
+	rm -rf "$tmp"
+}
+
 step_register_aidos_preset() {
 	mkdir -p "$DSH_HOME/.agent-presets/aidos"
-	cat > "$DSH_HOME/.agent-presets/aidos/agent.cordis.yml" <<'EOF'
-# The aidos agent preset composition (installed by sync.sh).
-# The loader re-exports the aidos-tools bundle from the installed aidos
-# package by absolute path. Preset rows resolve bare specifiers against
-# the installed harness, which has no aidos package; only an absolute
-# path reaches the web profile's node_modules.
-- name: ./aidos-loader.js
-EOF
+	# Source is the installed aidos package's preset. It carries the full
+	# tool chain (tool-bash, tool-fs, etc). The old generator overwrote it
+	# with a single-row loader, so bash-guard never ran.
+	local src="$DSH_HOME/profiles/web/node_modules/aidos/presets/aidos/agent.cordis.yml"
+	local fallback="$HERE/../aidos/presets/aidos/agent.cordis.yml"
+	if [ ! -f "$src" ]; then
+		if [ -f "$fallback" ]; then
+			src="$fallback"
+		else
+			echo "  ERROR: aidos preset not found at $src"
+			echo "         Run step_install_aidos first (dsh plugin add \$AIDOS_PLUGIN_SPEC), or clone aidos next to this repo."
+			return 1
+		fi
+	fi
+	# Copy the package's agent.cordis.yml verbatim, then rewrite the one
+	# relative row that needs the deployed wrapper name.
+	cp "$src" "$DSH_HOME/.agent-presets/aidos/agent.cordis.yml"
+	# The package ships `- name: ./aidos-tools.js` (self-contained). The
+	# deployed preset re-exports via an absolute shim, so rewrite that row.
+	# Keep every other row (tool-bash, tool-fs, etc) verbatim.
+	if rg -q '^[[:space:]]*-[[:space:]]*name:[[:space:]]*\./aidos-tools\.js' "$DSH_HOME/.agent-presets/aidos/agent.cordis.yml"; then
+		sed -i 's#^[[:space:]]*-[[:space:]]*name:[[:space:]]*\./aidos-tools\.js#- name: ./aidos-loader.js#' "$DSH_HOME/.agent-presets/aidos/agent.cordis.yml"
+	else
+		if ! rg -q 'aidos-loader\.js' "$DSH_HOME/.agent-presets/aidos/agent.cordis.yml"; then
+			echo "- name: ./aidos-loader.js" >> "$DSH_HOME/.agent-presets/aidos/agent.cordis.yml"
+		fi
+	fi
 	cat > "$DSH_HOME/.agent-presets/aidos/aidos-loader.js" <<EOF
 // Installed by sync.sh. Re-exports the aidos-tools plugin bundle from the
-// aidos package installed via `dsh plugin add`.
+// aidos package installed via \`dsh plugin add\`.
 //
 // The import path is templated to an absolute path on purpose: preset
 // compositions resolve bare specifiers against the installed harness, not
 // the web profile, so a bare "aidos/..." specifier cannot load here.
 export { name, inject, Config, apply } from "$DSH_HOME/profiles/web/node_modules/aidos/presets/aidos/aidos-tools.js";
 EOF
-	cat > "$DSH_HOME/.agent-presets/aidos/preset.yml" <<'EOF'
+	# Copy preset.yml from the same source; keep deployed order 3.
+	local preset_src="$DSH_HOME/profiles/web/node_modules/aidos/presets/aidos/preset.yml"
+	local preset_fallback="$HERE/../aidos/presets/aidos/preset.yml"
+	if [ -f "$preset_src" ]; then
+		cp "$preset_src" "$DSH_HOME/.agent-presets/aidos/preset.yml"
+	elif [ -f "$preset_fallback" ]; then
+		cp "$preset_fallback" "$DSH_HOME/.agent-presets/aidos/preset.yml"
+	else
+		cat > "$DSH_HOME/.agent-presets/aidos/preset.yml" <<'EOF'
 name: Aidos
 description: "The ticket board agent: plan, tickets, evidence, and state-gated tool access."
 order: 3
 EOF
+		return 0
+	fi
+	if rg -q '^[[:space:]]*order:' "$DSH_HOME/.agent-presets/aidos/preset.yml"; then
+		sed -i 's/^[[:space:]]*order:.*/order: 3/' "$DSH_HOME/.agent-presets/aidos/preset.yml"
+	else
+		echo "order: 3" >> "$DSH_HOME/.agent-presets/aidos/preset.yml"
+	fi
+}
+
+step_patch_standard_preset_tool_subagent() {
+	# Pin every subagent dispatched through the shipped `standard` preset
+	# onto the `worker` profile chain (its first route). Done by editing the
+	# shipped standard preset in place: the bundle owns the dsh install on
+	# this machine, and re-running sync is idempotent. A dsh reinstall that
+	# re-extracts the preset would silently revert; rerun sync to restore.
+	#
+	# Why: subagents inherit the parent agent's provider/model unless pinned,
+	# so without this the main agent's orchestrator head (e.g. hy3-free)
+	# leaks into subagent dispatches and the worker chain is never walked.
+	#
+	# Why not copy the preset: the user owns the install and prefers the
+	# direct edit. The patch is one row in one file; no new preset directory.
+	local dsh_bin dsh_pkg preset_yaml
+	dsh_bin="$(command -v dsh 2>/dev/null || true)"
+	if [ -z "$dsh_bin" ]; then
+		echo "  WARNING: dsh not on PATH; skipping standard preset patch."
+		return 0
+	fi
+	dsh_pkg="$(dirname "$(dirname "$(realpath "$dsh_bin")")")"
+	preset_yaml="$dsh_pkg/config/agent-presets/standard/agent.cordis.yml"
+	if [ ! -f "$preset_yaml" ]; then
+		echo "  WARNING: standard preset not found at $preset_yaml; skipping."
+		return 0
+	fi
+
+	local worker_head
+	worker_head="$(WORKER_YAML="$HERE/home/settings.yaml" python3 - <<'PY'
+import os, sys, yaml
+d = yaml.safe_load(open(os.environ['WORKER_YAML'])) or {}
+routes = ((d.get('profile') or {}).get('chains') or {}).get('worker', {}).get('routes') or []
+if not routes:
+    sys.exit('no worker chain routes in home/settings.yaml')
+r = routes[0]
+print(f"{r['provider']} {r['model']}")
+PY
+	)" || { echo "  ERROR: failed to read worker head: $worker_head"; return 1; }
+	local w_provider="${worker_head%% *}"
+	local w_model="${worker_head#* }"
+
+	python3 - "$preset_yaml" "$w_provider" "$w_model" <<'PY'
+import re, sys
+# Comment-preserving patch of the shipped standard preset. PyYAML round-trip
+# drops comments and rewrites indentation, making the resulting diff huge.
+# The dsh-tool-subagent rows have a deterministic shape, so a targeted line
+# scan that only touches the config block is both safe and minimal.
+#
+# Each row of interest (indent shown for tool-subagent nested in delegation):
+#     - id: tool-subagent[-fork]
+#       name: '@deepseek-ai/dsh-tool-subagent'
+#       [disabled: true]            <- skipped
+#       config:
+#         provider: ...
+#         toolName: subagent[_fork]
+#         backgroundMode: continuable
+#
+# We insert (or replace) `agentOptions:` with the worker head immediately
+# after `backgroundMode: continuable`, matching the existing 6/8-space
+# indent used by the surrounding keys.
+path, provider, model = sys.argv[1], sys.argv[2], sys.argv[3]
+indent6 = '      '   # config keys
+indent8 = '        '  # agentOptions values
+new_block = (
+    f"{indent6}agentOptions:\n"
+    f"{indent8}provider: {provider}\n"
+    f"{indent8}model: {model}\n"
+)
+with open(path) as f:
+    lines = f.read().splitlines(keepends=True)
+def row_indent(s):
+    return len(s) - len(s.lstrip(' '))
+edits = 0; skipped = 0
+out = []
+i = 0
+while i < len(lines):
+    line = lines[i]
+    # Anchor: a `- id:` line whose next non-blank line is
+    # `name: '@deepseek-ai/dsh-tool-subagent'`.
+    if (line.lstrip().startswith('- id:')
+        and i + 1 < len(lines)
+        and "name: '@deepseek-ai/dsh-tool-subagent'" in lines[i + 1]):
+        start = i
+        row_indent_val = row_indent(lines[start])
+        # Walk forward to find the row's end: blank line, shallower indent,
+        # or another `- ...` at the same indent.
+        j = start + 1
+        while j < len(lines):
+            ln = lines[j]
+            if not ln.strip(): break
+            ind = row_indent(ln)
+            if ind < row_indent_val: break
+            if ind == row_indent_val and ln.lstrip().startswith('- '): break
+            j += 1
+        row_lines = lines[start:j]
+        row_text = ''.join(row_lines)
+        # Skip disabled rows (tool-subagent-codex, tool-subagent-claude-code).
+        if re.search(r'^\s+disabled:\s*true\s*$', row_text, re.MULTILINE):
+            skipped += 1; out.extend(row_lines); i = j; continue
+        # Already pinned with these values? Leave as-is.
+        if re.search(rf'^{re.escape(indent6)}agentOptions:\s*$', row_text, re.MULTILINE):
+            new_row_text = re.sub(
+                rf'^{re.escape(indent6)}agentOptions:\n(?:{re.escape(indent8)}(?:provider|model):[^\n]*\n)+',
+                new_block, row_text, count=1, flags=re.MULTILINE,
+            )
+            if new_row_text != row_text:
+                edits += 1; out.append(new_row_text)
+            else:
+                skipped += 1; out.append(row_text)
+            i = j; continue
+        # Not pinned: insert new_block after the row's `backgroundMode:` line.
+        new_row_lines = []
+        inserted = False
+        for rl in row_lines:
+            new_row_lines.append(rl)
+            if not inserted and re.match(r'^\s+backgroundMode:[^\n]*\n$', rl):
+                new_row_lines.append(new_block)
+                inserted = True
+        if inserted:
+            edits += 1; out.extend(new_row_lines)
+        else:
+            skipped += 1; out.extend(row_lines)
+        i = j; continue
+    out.append(line)
+    i += 1
+if edits == 0:
+    print(f'  {skipped} tool-subagent row(s) unchanged (already pinned or disabled); no change')
+    sys.exit(0)
+with open(path, 'w') as f:
+    f.writelines(out)
+print(f'  pinned {edits} tool-subagent row(s) to {provider}/{model}; {skipped} unchanged')
+PY
 }
 
 step_set_defaults() {
@@ -363,14 +577,14 @@ print(d.get('profile', {}).get('active', 'personal'))
 PY
 )"
 	cp "$HERE/home/settings.yaml" "$DSH_HOME/settings.yaml"
-	python3 - "$DSH_HOME/settings.yaml" "$active" <<'PY'
-import sys, yaml
-p, active = sys.argv[1], sys.argv[2]
-d = yaml.safe_load(open(p))
-d['profile']['active'] = active
-with open(p, 'w') as f:
-    yaml.safe_dump(d, f, sort_keys=False)
-PY
+	# Byte-preserving patch of the single runtime line. A full YAML round-trip
+	# would let PyYAML (YAML 1.1) rewrite the file, mangling e.g. the
+	# reasoningEfforts key `off:` into `false: null` (YAML 1.1 treats `off` as
+	# boolean), which the llm-pi-ai schema rejects and which would drop every
+	# pi-ai provider. Only touch the `profile.active` value.
+	if [ "$active" != "personal" ]; then
+		sed -i "s/^  active: personal$/  active: $active/" "$DSH_HOME/settings.yaml"
+	fi
 }
 
 step_ignore_better_edit_dir() {
@@ -419,6 +633,8 @@ STEPS=(
 	"Report extra plugins (removal commands)|step_report_extra_plugins"
 	"Allow aidos build scripts in web pnpm-workspace.yaml|step_allow_aidos_build"
 	"Install the aidos plugin from git|step_install_aidos"
+	"Sync aidos skills from pinned commit|step_sync_aidos_skills"
+	"Pin subagents onto the worker chain (patch standard preset)|step_patch_standard_preset_tool_subagent"
 	"Register the aidos agent preset|step_register_aidos_preset"
 	"Regenerate settings.yaml from the repo template|step_set_defaults"
 	"Ensure .dsh_better_edit/ is ignored by git machine-wide|step_ignore_better_edit_dir"

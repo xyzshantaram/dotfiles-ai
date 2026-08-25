@@ -111,46 +111,26 @@
 
 import type { Context } from "@deepseek-ai/cordis";
 import z from "@deepseek-ai/schemastery";
-import { defineTool } from "@deepseek-ai/dsh-tools";
-import type {} from "@deepseek-ai/dsh-tools";
-import type { SubagentStartRequest } from "@deepseek-ai/dsh-subagent";
 import type { LlmCallConfig } from "@deepseek-ai/dsh-llm";
 import { settingsNamespace } from "@deepseek-ai/dsh-settings";
-import type {} from "@deepseek-ai/dsh-settings";
 import type { RequestErrorAction } from "@deepseek-ai/dsh-agent";
-import { normalizeEntry, chainOf, type RouteCandidate } from "./profile-routes";
-import { outputText } from "./shared/output-text";
+import { chainOf, type RouteCandidate } from "./profile-routes";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 export const name = "profiles";
 
 export const inject = ["tools", "subagents", "systemPrompt"] as const;
 
-/** One routable pair, or an ordered chain of them. */
-const RoutePin = z.union([
-  z.object({ provider: z.string(), model: z.string() }),
-  z.object({ routes: z.array(z.object({ provider: z.string(), model: z.string() })) }),
-]);
-
 export const Config = z.object({
   /** The subagents provider to start children on. The standard preset uses spawn. */
   provider: z.string().default("spawn"),
   /** Same-provider retry cap for retryPolicy.mode="always" adapters. */
   alwaysMaxRetries: z.number().step(1).min(1).default(2),
-  /** Per-role head pins. Any role left unset follows the profile namespace. */
-  roles: z
-    .object({
-      coder: RoutePin.default(void 0),
-      tester: RoutePin.default(void 0),
-      researcher: RoutePin.default(void 0),
-    })
-    .default(void 0),
 });
 
 type ProfilesConfig = {
   provider?: string;
   alwaysMaxRetries?: number;
-  roles?: { coder?: unknown; tester?: unknown; researcher?: unknown };
 };
 
 /** Shape of the `profile` settings namespace owned by see.ts. */
@@ -173,9 +153,6 @@ interface LlmService {
 
 /** The shared namespace, registered by plugins/see.ts. */
 const PROFILE_NS = settingsNamespace("profile");
-
-/** Every role child is a leaf worker: depth 0 parent + 1, no grandchildren. */
-const ROLE_MAX_DEPTH = 1;
 
 /** One failover level. */
 type Level = RouteCandidate;
@@ -273,136 +250,6 @@ function chainForDepth(ctx: Context, depth: number): Level[] {
   return chainOf(activeEntry(profile), depth >= 1 ? "subagent" : "orchestrator", profile?.chains);
 }
 
-/** The ordered failover chain for one depth. The error cache filters at walk time. */
-function effectiveChain(ctx: Context, depth: number): Level[] {
-  return chainForDepth(ctx, depth);
-}
-
-interface RoleSpec {
-  toolName: string;
-  description: string;
-}
-
-const ROLES: RoleSpec[] = [
-  {
-    toolName: "coder",
-    description:
-      "Delegate ONE well-scoped implementation unit to a coder subagent. Give a self-contained brief: the files involved, the exact change, the constraints, and any test the orchestrator names. It works in its own context and returns a report, not intermediate steps. Leaf worker: it cannot spawn further subagents.",
-  },
-  {
-    toolName: "tester",
-    description:
-      "Delegate test, lint, or build verification to a tester subagent. Name the exact commands or scope to run. It runs them and reports pass/fail with failure details. It never fixes code or edits files. Leaf worker: it cannot spawn further subagents.",
-  },
-  {
-    toolName: "researcher",
-    description:
-      "Delegate investigation or a code review to a researcher subagent. Give the specific question or the diff to review. It reads, searches, and fetches, then reports findings with references. It never edits files or runs mutating commands. Leaf worker: it cannot spawn further subagents.",
-  },
-];
-
-/**
- * Resolve one role's route HEAD at call time: the pin, else the active
- * profile's subagent chain head (role children are depth >= 1, so they ride
- * the subagent chain), else undefined (inherit agent-default-model). The
- * head skips rungs the error cache has down. Failover beyond the head is the
- * waterfall's job.
- */
-function resolveHead(ctx: Context, pin: unknown): RouteCandidate | undefined {
-  const settings = service<SettingsService>(ctx, "settings");
-  const profile = settings?.get(PROFILE_NS) as ProfileSettings | undefined;
-  const pinned = normalizeEntry(pin, profile?.chains);
-  if (pinned.length > 0) return pinned[0];
-  const chain = effectiveChain(ctx, 1);
-  return chain.find((level) => !isCachedDown(level));
-}
-
-/** Human-readable name of the route a dispatch used. */
-function via(route: RouteCandidate | undefined): string {
-  return route ? ` via ${route.provider}/${route.model}` : "";
-}
-
-function registerRoleTool(ctx: Context, spec: RoleSpec, config: ProfilesConfig): void {
-  ctx.tools.register(
-    defineTool({
-      name: spec.toolName,
-      description:
-        spec.description +
-        " Runs in the background by default and returns a durable subagent id; send_message continues that conversation. Set run_in_background: false to wait for the result.",
-      parameters: {
-        description: {
-          type: "string",
-          required: true,
-          description: "A short (3-5 word) description of the delegated task, for display.",
-        },
-        prompt: {
-          type: "string",
-          required: true,
-          description:
-            "The complete, self-contained task for the subagent. It does not share this conversation's context, so include everything it needs.",
-        },
-        run_in_background: {
-          type: "boolean",
-          description:
-            "Whether to run in the background and return a durable subagent id immediately. Defaults to true. Set false to wait for the result when your next action depends on it.",
-        },
-      },
-      output: {
-        schema: { type: "string" },
-        render: (_args, value) => [{ type: "text", text: value }],
-      },
-      async execute(args, exec) {
-        const parent = exec.agent;
-        if (!parent)
-          throw new Error(`${spec.toolName} requires a calling agent (exec.agent was undefined)`);
-
-        // Lazy lookup at call time: the head must reflect the CURRENT
-        // settings value, and the plugin must load with no provider mounted.
-        const head = resolveHead(
-          ctx,
-          config.roles?.[spec.toolName as keyof NonNullable<ProfilesConfig["roles"]>],
-        );
-        const provider = config.provider ?? "spawn";
-        const request: Omit<SubagentStartRequest, "signal"> = {
-          label: args.description,
-          prompt: [{ type: "text", text: args.prompt }],
-          parent,
-          ...(head !== undefined ? { agentOptions: head } : {}),
-          maxDepth: ROLE_MAX_DEPTH,
-        };
-
-        if (args.run_in_background ?? true) {
-          const { childId } = await ctx.subagents.startContinuable({
-            provider,
-            label: args.description,
-            request,
-            signal: exec.signal,
-          });
-          return (
-            `started ${spec.toolName} subagent ${childId}${via(head)}. ` +
-            "It runs in the background; send_message continues that conversation, " +
-            "and the runtime sends a notice when the run settles."
-          );
-        }
-
-        const run = await ctx.subagents.start(provider, { ...request, signal: exec.signal });
-        try {
-          const result = await run.result;
-          if (result.stopReason !== "completed") {
-            const diagnostic = result.diagnostic ? `: ${result.diagnostic}` : "";
-            throw new Error(
-              `${spec.toolName}: child ended with stop reason "${result.stopReason}"${diagnostic}`,
-            );
-          }
-          return outputText(result.output);
-        } finally {
-          await run.dispose();
-        }
-      },
-    }),
-  );
-}
-
 /** Install the two agent waterfalls that provide chain failover. */
 function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
   // Keyed by the request coordinate (turn:step). The harness bubbles agent/request
@@ -443,11 +290,21 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
     const stepKey = keyOf(p.turn, p.step);
 
     // W21: the chain is chosen by depth (0 -> orchestrator, child ->
-    // subagent). The depth is not in the payload: the agent lives in the
-    // agent-scoped context, not here. The chain stays on the orchestrator
-    // level. The error cache is honored while walking below.
-    const chain = effectiveChain(ctx, 0);
-    // A manual picker choice leads the levels: it is tried first, then the
+    // subagent). The depth is not in the payload (the agent lives in the
+    // agent-scoped context, not here), so match the proposal against BOTH
+    // chains and prefer the subagent chain when the proposal is in it: a
+    // subagent on the worker head matches the subagent chain and fails over
+    // along it, a main-agent request on an orchestrator rung matches the
+    // orchestrator chain. A model present in both chains routes on the
+    // subagent chain (the worker fallback set is a superset that includes
+    // the orchestrator tail). The error cache is honored while walking.
+    const orchestrator = chainForDepth(ctx, 0);
+    const subagentChain = chainForDepth(ctx, 1);
+    const chain = subagentChain.some(
+      (l) => l.provider === proposal.provider && l.model === proposal.model,
+    )
+      ? subagentChain
+      : orchestrator;
     // chain's remaining rungs. The choice may be the chain head (the list
     // keeps every rung once) or off-chain (it prefixes the chain).
     const agentDefaultModel = service<{
@@ -653,6 +510,7 @@ function canonicalConfig(profile: ProfileSettings | undefined) {
   };
 }
 
+// TODO(dedup): use plugins/shared/http.ts sendJson/readBody
 const MAX_BODY_BYTES = 64 * 1024;
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
@@ -927,9 +785,6 @@ function makeSwitchHandler(ctx: Context) {
 export function apply(ctx: Context, config: unknown): void {
   const cfg = (config ?? {}) as ProfilesConfig;
 
-  for (const spec of ROLES) {
-    registerRoleTool(ctx, spec, cfg);
-  }
   registerFailover(ctx, cfg.alwaysMaxRetries ?? 2);
 
   // W24: the settings panel reads/writes the profile namespace over these
@@ -976,10 +831,9 @@ export function apply(ctx: Context, config: unknown): void {
     name: "tool:profiles",
     order: 116.4,
     text:
-      "Role tools route delegation by job: coder implements one scoped unit, " +
-      "tester runs verification, researcher investigates or reviews. " +
-      "Prefer them over the generic subagent tool for those jobs; each child " +
-      "runs on the profile-routed model with automatic fallback and is a leaf worker. " +
+      "Every subagent runs on the profile-routed worker chain with automatic " +
+      "failover: the subagent tool is pinned to the worker chain head and a " +
+      "fault advances to the next rung (see the profile settings panel). " +
       "Start independent delegations together in one message.",
   });
 }

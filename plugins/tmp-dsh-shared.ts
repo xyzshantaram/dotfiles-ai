@@ -21,7 +21,10 @@
  * /tmp/dsh on the host and the agent sees them; the agent writes scripts
  * into /tmp/dsh and the user finds them; files persist across bash calls
  * for the boot's lifetime (real /tmp semantics — gone on reboot). Durable
- * scratch beyond that is a separate concern (the user's own plugin).
+ * scratch beyond that is a separate concern, but we also bind the aidos
+ * durable scratch (~/.dsh/aidos/scratch) at its own absolute path so bash can
+ * write there in any phase (bash-guard permits it); the scratch tools work on
+ * the host regardless.
  *
  * We restore the original confine on dispose so a stop/update leaves no
  * wrapper behind.
@@ -30,6 +33,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { dshHomePath } from "@deepseek-ai/dsh-home-paths";
 import type { Context } from "@deepseek-ai/cordis";
 
 export const name = "tmp-dsh-shared";
@@ -48,7 +52,11 @@ interface ConfinedArgvLike {
  * Returns the input untouched when the pair is absent (read-only mode,
  * Landlock, Seatbelt), so non-bwrap backends are never altered.
  */
-export function bindDurableTmp(confined: ConfinedArgvLike, hostTmpDsh: string): ConfinedArgvLike {
+export function bindDurableTmp(
+  confined: ConfinedArgvLike,
+  hostTmpDsh: string,
+  hostAidosScratch?: string,
+): ConfinedArgvLike {
   const argv = confined.argv;
   const idx = argv.findIndex((arg, i) => arg === "--tmpfs" && argv[i + 1] === "/tmp");
   if (idx < 0) return confined;
@@ -60,13 +68,23 @@ export function bindDurableTmp(confined: ConfinedArgvLike, hostTmpDsh: string): 
     // bash invocation.
     return confined;
   }
-  const next = [
-    ...argv.slice(0, idx + 2),
-    "--bind",
-    hostTmpDsh,
-    "/tmp/dsh",
-    ...argv.slice(idx + 2),
-  ];
+  // The binds to splice in immediately after `--tmpfs /tmp` (so they win the
+  // mount point). /tmp/dsh is the shared ephemeral scratch; the aidos durable
+  // scratch is bound at its own absolute path so bash commands that write to
+  // the path aidos reports (dshHomePath("aidos","scratch",...)) actually land
+  // there. Both source dirs are created on demand on the host.
+  const binds: string[] = ["--bind", hostTmpDsh, "/tmp/dsh"];
+  if (hostAidosScratch) {
+    try {
+      mkdirSync(hostAidosScratch, { recursive: true });
+      binds.push("--bind", hostAidosScratch, hostAidosScratch);
+    } catch {
+      // If the aidos scratch host dir cannot be prepared, skip its bind rather
+      // than risk breaking every bash call. The scratch tools still work on the
+      // host regardless of this bind.
+    }
+  }
+  const next = [...argv.slice(0, idx + 2), ...binds, ...argv.slice(idx + 2)];
   return { ...confined, argv: next };
 }
 
@@ -86,13 +104,17 @@ export function apply(ctx: Context): void {
   };
 
   const hostTmpDsh = join(tmpdir(), "dsh");
+  // The aidos durable scratch root, bound at its own absolute path so bash can
+  // reach the same path aidos reports.
+  const hostAidosScratch = dshHomePath("aidos", "scratch");
+  markApplied(hostAidosScratch);
   markApplied(hostTmpDsh);
 
   // Patch the concrete instance first (the shared root-singleton path).
   const original = sandbox.confine.bind(sandbox);
   sandbox.confine = (argv, policy) => {
     const confined = original(argv, policy);
-    return bindDurableTmp(confined, hostTmpDsh);
+    return bindDurableTmp(confined, hostTmpDsh, hostAidosScratch);
   };
 
   // Patch the provider prototype too. If the runtime instantiates a
@@ -112,6 +134,7 @@ export function apply(ctx: Context): void {
       return bindDurableTmp(
         (protoOriginal as (...a: unknown[]) => ConfinedArgvLike).apply(this, args),
         hostTmpDsh,
+        hostAidosScratch,
       );
     };
   }
