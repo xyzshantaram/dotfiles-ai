@@ -12,7 +12,7 @@
   box-shadow: var(--dsw-shadow-lv2);
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
-  border-radius: 1.25rem;
+  border-radius: 0.875rem;
   overflow: hidden;
 }
 .approval-comment-strip {
