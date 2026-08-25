@@ -6,14 +6,14 @@ This design system defines reusable form controls for a dark, desktop-oriented s
 
 The visual target is:
 
-* Dense but readable.
-* Dark gray instead of pure black.
-* Low-contrast borders.
-* White primary text.
-* Muted secondary text.
-* Rounded containers and controls.
-* Clear grouping without excessive visual decoration.
-* Native-looking controls with a custom application visual language.
+- Dense but readable.
+- Dark gray instead of pure black.
+- Low-contrast borders.
+- White primary text.
+- Muted secondary text.
+- Rounded containers and controls.
+- Clear grouping without excessive visual decoration.
+- Native-looking controls with a custom application visual language.
 
 The system is intended for settings pages, configuration editors, developer tools, and workspace preferences.
 
@@ -59,17 +59,17 @@ font-family:
 
 ### Type scale
 
-| Element             | Size | Weight | Color              |
-| ------------------- | ---: | -----: | ------------------ |
-| Page title          | 28px |    700 | `--text-primary`   |
-| Section heading     | 24px |    700 | `--text-primary`   |
-| Control label       | 20px |    400 | `--text-primary`   |
-| Description         | 18px |    400 | `--text-secondary` |
-| Input text          | 18px |    400 | `--text-primary`   |
-| Small control label | 16px |    400 | `--text-secondary` |
-| Helper text         | 16px |    400 | `--text-secondary` |
+| Element             |      Size | Weight | Color              |
+| ------------------- | --------: | -----: | ------------------ |
+| Page title          |    1.5rem |    650 | `--text-primary`   |
+| Section heading     |  1.125rem |    600 | `--text-primary`   |
+| Control label       | 0.9375rem |    500 | `--text-primary`   |
+| Description         |  0.875rem |    400 | `--text-secondary` |
+| Input text          |  0.875rem |    400 | `--text-primary`   |
+| Small control label | 0.8125rem |    400 | `--text-secondary` |
+| Helper text         | 0.8125rem |    400 | `--text-secondary` |
 
-Use a line height of approximately `1.45` for descriptions.
+Use a line height of approximately `1.5` for descriptions.
 
 The visual hierarchy comes primarily from size, weight, and color. Do not add excessive font styles.
 
@@ -83,34 +83,33 @@ Use a centered content column.
 
 ```css
 .settings-page {
-  width: min(100% - 60px, 900px);
+  width: min(100% - 2.5rem, 55rem);
   margin-inline: auto;
-  padding-block: 28px 48px;
+  padding-block: 1.5rem 2.5rem;
 }
 ```
 
-The screenshot uses approximately 30px horizontal page margins.
+The screenshot uses approximately 1.25rem (20px at 16px base) horizontal page margins per side via the width calculation.
 
 ### Vertical spacing
 
 Use an 8px spacing grid:
 
-```text
-8px
-16px
-24px
-32px
-40px
-48px
-```
+````text
+0.5rem
+1rem
+1.5rem
+2rem
+2.5rem
+3rem
 
 Recommended relationships:
 
-* Heading → description: `8px`
-* Description → control: `20–24px`
-* Section → section: `32–40px`
-* Card content padding: `24px`
-* Form controls: `8–12px` internal spacing
+* Heading → description: `0.5rem`
+* Description → control: `1rem`
+* Section → section: `1.75rem–2rem`
+* Card content padding: `1.25rem`
+* Form controls: `0.625rem` internal spacing
 
 ---
 
@@ -123,30 +122,28 @@ Section heading
 Description explaining the purpose of this section.
 
 [controls]
-```
+````
 
 ### Heading
 
-```css
+````css
 .section-title {
   margin: 0;
-  font-size: 24px;
+  font-size: 1.125rem;
   line-height: 1.2;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-primary);
 }
-```
 
 ### Description
 
 ```css
 .section-description {
-  margin: 10px 0 0;
+  margin: 0.625rem 0 0;
   color: var(--text-secondary);
-  font-size: 18px;
-  line-height: 1.45;
+  font-size: 0.875rem;
+  line-height: 1.5;
 }
-```
 
 Descriptions should be allowed to wrap naturally. Do not force them into a single line.
 
@@ -163,52 +160,60 @@ The entire control behaves as a clickable setting row.
 │ ☑  Enable @ file mentions                           │
 │    Turning this off hides the @ path picker...      │
 └─────────────────────────────────────────────────────┘
-```
+````
 
 ### Container
 
-```css
+````css
 .setting-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 24px;
+  border-radius: 0.875rem;
+  padding: 1.25rem;
 }
-```
 
-Use approximately `20px` corner radius.
-
-### Checkbox
-
-The checkbox is approximately 28px × 28px.
-
-```css
-.setting-checkbox {
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
-  border-radius: 3px;
+Use
+  approximately
+  `0.875rem`
+  (14px at 16px base)
+  corner
+  radius.
+  ###
+  Checkbox
+  The
+  checkbox
+  is
+  approximately
+  1.25rem
+  ×
+  1.25rem
+  (20px at 16px base).
+  ```css
+  .setting-checkbox {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: 0 0 1.25rem;
+  border-radius: 0.1875rem;
 }
-```
+````
 
 The checkbox should have a strong checked state.
 
 ### Layout
 
-```css
+````css
 .setting-card {
   display: grid;
-  grid-template-columns: 28px 1fr;
-  gap: 20px;
+  grid-template-columns: 1.25rem 1fr;
+  gap: 1rem;
   align-items: start;
 }
-```
 
 The checkbox aligns with the first line of the label, not the vertical center of the entire card.
 
 ### Label
 
-Use a 20px label.
+Use a 0.9375rem label.
 
 ### Description
 
@@ -220,7 +225,7 @@ This creates the characteristic two-column visual structure:
 [checkbox] [label]
            [description]
            [description]
-```
+````
 
 ---
 
@@ -241,9 +246,9 @@ The `Global / Workspace` control is a two-option segmented control.
 ```css
 .segmented-control {
   display: flex;
-  padding: 4px;
+  padding: 0.25rem;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 0.625rem;
   background: var(--surface);
 }
 ```
@@ -252,14 +257,14 @@ The `Global / Workspace` control is a two-option segmented control.
 
 ```css
 .segment {
-  min-width: 175px;
-  height: 48px;
+  min-width: 8.75rem;
+  height: 2.375rem;
   border: 0;
-  border-radius: 10px;
+  border-radius: 0.4375rem;
   background: transparent;
 
   color: var(--text-secondary);
-  font-size: 20px;
+  font-size: 0.875rem;
 }
 
 .segment[data-active="true"] {
@@ -291,30 +296,26 @@ The file filter editor uses a bordered container containing multiple rows.
 
 ### Container
 
-```css
+````css
 .control-list {
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 0.625rem;
   background: var(--surface);
 }
-```
 
-### Row
-
-```css
-.control-list-row {
-  min-height: 64px;
-  padding: 0 20px;
+### Row ```css .control-list-row {
+  min-height: 3rem;
+  padding: 0 0.875rem;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 0.625rem;
 }
 
 .control-list-row + .control-list-row {
   border-top: 1px solid var(--border-subtle);
 }
-```
+````
 
 The row should not have its own rounded corners.
 
@@ -332,19 +333,18 @@ The `Exact` and `Case-insensitive` controls are compact pill-like buttons.
 
 Use these for small stateful options.
 
-```css
+````css
 .pill {
-  height: 36px;
-  padding-inline: 10px;
+  height: 1.75rem;
+  padding-inline: 0.5rem;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: 0.375rem;
 
   background: transparent;
   color: var(--text-secondary);
 
-  font-size: 16px;
+  font-size: 0.8125rem;
 }
-```
 
 The controls should remain visually secondary to the filename.
 
@@ -355,7 +355,7 @@ For an active state:
   background: var(--surface-active);
   color: var(--text-primary);
 }
-```
+````
 
 ---
 
@@ -363,29 +363,24 @@ For an active state:
 
 The `×` button at the end of each row is intentionally minimal.
 
-```css
+````css
 .icon-button {
-  width: 40px;
-  height: 40px;
+  width: 2rem;
+  height: 2rem;
 
   display: inline-grid;
   place-items: center;
 
   border: 0;
-  border-radius: 8px;
+  border-radius: 0.375rem;
   background: transparent;
 
   color: var(--text-secondary);
-  font-size: 28px;
+  font-size: 1.25rem;
 }
-```
 
-Default:
-
-```text
-transparent background
-muted icon
-```
+default: ```text transparent background muted icon;
+````
 
 Hover:
 
@@ -407,26 +402,25 @@ The `Exact / Regex` selector uses the same visual language as the segmented cont
 ```css
 .mode-switch {
   display: inline-flex;
-  padding: 4px;
+  padding: 0.25rem;
 
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 0.625rem;
   background: var(--surface);
 }
 
 .mode-switch > button {
-  height: 44px;
-  padding-inline: 32px;
+  height: 2.125rem;
+  padding-inline: 1.25rem;
 
   border: 0;
-  border-radius: 9px;
+  border-radius: 0.375rem;
 
   background: transparent;
   color: var(--text-secondary);
 
-  font-size: 18px;
+  font-size: 0.875rem;
 }
-
 .mode-switch > button[data-active="true"] {
   background: var(--surface-active);
   color: var(--text-primary);
@@ -442,23 +436,22 @@ Use this for mutually exclusive input modes.
 
 The text input at the bottom follows the same surface language.
 
-```css
+````css
 .text-input {
-  height: 56px;
+  height: 2.5rem;
   width: 100%;
 
-  padding-inline: 16px;
+  padding-inline: 0.75rem;
 
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 0.625rem;
 
   background: var(--surface);
   color: var(--text-primary);
 
-  font-size: 18px;
+  font-size: 0.875rem;
   outline: none;
 }
-```
 
 Placeholder:
 
@@ -466,13 +459,13 @@ Placeholder:
 .text-input::placeholder {
   color: var(--text-muted);
 }
-```
+````
 
 Focus:
 
 ```css
 .text-input:focus {
-  border-color: #66676B;
+  border-color: #66676b;
 }
 ```
 
@@ -484,21 +477,20 @@ Do not use a bright blue focus ring unless the application already has a specifi
 
 The `+ Add` button is a light, high-contrast action.
 
-```css
+````css
 .primary-button {
-  height: 56px;
-  padding-inline: 20px;
+  height: 2.375rem;
+  padding-inline: 1.125rem;
 
   border: 0;
-  border-radius: 28px;
+  border-radius: 999rem;
 
-  background: #ADB2B8;
+  background: #adb2b8;
   color: #232324;
 
-  font-size: 18px;
+  font-size: 0.875rem;
   font-weight: 600;
 }
-```
 
 The button uses a pill shape because it is an action rather than a text-field control.
 
@@ -509,7 +501,7 @@ Disabled:
   opacity: 0.45;
   cursor: not-allowed;
 }
-```
+````
 
 Do not make disabled buttons completely invisible. They should remain identifiable but clearly inactive.
 
@@ -525,18 +517,17 @@ For smaller standalone checkboxes:
 
 Use:
 
-```css
+````css
 .checkbox-field {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 0.625rem;
 
   color: var(--text-secondary);
-  font-size: 18px;
+  font-size: 0.84375rem;
 }
-```
 
-The checkbox should be approximately `24px`.
+The checkbox should be approximately `1.125rem` (18px at 16px base).
 
 The label should be clickable.
 
@@ -565,7 +556,7 @@ Section description
 ☐ Checkbox setting
 
 Helper text
-```
+````
 
 Use spacing to establish hierarchy instead of additional borders.
 
@@ -604,18 +595,18 @@ This UI relies on subtle contrast rather than animation or strong color changes.
 Use only a small number of border strengths.
 
 ```css
---border:        #3E3E3F;
+--border: #3e3e3f;
 --border-subtle: #303031;
---border-focus:  #66676B;
+--border-focus: #66676b;
 ```
 
 Rules:
 
-* Outer containers use `--border`.
-* Internal list separators use `--border-subtle`.
-* Focus uses `--border-focus`.
-* Do not stack multiple borders around the same control.
-* Avoid shadows unless they provide a real elevation cue.
+- Outer containers use `--border`.
+- Internal list separators use `--border-subtle`.
+- Focus uses `--border-focus`.
+- Do not stack multiple borders around the same control.
+- Avoid shadows unless they provide a real elevation cue.
 
 ---
 
@@ -624,18 +615,18 @@ Rules:
 Use three main radius sizes:
 
 ```css
---radius-sm: 7px;
---radius-md: 12px;
---radius-lg: 20px;
---radius-pill: 999px;
+--radius-sm: 0.375rem;
+--radius-md: 0.625rem;
+--radius-lg: 0.875rem;
+--radius-pill: 999rem;
 ```
 
 Use:
 
-* `7px`: compact pills.
-* `12–14px`: inputs, segmented controls, lists.
-* `20px`: large setting cards.
-* `999px`: action buttons.
+- `0.375rem` (6px at 16px base): compact pills.
+- `0.625rem` (10px): inputs, segmented controls, lists.
+- `0.875rem` (14px): large setting cards.
+- `999rem`: action buttons.
 
 The radius should communicate component size.
 
@@ -704,11 +695,11 @@ The reference is optimized for desktop.
 
 Below approximately `700px`:
 
-* Reduce page horizontal padding to `16px`.
-* Allow segmented controls to fill the available width.
-* Allow list rows to wrap their secondary controls.
-* Keep the filename/action relationship intact.
-* Do not reduce body text below `16px`.
+- Reduce page horizontal padding to `1rem`.
+- Allow segmented controls to fill the available width.
+- Allow list rows to wrap their secondary controls.
+- Keep the filename/action relationship intact.
+- Do not reduce body text below `0.8125rem`.
 
 Large setting cards should retain their rounded container and internal padding.
 
@@ -770,17 +761,16 @@ A practical implementation can start with this:
   --text-secondary: #adb2b8;
   --text-muted: #88898a;
 
-  --radius-sm: 7px;
-  --radius-md: 12px;
-  --radius-lg: 20px;
-  --radius-pill: 999px;
-
-  --space-1: 8px;
-  --space-2: 16px;
-  --space-3: 24px;
-  --space-4: 32px;
-  --space-5: 40px;
-  --space-6: 48px;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-pill: 999rem;
+  --space-1: 0.5rem;
+  --space-2: 1rem;
+  --space-3: 1.5rem;
+  --space-4: 2rem;
+  --space-5: 2.5rem;
+  --space-6: 3rem;
 }
 ```
 
