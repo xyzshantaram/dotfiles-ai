@@ -30,6 +30,7 @@
     "tag": "ask",
     "fetch": "ask",
     "pull": "ask",
+    "remote": "ask",
     "checkout": "ask",
     "switch": "ask",
     "restore": "ask",

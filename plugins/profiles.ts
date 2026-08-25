@@ -85,8 +85,10 @@
  *   (dsh-subagent/lib/index.js:486-489).
  * - `agent/request`: dsh-agent-loop/lib/index.js:708; proposal needs
  *   non-empty provider and model (:714). `agent/request-error` returning
- *   `{ kind: 'retry' }`: :653, kind check :662. The fused dispatcher
- *   (dsh-agent/lib/index.js agentEvents) injects `agent` into both payloads.
+ *   `{ kind: 'retry' }`: :653, kind check :662. The dispatcher emits both
+ *   waterfalls with only {turn, step, signal} (and provider/failure/retryPolicy
+ *   on the error path) — `agent` is NOT in the payload (it lives in the
+ *   agent-scoped context). Failover keys its per-step state on turn:step.
  * - `ctx.llm.resolveCallConfig`: dsh-llm/lib/index.js:1351.
  *   `providerRetryPolicy`: dsh-llm/lib/index.js:1260.
  * - Depth: dsh-subagent/lib/types/depth.js delegationDepthOf —
@@ -403,20 +405,48 @@ function registerRoleTool(ctx: Context, spec: RoleSpec, config: ProfilesConfig):
 
 /** Install the two agent waterfalls that provide chain failover. */
 function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
-  // agent -> state for its current step. WeakMap: agents die, state follows.
-  const state = new WeakMap<object, StepState>();
+  // Keyed by the request coordinate (turn:step). The harness bubbles agent/request
+  // and agent/request-error to the host plane with only {turn, step, signal} in the
+  // payload — `agent` is NOT present here (it lives in the agent-scoped context, not
+  // the payload). turn:step is stable across one step's retries, so a retry resumes
+  // at the advanced cursor.
+  // Bounded per-step failover state. A WeakMap would auto-collect, but the key
+  // is now turn:step (not the agent), so we evict explicitly: an entry lives
+  // only for one step's retry sequence, then is dropped on abort/exhaustion.
+  // STATE_CAP bounds memory for long-lived sessions that never hit those paths.
+  const STATE_CAP = 1024;
+  const state = new Map<string, StepState>();
+  const stateOrder: string[] = [];
+  const setState = (key: string, value: StepState): void => {
+    if (!state.has(key)) {
+      stateOrder.push(key);
+      if (stateOrder.length > STATE_CAP) {
+        const oldest = stateOrder.shift();
+        if (oldest) state.delete(oldest);
+      }
+    }
+    state.set(key, value);
+  };
+  const clearState = (key: string): void => {
+    if (state.delete(key)) {
+      const idx = stateOrder.indexOf(key);
+      if (idx >= 0) stateOrder.splice(idx, 1);
+    }
+  };
   const keyOf = (turn: unknown, step: unknown): string => `${String(turn)}:${String(step)}`;
 
   ctx.on("agent/request", async (payload: unknown, next: () => Promise<unknown>) => {
     const proposal = (await next()) as LlmCallConfig;
     if (!proposal?.provider || !proposal.model) return proposal;
 
-    const p = payload as { agent?: object; turn?: unknown; step?: unknown; signal?: AbortSignal };
-    if (!p.agent) return proposal;
+    const p = payload as { turn?: unknown; step?: unknown; signal?: AbortSignal };
+    const stepKey = keyOf(p.turn, p.step);
 
-    // W21: the chain rides the agent's DEPTH (0 -> orchestrator, child ->
-    // subagent). The error cache is honored while walking below.
-    const chain = effectiveChain(ctx, depthOf(p.agent));
+    // W21: the chain is chosen by depth (0 -> orchestrator, child ->
+    // subagent). The depth is not in the payload: the agent lives in the
+    // agent-scoped context, not here. The chain stays on the orchestrator
+    // level. The error cache is honored while walking below.
+    const chain = effectiveChain(ctx, 0);
     // A manual picker choice leads the levels: it is tried first, then the
     // chain's remaining rungs. The choice may be the chain head (the list
     // keeps every rung once) or off-chain (it prefixes the chain).
@@ -439,11 +469,10 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
     );
     if (matched < 0) return proposal;
 
-    const stepKey = keyOf(p.turn, p.step);
-    let s = state.get(p.agent);
+    let s = state.get(stepKey);
     if (!s || s.stepKey !== stepKey) {
       s = { stepKey, levels, cursor: matched, retries: 0, failures: [] };
-      state.set(p.agent, s);
+      setState(stepKey, s);
     }
 
     const llm = service<LlmService>(ctx, "llm");
@@ -497,22 +526,21 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
 
   ctx.on("agent/request-error", (payload: unknown, next: () => Promise<RequestErrorAction>) => {
     const p = payload as {
-      agent?: object;
       turn?: unknown;
       step?: unknown;
       signal?: AbortSignal;
       failure?: { code?: string; message?: string };
       retryPolicy?: { mode?: string };
     };
-    const s = p.agent ? state.get(p.agent) : undefined;
-    if (!s || !p.agent || s.stepKey !== keyOf(p.turn, p.step)) return next();
+    const s = state.get(keyOf(p.turn, p.step));
+    if (!s || s.stepKey !== keyOf(p.turn, p.step)) return next();
 
     const cur = s.levels[s.cursor];
     if (!cur) return next();
 
     // A user abort is never a failover trigger.
     if (p.signal?.aborted) {
-      state.delete(p.agent);
+      clearState(keyOf(p.turn, p.step));
       return next();
     }
 
@@ -559,7 +587,7 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
     const tried = s.failures
       .map((f) => `  - ${f.level.provider}/${f.level.model}: ${f.code} — ${f.message}`)
       .join("\n");
-    state.delete(p.agent);
+    clearState(keyOf(p.turn, p.step));
     throw new Error(`profiles: all levels exhausted for the active chain:\n${tried}`);
   });
 }

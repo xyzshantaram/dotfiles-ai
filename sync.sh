@@ -12,7 +12,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#dad36d30db8a8c54af3031331f318c41ebc11d47}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#4d2dcdbec8954d7c3871002550023e43003bfb44}"
 
 
 step_install_deps() {
@@ -103,6 +103,8 @@ step_write_web_patch() {
 
     - id: profiles
       name: $HERE/plugins/profiles.js
+    - id: resume-command
+      name: $HERE/plugins/resume.js
     # The cordis_* tools, gated behind the two cordis skills via skill-gate.
     - id: tool-cordis
       name: '@deepseek-ai/dsh-tool-cordis'
@@ -112,6 +114,8 @@ step_write_web_patch() {
       name: '@deepseek-ai/dsh-compaction-basic/tool'
     - id: command-recall
       name: '@deepseek-ai/dsh-compaction-basic/command'
+    - id: ui-better-mobile
+      name: dsh-plugin-better-mobile-ui
 
 
 # Config override for the self-mounting dsh-remote plugin (the plugin
@@ -192,6 +196,7 @@ step_install_plugins() {
 		# Paste-to-path: pasted files land under <workspace>/.dsh/pastes/ and
 		# the composer carries a PATH reference. Replaced dsh-paste-input.
 		pnpm_ins "github:Johnny-xuan/dsh-paste-to-path#d68fb104ca25a663ba3912bb17f8c2ab32d60e37"
+	pnpm_ins "github:davidgereb/dsh-plugin-better-mobile-ui#16e21548315866b50d5f3f64b91a70f24f3318ba"
 
 		pnpm_ins "$HERE/plugins/session-archive"
 		pnpm_ins "$HERE/plugins/subscriptions"
@@ -236,6 +241,8 @@ step_report_extra_plugins() {
 		"session-archive"
 		"subscriptions"
 		"tool-render"
+
+		"dsh-plugin-better-mobile-ui"
 	)
 	local base=(
 		"@deepseek-ai/dsh-client-ui-attachment"
