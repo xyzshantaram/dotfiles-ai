@@ -106,6 +106,9 @@
   padding: 0.25rem 0.4375rem;
   display: flex;
 }
+.profiles-client-option:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
 .profiles-client-option-copy {
   flex-direction: column;
   flex: 1;

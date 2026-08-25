@@ -80,13 +80,6 @@ step_write_web_patch() {
         serverName: swiggy-instamart
         transport: streamable-http
         url: https://mcp.swiggy.com/im
-    - id: mcp-git
-      name: '@deepseek-ai/dsh-mcp-client'
-      config:
-        serverName: git
-        transport: stdio
-        command: uvx
-        args: ['mcp-server-git']
     - id: bash-guard
       name: $HERE/plugins/bash-guard.js
       config:
