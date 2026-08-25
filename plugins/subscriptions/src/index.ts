@@ -21,6 +21,7 @@
  *
  * The GO usage and DeepSeek balance routes fold in what the removed
  * dsh-opencode-go-usage and ds-api-usage packages owned.
+ * GO windows are now fetched via the zen API key at /subscriptions/opencode-usage.
  *
  * The balance has no public API. The zen balance equals the go balance and
  * is reachable only through opencode.ai's private `_server` RPC using the
@@ -82,8 +83,6 @@ const BALANCE_CACHE_MS = 30_000;
 const MERIDIAN_TIMEOUT_MS = 10_000;
 const OPENCODE_TIMEOUT_MS = 15_000;
 
-
-
 /** One in-flight promise plus a TTL, so open tabs never hammer the source. */
 function cachedOnce(fn, ttlMs) {
   let cache = null;
@@ -123,7 +122,12 @@ async function fetchServerText(url, options) {
 /** A signed-out session page contains one of these markers. */
 function looksSignedOut(text) {
   const lower = String(text).toLowerCase();
-  return lower.includes("login") || lower.includes("sign in") || lower.includes("auth/authorize");
+  return (
+    lower.includes("/login") ||
+    lower.includes("sign in") ||
+    lower.includes("/auth/authorize") ||
+    lower.includes("sign-in")
+  );
 }
 
 /** First workspace id from the SolidStart payload, then a JSON walk. */
@@ -638,13 +642,8 @@ export function apply(ctx, config) {
         sendJson(res, 400, { error: "month and year query params required" });
         return;
       }
-      const authHeader =
-        req.headers && typeof req.headers.authorization === "string"
-          ? req.headers.authorization
-          : "";
-      const token = authHeader.startsWith("Bearer ")
-        ? authHeader.slice(7).trim()
-        : credentials === undefined
+      const token =
+        credentials === undefined
           ? null
           : (await credentials.resolve("DEEPSEEK_PLATFORM_TOKEN"))?.value;
       if (!token) {
@@ -703,13 +702,8 @@ export function apply(ctx, config) {
         sendJson(res, 400, { error: "month and year query params required" });
         return;
       }
-      const authHeader =
-        req.headers && typeof req.headers.authorization === "string"
-          ? req.headers.authorization
-          : "";
-      const token = authHeader.startsWith("Bearer ")
-        ? authHeader.slice(7).trim()
-        : credentials === undefined
+      const token =
+        credentials === undefined
           ? null
           : (await credentials.resolve("DEEPSEEK_PLATFORM_TOKEN"))?.value;
       if (!token) {
@@ -740,7 +734,7 @@ export function apply(ctx, config) {
   };
 
   // Firefox platform.deepseek.com localStorage userToken extraction ──────────
-  const firefoxDeepSeekProfileDirs = () => {
+  const firefoxProfileDirs = () => {
     const root = join(homedir(), ".mozilla", "firefox");
     if (!existsSync(root)) return [];
     try {
@@ -751,14 +745,10 @@ export function apply(ctx, config) {
       return [];
     }
   };
+  const firefoxDeepSeekProfileDirs = firefoxProfileDirs;
 
-  // Read Firefox Storage v2 (ls/data.sqlite) for platform.deepseek.com userToken
-  // Firefox localStorage compression is 0 = raw or 1 = SNAPPY (snappyjs).
-  const readDeepSeekToken = (profileDir) => {
-    const storeDir = join(profileDir, "storage", "default", "https+++platform.deepseek.com", "ls");
-    const dbPath = join(storeDir, "data.sqlite");
-    if (!existsSync(dbPath)) return Promise.resolve(null);
-    const scratch = mkdtempSync(join(tmpdir(), "ds-token-"));
+  async function sqliteSnapshotAndQuery(dbPath, sql, timeoutMs = 10_000) {
+    const scratch = mkdtempSync(join(tmpdir(), "ff-sqlite-"));
     const dest = join(scratch, "data.sqlite");
     let cleaned = false;
     const cleanup = () => {
@@ -766,61 +756,62 @@ export function apply(ctx, config) {
       cleaned = true;
       try {
         rmSync(scratch, { recursive: true, force: true });
-      } catch {
-        /* best effort */
-      }
+      } catch {}
     };
-    // Snapshot the live Firefox DB via sqlite's backup API. We open the source
-    // with immutable=1 so sqlite takes NO lock; Firefox holds a persistent lock
-    // on this file, so a normal .backup fails with "database is locked". This
-    // reads through the sqlite engine (a consistent point-in-time snapshot) and
-    // never copies the user's browser DB files by hand.
     try {
-      execFileSync("/usr/bin/sqlite3", [`file:${dbPath}?mode=ro&immutable=1`, ".backup " + dest], {
+      execFileSync("sqlite3", [`file:${dbPath}?mode=ro&immutable=1`, ".backup " + dest], {
         timeout: 15_000,
         killSignal: "SIGKILL",
       });
     } catch {
       cleanup();
-      return Promise.resolve(null);
+      return null;
     }
-    const sql = "SELECT hex(value), compression_type FROM data WHERE key = 'userToken' LIMIT 1";
     return new Promise((resolve) => {
       execFile(
-        "/usr/bin/sqlite3",
+        "sqlite3",
         ["-readonly", "-noheader", dest, sql],
-        { timeout: 10_000 },
+        { timeout: timeoutMs },
         (error, stdout) => {
           try {
             if (error) return resolve(null);
             const raw = String(stdout).trim();
             if (!raw) return resolve(null);
-            const [hex, compressionType] = raw.split("|");
-            if (compressionType !== "0" && compressionType !== "1") return resolve(null);
-            let token;
-            try {
-              token =
-                compressionType === "1"
-                  ? uncompress(Buffer.from(hex, "hex")).toString("utf8")
-                  : Buffer.from(hex, "hex").toString("utf8");
-            } catch {
-              return resolve(null);
-            }
-            // appKit stores the token as {"value":"<token>","__version":"0"}; unwrap it
-            try {
-              const parsed = JSON.parse(token);
-              if (parsed !== null && typeof parsed === "object" && typeof parsed.value === "string")
-                token = parsed.value;
-            } catch {
-              /* not JSON */
-            }
-            resolve(token);
+            resolve(raw);
           } finally {
             cleanup();
           }
         },
       );
     });
+  }
+
+  // Read Firefox Storage v2 (ls/data.sqlite) for platform.deepseek.com userToken
+  // Firefox localStorage compression is 0 = raw or 1 = SNAPPY (snappyjs).
+  const readDeepSeekToken = async (profileDir) => {
+    const storeDir = join(profileDir, "storage", "default", "https+++platform.deepseek.com", "ls");
+    const dbPath = join(storeDir, "data.sqlite");
+    if (!existsSync(dbPath)) return null;
+    const sql = "SELECT hex(value), compression_type FROM data WHERE key = 'userToken' LIMIT 1";
+    const raw = await sqliteSnapshotAndQuery(dbPath, sql);
+    if (raw === null) return null;
+    const [hex, compressionType] = String(raw).split("|");
+    if (compressionType !== "0" && compressionType !== "1") return null;
+    let token;
+    try {
+      token =
+        compressionType === "1"
+          ? uncompress(Buffer.from(hex, "hex")).toString("utf8")
+          : Buffer.from(hex, "hex").toString("utf8");
+    } catch {
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(token);
+      if (parsed !== null && typeof parsed === "object" && typeof parsed.value === "string")
+        token = parsed.value;
+    } catch {}
+    return token;
   };
 
   const extractDeepSeekToken = async () => {
@@ -873,75 +864,24 @@ export function apply(ctx, config) {
     }
   };
 
-  const firefoxProfileDirs = () => {
-    const root = join(homedir(), ".mozilla", "firefox");
-    if (!existsSync(root)) return [];
-    try {
-      return readdirSync(root, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => join(root, entry.name));
-    } catch {
-      return [];
-    }
-  };
-
   // Firefox keeps the cookie DB in WAL mode. Copy sqlite + wal + shm to a
   // scratch dir so the read never contends with the live writer, then query
   // the copies read-only. Returns the opencode.ai cookie header string.
-  const readCookieString = (dbDir) => {
+  const readCookieString = async (dbDir) => {
     const src = join(dbDir, "cookies.sqlite");
-    if (!existsSync(src)) return Promise.resolve(null);
-    const scratch = mkdtempSync(join(tmpdir(), "oc-cookies-"));
-    const dest = join(scratch, "cookies.sqlite");
-    let cleaned = false;
-    const cleanup = () => {
-      if (cleaned) return;
-      cleaned = true;
-      try {
-        rmSync(scratch, { recursive: true, force: true });
-      } catch {
-        /* best effort */
-      }
-    };
-    // Snapshot the live Firefox DB via sqlite's backup API. We open the source
-    // with immutable=1 so sqlite takes NO lock; Firefox holds a persistent lock
-    // on this file, so a normal .backup fails with "database is locked". This
-    // reads through the sqlite engine (a consistent point-in-time snapshot) and
-    // never copies the user's browser DB files by hand.
-    try {
-      execFileSync("/usr/bin/sqlite3", [`file:${src}?mode=ro&immutable=1`, ".backup " + dest], {
-        timeout: 15_000,
-        killSignal: "SIGKILL",
-      });
-    } catch {
-      cleanup();
-      return Promise.resolve(null);
-    }
+    if (!existsSync(src)) return null;
     const sql =
-      "SELECT name || char(9) || value FROM moz_cookies WHERE host LIKE '%opencode.ai' AND name = 'auth'";
-    return new Promise((resolve) => {
-      execFile(
-        "/usr/bin/sqlite3",
-        ["-readonly", "-noheader", dest, sql],
-        { timeout: 10_000 },
-        (error, stdout) => {
-          try {
-            if (error) return resolve(null);
-            const parts = String(stdout)
-              .trim()
-              .split("\n")
-              .map((line) => {
-                const tab = line.indexOf("\t");
-                return tab === -1 ? null : line.slice(0, tab) + "=" + line.slice(tab + 1);
-              })
-              .filter((part) => part !== null && part.includes("="));
-            resolve(parts.length > 0 ? parts.join("; ") : null);
-          } finally {
-            cleanup();
-          }
-        },
-      );
-    });
+      "SELECT name || char(9) || value FROM moz_cookies WHERE (host = 'opencode.ai' OR host LIKE '%.opencode.ai') AND name = 'auth'";
+    const raw = await sqliteSnapshotAndQuery(src, sql);
+    if (raw === null) return null;
+    const parts = String(raw)
+      .split("\n")
+      .map((line) => {
+        const tab = String(line).indexOf("\t");
+        return tab === -1 ? null : String(line).slice(0, tab) + "=" + String(line).slice(tab + 1);
+      })
+      .filter((part) => part !== null && String(part).includes("="));
+    return parts.length > 0 ? parts.join("; ") : null;
   };
 
   // Validate the cookie against the real `_server` RPC before saving.

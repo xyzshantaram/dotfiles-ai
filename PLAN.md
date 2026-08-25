@@ -14,12 +14,12 @@ them as settled. Do not re-research them.
 - `agentEvents` fuses the agent into every payload. A listener of
   `agent/request` receives `{ turn, step, signal, agent }`. A listener of
   `agent/request-error` receives `{ turn, step, provider, failure, retryPolicy,
-  signal, agent }`. Source: `dsh-agent/lib/index.js`, function `agentEvents`.
+signal, agent }`. Source: `dsh-agent/lib/index.js`, function `agentEvents`.
 - `turn` and `step` are per-agent counters on `this.phase`. Two live agents may
   hold the same pair at the same time. Source: `dsh-agent-loop/lib/index.js`
   lines 521, 533, 603.
 - Depth reads as `Math.max(agent.session.header.delegationDepth ?? 0,
-  agent.options.subagentDepth ?? 0)`. Source: `dsh-subagent/lib/index.js`
+agent.options.subagentDepth ?? 0)`. Source: `dsh-subagent/lib/index.js`
   lines 43-47.
 - `agent/request-error` must return `{ kind: "retry" }` to retry. Any other
   value throws `LlmError`. Source: `dsh-agent-loop/lib/index.js` line 662.

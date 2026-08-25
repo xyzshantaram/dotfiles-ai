@@ -12,7 +12,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#88f654b07f2b0327b8f11c3b6dc5d96ed2adb80c}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#d022d82d4a419ee2ef12f6ecb5bd95a3a436ec09}"
 
 step_install_deps() {
 	(cd "$REPO" && pnpm install)
@@ -239,8 +239,8 @@ step_report_extra_plugins() {
 		"@deepseek-ai/dsh-tool-markdown"
 		"@deepseek-ai/dsh-tool-regex"
 		"@deepseek-ai/dsh-tool-time"
-        "@deepseek-ai/dsh-compaction-basic"
-        "@deepseek-ai/dsh-llm-pi-ai"
+		"@deepseek-ai/dsh-compaction-basic"
+		"@deepseek-ai/dsh-llm-pi-ai"
 		"@dsh-external/dsh-session-search"
 		"@xgone/dsh-remote"
 		"aidos"
@@ -577,13 +577,24 @@ print(d.get('profile', {}).get('active', 'personal'))
 PY
 )"
 	cp "$HERE/home/settings.yaml" "$DSH_HOME/settings.yaml"
+	# Strip build-time modelSync timestamp: it is local state, not template (M18)
+	if rg -q "^modelSync:" "$DSH_HOME/settings.yaml"; then
+		python3 - "$DSH_HOME/settings.yaml" <<'M18PY'
+import pathlib, re, os
+p = pathlib.Path(os.environ.get("DSH_HOME", os.path.expanduser("~/.dsh")) + "/settings.yaml")
+text = p.read_text()
+text = re.sub(r"\nmodelSync:\n(?:  .*\n?)*", "\n", text)
+p.write_text(text)
+M18PY
+	fi
 	# Byte-preserving patch of the single runtime line. A full YAML round-trip
 	# would let PyYAML (YAML 1.1) rewrite the file, mangling e.g. the
 	# reasoningEfforts key `off:` into `false: null` (YAML 1.1 treats `off` as
 	# boolean), which the llm-pi-ai schema rejects and which would drop every
 	# pi-ai provider. Only touch the `profile.active` value.
 	if [ "$active" != "personal" ]; then
-		sed -i "s/^  active: personal$/  active: $active/" "$DSH_HOME/settings.yaml"
+		if ! sed -i "s/^  active: .*$/  active: $active/" "$DSH_HOME/settings.yaml"; then echo "ERROR: failed to patch active" >&2; exit 1; fi
+	if ! rg -q "^  active: $active$" "$DSH_HOME/settings.yaml"; then echo "ERROR: active patch had no effect (expected $active)" >&2; exit 1; fi
 	fi
 }
 
@@ -621,9 +632,19 @@ EOF
 # ── step table ────────────────────────────────────────────────────────────────
 # Each entry: "Human title|function_name". Numbers derive from the array, so
 # adding, removing, or reordering steps needs NO manual renumbering.
+step_check_build_drift() {
+	# Fail the sync if any committed bundle differs from a fresh build.
+	# Keeps H1 from recurring: a source fix that was not rebuilt is not deployed.
+	if ! (cd "$HERE" && node build.mjs --check 2>&1); then
+		echo "ERROR: build drift detected. Run 'node build.mjs' and commit the bundles." >&2
+		return 1
+	fi
+}
+
 STEPS=(
 	"Install repo dev deps (esbuild for the build step)|step_install_deps"
 	"Build the personal plugins|step_build_plugins"
+	"Check committed bundles are fresh|step_check_build_drift"
 	"Sync skills -> $DSH_HOME/skills|step_sync_skills"
 	"Sync AGENTS.md -> $DSH_HOME/AGENTS.md|step_sync_agents_md"
 	"Sync dsh-better-edit guidance overrides|step_sync_better_edit_guidance"

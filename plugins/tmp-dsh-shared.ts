@@ -148,6 +148,7 @@ export function apply(ctx: Context): void {
   const wrappedProto = proto?.confine;
   ctx.effect(() => () => {
     if (sandbox.confine === wrappedInstance) sandbox.confine = original;
-    if (proto !== null && protoOriginal !== null && proto.confine === wrappedProto) proto.confine = protoOriginal;
+    if (proto !== null && protoOriginal !== null && proto.confine === wrappedProto)
+      proto.confine = protoOriginal;
   });
 }

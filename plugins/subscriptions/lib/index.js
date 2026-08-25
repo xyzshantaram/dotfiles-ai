@@ -520,7 +520,7 @@ async function fetchServerText(url, options) {
 }
 function looksSignedOut(text) {
   const lower = String(text).toLowerCase();
-  return lower.includes("login") || lower.includes("sign in") || lower.includes("auth/authorize");
+  return lower.includes("/login") || lower.includes("sign in") || lower.includes("/auth/authorize") || lower.includes("sign-in");
 }
 function parseWorkspaceId(text) {
   const match = /id\s*:\s*"(wrk_[^"]+)"/.exec(text);
@@ -931,8 +931,7 @@ function apply(ctx, config) {
         sendJson(res, 400, { error: "month and year query params required" });
         return;
       }
-      const authHeader = req.headers && typeof req.headers.authorization === "string" ? req.headers.authorization : "";
-      const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : credentials === void 0 ? null : (await credentials.resolve("DEEPSEEK_PLATFORM_TOKEN"))?.value;
+      const token = credentials === void 0 ? null : (await credentials.resolve("DEEPSEEK_PLATFORM_TOKEN"))?.value;
       if (!token) {
         sendJson(res, 200, {
           error: "DEEPSEEK_PLATFORM_TOKEN not configured; sign in to platform.deepseek.com"
@@ -983,8 +982,7 @@ function apply(ctx, config) {
         sendJson(res, 400, { error: "month and year query params required" });
         return;
       }
-      const authHeader = req.headers && typeof req.headers.authorization === "string" ? req.headers.authorization : "";
-      const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : credentials === void 0 ? null : (await credentials.resolve("DEEPSEEK_PLATFORM_TOKEN"))?.value;
+      const token = credentials === void 0 ? null : (await credentials.resolve("DEEPSEEK_PLATFORM_TOKEN"))?.value;
       if (!token) {
         sendJson(res, 200, {
           error: "DEEPSEEK_PLATFORM_TOKEN not configured; sign in to platform.deepseek.com"
@@ -1008,7 +1006,7 @@ function apply(ctx, config) {
       sendJson(res, 200, { error: error instanceof Error ? error.message : String(error) });
     }
   };
-  const firefoxDeepSeekProfileDirs = () => {
+  const firefoxProfileDirs = () => {
     const root = join(homedir(), ".mozilla", "firefox");
     if (!existsSync(root)) return [];
     try {
@@ -1017,11 +1015,9 @@ function apply(ctx, config) {
       return [];
     }
   };
-  const readDeepSeekToken = (profileDir) => {
-    const storeDir = join(profileDir, "storage", "default", "https+++platform.deepseek.com", "ls");
-    const dbPath = join(storeDir, "data.sqlite");
-    if (!existsSync(dbPath)) return Promise.resolve(null);
-    const scratch = mkdtempSync(join(tmpdir(), "ds-token-"));
+  const firefoxDeepSeekProfileDirs = firefoxProfileDirs;
+  async function sqliteSnapshotAndQuery(dbPath, sql, timeoutMs = 1e4) {
+    const scratch = mkdtempSync(join(tmpdir(), "ff-sqlite-"));
     const dest = join(scratch, "data.sqlite");
     let cleaned = false;
     const cleanup = () => {
@@ -1033,46 +1029,54 @@ function apply(ctx, config) {
       }
     };
     try {
-      execFileSync("/usr/bin/sqlite3", [`file:${dbPath}?mode=ro&immutable=1`, ".backup " + dest], {
+      execFileSync("sqlite3", [`file:${dbPath}?mode=ro&immutable=1`, ".backup " + dest], {
         timeout: 15e3,
         killSignal: "SIGKILL"
       });
     } catch {
       cleanup();
-      return Promise.resolve(null);
+      return null;
     }
-    const sql = "SELECT hex(value), compression_type FROM data WHERE key = 'userToken' LIMIT 1";
     return new Promise((resolve) => {
       execFile(
-        "/usr/bin/sqlite3",
+        "sqlite3",
         ["-readonly", "-noheader", dest, sql],
-        { timeout: 1e4 },
+        { timeout: timeoutMs },
         (error, stdout) => {
           try {
             if (error) return resolve(null);
             const raw = String(stdout).trim();
             if (!raw) return resolve(null);
-            const [hex, compressionType] = raw.split("|");
-            if (compressionType !== "0" && compressionType !== "1") return resolve(null);
-            let token;
-            try {
-              token = compressionType === "1" ? (0, import_snappyjs.uncompress)(Buffer.from(hex, "hex")).toString("utf8") : Buffer.from(hex, "hex").toString("utf8");
-            } catch {
-              return resolve(null);
-            }
-            try {
-              const parsed = JSON.parse(token);
-              if (parsed !== null && typeof parsed === "object" && typeof parsed.value === "string")
-                token = parsed.value;
-            } catch {
-            }
-            resolve(token);
+            resolve(raw);
           } finally {
             cleanup();
           }
         }
       );
     });
+  }
+  const readDeepSeekToken = async (profileDir) => {
+    const storeDir = join(profileDir, "storage", "default", "https+++platform.deepseek.com", "ls");
+    const dbPath = join(storeDir, "data.sqlite");
+    if (!existsSync(dbPath)) return null;
+    const sql = "SELECT hex(value), compression_type FROM data WHERE key = 'userToken' LIMIT 1";
+    const raw = await sqliteSnapshotAndQuery(dbPath, sql);
+    if (raw === null) return null;
+    const [hex, compressionType] = String(raw).split("|");
+    if (compressionType !== "0" && compressionType !== "1") return null;
+    let token;
+    try {
+      token = compressionType === "1" ? (0, import_snappyjs.uncompress)(Buffer.from(hex, "hex")).toString("utf8") : Buffer.from(hex, "hex").toString("utf8");
+    } catch {
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(token);
+      if (parsed !== null && typeof parsed === "object" && typeof parsed.value === "string")
+        token = parsed.value;
+    } catch {
+    }
+    return token;
   };
   const extractDeepSeekToken = async () => {
     for (const dir of firefoxDeepSeekProfileDirs()) {
@@ -1117,58 +1121,17 @@ function apply(ctx, config) {
       sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) });
     }
   };
-  const firefoxProfileDirs = () => {
-    const root = join(homedir(), ".mozilla", "firefox");
-    if (!existsSync(root)) return [];
-    try {
-      return readdirSync(root, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => join(root, entry.name));
-    } catch {
-      return [];
-    }
-  };
-  const readCookieString = (dbDir) => {
+  const readCookieString = async (dbDir) => {
     const src = join(dbDir, "cookies.sqlite");
-    if (!existsSync(src)) return Promise.resolve(null);
-    const scratch = mkdtempSync(join(tmpdir(), "oc-cookies-"));
-    const dest = join(scratch, "cookies.sqlite");
-    let cleaned = false;
-    const cleanup = () => {
-      if (cleaned) return;
-      cleaned = true;
-      try {
-        rmSync(scratch, { recursive: true, force: true });
-      } catch {
-      }
-    };
-    try {
-      execFileSync("/usr/bin/sqlite3", [`file:${src}?mode=ro&immutable=1`, ".backup " + dest], {
-        timeout: 15e3,
-        killSignal: "SIGKILL"
-      });
-    } catch {
-      cleanup();
-      return Promise.resolve(null);
-    }
-    const sql = "SELECT name || char(9) || value FROM moz_cookies WHERE host LIKE '%opencode.ai' AND name = 'auth'";
-    return new Promise((resolve) => {
-      execFile(
-        "/usr/bin/sqlite3",
-        ["-readonly", "-noheader", dest, sql],
-        { timeout: 1e4 },
-        (error, stdout) => {
-          try {
-            if (error) return resolve(null);
-            const parts = String(stdout).trim().split("\n").map((line) => {
-              const tab = line.indexOf("	");
-              return tab === -1 ? null : line.slice(0, tab) + "=" + line.slice(tab + 1);
-            }).filter((part) => part !== null && part.includes("="));
-            resolve(parts.length > 0 ? parts.join("; ") : null);
-          } finally {
-            cleanup();
-          }
-        }
-      );
-    });
+    if (!existsSync(src)) return null;
+    const sql = "SELECT name || char(9) || value FROM moz_cookies WHERE (host = 'opencode.ai' OR host LIKE '%.opencode.ai') AND name = 'auth'";
+    const raw = await sqliteSnapshotAndQuery(src, sql);
+    if (raw === null) return null;
+    const parts = String(raw).split("\n").map((line) => {
+      const tab = String(line).indexOf("	");
+      return tab === -1 ? null : String(line).slice(0, tab) + "=" + String(line).slice(tab + 1);
+    }).filter((part) => part !== null && String(part).includes("="));
+    return parts.length > 0 ? parts.join("; ") : null;
   };
   const extractCookie = async () => {
     for (const dir of firefoxProfileDirs()) {

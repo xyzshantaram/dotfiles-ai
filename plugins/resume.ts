@@ -75,7 +75,13 @@ function eventText(ev: any): string {
   if (t === "tool/result") {
     const r = d?.result;
     if (typeof r === "string") return r;
-    if (r && typeof r === "object") { try { return JSON.stringify(r).slice(0, 200); } catch { return "[unserializable result]"; } }
+    if (r && typeof r === "object") {
+      try {
+        return JSON.stringify(r).slice(0, 200);
+      } catch {
+        return "[unserializable result]";
+      }
+    }
     return "";
   }
   if (t === "compaction/summary")

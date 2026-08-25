@@ -389,19 +389,16 @@ function stripAnsi(text) {
 // tab counts as one indent unit, same as one space.
 function deIndent(text) {
   if (typeof text !== "string" || text === "") return text;
-  var lines = text.split("\n");
+  var expanded = text.replace(/\t/g, "    ");
+  var lines = expanded.split("\n");
   var min = -1;
   for (var i = 0; i < lines.length; i++) {
     if (lines[i].trim() === "") continue;
     var count = 0;
-    while (
-      count < lines[i].length &&
-      (lines[i].charAt(count) === " " || lines[i].charAt(count) === "\t")
-    )
-      count++;
+    while (count < lines[i].length && lines[i].charAt(count) === " ") count++;
     if (min === -1 || count < min) min = count;
   }
-  if (min <= 0) return text;
+  if (min <= 0) return expanded;
   var out = [];
   for (var i = 0; i < lines.length; i++) {
     out.push(lines[i].trim() === "" ? "" : lines[i].slice(min));

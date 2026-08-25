@@ -22,6 +22,7 @@ const cssTextPlugin = {
 };
 
 const here = dirname(fileURLToPath(import.meta.url));
+const isCheckMode = process.argv.includes("--check");
 
 const entries = [
   ["plugins/bash-guard.ts", "plugins/bash-guard.js"],
@@ -199,3 +200,19 @@ await build({
   outfile: join(here, "plugins/profiles-client/lib/index.js"),
   logLevel: "info",
 });
+
+if (isCheckMode) {
+  const { execSync } = await import("node:child_process");
+  try {
+    execSync("git diff --exit-code -- plugins/*.js plugins/*/dist/** plugins/*/lib/**", {
+      cwd: here,
+      stdio: "inherit",
+    });
+    console.log("build check: no drift");
+  } catch {
+    console.error(
+      "build check FAILED: committed bundles differ from fresh build. Run node build.mjs + ` and commit.",
+    );
+    process.exit(2);
+  }
+}

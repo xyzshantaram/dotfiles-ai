@@ -256,7 +256,12 @@ interface MessageContext {
 
 /** Substitute {command}, {name}, {matches}, {reason} in a template. */
 function formatMessage(template: string, ctx: MessageContext): string {
-  const matchesText = ctx.matches.map((m) => { const sub = m.subcommand ? ` (${m.subcommand})` : ""; return `  • ${m.name}${sub}: ${m.reason}`; }).join("\n");
+  const matchesText = ctx.matches
+    .map((m) => {
+      const sub = m.subcommand ? ` (${m.subcommand})` : "";
+      return `  • ${m.name}${sub}: ${m.reason}`;
+    })
+    .join("\n");
   const primary = ctx.matches[0];
   return template.replace(/(\{command\}|\{matches\}|\{name\}|\{reason\})/g, (token) => {
     if (token === "{command}") return ctx.command;
@@ -529,7 +534,15 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
     let profile = "none";
     const safePaths: string[] = ["/tmp/dsh"];
     let workspaceRoot: string | undefined;
-    const aidos = (ctx as unknown as { get(name: string): unknown }).get("aidos") as | { bashContext(agent: unknown): { profile: string; scratchDir: string; workspaceRoot: string } } | undefined;
+    const aidos = (ctx as unknown as { get(name: string): unknown }).get("aidos") as
+      | {
+          bashContext(agent: unknown): {
+            profile: string;
+            scratchDir: string;
+            workspaceRoot: string;
+          };
+        }
+      | undefined;
     if (aidos && agent) {
       try {
         const bc = aidos.bashContext(agent);

@@ -111,7 +111,10 @@ function parseToolsGated(frontmatter: string): string[] {
   if (afterColon.startsWith("[")) {
     const inner = afterColon.slice(1, afterColon.lastIndexOf("]"));
     if (inner.trim() === "") return [];
-    return inner.split(",").map((e) => e.trim().replace(/^["']|["']$/g, "")).filter((e) => e.length > 0);
+    return inner
+      .split(",")
+      .map((e) => e.trim().replace(/^["']|["']$/g, ""))
+      .filter((e) => e.length > 0);
   }
   if (afterColon.length > 0) {
     const bare = afterColon.replace(/^["']|["']$/g, "").trim();
@@ -127,7 +130,9 @@ function parseToolsGated(frontmatter: string): string[] {
     else break;
   }
   if (block.length === 0) {
-    console.warn("[skill-gate] tools-gated key with no value and no block list; gating nothing for this skill");
+    console.warn(
+      "[skill-gate] tools-gated key with no value and no block list; gating nothing for this skill",
+    );
   }
   return block.filter((e) => e.length > 0);
 }
