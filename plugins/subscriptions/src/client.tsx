@@ -124,7 +124,7 @@ function renderTelemetry(t) {
   parts.push(usd);
   parts.push(fmtCount(totalTokens) + " tokens");
   if (typeof usage.avgCacheHitRate === "number")
-    parts.push("cache " + Math.round(usage.avgCacheHitRate * 100) + "%");
+    parts.push("cache " + (usage.avgCacheHitRate * 100).toFixed(2) + "%");
   if (typeof t.errorCount === "number" && t.errorCount > 0) parts.push(t.errorCount + " errors");
   return parts.join(" · ");
 }
@@ -256,14 +256,14 @@ function buildRows(defs, windows, labelOf?) {
         <div className="ocgs-row-label">
           <b>{label}</b>
           {status ? <span className="ocgs-stale">{"resets in " + status}</span> : null}
-          <b>{percent + "%"}</b>
+          <b>{percent.toFixed(2) + "%"}</b>
         </div>
         <div className="ocgs-meta">
           <div className="ocgs-track">
             <div
               className="ocgs-fill"
               style={{
-                width: percent + "%",
+                width: percent.toFixed(2) + "%",
                 background: fillColor(percent),
               }}
             />
@@ -290,10 +290,11 @@ function renderDsBalance(info) {
 
 /** DeepSeek dashboard: big balance + monthly cost + token breakdown. */
 function renderDsDashboard(bal, amount, cost) {
-  var total = parseFloat(bal.total_balance);
-  var granted = parseFloat(bal.granted_balance);
-  var topped = parseFloat(bal.topped_up_balance);
-  var currency = bal.currency || "USD";
+  var balObj = bal && typeof bal === "object" ? bal : {};
+  var total = parseFloat(balObj.total_balance);
+  var granted = parseFloat(balObj.granted_balance);
+  var topped = parseFloat(balObj.topped_up_balance);
+  var currency = balObj.currency || "USD";
 
   // Parse monthly usage amount (tokens)
   var inTokens = 0,
@@ -394,10 +395,12 @@ function renderDsDashboard(bal, amount, cost) {
 
   return (
     <div className="ds-dashboard">
-      <div className="ds-hero">
-        <div className="ds-hero-total">{heroLines[0]}</div>
-        <div className="ds-hero-breakdown">{subLines.join(" · ")}</div>
-      </div>
+      {heroLines.length > 0 ? (
+        <div className="ds-hero">
+          <div className="ds-hero-total">{heroLines[0]}</div>
+          <div className="ds-hero-breakdown">{subLines.join(" · ")}</div>
+        </div>
+      ) : null}
       <div className="ds-usage-grid">{usageCards}</div>
     </div>
   );
@@ -1011,11 +1014,17 @@ function makePanel(ctx, config) {
           <div className="ocgs-section">
             <h4 className="ocgs-section-title">DeepSeek</h4>
             {ds && ds.error ? <div className="dsp-err">{"DeepSeek: " + ds.error}</div> : null}
-            {ds &&
-            ds.data &&
-            Array.isArray(ds.data.balance_infos) &&
-            ds.data.balance_infos.length > 0
-              ? renderDsDashboard(ds.data.balance_infos[0], dsUsageAmount, dsUsageCost)
+            {ds || dsUsageAmount || dsUsageCost
+              ? renderDsDashboard(
+                  ds &&
+                    ds.data &&
+                    Array.isArray(ds.data.balance_infos) &&
+                    ds.data.balance_infos.length > 0
+                    ? ds.data.balance_infos[0]
+                    : null,
+                  dsUsageAmount,
+                  dsUsageCost,
+                )
               : null}
             <div className="ocgs-cookie">
               <button className="ocgs-btn" disabled={dsToken.busy} onClick={fetchDsToken}>

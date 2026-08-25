@@ -1,7 +1,7 @@
 /*
  * DESIGN.md control component rules (§6–§14), ported verbatim from the
  * CONTROLS_CSS template literal in plugins/design-system.ts. Kept as a
- * reference asset only: no bundle consumes it, so it is never injected.
+ * reference asset only:no bundle consumes it, so it is never injected.
  */
 .setting-card {
   background: var(--surface);
@@ -9,31 +9,31 @@
   border-radius: var(--radius-lg);
   padding: var(--space-3);
   display: grid;
-  grid-template-columns: 28px 1fr;
-  gap: 20px;
+  grid-template-columns: 1.75rem 1fr;
+  gap: 1.25rem;
   align-items: start;
 }
 .setting-checkbox {
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
-  border-radius: 3px;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: 0 0 1.75rem;
+  border-radius: 0.1875rem;
 }
 .segmented-control {
   display: flex;
-  padding: 4px;
+  padding: 0.25rem;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 0.875rem;
   background: var(--surface);
 }
 .segment {
-  min-width: 175px;
-  height: 48px;
+  min-width: 10.9375rem;
+  height: 3rem;
   border: 0;
-  border-radius: 10px;
+  border-radius: 0.625rem;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 20px;
+  font-size: 1.25rem;
 }
 .segment[data-active="true"] {
   background: var(--surface-active);
@@ -43,42 +43,42 @@
 .control-list {
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 0.875rem;
   background: var(--surface);
 }
 .control-list-row {
-  min-height: 64px;
-  padding: 0 20px;
+  min-height: 4rem;
+  padding: 0 1.25rem;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 0.75rem;
 }
 .control-list-row + .control-list-row {
-  border-top: 1px solid var(--border-subtle);
+  border-top: 0.0625rem solid var(--border-subtle);
 }
 .pill {
-  height: 36px;
-  padding-inline: 10px;
+  height: 2.25rem;
+  padding-inline: 0.625rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-secondary);
-  font-size: 16px;
+  font-size: 1rem;
 }
 .pill[data-active="true"] {
   background: var(--surface-active);
   color: var(--text-primary);
 }
 .icon-button {
-  width: 40px;
-  height: 40px;
+  width: 2.5rem;
+  height: 2.5rem;
   display: inline-grid;
   place-items: center;
   border: 0;
-  border-radius: 8px;
+  border-radius: 0.5rem;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 28px;
+  font-size: 1.75rem;
 }
 .icon-button:hover {
   background: var(--surface-hover);
@@ -86,19 +86,19 @@
 }
 .mode-switch {
   display: inline-flex;
-  padding: 4px;
+  padding: 0.25rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface);
 }
 .mode-switch > button {
-  height: 44px;
-  padding-inline: 32px;
+  height: 2.75rem;
+  padding-inline: 2rem;
   border: 0;
-  border-radius: 9px;
+  border-radius: 0.5625rem;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 18px;
+  font-size: 1.125rem;
 }
 .mode-switch > button[data-active="true"] {
   background: var(--surface-active);
@@ -106,14 +106,14 @@
   font-weight: 600;
 }
 .text-input {
-  height: 56px;
+  height: 3.5rem;
   width: 100%;
-  padding-inline: 16px;
+  padding-inline: 1rem;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 0.875rem;
   background: var(--surface);
   color: var(--text-primary);
-  font-size: 18px;
+  font-size: 1.125rem;
   outline: none;
 }
 .text-input::placeholder {
@@ -123,13 +123,13 @@
   border-color: var(--border-focus);
 }
 .primary-button {
-  height: 56px;
-  padding-inline: 20px;
+  height: 3.5rem;
+  padding-inline: 1.25rem;
   border: 0;
-  border-radius: 28px;
+  border-radius: 1.75rem;
   background: #adb2b8;
   color: #232324;
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 600;
 }
 .primary-button:disabled {
@@ -139,7 +139,7 @@
 .checkbox-field {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 0.75rem;
   color: var(--text-secondary);
-  font-size: 18px;
+  font-size: 1.125rem;
 }

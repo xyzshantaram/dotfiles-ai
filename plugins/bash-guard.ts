@@ -159,7 +159,9 @@ async function loadRules(ctx: Context, dir: string): Promise<Map<string, GuardEn
           for (const d of r.drop) {
             if (typeof d !== "string" || d.length === 0) throw new Error("bad rewrite drop entry");
           }
-          const cleanRewrite: RewriteRule = { drop: r.drop.filter((d) => typeof d === "string" && d.length > 0) };
+          const cleanRewrite: RewriteRule = {
+            drop: r.drop.filter((d) => typeof d === "string" && d.length > 0),
+          };
           if (r.value !== undefined) {
             if (typeof r.value !== "boolean") throw new Error("bad rewrite value");
             cleanRewrite.value = r.value;
@@ -289,7 +291,10 @@ async function evaluate(
       if (rule === undefined) return undefined;
       return { name, rule, ref, verdict: verdictFor(rule, ref) };
     })
-    .filter((h): h is { name: string; rule: GuardEntry; ref: CommandRef; verdict: Verdict } => h !== undefined);
+    .filter(
+      (h): h is { name: string; rule: GuardEntry; ref: CommandRef; verdict: Verdict } =>
+        h !== undefined,
+    );
 
   // Rewrite pass — only at top level (depth 0), top-level commands only
   if (depth === 0 && hits.some((h) => h.rule.rewrites)) {

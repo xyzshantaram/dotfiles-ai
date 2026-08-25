@@ -941,7 +941,7 @@ function apply(ctx, config) {
           cache_write_tokens: cacheWrite
         };
       });
-      sendJson(res, 200, { data: transformed });
+      sendJson(res, 200, transformed);
     } catch (error) {
       sendJson(res, 200, { error: error instanceof Error ? error.message : String(error) });
     }
@@ -975,7 +975,7 @@ function apply(ctx, config) {
         }
         return { model: m.model || "(unknown)", cost };
       }).filter((m) => m.cost > 0);
-      sendJson(res, 200, { data: transformed });
+      sendJson(res, 200, transformed);
     } catch (error) {
       sendJson(res, 200, { error: error instanceof Error ? error.message : String(error) });
     }

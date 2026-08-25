@@ -159,7 +159,7 @@ var STYLE_TAG_ID = "tool-render/client.module.css";
 // the hand-rolled palette this bundle used to carry.
 var HLJS_THEME_CSS = [
   "pre code.hljs{display:block;overflow-x:auto;padding:1em}",
-  "code.hljs{padding:3px 5px}",
+  "code.hljs{padding:0.1875rem 0.3125rem}",
   ".hljs{color:#c9d1d9;background:#0d1117}",
   ".hljs-doctag,.hljs-keyword,.hljs-meta .hljs-keyword,.hljs-template-tag,.hljs-template-variable,.hljs-type,.hljs-variable.language_{color:#ff7b72}",
   ".hljs-title,.hljs-title.class_,.hljs-title.class_.inherited__,.hljs-title.function_{color:#d2a8ff}",

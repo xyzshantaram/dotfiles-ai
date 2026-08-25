@@ -651,8 +651,8 @@ export function apply(ctx, config) {
       const token = authHeader.startsWith("Bearer ")
         ? authHeader.slice(7).trim()
         : credentials === undefined
-        ? null
-        : (await credentials.resolve("DEEPSEEK_PLATFORM_TOKEN"))?.value;
+          ? null
+          : (await credentials.resolve("DEEPSEEK_PLATFORM_TOKEN"))?.value;
       if (!token) {
         sendJson(res, 200, {
           error: "DEEPSEEK_PLATFORM_TOKEN not configured; sign in to platform.deepseek.com",
@@ -665,7 +665,10 @@ export function apply(ctx, config) {
       const total = Array.isArray(biz.total) ? biz.total : [];
       const transformed = total.map((m) => {
         const usage = Array.isArray(m.usage) ? m.usage : [];
-        let input = 0, output = 0, cacheRead = 0, cacheWrite = 0;
+        let input = 0,
+          output = 0,
+          cacheRead = 0,
+          cacheWrite = 0;
         for (const item of usage) {
           const n = Number(item.amount) || 0;
           switch (item.type) {
@@ -691,7 +694,7 @@ export function apply(ctx, config) {
           cache_write_tokens: cacheWrite,
         };
       });
-      sendJson(res, 200, { data: transformed });
+      sendJson(res, 200, transformed);
     } catch (error) {
       sendJson(res, 200, { error: error instanceof Error ? error.message : String(error) });
     }
@@ -713,8 +716,8 @@ export function apply(ctx, config) {
       const token = authHeader.startsWith("Bearer ")
         ? authHeader.slice(7).trim()
         : credentials === undefined
-        ? null
-        : (await credentials.resolve("DEEPSEEK_PLATFORM_TOKEN"))?.value;
+          ? null
+          : (await credentials.resolve("DEEPSEEK_PLATFORM_TOKEN"))?.value;
       if (!token) {
         sendJson(res, 200, {
           error: "DEEPSEEK_PLATFORM_TOKEN not configured; sign in to platform.deepseek.com",
@@ -724,17 +727,19 @@ export function apply(ctx, config) {
       const raw = await dsUsageCostOnce(token, month, year);
       // Transform nested cost shape -> flat array with cost per model
       const bizRaw = raw?.data?.biz_data;
-      const biz = Array.isArray(bizRaw) ? (bizRaw[0] || {}) : (bizRaw || {});
+      const biz = Array.isArray(bizRaw) ? bizRaw[0] || {} : bizRaw || {};
       const total = Array.isArray(biz.total) ? biz.total : [];
-      const transformed = total.map((m) => {
-        const usage = Array.isArray(m.usage) ? m.usage : [];
-        let cost = 0;
-        for (const item of usage) {
-          if (item.type !== "REQUEST") cost += Number(item.amount) || 0;
-        }
-        return { model: m.model || "(unknown)", cost };
-      }).filter((m) => m.cost > 0);
-      sendJson(res, 200, { data: transformed });
+      const transformed = total
+        .map((m) => {
+          const usage = Array.isArray(m.usage) ? m.usage : [];
+          let cost = 0;
+          for (const item of usage) {
+            if (item.type !== "REQUEST") cost += Number(item.amount) || 0;
+          }
+          return { model: m.model || "(unknown)", cost };
+        })
+        .filter((m) => m.cost > 0);
+      sendJson(res, 200, transformed);
     } catch (error) {
       sendJson(res, 200, { error: error instanceof Error ? error.message : String(error) });
     }
