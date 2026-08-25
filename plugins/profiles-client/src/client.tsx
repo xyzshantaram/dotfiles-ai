@@ -84,15 +84,19 @@ window.__ModuleLoader__.load({
       "menu.profiles": "Profiles",
       "menu.default": "Default",
       "menu.models": "Models",
+      "menu.searchPlaceholder": "Search models\u2026",
+      "menu.noResults": "No models match",
     };
 
     /** Simplified Chinese dictionary, checked complete against the en key set. */
     var ZH = {
-      "seat.fallback": "模型",
-      "seat.aria": "选择模型或配置",
-      "menu.profiles": "配置",
-      "menu.default": "默认",
-      "menu.models": "模型",
+      "seat.fallback": "\u6a21\u578b",
+      "seat.aria": "\u9009\u62e9\u6a21\u578b\u6216\u914d\u7f6e",
+      "menu.profiles": "\u914d\u7f6e",
+      "menu.default": "\u9ed8\u8ba4",
+      "menu.models": "\u6a21\u578b",
+      "menu.searchPlaceholder": "\u641c\u7d22\u6a21\u578b\u2026",
+      "menu.noResults": "\u65e0\u5339\u914d\u6a21\u578b",
     };
 
     /** Static stand-in scope when the settings transport is unavailable. */
@@ -243,9 +247,21 @@ window.__ModuleLoader__.load({
         var open = openState[0];
         var setOpen = openState[1];
         var rootRef = useRef(null);
+        var searchState = useState("");
+        var modelQuery = searchState[0];
+        var setModelQuery = searchState[1];
+        var searchInputRef = useRef(null);
         var profileConfigState = useState(null);
         var profileConfig = profileConfigState[0];
         var setProfileConfig = profileConfigState[1];
+
+        useEffect(function () {
+          if (open) {
+            if (searchInputRef.current) searchInputRef.current.focus();
+          } else {
+            setModelQuery("");
+          }
+        }, [open]);
 
         useEffect(
           function () {
@@ -330,23 +346,24 @@ window.__ModuleLoader__.load({
           return { provider: provider, model: model };
         };
 
-        /** Model options grouped by provider, pretty labels, in catalog order. */
+        /** Model options grouped by provider, pretty labels, in catalog order; filtered by search. */
+        var trimmedQuery = modelQuery.trim().toLowerCase();
         var modelGroups = [];
         for (var g = 0; g < state.groups.length; g++) {
           var group = state.groups[g];
           if (group.models === void 0 || group.models.length === 0) continue;
+          var providerLabel = typeof group.name === "string" && group.name !== "" ? group.name : group.id;
           var models = [];
           for (var m = 0; m < group.models.length; m++) {
-            models.push({
-              id: group.models[m].id,
-              name: group.models[m].name,
-            });
+            var gm = group.models[m];
+            if (trimmedQuery !== "") {
+              var hay = (gm.name + " " + gm.id + " " + group.id + " " + providerLabel).toLowerCase();
+              if (hay.indexOf(trimmedQuery) === -1) continue;
+            }
+            models.push({ id: gm.id, name: gm.name });
           }
-          modelGroups.push({
-            id: group.id,
-            label: typeof group.name === "string" && group.name !== "" ? group.name : group.id,
-            models: models,
-          });
+          if (models.length === 0) continue;
+          modelGroups.push({ id: group.id, label: providerLabel, models: models });
         }
 
         var pick = function (selection) {
@@ -475,46 +492,62 @@ window.__ModuleLoader__.load({
                 ) : null}
                 <div>
                   <div className="dsp-section-title">{t("menu.models")}</div>
+                  <input
+                    ref={searchInputRef}
+                    className="profiles-client-search"
+                    type="search"
+                    placeholder={t("menu.searchPlaceholder")}
+                    value={modelQuery}
+                    aria-label={t("menu.searchPlaceholder")}
+                    onChange={function (event) { setModelQuery(event.target.value); }}
+                    onKeyDown={function (event) { event.stopPropagation(); }}
+                    onMouseDown={function (event) { event.stopPropagation(); }}
+                  />
                   {state.status === "error" && state.error ? (
                     <div className="profiles-client-strip">{state.error}</div>
                   ) : null}
-                  {modelGroups.map(function (grp) {
-                    return (
-                      <div key={grp.id}>
-                        <div className="dsp-section-title">{grp.label}</div>
-                        {grp.models.map(function (row) {
-                          var isActive =
-                            current !== void 0 &&
-                            current !== null &&
-                            current.provider === grp.id &&
-                            current.model === row.id;
-                          return (
-                            <div key={grp.id + "/" + row.id} className="profiles-client-model-row">
-                              <button
-                                type="button"
-                                className="profiles-client-option"
-                                onClick={function () {
-                                  pick({ provider: grp.id, model: row.id });
-                                }}
-                              >
-                                <span className="profiles-client-option-copy">
-                                  <span className="profiles-client-option-name profiles-client-option-model">
-                                    {row.name}
+                  {modelGroups.length === 0 && trimmedQuery !== "" ? (
+                    <div className="profiles-client-strip">{t("menu.noResults")}</div>
+                  ) : (
+                    modelGroups.map(function (grp) {
+                      return (
+                        <div key={grp.id}>
+                          <div className="dsp-section-title">{grp.label}</div>
+                          {grp.models.map(function (row) {
+                            var isActive =
+                              current !== void 0 &&
+                              current !== null &&
+                              current.provider === grp.id &&
+                              current.model === row.id;
+                            return (
+                              <div key={grp.id + "/" + row.id} className="profiles-client-model-row">
+                                <button
+                                  type="button"
+                                  className="profiles-client-option"
+                                  onClick={function () {
+                                    pick({ provider: grp.id, model: row.id });
+                                  }}
+                                >
+                                  <span className="profiles-client-option-copy">
+                                    <span className="profiles-client-option-name profiles-client-option-model">
+                                      {row.name}
+                                    </span>
+                                    <span className="profiles-client-option-detail">{grp.label}</span>
                                   </span>
-                                  <span className="profiles-client-option-detail">{grp.label}</span>
-                                </span>
-                                {isActive ? (
-                                  <span className="profiles-client-check" aria-hidden={true}>
-                                    ✓
-                                  </span>
-                                ) : null}
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
+                                  {isActive ? (
+                                    <span className="profiles-client-check" aria-hidden={true}>
+                                      &#x2713;
+                                    </span>
+                                  ) : null}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })
+                  )}
+
                 </div>
               </div>
             ) : null}
