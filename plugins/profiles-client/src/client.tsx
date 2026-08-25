@@ -50,11 +50,11 @@ window.__ModuleLoader__.load({
   id: "profiles-client",
   factory: function (require) {
     var module = { exports: {} };
-    var exports = module.exports;
 
     /** React comes from the browser module table. */
     var react = require("react");
     var useSyncExternalStore = react.useSyncExternalStore;
+    var useCallback = react.useCallback;
     var useState = react.useState;
     var useEffect = react.useEffect;
     var useRef = react.useRef;
@@ -63,6 +63,8 @@ window.__ModuleLoader__.load({
     var PLUGIN_NAME = "profiles-client";
     /** Locale namespace owned by this bundle. */
     var LOCALE_NS = "profiles-client";
+    function emptySubscribe() { return function () {}; }
+    function emptySnapshot() { return null; }
     /** Slot keys this bundle registers over (shipped owners keep default 0). */
     var MODEL_SEAT_SLOT = "conversation.input.model";
     /** Lower than the shipped seat's default 0; lowest live entry renders. */
@@ -170,8 +172,6 @@ window.__ModuleLoader__.load({
         return steps.length > 0 ? steps.join(", ") : "(empty)";
       }
       if (field !== void 0 && field !== null && Array.isArray(field.routes)) {
-        var name = chainNameForRoutes(field.routes, chains);
-        if (name !== void 0) return name;
         var count = field.routes.length;
         return "inline (" + count + " route" + (count === 1 ? "" : "s") + ")";
       }
@@ -233,18 +233,10 @@ window.__ModuleLoader__.load({
         var select = props.select;
         var t = props.t;
 
-        var state = useSyncExternalStore(
-          function (fn) {
-            return directory.subscribe(fn);
-          },
-          function () {
-            return directory.getSnapshot();
-          },
-        );
-        var profileSnap = useSyncExternalStore(
-          profileScope.store.subscribe,
-          profileScope.store.getSnapshot,
-        );
+        var seatSubscribe = useCallback(function (fn) { return directory.subscribe(fn); }, [directory]);
+        var seatGetSnapshot = useCallback(function () { return directory.getSnapshot(); }, [directory]);
+        var state = useSyncExternalStore(seatSubscribe, seatGetSnapshot);
+        var profileSnap = useSyncExternalStore(profileScope.store.subscribe, profileScope.store.getSnapshot);
         var profileValue = profileSnap.value;
 
         var openState = useState(false);
@@ -560,7 +552,9 @@ window.__ModuleLoader__.load({
     function cloneConfig(config) {
       function cloneRoutes(routes) {
         return (routes || []).map(function (r) {
-          return { provider: r.provider, model: r.model };
+          var out: Record<string, unknown> = { provider: (r as unknown as Record<string, unknown>).provider as string, model: (r as unknown as Record<string, unknown>).model as string };
+          if (typeof (r as unknown as Record<string, unknown>).reasoningEffort === "string" && ((r as unknown as Record<string, unknown>).reasoningEffort as string) !== "") out.reasoningEffort = (r as unknown as Record<string, unknown>).reasoningEffort as string;
+          return out;
         });
       }
       function cloneEntry(entry) {
@@ -610,18 +604,9 @@ window.__ModuleLoader__.load({
             : false;
         var directory =
           sessionId !== null && sessionId !== void 0 ? models.directoryFor(sessionId) : null;
-        var catalogState = useSyncExternalStore(
-          directory
-            ? directory.store.subscribe
-            : function () {
-                return function () {};
-              },
-          directory
-            ? directory.store.getSnapshot
-            : function () {
-                return null;
-              },
-        );
+        var catalogSubscribe = useCallback(function (cb) { return directory ? directory.store.subscribe(cb) : emptySubscribe(); }, [directory]);
+        var catalogGetSnapshot = useCallback(function () { return directory ? directory.store.getSnapshot() : null; }, [directory]);
+        var catalogState = useSyncExternalStore(catalogSubscribe, catalogGetSnapshot);
         useEffect(
           function () {
             if (directory && usable) directory.load().catch(function () {});
@@ -638,7 +623,7 @@ window.__ModuleLoader__.load({
         var draftState = useState(null);
         var draft = draftState[0];
         var setDraft = draftState[1];
-        var saveState = useState(null);
+        var saveState = useState({ busy: false, note: null, ok: true });
         var save = saveState[0];
         var setSave = saveState[1];
 
@@ -818,28 +803,13 @@ window.__ModuleLoader__.load({
             return next;
           });
         };
-        var setChainField = function (chainName, index, field, value) {
+        var setChainField = function (chainName, index, value) {
           setDraft(function (prev) {
             var next = cloneConfig(prev);
             var chain = next.chains[chainName];
             if (chain === void 0) return next;
             if (Array.isArray(chain)) {
               chain[index] = value;
-            } else if (chain.routes !== void 0) {
-              chain.routes[index][field] = value;
-            }
-            return next;
-          });
-        };
-        var addChainRung = function (chainName) {
-          setDraft(function (prev) {
-            var next = cloneConfig(prev);
-            var chain = next.chains[chainName];
-            if (chain === void 0) return next;
-            if (Array.isArray(chain)) {
-              chain.push("");
-            } else if (chain.routes !== void 0) {
-              chain.routes.push({ provider: "", model: "" });
             }
             return next;
           });
@@ -865,7 +835,7 @@ window.__ModuleLoader__.load({
           setDraft(function (prev) {
             var next = cloneConfig(prev);
             if (next.chains[key] === void 0) {
-              next.chains[key] = { routes: [{ provider: "", model: "" }] };
+              next.chains[key] = { routes: [] };
             }
             return next;
           });
@@ -1001,19 +971,25 @@ window.__ModuleLoader__.load({
                     var label = chainKey === "orchestrator" ? "orchestrator" : "subagent";
                     var summary = fieldSummary(field, config.chains);
                     var currentRef = refNameOf(field);
-                    if (currentRef === void 0)
-                      currentRef = chainNameForRoutes(field.routes, config.chains);
+                    var isInline = false;
+                    if (currentRef === void 0 && field !== void 0 && field !== null) {
+                      if (Array.isArray(field) && field.length > 0) isInline = true;
+                      else if (typeof field === "object" && Array.isArray(field.routes) && field.routes.length > 0) isInline = true;
+                    }
+                    var selectValue = currentRef !== void 0 ? currentRef : isInline ? "__inline__" : "__detach__";
                     return (
                       <div className="pf-panel-chain" key={chainKey}>
                         <div className="pf-panel-row">
                           <h5 className="pf-panel-chain-title">{label}</h5>
                           <select
                             className="pf-panel-select"
-                            value={currentRef !== void 0 ? currentRef : ""}
+                            value={selectValue}
                             onChange={function (event) {
                               var val = event.target.value;
                               if (val === "__detach__") {
                                 detachEntryField(name, chainKey);
+                              } else if (val === "__inline__") {
+                                return;
                               } else {
                                 setEntryChain(name, chainKey, val);
                               }
@@ -1027,6 +1003,7 @@ window.__ModuleLoader__.load({
                                 </option>
                               );
                             })}
+                            {isInline ? <option value="__inline__">{fieldSummary(field, config.chains)}</option> : null}
                           </select>
                           <button
                             type="button"
@@ -1093,7 +1070,7 @@ window.__ModuleLoader__.load({
                                     className="pf-panel-select"
                                     value={stepText}
                                     onChange={function (event) {
-                                      setChainField(chainName, index, null, event.target.value);
+                                      setChainField(chainName, index, event.target.value);
                                     }}
                                   >
                                     {chainKeys.map(function (key) {
@@ -1110,7 +1087,7 @@ window.__ModuleLoader__.load({
                                     value={stepText}
                                     placeholder="provider/model"
                                     onChange={function (event) {
-                                      setChainField(chainName, index, null, event.target.value);
+                                      setChainField(chainName, index, event.target.value);
                                     }}
                                   />
                                 )}

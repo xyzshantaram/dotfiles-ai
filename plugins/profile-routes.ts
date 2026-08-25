@@ -33,6 +33,10 @@
  * in order when a route fails (start error, or a foreground child ending
  * with stopReason "error"). Consumers walk the chain in order, retrying the
  * next route on failure.
+ *
+ * A route row with a blank provider or a blank model is dropped during
+ * normalization, because the agent loop rejects a proposal with an empty
+ * route.
  */
 
 /** One routable provider/model pair. */
@@ -55,7 +59,9 @@ function isRouteCandidate(value: unknown): value is RouteCandidate {
     typeof value === "object" &&
     value !== null &&
     typeof (value as { provider?: unknown }).provider === "string" &&
-    typeof (value as { model?: unknown }).model === "string"
+    (value as { provider: string }).provider.length > 0 &&
+    typeof (value as { model?: unknown }).model === "string" &&
+    (value as { model: string }).model.length > 0
   );
 }
 
@@ -199,8 +205,8 @@ export function entryHead(
 }
 
 /**
- * True when two route lists are identical: same length, same provider and
- * model in the same order. Ported from the profiles-client copy, including
+ * True when two route lists are identical: same length, same provider,
+ * model, and reasoning effort in the same order.
  * its Array.isArray guards.
  */
 export function routesEqual(a: unknown, b: unknown): boolean {
@@ -209,7 +215,12 @@ export function routesEqual(a: unknown, b: unknown): boolean {
   for (let i = 0; i < a.length; i++) {
     const left = (a as RouteCandidate[])[i];
     const right = (b as RouteCandidate[])[i];
-    if (left.provider !== right.provider || left.model !== right.model) return false;
+    if (
+      left.provider !== right.provider ||
+      left.model !== right.model ||
+      left.reasoningEffort !== right.reasoningEffort
+    )
+      return false;
   }
   return true;
 }
