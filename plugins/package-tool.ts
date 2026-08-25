@@ -473,7 +473,7 @@ export function apply(ctx: Context): void {
         // Arguments flow into shell command strings; reject anything outside a
         // safe package-name character set to stop injection through quotes,
         // dollars, or backticks.
-        if (!/^[A-Za-z0-9@._\-/]+$/.test(args.packageName)) {
+        if (!/^[A-Za-z0-9@][A-Za-z0-9@._\-/]*$/.test(args.packageName)) {
           throw new Error(`invalid package name: ${args.packageName}`);
         }
         const installedVersion = await getInstalledVersion(
@@ -513,12 +513,9 @@ export function apply(ctx: Context): void {
           }
         }
         if (isDowngrade) {
-          const manualCommand = buildCommand(
-            manager,
-            "add",
-            `${args.packageName}@${installedVersion}`,
-            dev,
-          );
+          const manualCommand = manager === "pip"
+            ? `pip install ${args.packageName}==${installedVersion}`
+            : buildCommand(manager, "add", `${args.packageName}@${installedVersion}`, dev);
           throw new Error(
             `Resolved version ${version} for ${args.packageName} is older than the installed version ` +
               `${installedVersion}. Refusing to downgrade. To do this deliberately, run by hand: ${manualCommand}`,

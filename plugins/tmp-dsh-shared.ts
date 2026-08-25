@@ -144,14 +144,10 @@ export function apply(ctx: Context): void {
   // restores the originals right here, at apply time, undoing both patches
   // before any bash call. Return the cleanup function so it runs only on
   // dispose.
+  const wrappedInstance = sandbox.confine;
+  const wrappedProto = proto?.confine;
   ctx.effect(() => () => {
-    // Restore both seams on dispose. If another instance already replaced
-    // confine after us, do not clobber its wrapper.
-    if (sandbox.confine !== undefined) {
-      sandbox.confine = original;
-    }
-    if (proto !== null && protoOriginal !== null && proto.confine !== undefined) {
-      proto.confine = protoOriginal;
-    }
+    if (sandbox.confine === wrappedInstance) sandbox.confine = original;
+    if (proto !== null && protoOriginal !== null && proto.confine === wrappedProto) proto.confine = protoOriginal;
   });
 }

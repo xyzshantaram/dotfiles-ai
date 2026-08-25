@@ -1,21 +1,18 @@
 // plugins/session-archive/src/index.ts
 import { stat, rm } from "node:fs/promises";
-import { dirname } from "node:path";
-var name = "session-archive";
-var inject = [];
-function service(ctx, name2) {
-  return ctx.get(name2);
-}
+import { basename, dirname } from "node:path";
+
+// plugins/shared/http.ts
+var DEFAULT_MAX_BODY_BYTES = 64 * 1024;
 function sendJson(res, status, body) {
   res.statusCode = status;
   res.setHeader("content-type", "application/json; charset=utf-8");
   res.setHeader("cache-control", "no-store");
   res.end(JSON.stringify(body));
 }
-var MAX_BODY_BYTES = 16 * 1024;
-async function readBody(req) {
+async function readBody(req, maxBytes = DEFAULT_MAX_BODY_BYTES) {
   const declared = req.headers["content-length"];
-  if (declared !== void 0 && Number(declared) > MAX_BODY_BYTES) {
+  if (declared !== void 0 && Number(declared) > maxBytes) {
     throw new Error("request body too large");
   }
   const chunks = [];
@@ -23,7 +20,7 @@ async function readBody(req) {
   for await (const chunk of req) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     received += buffer.byteLength;
-    if (received > MAX_BODY_BYTES) throw new Error("request body too large");
+    if (received > maxBytes) throw new Error("request body too large");
     chunks.push(buffer);
   }
   const text = Buffer.concat(chunks).toString("utf8");
@@ -32,6 +29,13 @@ async function readBody(req) {
   } catch {
     throw new Error("body is not valid JSON");
   }
+}
+
+// plugins/session-archive/src/index.ts
+var name = "session-archive";
+var inject = [];
+function service(ctx, name2) {
+  return ctx.get(name2);
 }
 function makeListHandler(ctx) {
   return async (_req, res) => {
@@ -98,7 +102,7 @@ function makeDeleteHandler(ctx) {
     }
     let body;
     try {
-      body = await readBody(req);
+      body = await readBody(req, 16 * 1024);
     } catch (error) {
       sendJson(res, 400, {
         ok: false,
@@ -116,6 +120,11 @@ function makeDeleteHandler(ctx) {
       sendJson(res, 200, { ok: false, error: "session is live" });
       return;
     }
+    const workspace = service(ctx, "workspaceRegistry");
+    if (workspace !== void 0 && !workspace.archivedSessionIds.includes(id)) {
+      sendJson(res, 200, { ok: false, error: "not archived" });
+      return;
+    }
     try {
       const headers = await persistence.list();
       const header = headers.find((candidate) => candidate.id === id);
@@ -126,6 +135,10 @@ function makeDeleteHandler(ctx) {
       const located = persistence.locate(header);
       if (located === void 0) {
         sendJson(res, 200, { ok: false, error: "not found" });
+        return;
+      }
+      if (basename(dirname(located.path)) !== id) {
+        sendJson(res, 200, { ok: false, error: "path mismatch; refusing to delete" });
         return;
       }
       await rm(dirname(located.path), { recursive: true, force: true });

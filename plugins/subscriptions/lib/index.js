@@ -438,6 +438,40 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import z from "@deepseek-ai/schemastery";
 import { installSettingsSection, settingsNamespace } from "@deepseek-ai/dsh-settings";
+
+// plugins/shared/http.ts
+var DEFAULT_MAX_BODY_BYTES = 64 * 1024;
+function sendJson(res, status, body) {
+  res.statusCode = status;
+  res.setHeader("content-type", "application/json; charset=utf-8");
+  res.setHeader("cache-control", "no-store");
+  res.end(JSON.stringify(body));
+}
+async function readBody(req, maxBytes = DEFAULT_MAX_BODY_BYTES) {
+  const declared = req.headers["content-length"];
+  if (declared !== void 0 && Number(declared) > maxBytes) {
+    throw new Error("request body too large");
+  }
+  const chunks = [];
+  let received = 0;
+  for await (const chunk of req) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    received += buffer.byteLength;
+    if (received > maxBytes) throw new Error("request body too large");
+    chunks.push(buffer);
+  }
+  const text = Buffer.concat(chunks).toString("utf8");
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error("body is not valid JSON");
+  }
+}
+function isPlainObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+// plugins/subscriptions/src/index.ts
 var name = "subscriptions";
 var inject = ["webServer", "credentials"];
 var Config = z.object({
@@ -454,12 +488,6 @@ var USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/53
 var BALANCE_CACHE_MS = 3e4;
 var MERIDIAN_TIMEOUT_MS = 1e4;
 var OPENCODE_TIMEOUT_MS = 15e3;
-function sendJson(res, status, body) {
-  res.statusCode = status;
-  res.setHeader("content-type", "application/json; charset=utf-8");
-  res.setHeader("cache-control", "no-store");
-  res.end(JSON.stringify(body));
-}
 function cachedOnce(fn, ttlMs) {
   let cache = null;
   return (...args) => {
@@ -1347,26 +1375,6 @@ function apply(ctx, config) {
     path: "/subscriptions/deepseek-token/login",
     handler: handleDeepSeekTokenLogin
   });
-  const MAX_BODY_BYTES = 64 * 1024;
-  async function readBody(req) {
-    const chunks = [];
-    for await (const chunk of req) {
-      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-      chunks.push(buffer);
-      if (Buffer.concat(chunks).byteLength > MAX_BODY_BYTES) {
-        throw new Error("request body too large");
-      }
-    }
-    const text = Buffer.concat(chunks).toString("utf8");
-    try {
-      return JSON.parse(text);
-    } catch {
-      throw new Error("body is not valid JSON");
-    }
-  }
-  function isPlainObject(value) {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
-  }
   function validateProviders(value) {
     if (!isPlainObject(value)) return { ok: false, error: "providers must be an object" };
     const out = {};

@@ -35,6 +35,7 @@ import { join } from "node:path";
 import z from "@deepseek-ai/schemastery";
 import { installSettingsSection, settingsNamespace } from "@deepseek-ai/dsh-settings";
 import { uncompress } from "snappyjs";
+import { sendJson, readBody, isPlainObject } from "../../shared/http";
 
 /** Stable Cordis plugin name. */
 export const name = "subscriptions";
@@ -81,14 +82,7 @@ const BALANCE_CACHE_MS = 30_000;
 const MERIDIAN_TIMEOUT_MS = 10_000;
 const OPENCODE_TIMEOUT_MS = 15_000;
 
-// TODO(dedup): use plugins/shared/http.ts sendJson/readBody
-/** Write a small JSON response. */
-function sendJson(res, status, body) {
-  res.statusCode = status;
-  res.setHeader("content-type", "application/json; charset=utf-8");
-  res.setHeader("cache-control", "no-store");
-  res.end(JSON.stringify(body));
-}
+
 
 /** One in-flight promise plus a TTL, so open tabs never hammer the source. */
 function cachedOnce(fn, ttlMs) {
@@ -1182,29 +1176,6 @@ export function apply(ctx, config) {
   // GET returns the resolved `subscriptions` namespace (user layer over the
   // composition base). PUT validates and writes through the same settings
   // service installSettingsSection registered, so a toggle hot-applies.
-  // TODO(dedup): use plugins/shared/http.ts sendJson/readBody
-  const MAX_BODY_BYTES = 64 * 1024;
-
-  async function readBody(req: unknown): Promise<unknown> {
-    const chunks: Buffer[] = [];
-    for await (const chunk of req as AsyncIterable<Buffer>) {
-      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-      chunks.push(buffer);
-      if (Buffer.concat(chunks).byteLength > MAX_BODY_BYTES) {
-        throw new Error("request body too large");
-      }
-    }
-    const text = Buffer.concat(chunks).toString("utf8");
-    try {
-      return JSON.parse(text);
-    } catch {
-      throw new Error("body is not valid JSON");
-    }
-  }
-
-  function isPlainObject(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
-  }
 
   function validateProviders(
     value: unknown,
@@ -1241,7 +1212,7 @@ export function apply(ctx, config) {
       }
       let body: unknown;
       try {
-        body = await readBody(req);
+        body = await readBody(req as import("node:http").IncomingMessage);
       } catch (error) {
         sendJsonRes(res, 400, {
           ok: false,

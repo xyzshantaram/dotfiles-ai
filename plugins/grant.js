@@ -1,6 +1,6 @@
 // plugins/grant.ts
 import { realpathSync } from "node:fs";
-import { isAbsolute, normalize, resolve, sep } from "node:path";
+import { dirname, isAbsolute, normalize, resolve, sep } from "node:path";
 var name = "grant";
 var inject = ["fs"];
 function stripQuotes(raw) {
@@ -16,7 +16,19 @@ function canonicalPath(path) {
   try {
     return realpathSync.native(path);
   } catch {
-    return resolve(path);
+    let dir = dirname(path);
+    let rest = [path.slice(dir.length)];
+    while (true) {
+      try {
+        const canonDir = realpathSync.native(dir);
+        return canonDir + rest.join("");
+      } catch {
+        const parent = dirname(dir);
+        if (parent === dir) return resolve(path);
+        rest.unshift(dir.slice(parent.length));
+        dir = parent;
+      }
+    }
   }
 }
 function isUnder(root, target) {
@@ -109,7 +121,7 @@ function apply(ctx) {
         };
       }
       const root = canonicalPath(normalize(raw));
-      if (root === "/" || root === resolve("/") || root.length <= 1) {
+      if (root === "/" || root.length <= 1) {
         return {
           kind: "error",
           text: "grant: refusing to grant filesystem root (/); choose a narrower path"

@@ -169,7 +169,7 @@ function registerSeeTool(ctx, source) {
         const routes = readProfile(source);
         if (routes.length === 0) throw new Error("see: no vision route resolved");
         const schemas = ctx.tools.schemas(scopeOf(ctx));
-        const deny = schemas.map((schema) => schema.name).filter((toolName) => toolName !== "run_code" && !SEE_CHILD_KEEP.has(toolName));
+        const deny = schemas.map((schema) => schema.name).filter((toolName) => !SEE_CHILD_KEEP.has(toolName));
         let lastError = null;
         for (const route of routes) {
           const request = {
@@ -192,8 +192,9 @@ function registerSeeTool(ctx, source) {
             maxDepth: 1,
             signal: exec.signal
           };
-          const run = await ctx.subagents.start("spawn", request);
+          let run;
           try {
+            run = await ctx.subagents.start("spawn", request);
             const result = await run.result;
             if (result.stopReason === "completed") {
               return outputText(result.output);
@@ -212,7 +213,7 @@ function registerSeeTool(ctx, source) {
           } catch (err) {
             lastError = err instanceof Error ? err : new Error(String(err));
           } finally {
-            await run.dispose().catch(() => {
+            if (run) await run.dispose().catch(() => {
             });
           }
         }

@@ -8048,9 +8048,7 @@ var EXTENSION_LANGUAGE = {
   hpp: "cpp",
   hh: "cpp",
   diff: "diff",
-  patch: "diff",
-  ini: "ini",
-  cfg: "ini"
+  patch: "diff"
 };
 var useState = import_react.default.useState;
 var StateDot2 = primitives.StateDot;

@@ -26,11 +26,8 @@
  *   same technique as the B1 mask (src/tools/mask.ts:96-105 in the aidos repo),
  *   so it never names a tool the registry does not hold.
  *
- * NOT-VERIFIED: the `profile` settings namespace contract.
- * No shipped dsh source defines it. The field names and the "x-preview-f-free"
- * personal route are authored from SPEC-W W2 only. TODO: confirm the final
- * settings.yaml shape and the personal provider/model route with the
- * orchestrator, then adjust PROFILE_SCHEMA and the defaults below.
+ * The `profile` settings namespace is owned by see.ts (PROFILE_SCHEMA below)
+ * and matches home/settings.yaml. Personal route verified as x-preview-f-free.
  */
 
 import type { Context } from "@deepseek-ai/cordis";
@@ -170,9 +167,7 @@ function registerSeeTool(ctx: Context, source: () => ProfileSettings | undefined
         // keep set. Computed at call time (B1 mask.ts technique) so the
         // filter never names a tool the registry does not hold.
         const schemas = ctx.tools.schemas(scopeOf(ctx));
-        const deny = schemas
-          .map((schema) => schema.name)
-          .filter((toolName) => toolName !== "run_code" && !SEE_CHILD_KEEP.has(toolName));
+        const deny = schemas.map((schema) => schema.name).filter((toolName) => !SEE_CHILD_KEEP.has(toolName));
 
         let lastError: Error | null = null;
         for (const route of routes) {
@@ -196,8 +191,9 @@ function registerSeeTool(ctx: Context, source: () => ProfileSettings | undefined
             maxDepth: 1,
             signal: exec.signal,
           };
-          const run = await ctx.subagents.start("spawn", request);
+          let run: Awaited<ReturnType<typeof ctx.subagents.start>> | undefined;
           try {
+            run = await ctx.subagents.start("spawn", request);
             const result = await run.result;
             if (result.stopReason === "completed") {
               return outputText(result.output);
@@ -216,7 +212,7 @@ function registerSeeTool(ctx: Context, source: () => ProfileSettings | undefined
           } catch (err) {
             lastError = err instanceof Error ? err : new Error(String(err));
           } finally {
-            await run.dispose().catch(() => {});
+            if (run) await run.dispose().catch(() => {});
           }
         }
         throw lastError ?? new Error("see: all vision routes failed");

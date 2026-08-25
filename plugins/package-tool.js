@@ -2300,7 +2300,7 @@ Wrote scripts.${taskName} to ${cwd}/package.json`;
         }
         const manager = args.manager ?? await detectManager(ctx, args.ecosystem, cwd, signal);
         await requireManifest(ctx, args.ecosystem, cwd, signal);
-        if (!/^[A-Za-z0-9@._\-/]+$/.test(args.packageName)) {
+        if (!/^[A-Za-z0-9@][A-Za-z0-9@._\-/]*$/.test(args.packageName)) {
           throw new Error(`invalid package name: ${args.packageName}`);
         }
         const installedVersion = await getInstalledVersion(
@@ -2331,12 +2331,7 @@ Wrote scripts.${taskName} to ${cwd}/package.json`;
           }
         }
         if (isDowngrade) {
-          const manualCommand = buildCommand(
-            manager,
-            "add",
-            `${args.packageName}@${installedVersion}`,
-            dev
-          );
+          const manualCommand = manager === "pip" ? `pip install ${args.packageName}==${installedVersion}` : buildCommand(manager, "add", `${args.packageName}@${installedVersion}`, dev);
           throw new Error(
             `Resolved version ${version} for ${args.packageName} is older than the installed version ${installedVersion}. Refusing to downgrade. To do this deliberately, run by hand: ${manualCommand}`
           );

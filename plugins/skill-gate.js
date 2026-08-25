@@ -33,16 +33,33 @@ function readFrontmatter(text) {
   return lines.slice(1, end).join("\n");
 }
 function parseToolsGated(frontmatter) {
-  const match = frontmatter.match(/^tools-gated\s*:\s*(\[[^\]]*\]|[^\n]+)\s*$/m);
-  if (!match) return [];
-  const raw = match[1].trim();
-  if (raw.startsWith("[")) {
-    const inner = raw.slice(1, -1);
+  const lines = frontmatter.split("\n");
+  const idx = lines.findIndex((l) => /^tools-gated\s*:/.test(l));
+  if (idx < 0) return [];
+  const rawLine = lines[idx];
+  const afterColon = rawLine.slice(rawLine.indexOf(":") + 1).trim();
+  if (afterColon.startsWith("[")) {
+    const inner = afterColon.slice(1, afterColon.lastIndexOf("]"));
     if (inner.trim() === "") return [];
-    return inner.split(",").map((entry) => entry.trim().replace(/^["']|["']$/g, "")).filter((entry) => entry.length > 0);
+    return inner.split(",").map((e) => e.trim().replace(/^["']|["']$/g, "")).filter((e) => e.length > 0);
   }
-  const bare = raw.replace(/^["']|["']$/g, "").trim();
-  return bare ? [bare] : [];
+  if (afterColon.length > 0) {
+    const bare = afterColon.replace(/^["']|["']$/g, "").trim();
+    return bare ? [bare] : [];
+  }
+  const block = [];
+  for (let i = idx + 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^\S/.test(line)) break;
+    const m = line.match(/^\s*-\s*(.+?)\s*$/);
+    if (m) block.push(m[1].trim().replace(/^["']|["']$/g, ""));
+    else if (line.trim() === "" || /^\s*#/.test(line)) continue;
+    else break;
+  }
+  if (block.length === 0) {
+    console.warn("[skill-gate] tools-gated key with no value and no block list; gating nothing for this skill");
+  }
+  return block.filter((e) => e.length > 0);
 }
 function discoverGates(skillDirs) {
   const dirs = [join(resolveDshHome(), "skills"), ...skillDirs];
