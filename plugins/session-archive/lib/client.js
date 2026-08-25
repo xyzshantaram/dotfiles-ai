@@ -40,67 +40,22 @@ __export(client_exports, {
   name: () => name
 });
 module.exports = __toCommonJS(client_exports);
-var import_react = __toESM(require("react"), 1);
+var import_react2 = __toESM(require("react"), 1);
 
-// plugins/design-system.ts
-var DESIGN_TOKENS = `:root {
-  --bg: #2c2c2e;
-  --surface: #232324;
-  --surface-hover: #303032;
-  --surface-active: #43454a;
-
-  --border: #3e3e3f;
-  --border-subtle: #303031;
-  --border-focus: #66676b;
-
-  --text-primary: #f9fafb;
-  --text-secondary: #adb2b8;
-  --text-muted: #88898a;
-
-  --radius-sm: 7px;
-  --radius-md: 12px;
-  --radius-lg: 20px;
-  --radius-pill: 999px;
-
-  --space-1: 8px;
-  --space-2: 16px;
-  --space-3: 24px;
-  --space-4: 32px;
-  --space-5: 40px;
-  --space-6: 48px;
-}`;
-var CONTROLS_CSS = `
-.setting-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--space-3);display:grid;grid-template-columns:28px 1fr;gap:20px;align-items:start}
-.setting-checkbox{width:28px;height:28px;flex:0 0 28px;border-radius:3px}
-.segmented-control{display:flex;padding:4px;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
-.segment{min-width:175px;height:48px;border:0;border-radius:10px;background:transparent;color:var(--text-secondary);font-size:20px}
-.segment[data-active="true"]{background:var(--surface-active);color:var(--text-primary);font-weight:600}
-.control-list{overflow:hidden;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
-.control-list-row{min-height:64px;padding:0 20px;display:flex;align-items:center;gap:12px}
-.control-list-row + .control-list-row{border-top:1px solid var(--border-subtle)}
-.pill{height:36px;padding-inline:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--text-secondary);font-size:16px}
-.pill[data-active="true"]{background:var(--surface-active);color:var(--text-primary)}
-.icon-button{width:40px;height:40px;display:inline-grid;place-items:center;border:0;border-radius:8px;background:transparent;color:var(--text-secondary);font-size:28px}
-.icon-button:hover{background:var(--surface-hover);color:var(--text-primary)}
-.mode-switch{display:inline-flex;padding:4px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface)}
-.mode-switch>button{height:44px;padding-inline:32px;border:0;border-radius:9px;background:transparent;color:var(--text-secondary);font-size:18px}
-.mode-switch>button[data-active="true"]{background:var(--surface-active);color:var(--text-primary);font-weight:600}
-.text-input{height:56px;width:100%;padding-inline:16px;border:1px solid var(--border);border-radius:14px;background:var(--surface);color:var(--text-primary);font-size:18px;outline:none}
-.text-input::placeholder{color:var(--text-muted)}
-.text-input:focus{border-color:var(--border-focus)}
-.primary-button{height:56px;padding-inline:20px;border:0;border-radius:28px;background:#adb2b8;color:#232324;font-size:18px;font-weight:600}
-.primary-button:disabled{opacity:.45;cursor:not-allowed}
-.checkbox-field{display:flex;align-items:center;gap:12px;color:var(--text-secondary);font-size:18px}
-`.trim();
-var mergeCss = (...parts) => parts.filter(Boolean).join("\n");
-
-// css-text:/home/sid/repos/dotfiles-ai/plugins/session-archive/src/client.module.css
-var client_default = ".sarch-root{box-sizing:border-box;display:flex;flex-direction:column;gap:12px;padding:0;color:var(--dsw-alias-label-primary)}\n.sarch-head{display:flex;align-items:center;justify-content:space-between;gap:12px}\n.sarch-title{font-size:24px;font-weight:700;margin:0;line-height:1.2;color:var(--dsw-alias-label-primary)}\n.sarch-refresh{cursor:pointer;border:none;background:none;padding:0;color:var(--dsw-alias-label-secondary);font-size:15px;line-height:20px}\n.sarch-refresh:hover{color:var(--dsw-alias-label-primary)}\n.sarch-section{display:flex;flex-direction:column;gap:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:20px;padding:20px;background:var(--dsw-alias-bg-tertiary)}\n.sarch-rows{display:flex;flex-direction:column;gap:12px}\n.sarch-row{display:flex;align-items:center;gap:12px;min-width:0}\n.sarch-row-main{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}\n.sarch-row-id{font-size:16px;line-height:22px;font-weight:600;color:var(--dsw-alias-label-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n.sarch-row-meta{display:flex;align-items:center;gap:12px;min-width:0}\n.sarch-row-meta>span{font-size:14px;line-height:22px;color:var(--dsw-alias-label-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n.sarch-live{font-size:15px;line-height:20px;color:var(--dsw-alias-state-success-primary);font-weight:600;flex:none}\n.sarch-btn{box-sizing:border-box;width:40px;height:40px;display:inline-grid;place-items:center;flex:none;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);font-size:28px;padding:0;cursor:pointer}\n.sarch-btn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}\n.sarch-btn:disabled{opacity:.5;cursor:default}\n.sarch-empty{font-size:14px;line-height:22px;color:var(--dsw-alias-label-secondary);font-style:italic}\n.sarch-err{font-size:15px;line-height:22px;color:var(--dsw-alias-state-error-primary)}\n";
-
-// plugins/session-archive/src/client.tsx
-var PLUGIN_NAME = "session-archive";
-var STYLE_TAG_ID = "session-archive/settings.css";
-var CSS_TEXT = mergeCss(DESIGN_TOKENS, CONTROLS_CSS, [client_default]);
+// plugins/shared/client-util.ts
+function injectStyle(pluginName, styleId, cssText) {
+  if (typeof document === "undefined") return;
+  if (document.querySelector("style[data-plugin-css=" + JSON.stringify(styleId) + "]") !== null)
+    return;
+  const tag = document.createElement("style");
+  tag.dataset.plugin = pluginName;
+  tag.dataset.pluginCss = styleId;
+  tag.textContent = cssText;
+  document.head.appendChild(tag);
+}
+function mergeCss(...parts) {
+  return parts.flat().filter(Boolean).join("\n");
+}
 function fetchJson(url) {
   return fetch(url, { cache: "no-store" }).then(function(res) {
     return res.json().catch(function() {
@@ -140,6 +95,22 @@ function postJson(url, body) {
     return { data: null, error: String(e && e.message || e) };
   });
 }
+
+// plugins/shared/settings-panel.tsx
+var import_react = __toESM(require("react"));
+function SettingsSection(props) {
+  return /* @__PURE__ */ import_react.default.createElement("div", { className: "dsp-root" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "dsp-head" }, /* @__PURE__ */ import_react.default.createElement("h3", { className: "dsp-title" }, props.title), props.onRefresh ? /* @__PURE__ */ import_react.default.createElement("button", { className: "dsp-refresh", onClick: props.onRefresh }, props.refreshLabel === void 0 ? "Refresh" : props.refreshLabel) : null), props.children);
+}
+
+// css-text:/home/sid/repos/dotfiles-ai/plugins/shared/settings.css
+var settings_default = "/* Shared settings-page vocabulary, normalized from the session-archive,\n * subscriptions, and profiles settings panels. One rule set in one file so\n * the three panels cannot drift. Radius and padding disagreements are\n * normalized to the session-archive (or median) value; the var(--dsw-...)\n * aliases the current rules use are kept as-is. */\n\n/* Page-level container: airy vertical rhythm, no own box. */\n.dsp-root {\n  box-sizing: border-box;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  padding: 0;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Header row (title + refresh). */\n.dsp-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 12px;\n}\n\n.dsp-title {\n  font-size: 24px;\n  font-weight: 700;\n  margin: 0;\n  line-height: 1.2;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Refresh: session-archive/profiles form (no box, color shift only).\n * subscriptions pads and rounds the hit area; normalized away. */\n.dsp-refresh {\n  cursor: pointer;\n  border: none;\n  background: none;\n  padding: 0;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 15px;\n  line-height: 20px;\n}\n.dsp-refresh:hover {\n  color: var(--dsw-alias-label-primary);\n}\n\n.dsp-err {\n  font-size: 15px;\n  line-height: 22px;\n  color: var(--dsw-alias-state-error-primary);\n}\n\n/* Large setting card. Padding is the median of 16/20/24 (session-archive\n * 20px); the radius is the two-agreeing 20px, not profiles' 12px. */\n.dsp-section {\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 20px;\n  padding: 20px;\n  background: var(--dsw-alias-bg-tertiary);\n}\n\n/* Card title: subscriptions' 24px/700 matches the page-title vocabulary;\n * profiles' smaller 16px/600 card title normalized up. */\n.dsp-section-title {\n  font-size: 24px;\n  font-weight: 700;\n  margin: 0;\n  line-height: 1.2;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Setting row: horizontal in session-archive and profiles (subscriptions\n * stacks its label and meta vertically; normalized to the horizontal form). */\n.dsp-row {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  min-width: 0;\n}\n\n/* Row label: only subscriptions defines one; ported verbatim, with its\n * emphasized <b> children. */\n.dsp-row-label {\n  display: flex;\n  align-items: baseline;\n  gap: 10px;\n  font-size: 16px;\n  line-height: 22px;\n  color: var(--dsw-alias-label-secondary);\n}\n.dsp-row-label b {\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n  font-size: 16px;\n}\n.dsp-row-label b:last-child {\n  margin-left: auto;\n}\n";
+
+// css-text:/home/sid/repos/dotfiles-ai/plugins/session-archive/src/client.module.css
+var client_default = ".sarch-section{display:flex;flex-direction:column;gap:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:20px;padding:20px;background:var(--dsw-alias-bg-tertiary)}\n.sarch-rows{display:flex;flex-direction:column;gap:12px}\n.sarch-row{display:flex;align-items:center;gap:12px;min-width:0}\n.sarch-row-main{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}\n.sarch-row-id{font-size:16px;line-height:22px;font-weight:600;color:var(--dsw-alias-label-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n.sarch-row-meta{display:flex;align-items:center;gap:12px;min-width:0}\n.sarch-row-meta > span{font-size:14px;line-height:22px;color:var(--dsw-alias-label-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n.sarch-live{font-size:15px;line-height:20px;color:var(--dsw-alias-state-success-primary);font-weight:600;flex:none}\n.sarch-btn{box-sizing:border-box;width:40px;height:40px;display:inline-grid;place-items:center;flex:none;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);font-size:28px;padding:0;cursor:pointer}\n.sarch-btn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}\n.sarch-btn:disabled{opacity:0.5;cursor:default}\n.sarch-empty{font-size:14px;line-height:22px;color:var(--dsw-alias-label-secondary);font-style:italic}\n";
+
+// plugins/session-archive/src/client.tsx
+var PLUGIN_NAME = "session-archive";
+var STYLE_TAG_ID = "session-archive/settings.css";
 function shortId(id) {
   if (typeof id !== "string") return "";
   if (id.length <= 16) return id;
@@ -157,10 +128,10 @@ function fmtSize(bytes) {
 }
 function makePanel() {
   return function Panel() {
-    var listState = import_react.default.useState(null);
+    var listState = import_react2.default.useState(null);
     var list = listState[0];
     var setList = listState[1];
-    var busyState = import_react.default.useState(null);
+    var busyState = import_react2.default.useState(null);
     var busy = busyState[0];
     var setBusy = busyState[1];
     var load = function() {
@@ -175,7 +146,7 @@ function makePanel() {
         setList({ data: sessions, error: null });
       });
     };
-    import_react.default.useEffect(function() {
+    import_react2.default.useEffect(function() {
       load();
     }, []);
     var remove = function(id) {
@@ -197,7 +168,7 @@ function makePanel() {
       for (var i = 0; i < list.data.length; i++) {
         var session = list.data[i];
         var live = session.live === true;
-        var action = live ? /* @__PURE__ */ import_react.default.createElement("span", { className: "sarch-live" }, "live") : /* @__PURE__ */ import_react.default.createElement(
+        var action = live ? /* @__PURE__ */ import_react2.default.createElement("span", { className: "sarch-live" }, "live") : /* @__PURE__ */ import_react2.default.createElement(
           "button",
           {
             className: "sarch-btn",
@@ -214,41 +185,35 @@ function makePanel() {
         );
         var label = session.title ? session.title : shortId(session.id);
         rows.push(
-          /* @__PURE__ */ import_react.default.createElement("div", { className: "sarch-row", key: session.id }, /* @__PURE__ */ import_react.default.createElement("div", { className: "sarch-row-main" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "sarch-row-id" }, label), /* @__PURE__ */ import_react.default.createElement("div", { className: "sarch-row-meta" }, /* @__PURE__ */ import_react.default.createElement("span", null, session.cwd ? session.cwd : "no cwd"), /* @__PURE__ */ import_react.default.createElement("span", null, fmtDate(session.createdAt)), /* @__PURE__ */ import_react.default.createElement("span", null, fmtSize(session.size)))), action)
+          /* @__PURE__ */ import_react2.default.createElement("div", { className: "sarch-row", key: session.id }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "sarch-row-main" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "sarch-row-id" }, label), /* @__PURE__ */ import_react2.default.createElement("div", { className: "sarch-row-meta" }, /* @__PURE__ */ import_react2.default.createElement("span", null, session.cwd ? session.cwd : "no cwd"), /* @__PURE__ */ import_react2.default.createElement("span", null, fmtDate(session.createdAt)), /* @__PURE__ */ import_react2.default.createElement("span", null, fmtSize(session.size)))), action)
         );
       }
     }
     var body = null;
     if (list === null) {
-      body = /* @__PURE__ */ import_react.default.createElement("div", { className: "sarch-empty" }, "Loading\u2026");
+      body = /* @__PURE__ */ import_react2.default.createElement("div", { className: "sarch-empty" }, "Loading\u2026");
     } else if (list.error && (!list.data || list.data.length === 0)) {
-      body = /* @__PURE__ */ import_react.default.createElement("div", { className: "sarch-err" }, list.error);
+      body = /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, list.error);
     } else if (rows.length === 0) {
-      body = /* @__PURE__ */ import_react.default.createElement("div", { className: "sarch-empty" }, "No archived sessions");
+      body = /* @__PURE__ */ import_react2.default.createElement("div", { className: "sarch-empty" }, "No archived sessions");
     } else {
-      body = /* @__PURE__ */ import_react.default.createElement("div", { className: "sarch-section" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "sarch-rows" }, rows), list.error ? /* @__PURE__ */ import_react.default.createElement("div", { className: "sarch-err" }, list.error) : null);
+      body = /* @__PURE__ */ import_react2.default.createElement("div", { className: "sarch-section" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "sarch-rows" }, rows), list.error ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, list.error) : null);
     }
-    return /* @__PURE__ */ import_react.default.createElement("div", { className: "sarch-root" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "sarch-head" }, /* @__PURE__ */ import_react.default.createElement("h3", { className: "sarch-title" }, "Archive"), /* @__PURE__ */ import_react.default.createElement("button", { className: "sarch-refresh", onClick: load }, "Refresh")), body);
+    return /* @__PURE__ */ import_react2.default.createElement(SettingsSection, { title: "Archive", onRefresh: load, refreshLabel: "Refresh" }, body);
   };
 }
 var name = PLUGIN_NAME;
 var inject = ["slots"];
 function apply(ctx) {
   ctx.effect(function() {
-    if (typeof document === "undefined") return;
-    if (document.querySelector('style[data-plugin-css="' + STYLE_TAG_ID + '"]') !== null) return;
-    var tag = document.createElement("style");
-    tag.dataset.plugin = PLUGIN_NAME;
-    tag.dataset.pluginCss = STYLE_TAG_ID;
-    tag.textContent = CSS_TEXT;
-    document.head.appendChild(tag);
+    injectStyle(PLUGIN_NAME, STYLE_TAG_ID, mergeCss(settings_default, client_default));
   }, "session-archive: styles");
   var Panel = makePanel();
   ctx.slots.inject("settings.section", function() {
     return ctx.slots.register(
       { name: "settings.section", id: PLUGIN_NAME, order: 28, label: "Archive" },
       function() {
-        return /* @__PURE__ */ import_react.default.createElement(Panel, null);
+        return /* @__PURE__ */ import_react2.default.createElement(Panel, null);
       }
     );
   });

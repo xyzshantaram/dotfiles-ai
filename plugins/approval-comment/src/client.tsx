@@ -32,7 +32,7 @@ hljs.registerLanguage("bash", bashGrammar);
 
 /** The browser module table resolves these platform modules. */
 import react from "react";
-import { DESIGN_TOKENS, CONTROLS_CSS, mergeCss } from "../../design-system";
+import { injectStyle, mergeCss, escapeHtml, registerLocale } from "../../shared/client-util";
 import localCss from "./client.module.css";
 import * as _primitives from "@deepseek-ai/dsh-client-ui-primitives";
 var Button = _primitives.Button;
@@ -50,17 +50,7 @@ var LOCALE_NS = "approval-comment";
  * the shipped modules (`data-plugin-css` guard, one tag per bundle).
  */
 var STYLE_TAG_ID = "approval-comment/ApprovalComment.module.css";
-var CSS_TEXT = mergeCss(DESIGN_TOKENS, CONTROLS_CSS, [localCss]);
-if (
-  typeof document !== "undefined" &&
-  document.querySelector("style[data-plugin-css=" + JSON.stringify(STYLE_TAG_ID) + "]") === null
-) {
-  var tag = document.createElement("style");
-  tag.dataset.plugin = PLUGIN_NAME;
-  tag.dataset.pluginCss = STYLE_TAG_ID;
-  tag.textContent = CSS_TEXT;
-  document.head.appendChild(tag);
-}
+injectStyle(PLUGIN_NAME, STYLE_TAG_ID, mergeCss(localCss));
 
 /** English dictionary for this card. Approval strings match the shipped text. */
 var EN = {
@@ -114,15 +104,6 @@ function commandOf(call) {
 function rootToolCall(snapshot, callId) {
   var node = snapshot.chat && snapshot.chat.nodes.get(conversationContextKey("tool-call", callId));
   return node === undefined || node === null ? undefined : node.data && node.data.root;
-}
-
-function escapeHtml(text) {
-  return String(text)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
 }
 
 /** Highlight one command line as bash. Returns HTML, never throws. */
@@ -346,7 +327,7 @@ function apply(ctx) {
   var steerTo = buildSteerTo(ctx.sessions);
   var card = makeApprovalCommentCard(steerTo);
   ctx.effect(function () {
-    return ctx.locale.register(LOCALE_NS, { en: EN, zh: ZH });
+    return registerLocale(ctx, LOCALE_NS, EN, ZH);
   }, "approval-comment: dictionaries");
   ctx.slots.inject("conversation.composer", function () {
     return ctx.slots.register(

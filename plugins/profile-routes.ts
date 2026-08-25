@@ -156,3 +156,64 @@ export function chainOf(
   }
   return normalizeEntry(entry, chains);
 }
+
+/**
+ * W21-aware head picker: the first route of an entry's effective chain.
+ *
+ * A nested entry `{ orchestrator, subagent }` picks the orchestrator chain's
+ * head first, then the subagent chain's head. Any other shape (single route,
+ * `{ routes }`, composition array, string ref) falls through to
+ * normalizeEntry and yields its first candidate, or undefined when the
+ * entry is absent or malformed.
+ *
+ * One intentional narrowing vs the old client copy: per W24 every named
+ * chain value is a `{ routes }` shape, so a chain value that is itself
+ * W21-shaped (an `{ orchestrator, subagent }` object) resolves to
+ * undefined instead of recursing into it.
+ */
+export function entryHead(
+  entry: unknown,
+  chains?: Record<string, unknown>,
+): RouteCandidate | undefined {
+  if (typeof entry === "object" && entry !== null) {
+    const obj = entry as Record<string, unknown>;
+    if ("orchestrator" in obj || "subagent" in obj) {
+      return entryHead(obj.orchestrator, chains) ?? entryHead(obj.subagent, chains);
+    }
+  }
+  return normalizeEntry(entry, chains)[0];
+}
+
+/**
+ * True when two route lists are identical: same length, same provider and
+ * model in the same order. Ported from the profiles-client copy, including
+ * its Array.isArray guards.
+ */
+export function routesEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const left = (a as RouteCandidate[])[i];
+    const right = (b as RouteCandidate[])[i];
+    if (left.provider !== right.provider || left.model !== right.model) return false;
+  }
+  return true;
+}
+
+/**
+ * Reverse-match a chain name from its resolved routes.
+ *
+ * Iterates the chain map in key order and returns the first name whose
+ * normalized routes equal the given list, else undefined. Used to recover
+ * the original chain name after the server resolves string refs away.
+ */
+export function chainNameForRoutes(
+  routes: RouteCandidate[],
+  chains?: Record<string, unknown>,
+): string | undefined {
+  if (chains === undefined || chains === null) return undefined;
+  for (const name of Object.keys(chains)) {
+    if (routesEqual(normalizeEntry(chains[name], chains), routes)) return name;
+  }
+  return undefined;
+}

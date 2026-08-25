@@ -22,7 +22,9 @@
  */
 
 import react from "react";
-import { DESIGN_TOKENS, CONTROLS_CSS, mergeCss } from "../../design-system";
+import { injectStyle, mergeCss, fetchJson, postJson } from "../../shared/client-util";
+import { SettingsSection } from "../../shared/settings-panel";
+import settingsCss from "../../shared/settings.css";
 import localCss from "./client.module.css";
 
 /** Stable plugin identity, also the loader entry id in cordis.patch.yml. */
@@ -30,62 +32,6 @@ var PLUGIN_NAME = "session-archive";
 
 /** One stylesheet for this panel. Class names are kebab-case only. */
 var STYLE_TAG_ID = "session-archive/settings.css";
-var CSS_TEXT = mergeCss(DESIGN_TOKENS, CONTROLS_CSS, [localCss]);
-
-/** Fetch one same-origin route and always resolve to a plain object. */
-function fetchJson(url) {
-  return fetch(url, { cache: "no-store" })
-    .then(function (res) {
-      return res
-        .json()
-        .catch(function () {
-          return null;
-        })
-        .then(function (json) {
-          return { ok: res.ok, status: res.status, json: json };
-        });
-    })
-    .then(function (result) {
-      if (result.json !== null && result.json.error) {
-        return { data: null, error: String(result.json.error) };
-      }
-      if (!result.ok) return { data: null, error: "HTTP " + result.status };
-      return { data: result.json, error: null };
-    })
-    .catch(function (e) {
-      return { data: null, error: String((e && e.message) || e) };
-    });
-}
-
-/** POST one same-origin route with a JSON body, same {data,error} shape. */
-function postJson(url, body) {
-  return fetch(url, {
-    method: "POST",
-    cache: "no-store",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  })
-    .then(function (res) {
-      return res
-        .json()
-        .catch(function () {
-          return null;
-        })
-        .then(function (json) {
-          return { ok: res.ok, status: res.status, json: json };
-        });
-    })
-    .then(function (result) {
-      if (result.json !== null && result.json.error) {
-        return { data: null, error: String(result.json.error) };
-      }
-      if (!result.ok) return { data: null, error: "HTTP " + result.status };
-      return { data: result.json, error: null };
-    })
-    .catch(function (e) {
-      return { data: null, error: String((e && e.message) || e) };
-    });
-}
 
 /** Shorten a session id for display: head + ellipsis + tail. */
 function shortId(id) {
@@ -186,7 +132,7 @@ function makePanel() {
               </div>
             </div>
             {action}
-          </div>
+          </div>,
         );
       }
     }
@@ -195,28 +141,22 @@ function makePanel() {
     if (list === null) {
       body = <div className="sarch-empty">Loading…</div>;
     } else if (list.error && (!list.data || list.data.length === 0)) {
-      body = <div className="sarch-err">{list.error}</div>;
+      body = <div className="dsp-err">{list.error}</div>;
     } else if (rows.length === 0) {
       body = <div className="sarch-empty">No archived sessions</div>;
     } else {
       body = (
         <div className="sarch-section">
           <div className="sarch-rows">{rows}</div>
-          {list.error ? <div className="sarch-err">{list.error}</div> : null}
+          {list.error ? <div className="dsp-err">{list.error}</div> : null}
         </div>
       );
     }
 
     return (
-      <div className="sarch-root">
-        <div className="sarch-head">
-          <h3 className="sarch-title">Archive</h3>
-          <button className="sarch-refresh" onClick={load}>
-            Refresh
-          </button>
-        </div>
+      <SettingsSection title={"Archive"} onRefresh={load} refreshLabel={"Refresh"}>
         {body}
-      </div>
+      </SettingsSection>
     );
   };
 }
@@ -229,13 +169,7 @@ var inject = ["slots"];
 /** Plugin body: inject the styles once and register the settings section. */
 function apply(ctx) {
   ctx.effect(function () {
-    if (typeof document === "undefined") return;
-    if (document.querySelector('style[data-plugin-css="' + STYLE_TAG_ID + '"]') !== null) return;
-    var tag = document.createElement("style");
-    tag.dataset.plugin = PLUGIN_NAME;
-    tag.dataset.pluginCss = STYLE_TAG_ID;
-    tag.textContent = CSS_TEXT;
-    document.head.appendChild(tag);
+    injectStyle(PLUGIN_NAME, STYLE_TAG_ID, mergeCss(settingsCss, localCss));
   }, "session-archive: styles");
 
   // The panel component is created once, so its identity stays stable across

@@ -2003,60 +2003,29 @@ function bash(hljs) {
 // plugins/approval-comment/src/client.tsx
 var import_react = __toESM(require("react"), 1);
 
-// plugins/design-system.ts
-var DESIGN_TOKENS = `:root {
-  --bg: #2c2c2e;
-  --surface: #232324;
-  --surface-hover: #303032;
-  --surface-active: #43454a;
-
-  --border: #3e3e3f;
-  --border-subtle: #303031;
-  --border-focus: #66676b;
-
-  --text-primary: #f9fafb;
-  --text-secondary: #adb2b8;
-  --text-muted: #88898a;
-
-  --radius-sm: 7px;
-  --radius-md: 12px;
-  --radius-lg: 20px;
-  --radius-pill: 999px;
-
-  --space-1: 8px;
-  --space-2: 16px;
-  --space-3: 24px;
-  --space-4: 32px;
-  --space-5: 40px;
-  --space-6: 48px;
-}`;
-var CONTROLS_CSS = `
-.setting-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--space-3);display:grid;grid-template-columns:28px 1fr;gap:20px;align-items:start}
-.setting-checkbox{width:28px;height:28px;flex:0 0 28px;border-radius:3px}
-.segmented-control{display:flex;padding:4px;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
-.segment{min-width:175px;height:48px;border:0;border-radius:10px;background:transparent;color:var(--text-secondary);font-size:20px}
-.segment[data-active="true"]{background:var(--surface-active);color:var(--text-primary);font-weight:600}
-.control-list{overflow:hidden;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
-.control-list-row{min-height:64px;padding:0 20px;display:flex;align-items:center;gap:12px}
-.control-list-row + .control-list-row{border-top:1px solid var(--border-subtle)}
-.pill{height:36px;padding-inline:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--text-secondary);font-size:16px}
-.pill[data-active="true"]{background:var(--surface-active);color:var(--text-primary)}
-.icon-button{width:40px;height:40px;display:inline-grid;place-items:center;border:0;border-radius:8px;background:transparent;color:var(--text-secondary);font-size:28px}
-.icon-button:hover{background:var(--surface-hover);color:var(--text-primary)}
-.mode-switch{display:inline-flex;padding:4px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface)}
-.mode-switch>button{height:44px;padding-inline:32px;border:0;border-radius:9px;background:transparent;color:var(--text-secondary);font-size:18px}
-.mode-switch>button[data-active="true"]{background:var(--surface-active);color:var(--text-primary);font-weight:600}
-.text-input{height:56px;width:100%;padding-inline:16px;border:1px solid var(--border);border-radius:14px;background:var(--surface);color:var(--text-primary);font-size:18px;outline:none}
-.text-input::placeholder{color:var(--text-muted)}
-.text-input:focus{border-color:var(--border-focus)}
-.primary-button{height:56px;padding-inline:20px;border:0;border-radius:28px;background:#adb2b8;color:#232324;font-size:18px;font-weight:600}
-.primary-button:disabled{opacity:.45;cursor:not-allowed}
-.checkbox-field{display:flex;align-items:center;gap:12px;color:var(--text-secondary);font-size:18px}
-`.trim();
-var mergeCss = (...parts) => parts.filter(Boolean).join("\n");
+// plugins/shared/client-util.ts
+function injectStyle(pluginName, styleId, cssText) {
+  if (typeof document === "undefined") return;
+  if (document.querySelector("style[data-plugin-css=" + JSON.stringify(styleId) + "]") !== null)
+    return;
+  const tag = document.createElement("style");
+  tag.dataset.plugin = pluginName;
+  tag.dataset.pluginCss = styleId;
+  tag.textContent = cssText;
+  document.head.appendChild(tag);
+}
+function mergeCss(...parts) {
+  return parts.flat().filter(Boolean).join("\n");
+}
+function escapeHtml(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function registerLocale(ctx, ns, en, zh) {
+  return ctx.locale.register(ns, { en, zh });
+}
 
 // css-text:/home/sid/repos/dotfiles-ai/plugins/approval-comment/src/client.module.css
-var client_default = ".approval-comment-root{padding:8px calc(var(--dsh-composer-side-clearance) + 16px) 12px;flex-direction:column;align-items:center;display:flex}\n.approval-comment-card{width:100%;max-width:var(--dsh-chat-content-width);border:1px solid var(--dsw-alias-state-warn-secondary);background:var(--dsw-specific-input-major);box-shadow:var(--dsw-shadow-lv2);--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2);border-radius:20px;overflow:hidden}\n.approval-comment-strip{background:var(--dsw-alias-state-warn-tertiary);color:var(--dsw-alias-state-warn-primary);align-items:center;gap:8px;padding:8px 13px;font-size:13px;line-height:18px;display:flex}\n.approval-comment-dot{background:var(--dsw-alias-state-warn-primary);border-radius:50%;width:8px;height:8px}\n.approval-comment-body{box-sizing:border-box;max-height:var(--dsh-composer-text-max-height);flex-direction:column;gap:6px;padding:10px 13px 0;display:flex;overflow-y:auto}\n.approval-comment-headline{color:var(--dsw-alias-label-primary);font-size:15px;font-weight:500;line-height:24px}\n.approval-comment-command{color:var(--dsw-alias-label-tertiary);font-family:var(--ds-font-family-code);overflow-wrap:anywhere;font-size:13px;line-height:20px}\n.approval-comment-command code.hljs{background:transparent;padding:0;font-family:inherit;font-size:inherit;line-height:inherit;overflow-wrap:inherit}\n.approval-comment-command .hljs-comment,.approval-comment-command .hljs-quote{color:#8b949e;font-style:italic}\n.approval-comment-command .hljs-keyword,.approval-comment-command .hljs-literal,.approval-comment-command .hljs-section{color:#ff7b72}\n.approval-comment-command .hljs-string,.approval-comment-command .hljs-regexp{color:#a5d6ff}\n.approval-comment-command .hljs-title,.approval-comment-command .hljs-title.function_,.approval-comment-command .hljs-title.class_{color:#d2a8ff}\n.approval-comment-command .hljs-number,.approval-comment-command .hljs-symbol,.approval-comment-command .hljs-bullet{color:#79c0ff}\n.approval-comment-command .hljs-attr,.approval-comment-command .hljs-attribute,.approval-comment-command .hljs-variable{color:#ffa657}\n.approval-comment-command .hljs-name,.approval-comment-command .hljs-tag,.approval-comment-command .hljs-built_in,.approval-comment-command .hljs-type{color:#7ee787}\n.approval-comment-action-row{justify-content:flex-end;gap:8px;padding:11px 13px;display:flex}\n.approval-comment-reject:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover-danger);color:var(--dsw-alias-state-error-primary);border-color:#0000}\n.approval-comment-comment-toggle{align-self:flex-start;background:none;border:0;padding:2px 0;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:18px;cursor:pointer}\n.approval-comment-comment-toggle:hover:not(:disabled){color:var(--dsw-alias-label-primary)}\n.approval-comment-comment-toggle:disabled{opacity:.5;cursor:default}\n.approval-comment-comment-field{flex-direction:column;gap:6px;display:flex}\n.approval-comment-comment-input{box-sizing:border-box;width:100%;min-height:56px;resize:vertical;border:1px solid var(--dsw-alias-line-secondary);border-radius:8px;padding:6px 8px;background:var(--dsw-specific-input-major);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:13px;line-height:20px}\n.approval-comment-comment-input:focus{outline:0;border-color:var(--dsw-alias-state-warn-secondary)}\n.approval-comment-comment-input:disabled{opacity:.5}\n.approval-comment-comment-hint{color:var(--dsw-alias-label-caption);font-size:12px;line-height:16px;margin:0}\n";
+var client_default = ".approval-comment-root{padding:8px calc(var(--dsh-composer-side-clearance) + 16px) 12px;flex-direction:column;align-items:center;display:flex}\n.approval-comment-card{width:100%;max-width:var(--dsh-chat-content-width);border:1px solid var(--dsw-alias-state-warn-secondary);background:var(--dsw-specific-input-major);box-shadow:var(--dsw-shadow-lv2);--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2);border-radius:20px;overflow:hidden}\n.approval-comment-strip{background:var(--dsw-alias-state-warn-tertiary);color:var(--dsw-alias-state-warn-primary);align-items:center;gap:8px;padding:8px 13px;font-size:13px;line-height:18px;display:flex}\n.approval-comment-dot{background:var(--dsw-alias-state-warn-primary);border-radius:50%;width:8px;height:8px}\n.approval-comment-body{box-sizing:border-box;max-height:var(--dsh-composer-text-max-height);flex-direction:column;gap:6px;padding:10px 13px 0;display:flex;overflow-y:auto}\n.approval-comment-headline{color:var(--dsw-alias-label-primary);font-size:15px;font-weight:500;line-height:24px}\n.approval-comment-command{color:var(--dsw-alias-label-tertiary);font-family:var(--ds-font-family-code);overflow-wrap:anywhere;font-size:13px;line-height:20px}\n.approval-comment-command code.hljs{background:transparent;padding:0;font-family:inherit;font-size:inherit;line-height:inherit;overflow-wrap:inherit}\n.approval-comment-command .hljs-comment,.approval-comment-command .hljs-quote{color:#8b949e;font-style:italic}\n.approval-comment-command .hljs-keyword,.approval-comment-command .hljs-literal,.approval-comment-command .hljs-section{color:#ff7b72}\n.approval-comment-command .hljs-string,.approval-comment-command .hljs-regexp{color:#a5d6ff}\n.approval-comment-command .hljs-title,.approval-comment-command .hljs-title.function_,.approval-comment-command .hljs-title.class_{color:#d2a8ff}\n.approval-comment-command .hljs-number,.approval-comment-command .hljs-symbol,.approval-comment-command .hljs-bullet{color:#79c0ff}\n.approval-comment-command .hljs-attr,.approval-comment-command .hljs-attribute,.approval-comment-command .hljs-variable{color:#ffa657}\n.approval-comment-command .hljs-name,.approval-comment-command .hljs-tag,.approval-comment-command .hljs-built_in,.approval-comment-command .hljs-type{color:#7ee787}\n.approval-comment-action-row{justify-content:flex-end;gap:8px;padding:11px 13px;display:flex}\n.approval-comment-reject:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover-danger);color:var(--dsw-alias-state-error-primary);border-color:#0000}\n.approval-comment-comment-toggle{align-self:flex-start;background:none;border:0;padding:2px 0;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:18px;cursor:pointer}\n.approval-comment-comment-toggle:hover:not(:disabled){color:var(--dsw-alias-label-primary)}\n.approval-comment-comment-toggle:disabled{opacity:0.5;cursor:default}\n.approval-comment-comment-field{flex-direction:column;gap:6px;display:flex}\n.approval-comment-comment-input{box-sizing:border-box;width:100%;min-height:56px;resize:vertical;border:1px solid var(--dsw-alias-line-secondary);border-radius:8px;padding:6px 8px;background:var(--dsw-specific-input-major);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:13px;line-height:20px}\n.approval-comment-comment-input:focus{outline:0;border-color:var(--dsw-alias-state-warn-secondary)}\n.approval-comment-comment-input:disabled{opacity:0.5}\n.approval-comment-comment-hint{color:var(--dsw-alias-label-caption);font-size:12px;line-height:16px;margin:0}\n";
 
 // plugins/approval-comment/src/client.tsx
 var _primitives = __toESM(require("@deepseek-ai/dsh-client-ui-primitives"), 1);
@@ -2067,15 +2036,7 @@ var conversationContextKey2 = _runtime.conversationContextKey;
 var PLUGIN_NAME = "approval-comment";
 var LOCALE_NS = "approval-comment";
 var STYLE_TAG_ID = "approval-comment/ApprovalComment.module.css";
-var CSS_TEXT = mergeCss(DESIGN_TOKENS, CONTROLS_CSS, [client_default]);
-if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(STYLE_TAG_ID) + "]") === null) {
-  tag = document.createElement("style");
-  tag.dataset.plugin = PLUGIN_NAME;
-  tag.dataset.pluginCss = STYLE_TAG_ID;
-  tag.textContent = CSS_TEXT;
-  document.head.appendChild(tag);
-}
-var tag;
+injectStyle(PLUGIN_NAME, STYLE_TAG_ID, mergeCss(client_default));
 var EN = {
   "approval.waiting": "Waiting for approval",
   "approval.detail.aria": "Approval details",
@@ -2117,9 +2078,6 @@ function commandOf(call) {
 function rootToolCall(snapshot, callId) {
   var node = snapshot.chat && snapshot.chat.nodes.get(conversationContextKey2("tool-call", callId));
   return node === void 0 || node === null ? void 0 : node.data && node.data.root;
-}
-function escapeHtml(text) {
-  return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 function highlightCommand(command) {
   try {
@@ -2284,7 +2242,7 @@ function apply(ctx) {
   var steerTo = buildSteerTo(ctx.sessions);
   var card = makeApprovalCommentCard(steerTo);
   ctx.effect(function() {
-    return ctx.locale.register(LOCALE_NS, { en: EN, zh: ZH });
+    return registerLocale(ctx, LOCALE_NS, EN, ZH);
   }, "approval-comment: dictionaries");
   ctx.slots.inject("conversation.composer", function() {
     return ctx.slots.register(

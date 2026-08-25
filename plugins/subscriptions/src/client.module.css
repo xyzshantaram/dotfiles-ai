@@ -1,13 +1,4 @@
-/* Page-level container: airy vertical rhythm, no own box. */
-.ocgs-root{box-sizing:border-box;display:flex;flex-direction:column;gap:13px;padding:0;color:var(--dsw-alias-label-primary)}
-/* Header row (title + refresh). */
-.ocgs-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.ocgs-title{font-size:24px;font-weight:700;margin:0;line-height:1.2;color:var(--dsw-alias-label-primary)}
-.ocgs-head-title{display:flex;align-items:baseline;gap:10px;min-width:0;flex:1;overflow:hidden}
 .ocgs-stale{font-size:14px;line-height:20px;color:var(--dsw-alias-label-secondary);white-space:nowrap}
-.ocgs-refresh{cursor:pointer;border:none;background:none;padding:5px 5px;border-radius:7px;color:var(--dsw-alias-label-secondary);font-size:15px;line-height:20px}
-.ocgs-refresh:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}
-/* Large setting card: 20px radius, generous 24px padding, single subtle border. */
 .ocgs-section{display:flex;flex-direction:column;gap:13px;border:1px solid var(--dsw-alias-border-l2);border-radius:20px;padding:24px;background:var(--dsw-alias-bg-tertiary)}
 .ocgs-section-title{font-size:24px;font-weight:700;margin:0;line-height:1.2;color:var(--dsw-alias-label-primary)}
 .ocgs-balance{font-size:18px;font-weight:600;color:var(--dsw-alias-label-primary)}
@@ -18,30 +9,23 @@
 .ocgs-row-label b{font-weight:600;color:var(--dsw-alias-label-primary);font-size:16px}
 .ocgs-row-label b:last-child{margin-left:auto}
 .ocgs-meta{display:flex;align-items:center;gap:10px;min-width:0}
-.ocgs-meta>span{font-size:13px;line-height:18px;color:var(--dsw-alias-label-secondary);white-space:nowrap;flex:none}
-/* Progress track: thin, soft, rounded. */
+.ocgs-meta > span{font-size:13px;line-height:18px;color:var(--dsw-alias-label-secondary);white-space:nowrap;flex:none}
 .ocgs-track{box-sizing:border-box;flex:1;min-width:0;height:8px;border-radius:7px;background:var(--dsw-alias-border-l2);overflow:hidden}
-.ocgs-fill{height:100%;border-radius:7px;transition:width .4s ease}
+.ocgs-fill{height:100%;border-radius:7px;transition:width 0.4s ease}
 .ocgs-pace{font-size:15px;line-height:22px;color:var(--dsw-alias-label-secondary)}
-.ocgs-err{font-size:15px;line-height:22px;color:var(--dsw-alias-state-error-primary)}
-/* Action row (fetch cookie / token buttons + note). */
 .ocgs-cookie{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:3px 0 6px}
-/* Secondary / pill button. */
 .ocgs-btn{display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:999px;font-size:15px;line-height:20px;padding:7px 15px;cursor:pointer;min-height:36px}
 .ocgs-btn:hover{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-border-l3)}
-.ocgs-btn:disabled{opacity:.5;cursor:default}
+.ocgs-btn:disabled{opacity:0.5;cursor:default}
 .ocgs-cookie-note{font-size:14px;line-height:18px;color:var(--dsw-alias-label-secondary)}
-/* Provider visibility toggles — checkbox field language. */
 .ocgs-toggles{display:flex;flex-direction:column;gap:10px}
 .ocgs-toggle{display:flex;align-items:center;gap:10px;min-width:0;cursor:pointer}
 .ocgs-toggle-label{flex:1;min-width:0;font-size:18px;line-height:24px;color:var(--dsw-alias-label-secondary)}
 .ocgs-toggle input{flex:none;width:24px;height:24px;cursor:pointer;accent-color:var(--dsw-alias-state-business-primary)}
-/* Details disclosure for the toggle list. */
 .ocgs-details{border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-tertiary);padding:13px;margin-top:4px}
 .ocgs-summary{cursor:pointer;font-size:18px;font-weight:600;color:var(--dsw-alias-label-primary);list-style:none}
 .ocgs-summary::-webkit-details-marker{display:none}
 .ocgs-details[open] .ocgs-toggles{padding-top:10px}
-/* DeepSeek dashboard — nested grouped controls. */
 .ds-dashboard{display:flex;flex-direction:column;gap:13px}
 .ds-hero{display:flex;flex-direction:column;gap:5px;padding:13px;background:var(--dsw-alias-bg-tertiary);border-radius:12px;border:1px solid var(--dsw-alias-border-l2)}
 .ds-hero-total{font-size:32px;font-weight:700;color:var(--dsw-alias-label-primary);line-height:1.2}
@@ -58,5 +42,4 @@
 .ds-token-value.out{color:var(--dsw-alias-state-error-primary)}
 .ds-empty{font-size:14px;color:var(--dsw-alias-label-secondary);font-style:italic}
 .ocgs-note{font-size:15px;line-height:22px;color:var(--dsw-alias-label-secondary)}
-/* Visible focus ring on every interactive control. */
 :focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}

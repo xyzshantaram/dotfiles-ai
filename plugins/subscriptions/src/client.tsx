@@ -32,6 +32,10 @@
  * alive so the client-module registry serves this bundle.
  */
 import react from "react";
+import { injectStyle, mergeCss, fetchJson, postJson, putJson } from "../../shared/client-util";
+import { SettingsSection } from "../../shared/settings-panel";
+import settingsCss from "../../shared/settings.css";
+import { chainNameForRoutes } from "../../profile-routes";
 import localCss from "./client.module.css";
 
 /** Stable plugin identity, also the loader entry id in cordis.patch.yml. */
@@ -39,10 +43,6 @@ var PLUGIN_NAME = "subscriptions";
 
 /** Stable stylesheet tag id, used to dedupe the injected <style> element. */
 var STYLE_TAG_ID = "subscriptions/client.css";
-
-
-/** One stylesheet for this panel. Class names are kebab-case only. */
-var CSS_TEXT = [localCss].join("");
 
 /** OpenCode GO windows, in the same order as the sidebar widget. */
 var GO_WINDOWS = [
@@ -120,14 +120,12 @@ function renderTelemetry(t) {
       : "— est";
   var req = typeof t.totalRequests === "number" ? String(t.totalRequests) : "—";
   var parts = ["24h: " + req + " req"];
-  if (typeof t.requestsPerMinute === "number")
-    parts.push(t.requestsPerMinute.toFixed(1) + "/min");
+  if (typeof t.requestsPerMinute === "number") parts.push(t.requestsPerMinute.toFixed(1) + "/min");
   parts.push(usd);
   parts.push(fmtCount(totalTokens) + " tokens");
   if (typeof usage.avgCacheHitRate === "number")
     parts.push("cache " + Math.round(usage.avgCacheHitRate * 100) + "%");
-  if (typeof t.errorCount === "number" && t.errorCount > 0)
-    parts.push(t.errorCount + " errors");
+  if (typeof t.errorCount === "number" && t.errorCount > 0) parts.push(t.errorCount + " errors");
   return parts.join(" · ");
 }
 
@@ -173,17 +171,25 @@ function renderLogSummary(logs) {
   return line;
 }
 
-/** Usage percent of a window: go sends percent, meridian sends utilization. */
+/** Usage percent of a window: go sends percent, meridian sends utilization,
+ * Command Code sends used/cap. Always clamps to 0..100 (D5). */
 function windowPercent(win) {
-  if (typeof win.percent === "number") return win.percent;
-  if (typeof win.utilization === "number") return win.utilization * 100;
-  return null;
+  var pct = null;
+  if (typeof win.percent === "number") pct = win.percent;
+  else if (typeof win.utilization === "number") pct = win.utilization * 100;
+  else if (typeof win.used === "number" && typeof win.cap === "number" && win.cap > 0)
+    pct = (win.used / win.cap) * 100;
+  if (pct === null) return null;
+  return Math.max(0, Math.min(100, pct));
 }
 
 /** Right-hand status text: a failing status wins, else the reset countdown. */
 function statusText(win, hint) {
   if (typeof win.status === "string" && win.status !== "ok") return win.status;
   if (win.resetsAt) return timeUntil(win.resetsAt);
+  // Command Code windows name the reset time resetAt; buildRows prefixes
+  // "resets in ", so return the bare countdown like the resetsAt branch.
+  if (win.resetAt) return timeUntil(win.resetAt);
   return hint || "";
 }
 
@@ -227,90 +233,14 @@ function renderPaceLine(label, pace, resetsAtMs, utilization) {
   return parts.join(" · ");
 }
 
-/** Fetch one same-origin proxy route and always resolve to a plain object. */
-function fetchJson(url) {
-  return fetch(url, { cache: "no-store" })
-    .then(function (res) {
-      return res
-        .json()
-        .catch(function () {
-          return null;
-        })
-        .then(function (json) {
-          return { ok: res.ok, status: res.status, json: json };
-        });
-    })
-    .then(function (result) {
-      if (result.json !== null && result.json.error) {
-        return { data: null, error: String(result.json.error) };
-      }
-      if (!result.ok) return { data: null, error: "HTTP " + result.status };
-      return { data: result.json, error: null };
-    })
-    .catch(function (e) {
-      return { data: null, error: String((e && e.message) || e) };
-    });
-}
-
-/** POST one same-origin route (cookie extract/login), same {data,error} shape. */
-function postJson(url) {
-  return fetch(url, { method: "POST", cache: "no-store" })
-    .then(function (res) {
-      return res
-        .json()
-        .catch(function () {
-          return null;
-        })
-        .then(function (json) {
-          return { ok: res.ok, status: res.status, json: json };
-        });
-    })
-    .then(function (result) {
-      if (result.json !== null && result.json.error) {
-        return { data: null, error: String(result.json.error) };
-      }
-      if (!result.ok) return { data: null, error: "HTTP " + result.status };
-      return { data: result.json, error: null };
-    })
-    .catch(function (e) {
-      return { data: null, error: String((e && e.message) || e) };
-    });
-}
-
-/** PUT one same-origin route with a JSON body; same {data,error} shape. */
-function putJson(url, body) {
-  return fetch(url, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-    cache: "no-store",
-  })
-    .then(function (res) {
-      return res
-        .json()
-        .catch(function () {
-          return null;
-        })
-        .then(function (json) {
-          return { ok: res.ok, status: res.status, json: json };
-        });
-    })
-    .then(function (result) {
-      if (result.json !== null && result.json.error) {
-        return { data: null, error: String(result.json.error) };
-      }
-      if (!result.ok) return { data: null, error: "HTTP " + result.status };
-      return { data: result.json, error: null };
-    })
-    .catch(function (e) {
-      return { data: null, error: String((e && e.message) || e) };
-    });
-}
-
 /** One window row: label + percent, then a track with a fill and status. */
-function buildRows(defs, windows, labelOf) {
+function buildRows(defs, windows, labelOf?) {
   var rows = [];
-  var keys = defs ? defs.map(function (d) { return d.key; }) : Object.keys(windows || {});
+  var keys = defs
+    ? defs.map(function (d) {
+        return d.key;
+      })
+    : Object.keys(windows || {});
   for (var i = 0; i < keys.length; i++) {
     var key = keys[i];
     var def = defs ? defs[i] : null;
@@ -333,7 +263,7 @@ function buildRows(defs, windows, labelOf) {
             <div
               className="ocgs-fill"
               style={{
-                width: Math.max(0, Math.min(100, percent)) + "%",
+                width: percent + "%",
                 background: fillColor(percent),
               }}
             />
@@ -435,7 +365,12 @@ function renderDsDashboard(bal, amount, cost) {
         <div className="ds-usage-label">Total Tokens</div>
         <div className="ds-usage-value">{fmtCount(totalTokens)}</div>
         <div className="ds-usage-sub">
-          {"in " + fmtCount(inTokens) + " · out " + fmtCount(outTokens) + " · cache " + fmtCount(cacheRead + cacheWrite)}
+          {"in " +
+            fmtCount(inTokens) +
+            " · out " +
+            fmtCount(outTokens) +
+            " · cache " +
+            fmtCount(cacheRead + cacheWrite)}
         </div>
       </div>,
     );
@@ -468,105 +403,29 @@ function renderDsDashboard(bal, amount, cost) {
   );
 }
 
-/**
- * Flatten one named-chain value to an ordered route list (client mirror of
- * the host chainOf in plugins/profile-routes.ts). Handles { routes: [...] },
- * composition arrays, "chain:<name>" refs, and "provider/model" strings.
- */
-function chainRoutes(value, chains, seen) {
-  var out = [];
-  if (value === null || value === undefined) return out;
-  if (typeof value === "string") {
-    if (value.indexOf("chain:") === 0) {
-      var refName = value.slice("chain:".length);
-      if (chains && chains[refName] && (!seen || !seen.has(refName))) {
-        var guard = new Set(seen || []);
-        guard.add(refName);
-        return chainRoutes(chains[refName], chains, guard);
-      }
-      return out;
-    }
-    var slash = value.indexOf("/");
-    if (slash > 0) return [{ provider: value.slice(0, slash), model: value.slice(slash + 1) }];
-    if (chains && chains[value] && (!seen || !seen.has(value))) {
-      var guard2 = new Set(seen || []);
-      guard2.add(value);
-      return chainRoutes(chains[value], chains, guard2);
-    }
-    return out;
-  }
-  if (Array.isArray(value)) {
-    for (var ci = 0; ci < value.length; ci++)
-      out = out.concat(chainRoutes(value[ci], chains, seen));
-    return out;
-  }
-  if (value && typeof value === "object" && Array.isArray(value.routes)) {
-    for (var cj = 0; cj < value.routes.length; cj++) {
-      var route = value.routes[cj];
-      if (route && typeof route.provider === "string" && typeof route.model === "string") {
-        out.push({ provider: route.provider, model: route.model });
-      }
-    }
-  }
-  return out;
-}
-
-/** True when two route lists carry the same provider/model pairs in order. */
-function routesEqual(a, b) {
-  if (a.length !== b.length) return false;
-  for (var ri = 0; ri < a.length; ri++) {
-    if (a[ri].provider !== b[ri].provider || a[ri].model !== b[ri].model) return false;
-  }
-  return true;
-}
-
-/** Reverse-match a chain NAME from its flattened routes against the library. */
-function chainNameFor(routes, chains) {
-  if (!chains || typeof chains !== "object") return null;
-  var keys = Object.keys(chains);
-  for (var ki = 0; ki < keys.length; ki++) {
-    var flat = chainRoutes(chains[keys[ki]], chains, new Set([keys[ki]]));
-    if (routesEqual(flat, routes)) return keys[ki];
-  }
-  return null;
-}
-
 /** Command Code window meters (5-hour + weekly). [] when no usable data. */
 function buildCcMeters(cc) {
-  var meters = [];
-  if (!cc || cc.error || !cc.data || cc.data.ok !== true) return meters;
+  if (!cc || cc.error || !cc.data || cc.data.ok !== true) return [];
   var wins = cc.data.windows || null;
   var ccDefs = [
     { key: "fiveHour", label: "5-hour" },
     { key: "weekly", label: "Weekly" },
   ];
-  for (var mi = 0; mi < ccDefs.length; mi++) {
-    var def = ccDefs[mi];
-    var win = wins ? wins[def.key] : null;
+  var windows = {};
+  for (var ci = 0; ci < ccDefs.length; ci++) {
+    var win = wins ? wins[ccDefs[ci].key] : null;
     if (!win) continue;
     var used = typeof win.used === "number" ? win.used : null;
     var cap = typeof win.cap === "number" ? win.cap : null;
     if (used === null || cap === null || cap <= 0) continue;
-    var pct = Math.round((used / cap) * 100);
-    meters.push(
-      <div className="ocgs-row" key={def.key}>
-        <div className="ocgs-row-label">
-          <b>{def.label}</b>
-          {win.resetAt ? <span className="ocgs-stale">{"resets in " + timeUntil(win.resetAt)}</span> : null}
-          <b>{pct + "%"}</b>
-        </div>
-        <div className="ocgs-meta">
-          <div className="ocgs-track">
-            <div
-              className="ocgs-fill"
-              style={{ width: Math.max(0, Math.min(100, pct)) + "%", background: fillColor(pct) }}
-            />
-          </div>
-        </div>
-      </div>,
-    );
+    windows[ccDefs[ci].key] = {
+      key: ccDefs[ci].key,
+      used: used,
+      cap: cap,
+      resetAt: win.resetAt || null,
+    };
   }
-  return meters;
+  return buildRows(ccDefs, windows, undefined);
 }
 /**
  * Build the panel component. The plugin context is captured so the
@@ -687,7 +546,7 @@ function renderCcSection(cc, ccUsage) {
   return (
     <div className="ocgs-section">
       <h4 className="ocgs-section-title">Command Code</h4>
-      {errorLine ? <div className="ocgs-err">{errorLine}</div> : null}
+      {errorLine ? <div className="dsp-err">{errorLine}</div> : null}
       {hero}
       {meters.length > 0 ? <div className="ocgs-rows">{meters}</div> : null}
       {costCard ? <div className="ds-usage-grid">{costCard}</div> : null}
@@ -1023,7 +882,7 @@ function makePanel(ctx, config) {
           : [];
       profileInfo = {
         active: activeName,
-        chain: chainNameFor(orcRoutes, pcfg.chains),
+        chain: chainNameForRoutes(orcRoutes, pcfg.chains),
         head: orcRoutes.length > 0 ? orcRoutes[0] : null,
       };
     }
@@ -1077,14 +936,8 @@ function makePanel(ctx, config) {
     }
 
     return (
-      <div className="ocgs-root">
-        <div className="ocgs-head">
-          <div className="ocgs-head-title">
-            <h3 className="ocgs-title">Subscriptions</h3>
-            {staleText ? <span className="ocgs-stale">{staleText}</span> : null}
-          </div>
-          <button className="ocgs-refresh" onClick={load}>Refresh</button>
-        </div>
+      <SettingsSection title={"Subscriptions"} onRefresh={load} refreshLabel={"Refresh"}>
+        {staleText ? <div className="ocgs-stale">{staleText}</div> : null}
 
         <details className="ocgs-details">
           <summary className="ocgs-summary">Show sections</summary>
@@ -1112,8 +965,9 @@ function makePanel(ctx, config) {
         {snap === null ? <div className="ocgs-note">Loading subscription data…</div> : null}
 
         {allFailed ? (
-          <div className="ocgs-err">
-            {"Could not load subscription data. " + (firstError || "Check that the subscriptions plugin is mounted.")}
+          <div className="dsp-err">
+            {"Could not load subscription data. " +
+              (firstError || "Check that the subscriptions plugin is mounted.")}
           </div>
         ) : null}
 
@@ -1145,7 +999,9 @@ function makePanel(ctx, config) {
         {providerVisible(cfg, "claude") ? (
           <div className="ocgs-section">
             <h4 className="ocgs-section-title">Claude (meridian)</h4>
-            {quota && quota.error ? <div className="ocgs-err">{"Claude (meridian): " + quota.error}</div> : null}
+            {quota && quota.error ? (
+              <div className="dsp-err">{"Claude (meridian): " + quota.error}</div>
+            ) : null}
             <div className="ocgs-rows">{buildRows(null, claudeWindows, windowLabel)}</div>
             {claudePaceLine ? <div className="ocgs-pace">{claudePaceLine}</div> : null}
           </div>
@@ -1154,8 +1010,11 @@ function makePanel(ctx, config) {
         {providerVisible(cfg, "deepseek") ? (
           <div className="ocgs-section">
             <h4 className="ocgs-section-title">DeepSeek</h4>
-            {ds && ds.error ? <div className="ocgs-err">{"DeepSeek: " + ds.error}</div> : null}
-            {ds && ds.data && Array.isArray(ds.data.balance_infos) && ds.data.balance_infos.length > 0
+            {ds && ds.error ? <div className="dsp-err">{"DeepSeek: " + ds.error}</div> : null}
+            {ds &&
+            ds.data &&
+            Array.isArray(ds.data.balance_infos) &&
+            ds.data.balance_infos.length > 0
               ? renderDsDashboard(ds.data.balance_infos[0], dsUsageAmount, dsUsageCost)
               : null}
             <div className="ocgs-cookie">
@@ -1176,7 +1035,7 @@ function makePanel(ctx, config) {
           <div className="ocgs-section">
             <h4 className="ocgs-section-title">OpenCode GO</h4>
             {balanceLine ? <div className="ocgs-balance">{balanceLine}</div> : null}
-            {go && go.error ? <div className="ocgs-err">{"OpenCode GO: " + go.error}</div> : null}
+            {go && go.error ? <div className="dsp-err">{"OpenCode GO: " + go.error}</div> : null}
             <div className="ocgs-rows">{buildRows(GO_WINDOWS, goUsage)}</div>
             {goPaceLine ? <div className="ocgs-pace">{goPaceLine}</div> : null}
             <div className="ocgs-cookie">
@@ -1195,14 +1054,14 @@ function makePanel(ctx, config) {
 
         {providerVisible(cfg, "opencode-zen") ? (
           <div className="ocgs-section">
-            <div className="ocgs-head">
+            <div className="dsp-head">
               <h4 className="ocgs-section-title">OpenCode Zen</h4>
-              <button className="ocgs-refresh" onClick={refreshOz}>
+              <button className="dsp-refresh" onClick={refreshOz}>
                 Refresh
               </button>
             </div>
             {ozBalanceLine ? <div className="ocgs-balance">{ozBalanceLine}</div> : null}
-            {oz && oz.error ? <div className="ocgs-err">{"OpenCode Zen: " + oz.error}</div> : null}
+            {oz && oz.error ? <div className="dsp-err">{"OpenCode Zen: " + oz.error}</div> : null}
             <div className="ocgs-cookie">
               <button className="ocgs-btn" disabled={cookie.busy} onClick={fetchCookie}>
                 {cookie.busy ? "Fetching…" : "Fetch cookie from Firefox"}
@@ -1216,7 +1075,7 @@ function makePanel(ctx, config) {
             </div>
           </div>
         ) : null}
-      </div>
+      </SettingsSection>
     );
   };
 }
@@ -1228,13 +1087,7 @@ var inject = ["slots"];
 /** Plugin body: inject the styles once and register the settings section. */
 function apply(ctx, config) {
   ctx.effect(function () {
-    if (typeof document === "undefined") return;
-    if (document.querySelector('style[data-plugin-css="' + STYLE_TAG_ID + '"]') !== null) return;
-    var tag = document.createElement("style");
-    tag.dataset.plugin = PLUGIN_NAME;
-    tag.dataset.pluginCss = STYLE_TAG_ID;
-    tag.textContent = CSS_TEXT;
-    document.head.appendChild(tag);
+    injectStyle(PLUGIN_NAME, STYLE_TAG_ID, mergeCss(settingsCss, localCss));
   }, "subscriptions: styles");
 
   // The panel component is created once, so its identity stays stable across
