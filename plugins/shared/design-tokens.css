@@ -17,10 +17,10 @@
   --text-secondary: #adb2b8;
   --text-muted: #88898a;
 
-  --radius-sm: 0.4375rem;
-  --radius-md: 0.75rem;
-  --radius-lg: 1.25rem;
-  --radius-pill: 62.4375rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-pill: 999rem;
 
   --space-1: 0.5rem;
   --space-2: 1rem;
