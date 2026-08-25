@@ -144,12 +144,6 @@ function isCachedDown(level) {
   }
   return false;
 }
-function depthOf(agent) {
-  const a = agent;
-  const header = a?.session?.header?.delegationDepth ?? 0;
-  const options = a?.options?.subagentDepth ?? 0;
-  return Math.max(header, options);
-}
 function chainForDepth(ctx, depth) {
   const settings = service(ctx, "settings");
   const profile = settings?.get(PROFILE_NS);
@@ -251,14 +245,32 @@ function registerRoleTool(ctx, spec, config) {
   );
 }
 function registerFailover(ctx, alwaysMaxRetries) {
-  const state = /* @__PURE__ */ new WeakMap();
+  const STATE_CAP = 1024;
+  const state = /* @__PURE__ */ new Map();
+  const stateOrder = [];
+  const setState = (key, value) => {
+    if (!state.has(key)) {
+      stateOrder.push(key);
+      if (stateOrder.length > STATE_CAP) {
+        const oldest = stateOrder.shift();
+        if (oldest) state.delete(oldest);
+      }
+    }
+    state.set(key, value);
+  };
+  const clearState = (key) => {
+    if (state.delete(key)) {
+      const idx = stateOrder.indexOf(key);
+      if (idx >= 0) stateOrder.splice(idx, 1);
+    }
+  };
   const keyOf = (turn, step) => `${String(turn)}:${String(step)}`;
   ctx.on("agent/request", async (payload, next) => {
     const proposal = await next();
     if (!proposal?.provider || !proposal.model) return proposal;
     const p = payload;
-    if (!p.agent) return proposal;
-    const chain = effectiveChain(ctx, depthOf(p.agent));
+    const stepKey = keyOf(p.turn, p.step);
+    const chain = effectiveChain(ctx, 0);
     const agentDefaultModel = service(ctx, "agentDefaultModel");
     const selection = agentDefaultModel?.currentSelection?.();
     const levels = selection ? [
@@ -271,11 +283,10 @@ function registerFailover(ctx, alwaysMaxRetries) {
       (level2) => level2.provider === proposal.provider && level2.model === proposal.model
     );
     if (matched < 0) return proposal;
-    const stepKey = keyOf(p.turn, p.step);
-    let s = state.get(p.agent);
+    let s = state.get(stepKey);
     if (!s || s.stepKey !== stepKey) {
       s = { stepKey, levels, cursor: matched, retries: 0, failures: [] };
-      state.set(p.agent, s);
+      setState(stepKey, s);
     }
     const llm = service(ctx, "llm");
     while (s.cursor < s.levels.length) {
@@ -317,12 +328,12 @@ ${tried}`);
   });
   ctx.on("agent/request-error", (payload, next) => {
     const p = payload;
-    const s = p.agent ? state.get(p.agent) : void 0;
-    if (!s || !p.agent || s.stepKey !== keyOf(p.turn, p.step)) return next();
+    const s = state.get(keyOf(p.turn, p.step));
+    if (!s || s.stepKey !== keyOf(p.turn, p.step)) return next();
     const cur = s.levels[s.cursor];
     if (!cur) return next();
     if (p.signal?.aborted) {
-      state.delete(p.agent);
+      clearState(keyOf(p.turn, p.step));
       return next();
     }
     const failure = p.failure ?? {};
@@ -358,7 +369,7 @@ ${tried}`);
       return { kind: "retry" };
     }
     const tried = s.failures.map((f) => `  - ${f.level.provider}/${f.level.model}: ${f.code} \u2014 ${f.message}`).join("\n");
-    state.delete(p.agent);
+    clearState(keyOf(p.turn, p.step));
     throw new Error(`profiles: all levels exhausted for the active chain:
 ${tried}`);
   });

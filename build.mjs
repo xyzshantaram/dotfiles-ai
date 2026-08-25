@@ -29,6 +29,7 @@ const entries = [
   ["plugins/package-tool.ts", "plugins/package-tool.js"],
   ["plugins/skill-gate.ts", "plugins/skill-gate.js"],
   ["plugins/profiles.ts", "plugins/profiles.js"],
+  ["plugins/resume.ts", "plugins/resume.js"],
   ["plugins/ask-interrupt.ts", "plugins/ask-interrupt.js"],
   ["plugins/tmp-dsh-shared.ts", "plugins/tmp-dsh-shared.js"],
   ["plugins/grant.ts", "plugins/grant.js"],
