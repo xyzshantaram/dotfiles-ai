@@ -17,9 +17,9 @@
 .approval-comment-reject:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover-danger);color:var(--dsw-alias-state-error-primary);border-color:#0000}
 .approval-comment-comment-toggle{align-self:flex-start;background:none;border:0;padding:2px 0;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:18px;cursor:pointer}
 .approval-comment-comment-toggle:hover:not(:disabled){color:var(--dsw-alias-label-primary)}
-.approval-comment-comment-toggle:disabled{opacity:.5;cursor:default}
+.approval-comment-comment-toggle:disabled{opacity:0.5;cursor:default}
 .approval-comment-comment-field{flex-direction:column;gap:6px;display:flex}
 .approval-comment-comment-input{box-sizing:border-box;width:100%;min-height:56px;resize:vertical;border:1px solid var(--dsw-alias-line-secondary);border-radius:8px;padding:6px 8px;background:var(--dsw-specific-input-major);color:var(--dsw-alias-label-primary);font-family:inherit;font-size:13px;line-height:20px}
 .approval-comment-comment-input:focus{outline:0;border-color:var(--dsw-alias-state-warn-secondary)}
-.approval-comment-comment-input:disabled{opacity:.5}
+.approval-comment-comment-input:disabled{opacity:0.5}
 .approval-comment-comment-hint{color:var(--dsw-alias-label-caption);font-size:12px;line-height:16px;margin:0}

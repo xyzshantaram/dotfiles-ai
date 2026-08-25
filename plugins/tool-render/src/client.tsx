@@ -48,7 +48,7 @@
 // Registered lazily (on first use) from an extension map, so the bundle
 // carries only the languages that read calls can actually produce.
 import hljs from "highlight.js/lib/core";
-import { DESIGN_TOKENS, CONTROLS_CSS, mergeCss } from "../../design-system";
+import { injectStyle, mergeCss, escapeHtml } from "../../shared/client-util";
 import localCss from "./client.module.css";
 import jsGrammar from "highlight.js/lib/languages/javascript";
 import tsGrammar from "highlight.js/lib/languages/typescript";
@@ -177,17 +177,7 @@ var HLJS_THEME_CSS = [
   ".hljs-deletion{color:#ffdcd7;background-color:#67060c}",
 ].join("");
 
-var CSS_TEXT = mergeCss(DESIGN_TOKENS, CONTROLS_CSS, [localCss]);
-if (
-  typeof document !== "undefined" &&
-  document.querySelector("style[data-plugin-css=" + JSON.stringify(STYLE_TAG_ID) + "]") === null
-) {
-  var tag = document.createElement("style");
-  tag.dataset.plugin = PLUGIN_NAME;
-  tag.dataset.pluginCss = STYLE_TAG_ID;
-  tag.textContent = mergeCss(CSS_TEXT, HLJS_THEME_CSS);
-  document.head.appendChild(tag);
-}
+injectStyle(PLUGIN_NAME, STYLE_TAG_ID, mergeCss(localCss, HLJS_THEME_CSS));
 
 // ---- Post-render highlighting pass for raw <pre><code> blocks. ---------
 // The render path already highlights every block it creates and marks the
@@ -385,15 +375,6 @@ function pickString(value, keys) {
     if (typeof v === "string" && v !== "") return v;
   }
   return undefined;
-}
-
-function escapeHtml(text) {
-  return String(text)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
 }
 
 var ANSI_RE =
@@ -1406,8 +1387,12 @@ function writeBody(path, before, newText) {
   if (before === null || before === "") {
     return (
       <div className="tool-render-write">
-        <div className="tool-render-write-note">{"No earlier version on record; new content below"}</div>
-        <div className="tool-render-code">{readLineRows(numberedReadRows(newText, 1), language)}</div>
+        <div className="tool-render-write-note">
+          {"No earlier version on record; new content below"}
+        </div>
+        <div className="tool-render-code">
+          {readLineRows(numberedReadRows(newText, 1), language)}
+        </div>
       </div>
     );
   }

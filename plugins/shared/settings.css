@@ -1,0 +1,102 @@
+/* Shared settings-page vocabulary, normalized from the session-archive,
+ * subscriptions, and profiles settings panels. One rule set in one file so
+ * the three panels cannot drift. Radius and padding disagreements are
+ * normalized to the session-archive (or median) value; the var(--dsw-...)
+ * aliases the current rules use are kept as-is. */
+
+/* Page-level container: airy vertical rhythm, no own box. */
+.dsp-root {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* Header row (title + refresh). */
+.dsp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dsp-title {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0;
+  line-height: 1.2;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* Refresh: session-archive/profiles form (no box, color shift only).
+ * subscriptions pads and rounds the hit area; normalized away. */
+.dsp-refresh {
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 15px;
+  line-height: 20px;
+}
+.dsp-refresh:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+.dsp-err {
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* Large setting card. Padding is the median of 16/20/24 (session-archive
+ * 20px); the radius is the two-agreeing 20px, not profiles' 12px. */
+.dsp-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 20px;
+  padding: 20px;
+  background: var(--dsw-alias-bg-tertiary);
+}
+
+/* Card title: subscriptions' 24px/700 matches the page-title vocabulary;
+ * profiles' smaller 16px/600 card title normalized up. */
+.dsp-section-title {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0;
+  line-height: 1.2;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* Setting row: horizontal in session-archive and profiles (subscriptions
+ * stacks its label and meta vertically; normalized to the horizontal form). */
+.dsp-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* Row label: only subscriptions defines one; ported verbatim, with its
+ * emphasized <b> children. */
+.dsp-row-label {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 16px;
+  line-height: 22px;
+  color: var(--dsw-alias-label-secondary);
+}
+.dsp-row-label b {
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+  font-size: 16px;
+}
+.dsp-row-label b:last-child {
+  margin-left: auto;
+}

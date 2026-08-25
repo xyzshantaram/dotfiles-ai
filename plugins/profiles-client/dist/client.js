@@ -1,58 +1,150 @@
 (() => {
-  // plugins/design-system.ts
-  var DESIGN_TOKENS = `:root {
-  --bg: #2c2c2e;
-  --surface: #232324;
-  --surface-hover: #303032;
-  --surface-active: #43454a;
+  // plugins/shared/client-util.ts
+  function injectStyle(pluginName, styleId, cssText) {
+    if (typeof document === "undefined") return;
+    if (document.querySelector("style[data-plugin-css=" + JSON.stringify(styleId) + "]") !== null)
+      return;
+    const tag = document.createElement("style");
+    tag.dataset.plugin = pluginName;
+    tag.dataset.pluginCss = styleId;
+    tag.textContent = cssText;
+    document.head.appendChild(tag);
+  }
+  function mergeCss(...parts) {
+    return parts.flat().filter(Boolean).join("\n");
+  }
+  function fetchJson(url) {
+    return fetch(url, { cache: "no-store" }).then(function(res) {
+      return res.json().catch(function() {
+        return null;
+      }).then(function(json) {
+        return { ok: res.ok, status: res.status, json };
+      });
+    }).then(function(result) {
+      if (result.json !== null && result.json.error) {
+        return { data: null, error: String(result.json.error) };
+      }
+      if (!result.ok) return { data: null, error: "HTTP " + result.status };
+      return { data: result.json, error: null };
+    }).catch(function(e) {
+      return { data: null, error: String(e && e.message || e) };
+    });
+  }
+  function putJson(url, body) {
+    return fetch(url, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      cache: "no-store"
+    }).then(function(res) {
+      return res.json().catch(function() {
+        return null;
+      }).then(function(json) {
+        return { ok: res.ok, status: res.status, json };
+      });
+    }).then(function(result) {
+      if (result.json !== null && result.json.error) {
+        return { data: null, error: String(result.json.error) };
+      }
+      if (!result.ok) return { data: null, error: "HTTP " + result.status };
+      return { data: result.json, error: null };
+    }).catch(function(e) {
+      return { data: null, error: String(e && e.message || e) };
+    });
+  }
+  function registerLocale(ctx, ns, en, zh) {
+    return ctx.locale.register(ns, { en, zh });
+  }
 
-  --border: #3e3e3f;
-  --border-subtle: #303031;
-  --border-focus: #66676b;
+  // plugins/profile-routes.ts
+  function isRouteCandidate(value) {
+    return typeof value === "object" && value !== null && typeof value.provider === "string" && typeof value.model === "string";
+  }
+  function normalizeEntry(entry, chains, seen) {
+    if (isRouteCandidate(entry)) return [entry];
+    if (typeof entry === "string") {
+      if (entry.startsWith("chain:")) {
+        const name = entry.slice("chain:".length);
+        if (chains?.[name] === void 0) return [];
+        const guard = new Set(seen ?? []);
+        if (guard.has(name)) return [];
+        guard.add(name);
+        return normalizeEntry(chains[name], chains, guard);
+      }
+      const slash = entry.indexOf("/");
+      if (slash > 0) {
+        return [{ provider: entry.slice(0, slash), model: entry.slice(slash + 1) }];
+      }
+      if (chains?.[entry] !== void 0) {
+        const guard = new Set(seen ?? []);
+        if (guard.has(entry)) return [];
+        guard.add(entry);
+        return normalizeEntry(chains[entry], chains, guard);
+      }
+      return [];
+    }
+    if (typeof entry === "object" && entry !== null) {
+      if (Array.isArray(entry.routes)) {
+        return entry.routes.filter(isRouteCandidate);
+      }
+      if (Array.isArray(entry)) {
+        const out = [];
+        for (const step of entry) {
+          if (typeof step === "string") {
+            if (step.startsWith("chain:")) {
+              const name = step.slice("chain:".length);
+              if (chains?.[name] !== void 0) {
+                const guard = new Set(seen ?? []);
+                if (!guard.has(name)) {
+                  guard.add(name);
+                  out.push(...normalizeEntry(chains[name], chains, guard));
+                }
+              }
+            } else if (step.indexOf("/") > 0) {
+              const slash = step.indexOf("/");
+              out.push({ provider: step.slice(0, slash), model: step.slice(slash + 1) });
+            }
+          } else {
+            out.push(...normalizeEntry(step, chains, seen));
+          }
+        }
+        return out;
+      }
+    }
+    return [];
+  }
+  function entryHead(entry, chains) {
+    if (typeof entry === "object" && entry !== null) {
+      const obj = entry;
+      if ("orchestrator" in obj || "subagent" in obj) {
+        return entryHead(obj.orchestrator, chains) ?? entryHead(obj.subagent, chains);
+      }
+    }
+    return normalizeEntry(entry, chains)[0];
+  }
+  function routesEqual(a, b) {
+    if (a === b) return true;
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      const left = a[i];
+      const right = b[i];
+      if (left.provider !== right.provider || left.model !== right.model) return false;
+    }
+    return true;
+  }
+  function chainNameForRoutes(routes, chains) {
+    if (chains === void 0 || chains === null) return void 0;
+    for (const name of Object.keys(chains)) {
+      if (routesEqual(normalizeEntry(chains[name], chains), routes)) return name;
+    }
+    return void 0;
+  }
 
-  --text-primary: #f9fafb;
-  --text-secondary: #adb2b8;
-  --text-muted: #88898a;
-
-  --radius-sm: 7px;
-  --radius-md: 12px;
-  --radius-lg: 20px;
-  --radius-pill: 999px;
-
-  --space-1: 8px;
-  --space-2: 16px;
-  --space-3: 24px;
-  --space-4: 32px;
-  --space-5: 40px;
-  --space-6: 48px;
-}`;
-  var CONTROLS_CSS = `
-.setting-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--space-3);display:grid;grid-template-columns:28px 1fr;gap:20px;align-items:start}
-.setting-checkbox{width:28px;height:28px;flex:0 0 28px;border-radius:3px}
-.segmented-control{display:flex;padding:4px;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
-.segment{min-width:175px;height:48px;border:0;border-radius:10px;background:transparent;color:var(--text-secondary);font-size:20px}
-.segment[data-active="true"]{background:var(--surface-active);color:var(--text-primary);font-weight:600}
-.control-list{overflow:hidden;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
-.control-list-row{min-height:64px;padding:0 20px;display:flex;align-items:center;gap:12px}
-.control-list-row + .control-list-row{border-top:1px solid var(--border-subtle)}
-.pill{height:36px;padding-inline:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--text-secondary);font-size:16px}
-.pill[data-active="true"]{background:var(--surface-active);color:var(--text-primary)}
-.icon-button{width:40px;height:40px;display:inline-grid;place-items:center;border:0;border-radius:8px;background:transparent;color:var(--text-secondary);font-size:28px}
-.icon-button:hover{background:var(--surface-hover);color:var(--text-primary)}
-.mode-switch{display:inline-flex;padding:4px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface)}
-.mode-switch>button{height:44px;padding-inline:32px;border:0;border-radius:9px;background:transparent;color:var(--text-secondary);font-size:18px}
-.mode-switch>button[data-active="true"]{background:var(--surface-active);color:var(--text-primary);font-weight:600}
-.text-input{height:56px;width:100%;padding-inline:16px;border:1px solid var(--border);border-radius:14px;background:var(--surface);color:var(--text-primary);font-size:18px;outline:none}
-.text-input::placeholder{color:var(--text-muted)}
-.text-input:focus{border-color:var(--border-focus)}
-.primary-button{height:56px;padding-inline:20px;border:0;border-radius:28px;background:#adb2b8;color:#232324;font-size:18px;font-weight:600}
-.primary-button:disabled{opacity:.45;cursor:not-allowed}
-.checkbox-field{display:flex;align-items:center;gap:12px;color:var(--text-secondary);font-size:18px}
-`.trim();
-  var mergeCss = (...parts) => parts.filter(Boolean).join("\n");
+  // css-text:/home/sid/repos/dotfiles-ai/plugins/shared/settings.css
+  var settings_default = "/* Shared settings-page vocabulary, normalized from the session-archive,\n * subscriptions, and profiles settings panels. One rule set in one file so\n * the three panels cannot drift. Radius and padding disagreements are\n * normalized to the session-archive (or median) value; the var(--dsw-...)\n * aliases the current rules use are kept as-is. */\n\n/* Page-level container: airy vertical rhythm, no own box. */\n.dsp-root {\n  box-sizing: border-box;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  padding: 0;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Header row (title + refresh). */\n.dsp-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 12px;\n}\n\n.dsp-title {\n  font-size: 24px;\n  font-weight: 700;\n  margin: 0;\n  line-height: 1.2;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Refresh: session-archive/profiles form (no box, color shift only).\n * subscriptions pads and rounds the hit area; normalized away. */\n.dsp-refresh {\n  cursor: pointer;\n  border: none;\n  background: none;\n  padding: 0;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 15px;\n  line-height: 20px;\n}\n.dsp-refresh:hover {\n  color: var(--dsw-alias-label-primary);\n}\n\n.dsp-err {\n  font-size: 15px;\n  line-height: 22px;\n  color: var(--dsw-alias-state-error-primary);\n}\n\n/* Large setting card. Padding is the median of 16/20/24 (session-archive\n * 20px); the radius is the two-agreeing 20px, not profiles' 12px. */\n.dsp-section {\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 20px;\n  padding: 20px;\n  background: var(--dsw-alias-bg-tertiary);\n}\n\n/* Card title: subscriptions' 24px/700 matches the page-title vocabulary;\n * profiles' smaller 16px/600 card title normalized up. */\n.dsp-section-title {\n  font-size: 24px;\n  font-weight: 700;\n  margin: 0;\n  line-height: 1.2;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Setting row: horizontal in session-archive and profiles (subscriptions\n * stacks its label and meta vertically; normalized to the horizontal form). */\n.dsp-row {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  min-width: 0;\n}\n\n/* Row label: only subscriptions defines one; ported verbatim, with its\n * emphasized <b> children. */\n.dsp-row-label {\n  display: flex;\n  align-items: baseline;\n  gap: 10px;\n  font-size: 16px;\n  line-height: 22px;\n  color: var(--dsw-alias-label-secondary);\n}\n.dsp-row-label b {\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n  font-size: 16px;\n}\n.dsp-row-label b:last-child {\n  margin-left: auto;\n}\n";
 
   // css-text:/home/sid/repos/dotfiles-ai/plugins/profiles-client/src/client.module.css
-  var client_default = ".profiles-client-root{min-width:0;position:relative}\n.profiles-client-trigger{min-width:0;max-width:min(360px,45cqw);height:28px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:12px;outline:none;align-items:center;gap:5px;padding:0 7px;font-size:13px;font-weight:500;line-height:20px;display:flex}\n.profiles-client-trigger:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}\n.profiles-client-trigger:focus-visible{box-shadow:0 0 0 2px var(--dsw-alias-border-l3)}\n.profiles-client-trigger:disabled{color:var(--dsw-alias-label-dimmed);cursor:default}\n.profiles-client-profile-pill{flex:none;box-sizing:border-box;display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 6px;border-radius:7px;background:var(--dsw-alias-interactive-bg-hover);color:#fff;font-size:12px;font-weight:700;line-height:18px;white-space:nowrap;text-transform:uppercase}\n.profiles-client-pill-dot{flex:none;width:6px;height:6px;border-radius:50%}\n.profiles-client-pill-dot.profiles-client-pill-dot-matched{background:var(--dsw-alias-state-info-primary,#3b82f6)}\n.profiles-client-pill-dot.profiles-client-pill-dot-changed{background:#f59e0b}\n.profiles-client-model-label{text-overflow:ellipsis;white-space:nowrap;min-width:0;overflow:hidden}\n.profiles-client-chevron{color:var(--dsw-alias-label-caption);flex:none}\n.profiles-client-menu{z-index:20;border:1px solid var(--dsw-alias-border-inverted);background:var(--dsw-specific-menu);width:max-content;min-width:220px;max-width:min(420px,100vw - 32px);max-height:min(400px,100vh - 96px);box-shadow:var(--dsw-shadow-lv3);color:var(--dsw-alias-label-primary);border-radius:12px;flex-direction:column;padding:4px;display:flex;position:absolute;bottom:calc(100% + 8px);right:0;overflow-x:hidden;overflow-y:auto}\n.profiles-client-menu{z-index:20;border:1px solid var(--dsw-alias-border-inverted);background:var(--dsw-specific-menu);width:max-content;min-width:220px;max-width:min(420px,100vw - 32px);max-height:min(400px,100vh - 96px);box-shadow:var(--dsw-shadow-lv3);color:var(--dsw-alias-label-primary);border-radius:8px;flex-direction:column;padding:3px;display:flex;position:absolute;bottom:calc(100% + 8px);right:0;overflow-x:hidden;overflow-y:auto}\n.profiles-client-option{box-sizing:border-box;width:auto;min-width:100%;min-height:34px;color:inherit;text-align:left;cursor:pointer;background:0 0;border:none;border-radius:10px;outline:none;align-items:center;gap:8px;padding:5px 8px;display:flex}\n.profiles-client-option{box-sizing:border-box;width:auto;min-width:100%;min-height:34px;color:inherit;text-align:left;cursor:pointer;background:0 0;border:none;border-radius:8px;outline:none;align-items:center;gap:8px;padding:4px 7px;display:flex}\n.profiles-client-option-copy{flex-direction:column;flex:1;min-width:0;display:flex}\n.profiles-client-option-name{color:inherit;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:500;line-height:20px;overflow:hidden}\n.profiles-client-option-profile{font-weight:700}\n.profiles-client-option-model{font-size:12px;font-weight:500}\n.profiles-client-option-detail{color:var(--dsw-alias-label-tertiary);text-overflow:ellipsis;white-space:nowrap;font-size:12px;line-height:16px;overflow:hidden}\n.profiles-client-check{color:var(--dsw-alias-label-primary);flex:0 0 14px}\n.profiles-client-model-row{display:flex;flex-direction:column;gap:2px}\n.profiles-client-effort{box-sizing:border-box;width:calc(100% - 16px);min-width:0;margin-left:8px;height:24px;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:0 6px;font-size:11px;line-height:16px}\n.profiles-client-strip{color:var(--dsw-alias-label-tertiary);padding:10px;font-size:13px;line-height:20px}\n.pf-panel-root{box-sizing:border-box;display:flex;flex-direction:column;gap:12px;padding:0;color:var(--dsw-alias-label-primary)}\n.pf-panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px}\n.pf-panel-title{font-size:24px;font-weight:700;margin:0;line-height:1.2;color:var(--dsw-alias-label-primary)}\n.pf-panel-refresh{cursor:pointer;border:none;background:none;padding:0;color:var(--dsw-alias-label-secondary);font-size:15px;line-height:20px}\n.pf-panel-refresh:hover{color:var(--dsw-alias-label-primary)}\n.pf-panel-err{font-size:15px;line-height:22px;color:var(--dsw-alias-state-error-primary)}\n.pf-panel-active{display:flex;gap:12px;flex-wrap:wrap}\n.pf-panel-active-btn{display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:12px;font-size:15px;line-height:20px;padding:6px 11px;min-height:40px;cursor:pointer}\n.pf-panel-active-btn-on{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-border-l3)}\n.pf-panel-entry{display:flex;flex-direction:column;gap:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;padding:16px;background:var(--dsw-alias-bg-tertiary)}\n.pf-panel-entry-title{font-size:16px;font-weight:600;margin:0;color:var(--dsw-alias-label-primary)}\n.pf-panel-chain{display:flex;flex-direction:column;gap:12px}\n.pf-panel-chain-title{font-size:16px;line-height:22px;color:var(--dsw-alias-label-secondary);margin:0}\n.pf-panel-row{display:flex;gap:12px;align-items:center;min-width:0}\n.pf-panel-input{box-sizing:border-box;flex:1;min-width:0;height:40px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:0 8px;font-size:15px;line-height:20px}\n.pf-panel-input:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}\n.pf-panel-del{flex:none;cursor:pointer;border:none;background:none;padding:0 4px;color:var(--dsw-alias-label-secondary);font-size:16px;line-height:20px}\n.pf-panel-add{align-self:flex-start;color:var(--dsw-alias-label-secondary);background:none;border:1px dashed var(--dsw-alias-border-l2);border-radius:7px;font-size:15px;line-height:20px;padding:3px 11px;cursor:pointer}\n.pf-panel-add:hover{color:var(--dsw-alias-label-primary)}\n.pf-panel-meta{font-size:14px;line-height:22px;color:var(--dsw-alias-label-secondary)}\n.pf-panel-ref{flex:none;color:var(--dsw-alias-label-tertiary);background:var(--dsw-alias-interactive-bg-hover);border-radius:7px;font-size:13px;line-height:20px;padding:1px 8px}\n.pf-panel-actions{display:flex;align-items:center;gap:12px}\n.pf-panel-save{display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l3);border-radius:12px;font-size:15px;line-height:20px;padding:6px 11px;min-height:40px;cursor:pointer}\n.pf-panel-save:disabled{opacity:.5;cursor:default}\n.pf-panel-status{font-size:15px;line-height:22px}\n.pf-panel-ok{color:var(--dsw-alias-state-success-primary)}\n.pf-panel-bad{color:var(--dsw-alias-state-error-primary)}\n.pf-panel-select{box-sizing:border-box;flex:1;min-width:0;height:40px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:0 8px;font-size:15px;line-height:20px;cursor:pointer}\n.pf-panel-select:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}\n.pf-panel-effort{box-sizing:border-box;flex:0 0 auto;min-width:0;margin-left:8px;height:40px;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:0 8px;font-size:15px;line-height:20px;cursor:pointer}\n.pf-panel-select option,.pf-panel-effort option{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}\n.pf-panel-model-row{display:flex;flex-direction:column;gap:2px}\n.pf-panel-add-select{align-self:flex-start;border-style:dashed}\n";
+  var client_default = ".profiles-client-root{min-width:0;position:relative}\n.profiles-client-trigger{min-width:0;max-width:min(360px,45cqw);height:28px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:12px;outline:none;align-items:center;gap:5px;padding:0 7px;font-size:13px;font-weight:500;line-height:20px;display:flex}\n.profiles-client-trigger:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}\n.profiles-client-trigger:focus-visible{box-shadow:0 0 0 2px var(--dsw-alias-border-l3)}\n.profiles-client-trigger:disabled{color:var(--dsw-alias-label-dimmed);cursor:default}\n.profiles-client-profile-pill{flex:none;box-sizing:border-box;display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 6px;border-radius:7px;background:var(--dsw-alias-interactive-bg-hover);color:#fff;font-size:12px;font-weight:700;line-height:18px;white-space:nowrap;text-transform:uppercase}\n.profiles-client-pill-dot{flex:none;width:6px;height:6px;border-radius:50%}\n.profiles-client-pill-dot.profiles-client-pill-dot-matched{background:var(--dsw-alias-state-info-primary,#3b82f6)}\n.profiles-client-pill-dot.profiles-client-pill-dot-changed{background:#f59e0b}\n.profiles-client-model-label{text-overflow:ellipsis;white-space:nowrap;min-width:0;overflow:hidden}\n.profiles-client-chevron{color:var(--dsw-alias-label-caption);flex:none}\n.profiles-client-menu{z-index:20;border:1px solid var(--dsw-alias-border-inverted);background:var(--dsw-specific-menu);width:max-content;min-width:220px;max-width:min(420px,100vw - 32px);max-height:min(400px,100vh - 96px);box-shadow:var(--dsw-shadow-lv3);color:var(--dsw-alias-label-primary);border-radius:8px;flex-direction:column;padding:3px;display:flex;position:absolute;bottom:calc(100% + 8px);right:0;overflow-x:hidden;overflow-y:auto}\n.profiles-client-option{box-sizing:border-box;width:auto;min-width:100%;min-height:34px;color:inherit;text-align:left;cursor:pointer;background:0 0;border:none;border-radius:8px;outline:none;align-items:center;gap:8px;padding:4px 7px;display:flex}\n.profiles-client-option-copy{flex-direction:column;flex:1;min-width:0;display:flex}\n.profiles-client-option-name{color:inherit;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:500;line-height:20px;overflow:hidden}\n.profiles-client-option-profile{font-weight:700}\n.profiles-client-option-model{font-size:12px;font-weight:500}\n.profiles-client-option-detail{color:var(--dsw-alias-label-tertiary);text-overflow:ellipsis;white-space:nowrap;font-size:12px;line-height:16px;overflow:hidden}\n.profiles-client-check{color:var(--dsw-alias-label-primary);flex:0 0 14px}\n.profiles-client-model-row{display:flex;flex-direction:column;gap:2px}\n.profiles-client-effort{box-sizing:border-box;width:calc(100% - 16px);min-width:0;margin-left:8px;height:24px;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:0 6px;font-size:11px;line-height:16px}\n.profiles-client-strip{color:var(--dsw-alias-label-tertiary);padding:10px;font-size:13px;line-height:20px}\n.pf-panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px}\n.pf-panel-active{display:flex;gap:12px;flex-wrap:wrap}\n.pf-panel-active-btn{display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:12px;font-size:15px;line-height:20px;padding:6px 11px;min-height:40px;cursor:pointer}\n.pf-panel-active-btn-on{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-border-l3)}\n.pf-panel-entry{display:flex;flex-direction:column;gap:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;padding:16px;background:var(--dsw-alias-bg-tertiary)}\n.pf-panel-entry-title{font-size:16px;font-weight:600;margin:0;color:var(--dsw-alias-label-primary)}\n.pf-panel-chain{display:flex;flex-direction:column;gap:12px}\n.pf-panel-chain-title{font-size:16px;line-height:22px;color:var(--dsw-alias-label-secondary);margin:0}\n.pf-panel-row{display:flex;gap:12px;align-items:center;min-width:0}\n.pf-panel-input{box-sizing:border-box;flex:1;min-width:0;height:40px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:0 8px;font-size:15px;line-height:20px}\n.pf-panel-input:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}\n.pf-panel-del{flex:none;cursor:pointer;border:none;background:none;padding:0 4px;color:var(--dsw-alias-label-secondary);font-size:16px;line-height:20px}\n.pf-panel-add{align-self:flex-start;color:var(--dsw-alias-label-secondary);background:none;border:1px dashed var(--dsw-alias-border-l2);border-radius:7px;font-size:15px;line-height:20px;padding:3px 11px;cursor:pointer}\n.pf-panel-add:hover{color:var(--dsw-alias-label-primary)}\n.pf-panel-meta{font-size:14px;line-height:22px;color:var(--dsw-alias-label-secondary)}\n.pf-panel-ref{flex:none;color:var(--dsw-alias-label-tertiary);background:var(--dsw-alias-interactive-bg-hover);border-radius:7px;font-size:13px;line-height:20px;padding:1px 8px}\n.pf-panel-actions{display:flex;align-items:center;gap:12px}\n.pf-panel-save{display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l3);border-radius:12px;font-size:15px;line-height:20px;padding:6px 11px;min-height:40px;cursor:pointer}\n.pf-panel-save:disabled{opacity:0.5;cursor:default}\n.pf-panel-status{font-size:15px;line-height:22px}\n.pf-panel-ok{color:var(--dsw-alias-state-success-primary)}\n.pf-panel-bad{color:var(--dsw-alias-state-error-primary)}\n.pf-panel-select{box-sizing:border-box;flex:1;min-width:0;height:40px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:0 8px;font-size:15px;line-height:20px;cursor:pointer}\n.pf-panel-select:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}\n.pf-panel-effort{box-sizing:border-box;flex:0 0 auto;min-width:0;margin-left:8px;height:40px;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:0 8px;font-size:15px;line-height:20px;cursor:pointer}\n.pf-panel-select option,.pf-panel-effort option{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}\n.pf-panel-model-row{display:flex;flex-direction:column;gap:2px}\n.pf-panel-add-select{align-self:flex-start;border-style:dashed}\n";
 
   // plugins/profiles-client/src/client.tsx
   window.__ModuleLoader__.load({
@@ -61,7 +153,6 @@
       var module = { exports: {} };
       var exports = module.exports;
       var react = require2("react");
-      var createElement = react.createElement;
       var useSyncExternalStore = react.useSyncExternalStore;
       var useState = react.useState;
       var useEffect = react.useEffect;
@@ -71,14 +162,7 @@
       var MODEL_SEAT_SLOT = "conversation.input.model";
       var SEAT_PRIORITY = -100;
       var STYLE_TAG_ID = "profiles-client/client.module.css";
-      var CSS_TEXT = mergeCss(DESIGN_TOKENS, CONTROLS_CSS, [client_default]);
-      if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(STYLE_TAG_ID) + "]") === null) {
-        var tag = document.createElement("style");
-        tag.dataset.plugin = PLUGIN_NAME;
-        tag.dataset.pluginCss = STYLE_TAG_ID;
-        tag.textContent = CSS_TEXT;
-        document.head.appendChild(tag);
-      }
+      injectStyle(PLUGIN_NAME, STYLE_TAG_ID, mergeCss(settings_default, client_default));
       var EN = {
         "seat.fallback": "Model",
         "seat.aria": "Select model or profile",
@@ -114,79 +198,14 @@
           }
         };
       }
-      function headOf(entry, chains) {
-        function isPair(value) {
-          return typeof value === "object" && value !== null && typeof value.provider === "string" && typeof value.model === "string";
-        }
-        if (typeof entry === "string") {
-          if (chains !== void 0 && chains !== null && chains[entry] !== void 0) {
-            return headOf(chains[entry], chains);
-          }
-          return void 0;
-        }
-        if (typeof entry === "object" && entry !== null && ("orchestrator" in entry || "subagent" in entry)) {
-          return headOf(entry.orchestrator, chains) ?? headOf(entry.subagent, chains);
-        }
-        if (isPair(entry)) return { provider: entry.provider, model: entry.model };
-        if (Array.isArray(entry)) {
-          var resolved = resolveChain(entry, chains);
-          return resolved.length > 0 ? resolved[0] : void 0;
-        }
-        if (typeof entry === "object" && entry !== null && Array.isArray(entry.routes)) {
-          for (var i = 0; i < entry.routes.length; i++) {
-            if (isPair(entry.routes[i]))
-              return { provider: entry.routes[i].provider, model: entry.routes[i].model };
-          }
-        }
-        return void 0;
-      }
       function activeFace(profileValue) {
         var active = profileValue && typeof profileValue.active === "string" ? profileValue.active : "work";
         var chains = profileValue === void 0 || profileValue === null ? void 0 : profileValue.chains;
         var entry = profileValue === void 0 || profileValue === null ? void 0 : active === "personal" ? profileValue.personal : profileValue.work;
-        return { active, head: headOf(entry, chains) };
+        return { active, head: entryHead(entry, chains) };
       }
       function refNameOf(field) {
         return typeof field === "string" ? field : void 0;
-      }
-      function resolveChain(value, chains, seen) {
-        function isPair(v) {
-          return typeof v === "object" && v !== null && typeof v.provider === "string" && typeof v.model === "string";
-        }
-        var out = [];
-        if (Array.isArray(value)) {
-          var guard = new Set(seen || []);
-          for (var i = 0; i < value.length; i++) {
-            var step = value[i];
-            if (typeof step === "string") {
-              if (step.indexOf("chain:") === 0) {
-                var name = step.slice(6);
-                if (chains !== void 0 && chains !== null && chains[name] !== void 0 && !guard.has(name)) {
-                  guard.add(name);
-                  out = out.concat(resolveChain(chains[name], chains, guard));
-                }
-              } else {
-                var slash = step.indexOf("/");
-                if (slash > 0) {
-                  out.push({ provider: step.slice(0, slash), model: step.slice(slash + 1) });
-                }
-              }
-            } else if (isPair(step)) {
-              out.push({ provider: step.provider, model: step.model });
-            } else if (Array.isArray(step)) {
-              out = out.concat(resolveChain(step, chains, guard));
-            }
-          }
-          return out;
-        }
-        if (typeof value === "object" && value !== null && Array.isArray(value.routes)) {
-          for (var j = 0; j < value.routes.length; j++) {
-            if (isPair(value.routes[j])) {
-              out.push({ provider: value.routes[j].provider, model: value.routes[j].model });
-            }
-          }
-        }
-        return out;
       }
       function isCompositionChain(value) {
         return Array.isArray(value);
@@ -198,22 +217,6 @@
         }
         return "";
       }
-      function routesEqual(a, b) {
-        if (a === b) return true;
-        if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
-        for (var i = 0; i < a.length; i++) {
-          if (a[i].provider !== b[i].provider || a[i].model !== b[i].model) return false;
-        }
-        return true;
-      }
-      function chainNameOf(field, chains) {
-        if (chains === void 0 || chains === null) return void 0;
-        var names = Object.keys(chains);
-        for (var i = 0; i < names.length; i++) {
-          if (routesEqual(resolveChain(chains[names[i]], chains), field.routes)) return names[i];
-        }
-        return void 0;
-      }
       function fieldSummary(field, chains) {
         var refName = refNameOf(field);
         if (refName !== void 0) return refName;
@@ -224,7 +227,7 @@
           return steps.length > 0 ? steps.join(", ") : "(empty)";
         }
         if (field !== void 0 && field !== null && Array.isArray(field.routes)) {
-          var name = chainNameOf(field, chains);
+          var name = chainNameForRoutes(field.routes, chains);
           if (name !== void 0) return name;
           var count = field.routes.length;
           return "inline (" + count + " route" + (count === 1 ? "" : "s") + ")";
@@ -336,7 +339,7 @@
             var known = ["work", "personal"];
             for (var i = 0; i < known.length; i++) {
               var key = known[i];
-              var head = headOf(liveProfile[key], liveProfile.chains);
+              var head = entryHead(liveProfile[key], liveProfile.chains);
               if (head !== void 0) profileRows.push({ key, head });
             }
           }
@@ -423,7 +426,7 @@
               }
             },
             /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-copy" }, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-name profiles-client-option-profile" }, t("menu.default")), /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-detail" }, face.head !== void 0 ? prettyOf(face.head.provider, face.head.model).provider + "/" + prettyOf(face.head.provider, face.head.model).model : ""))
-          ), profileRows.length > 0 ? /* @__PURE__ */ react.createElement("div", null, /* @__PURE__ */ react.createElement("div", { className: "profiles-client-section-label" }, t("menu.profiles")), profileRows.map(function(row) {
+          ), profileRows.length > 0 ? /* @__PURE__ */ react.createElement("div", null, /* @__PURE__ */ react.createElement("div", { className: "dsp-section-title" }, t("menu.profiles")), profileRows.map(function(row) {
             var isActive = row.key === face.active;
             var headPretty = prettyOf(row.head.provider, row.head.model);
             return /* @__PURE__ */ react.createElement(
@@ -443,71 +446,28 @@
               /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-copy" }, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-name profiles-client-option-profile" }, row.key + (isActive ? " \xB7" : "")), /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-detail" }, headPretty.provider + "/" + headPretty.model)),
               isActive ? /* @__PURE__ */ react.createElement("span", { className: "profiles-client-check", "aria-hidden": true }, "\u2713") : null
             );
-          })) : null, /* @__PURE__ */ react.createElement("div", null, /* @__PURE__ */ react.createElement("div", { className: "profiles-client-section-label" }, t("menu.models")), state.status === "error" && state.error ? /* @__PURE__ */ react.createElement("div", { className: "profiles-client-strip" }, state.error) : null, modelGroups.map(function(grp) {
-            return /* @__PURE__ */ react.createElement("div", { key: grp.id }, /* @__PURE__ */ react.createElement("div", { className: "profiles-client-section-label" }, grp.label), grp.models.map(function(row) {
+          })) : null, /* @__PURE__ */ react.createElement("div", null, /* @__PURE__ */ react.createElement("div", { className: "dsp-section-title" }, t("menu.models")), state.status === "error" && state.error ? /* @__PURE__ */ react.createElement("div", { className: "profiles-client-strip" }, state.error) : null, modelGroups.map(function(grp) {
+            return /* @__PURE__ */ react.createElement("div", { key: grp.id }, /* @__PURE__ */ react.createElement("div", { className: "dsp-section-title" }, grp.label), grp.models.map(function(row) {
               var isActive = current !== void 0 && current !== null && current.provider === grp.id && current.model === row.id;
-              return /* @__PURE__ */ react.createElement(
-                "div",
+              return /* @__PURE__ */ react.createElement("div", { key: grp.id + "/" + row.id, className: "profiles-client-model-row" }, /* @__PURE__ */ react.createElement(
+                "button",
                 {
-                  key: grp.id + "/" + row.id,
-                  className: "profiles-client-model-row"
+                  type: "button",
+                  className: "profiles-client-option",
+                  onClick: function() {
+                    pick({ provider: grp.id, model: row.id });
+                  }
                 },
-                /* @__PURE__ */ react.createElement(
-                  "button",
-                  {
-                    type: "button",
-                    className: "profiles-client-option",
-                    onClick: function() {
-                      pick({ provider: grp.id, model: row.id });
-                    }
-                  },
-                  /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-copy" }, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-name profiles-client-option-model" }, row.name), /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-detail" }, grp.label)),
-                  isActive ? /* @__PURE__ */ react.createElement("span", { className: "profiles-client-check", "aria-hidden": true }, "\u2713") : null
-                )
-              );
+                /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-copy" }, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-name profiles-client-option-model" }, row.name), /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-detail" }, grp.label)),
+                isActive ? /* @__PURE__ */ react.createElement("span", { className: "profiles-client-check", "aria-hidden": true }, "\u2713") : null
+              ));
             }));
           }))) : null);
         }
         return ProfileModelSeat;
       }
-      function fetchJson(url) {
-        return fetch(url, { cache: "no-store" }).then(function(res) {
-          return res.json().catch(function() {
-            return null;
-          }).then(function(json) {
-            return { ok: res.ok, status: res.status, json };
-          });
-        }).then(function(result) {
-          if (result.json !== null && result.json.error) {
-            return { data: null, error: String(result.json.error) };
-          }
-          if (!result.ok) return { data: null, error: "HTTP " + result.status };
-          return { data: result.json, error: null };
-        }).catch(function(e) {
-          return { data: null, error: String(e && e.message || e) };
-        });
-      }
-      function putJson(url, body) {
-        return fetch(url, {
-          method: "PUT",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(body),
-          cache: "no-store"
-        }).then(function(res) {
-          return res.json().catch(function() {
-            return null;
-          }).then(function(json) {
-            return { ok: res.ok, status: res.status, json };
-          });
-        }).then(function(result) {
-          if (result.json !== null && result.json.error) {
-            return { data: null, error: String(result.json.error) };
-          }
-          if (!result.ok) return { data: null, error: "HTTP " + result.status };
-          return { data: result.json, error: null };
-        }).catch(function(e) {
-          return { data: null, error: String(e && e.message || e) };
-        });
+      function SettingsSection(props) {
+        return /* @__PURE__ */ react.createElement("div", { className: "dsp-root" }, /* @__PURE__ */ react.createElement("div", { className: "dsp-head" }, /* @__PURE__ */ react.createElement("h3", { className: "dsp-title" }, props.title), props.onRefresh ? /* @__PURE__ */ react.createElement("button", { className: "dsp-refresh", onClick: props.onRefresh }, props.refreshLabel === void 0 ? "Refresh" : props.refreshLabel) : null), props.children);
       }
       function cloneConfig(config) {
         function cloneRoutes(routes) {
@@ -714,10 +674,10 @@
             fetchConfig();
           }, []);
           if (load === null) {
-            return /* @__PURE__ */ react.createElement("div", { className: "pf-panel-root" }, /* @__PURE__ */ react.createElement("div", { className: "pf-panel-head" }, /* @__PURE__ */ react.createElement("h3", { className: "pf-panel-title" }, "Profiles"), /* @__PURE__ */ react.createElement("button", { className: "pf-panel-refresh", onClick: fetchConfig }, "Refresh")));
+            return /* @__PURE__ */ react.createElement(SettingsSection, { title: "Profiles", onRefresh: fetchConfig, refreshLabel: "Refresh" });
           }
           if (load.error) {
-            return /* @__PURE__ */ react.createElement("div", { className: "pf-panel-root" }, /* @__PURE__ */ react.createElement("div", { className: "pf-panel-head" }, /* @__PURE__ */ react.createElement("h3", { className: "pf-panel-title" }, "Profiles"), /* @__PURE__ */ react.createElement("button", { className: "pf-panel-refresh", onClick: fetchConfig }, "Refresh")), /* @__PURE__ */ react.createElement("div", { className: "pf-panel-err" }, "Profiles: " + load.error));
+            return /* @__PURE__ */ react.createElement(SettingsSection, { title: "Profiles", onRefresh: fetchConfig, refreshLabel: "Refresh" }, /* @__PURE__ */ react.createElement("div", { className: "dsp-err" }, "Profiles: " + load.error));
           }
           var config = draft;
           var errorCache = load.errorCache || {};
@@ -826,7 +786,7 @@
           }
           var currentEffortList = currentCat !== null ? effortsOf(currentCat.reasoning) : [];
           var currentEffortValue = currentModel !== void 0 && currentModel !== null && typeof currentModel.reasoningEffort === "string" && currentModel.reasoningEffort !== "" ? currentModel.reasoningEffort : currentCat !== null && currentCat.reasoning !== void 0 && currentCat.reasoning !== null && typeof currentCat.reasoning.defaultEffort === "string" ? currentCat.reasoning.defaultEffort : "";
-          return /* @__PURE__ */ react.createElement("div", { className: "pf-panel-root" }, /* @__PURE__ */ react.createElement("div", { className: "pf-panel-head" }, /* @__PURE__ */ react.createElement("h3", { className: "pf-panel-title" }, "Profiles"), /* @__PURE__ */ react.createElement("button", { className: "pf-panel-refresh", onClick: fetchConfig }, "Refresh")), /* @__PURE__ */ react.createElement("div", { className: "pf-panel-active" }, entries.map(function(name) {
+          return /* @__PURE__ */ react.createElement(SettingsSection, { title: "Profiles", onRefresh: fetchConfig, refreshLabel: "Refresh" }, /* @__PURE__ */ react.createElement("div", { className: "pf-panel-active" }, entries.map(function(name) {
             return /* @__PURE__ */ react.createElement(
               "button",
               {
@@ -873,7 +833,8 @@
               var label = chainKey === "orchestrator" ? "orchestrator" : "subagent";
               var summary = fieldSummary(field, config.chains);
               var currentRef = refNameOf(field);
-              if (currentRef === void 0) currentRef = chainNameOf(field, config.chains);
+              if (currentRef === void 0)
+                currentRef = chainNameForRoutes(field.routes, config.chains);
               return /* @__PURE__ */ react.createElement("div", { className: "pf-panel-chain", key: chainKey }, /* @__PURE__ */ react.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ react.createElement("h5", { className: "pf-panel-chain-title" }, label), /* @__PURE__ */ react.createElement(
                 "select",
                 {
@@ -908,7 +869,7 @@
           }), /* @__PURE__ */ react.createElement("div", { className: "pf-panel-entry" }, /* @__PURE__ */ react.createElement("div", { className: "pf-panel-head" }, /* @__PURE__ */ react.createElement("h4", { className: "pf-panel-entry-title" }, "Named chains"), /* @__PURE__ */ react.createElement("button", { type: "button", className: "pf-panel-add", onClick: addChain }, "+ Add chain")), Object.keys(config.chains).length === 0 ? /* @__PURE__ */ react.createElement("div", { className: "pf-panel-meta" }, "No named chains") : Object.keys(config.chains).map(function(chainName) {
             var chain = config.chains[chainName];
             var isComposition = isCompositionChain(chain);
-            var resolved = resolveChain(chain, config.chains);
+            var resolved = normalizeEntry(chain, config.chains);
             var steps = isComposition ? chain.map(function(step) {
               return { step };
             }) : chain !== void 0 && Array.isArray(chain.routes) ? chain.routes : [];
@@ -1050,15 +1011,7 @@
               }),
               /* @__PURE__ */ react.createElement("option", { value: "__new__" }, "New named chain\u2026")
             )), resolved.length > 0 ? /* @__PURE__ */ react.createElement("div", { className: "pf-panel-meta" }, "Resolves to " + resolved.length + " route" + (resolved.length === 1 ? "" : "s") + ": " + resolved[0].provider + "/" + resolved[0].model + (resolved.length > 1 ? " \u2026" : "")) : null);
-          })), /* @__PURE__ */ react.createElement("div", { className: "pf-panel-meta" }, downRungs > 0 ? /* @__PURE__ */ react.createElement("span", null, downRungs + " rung" + (downRungs === 1 ? "" : "s") + " cached down ", /* @__PURE__ */ react.createElement(
-            "button",
-            {
-              type: "button",
-              className: "pf-panel-refresh",
-              onClick: fetchConfig
-            },
-            "Retry now"
-          )) : null), /* @__PURE__ */ react.createElement("div", { className: "pf-panel-actions" }, /* @__PURE__ */ react.createElement(
+          })), /* @__PURE__ */ react.createElement("div", { className: "pf-panel-meta" }, downRungs > 0 ? /* @__PURE__ */ react.createElement("span", null, downRungs + " rung" + (downRungs === 1 ? "" : "s") + " cached down ", /* @__PURE__ */ react.createElement("button", { type: "button", className: "dsp-refresh", onClick: fetchConfig }, "Retry now")) : null), /* @__PURE__ */ react.createElement("div", { className: "pf-panel-actions" }, /* @__PURE__ */ react.createElement(
             "button",
             {
               type: "button",
@@ -1067,20 +1020,14 @@
               onClick: saveConfig
             },
             save.busy === true ? "Saving\u2026" : "Save"
-          ), save.note ? /* @__PURE__ */ react.createElement(
-            "span",
-            {
-              className: "pf-panel-status " + (save.ok ? "pf-panel-ok" : "pf-panel-bad")
-            },
-            save.note
-          ) : null));
+          ), save.note ? /* @__PURE__ */ react.createElement("span", { className: "pf-panel-status " + (save.ok ? "pf-panel-ok" : "pf-panel-bad") }, save.note) : null));
         }
         return ProfilesPanel;
       }
       var inject = ["slots", "sessions", "locale", "connection"];
       function apply(ctx) {
         ctx.effect(function() {
-          return ctx.locale.register(LOCALE_NS, { en: EN, zh: ZH });
+          return registerLocale(ctx, LOCALE_NS, EN, ZH);
         }, "profiles-client: dictionaries");
         var profileScope;
         try {
@@ -1126,12 +1073,12 @@
               seat
             );
           });
-          var panel = makeProfilesPanel(models, sessions);
+          var Panel = makeProfilesPanel(models, sessions);
           ctx.slots.inject("settings.section", function() {
             return ctx.slots.register(
               { name: "settings.section", id: PLUGIN_NAME, order: 27, label: "Profiles" },
               function() {
-                return createElement(panel);
+                return /* @__PURE__ */ react.createElement(Panel, null);
               }
             );
           });

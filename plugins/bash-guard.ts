@@ -391,7 +391,7 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
     const result = await evaluate(ctx, dir, command, 0);
     if (result.command !== command) {
       try {
-        exec.arguments.command = result.command;
+        (exec.arguments as { command: string }).command = result.command;
       } catch {
         ctx.logger.warn("bash-guard: could not apply rewritten command; running original");
       }

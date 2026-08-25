@@ -1,0 +1,31 @@
+/*
+ * DESIGN.md token set (§22 `:root` block), ported verbatim from the
+ * DESIGN_TOKENS template literal in plugins/design-system.ts. Kept as a
+ * reference asset only: no bundle consumes it, so it is never injected.
+ */
+:root {
+  --bg: #2c2c2e;
+  --surface: #232324;
+  --surface-hover: #303032;
+  --surface-active: #43454a;
+
+  --border: #3e3e3f;
+  --border-subtle: #303031;
+  --border-focus: #66676b;
+
+  --text-primary: #f9fafb;
+  --text-secondary: #adb2b8;
+  --text-muted: #88898a;
+
+  --radius-sm: 7px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-5: 40px;
+  --space-6: 48px;
+}

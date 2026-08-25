@@ -35,7 +35,15 @@
  * resolves through the browser module table (react is a platform module).
  */
 
-import { DESIGN_TOKENS, CONTROLS_CSS, mergeCss } from "../../design-system";
+import {
+  injectStyle,
+  mergeCss,
+  fetchJson,
+  putJson,
+  registerLocale,
+} from "../../shared/client-util";
+import { entryHead, normalizeEntry, chainNameForRoutes } from "../../profile-routes";
+import settingsCss from "../../shared/settings.css";
 import localCss from "./client.module.css";
 
 window.__ModuleLoader__.load({
@@ -46,7 +54,6 @@ window.__ModuleLoader__.load({
 
     /** React comes from the browser module table. */
     var react = require("react");
-    var createElement = react.createElement;
     var useSyncExternalStore = react.useSyncExternalStore;
     var useState = react.useState;
     var useEffect = react.useEffect;
@@ -66,17 +73,7 @@ window.__ModuleLoader__.load({
      * use the kebab-case plugin prefix so they cannot collide.
      */
     var STYLE_TAG_ID = "profiles-client/client.module.css";
-    var CSS_TEXT = mergeCss(DESIGN_TOKENS, CONTROLS_CSS, [localCss]);
-    if (
-      typeof document !== "undefined" &&
-      document.querySelector("style[data-plugin-css=" + JSON.stringify(STYLE_TAG_ID) + "]") === null
-    ) {
-      var tag = document.createElement("style");
-      tag.dataset.plugin = PLUGIN_NAME;
-      tag.dataset.pluginCss = STYLE_TAG_ID;
-      tag.textContent = CSS_TEXT;
-      document.head.appendChild(tag);
-    }
+    injectStyle(PLUGIN_NAME, STYLE_TAG_ID, mergeCss(settingsCss, localCss));
 
     /** English dictionary. */
     var EN = {
@@ -117,49 +114,6 @@ window.__ModuleLoader__.load({
         },
       };
     }
-    /**
-     * Port of plugins/profile-routes.ts normalizeEntry: one route pair or an
-     * ordered routes chain; the FIRST valid pair is the orchestrator head.
-     * A string entry names a key in the profile's `chains` map (name -> { routes }).
-     */
-    function headOf(entry, chains) {
-      function isPair(value) {
-        return (
-          typeof value === "object" &&
-          value !== null &&
-          typeof value.provider === "string" &&
-          typeof value.model === "string"
-        );
-      }
-      if (typeof entry === "string") {
-        if (chains !== void 0 && chains !== null && chains[entry] !== void 0) {
-          return headOf(chains[entry], chains);
-        }
-        return void 0;
-      }
-      // W21 nested entry { orchestrator, subagent }: the orchestrator
-      // chain's head wins, the subagent chain is the fallback.
-      if (
-        typeof entry === "object" &&
-        entry !== null &&
-        ("orchestrator" in entry || "subagent" in entry)
-      ) {
-        return headOf(entry.orchestrator, chains) ?? headOf(entry.subagent, chains);
-      }
-      if (isPair(entry)) return { provider: entry.provider, model: entry.model };
-      // Composition array (W29): flatten steps, take the first route.
-      if (Array.isArray(entry)) {
-        var resolved = resolveChain(entry, chains);
-        return resolved.length > 0 ? resolved[0] : void 0;
-      }
-      if (typeof entry === "object" && entry !== null && Array.isArray(entry.routes)) {
-        for (var i = 0; i < entry.routes.length; i++) {
-          if (isPair(entry.routes[i]))
-            return { provider: entry.routes[i].provider, model: entry.routes[i].model };
-        }
-      }
-      return void 0;
-    }
 
     /** Active profile name and its expected orchestrator head. */
     function activeFace(profileValue) {
@@ -172,7 +126,7 @@ window.__ModuleLoader__.load({
           : active === "personal"
             ? profileValue.personal
             : profileValue.work;
-      return { active: active, head: headOf(entry, chains) };
+      return { active: active, head: entryHead(entry, chains) };
     }
     /**
      * The W24 entry field ref check: a STRING names a key in the
@@ -182,61 +136,6 @@ window.__ModuleLoader__.load({
       return typeof field === "string" ? field : void 0;
     }
 
-    /**
-     * Resolve one chain value to its final route list for preview.
-     * Mirrors plugins/profile-routes.ts normalizeEntry: a `{ routes }`
-     * chain yields its pairs; a composition array flattens "provider/model"
-     * steps and follows "chain:<name>" refs in order, cycle-guarded.
-     */
-    function resolveChain(value, chains, seen?) {
-      function isPair(v) {
-        return (
-          typeof v === "object" &&
-          v !== null &&
-          typeof v.provider === "string" &&
-          typeof v.model === "string"
-        );
-      }
-      var out = [];
-      if (Array.isArray(value)) {
-        var guard = new Set(seen || []);
-        for (var i = 0; i < value.length; i++) {
-          var step = value[i];
-          if (typeof step === "string") {
-            if (step.indexOf("chain:") === 0) {
-              var name = step.slice(6);
-              if (
-                chains !== void 0 &&
-                chains !== null &&
-                chains[name] !== void 0 &&
-                !guard.has(name)
-              ) {
-                guard.add(name);
-                out = out.concat(resolveChain(chains[name], chains, guard));
-              }
-            } else {
-              var slash = step.indexOf("/");
-              if (slash > 0) {
-                out.push({ provider: step.slice(0, slash), model: step.slice(slash + 1) });
-              }
-            }
-          } else if (isPair(step)) {
-            out.push({ provider: step.provider, model: step.model });
-          } else if (Array.isArray(step)) {
-            out = out.concat(resolveChain(step, chains, guard));
-          }
-        }
-        return out;
-      }
-      if (typeof value === "object" && value !== null && Array.isArray(value.routes)) {
-        for (var j = 0; j < value.routes.length; j++) {
-          if (isPair(value.routes[j])) {
-            out.push({ provider: value.routes[j].provider, model: value.routes[j].model });
-          }
-        }
-      }
-      return out;
-    }
     /** True when the chain value is a composition array of steps. */
     function isCompositionChain(value) {
       return Array.isArray(value);
@@ -256,31 +155,6 @@ window.__ModuleLoader__.load({
       return "";
     }
 
-    /** True when two resolved route lists are identical, in order. */
-    function routesEqual(a, b) {
-      if (a === b) return true;
-      if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
-      for (var i = 0; i < a.length; i++) {
-        if (a[i].provider !== b[i].provider || a[i].model !== b[i].model) return false;
-      }
-      return true;
-    }
-
-    /**
-     * The named chain whose resolved routes equal the field, when one exists.
-     * The GET /profiles/config response resolves string refs server-side, so
-     * the original name is gone by the time the panel renders; this recovers
-     * it by comparing the canonical field against every named chain.
-     */
-    function chainNameOf(field, chains) {
-      if (chains === void 0 || chains === null) return void 0;
-      var names = Object.keys(chains);
-      for (var i = 0; i < names.length; i++) {
-        if (routesEqual(resolveChain(chains[names[i]], chains), field.routes)) return names[i];
-      }
-      return void 0;
-    }
-
     /**
      * One condensed line for a chain field: the referenced chain NAME when the
      * field is a string or matches a named chain, the step names when it is a
@@ -296,7 +170,7 @@ window.__ModuleLoader__.load({
         return steps.length > 0 ? steps.join(", ") : "(empty)";
       }
       if (field !== void 0 && field !== null && Array.isArray(field.routes)) {
-        var name = chainNameOf(field, chains);
+        var name = chainNameForRoutes(field.routes, chains);
         if (name !== void 0) return name;
         var count = field.routes.length;
         return "inline (" + count + " route" + (count === 1 ? "" : "s") + ")";
@@ -441,7 +315,7 @@ window.__ModuleLoader__.load({
           var known = ["work", "personal"];
           for (var i = 0; i < known.length; i++) {
             var key = known[i];
-            var head = headOf(liveProfile[key], liveProfile.chains);
+            var head = entryHead(liveProfile[key], liveProfile.chains);
             if (head !== void 0) profileRows.push({ key: key, head: head });
           }
         }
@@ -566,9 +440,7 @@ window.__ModuleLoader__.load({
                 </button>
                 {profileRows.length > 0 ? (
                   <div>
-                    <div className="profiles-client-section-label">
-                      {t("menu.profiles")}
-                    </div>
+                    <div className="dsp-section-title">{t("menu.profiles")}</div>
                     {profileRows.map(function (row) {
                       var isActive = row.key === face.active;
                       var headPretty = prettyOf(row.head.provider, row.head.model);
@@ -604,18 +476,14 @@ window.__ModuleLoader__.load({
                   </div>
                 ) : null}
                 <div>
-                  <div className="profiles-client-section-label">
-                    {t("menu.models")}
-                  </div>
+                  <div className="dsp-section-title">{t("menu.models")}</div>
                   {state.status === "error" && state.error ? (
                     <div className="profiles-client-strip">{state.error}</div>
                   ) : null}
                   {modelGroups.map(function (grp) {
                     return (
                       <div key={grp.id}>
-                        <div className="profiles-client-section-label">
-                          {grp.label}
-                        </div>
+                        <div className="dsp-section-title">{grp.label}</div>
                         {grp.models.map(function (row) {
                           var isActive =
                             current !== void 0 &&
@@ -623,10 +491,7 @@ window.__ModuleLoader__.load({
                             current.provider === grp.id &&
                             current.model === row.id;
                           return (
-                            <div
-                              key={grp.id + "/" + row.id}
-                              className="profiles-client-model-row"
-                            >
+                            <div key={grp.id + "/" + row.id} className="profiles-client-model-row">
                               <button
                                 type="button"
                                 className="profiles-client-option"
@@ -638,9 +503,7 @@ window.__ModuleLoader__.load({
                                   <span className="profiles-client-option-name profiles-client-option-model">
                                     {row.name}
                                   </span>
-                                  <span className="profiles-client-option-detail">
-                                    {grp.label}
-                                  </span>
+                                  <span className="profiles-client-option-detail">{grp.label}</span>
                                 </span>
                                 {isActive ? (
                                   <span className="profiles-client-check" aria-hidden={true}>
@@ -663,62 +526,29 @@ window.__ModuleLoader__.load({
       return ProfileModelSeat;
     }
 
+    /**
+     * Local stand-in for the shared SettingsSection (../../shared/settings-panel.tsx):
+     * this bundle is a bare IIFE with no facade wrapper, so importing that
+     * module would hoist a top-level __require("react") that the browser
+     * throws on. Renders the same dsp-* structure settings.css provides.
+     */
+    function SettingsSection(props) {
+      return (
+        <div className="dsp-root">
+          <div className="dsp-head">
+            <h3 className="dsp-title">{props.title}</h3>
+            {props.onRefresh ? (
+              <button className="dsp-refresh" onClick={props.onRefresh}>
+                {props.refreshLabel === undefined ? "Refresh" : props.refreshLabel}
+              </button>
+            ) : null}
+          </div>
+          {props.children}
+        </div>
+      );
+    }
+
     // ── W24: profiles settings panel ─────────────────────────────────
-
-    /** GET one same-origin route; always resolves to {data, error}. */
-    function fetchJson(url) {
-      return fetch(url, { cache: "no-store" })
-        .then(function (res) {
-          return res
-            .json()
-            .catch(function () {
-              return null;
-            })
-            .then(function (json) {
-              return { ok: res.ok, status: res.status, json: json };
-            });
-        })
-        .then(function (result) {
-          if (result.json !== null && result.json.error) {
-            return { data: null, error: String(result.json.error) };
-          }
-          if (!result.ok) return { data: null, error: "HTTP " + result.status };
-          return { data: result.json, error: null };
-        })
-        .catch(function (e) {
-          return { data: null, error: String((e && e.message) || e) };
-        });
-    }
-
-    /** PUT one same-origin route with a JSON body; same {data, error} shape. */
-    function putJson(url, body) {
-      return fetch(url, {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-        cache: "no-store",
-      })
-        .then(function (res) {
-          return res
-            .json()
-            .catch(function () {
-              return null;
-            })
-            .then(function (json) {
-              return { ok: res.ok, status: res.status, json: json };
-            });
-        })
-        .then(function (result) {
-          if (result.json !== null && result.json.error) {
-            return { data: null, error: String(result.json.error) };
-          }
-          if (!result.ok) return { data: null, error: "HTTP " + result.status };
-          return { data: result.json, error: null };
-        })
-        .catch(function (e) {
-          return { data: null, error: String((e && e.message) || e) };
-        });
-    }
 
     /** Fresh editable copy of the canonical config the panel edits. */
     function cloneConfig(config) {
@@ -961,27 +791,14 @@ window.__ModuleLoader__.load({
 
         if (load === null) {
           return (
-            <div className="pf-panel-root">
-              <div className="pf-panel-head">
-                <h3 className="pf-panel-title">Profiles</h3>
-                <button className="pf-panel-refresh" onClick={fetchConfig}>
-                  Refresh
-                </button>
-              </div>
-            </div>
+            <SettingsSection title={"Profiles"} onRefresh={fetchConfig} refreshLabel={"Refresh"} />
           );
         }
         if (load.error) {
           return (
-            <div className="pf-panel-root">
-              <div className="pf-panel-head">
-                <h3 className="pf-panel-title">Profiles</h3>
-                <button className="pf-panel-refresh" onClick={fetchConfig}>
-                  Refresh
-                </button>
-              </div>
-              <div className="pf-panel-err">{"Profiles: " + load.error}</div>
-            </div>
+            <SettingsSection title={"Profiles"} onRefresh={fetchConfig} refreshLabel={"Refresh"}>
+              <div className="dsp-err">{"Profiles: " + load.error}</div>
+            </SettingsSection>
           );
         }
 
@@ -1111,13 +928,7 @@ window.__ModuleLoader__.load({
               ? currentCat.reasoning.defaultEffort
               : "";
         return (
-          <div className="pf-panel-root">
-            <div className="pf-panel-head">
-              <h3 className="pf-panel-title">Profiles</h3>
-              <button className="pf-panel-refresh" onClick={fetchConfig}>
-                Refresh
-              </button>
-            </div>
+          <SettingsSection title={"Profiles"} onRefresh={fetchConfig} refreshLabel={"Refresh"}>
             <div className="pf-panel-active">
               {entries.map(function (name) {
                 return (
@@ -1137,9 +948,7 @@ window.__ModuleLoader__.load({
                 );
               })}
             </div>
-            {currentEffortList.length > 0 &&
-            currentModel !== void 0 &&
-            currentModel !== null ? (
+            {currentEffortList.length > 0 && currentModel !== void 0 && currentModel !== null ? (
               <div className="pf-panel-model-row">
                 <div className="pf-panel-row">
                   <span className="pf-panel-ref" title="Current model">
@@ -1166,9 +975,7 @@ window.__ModuleLoader__.load({
                         <option
                           key={eff.id}
                           value={eff.id}
-                          title={
-                            eff.description !== void 0 ? eff.description : undefined
-                          }
+                          title={eff.description !== void 0 ? eff.description : undefined}
                         >
                           {eff.name}
                         </option>
@@ -1182,16 +989,14 @@ window.__ModuleLoader__.load({
               var entry = config[name];
               return (
                 <div className="pf-panel-entry" key={name}>
-                  <h4 className="pf-panel-entry-title">
-                    {name === "work" ? "Work" : "Personal"}
-                  </h4>
+                  <h4 className="pf-panel-entry-title">{name === "work" ? "Work" : "Personal"}</h4>
                   {["orchestrator", "subagent"].map(function (chainKey) {
                     var field = entry[chainKey];
-                    var label =
-                      chainKey === "orchestrator" ? "orchestrator" : "subagent";
+                    var label = chainKey === "orchestrator" ? "orchestrator" : "subagent";
                     var summary = fieldSummary(field, config.chains);
                     var currentRef = refNameOf(field);
-                    if (currentRef === void 0) currentRef = chainNameOf(field, config.chains);
+                    if (currentRef === void 0)
+                      currentRef = chainNameForRoutes(field.routes, config.chains);
                     return (
                       <div className="pf-panel-chain" key={chainKey}>
                         <div className="pf-panel-row">
@@ -1248,7 +1053,7 @@ window.__ModuleLoader__.load({
                 Object.keys(config.chains).map(function (chainName) {
                   var chain = config.chains[chainName];
                   var isComposition = isCompositionChain(chain);
-                  var resolved = resolveChain(chain, config.chains);
+                  var resolved = normalizeEntry(chain, config.chains);
                   var steps = isComposition
                     ? chain.map(function (step) {
                         return { step: step };
@@ -1328,12 +1133,9 @@ window.__ModuleLoader__.load({
                                 break;
                               }
                             }
-                            var efforts =
-                              catModel !== null ? effortsOf(catModel.reasoning) : [];
+                            var efforts = catModel !== null ? effortsOf(catModel.reasoning) : [];
                             var currentEffort =
-                              typeof rung.reasoningEffort === "string"
-                                ? rung.reasoningEffort
-                                : "";
+                              typeof rung.reasoningEffort === "string" ? rung.reasoningEffort : "";
                             return (
                               <div className="pf-panel-model-row" key={index}>
                                 <div className="pf-panel-row">
@@ -1452,11 +1254,7 @@ window.__ModuleLoader__.load({
               {downRungs > 0 ? (
                 <span>
                   {downRungs + " rung" + (downRungs === 1 ? "" : "s") + " cached down "}
-                  <button
-                    type="button"
-                    className="pf-panel-refresh"
-                    onClick={fetchConfig}
-                  >
+                  <button type="button" className="dsp-refresh" onClick={fetchConfig}>
                     Retry now
                   </button>
                 </span>
@@ -1472,16 +1270,12 @@ window.__ModuleLoader__.load({
                 {save.busy === true ? "Saving…" : "Save"}
               </button>
               {save.note ? (
-                <span
-                  className={
-                    "pf-panel-status " + (save.ok ? "pf-panel-ok" : "pf-panel-bad")
-                  }
-                >
+                <span className={"pf-panel-status " + (save.ok ? "pf-panel-ok" : "pf-panel-bad")}>
                   {save.note}
                 </span>
               ) : null}
             </div>
-          </div>
+          </SettingsSection>
         );
       }
       return ProfilesPanel;
@@ -1494,7 +1288,7 @@ window.__ModuleLoader__.load({
 
     function apply(ctx) {
       ctx.effect(function () {
-        return ctx.locale.register(LOCALE_NS, { en: EN, zh: ZH });
+        return registerLocale(ctx, LOCALE_NS, EN, ZH);
       }, "profiles-client: dictionaries");
 
       // Settings arrive through the ui-settings shared describe mirror: each
@@ -1551,12 +1345,12 @@ window.__ModuleLoader__.load({
             seat,
           );
         });
-        var panel = makeProfilesPanel(models, sessions);
+        var Panel = makeProfilesPanel(models, sessions);
         ctx.slots.inject("settings.section", function () {
           return ctx.slots.register(
             { name: "settings.section", id: PLUGIN_NAME, order: 27, label: "Profiles" },
             function () {
-              return createElement(panel);
+              return <Panel />;
             },
           );
         });

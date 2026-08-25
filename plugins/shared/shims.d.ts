@@ -36,3 +36,9 @@ interface Window {
   /** Set once tool-render has installed its highlight.js pass. */
   __toolRenderHljsPass?: boolean | undefined;
 }
+
+/** Inlined CSS text: the build's cssTextPlugin exports the file's text as the default export. */
+declare module "*.css" {
+  const css: string;
+  export default css;
+}

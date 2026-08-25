@@ -40,15 +40,174 @@ __export(client_exports, {
   name: () => name
 });
 module.exports = __toCommonJS(client_exports);
-var import_react = __toESM(require("react"), 1);
+var import_react2 = __toESM(require("react"), 1);
+
+// plugins/shared/client-util.ts
+function injectStyle(pluginName, styleId, cssText) {
+  if (typeof document === "undefined") return;
+  if (document.querySelector("style[data-plugin-css=" + JSON.stringify(styleId) + "]") !== null)
+    return;
+  const tag = document.createElement("style");
+  tag.dataset.plugin = pluginName;
+  tag.dataset.pluginCss = styleId;
+  tag.textContent = cssText;
+  document.head.appendChild(tag);
+}
+function mergeCss(...parts) {
+  return parts.flat().filter(Boolean).join("\n");
+}
+function fetchJson(url) {
+  return fetch(url, { cache: "no-store" }).then(function(res) {
+    return res.json().catch(function() {
+      return null;
+    }).then(function(json) {
+      return { ok: res.ok, status: res.status, json };
+    });
+  }).then(function(result) {
+    if (result.json !== null && result.json.error) {
+      return { data: null, error: String(result.json.error) };
+    }
+    if (!result.ok) return { data: null, error: "HTTP " + result.status };
+    return { data: result.json, error: null };
+  }).catch(function(e) {
+    return { data: null, error: String(e && e.message || e) };
+  });
+}
+function postJson(url, body) {
+  return fetch(url, {
+    method: "POST",
+    cache: "no-store",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body)
+  }).then(function(res) {
+    return res.json().catch(function() {
+      return null;
+    }).then(function(json) {
+      return { ok: res.ok, status: res.status, json };
+    });
+  }).then(function(result) {
+    if (result.json !== null && result.json.error) {
+      return { data: null, error: String(result.json.error) };
+    }
+    if (!result.ok) return { data: null, error: "HTTP " + result.status };
+    return { data: result.json, error: null };
+  }).catch(function(e) {
+    return { data: null, error: String(e && e.message || e) };
+  });
+}
+function putJson(url, body) {
+  return fetch(url, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+    cache: "no-store"
+  }).then(function(res) {
+    return res.json().catch(function() {
+      return null;
+    }).then(function(json) {
+      return { ok: res.ok, status: res.status, json };
+    });
+  }).then(function(result) {
+    if (result.json !== null && result.json.error) {
+      return { data: null, error: String(result.json.error) };
+    }
+    if (!result.ok) return { data: null, error: "HTTP " + result.status };
+    return { data: result.json, error: null };
+  }).catch(function(e) {
+    return { data: null, error: String(e && e.message || e) };
+  });
+}
+
+// plugins/shared/settings-panel.tsx
+var import_react = __toESM(require("react"));
+function SettingsSection(props) {
+  return /* @__PURE__ */ import_react.default.createElement("div", { className: "dsp-root" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "dsp-head" }, /* @__PURE__ */ import_react.default.createElement("h3", { className: "dsp-title" }, props.title), props.onRefresh ? /* @__PURE__ */ import_react.default.createElement("button", { className: "dsp-refresh", onClick: props.onRefresh }, props.refreshLabel === void 0 ? "Refresh" : props.refreshLabel) : null), props.children);
+}
+
+// css-text:/home/sid/repos/dotfiles-ai/plugins/shared/settings.css
+var settings_default = "/* Shared settings-page vocabulary, normalized from the session-archive,\n * subscriptions, and profiles settings panels. One rule set in one file so\n * the three panels cannot drift. Radius and padding disagreements are\n * normalized to the session-archive (or median) value; the var(--dsw-...)\n * aliases the current rules use are kept as-is. */\n\n/* Page-level container: airy vertical rhythm, no own box. */\n.dsp-root {\n  box-sizing: border-box;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  padding: 0;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Header row (title + refresh). */\n.dsp-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 12px;\n}\n\n.dsp-title {\n  font-size: 24px;\n  font-weight: 700;\n  margin: 0;\n  line-height: 1.2;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Refresh: session-archive/profiles form (no box, color shift only).\n * subscriptions pads and rounds the hit area; normalized away. */\n.dsp-refresh {\n  cursor: pointer;\n  border: none;\n  background: none;\n  padding: 0;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 15px;\n  line-height: 20px;\n}\n.dsp-refresh:hover {\n  color: var(--dsw-alias-label-primary);\n}\n\n.dsp-err {\n  font-size: 15px;\n  line-height: 22px;\n  color: var(--dsw-alias-state-error-primary);\n}\n\n/* Large setting card. Padding is the median of 16/20/24 (session-archive\n * 20px); the radius is the two-agreeing 20px, not profiles' 12px. */\n.dsp-section {\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 20px;\n  padding: 20px;\n  background: var(--dsw-alias-bg-tertiary);\n}\n\n/* Card title: subscriptions' 24px/700 matches the page-title vocabulary;\n * profiles' smaller 16px/600 card title normalized up. */\n.dsp-section-title {\n  font-size: 24px;\n  font-weight: 700;\n  margin: 0;\n  line-height: 1.2;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Setting row: horizontal in session-archive and profiles (subscriptions\n * stacks its label and meta vertically; normalized to the horizontal form). */\n.dsp-row {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  min-width: 0;\n}\n\n/* Row label: only subscriptions defines one; ported verbatim, with its\n * emphasized <b> children. */\n.dsp-row-label {\n  display: flex;\n  align-items: baseline;\n  gap: 10px;\n  font-size: 16px;\n  line-height: 22px;\n  color: var(--dsw-alias-label-secondary);\n}\n.dsp-row-label b {\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n  font-size: 16px;\n}\n.dsp-row-label b:last-child {\n  margin-left: auto;\n}\n";
+
+// plugins/profile-routes.ts
+function isRouteCandidate(value) {
+  return typeof value === "object" && value !== null && typeof value.provider === "string" && typeof value.model === "string";
+}
+function normalizeEntry(entry, chains, seen) {
+  if (isRouteCandidate(entry)) return [entry];
+  if (typeof entry === "string") {
+    if (entry.startsWith("chain:")) {
+      const name2 = entry.slice("chain:".length);
+      if (chains?.[name2] === void 0) return [];
+      const guard = new Set(seen ?? []);
+      if (guard.has(name2)) return [];
+      guard.add(name2);
+      return normalizeEntry(chains[name2], chains, guard);
+    }
+    const slash = entry.indexOf("/");
+    if (slash > 0) {
+      return [{ provider: entry.slice(0, slash), model: entry.slice(slash + 1) }];
+    }
+    if (chains?.[entry] !== void 0) {
+      const guard = new Set(seen ?? []);
+      if (guard.has(entry)) return [];
+      guard.add(entry);
+      return normalizeEntry(chains[entry], chains, guard);
+    }
+    return [];
+  }
+  if (typeof entry === "object" && entry !== null) {
+    if (Array.isArray(entry.routes)) {
+      return entry.routes.filter(isRouteCandidate);
+    }
+    if (Array.isArray(entry)) {
+      const out = [];
+      for (const step of entry) {
+        if (typeof step === "string") {
+          if (step.startsWith("chain:")) {
+            const name2 = step.slice("chain:".length);
+            if (chains?.[name2] !== void 0) {
+              const guard = new Set(seen ?? []);
+              if (!guard.has(name2)) {
+                guard.add(name2);
+                out.push(...normalizeEntry(chains[name2], chains, guard));
+              }
+            }
+          } else if (step.indexOf("/") > 0) {
+            const slash = step.indexOf("/");
+            out.push({ provider: step.slice(0, slash), model: step.slice(slash + 1) });
+          }
+        } else {
+          out.push(...normalizeEntry(step, chains, seen));
+        }
+      }
+      return out;
+    }
+  }
+  return [];
+}
+function routesEqual(a, b) {
+  if (a === b) return true;
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const left = a[i];
+    const right = b[i];
+    if (left.provider !== right.provider || left.model !== right.model) return false;
+  }
+  return true;
+}
+function chainNameForRoutes(routes, chains) {
+  if (chains === void 0 || chains === null) return void 0;
+  for (const name2 of Object.keys(chains)) {
+    if (routesEqual(normalizeEntry(chains[name2], chains), routes)) return name2;
+  }
+  return void 0;
+}
 
 // css-text:/home/sid/repos/dotfiles-ai/plugins/subscriptions/src/client.module.css
-var client_default = "/* Page-level container: airy vertical rhythm, no own box. */\n.ocgs-root{box-sizing:border-box;display:flex;flex-direction:column;gap:13px;padding:0;color:var(--dsw-alias-label-primary)}\n/* Header row (title + refresh). */\n.ocgs-head{display:flex;align-items:center;justify-content:space-between;gap:10px}\n.ocgs-title{font-size:24px;font-weight:700;margin:0;line-height:1.2;color:var(--dsw-alias-label-primary)}\n.ocgs-head-title{display:flex;align-items:baseline;gap:10px;min-width:0;flex:1;overflow:hidden}\n.ocgs-stale{font-size:14px;line-height:20px;color:var(--dsw-alias-label-secondary);white-space:nowrap}\n.ocgs-refresh{cursor:pointer;border:none;background:none;padding:5px 5px;border-radius:7px;color:var(--dsw-alias-label-secondary);font-size:15px;line-height:20px}\n.ocgs-refresh:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}\n/* Large setting card: 20px radius, generous 24px padding, single subtle border. */\n.ocgs-section{display:flex;flex-direction:column;gap:13px;border:1px solid var(--dsw-alias-border-l2);border-radius:20px;padding:24px;background:var(--dsw-alias-bg-tertiary)}\n.ocgs-section-title{font-size:24px;font-weight:700;margin:0;line-height:1.2;color:var(--dsw-alias-label-primary)}\n.ocgs-balance{font-size:18px;font-weight:600;color:var(--dsw-alias-label-primary)}\n.ocgs-telemetry{font-size:15px;line-height:22px;color:var(--dsw-alias-label-secondary)}\n.ocgs-rows{display:flex;flex-direction:column;gap:13px}\n.ocgs-row{display:flex;flex-direction:column;gap:5px;min-width:0}\n.ocgs-row-label{display:flex;align-items:baseline;gap:10px;font-size:16px;line-height:22px;color:var(--dsw-alias-label-secondary)}\n.ocgs-row-label b{font-weight:600;color:var(--dsw-alias-label-primary);font-size:16px}\n.ocgs-row-label b:last-child{margin-left:auto}\n.ocgs-meta{display:flex;align-items:center;gap:10px;min-width:0}\n.ocgs-meta>span{font-size:13px;line-height:18px;color:var(--dsw-alias-label-secondary);white-space:nowrap;flex:none}\n/* Progress track: thin, soft, rounded. */\n.ocgs-track{box-sizing:border-box;flex:1;min-width:0;height:8px;border-radius:7px;background:var(--dsw-alias-border-l2);overflow:hidden}\n.ocgs-fill{height:100%;border-radius:7px;transition:width .4s ease}\n.ocgs-pace{font-size:15px;line-height:22px;color:var(--dsw-alias-label-secondary)}\n.ocgs-err{font-size:15px;line-height:22px;color:var(--dsw-alias-state-error-primary)}\n/* Action row (fetch cookie / token buttons + note). */\n.ocgs-cookie{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:3px 0 6px}\n/* Secondary / pill button. */\n.ocgs-btn{display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:999px;font-size:15px;line-height:20px;padding:7px 15px;cursor:pointer;min-height:36px}\n.ocgs-btn:hover{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-border-l3)}\n.ocgs-btn:disabled{opacity:.5;cursor:default}\n.ocgs-cookie-note{font-size:14px;line-height:18px;color:var(--dsw-alias-label-secondary)}\n/* Provider visibility toggles \u2014 checkbox field language. */\n.ocgs-toggles{display:flex;flex-direction:column;gap:10px}\n.ocgs-toggle{display:flex;align-items:center;gap:10px;min-width:0;cursor:pointer}\n.ocgs-toggle-label{flex:1;min-width:0;font-size:18px;line-height:24px;color:var(--dsw-alias-label-secondary)}\n.ocgs-toggle input{flex:none;width:24px;height:24px;cursor:pointer;accent-color:var(--dsw-alias-state-business-primary)}\n/* Details disclosure for the toggle list. */\n.ocgs-details{border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-tertiary);padding:13px;margin-top:4px}\n.ocgs-summary{cursor:pointer;font-size:18px;font-weight:600;color:var(--dsw-alias-label-primary);list-style:none}\n.ocgs-summary::-webkit-details-marker{display:none}\n.ocgs-details[open] .ocgs-toggles{padding-top:10px}\n/* DeepSeek dashboard \u2014 nested grouped controls. */\n.ds-dashboard{display:flex;flex-direction:column;gap:13px}\n.ds-hero{display:flex;flex-direction:column;gap:5px;padding:13px;background:var(--dsw-alias-bg-tertiary);border-radius:12px;border:1px solid var(--dsw-alias-border-l2)}\n.ds-hero-total{font-size:32px;font-weight:700;color:var(--dsw-alias-label-primary);line-height:1.2}\n.ds-hero-breakdown{font-size:15px;color:var(--dsw-alias-label-secondary)}\n.ds-usage-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}\n.ds-usage-card{padding:13px;background:var(--dsw-alias-bg-tertiary);border-radius:12px;border:1px solid var(--dsw-alias-border-l2)}\n.ds-usage-label{font-size:12px;color:var(--dsw-alias-label-secondary);text-transform:uppercase;letter-spacing:0.5px}\n.ds-usage-value{font-size:20px;font-weight:600;color:var(--dsw-alias-label-primary);margin-top:6px}\n.ds-usage-sub{font-size:14px;color:var(--dsw-alias-label-secondary);margin-top:4px}\n.ds-token-row{display:flex;gap:10px;flex-wrap:wrap}\n.ds-token-card{flex:1;min-width:140px;padding:11px;background:var(--dsw-alias-bg-tertiary);border-radius:12px;border:1px solid var(--dsw-alias-border-l2)}\n.ds-token-label{font-size:12px;color:var(--dsw-alias-label-secondary)}\n.ds-token-value{font-size:18px;font-weight:600;color:var(--dsw-alias-state-success-primary)}\n.ds-token-value.out{color:var(--dsw-alias-state-error-primary)}\n.ds-empty{font-size:14px;color:var(--dsw-alias-label-secondary);font-style:italic}\n.ocgs-note{font-size:15px;line-height:22px;color:var(--dsw-alias-label-secondary)}\n/* Visible focus ring on every interactive control. */\n:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}\n";
+var client_default = ".ocgs-stale{font-size:14px;line-height:20px;color:var(--dsw-alias-label-secondary);white-space:nowrap}\n.ocgs-section{display:flex;flex-direction:column;gap:13px;border:1px solid var(--dsw-alias-border-l2);border-radius:20px;padding:24px;background:var(--dsw-alias-bg-tertiary)}\n.ocgs-section-title{font-size:24px;font-weight:700;margin:0;line-height:1.2;color:var(--dsw-alias-label-primary)}\n.ocgs-balance{font-size:18px;font-weight:600;color:var(--dsw-alias-label-primary)}\n.ocgs-telemetry{font-size:15px;line-height:22px;color:var(--dsw-alias-label-secondary)}\n.ocgs-rows{display:flex;flex-direction:column;gap:13px}\n.ocgs-row{display:flex;flex-direction:column;gap:5px;min-width:0}\n.ocgs-row-label{display:flex;align-items:baseline;gap:10px;font-size:16px;line-height:22px;color:var(--dsw-alias-label-secondary)}\n.ocgs-row-label b{font-weight:600;color:var(--dsw-alias-label-primary);font-size:16px}\n.ocgs-row-label b:last-child{margin-left:auto}\n.ocgs-meta{display:flex;align-items:center;gap:10px;min-width:0}\n.ocgs-meta > span{font-size:13px;line-height:18px;color:var(--dsw-alias-label-secondary);white-space:nowrap;flex:none}\n.ocgs-track{box-sizing:border-box;flex:1;min-width:0;height:8px;border-radius:7px;background:var(--dsw-alias-border-l2);overflow:hidden}\n.ocgs-fill{height:100%;border-radius:7px;transition:width 0.4s ease}\n.ocgs-pace{font-size:15px;line-height:22px;color:var(--dsw-alias-label-secondary)}\n.ocgs-cookie{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:3px 0 6px}\n.ocgs-btn{display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover);border:1px solid var(--dsw-alias-border-l2);border-radius:999px;font-size:15px;line-height:20px;padding:7px 15px;cursor:pointer;min-height:36px}\n.ocgs-btn:hover{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-border-l3)}\n.ocgs-btn:disabled{opacity:0.5;cursor:default}\n.ocgs-cookie-note{font-size:14px;line-height:18px;color:var(--dsw-alias-label-secondary)}\n.ocgs-toggles{display:flex;flex-direction:column;gap:10px}\n.ocgs-toggle{display:flex;align-items:center;gap:10px;min-width:0;cursor:pointer}\n.ocgs-toggle-label{flex:1;min-width:0;font-size:18px;line-height:24px;color:var(--dsw-alias-label-secondary)}\n.ocgs-toggle input{flex:none;width:24px;height:24px;cursor:pointer;accent-color:var(--dsw-alias-state-business-primary)}\n.ocgs-details{border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-tertiary);padding:13px;margin-top:4px}\n.ocgs-summary{cursor:pointer;font-size:18px;font-weight:600;color:var(--dsw-alias-label-primary);list-style:none}\n.ocgs-summary::-webkit-details-marker{display:none}\n.ocgs-details[open] .ocgs-toggles{padding-top:10px}\n.ds-dashboard{display:flex;flex-direction:column;gap:13px}\n.ds-hero{display:flex;flex-direction:column;gap:5px;padding:13px;background:var(--dsw-alias-bg-tertiary);border-radius:12px;border:1px solid var(--dsw-alias-border-l2)}\n.ds-hero-total{font-size:32px;font-weight:700;color:var(--dsw-alias-label-primary);line-height:1.2}\n.ds-hero-breakdown{font-size:15px;color:var(--dsw-alias-label-secondary)}\n.ds-usage-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}\n.ds-usage-card{padding:13px;background:var(--dsw-alias-bg-tertiary);border-radius:12px;border:1px solid var(--dsw-alias-border-l2)}\n.ds-usage-label{font-size:12px;color:var(--dsw-alias-label-secondary);text-transform:uppercase;letter-spacing:0.5px}\n.ds-usage-value{font-size:20px;font-weight:600;color:var(--dsw-alias-label-primary);margin-top:6px}\n.ds-usage-sub{font-size:14px;color:var(--dsw-alias-label-secondary);margin-top:4px}\n.ds-token-row{display:flex;gap:10px;flex-wrap:wrap}\n.ds-token-card{flex:1;min-width:140px;padding:11px;background:var(--dsw-alias-bg-tertiary);border-radius:12px;border:1px solid var(--dsw-alias-border-l2)}\n.ds-token-label{font-size:12px;color:var(--dsw-alias-label-secondary)}\n.ds-token-value{font-size:18px;font-weight:600;color:var(--dsw-alias-state-success-primary)}\n.ds-token-value.out{color:var(--dsw-alias-state-error-primary)}\n.ds-empty{font-size:14px;color:var(--dsw-alias-label-secondary);font-style:italic}\n.ocgs-note{font-size:15px;line-height:22px;color:var(--dsw-alias-label-secondary)}\n:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}\n";
 
 // plugins/subscriptions/src/client.tsx
 var PLUGIN_NAME = "subscriptions";
 var STYLE_TAG_ID = "subscriptions/client.css";
-var CSS_TEXT = [client_default].join("");
 var GO_WINDOWS = [
   { key: "rolling", label: "Rolling (5h)", hint: "5h" },
   { key: "weekly", label: "Weekly", hint: null },
@@ -97,14 +256,12 @@ function renderTelemetry(t) {
   var usd = t.costEstimate && typeof t.costEstimate.totalUsd === "number" ? "$" + t.costEstimate.totalUsd.toFixed(2) + " est" : "\u2014 est";
   var req = typeof t.totalRequests === "number" ? String(t.totalRequests) : "\u2014";
   var parts = ["24h: " + req + " req"];
-  if (typeof t.requestsPerMinute === "number")
-    parts.push(t.requestsPerMinute.toFixed(1) + "/min");
+  if (typeof t.requestsPerMinute === "number") parts.push(t.requestsPerMinute.toFixed(1) + "/min");
   parts.push(usd);
   parts.push(fmtCount(totalTokens) + " tokens");
   if (typeof usage.avgCacheHitRate === "number")
     parts.push("cache " + Math.round(usage.avgCacheHitRate * 100) + "%");
-  if (typeof t.errorCount === "number" && t.errorCount > 0)
-    parts.push(t.errorCount + " errors");
+  if (typeof t.errorCount === "number" && t.errorCount > 0) parts.push(t.errorCount + " errors");
   return parts.join(" \xB7 ");
 }
 function renderHealth(h) {
@@ -141,13 +298,18 @@ function renderLogSummary(logs) {
   return line;
 }
 function windowPercent(win) {
-  if (typeof win.percent === "number") return win.percent;
-  if (typeof win.utilization === "number") return win.utilization * 100;
-  return null;
+  var pct = null;
+  if (typeof win.percent === "number") pct = win.percent;
+  else if (typeof win.utilization === "number") pct = win.utilization * 100;
+  else if (typeof win.used === "number" && typeof win.cap === "number" && win.cap > 0)
+    pct = win.used / win.cap * 100;
+  if (pct === null) return null;
+  return Math.max(0, Math.min(100, pct));
 }
 function statusText(win, hint) {
   if (typeof win.status === "string" && win.status !== "ok") return win.status;
   if (win.resetsAt) return timeUntil(win.resetsAt);
+  if (win.resetAt) return timeUntil(win.resetAt);
   return hint || "";
 }
 var SEVEN_DAYS_MS = 7 * 864e5;
@@ -179,62 +341,6 @@ function renderPaceLine(label, pace, resetsAtMs, utilization) {
   }
   return parts.join(" \xB7 ");
 }
-function fetchJson(url) {
-  return fetch(url, { cache: "no-store" }).then(function(res) {
-    return res.json().catch(function() {
-      return null;
-    }).then(function(json) {
-      return { ok: res.ok, status: res.status, json };
-    });
-  }).then(function(result) {
-    if (result.json !== null && result.json.error) {
-      return { data: null, error: String(result.json.error) };
-    }
-    if (!result.ok) return { data: null, error: "HTTP " + result.status };
-    return { data: result.json, error: null };
-  }).catch(function(e) {
-    return { data: null, error: String(e && e.message || e) };
-  });
-}
-function postJson(url) {
-  return fetch(url, { method: "POST", cache: "no-store" }).then(function(res) {
-    return res.json().catch(function() {
-      return null;
-    }).then(function(json) {
-      return { ok: res.ok, status: res.status, json };
-    });
-  }).then(function(result) {
-    if (result.json !== null && result.json.error) {
-      return { data: null, error: String(result.json.error) };
-    }
-    if (!result.ok) return { data: null, error: "HTTP " + result.status };
-    return { data: result.json, error: null };
-  }).catch(function(e) {
-    return { data: null, error: String(e && e.message || e) };
-  });
-}
-function putJson(url, body) {
-  return fetch(url, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-    cache: "no-store"
-  }).then(function(res) {
-    return res.json().catch(function() {
-      return null;
-    }).then(function(json) {
-      return { ok: res.ok, status: res.status, json };
-    });
-  }).then(function(result) {
-    if (result.json !== null && result.json.error) {
-      return { data: null, error: String(result.json.error) };
-    }
-    if (!result.ok) return { data: null, error: "HTTP " + result.status };
-    return { data: result.json, error: null };
-  }).catch(function(e) {
-    return { data: null, error: String(e && e.message || e) };
-  });
-}
 function buildRows(defs, windows, labelOf) {
   var rows = [];
   var keys = defs ? defs.map(function(d) {
@@ -251,12 +357,12 @@ function buildRows(defs, windows, labelOf) {
     var hint = def ? def.hint : null;
     var status = statusText(win, hint);
     rows.push(
-      /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-row", key }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-row-label" }, /* @__PURE__ */ import_react.default.createElement("b", null, label), status ? /* @__PURE__ */ import_react.default.createElement("span", { className: "ocgs-stale" }, "resets in " + status) : null, /* @__PURE__ */ import_react.default.createElement("b", null, percent + "%")), /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-meta" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-track" }, /* @__PURE__ */ import_react.default.createElement(
+      /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-row", key }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-row-label" }, /* @__PURE__ */ import_react2.default.createElement("b", null, label), status ? /* @__PURE__ */ import_react2.default.createElement("span", { className: "ocgs-stale" }, "resets in " + status) : null, /* @__PURE__ */ import_react2.default.createElement("b", null, percent + "%")), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-meta" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-track" }, /* @__PURE__ */ import_react2.default.createElement(
         "div",
         {
           className: "ocgs-fill",
           style: {
-            width: Math.max(0, Math.min(100, percent)) + "%",
+            width: percent + "%",
             background: fillColor(percent)
           }
         }
@@ -318,104 +424,46 @@ function renderDsDashboard(bal, amount, cost) {
   var usageCards = [];
   if (totalTokens > 0 || totalCost > 0) {
     usageCards.push(
-      /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-card" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-label" }, "Total Cost"), /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-value" }, "$" + totalCost.toFixed(2)))
+      /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-card" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-label" }, "Total Cost"), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-value" }, "$" + totalCost.toFixed(2)))
     );
     usageCards.push(
-      /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-card" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-label" }, "Total Tokens"), /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-value" }, fmtCount(totalTokens)), /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-sub" }, "in " + fmtCount(inTokens) + " \xB7 out " + fmtCount(outTokens) + " \xB7 cache " + fmtCount(cacheRead + cacheWrite)))
+      /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-card" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-label" }, "Total Tokens"), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-value" }, fmtCount(totalTokens)), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-sub" }, "in " + fmtCount(inTokens) + " \xB7 out " + fmtCount(outTokens) + " \xB7 cache " + fmtCount(cacheRead + cacheWrite)))
     );
     for (var cmi = 0; cmi < costByModel.length; cmi++) {
       var cm = costByModel[cmi];
       usageCards.push(
-        /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-card" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-label" }, cm.model), /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-value" }, "$" + cm.cost.toFixed(2)))
+        /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-card" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-label" }, cm.model), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-value" }, "$" + cm.cost.toFixed(2)))
       );
     }
   } else {
     usageCards.push(
-      /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-card ds-empty" }, "No usage data (sign in to platform.deepseek.com)")
+      /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-card ds-empty" }, "No usage data (sign in to platform.deepseek.com)")
     );
   }
-  return /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-dashboard" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-hero" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-hero-total" }, heroLines[0]), /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-hero-breakdown" }, subLines.join(" \xB7 "))), /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-grid" }, usageCards));
-}
-function chainRoutes(value, chains, seen) {
-  var out = [];
-  if (value === null || value === void 0) return out;
-  if (typeof value === "string") {
-    if (value.indexOf("chain:") === 0) {
-      var refName = value.slice("chain:".length);
-      if (chains && chains[refName] && (!seen || !seen.has(refName))) {
-        var guard = new Set(seen || []);
-        guard.add(refName);
-        return chainRoutes(chains[refName], chains, guard);
-      }
-      return out;
-    }
-    var slash = value.indexOf("/");
-    if (slash > 0) return [{ provider: value.slice(0, slash), model: value.slice(slash + 1) }];
-    if (chains && chains[value] && (!seen || !seen.has(value))) {
-      var guard2 = new Set(seen || []);
-      guard2.add(value);
-      return chainRoutes(chains[value], chains, guard2);
-    }
-    return out;
-  }
-  if (Array.isArray(value)) {
-    for (var ci = 0; ci < value.length; ci++)
-      out = out.concat(chainRoutes(value[ci], chains, seen));
-    return out;
-  }
-  if (value && typeof value === "object" && Array.isArray(value.routes)) {
-    for (var cj = 0; cj < value.routes.length; cj++) {
-      var route = value.routes[cj];
-      if (route && typeof route.provider === "string" && typeof route.model === "string") {
-        out.push({ provider: route.provider, model: route.model });
-      }
-    }
-  }
-  return out;
-}
-function routesEqual(a, b) {
-  if (a.length !== b.length) return false;
-  for (var ri = 0; ri < a.length; ri++) {
-    if (a[ri].provider !== b[ri].provider || a[ri].model !== b[ri].model) return false;
-  }
-  return true;
-}
-function chainNameFor(routes, chains) {
-  if (!chains || typeof chains !== "object") return null;
-  var keys = Object.keys(chains);
-  for (var ki = 0; ki < keys.length; ki++) {
-    var flat = chainRoutes(chains[keys[ki]], chains, /* @__PURE__ */ new Set([keys[ki]]));
-    if (routesEqual(flat, routes)) return keys[ki];
-  }
-  return null;
+  return /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-dashboard" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-hero" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-hero-total" }, heroLines[0]), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-hero-breakdown" }, subLines.join(" \xB7 "))), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, usageCards));
 }
 function buildCcMeters(cc) {
-  var meters = [];
-  if (!cc || cc.error || !cc.data || cc.data.ok !== true) return meters;
+  if (!cc || cc.error || !cc.data || cc.data.ok !== true) return [];
   var wins = cc.data.windows || null;
   var ccDefs = [
     { key: "fiveHour", label: "5-hour" },
     { key: "weekly", label: "Weekly" }
   ];
-  for (var mi = 0; mi < ccDefs.length; mi++) {
-    var def = ccDefs[mi];
-    var win = wins ? wins[def.key] : null;
+  var windows = {};
+  for (var ci = 0; ci < ccDefs.length; ci++) {
+    var win = wins ? wins[ccDefs[ci].key] : null;
     if (!win) continue;
     var used = typeof win.used === "number" ? win.used : null;
     var cap = typeof win.cap === "number" ? win.cap : null;
     if (used === null || cap === null || cap <= 0) continue;
-    var pct = Math.round(used / cap * 100);
-    meters.push(
-      /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-row", key: def.key }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-row-label" }, /* @__PURE__ */ import_react.default.createElement("b", null, def.label), win.resetAt ? /* @__PURE__ */ import_react.default.createElement("span", { className: "ocgs-stale" }, "resets in " + timeUntil(win.resetAt)) : null, /* @__PURE__ */ import_react.default.createElement("b", null, pct + "%")), /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-meta" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-track" }, /* @__PURE__ */ import_react.default.createElement(
-        "div",
-        {
-          className: "ocgs-fill",
-          style: { width: Math.max(0, Math.min(100, pct)) + "%", background: fillColor(pct) }
-        }
-      ))))
-    );
+    windows[ccDefs[ci].key] = {
+      key: ccDefs[ci].key,
+      used,
+      cap,
+      resetAt: win.resetAt || null
+    };
   }
-  return meters;
+  return buildRows(ccDefs, windows, void 0);
 }
 var SNAP_KEY = "subscriptions:lastSnap";
 function storageAvailable() {
@@ -488,31 +536,31 @@ function renderCcSection(cc, ccUsage) {
     }
   }
   if (breakdown.length > 0) {
-    hero = /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-hero" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-hero-total" }, "$" + total.toFixed(2)), /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-hero-breakdown" }, breakdown.join(" \xB7 ")));
+    hero = /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-hero" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-hero-total" }, "$" + total.toFixed(2)), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-hero-breakdown" }, breakdown.join(" \xB7 ")));
   }
   var meters = buildCcMeters(cc);
   var costCard = null;
   if (usage && typeof usage.totalCost === "number") {
     var period = usage.periodStart ? fmtDate(usage.periodStart) + (usage.periodEnd ? " \u2013 " + fmtDate(usage.periodEnd) : "") : "this period";
-    costCard = /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-card" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-label" }, "Monthly cost"), /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-value" }, "$" + usage.totalCost.toFixed(2)), /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-sub" }, period));
+    costCard = /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-card" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-label" }, "Monthly cost"), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-value" }, "$" + usage.totalCost.toFixed(2)), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-sub" }, period));
   }
-  return /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react.default.createElement("h4", { className: "ocgs-section-title" }, "Command Code"), errorLine ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-err" }, errorLine) : null, hero, meters.length > 0 ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-rows" }, meters) : null, costCard ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ds-usage-grid" }, costCard) : null);
+  return /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "Command Code"), errorLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, errorLine) : null, hero, meters.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, meters) : null, costCard ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, costCard) : null);
 }
 function makePanel(ctx, config) {
   return function Panel() {
-    var snapState = import_react.default.useState(null);
+    var snapState = import_react2.default.useState(null);
     var snap = snapState[0];
     var setSnap = snapState[1];
-    var staleTsState = import_react.default.useState(null);
+    var staleTsState = import_react2.default.useState(null);
     var staleTs = staleTsState[0];
     var setStaleTs = staleTsState[1];
-    var cacheOkState = import_react.default.useState(null);
+    var cacheOkState = import_react2.default.useState(null);
     var cacheOk = cacheOkState[0];
     var setCacheOk = cacheOkState[1];
-    var cfgState = import_react.default.useState(config);
+    var cfgState = import_react2.default.useState(config);
     var cfg = cfgState[0];
     var setCfg = cfgState[1];
-    import_react.default.useEffect(function() {
+    import_react2.default.useEffect(function() {
       if (config == null) {
         fetchJson("/subscriptions/config").then(function(result) {
           if (result.data && result.data.config) setCfg(result.data.config);
@@ -558,7 +606,7 @@ function makePanel(ctx, config) {
       setStaleTs(Date.now());
       writeLastSnap(snapData);
     };
-    import_react.default.useEffect(function() {
+    import_react2.default.useEffect(function() {
       var ok = storageAvailable();
       setCacheOk(ok);
       if (ok) {
@@ -587,10 +635,10 @@ function makePanel(ctx, config) {
     var oz = snap ? snap.oz : null;
     var health = snap ? snap.health : null;
     var logs = snap ? snap.logs : null;
-    var cookieState = import_react.default.useState({ busy: false, note: null, showLogin: false });
+    var cookieState = import_react2.default.useState({ busy: false, note: null, showLogin: false });
     var cookie = cookieState[0];
     var setCookie = cookieState[1];
-    var dsTokenState = import_react.default.useState({ busy: false, note: null, showLogin: false });
+    var dsTokenState = import_react2.default.useState({ busy: false, note: null, showLogin: false });
     var dsToken = dsTokenState[0];
     var setDsToken = dsTokenState[1];
     var fetchCookie = async function() {
@@ -636,7 +684,7 @@ function makePanel(ctx, config) {
       setSnap(Object.assign({}, snap, { oz: result }));
       setStaleTs(Date.now());
     };
-    var toggleState = import_react.default.useState(null);
+    var toggleState = import_react2.default.useState(null);
     var toggleBusy = toggleState[0];
     var setToggleBusy = toggleState[1];
     var toggleProvider = function(key) {
@@ -766,7 +814,7 @@ function makePanel(ctx, config) {
       var orcRoutes = profileEntry && profileEntry.orchestrator && Array.isArray(profileEntry.orchestrator.routes) ? profileEntry.orchestrator.routes : [];
       profileInfo = {
         active: activeName,
-        chain: chainNameFor(orcRoutes, pcfg.chains),
+        chain: chainNameForRoutes(orcRoutes, pcfg.chains),
         head: orcRoutes.length > 0 ? orcRoutes[0] : null
       };
     }
@@ -812,10 +860,10 @@ function makePanel(ctx, config) {
       }
       allFailed = failCount === dataKeys.length;
     }
-    return /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-root" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-head" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-head-title" }, /* @__PURE__ */ import_react.default.createElement("h3", { className: "ocgs-title" }, "Subscriptions"), staleText ? /* @__PURE__ */ import_react.default.createElement("span", { className: "ocgs-stale" }, staleText) : null), /* @__PURE__ */ import_react.default.createElement("button", { className: "ocgs-refresh", onClick: load }, "Refresh")), /* @__PURE__ */ import_react.default.createElement("details", { className: "ocgs-details" }, /* @__PURE__ */ import_react.default.createElement("summary", { className: "ocgs-summary" }, "Show sections"), /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-toggles" }, PROVIDER_TOGGLES.map(function(def) {
+    return /* @__PURE__ */ import_react2.default.createElement(SettingsSection, { title: "Subscriptions", onRefresh: load, refreshLabel: "Refresh" }, staleText ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-stale" }, staleText) : null, /* @__PURE__ */ import_react2.default.createElement("details", { className: "ocgs-details" }, /* @__PURE__ */ import_react2.default.createElement("summary", { className: "ocgs-summary" }, "Show sections"), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-toggles" }, PROVIDER_TOGGLES.map(function(def) {
       var providers = cfg && cfg.providers || {};
       var visible = providers[def.key] !== false;
-      return /* @__PURE__ */ import_react.default.createElement("label", { className: "ocgs-toggle", key: def.key }, /* @__PURE__ */ import_react.default.createElement(
+      return /* @__PURE__ */ import_react2.default.createElement("label", { className: "ocgs-toggle", key: def.key }, /* @__PURE__ */ import_react2.default.createElement(
         "input",
         {
           type: "checkbox",
@@ -825,28 +873,22 @@ function makePanel(ctx, config) {
             toggleProvider(def.key);
           }
         }
-      ), /* @__PURE__ */ import_react.default.createElement("span", { className: "ocgs-toggle-label" }, def.label));
-    }))), snap === null ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-note" }, "Loading subscription data\u2026") : null, allFailed ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-err" }, "Could not load subscription data. " + (firstError || "Check that the subscriptions plugin is mounted.")) : null, profileInfo || quotaPick || telemetryLine || healthLine || logsLine ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react.default.createElement("h4", { className: "ocgs-section-title" }, "Quota"), profileInfo ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-rows" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-row" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-row-label" }, /* @__PURE__ */ import_react.default.createElement("b", null, "Profile: " + profileInfo.active), profileInfo.chain ? /* @__PURE__ */ import_react.default.createElement("span", { className: "ocgs-stale" }, "chain: " + profileInfo.chain) : null))) : null, quotaPick ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-rows" }, quotaPick.rows) : null, quotaPick && quotaPick.pace ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-pace" }, quotaPick.pace) : null, telemetryLine ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-telemetry" }, telemetryLine) : null, healthLine ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-telemetry" }, healthLine) : null, logsLine ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-telemetry" }, logsLine) : null) : null, providerVisible(cfg, "commandcode") ? renderCcSection(cc, ccUsage) : null, providerVisible(cfg, "claude") ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react.default.createElement("h4", { className: "ocgs-section-title" }, "Claude (meridian)"), quota && quota.error ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-err" }, "Claude (meridian): " + quota.error) : null, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-rows" }, buildRows(null, claudeWindows, windowLabel)), claudePaceLine ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-pace" }, claudePaceLine) : null) : null, providerVisible(cfg, "deepseek") ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react.default.createElement("h4", { className: "ocgs-section-title" }, "DeepSeek"), ds && ds.error ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-err" }, "DeepSeek: " + ds.error) : null, ds && ds.data && Array.isArray(ds.data.balance_infos) && ds.data.balance_infos.length > 0 ? renderDsDashboard(ds.data.balance_infos[0], dsUsageAmount, dsUsageCost) : null, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-cookie" }, /* @__PURE__ */ import_react.default.createElement("button", { className: "ocgs-btn", disabled: dsToken.busy, onClick: fetchDsToken }, dsToken.busy ? "Fetching\u2026" : "Fetch token from Firefox"), dsToken.showLogin ? /* @__PURE__ */ import_react.default.createElement("button", { className: "ocgs-btn", onClick: openDsLogin }, "Open platform.deepseek.com") : null, dsToken.note ? /* @__PURE__ */ import_react.default.createElement("span", { className: "ocgs-cookie-note" }, dsToken.note) : null)) : null, providerVisible(cfg, "opencode") ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react.default.createElement("h4", { className: "ocgs-section-title" }, "OpenCode GO"), balanceLine ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-balance" }, balanceLine) : null, go && go.error ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-err" }, "OpenCode GO: " + go.error) : null, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-rows" }, buildRows(GO_WINDOWS, goUsage)), goPaceLine ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-pace" }, goPaceLine) : null, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-cookie" }, /* @__PURE__ */ import_react.default.createElement("button", { className: "ocgs-btn", disabled: cookie.busy, onClick: fetchCookie }, cookie.busy ? "Fetching\u2026" : "Fetch cookie from Firefox"), cookie.showLogin ? /* @__PURE__ */ import_react.default.createElement("button", { className: "ocgs-btn", onClick: openLogin }, "Open login page") : null, cookie.note ? /* @__PURE__ */ import_react.default.createElement("span", { className: "ocgs-cookie-note" }, cookie.note) : null)) : null, providerVisible(cfg, "opencode-zen") ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-head" }, /* @__PURE__ */ import_react.default.createElement("h4", { className: "ocgs-section-title" }, "OpenCode Zen"), /* @__PURE__ */ import_react.default.createElement("button", { className: "ocgs-refresh", onClick: refreshOz }, "Refresh")), ozBalanceLine ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-balance" }, ozBalanceLine) : null, oz && oz.error ? /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-err" }, "OpenCode Zen: " + oz.error) : null, /* @__PURE__ */ import_react.default.createElement("div", { className: "ocgs-cookie" }, /* @__PURE__ */ import_react.default.createElement("button", { className: "ocgs-btn", disabled: cookie.busy, onClick: fetchCookie }, cookie.busy ? "Fetching\u2026" : "Fetch cookie from Firefox"), cookie.showLogin ? /* @__PURE__ */ import_react.default.createElement("button", { className: "ocgs-btn", onClick: openLogin }, "Open opencode.ai") : null, cookie.note ? /* @__PURE__ */ import_react.default.createElement("span", { className: "ocgs-cookie-note" }, cookie.note) : null)) : null);
+      ), /* @__PURE__ */ import_react2.default.createElement("span", { className: "ocgs-toggle-label" }, def.label));
+    }))), snap === null ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note" }, "Loading subscription data\u2026") : null, allFailed ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, "Could not load subscription data. " + (firstError || "Check that the subscriptions plugin is mounted.")) : null, profileInfo || quotaPick || telemetryLine || healthLine || logsLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "Quota"), profileInfo ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-row" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-row-label" }, /* @__PURE__ */ import_react2.default.createElement("b", null, "Profile: " + profileInfo.active), profileInfo.chain ? /* @__PURE__ */ import_react2.default.createElement("span", { className: "ocgs-stale" }, "chain: " + profileInfo.chain) : null))) : null, quotaPick ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, quotaPick.rows) : null, quotaPick && quotaPick.pace ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-pace" }, quotaPick.pace) : null, telemetryLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-telemetry" }, telemetryLine) : null, healthLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-telemetry" }, healthLine) : null, logsLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-telemetry" }, logsLine) : null) : null, providerVisible(cfg, "commandcode") ? renderCcSection(cc, ccUsage) : null, providerVisible(cfg, "claude") ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "Claude (meridian)"), quota && quota.error ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, "Claude (meridian): " + quota.error) : null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, buildRows(null, claudeWindows, windowLabel)), claudePaceLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-pace" }, claudePaceLine) : null) : null, providerVisible(cfg, "deepseek") ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "DeepSeek"), ds && ds.error ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, "DeepSeek: " + ds.error) : null, ds && ds.data && Array.isArray(ds.data.balance_infos) && ds.data.balance_infos.length > 0 ? renderDsDashboard(ds.data.balance_infos[0], dsUsageAmount, dsUsageCost) : null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-cookie" }, /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", disabled: dsToken.busy, onClick: fetchDsToken }, dsToken.busy ? "Fetching\u2026" : "Fetch token from Firefox"), dsToken.showLogin ? /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", onClick: openDsLogin }, "Open platform.deepseek.com") : null, dsToken.note ? /* @__PURE__ */ import_react2.default.createElement("span", { className: "ocgs-cookie-note" }, dsToken.note) : null)) : null, providerVisible(cfg, "opencode") ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "OpenCode GO"), balanceLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-balance" }, balanceLine) : null, go && go.error ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, "OpenCode GO: " + go.error) : null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, buildRows(GO_WINDOWS, goUsage)), goPaceLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-pace" }, goPaceLine) : null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-cookie" }, /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", disabled: cookie.busy, onClick: fetchCookie }, cookie.busy ? "Fetching\u2026" : "Fetch cookie from Firefox"), cookie.showLogin ? /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", onClick: openLogin }, "Open login page") : null, cookie.note ? /* @__PURE__ */ import_react2.default.createElement("span", { className: "ocgs-cookie-note" }, cookie.note) : null)) : null, providerVisible(cfg, "opencode-zen") ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-head" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "OpenCode Zen"), /* @__PURE__ */ import_react2.default.createElement("button", { className: "dsp-refresh", onClick: refreshOz }, "Refresh")), ozBalanceLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-balance" }, ozBalanceLine) : null, oz && oz.error ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, "OpenCode Zen: " + oz.error) : null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-cookie" }, /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", disabled: cookie.busy, onClick: fetchCookie }, cookie.busy ? "Fetching\u2026" : "Fetch cookie from Firefox"), cookie.showLogin ? /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", onClick: openLogin }, "Open opencode.ai") : null, cookie.note ? /* @__PURE__ */ import_react2.default.createElement("span", { className: "ocgs-cookie-note" }, cookie.note) : null)) : null);
   };
 }
 var name = PLUGIN_NAME;
 var inject = ["slots"];
 function apply(ctx, config) {
   ctx.effect(function() {
-    if (typeof document === "undefined") return;
-    if (document.querySelector('style[data-plugin-css="' + STYLE_TAG_ID + '"]') !== null) return;
-    var tag = document.createElement("style");
-    tag.dataset.plugin = PLUGIN_NAME;
-    tag.dataset.pluginCss = STYLE_TAG_ID;
-    tag.textContent = CSS_TEXT;
-    document.head.appendChild(tag);
+    injectStyle(PLUGIN_NAME, STYLE_TAG_ID, mergeCss(settings_default, client_default));
   }, "subscriptions: styles");
   var Panel = makePanel(ctx, config);
   ctx.slots.inject("settings.section", function() {
     return ctx.slots.register(
       { name: "settings.section", id: PLUGIN_NAME, order: 26, label: "Subscriptions" },
       function() {
-        return /* @__PURE__ */ import_react.default.createElement(Panel, null);
+        return /* @__PURE__ */ import_react2.default.createElement(Panel, null);
       }
     );
   });

@@ -1,0 +1,145 @@
+/*
+ * DESIGN.md control component rules (§6–§14), ported verbatim from the
+ * CONTROLS_CSS template literal in plugins/design-system.ts. Kept as a
+ * reference asset only: no bundle consumes it, so it is never injected.
+ */
+.setting-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+.setting-checkbox {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: 3px;
+}
+.segmented-control {
+  display: flex;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.segment {
+  min-width: 175px;
+  height: 48px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 20px;
+}
+.segment[data-active="true"] {
+  background: var(--surface-active);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.control-list {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.control-list-row {
+  min-height: 64px;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.control-list-row + .control-list-row {
+  border-top: 1px solid var(--border-subtle);
+}
+.pill {
+  height: 36px;
+  padding-inline: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 16px;
+}
+.pill[data-active="true"] {
+  background: var(--surface-active);
+  color: var(--text-primary);
+}
+.icon-button {
+  width: 40px;
+  height: 40px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 28px;
+}
+.icon-button:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+.mode-switch {
+  display: inline-flex;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.mode-switch > button {
+  height: 44px;
+  padding-inline: 32px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 18px;
+}
+.mode-switch > button[data-active="true"] {
+  background: var(--surface-active);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.text-input {
+  height: 56px;
+  width: 100%;
+  padding-inline: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 18px;
+  outline: none;
+}
+.text-input::placeholder {
+  color: var(--text-muted);
+}
+.text-input:focus {
+  border-color: var(--border-focus);
+}
+.primary-button {
+  height: 56px;
+  padding-inline: 20px;
+  border: 0;
+  border-radius: 28px;
+  background: #adb2b8;
+  color: #232324;
+  font-size: 18px;
+  font-weight: 600;
+}
+.primary-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-secondary);
+  font-size: 18px;
+}
