@@ -216,7 +216,26 @@ export function apply(ctx: Context, config: unknown): void {
     }
     return next();
   });
-
+  // Prompt filter: strip gated schemas from the system prompt's tool list
+  // during assembly, so the model never receives them on ANY step — not just
+  // steps after the first. The pre-step restrict() below blocks calls but runs
+  // after assemble(), so the first (often only) step would otherwise ship every
+  // gated tool and waste context. This runs inside assemble() for every step,
+  // including the first, and removes schemas from the prompt the request is built from.
+  ctx.on("system-prompt/assemble" as keyof Events, (assembly: { tools: Array<{ name: string }> }, context: { agent?: Agent }, next: () => Promise<unknown>) => {
+    const agent = context.agent;
+    if (!agent) return next();
+    const patterns = gatedPatterns();
+    const lockdown = isSubagent(agent) ? subagentDeny : [];
+    if (patterns.length === 0 && lockdown.length === 0) return next();
+    const active = activeById.get(agent.id) ?? new Set<string>();
+    const deny = expandDeny(agent, patterns, active);
+    for (const name of lockdown) if (!deny.includes(name)) deny.push(name);
+    if (deny.length === 0) return next();
+    const blocked = new Set(deny);
+    assembly.tools = assembly.tools.filter((t) => !blocked.has(t.name));
+    return next();
+  });
   ctx.on("tools/post-execute", (exec, result, next) => {
     const proceed = async () => {
       const outcome = await next();
