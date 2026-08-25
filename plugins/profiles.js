@@ -4,7 +4,7 @@ import { settingsNamespace } from "@deepseek-ai/dsh-settings";
 
 // plugins/profile-routes.ts
 function isRouteCandidate(value) {
-  return typeof value === "object" && value !== null && typeof value.provider === "string" && typeof value.model === "string";
+  return typeof value === "object" && value !== null && typeof value.provider === "string" && value.provider.length > 0 && typeof value.model === "string" && value.model.length > 0;
 }
 function normalizeEntry(entry, chains, seen) {
   if (isRouteCandidate(entry)) return [entry];
@@ -85,6 +85,38 @@ function chainOf(entry, chainName, chains) {
   return normalizeEntry(entry, chains);
 }
 
+// plugins/shared/http.ts
+var DEFAULT_MAX_BODY_BYTES = 64 * 1024;
+function sendJson(res, status, body) {
+  res.statusCode = status;
+  res.setHeader("content-type", "application/json; charset=utf-8");
+  res.setHeader("cache-control", "no-store");
+  res.end(JSON.stringify(body));
+}
+async function readBody(req, maxBytes = DEFAULT_MAX_BODY_BYTES) {
+  const declared = req.headers["content-length"];
+  if (declared !== void 0 && Number(declared) > maxBytes) {
+    throw new Error("request body too large");
+  }
+  const chunks = [];
+  let received = 0;
+  for await (const chunk of req) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    received += buffer.byteLength;
+    if (received > maxBytes) throw new Error("request body too large");
+    chunks.push(buffer);
+  }
+  const text = Buffer.concat(chunks).toString("utf8");
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error("body is not valid JSON");
+  }
+}
+function isPlainObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 // plugins/profiles.ts
 var name = "profiles";
 var inject = ["tools", "subagents", "systemPrompt"];
@@ -101,21 +133,59 @@ function service(ctx, name2) {
 function activeEntry(profile) {
   return (profile?.active ?? "work") === "personal" ? profile?.personal : profile?.work;
 }
-var ERROR_WINDOW_MS = 6e5;
-var ERROR_CLASSES = ["no-credits", "model-unavailable", "auth", "bad-request"];
+var ERROR_CLASSES = ["auth", "no-credits", "model-unavailable", "rate-limit"];
+var ERROR_TTL_MS = {
+  auth: 6e5,
+  "no-credits": 6e5,
+  "model-unavailable": 6e5,
+  "rate-limit": 3e4
+};
 var downCache = /* @__PURE__ */ new Map();
 function errorKey(level, cls) {
   return `${level.provider}:${level.model}:${cls}`;
 }
+var ERROR_CODE_CLASS = {
+  NO_ADAPTER: "model-unavailable",
+  INVALID_MODEL_INFO: "model-unavailable",
+  MODEL_NOT_FOUND: "model-unavailable",
+  HTTP_404: "model-unavailable",
+  RATE_LIMIT: "rate-limit",
+  HTTP_429: "rate-limit",
+  TOO_MANY_REQUESTS: "rate-limit",
+  AUTH: "auth",
+  UNAUTHORIZED: "auth",
+  FORBIDDEN: "auth",
+  INVALID_API_KEY: "auth",
+  HTTP_401: "auth",
+  HTTP_403: "auth",
+  NO_CREDITS: "no-credits",
+  INSUFFICIENT_QUOTA: "no-credits",
+  QUOTA_EXCEEDED: "no-credits",
+  PAYMENT_REQUIRED: "no-credits",
+  HTTP_402: "no-credits"
+};
 function normalizeErrorClass(code, message) {
-  const c = String(code ?? "").toLowerCase();
+  const codeClass = code ? ERROR_CODE_CLASS[code.trim().toUpperCase()] : void 0;
+  if (codeClass !== void 0) return codeClass;
   const m = String(message ?? "").toLowerCase();
-  const hit = (...needles) => needles.some((n) => c.includes(n) || m.includes(n));
-  if (hit("401", "unauthorized", "authentication", "invalid api key")) return "auth";
-  if (hit("400", "bad request", "bad_request", "invalid request")) return "bad-request";
-  if (hit("quota", "balance", "insufficient", "credit", "usage limit", "billing", "429", "rate limit"))
+  if (/insufficient\s+(funds|balance|credits?|quota)|quota exceeded|billing|payment required|out of credits?/.test(
+    m
+  )) {
     return "no-credits";
-  if (hit("model", "not found", "unavailable", "404", "no such model")) return "model-unavailable";
+  }
+  if (/invalid api key|unauthorized|authentication fail|invalid authentication|permission denied/.test(
+    m
+  )) {
+    return "auth";
+  }
+  if (/rate limit|too many requests/.test(m)) {
+    return "rate-limit";
+  }
+  if (/unknown model|no such model|model .{0,40}(not found|does not exist|is not available|is not supported)/.test(
+    m
+  )) {
+    return "model-unavailable";
+  }
   return void 0;
 }
 function markDown(level, code, message) {
@@ -127,9 +197,25 @@ function isCachedDown(level) {
   const now = Date.now();
   for (const cls of ERROR_CLASSES) {
     const at = downCache.get(errorKey(level, cls));
-    if (at !== void 0 && now - at < ERROR_WINDOW_MS) return true;
+    if (at === void 0) continue;
+    if (now - at < ERROR_TTL_MS[cls]) return true;
+    downCache.delete(errorKey(level, cls));
   }
   return false;
+}
+function liveDownKeys() {
+  const now = Date.now();
+  for (const [key, at] of downCache) {
+    const cls = key.slice(key.lastIndexOf(":") + 1);
+    if (now - at >= ERROR_TTL_MS[cls]) downCache.delete(key);
+  }
+  return [...downCache.keys()];
+}
+function depthOf(agent) {
+  const a = agent;
+  const header = a?.session?.header?.delegationDepth ?? 0;
+  const options = a?.options?.subagentDepth ?? 0;
+  return Math.max(header, options);
 }
 function chainForDepth(ctx, depth) {
   const settings = service(ctx, "settings");
@@ -137,99 +223,131 @@ function chainForDepth(ctx, depth) {
   return chainOf(activeEntry(profile), depth >= 1 ? "subagent" : "orchestrator", profile?.chains);
 }
 function registerFailover(ctx, alwaysMaxRetries) {
-  const STATE_CAP = 1024;
-  const state = /* @__PURE__ */ new Map();
-  const stateOrder = [];
-  const setState = (key, value) => {
-    if (!state.has(key)) {
-      stateOrder.push(key);
-      if (stateOrder.length > STATE_CAP) {
-        const oldest = stateOrder.shift();
-        if (oldest) state.delete(oldest);
-      }
+  const state = /* @__PURE__ */ new WeakMap();
+  function getAgentState(agent) {
+    let m = state.get(agent);
+    if (!m) {
+      m = /* @__PURE__ */ new Map();
+      state.set(agent, m);
     }
-    state.set(key, value);
-  };
-  const clearState = (key) => {
-    if (state.delete(key)) {
-      const idx = stateOrder.indexOf(key);
-      if (idx >= 0) stateOrder.splice(idx, 1);
-    }
-  };
+    return m;
+  }
   const keyOf = (turn, step) => `${String(turn)}:${String(step)}`;
+  function buildConfig(proposal, candidate) {
+    const sameRoute = candidate.provider === proposal.provider && candidate.model === proposal.model;
+    if (candidate.reasoningEffort !== void 0) {
+      return {
+        ...proposal,
+        provider: candidate.provider,
+        model: candidate.model,
+        reasoningEffort: candidate.reasoningEffort
+      };
+    }
+    if (sameRoute) {
+      return {
+        ...proposal,
+        provider: candidate.provider,
+        model: candidate.model
+      };
+    }
+    const { reasoningEffort: _drop, ...base } = proposal;
+    return { ...base, provider: candidate.provider, model: candidate.model };
+  }
   ctx.on("agent/request", async (payload, next) => {
     const proposal = await next();
     if (!proposal?.provider || !proposal.model) return proposal;
     const p = payload;
+    const agent = p.agent;
+    if (!agent) {
+      ctx.logger.warn("profiles: agent missing from agent/request payload; failing over disabled for this request");
+      return proposal;
+    }
     const stepKey = keyOf(p.turn, p.step);
-    const orchestrator = chainForDepth(ctx, 0);
-    const subagentChain = chainForDepth(ctx, 1);
-    const chain = subagentChain.some(
-      (l) => l.provider === proposal.provider && l.model === proposal.model
-    ) ? subagentChain : orchestrator;
-    const agentDefaultModel = service(ctx, "agentDefaultModel");
-    const selection = agentDefaultModel?.currentSelection?.();
-    const levels = selection ? [
-      selection,
-      ...chain.filter(
-        (level2) => !(level2.provider === selection.provider && level2.model === selection.model)
-      )
-    ] : chain;
-    const matched = levels.findIndex(
-      (level2) => level2.provider === proposal.provider && level2.model === proposal.model
-    );
-    if (matched < 0) return proposal;
-    let s = state.get(stepKey);
+    const depth = depthOf(agent);
+    const chain = chainForDepth(ctx, depth);
+    const proposalRoute = {
+      provider: proposal.provider,
+      model: proposal.model,
+      ...proposal.reasoningEffort ? { reasoningEffort: proposal.reasoningEffort } : {}
+    };
+    const levels = [
+      proposalRoute,
+      ...chain.filter((level2) => !(level2.provider === proposalRoute.provider && level2.model === proposalRoute.model))
+    ];
+    const agentMap = getAgentState(agent);
+    let s = agentMap.get(stepKey);
     if (!s || s.stepKey !== stepKey) {
-      s = { stepKey, levels, cursor: matched, retries: 0, failures: [] };
-      setState(stepKey, s);
+      s = { stepKey, levels, cursor: 0, retries: 0, failures: [] };
+      agentMap.set(stepKey, s);
+    } else {
+      s.levels = levels;
+      if (s.cursor >= s.levels.length) s.cursor = 0;
     }
     const llm = service(ctx, "llm");
-    while (s.cursor < s.levels.length) {
-      const candidate = s.levels[s.cursor];
-      if (isCachedDown(candidate)) {
-        s.cursor += 1;
-        continue;
+    let ignoredCache = false;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      while (s.cursor < s.levels.length) {
+        const candidate = s.levels[s.cursor];
+        if (!ignoredCache && isCachedDown(candidate)) {
+          s.cursor += 1;
+          continue;
+        }
+        if (llm) {
+          try {
+            await llm.resolveCallConfig(buildConfig(proposal, candidate), p.signal);
+            break;
+          } catch (error) {
+            if (p.signal?.aborted) throw error;
+            const err = error;
+            s.failures.push({
+              level: candidate,
+              code: err?.code ?? "UNKNOWN",
+              message: err?.message ?? String(error)
+            });
+            markDown(candidate, err?.code, err?.message ?? String(error));
+            s.cursor += 1;
+            continue;
+          }
+        } else {
+          break;
+        }
       }
-      try {
-        await llm?.resolveCallConfig(
-          { ...proposal, provider: candidate.provider, model: candidate.model },
-          p.signal
-        );
-        break;
-      } catch (error) {
-        if (p.signal?.aborted) throw error;
-        const err = error;
-        s.failures.push({
-          level: candidate,
-          code: err?.code ?? "UNKNOWN",
-          message: err?.message ?? String(error)
-        });
-        markDown(candidate, err?.code, err?.message ?? String(error));
-        s.cursor += 1;
+      if (s.cursor < s.levels.length) break;
+      if (!ignoredCache && s.failures.length === 0) {
+        let anyDown = false;
+        for (const lv of s.levels) if (isCachedDown(lv)) {
+          anyDown = true;
+          break;
+        }
+        if (anyDown) {
+          ctx.logger.warn("profiles: every level is cached down; retrying while ignoring the cache");
+          s.cursor = 0;
+          ignoredCache = true;
+          continue;
+        }
       }
+      break;
     }
-    if (!s || s.cursor >= s.levels.length) {
-      const tried = s ? s.failures.map((f) => `  - ${f.level.provider}/${f.level.model}: ${f.code} \u2014 ${f.message}`).join("\n") : "(no levels)";
+    if (s.cursor >= s.levels.length) {
+      const tried = s.failures.map((f) => `  - ${f.level.provider}/${f.level.model}: ${f.code} \u2014 ${f.message}`).join("\n");
       throw new Error(`profiles: no level can serve the active chain:
 ${tried}`);
     }
     const level = s.levels[s.cursor];
-    return {
-      ...proposal,
-      provider: level.provider,
-      model: level.model,
-      ...level.reasoningEffort ? { reasoningEffort: level.reasoningEffort } : {}
-    };
+    return buildConfig(proposal, level);
   });
   ctx.on("agent/request-error", (payload, next) => {
     const p = payload;
-    const s = state.get(keyOf(p.turn, p.step));
+    const agent = p.agent;
+    if (!agent) return next();
+    const agentMap = state.get(agent);
+    if (!agentMap) return next();
+    const s = agentMap.get(keyOf(p.turn, p.step));
     if (!s || s.stepKey !== keyOf(p.turn, p.step)) return next();
     const cur = s.levels[s.cursor];
     if (!cur) return next();
     if (p.signal?.aborted) {
-      clearState(keyOf(p.turn, p.step));
+      agentMap.delete(keyOf(p.turn, p.step));
       return next();
     }
     const failure = p.failure ?? {};
@@ -265,7 +383,7 @@ ${tried}`);
       return { kind: "retry" };
     }
     const tried = s.failures.map((f) => `  - ${f.level.provider}/${f.level.model}: ${f.code} \u2014 ${f.message}`).join("\n");
-    clearState(keyOf(p.turn, p.step));
+    agentMap.delete(keyOf(p.turn, p.step));
     throw new Error(`profiles: all levels exhausted for the active chain:
 ${tried}`);
   });
@@ -287,43 +405,20 @@ function canonicalEntry(entry, chains) {
     subagent: { routes: chainOf(entry, "subagent", chains) }
   };
 }
+function rawEntry(entry) {
+  return entry ?? { orchestrator: { routes: [] }, subagent: { routes: [] } };
+}
 function canonicalConfig(profile) {
   return {
     active: profile?.active ?? "work",
-    chains: profile?.chains,
-    work: canonicalEntry(profile?.work, profile?.chains),
-    personal: canonicalEntry(profile?.personal, profile?.chains)
+    chains: profile?.chains ?? {},
+    work: rawEntry(profile?.work),
+    personal: rawEntry(profile?.personal),
+    resolved: {
+      work: canonicalEntry(profile?.work, profile?.chains),
+      personal: canonicalEntry(profile?.personal, profile?.chains)
+    }
   };
-}
-var MAX_BODY_BYTES = 64 * 1024;
-function sendJson(res, status, body) {
-  res.statusCode = status;
-  res.setHeader("content-type", "application/json; charset=utf-8");
-  res.setHeader("cache-control", "no-store");
-  res.end(JSON.stringify(body));
-}
-async function readBody(req) {
-  const declared = req.headers["content-length"];
-  if (declared !== void 0 && Number(declared) > MAX_BODY_BYTES) {
-    throw new Error("request body too large");
-  }
-  const chunks = [];
-  let received = 0;
-  for await (const chunk of req) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    received += buffer.byteLength;
-    if (received > MAX_BODY_BYTES) throw new Error("request body too large");
-    chunks.push(buffer);
-  }
-  const text = Buffer.concat(chunks).toString("utf8");
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error("body is not valid JSON");
-  }
-}
-function isPlainObject(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function validateRouteRow(value, path) {
   if (!isPlainObject(value)) return { ok: false, error: `${path} must be an object` };
@@ -448,7 +543,7 @@ function makeConfigHandler(ctx) {
       sendJson(res, 200, {
         ok: true,
         config: canonicalConfig(profile),
-        errorCache: { ttlMs: ERROR_WINDOW_MS, down: [...downCache.keys()] }
+        errorCache: { ttlMs: ERROR_TTL_MS, down: liveDownKeys() }
       });
       return;
     }
@@ -486,7 +581,7 @@ function makeConfigHandler(ctx) {
       sendJson(res, 200, {
         ok: true,
         config: canonicalConfig(profile),
-        errorCache: { ttlMs: ERROR_WINDOW_MS, down: [...downCache.keys()] }
+        errorCache: { ttlMs: ERROR_TTL_MS, down: liveDownKeys() }
       });
       return;
     }
@@ -534,7 +629,7 @@ function makeSwitchHandler(ctx) {
     sendJson(res, 200, {
       ok: true,
       config: canonicalConfig(after),
-      errorCache: { ttlMs: ERROR_WINDOW_MS, down: [...downCache.keys()] }
+      errorCache: { ttlMs: ERROR_TTL_MS, down: liveDownKeys() }
     });
   };
 }
@@ -554,10 +649,13 @@ function apply(ctx, config) {
       handler: makeSwitchHandler(ctx)
     });
   });
-  ctx.on("settings/updated", (ns, next) => {
+  ctx.on("settings/updated", (ns, next, prev) => {
     if (ns !== PROFILE_NS) return;
     downCache.clear();
-    syncDefaultModel(ctx, next);
+    const nextHead = chainOf(activeEntry(next), "orchestrator", next?.chains)[0];
+    const prevHead = chainOf(activeEntry(prev), "orchestrator", prev?.chains)[0];
+    const flipped = (nextHead?.provider ?? "") !== (prevHead?.provider ?? "") || (nextHead?.model ?? "") !== (prevHead?.model ?? "") || (nextHead?.reasoningEffort ?? "") !== (prevHead?.reasoningEffort ?? "");
+    if (flipped) syncDefaultModel(ctx, next);
   });
   ctx.on("session/created", (session) => {
     const depth = session?.header?.delegationDepth ?? 0;

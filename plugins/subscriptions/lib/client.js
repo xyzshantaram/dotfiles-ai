@@ -129,7 +129,7 @@ var settings_default = "/* Shared settings-page vocabulary, normalized from the 
 
 // plugins/profile-routes.ts
 function isRouteCandidate(value) {
-  return typeof value === "object" && value !== null && typeof value.provider === "string" && typeof value.model === "string";
+  return typeof value === "object" && value !== null && typeof value.provider === "string" && value.provider.length > 0 && typeof value.model === "string" && value.model.length > 0;
 }
 function normalizeEntry(entry, chains, seen) {
   if (isRouteCandidate(entry)) return [entry];
@@ -196,7 +196,8 @@ function routesEqual(a, b) {
   for (let i = 0; i < a.length; i++) {
     const left = a[i];
     const right = b[i];
-    if (left.provider !== right.provider || left.model !== right.model) return false;
+    if (left.provider !== right.provider || left.model !== right.model || left.reasoningEffort !== right.reasoningEffort)
+      return false;
   }
   return true;
 }

@@ -58,7 +58,7 @@
 
   // plugins/profile-routes.ts
   function isRouteCandidate(value) {
-    return typeof value === "object" && value !== null && typeof value.provider === "string" && typeof value.model === "string";
+    return typeof value === "object" && value !== null && typeof value.provider === "string" && value.provider.length > 0 && typeof value.model === "string" && value.model.length > 0;
   }
   function normalizeEntry(entry, chains, seen) {
     if (isRouteCandidate(entry)) return [entry];
@@ -128,23 +128,6 @@
     }
     return normalizeEntry(entry, chains)[0];
   }
-  function routesEqual(a, b) {
-    if (a === b) return true;
-    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
-    for (let i = 0; i < a.length; i++) {
-      const left = a[i];
-      const right = b[i];
-      if (left.provider !== right.provider || left.model !== right.model) return false;
-    }
-    return true;
-  }
-  function chainNameForRoutes(routes, chains) {
-    if (chains === void 0 || chains === null) return void 0;
-    for (const name of Object.keys(chains)) {
-      if (routesEqual(normalizeEntry(chains[name], chains), routes)) return name;
-    }
-    return void 0;
-  }
 
   // css-text:/home/sid/repos/dotfiles-ai/plugins/shared/settings.css
   var settings_default = "/* Shared settings-page vocabulary, normalized from the session-archive,\n * subscriptions, and profiles settings panels. One rule set in one file so\n * the three panels cannot drift. Radius and padding disagreements are\n * normalized to the session-archive (or median) value; the var(--dsw-...)\n * aliases the current rules use are kept as-is. */\n\n/* Page-level container:airy vertical rhythm, no own box. */\n.dsp-root {\n  box-sizing: border-box;\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n  padding: 0;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Header row (title + refresh). */\n.dsp-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 0.75rem;\n}\n\n.dsp-title {\n  font-size: 1.5rem;\n  font-weight: 700;\n  margin: 0;\n  line-height: 1.2;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Refresh:session-archive/profiles form (no box, color shift only).\n * subscriptions pads and rounds the hit area; normalized away. */\n.dsp-refresh {\n  cursor: pointer;\n  border: none;\n  background: none;\n  padding: 0;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n}\n.dsp-refresh:hover {\n  color: var(--dsw-alias-label-primary);\n}\n\n.dsp-err {\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-state-error-primary);\n}\n\n/* Large setting card. Padding is the median of 16/20/24 (session-archive\n * 20px); the radius is the two-agreeing 20px, not profiles' 12px. */\n.dsp-section {\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 1.25rem;\n  padding: 1.25rem;\n  background: var(--dsw-alias-bg-tertiary);\n}\n\n/* Card title:subscriptions' 1.5rem/700 matches the page-title vocabulary;\n * profiles' smaller 16px/600 card title normalized up. */\n.dsp-section-title {\n  font-size: 1.5rem;\n  font-weight: 700;\n  margin: 0;\n  line-height: 1.2;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Setting row:horizontal in session-archive and profiles (subscriptions\n * stacks its label and meta vertically; normalized to the horizontal form). */\n.dsp-row {\n  display: flex;\n  align-items: center;\n  gap: 0.75rem;\n  min-width: 0;\n}\n\n/* Row label:only subscriptions defines one; ported verbatim, with its\n * emphasized <b> children. */\n.dsp-row-label {\n  display: flex;\n  align-items: baseline;\n  gap: 0.625rem;\n  font-size: 1rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.dsp-row-label b {\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n  font-size: 1rem;\n}\n.dsp-row-label b:last-child {\n  margin-left: auto;\n}\n";
@@ -157,14 +140,21 @@
     id: "profiles-client",
     factory: function(require2) {
       var module = { exports: {} };
-      var exports = module.exports;
       var react = require2("react");
       var useSyncExternalStore = react.useSyncExternalStore;
+      var useCallback = react.useCallback;
       var useState = react.useState;
       var useEffect = react.useEffect;
       var useRef = react.useRef;
       var PLUGIN_NAME = "profiles-client";
       var LOCALE_NS = "profiles-client";
+      function emptySubscribe() {
+        return function() {
+        };
+      }
+      function emptySnapshot() {
+        return null;
+      }
       var MODEL_SEAT_SLOT = "conversation.input.model";
       var SEAT_PRIORITY = -100;
       var STYLE_TAG_ID = "profiles-client/client.module.css";
@@ -233,8 +223,6 @@
           return steps.length > 0 ? steps.join(", ") : "(empty)";
         }
         if (field !== void 0 && field !== null && Array.isArray(field.routes)) {
-          var name = chainNameForRoutes(field.routes, chains);
-          if (name !== void 0) return name;
           var count = field.routes.length;
           return "inline (" + count + " route" + (count === 1 ? "" : "s") + ")";
         }
@@ -281,18 +269,14 @@
           var load = props.load;
           var select = props.select;
           var t = props.t;
-          var state = useSyncExternalStore(
-            function(fn) {
-              return directory.subscribe(fn);
-            },
-            function() {
-              return directory.getSnapshot();
-            }
-          );
-          var profileSnap = useSyncExternalStore(
-            profileScope.store.subscribe,
-            profileScope.store.getSnapshot
-          );
+          var seatSubscribe = useCallback(function(fn) {
+            return directory.subscribe(fn);
+          }, [directory]);
+          var seatGetSnapshot = useCallback(function() {
+            return directory.getSnapshot();
+          }, [directory]);
+          var state = useSyncExternalStore(seatSubscribe, seatGetSnapshot);
+          var profileSnap = useSyncExternalStore(profileScope.store.subscribe, profileScope.store.getSnapshot);
           var profileValue = profileSnap.value;
           var openState = useState(false);
           var open = openState[0];
@@ -479,7 +463,9 @@
       function cloneConfig(config) {
         function cloneRoutes(routes) {
           return (routes || []).map(function(r) {
-            return { provider: r.provider, model: r.model };
+            var out = { provider: r.provider, model: r.model };
+            if (typeof r.reasoningEffort === "string" && r.reasoningEffort !== "") out.reasoningEffort = r.reasoningEffort;
+            return out;
           });
         }
         function cloneEntry(entry) {
@@ -518,15 +504,13 @@
           var sessionId = sessionSnap !== null && sessionSnap !== void 0 ? sessionSnap.current : null;
           var usable = sessionId !== null && sessionId !== void 0 ? sessions.subagentAddress(sessionId) === void 0 : false;
           var directory = sessionId !== null && sessionId !== void 0 ? models.directoryFor(sessionId) : null;
-          var catalogState = useSyncExternalStore(
-            directory ? directory.store.subscribe : function() {
-              return function() {
-              };
-            },
-            directory ? directory.store.getSnapshot : function() {
-              return null;
-            }
-          );
+          var catalogSubscribe = useCallback(function(cb) {
+            return directory ? directory.store.subscribe(cb) : emptySubscribe();
+          }, [directory]);
+          var catalogGetSnapshot = useCallback(function() {
+            return directory ? directory.store.getSnapshot() : null;
+          }, [directory]);
+          var catalogState = useSyncExternalStore(catalogSubscribe, catalogGetSnapshot);
           useEffect(
             function() {
               if (directory && usable) directory.load().catch(function() {
@@ -541,7 +525,7 @@
           var draftState = useState(null);
           var draft = draftState[0];
           var setDraft = draftState[1];
-          var saveState = useState(null);
+          var saveState = useState({ busy: false, note: null, ok: true });
           var save = saveState[0];
           var setSave = saveState[1];
           var catalogModels = [];
@@ -695,28 +679,13 @@
               return next;
             });
           };
-          var setChainField = function(chainName, index, field, value) {
+          var setChainField = function(chainName, index, value) {
             setDraft(function(prev) {
               var next = cloneConfig(prev);
               var chain = next.chains[chainName];
               if (chain === void 0) return next;
               if (Array.isArray(chain)) {
                 chain[index] = value;
-              } else if (chain.routes !== void 0) {
-                chain.routes[index][field] = value;
-              }
-              return next;
-            });
-          };
-          var addChainRung = function(chainName) {
-            setDraft(function(prev) {
-              var next = cloneConfig(prev);
-              var chain = next.chains[chainName];
-              if (chain === void 0) return next;
-              if (Array.isArray(chain)) {
-                chain.push("");
-              } else if (chain.routes !== void 0) {
-                chain.routes.push({ provider: "", model: "" });
               }
               return next;
             });
@@ -742,7 +711,7 @@
             setDraft(function(prev) {
               var next = cloneConfig(prev);
               if (next.chains[key] === void 0) {
-                next.chains[key] = { routes: [{ provider: "", model: "" }] };
+                next.chains[key] = { routes: [] };
               }
               return next;
             });
@@ -840,17 +809,23 @@
               var label = chainKey === "orchestrator" ? "orchestrator" : "subagent";
               var summary = fieldSummary(field, config.chains);
               var currentRef = refNameOf(field);
-              if (currentRef === void 0)
-                currentRef = chainNameForRoutes(field.routes, config.chains);
+              var isInline = false;
+              if (currentRef === void 0 && field !== void 0 && field !== null) {
+                if (Array.isArray(field) && field.length > 0) isInline = true;
+                else if (typeof field === "object" && Array.isArray(field.routes) && field.routes.length > 0) isInline = true;
+              }
+              var selectValue = currentRef !== void 0 ? currentRef : isInline ? "__inline__" : "__detach__";
               return /* @__PURE__ */ react.createElement("div", { className: "pf-panel-chain", key: chainKey }, /* @__PURE__ */ react.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ react.createElement("h5", { className: "pf-panel-chain-title" }, label), /* @__PURE__ */ react.createElement(
                 "select",
                 {
                   className: "pf-panel-select",
-                  value: currentRef !== void 0 ? currentRef : "",
+                  value: selectValue,
                   onChange: function(event) {
                     var val = event.target.value;
                     if (val === "__detach__") {
                       detachEntryField(name, chainKey);
+                    } else if (val === "__inline__") {
+                      return;
                     } else {
                       setEntryChain(name, chainKey, val);
                     }
@@ -859,7 +834,8 @@
                 /* @__PURE__ */ react.createElement("option", { value: "__detach__" }, "\u2014 none \u2014"),
                 chainKeys.map(function(key) {
                   return /* @__PURE__ */ react.createElement("option", { key, value: key }, key);
-                })
+                }),
+                isInline ? /* @__PURE__ */ react.createElement("option", { value: "__inline__" }, fieldSummary(field, config.chains)) : null
               ), /* @__PURE__ */ react.createElement(
                 "button",
                 {
@@ -900,7 +876,7 @@
                   className: "pf-panel-select",
                   value: stepText,
                   onChange: function(event) {
-                    setChainField(chainName, index, null, event.target.value);
+                    setChainField(chainName, index, event.target.value);
                   }
                 },
                 chainKeys.map(function(key) {
@@ -913,7 +889,7 @@
                   value: stepText,
                   placeholder: "provider/model",
                   onChange: function(event) {
-                    setChainField(chainName, index, null, event.target.value);
+                    setChainField(chainName, index, event.target.value);
                   }
                 }
               ), /* @__PURE__ */ react.createElement(

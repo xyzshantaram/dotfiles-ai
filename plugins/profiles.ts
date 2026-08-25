@@ -85,10 +85,9 @@
  *   (dsh-subagent/lib/index.js:486-489).
  * - `agent/request`: dsh-agent-loop/lib/index.js:708; proposal needs
  *   non-empty provider and model (:714). `agent/request-error` returning
- *   `{ kind: 'retry' }`: :653, kind check :662. The dispatcher emits both
- *   waterfalls with only {turn, step, signal} (and provider/failure/retryPolicy
- *   on the error path) — `agent` is NOT in the payload (it lives in the
- *   agent-scoped context). Failover keys its per-step state on turn:step.
+ *   `{ kind: 'retry' }`: :653, kind check :662. The dispatcher fuses agent into
+ *   every payload (dsh-agent/lib/index.js agentEvents) — `agent` IS present
+ *   with turn/step/signal. Failover keys its per-step state on agent + turn:step.
  * - `ctx.llm.resolveCallConfig`: dsh-llm/lib/index.js:1351.
  *   `providerRetryPolicy`: dsh-llm/lib/index.js:1260.
  * - Depth: dsh-subagent/lib/types/depth.js delegationDepthOf —
@@ -116,7 +115,7 @@ import { settingsNamespace } from "@deepseek-ai/dsh-settings";
 import type { RequestErrorAction } from "@deepseek-ai/dsh-agent";
 import { chainOf, type RouteCandidate } from "./profile-routes";
 import type { IncomingMessage, ServerResponse } from "node:http";
-
+import { sendJson, readBody, isPlainObject } from "./shared/http";
 export const name = "profiles";
 
 export const inject = ["tools", "subagents", "systemPrompt"] as const;
@@ -176,12 +175,17 @@ function activeEntry(profile: ProfileSettings | undefined): unknown {
 
 // ── Error cache (W21) ───────────────────────────────────────────────────────
 // A persistent fault marks one (provider, model, error-class) key down for
-// ERROR_WINDOW_MS. Selections skip the dead rung at proposal time and when
-// the waterfall walks the chain. Any `profile` namespace update clears the
-// whole cache: a manual active flip rewrites every chain anyway.
-const ERROR_WINDOW_MS = 600_000; // >= 10 minutes
-const ERROR_CLASSES = ["no-credits", "model-unavailable", "auth", "bad-request"] as const;
+// its class time to live. Selections skip the dead rung at proposal time and
+// when the waterfall walks the chain. Any `profile` namespace update clears
+// the whole cache: a manual active flip rewrites every chain anyway.
+const ERROR_CLASSES = ["auth", "no-credits", "model-unavailable", "rate-limit"] as const;
 type ErrorClass = (typeof ERROR_CLASSES)[number];
+const ERROR_TTL_MS: Record<ErrorClass, number> = {
+  auth: 600_000,
+  "no-credits": 600_000,
+  "model-unavailable": 600_000,
+  "rate-limit": 30_000,
+};
 const downCache = new Map<string, number>();
 
 function errorKey(level: Level, cls: ErrorClass): string {
@@ -189,21 +193,63 @@ function errorKey(level: Level, cls: ErrorClass): string {
 }
 
 /**
- * Classify a provider failure code/message into a cacheable error class.
- * Matches code constants and message substrings; anything else is transient
- * and is NOT cached.
+ * Structured failure codes mapped to a cacheable class. The code table is
+ * read first, so classification never depends on message wording.
+ */
+const ERROR_CODE_CLASS: Record<string, ErrorClass> = {
+  NO_ADAPTER: "model-unavailable",
+  INVALID_MODEL_INFO: "model-unavailable",
+  MODEL_NOT_FOUND: "model-unavailable",
+  HTTP_404: "model-unavailable",
+  RATE_LIMIT: "rate-limit",
+  HTTP_429: "rate-limit",
+  TOO_MANY_REQUESTS: "rate-limit",
+  AUTH: "auth",
+  UNAUTHORIZED: "auth",
+  FORBIDDEN: "auth",
+  INVALID_API_KEY: "auth",
+  HTTP_401: "auth",
+  HTTP_403: "auth",
+  NO_CREDITS: "no-credits",
+  INSUFFICIENT_QUOTA: "no-credits",
+  QUOTA_EXCEEDED: "no-credits",
+  PAYMENT_REQUIRED: "no-credits",
+  HTTP_402: "no-credits",
+};
+
+/**
+ * Classify a provider failure into a cacheable class. Read the structured code
+ * first, then a narrow message test. Anything else is transient and is NOT
+ * cached.
  */
 function normalizeErrorClass(code: string | undefined, message: string): ErrorClass | undefined {
-  const c = String(code ?? "").toLowerCase();
+  const codeClass = code ? ERROR_CODE_CLASS[code.trim().toUpperCase()] : undefined;
+  if (codeClass !== undefined) return codeClass;
   const m = String(message ?? "").toLowerCase();
-  const hit = (...needles: string[]) => needles.some((n) => c.includes(n) || m.includes(n));
-  if (hit("401", "unauthorized", "authentication", "invalid api key")) return "auth";
-  if (hit("400", "bad request", "bad_request", "invalid request")) return "bad-request";
   if (
-    hit("quota", "balance", "insufficient", "credit", "usage limit", "billing", "429", "rate limit")
-  )
+    /insufficient\s+(funds|balance|credits?|quota)|quota exceeded|billing|payment required|out of credits?/.test(
+      m,
+    )
+  ) {
     return "no-credits";
-  if (hit("model", "not found", "unavailable", "404", "no such model")) return "model-unavailable";
+  }
+  if (
+    /invalid api key|unauthorized|authentication fail|invalid authentication|permission denied/.test(
+      m,
+    )
+  ) {
+    return "auth";
+  }
+  if (/rate limit|too many requests/.test(m)) {
+    return "rate-limit";
+  }
+  if (
+    /unknown model|no such model|model .{0,40}(not found|does not exist|is not available|is not supported)/.test(
+      m,
+    )
+  ) {
+    return "model-unavailable";
+  }
   return undefined;
 }
 
@@ -213,14 +259,26 @@ function markDown(level: Level, code: string | undefined, message: string): void
   downCache.set(errorKey(level, cls), Date.now());
 }
 
-/** True when ANY class key of the level is inside the window. */
+/** True when ANY class key of the level is inside its class window. */
 function isCachedDown(level: Level): boolean {
   const now = Date.now();
   for (const cls of ERROR_CLASSES) {
     const at = downCache.get(errorKey(level, cls));
-    if (at !== undefined && now - at < ERROR_WINDOW_MS) return true;
+    if (at === undefined) continue;
+    if (now - at < ERROR_TTL_MS[cls]) return true;
+    downCache.delete(errorKey(level, cls));
   }
   return false;
+}
+
+/** Prune expired entries; return the down keys still inside their class window. */
+function liveDownKeys(): string[] {
+  const now = Date.now();
+  for (const [key, at] of downCache) {
+    const cls = key.slice(key.lastIndexOf(":") + 1) as ErrorClass;
+    if (now - at >= ERROR_TTL_MS[cls]) downCache.delete(key);
+  }
+  return [...downCache.keys()];
 }
 
 // ── Depth resolution (W21) ─────────────────────────────────────────────────
@@ -252,133 +310,132 @@ function chainForDepth(ctx: Context, depth: number): Level[] {
 
 /** Install the two agent waterfalls that provide chain failover. */
 function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
-  // Keyed by the request coordinate (turn:step). The harness bubbles agent/request
-  // and agent/request-error to the host plane with only {turn, step, signal} in the
-  // payload — `agent` is NOT present here (it lives in the agent-scoped context, not
-  // the payload). turn:step is stable across one step's retries, so a retry resumes
-  // at the advanced cursor.
-  // Bounded per-step failover state. A WeakMap would auto-collect, but the key
-  // is now turn:step (not the agent), so we evict explicitly: an entry lives
-  // only for one step's retry sequence, then is dropped on abort/exhaustion.
-  // STATE_CAP bounds memory for long-lived sessions that never hit those paths.
-  const STATE_CAP = 1024;
-  const state = new Map<string, StepState>();
-  const stateOrder: string[] = [];
-  const setState = (key: string, value: StepState): void => {
-    if (!state.has(key)) {
-      stateOrder.push(key);
-      if (stateOrder.length > STATE_CAP) {
-        const oldest = stateOrder.shift();
-        if (oldest) state.delete(oldest);
-      }
+  // Per-agent failover state. WeakMap keyed by the agent object isolates
+  // concurrent agents (turn:step is per-agent, not global). The stored
+  // stepKey still guards a stale step within one agent. A plain Map keyed
+  // on "turn:step" would collide across agents at the same coordinate.
+  const state = new WeakMap<object, Map<string, StepState>>();
+
+  function getAgentState(agent: object): Map<string, StepState> {
+    let m = state.get(agent);
+    if (!m) {
+      m = new Map<string, StepState>();
+      state.set(agent, m);
     }
-    state.set(key, value);
-  };
-  const clearState = (key: string): void => {
-    if (state.delete(key)) {
-      const idx = stateOrder.indexOf(key);
-      if (idx >= 0) stateOrder.splice(idx, 1);
-    }
-  };
+    return m;
+  }
+
   const keyOf = (turn: unknown, step: unknown): string => `${String(turn)}:${String(step)}`;
+
+  function buildConfig(proposal: LlmCallConfig, candidate: Level): LlmCallConfig {
+    const sameRoute =
+      candidate.provider === (proposal as { provider?: string }).provider &&
+      candidate.model === (proposal as { model?: string }).model;
+    if (candidate.reasoningEffort !== undefined) {
+      return {
+        ...(proposal as object),
+        provider: candidate.provider,
+        model: candidate.model,
+        reasoningEffort: candidate.reasoningEffort as LlmCallConfig["reasoningEffort"],
+      } as LlmCallConfig;
+    }
+    if (sameRoute) {
+      return {
+        ...(proposal as object),
+        provider: candidate.provider,
+        model: candidate.model,
+      } as LlmCallConfig;
+    }
+    const { reasoningEffort: _drop, ...base } = proposal as unknown as Record<string, unknown>;
+    return { ...(base as object), provider: candidate.provider, model: candidate.model } as LlmCallConfig;
+  }
 
   ctx.on("agent/request", async (payload: unknown, next: () => Promise<unknown>) => {
     const proposal = (await next()) as LlmCallConfig;
     if (!proposal?.provider || !proposal.model) return proposal;
 
-    const p = payload as { turn?: unknown; step?: unknown; signal?: AbortSignal };
+    const p = payload as { turn?: unknown; step?: unknown; signal?: AbortSignal; agent?: unknown };
+    const agent = p.agent as object | undefined;
+    if (!agent) {
+      ctx.logger.warn("profiles: agent missing from agent/request payload; failing over disabled for this request");
+      return proposal;
+    }
     const stepKey = keyOf(p.turn, p.step);
+    const depth = depthOf(agent);
+    const chain = chainForDepth(ctx, depth);
+    const proposalRoute: Level = {
+      provider: proposal.provider,
+      model: proposal.model,
+      ...(proposal.reasoningEffort ? { reasoningEffort: proposal.reasoningEffort as string } : {}),
+    };
+    const levels: Level[] = [
+      proposalRoute,
+      ...chain.filter((level) => !(level.provider === proposalRoute.provider && level.model === proposalRoute.model)),
+    ];
 
-    // W21: the chain is chosen by depth (0 -> orchestrator, child ->
-    // subagent). The depth is not in the payload (the agent lives in the
-    // agent-scoped context, not here), so match the proposal against BOTH
-    // chains and prefer the subagent chain when the proposal is in it: a
-    // subagent on the worker head matches the subagent chain and fails over
-    // along it, a main-agent request on an orchestrator rung matches the
-    // orchestrator chain. A model present in both chains routes on the
-    // subagent chain (the worker fallback set is a superset that includes
-    // the orchestrator tail). The error cache is honored while walking.
-    const orchestrator = chainForDepth(ctx, 0);
-    const subagentChain = chainForDepth(ctx, 1);
-    const chain = subagentChain.some(
-      (l) => l.provider === proposal.provider && l.model === proposal.model,
-    )
-      ? subagentChain
-      : orchestrator;
-    // chain's remaining rungs. The choice may be the chain head (the list
-    // keeps every rung once) or off-chain (it prefixes the chain).
-    const agentDefaultModel = service<{
-      currentSelection(): { provider: string; model: string } | undefined;
-    }>(ctx, "agentDefaultModel");
-    const selection = agentDefaultModel?.currentSelection?.();
-    const levels = selection
-      ? [
-          selection,
-          ...chain.filter(
-            (level) => !(level.provider === selection.provider && level.model === selection.model),
-          ),
-        ]
-      : chain;
-    // Failover applies from the matched level onward; unmatched requests
-    // (a pick for another rung, an unrelated provider) pass through.
-    const matched = levels.findIndex(
-      (level) => level.provider === proposal.provider && level.model === proposal.model,
-    );
-    if (matched < 0) return proposal;
-
-    let s = state.get(stepKey);
+    const agentMap = getAgentState(agent);
+    let s = agentMap.get(stepKey);
     if (!s || s.stepKey !== stepKey) {
-      s = { stepKey, levels, cursor: matched, retries: 0, failures: [] };
-      setState(stepKey, s);
+      s = { stepKey, levels, cursor: 0, retries: 0, failures: [] };
+      agentMap.set(stepKey, s);
+    } else {
+      s.levels = levels;
+      if (s.cursor >= s.levels.length) s.cursor = 0;
     }
 
     const llm = service<LlmService>(ctx, "llm");
 
-    // Skip rungs the error cache has down, then levels that would fail
-    // before streaming. An abort during the probe must surface as an abort.
-    while (s.cursor < s.levels.length) {
-      const candidate = s.levels[s.cursor];
-      if (isCachedDown(candidate)) {
-        s.cursor += 1;
-        continue;
+    let ignoredCache = false;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      while (s.cursor < s.levels.length) {
+        const candidate = s.levels[s.cursor];
+        if (!ignoredCache && isCachedDown(candidate)) {
+          s.cursor += 1;
+          continue;
+        }
+        if (llm) {
+          try {
+            await llm.resolveCallConfig(buildConfig(proposal, candidate), p.signal);
+            break;
+          } catch (error) {
+            if (p.signal?.aborted) throw error;
+            const err = error as { code?: string; message?: string };
+            s.failures.push({
+              level: candidate,
+              code: err?.code ?? "UNKNOWN",
+              message: err?.message ?? String(error),
+            });
+            markDown(candidate, err?.code, err?.message ?? String(error));
+            s.cursor += 1;
+            continue;
+          }
+        } else {
+          break;
+        }
       }
-      try {
-        await llm?.resolveCallConfig(
-          { ...proposal, provider: candidate.provider, model: candidate.model },
-          p.signal,
-        );
-        break;
-      } catch (error) {
-        if (p.signal?.aborted) throw error;
-        const err = error as { code?: string; message?: string };
-        s.failures.push({
-          level: candidate,
-          code: err?.code ?? "UNKNOWN",
-          message: err?.message ?? String(error),
-        });
-        markDown(candidate, err?.code, err?.message ?? String(error));
-        s.cursor += 1;
+      if (s.cursor < s.levels.length) break;
+      if (!ignoredCache && s.failures.length === 0) {
+        let anyDown = false;
+        for (const lv of s.levels) if (isCachedDown(lv)) { anyDown = true; break; }
+        if (anyDown) {
+          ctx.logger.warn("profiles: every level is cached down; retrying while ignoring the cache");
+          s.cursor = 0;
+          ignoredCache = true;
+          continue;
+        }
       }
+      break;
     }
 
-    if (!s || s.cursor >= s.levels.length) {
-      const tried = s
-        ? s.failures
-            .map((f) => `  - ${f.level.provider}/${f.level.model}: ${f.code} — ${f.message}`)
-            .join("\n")
-        : "(no levels)";
+    if (s.cursor >= s.levels.length) {
+      const tried = s.failures
+        .map((f) => `  - ${f.level.provider}/${f.level.model}: ${f.code} — ${f.message}`)
+        .join("\n");
       throw new Error(`profiles: no level can serve the active chain:\n${tried}`);
     }
 
     const level = s.levels[s.cursor];
-    return {
-      ...proposal,
-      provider: level.provider,
-      model: level.model,
-      ...(level.reasoningEffort
-        ? { reasoningEffort: level.reasoningEffort as LlmCallConfig["reasoningEffort"] }
-        : {}),
-    };
+    return buildConfig(proposal, level);
   });
 
   ctx.on("agent/request-error", (payload: unknown, next: () => Promise<RequestErrorAction>) => {
@@ -388,16 +445,20 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
       signal?: AbortSignal;
       failure?: { code?: string; message?: string };
       retryPolicy?: { mode?: string };
+      agent?: unknown;
     };
-    const s = state.get(keyOf(p.turn, p.step));
+    const agent = p.agent as object | undefined;
+    if (!agent) return next();
+    const agentMap = state.get(agent);
+    if (!agentMap) return next();
+    const s = agentMap.get(keyOf(p.turn, p.step));
     if (!s || s.stepKey !== keyOf(p.turn, p.step)) return next();
 
     const cur = s.levels[s.cursor];
     if (!cur) return next();
 
-    // A user abort is never a failover trigger.
     if (p.signal?.aborted) {
-      clearState(keyOf(p.turn, p.step));
+      agentMap.delete(keyOf(p.turn, p.step));
       return next();
     }
 
@@ -414,10 +475,8 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
       });
     }
 
-    // W21: a persistent fault marks the rung down so later selections skip it.
     markDown(cur, failure.code, failure.message ?? "");
 
-    // An "always" adapter retries itself endlessly; cap it, then advance.
     if (p.retryPolicy?.mode === "always") {
       s.retries += 1;
       if (s.retries <= alwaysMaxRetries) return next();
@@ -425,7 +484,6 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
     s.retries = 0;
 
     s.cursor += 1;
-    // Skip rungs the error cache has down while walking the chain.
     while (s.cursor < s.levels.length && isCachedDown(s.levels[s.cursor])) s.cursor += 1;
 
     if (s.cursor < s.levels.length) {
@@ -444,7 +502,7 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
     const tried = s.failures
       .map((f) => `  - ${f.level.provider}/${f.level.model}: ${f.code} — ${f.message}`)
       .join("\n");
-    clearState(keyOf(p.turn, p.step));
+    agentMap.delete(keyOf(p.turn, p.step));
     throw new Error(`profiles: all levels exhausted for the active chain:\n${tried}`);
   });
 }
@@ -501,51 +559,25 @@ function canonicalEntry(entry: unknown, chains?: Record<string, unknown>): Canon
   };
 }
 
+function rawEntry(entry: unknown): unknown {
+  return entry ?? { orchestrator: { routes: [] }, subagent: { routes: [] } };
+}
+
 function canonicalConfig(profile: ProfileSettings | undefined) {
   return {
     active: profile?.active ?? "work",
-    chains: profile?.chains,
-    work: canonicalEntry(profile?.work, profile?.chains),
-    personal: canonicalEntry(profile?.personal, profile?.chains),
+    chains: profile?.chains ?? {},
+    work: rawEntry(profile?.work),
+    personal: rawEntry(profile?.personal),
+    resolved: {
+      work: canonicalEntry(profile?.work, profile?.chains),
+      personal: canonicalEntry(profile?.personal, profile?.chains),
+    },
   };
 }
 
-// TODO(dedup): use plugins/shared/http.ts sendJson/readBody
-const MAX_BODY_BYTES = 64 * 1024;
-
-function sendJson(res: ServerResponse, status: number, body: unknown): void {
-  res.statusCode = status;
-  res.setHeader("content-type", "application/json; charset=utf-8");
-  res.setHeader("cache-control", "no-store");
-  res.end(JSON.stringify(body));
-}
-
-async function readBody(req: IncomingMessage): Promise<unknown> {
-  const declared = req.headers["content-length"];
-  if (declared !== undefined && Number(declared) > MAX_BODY_BYTES) {
-    throw new Error("request body too large");
-  }
-  const chunks: Buffer[] = [];
-  let received = 0;
-  for await (const chunk of req) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    received += buffer.byteLength;
-    if (received > MAX_BODY_BYTES) throw new Error("request body too large");
-    chunks.push(buffer);
-  }
-  const text = Buffer.concat(chunks).toString("utf8");
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error("body is not valid JSON");
-  }
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 type Validated<T> = { ok: true; value: T } | { ok: false; error: string };
+
 
 function validateRouteRow(value: unknown, path: string): Validated<RouteCandidate> {
   if (!isPlainObject(value)) return { ok: false, error: `${path} must be an object` };
@@ -690,7 +722,7 @@ function makeConfigHandler(ctx: Context) {
       sendJson(res, 200, {
         ok: true,
         config: canonicalConfig(profile),
-        errorCache: { ttlMs: ERROR_WINDOW_MS, down: [...downCache.keys()] },
+        errorCache: { ttlMs: ERROR_TTL_MS, down: liveDownKeys() },
       });
       return;
     }
@@ -728,7 +760,7 @@ function makeConfigHandler(ctx: Context) {
       sendJson(res, 200, {
         ok: true,
         config: canonicalConfig(profile),
-        errorCache: { ttlMs: ERROR_WINDOW_MS, down: [...downCache.keys()] },
+        errorCache: { ttlMs: ERROR_TTL_MS, down: liveDownKeys() },
       });
       return;
     }
@@ -777,7 +809,7 @@ function makeSwitchHandler(ctx: Context) {
     sendJson(res, 200, {
       ok: true,
       config: canonicalConfig(after),
-      errorCache: { ttlMs: ERROR_WINDOW_MS, down: [...downCache.keys()] },
+      errorCache: { ttlMs: ERROR_TTL_MS, down: liveDownKeys() },
     });
   };
 }
@@ -804,12 +836,16 @@ export function apply(ctx: Context, config: unknown): void {
     });
   });
 
-  // Main-agent sync + error-cache reset: only on profile flips, never at
-  // boot, never on writes the model picker made to its own namespace.
-  ctx.on("settings/updated", (ns, next) => {
+  ctx.on("settings/updated", (ns, next, prev) => {
     if (ns !== PROFILE_NS) return;
     downCache.clear();
-    syncDefaultModel(ctx, next as ProfileSettings);
+    const nextHead = chainOf(activeEntry(next as ProfileSettings), "orchestrator", (next as ProfileSettings)?.chains)[0];
+    const prevHead = chainOf(activeEntry(prev as ProfileSettings), "orchestrator", (prev as ProfileSettings)?.chains)[0];
+    const flipped =
+      (nextHead?.provider ?? "") !== (prevHead?.provider ?? "") ||
+      (nextHead?.model ?? "") !== (prevHead?.model ?? "") ||
+      (nextHead?.reasoningEffort ?? "") !== (prevHead?.reasoningEffort ?? "");
+    if (flipped) syncDefaultModel(ctx, next as ProfileSettings);
   });
 
   // W-new-project: reset the default model to the active profile's head on

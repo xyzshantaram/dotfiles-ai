@@ -6,7 +6,7 @@ import { scopeOf } from "@deepseek-ai/dsh-scope";
 
 // plugins/profile-routes.ts
 function isRouteCandidate(value) {
-  return typeof value === "object" && value !== null && typeof value.provider === "string" && typeof value.model === "string";
+  return typeof value === "object" && value !== null && typeof value.provider === "string" && value.provider.length > 0 && typeof value.model === "string" && value.model.length > 0;
 }
 function normalizeEntry(entry, chains, seen) {
   if (isRouteCandidate(entry)) return [entry];
