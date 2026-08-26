@@ -254,18 +254,28 @@ function apply(ctx, config) {
       const routed = agent.session?.requestHeader?.()?.config;
       const provider = routed?.provider ?? opts?.provider;
       const model = routed?.model ?? opts?.model;
-      if (provider === void 0 || model === void 0) return;
+      if (provider === void 0 || model === void 0) {
+        console.debug("[see] agent/created: no provider/model resolved, skipping vision gate", {
+          hasRouted: routed !== void 0,
+          hasOpts: opts !== void 0
+        });
+        return;
+      }
       let hasVision = false;
       try {
         const info = await llm.resolveModelInfo(provider, model);
-        const mods = info?.input?.inputModalities ?? info?.inputModalities;
-        if (Array.isArray(mods)) hasVision = mods.includes("image");
-      } catch {
+        const mods = info?.inputModalities;
+        hasVision = Array.isArray(mods) && mods.includes("image");
+        console.debug("[see] resolveModelInfo", { provider, model, inputModalities: mods, hasVision });
+      } catch (err) {
+        console.debug("[see] resolveModelInfo threw, defaulting to no vision", { provider, model }, err);
       }
       const deny = hasVision ? ["see"] : ["read_image"];
+      console.info("[see] vision gate decision", { provider, model, hasVision, deny });
       try {
         agent.ctx.tools.restrict({ deny });
-      } catch {
+      } catch (err) {
+        console.debug("[see] tools.restrict failed, leaving both tools available", { provider, model }, err);
       }
     });
   }
