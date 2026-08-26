@@ -13,17 +13,36 @@ ticket of the pair.
 
 ## Checklist
 
-- [ ] **D-B1 — Fix the control-flow bug in `sync.sh:600-604`.**
-  The `if ! rg -q ...` check sits outside the `if [ "$active" != "personal" ]`
-  block, so the error branch can fire against a freshly copied template. Nest it
-  inside. Fix the stray indentation at `sync.sh:208` as a drive-by in the same
-  diff.
-  **Evaluate:** `cat -A` confirms the nesting. Run `sync.sh` with a personal
-  profile active and confirm no error branch fires.
-
-- [ ] **D-LOG1 — Replace `console.*` with `ctx.logger` in `skill-gate.ts`.**
-  Lines 151 and 254 bypass the structured journal that every other plugin uses.
-  **Evaluate:** a grep finds no `console.*` left in first-party `plugins/*.ts`.
+- [x] **D-BUG1 — Live incident: bash tool calls fail with an empty `Error:` and bash-guard produces zero log output.**
+  Closed. Two separate root causes, both confirmed and fixed:
+  1. **Stale WebSocket, not a code bug.** The browser tab was talking to a
+     `dsh-web.service` process that had already restarted. No tool call ever
+     reached the live process, so bash-guard never logged anything and the
+     client rendered a dead-connection artifact as an empty `Error:`. Fixed
+     by a hard reload; confirmed live afterward, `bash-guard` logs its full
+     `evaluating command` → `resolved aidos profile` → rules loaded → verdict
+     trace as designed.
+  2. **The real message-loss bug**, `plugins/bash-guard.ts`'s
+     `Config.denyMessage`/`askMessage` used `z.string().default("")`, so an
+     unset config value was the string `""`, not `undefined`. `evaluate()`'s
+     `templates.deny ?? DEFAULT_DENY_TEMPLATE` only falls back on nullish, so
+     it formatted against the empty string and always rendered a bare
+     `Error: ` on every deny/ask, regardless of session state. Fixed by
+     dropping the `.default("")` (schemastery has no `.optional()`; an
+     unset-by-default field is already nullable-passthrough without one).
+     Also deduped the `ruleNames` list in the deny/ask journal warn lines
+     (`[...new Set(...)]`), since a command matched via two unbash extraction
+     paths (e.g. `date` inside `$(...)`) logged `[date, date]`.
+  Verified: `tsc --noEmit` clean, `prettier --check` clean, `node build.mjs`
+  rebuilt `plugins/bash-guard.js` with both fixes present in the bundle.
+  A third, separate bug surfaced during this investigation and does not
+  belong to this repo: aidos's `bashContext()` (`src/host/aidos-core.ts:555`)
+  resolves `profile = "planning"` for any primary agent with zero tickets,
+  with no check for whether an aidos project is attached to the session at
+  all — so a plain non-aidos session gets the same deny-by-default
+  `profile-planning` overlay as a real aidos agent mid-planning. Handed off
+  to the aidos side via `~/repos/aidos/URGENT-PROMPT.md` (ticket it there
+  under an `A-` prefix, not tracked further in this file).
 
 - [ ] **D-LOG2 — Host-layer logging: gaps and happy paths.**
   Add leveled `ctx.logger` calls across the first-party host plugins
@@ -43,7 +62,7 @@ ticket of the pair.
   Also add `echo` lines to the silent `sync.sh` steps: `step_set_defaults`
   (line 584 overwrite), `step_sync_agents_md` (lines 30-32), the preset `sed` at
   line 398, and the successful `profile.active` patch near line 601.
-  Follow the level convention in Critical context. Do not touch `see.ts`.
+  Follow the level convention in Critical context.
   **Evaluate:** trigger an archived-session delete and observe the new log line.
   Force one profile failover and confirm the log names both models and the
   session. `tsc --noEmit` passes.
@@ -52,8 +71,7 @@ ticket of the pair.
   Add the same leveled logging to the first-party client packages
   (`session-archive`, `subscriptions`, `shared/client-util.ts`, and the profiles
   panel client). Cover panel mount, data load, each user action that reaches the
-  host, and each response. Keep routine chatter at `debug`. Do not touch
-  `approval-comment`.
+  host, and each response. Keep routine chatter at `debug`.
   **Evaluate:** `node build.mjs` passes. Human review: open each panel with the
   browser console at `debug` and confirm the log reads clearly and does not
   flood.
@@ -120,6 +138,48 @@ ticket of the pair.
 
 ## Critical context
 
+- **Live incident (2026-08-26), superseded by D-BUG1 above:** started as "every
+  bash call is breaking" with no visible logs at all. Investigation so far,
+  settled and not to be re-litigated:
+  - `ctx.logger.*` calls do not reach the journal or console on their own:
+    cordis's `LoggerService` registers exactly one default exporter (its own
+    constructor), which only pushes messages into an in-memory ring buffer
+    nothing reads. Confirmed by grepping cordis's own `lib/index.js` and every
+    installed `@deepseek-ai/dsh-*` package for a second
+    `ctx.logger.exporter(...)` registration: zero matches anywhere.
+    `~/repos/dsh-remote` hit the same gap and worked around it with raw
+    `console.*` calls instead of fixing it (its own comment says as much,
+    `lib/index.js:1483`).
+  - Fixed with a new first-party plugin, `plugins/log-exporter.ts` (bundled by
+    `build.mjs`, first entry; installed as the first row of `sync.sh`'s
+    `insert:` plugin list, before `mcp-nostrbook`, so every later plugin's
+    `ctx.logger` calls are captured from their own `apply()` onward).
+  - **Gotcha, already hit once:** cordis's exporter dispatch filters by level
+    before calling `export()` — `exporter.levels?.default ?? this.level ?? 1`
+    is the threshold, and only messages whose numeric level (`error=0, info=1,
+    warn=2, debug=3`) is `<=` that threshold reach the exporter. An exporter
+    registered with no `levels` field defaults to threshold `1`, which silently
+    drops every `warn` and `debug` call — nearly all of today's instrumentation.
+    Fixed by setting `levels: { default: 3 }` explicitly. Verified live (not
+    just by build/typecheck): all four levels print after the fix, and `[see]`,
+    `[remote]` (dsh-remote, unrelated to this repo's own `approval-comment`),
+    and `[mcp-client]` lines all show up correctly in the post-restart journal.
+  - `approval-comment`'s client-side (`client.tsx`) got additional `console.*`
+    calls (mount/unmount, answer click, `commandOf` parse failure, `apply`
+    entry) per the user's request. These are browser-devtools-console only —
+    the plugin's host side (`src/index.ts`) is an empty stub with no `ctx`
+    access relevant to this file, so nothing here reaches the journal. The user
+    confirmed seeing the `apply: registering composer slot` line in the browser
+    console, so the wiring works; no other approval-comment log line has been
+    confirmed live yet (mount/answer weren't seen before the bash tool failure
+    interrupted the session, which is itself a D-BUG1 data point: the card may
+    never have mounted for the failing calls).
+- All "do not touch" file exclusions from earlier in this sweep (`see.ts` in
+  D-LOG2, `approval-comment` in D-LOG3) are dropped per user instruction: only
+  this session works on `dotfiles-ai`, so the cross-agent coordination concern
+  that motivated them no longer applies.
+- D-BUG1's work is now committed (see git log). A fresh session should still
+  run `git status --short` to reconfirm before touching anything.
 - Bundle outputs under `plugins/*.js`, `plugins/*/dist`, and `plugins/*/lib` are
   committed. `build.mjs` regenerates them. Rebuild after every TypeScript change.
   `sync.sh` no longer runs a build-drift check (removed: `step_build_plugins`
@@ -127,9 +187,9 @@ ticket of the pair.
   so a stale committed bundle never reaches the deployed output regardless).
 - `see.ts`, `plugins/see.js`, and `plugins/approval-comment/*` already had
   their bug fixes committed earlier today (`2ddd22f`, `b86a3ff`) under a
-  separate `PLAN.md` effort (T1-T6, unrelated to this sweep). D-LOG2's
-  "do not touch `see.ts`" instruction still stands: this sweep's logging pass
-  does not touch it, but it is no longer off-limits to other agents/sessions.
+  separate `PLAN.md` effort (T1-T6, unrelated to this sweep). That effort is
+  finished, so its findings are historical context only, not a constraint on
+  this sweep's scope.
 - `sync-models.mjs`'s hand-rolled YAML parser has already been replaced with
   the `yaml` package (uncommitted in the tree as of this writing) under
   D-SYNC1/D-SYNC2 below, which now live in this file, not the other `PLAN.md`.
