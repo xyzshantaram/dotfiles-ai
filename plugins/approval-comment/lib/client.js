@@ -2079,7 +2079,14 @@ function commandOf(call) {
 }
 function rootToolCall(snapshot, callId) {
   var node = snapshot.chat && snapshot.chat.nodes.get(conversationContextKey2("tool-call", callId));
-  return node === void 0 || node === null ? void 0 : node.data && node.data.root;
+  if (node === void 0 || node === null) return void 0;
+  var root = node.data && node.data.root;
+  if (root === void 0) return void 0;
+  if (root === null) {
+    console.debug("[approval-comment] rootToolCall: node.data.root is null", callId);
+    return void 0;
+  }
+  return root;
 }
 function highlightCommand(command) {
   try {
@@ -2150,10 +2157,12 @@ function makeApprovalCommentCard(steerTo) {
             "approval response rejected: " + (receipt === void 0 || receipt === null || receipt.reason === void 0 ? "unknown" : receipt.reason)
           );
         }
+        console.debug("[approval-comment] answered", matched.key, outcome);
         if (outcome === "rejected" && commentText !== "") {
           steerTo(matched.sessionId, matched.payload.toolName, commentText);
         }
-      }).catch(function() {
+      }).catch(function(error) {
+        console.warn("[approval-comment] answer failed", matched.key, outcome, error);
         setAnswered(false);
       });
     };
