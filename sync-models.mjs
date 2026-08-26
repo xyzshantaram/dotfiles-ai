@@ -331,8 +331,13 @@ function lookupMeta(id, db) {
     const out = {};
     if (typeof e.max_input_tokens === "number") out.contextWindow = e.max_input_tokens;
     if (typeof e.max_output_tokens === "number") out.maxTokens = e.max_output_tokens;
-    const params = e.supported_openai_params || [];
-    out.image = Array.isArray(params) && params.includes("image");
+    // LiteLLM reports vision as a top-level `supports_vision` boolean, not a
+    // `supported_openai_params` array containing "image" (that field does not
+    // exist anywhere in LiteLLM's model_prices_and_context_window.json;
+    // confirmed against a live fetch, 0 of ~3200 entries carry it). The
+    // previous check always evaluated to `[] .includes("image")` -> false, so
+    // no model synced through --with-meta ever got defaultInput: [text, image].
+    out.image = e.supports_vision === true;
     const efforts = reasoningEffortsFor(e);
     if (efforts) out.reasoningEfforts = efforts;
     return out;
