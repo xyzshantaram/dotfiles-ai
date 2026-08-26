@@ -96,6 +96,7 @@ function commandOf(call) {
     var args = JSON.parse(call.argsRaw);
     return typeof args.command === "string" ? args.command : undefined;
   } catch (error) {
+    console.warn("[approval-comment] commandOf: failed to parse call.argsRaw", error);
     return undefined;
   }
 }
@@ -188,6 +189,16 @@ function makeApprovalCommentCard(steerTo) {
     var draft = draftState[0];
     var setDraft = draftState[1];
 
+    react.useEffect(
+      function () {
+        console.debug("[approval-comment] card mounted for approval", matched.key);
+        return function () {
+          console.debug("[approval-comment] card unmounted for approval", matched.key);
+        };
+      },
+      [matched.key],
+    );
+
     var command = props.useSession(function (snapshot) {
       var callId = matched.payload.callId;
       if (callId === undefined) return undefined;
@@ -198,6 +209,7 @@ function makeApprovalCommentCard(steerTo) {
 
     var answer = function (outcome) {
       if (answered) return;
+      console.debug("[approval-comment] answer:", outcome);
       setAnswered(true);
       var commentText = draft.trim();
       matched
@@ -339,6 +351,7 @@ var inject = ["slots", "sessions", "locale"];
  * declared, and register the dictionary for this card's locale seat.
  */
 function apply(ctx) {
+  console.debug("[approval-comment] apply: registering composer slot");
   var steerTo = buildSteerTo(ctx.sessions);
   var card = makeApprovalCommentCard(steerTo);
   ctx.effect(function () {

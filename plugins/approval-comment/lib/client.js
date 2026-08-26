@@ -2074,6 +2074,7 @@ function commandOf(call) {
     var args = JSON.parse(call.argsRaw);
     return typeof args.command === "string" ? args.command : void 0;
   } catch (error) {
+    console.warn("[approval-comment] commandOf: failed to parse call.argsRaw", error);
     return void 0;
   }
 }
@@ -2133,6 +2134,15 @@ function makeApprovalCommentCard(steerTo) {
     var draftState = import_react.default.useState("");
     var draft = draftState[0];
     var setDraft = draftState[1];
+    import_react.default.useEffect(
+      function() {
+        console.debug("[approval-comment] card mounted for approval", matched.key);
+        return function() {
+          console.debug("[approval-comment] card unmounted for approval", matched.key);
+        };
+      },
+      [matched.key]
+    );
     var command = props.useSession(function(snapshot) {
       var callId = matched.payload.callId;
       if (callId === void 0) return void 0;
@@ -2142,6 +2152,7 @@ function makeApprovalCommentCard(steerTo) {
     });
     var answer = function(outcome) {
       if (answered) return;
+      console.debug("[approval-comment] answer:", outcome);
       setAnswered(true);
       var commentText = draft.trim();
       matched.respond({
@@ -2250,6 +2261,7 @@ function makeApprovalCommentCard(steerTo) {
 var name = PLUGIN_NAME;
 var inject = ["slots", "sessions", "locale"];
 function apply(ctx) {
+  console.debug("[approval-comment] apply: registering composer slot");
   var steerTo = buildSteerTo(ctx.sessions);
   var card = makeApprovalCommentCard(steerTo);
   ctx.effect(function() {
