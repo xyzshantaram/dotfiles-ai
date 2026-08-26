@@ -180,7 +180,11 @@ step_install_plugins() {
 			out="$(dsh plugin --profile web add "$spec" 2>&1)"
 			rc=$?
 			if [ "$rc" -ne 0 ]; then printf '%s\n' "$out"; return "$rc"; fi
-			printf '%s\n' "$out" | rg -i 'warn|error' || true
+			# pnpm's peer-dependency notice fires on nearly every install in
+			# this bundle (each plugin declares its own dsh peer range) and
+			# carries no actionable info here; drop only that one line, keep
+			# every other warn/error.
+			printf '%s\n' "$out" | rg -i 'warn|error' | rg -v -i 'peer dependenc' || true
 		}
 		pnpm_ins "github:sunshaobei/dsh-input-history#9b5b7a494a5c"
 		pnpm_ins "github:omdsh-dev/dsh-tool-calculator#05090e946113721c5295518cc20e74f427022c55"
