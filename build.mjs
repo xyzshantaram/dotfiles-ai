@@ -25,6 +25,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const isCheckMode = process.argv.includes("--check");
 
 const entries = [
+  ["plugins/log-exporter.ts", "plugins/log-exporter.js"],
   ["plugins/bash-guard.ts", "plugins/bash-guard.js"],
   ["plugins/see.ts", "plugins/see.js"],
   ["plugins/manifest-guard.ts", "plugins/manifest-guard.js"],
