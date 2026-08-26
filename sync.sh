@@ -53,6 +53,8 @@ step_write_web_patch() {
 # @deepseek-ai/* imports against the host base (dsh install node_modules);
 # unbash + the walker are bundled inside each plugin file.
 - insert:
+    - id: log-exporter
+      name: $HERE/plugins/log-exporter.js
     - id: mcp-nostrbook
       name: '@deepseek-ai/dsh-mcp-client'
       config:
