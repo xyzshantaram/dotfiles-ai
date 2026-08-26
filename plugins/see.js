@@ -255,10 +255,9 @@ function apply(ctx, config) {
       const provider = routed?.provider ?? opts?.provider;
       const model = routed?.model ?? opts?.model;
       if (provider === void 0 || model === void 0) {
-        console.debug("[see] agent/created: no provider/model resolved, skipping vision gate", {
-          hasRouted: routed !== void 0,
-          hasOpts: opts !== void 0
-        });
+        ctx.logger.debug(
+          `[see] agent/created: no provider/model resolved, skipping vision gate hasRouted=${routed !== void 0} hasOpts=${opts !== void 0}`
+        );
         return;
       }
       let hasVision = false;
@@ -266,28 +265,23 @@ function apply(ctx, config) {
         const info = await llm.resolveModelInfo(provider, model);
         const mods = info?.inputModalities;
         hasVision = Array.isArray(mods) && mods.includes("image");
-        console.debug("[see] resolveModelInfo", {
-          provider,
-          model,
-          inputModalities: mods,
-          hasVision
-        });
+        ctx.logger.debug(
+          `[see] resolveModelInfo provider=${provider} model=${model} inputModalities=${String(mods)} hasVision=${hasVision}`
+        );
       } catch (err) {
-        console.debug(
-          "[see] resolveModelInfo threw, defaulting to no vision",
-          { provider, model },
-          err
+        ctx.logger.debug(
+          `[see] resolveModelInfo threw, defaulting to no vision provider=${provider} model=${model} error=${err instanceof Error ? err.message : String(err)}`
         );
       }
       const deny = hasVision ? ["see"] : ["read_image"];
-      console.info("[see] vision gate decision", { provider, model, hasVision, deny });
+      ctx.logger.info(
+        `[see] vision gate decision provider=${provider} model=${model} hasVision=${hasVision} deny=${deny.join(",")}`
+      );
       try {
         agent.ctx.tools.restrict({ deny });
       } catch (err) {
-        console.debug(
-          "[see] tools.restrict failed, leaving both tools available",
-          { provider, model },
-          err
+        ctx.logger.debug(
+          `[see] tools.restrict failed, leaving both tools available provider=${provider} model=${model} error=${err instanceof Error ? err.message : String(err)}`
         );
       }
     });
