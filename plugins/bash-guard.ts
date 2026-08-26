@@ -86,8 +86,14 @@ export const inject = [];
 
 export const Config = z.object({
   guardsDir: z.string().default("$DSH_HOME/plugins/guards"),
-  denyMessage: z.string().default(""),
-  askMessage: z.string().default(""),
+  // Left unset by default (not defaulted to ""): evaluate() falls back to
+  // DEFAULT_DENY_TEMPLATE/DEFAULT_ASK_TEMPLATE with `??`, which only skips a
+  // nullish value. A "" default here used to satisfy that check and silently
+  // format against an empty template, rendering a bare "Error: " on every
+  // deny/ask. Do not add a string default back without also changing the
+  // `??` fallback in evaluate().
+  denyMessage: z.string(),
+  askMessage: z.string(),
 });
 
 type BashGuardConfig = {
@@ -133,6 +139,7 @@ async function loadRules(ctx: Context, dir: string): Promise<Map<string, GuardEn
   try {
     names = await readdir(dir);
   } catch {
+    ctx.logger.debug(`bash-guard: rules directory not found at ${dir}; allowing all commands`);
     return rules; // no dir yet => no rules => everything allowed
   }
   for (const name of names) {
@@ -202,6 +209,7 @@ async function loadRules(ctx: Context, dir: string): Promise<Map<string, GuardEn
           });
         }
       }
+      ctx.logger.debug(`bash-guard: loaded ${clean.length} command(s) from rule file ${name}`);
     } catch (error) {
       ctx.logger.warn(
         `bash-guard: skipping malformed rule file ${name}: ${error instanceof Error ? error.message : String(error)}`,
@@ -387,18 +395,19 @@ async function evaluate(
   try {
     script = parse(command);
   } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    ctx.logger.warn(`bash-guard: parse error in command; denying: ${command} (error: ${errorMsg})`);
     return {
       command,
       decision: {
         kind: "deny",
-        reason: `bash-guard: could not parse the command; refusing to run it unparsed. ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        reason: `bash-guard: could not parse the command; refusing to run it unparsed. ${errorMsg}`,
       },
     };
   }
   if (script.errors && script.errors.length > 0) {
     const messages = script.errors.map((e) => e.message).join("; ");
+    ctx.logger.warn(`bash-guard: script parse errors; denying: ${command} (errors: ${messages})`);
     return {
       command,
       decision: {
@@ -411,6 +420,7 @@ async function evaluate(
   const refs = extractAllCommandsFromAST(script, command);
   const { commands } = expandWrapperCommands(refs);
   const all = [...refs, ...commands];
+  ctx.logger.debug(`bash-guard: extracted ${all.length} command(s) from: ${command}`);
 
   // Scratch escape: a command whose LAST path-like argument lands under a
   // safe scratch root is always allowed, in every phase. Scratch writes are
@@ -418,6 +428,7 @@ async function evaluate(
   // (and especially a subagent) can spool to /tmp/dsh or the aidos durable
   // scratch at any time.
   if (safePaths.length > 0 && scratchAllowed(all, safePaths, workspaceRoot)) {
+    ctx.logger.info(`bash-guard: scratch write allowed: ${command}`);
     return { command, decision: null };
   }
   const rules = await loadRulesMulti(ctx, dirs);
@@ -486,10 +497,12 @@ async function evaluate(
   }
 
   if (all.length === 0) {
+    ctx.logger.debug(`bash-guard: no actual commands found in: ${command}`);
     return { command, decision: null };
   }
 
   if (hits.length === 0) {
+    ctx.logger.debug(`bash-guard: no rules matched for: ${command}`);
     return { command, decision: null };
   }
 
@@ -502,6 +515,8 @@ async function evaluate(
         command,
         matches: matchLines(denying),
       });
+      const ruleNames = [...new Set(denying.map((h) => h.name))].join(", ");
+      ctx.logger.warn(`bash-guard: command denied by rules [${ruleNames}]: ${command}`);
       return { command, decision: { kind: "deny", reason } };
     }
     case "ask": {
@@ -510,6 +525,8 @@ async function evaluate(
         command,
         matches: matchLines(asking),
       });
+      const ruleNames = [...new Set(asking.map((h) => h.name))].join(", ");
+      ctx.logger.warn(`bash-guard: command asks for approval by rules [${ruleNames}]: ${command}`);
       return {
         command,
         decision: { kind: "ask", reason },
@@ -518,6 +535,7 @@ async function evaluate(
     case "allow":
     case "none":
     default:
+      ctx.logger.debug(`bash-guard: command allowed: ${command}`);
       return { command, decision: null };
   }
 }
@@ -529,6 +547,8 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
     if (exec.name !== "bash") return next();
     const command = (exec.arguments as { command?: string } | undefined)?.command;
     if (typeof command !== "string" || command.trim().length === 0) return next();
+
+    ctx.logger.debug(`bash-guard: evaluating command: ${command}`);
 
     const agent = exec.agent;
     let profile = "none";
@@ -549,8 +569,9 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
         profile = bc.profile;
         workspaceRoot = bc.workspaceRoot;
         if (bc.scratchDir) safePaths.push(bc.scratchDir);
-      } catch {
-        // aidos not ready
+        ctx.logger.debug(`bash-guard: resolved aidos profile: ${profile}`);
+      } catch (error) {
+        ctx.logger.debug(`bash-guard: aidos context not available; using default profile`);
       }
     }
     const dirs = profile === "none" ? [baseDir] : [baseDir, join(baseDir, `profile-${profile}`)];
