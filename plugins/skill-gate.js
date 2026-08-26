@@ -32,7 +32,7 @@ function readFrontmatter(text) {
   if (end < 0) return "";
   return lines.slice(1, end).join("\n");
 }
-function parseToolsGated(frontmatter) {
+function parseToolsGated(frontmatter, ctx) {
   const lines = frontmatter.split("\n");
   const idx = lines.findIndex((l) => /^tools-gated\s*:/.test(l));
   if (idx < 0) return [];
@@ -67,13 +67,13 @@ function parseToolsGated(frontmatter) {
     else break;
   }
   if (block.length === 0) {
-    console.warn(
+    ctx.logger.warn(
       "[skill-gate] tools-gated key with no value and no block list; gating nothing for this skill"
     );
   }
   return block.filter((e) => e.length > 0);
 }
-function discoverGates(skillDirs) {
+function discoverGates(skillDirs, ctx) {
   const dirs = [join(resolveDshHome(), "skills"), ...skillDirs];
   const gates = /* @__PURE__ */ new Map();
   const seek = (skillName, dir) => {
@@ -87,7 +87,7 @@ function discoverGates(skillDirs) {
       } catch {
         continue;
       }
-      const parsed = parseToolsGated(readFrontmatter(text));
+      const parsed = parseToolsGated(readFrontmatter(text), ctx);
       if (parsed.length > 0) return parsed;
     }
     return void 0;
@@ -138,7 +138,9 @@ function apply(ctx, config) {
     try {
       enforce(payload.agent);
     } catch (err) {
-      console.error("[skill-gate] pre-step enforcement failed:", err);
+      ctx.logger.error(
+        `[skill-gate] pre-step enforcement failed: ${err instanceof Error ? err.message : String(err)}`
+      );
     }
     return next();
   });
@@ -173,7 +175,7 @@ function apply(ctx, config) {
     clearAll();
   });
   function gatedPatterns() {
-    if (!gatesCache) gatesCache = discoverGates(skillDirs);
+    if (!gatesCache) gatesCache = discoverGates(skillDirs, ctx);
     const out = /* @__PURE__ */ new Set();
     for (const toolList of gatesCache.values()) {
       for (const tool of toolList) out.add(tool);
@@ -266,7 +268,7 @@ function apply(ctx, config) {
     if (!skillName) return;
     const isError = result?.isError === true;
     if (isError) return;
-    if (!gatesCache) gatesCache = discoverGates(skillDirs);
+    if (!gatesCache) gatesCache = discoverGates(skillDirs, ctx);
     const gated = gatesCache.get(skillName);
     if (!gated || gated.length === 0) return;
     const active = activeById.get(agent.id) ?? /* @__PURE__ */ new Set();

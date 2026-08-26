@@ -102,7 +102,7 @@ function readFrontmatter(text: string): string {
  * (`- a` lines under the key), or a single bare scalar (`a`). Anything
  * else yields an empty list so a malformed value never gates a tool.
  */
-function parseToolsGated(frontmatter: string): string[] {
+function parseToolsGated(frontmatter: string, ctx: Context): string[] {
   // tools-gated may be an inline array ([a,b], single-line or joined
   // multi-line), a bare block list (- a), or a single bare scalar.
   const lines = frontmatter.split("\n");
@@ -148,7 +148,7 @@ function parseToolsGated(frontmatter: string): string[] {
     else break;
   }
   if (block.length === 0) {
-    console.warn(
+    ctx.logger.warn(
       "[skill-gate] tools-gated key with no value and no block list; gating nothing for this skill",
     );
   }
@@ -156,7 +156,7 @@ function parseToolsGated(frontmatter: string): string[] {
 }
 
 /** Discover the complete skill-name → gated-tools map from the skill roots. */
-function discoverGates(skillDirs: string[]): Map<string, string[]> {
+function discoverGates(skillDirs: string[], ctx: Context): Map<string, string[]> {
   const dirs = [join(resolveDshHome(), "skills"), ...skillDirs];
   const gates = new Map<string, string[]>();
   const seek = (skillName: string, dir: string): string[] | undefined => {
@@ -170,7 +170,7 @@ function discoverGates(skillDirs: string[]): Map<string, string[]> {
       } catch {
         continue;
       }
-      const parsed = parseToolsGated(readFrontmatter(text));
+      const parsed = parseToolsGated(readFrontmatter(text), ctx);
       if (parsed.length > 0) return parsed;
     }
     return undefined;
@@ -251,7 +251,9 @@ export function apply(ctx: Context, config: unknown): void {
       enforce(payload.agent);
     } catch (err) {
       // Observe only: never break stepping, but surface the fault in the journal.
-      console.error("[skill-gate] pre-step enforcement failed:", err);
+      ctx.logger.error(
+        `[skill-gate] pre-step enforcement failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
     return next();
   });
@@ -297,7 +299,7 @@ export function apply(ctx: Context, config: unknown): void {
 
   /** Every `tools-gated` declaration, exact names and `*` patterns alike. */
   function gatedPatterns(): string[] {
-    if (!gatesCache) gatesCache = discoverGates(skillDirs);
+    if (!gatesCache) gatesCache = discoverGates(skillDirs, ctx);
     const out = new Set<string>();
     for (const toolList of gatesCache.values()) {
       for (const tool of toolList) out.add(tool);
@@ -419,7 +421,7 @@ export function apply(ctx: Context, config: unknown): void {
     // Only treat a successful load as activation.
     const isError = (result as { isError?: boolean })?.isError === true;
     if (isError) return;
-    if (!gatesCache) gatesCache = discoverGates(skillDirs);
+    if (!gatesCache) gatesCache = discoverGates(skillDirs, ctx);
     const gated = gatesCache.get(skillName);
     if (!gated || gated.length === 0) return;
     const active = activeById.get(agent.id) ?? new Set<string>();
