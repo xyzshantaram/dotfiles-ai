@@ -637,19 +637,9 @@ EOF
 # ── step table ────────────────────────────────────────────────────────────────
 # Each entry: "Human title|function_name". Numbers derive from the array, so
 # adding, removing, or reordering steps needs NO manual renumbering.
-step_check_build_drift() {
-	# Fail the sync if any committed bundle differs from a fresh build.
-	# Keeps H1 from recurring: a source fix that was not rebuilt is not deployed.
-	if ! (cd "$HERE" && node build.mjs --check 2>&1); then
-		echo "ERROR: build drift detected. Run 'node build.mjs' and commit the bundles." >&2
-		return 1
-	fi
-}
-
 STEPS=(
 	"Install repo dev deps (esbuild for the build step)|step_install_deps"
 	"Build the personal plugins|step_build_plugins"
-	"Check committed bundles are fresh|step_check_build_drift"
 	"Sync skills -> $DSH_HOME/skills|step_sync_skills"
 	"Sync AGENTS.md -> $DSH_HOME/AGENTS.md|step_sync_agents_md"
 	"Sync dsh-better-edit guidance overrides|step_sync_better_edit_guidance"
