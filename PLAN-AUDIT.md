@@ -8,8 +8,8 @@ settings panel that shows the dsh web server log. This file is temporary. It is
 deleted when the sweep lands.
 
 This sweep is interleaved with the matching sweep in `~/repos/aidos`
-(`PLAN-AUDIT.md` there). This repo pins an aidos revision, so D-PIN1 is the last
-ticket of the pair.
+(`PLAN-AUDIT.md` there). This repo pins an aidos revision; the pin now points
+at `6115526` (aidos's `A-BASH1` fix, `dotfiles-ai@6e0265d`).
 
 ## Checklist
 
@@ -57,10 +57,11 @@ ticket of the pair.
   log, so the log is readable from a remote browser instead of only from a
   terminal on the laptop. The host side runs a configurable command and returns
   its output. Default command: `journalctl --user -u dsh-web.service`. The
-  command is a plugin setting so it can be repointed. Manual refresh only, no
-  streaming and no polling. Follow the existing plugin shape: a `.ts` host
-  plugin plus a client package, installed from `sync.sh`, bundled by
-  `build.mjs`, styled per `src/DESIGN.md`.
+  command is a plugin setting so it can be repointed. One-shot fetch, manual
+  refresh button only, no streaming and no polling. The panel is a scrolling
+  view in a monospace/readable font, not a raw dump. Follow the existing
+  plugin shape: a `.ts` host plugin plus a client package, installed from
+  `sync.sh`, bundled by `build.mjs`, styled per `src/DESIGN.md`.
   **Evaluate:** the panel loads and shows recent `dsh-web` lines. The refresh
   button fetches newer lines. Changing the configured command changes what the
   panel shows. Human review: open the panel from a phone over the LAN and
@@ -73,29 +74,11 @@ ticket of the pair.
   log-viewer host handler.
   **Evaluate:** `pnpm test` passes locally and covers the three named areas.
 
-- [ ] **D-PIN1 — Re-pin the vendored aidos revision.**
-  `sync.sh` clones aidos at a pinned commit. After the aidos sweep lands, update
-  the pin.
-  **Evaluate:** `sync.sh` clones the new commit and the sync completes cleanly.
-
-- [ ] **D-SYNC1 — `sync-models.mjs`: real YAML parsing plus marker-region regeneration.**
-  Replace the hand-rolled line-based YAML parser with the `yaml` package
-  (`pnpm add yaml`, approved for this ticket only). Each seeded provider's
-  `models:` list gets a marker region (`# sync-models:begin` /
-  `# sync-models:end`); each run replaces the whole marked block from a fresh
-  fetch rather than only appending missing ids. Content outside the markers,
-  and every non-seeded provider, stays byte-identical across runs that change
-  nothing else. `--dry-run` prints the block without writing. Existing
-  behavior (chain-consistency check, `modelSync.lastRun` stamp, `--with-meta`
-  LiteLLM lookup incl. the `supports_vision` fix) survives unchanged.
-  **Evaluate:** `node --check sync-models.mjs` and `prettier --check
-  sync-models.mjs` pass. Two consecutive real-file `--dry-run`s produce
-  identical output. A fixture run shows hand-written content and non-seeded
-  providers untouched across repeated runs, and the marked block converges
-  (idempotent) except for the `lastRun` stamp.
-
 - [ ] **D-SYNC2 — One-time purge and reseed of `command-code` and `opencode-zen`.**
-  Depends on D-SYNC1 landing first. Clear the `models:` list under
+  `sync-models.mjs`'s real-YAML-parsing rewrite (formerly D-SYNC1) has already
+  landed (`635fd78`; independently re-verified this session via a `tester`
+  subagent dispatch, all 6 evaluation criteria pass), so this ticket is
+  unblocked. Clear the `models:` list under
   `command-code` and under `opencode-zen` in `home/settings.yaml`; `meridian`
   and `opencode` are untouched. Run `node sync-models.mjs --with-meta` to
   repopulate both providers under the new markers.
@@ -145,8 +128,9 @@ ticket of the pair.
   finished, so its findings are historical context only, not a constraint on
   this sweep's scope.
 - `sync-models.mjs`'s hand-rolled YAML parser has already been replaced with
-  the `yaml` package (uncommitted in the tree as of this writing) under
-  D-SYNC1/D-SYNC2 below, which now live in this file, not the other `PLAN.md`.
+  the `yaml` package, committed (`635fd78`) and independently re-verified via
+  a `tester` subagent dispatch (all 6 evaluation criteria pass). Only D-SYNC2
+  (the one-time reseed) is still open.
 - `tsconfig.json` sets `strict: false`, so a passing `tsc --noEmit` is a weak
   check. Do not treat it as proof a change works.
 - The inline Python YAML patcher at `sync.sh:475-565` preserves comments on
@@ -161,10 +145,6 @@ ticket of the pair.
 
 - Never commit without explicit approval.
 - Fine to add well-scoped, actively maintained libraries. Ask before adding one.
-- The tree holds uncommitted changes to `package.json`, `pnpm-lock.yaml`, and
-  `sync-models.mjs` from D-SYNC1's `yaml`-package rewrite. They belong to this
-  file's own checklist now; stage and commit them under D-SYNC1, not
-  separately.
 
 ## Human review queue
 
