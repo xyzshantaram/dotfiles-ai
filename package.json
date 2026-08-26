@@ -38,6 +38,6 @@
     "build": "node build.mjs",
     "format": "prettier --write \"**/*.{ts,tsx,css}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,css}\"",
-    "sync-models": "node sync-models.mjs"
+    "sync-models": "node sync-models.mjs --with-meta"
   }
 }
