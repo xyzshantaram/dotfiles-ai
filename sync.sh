@@ -288,7 +288,12 @@ for key in (proj.get("dependencies") or {}):
 				;;
 		esac
 	done
-	[ "$extra" -eq 0 ] && echo "  no extra plugins."
+	if [ "$extra" -eq 0 ]; then
+		echo "  no extra plugins."
+	else
+		echo "  (informational only — sync continues despite extra plugins)" >&2
+	fi
+	return 0
 }
 
 step_allow_aidos_build() {
