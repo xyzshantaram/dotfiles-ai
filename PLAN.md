@@ -1,10 +1,16 @@
-# Plan — profiles plugin audit and hardening
+# Plan — profiles plugin audit and hardening, plus sync-models.mjs hardening
 
 ## Vision
 
 Make the profiles plugin correct under concurrency and honest about failure.
 Every fallback path must pick the right chain, isolate its state per agent, and
 degrade to a working route instead of failing the turn.
+
+This plan also tracks a second, unrelated effort found in the same session:
+hardening `sync-models.mjs`'s model-seeding pipeline (real YAML parsing,
+marker-region regeneration, and a one-time reseed of `command-code` and
+`opencode-zen`). The two efforts share this file only because T6 below cannot
+be verified until this second effort lands; they are otherwise independent.
 
 ## Verified harness facts
 
@@ -45,6 +51,16 @@ agent.options.subagentDepth ?? 0)`. Source: `dsh-subagent/lib/index.js`
   generic 400 is never cached.
 - Scope covers the host plugin, the shared route model, and the client panel.
 - Cleanup items land in the same pass.
+- `sync-models.mjs` regenerates its whole managed marker block on every run,
+  rather than only appending missing entries. Entries outside the markers stay
+  untouched.
+- `sync-models.mjs` switches its hand-rolled line-based YAML parser to the
+  `yaml` package. This is the one approved exception to "no new runtime
+  dependency without asking" below; the user approved it explicitly for this
+  ticket only.
+- The one-time purge covers exactly the `models:` list contents under
+  `command-code` and `opencode-zen` in `home/settings.yaml`. `meridian` and
+  `opencode` are untouched; the sync loop never seeds them.
 
 ## Tickets
 
@@ -138,6 +154,47 @@ agent.options.subagentDepth ?? 0)`. Source: `dsh-subagent/lib/index.js`
 - `pnpm exec prettier --check .` passes.
 - The orchestrator independently verifies at least one concrete behavior claim
   per ticket before closing it.
+
+### T7 — `sync-models.mjs`: real YAML parsing plus marker-region regeneration
+
+**Status:** todo
+**Acceptance criteria:**
+
+- `yaml` is added as a dependency through `pnpm add`, not a hand-edited
+  `package.json` line.
+- `sync-models.mjs` reads and writes `home/settings.yaml` through the `yaml`
+  package. The hand-rolled `analyze()` line parser and the line-splice edit
+  list are gone.
+- Each seeded provider's `models:` list carries a marker region (for example
+  `# sync-models:begin` / `# sync-models:end`) around the entries this script
+  manages.
+- Each run replaces the whole marked block from scratch rather than only
+  appending ids that are missing. Content outside the markers, and every
+  provider this script does not seed, is byte-identical before and after a run
+  that changes nothing else.
+- `--dry-run` prints the block the run would write without touching the file.
+- Existing behavior survives unchanged: the chain-consistency check, the
+  `modelSync.lastRun` stamp, and the `--with-meta` LiteLLM lookup (including
+  the `supports_vision` fix from the prior commit).
+
+### T8 — one-time purge and reseed of `command-code` and `opencode-zen`
+
+**Status:** todo
+**Acceptance criteria:**
+
+- `home/settings.yaml`: the `models:` list under `command-code` and under
+  `opencode-zen` is cleared before the reseed. `meridian` and `opencode` are
+  untouched.
+- After T7 lands, `node sync-models.mjs --with-meta` repopulates both
+  providers' models under the new markers.
+- Reseeded `command-code`/`opencode-zen` models that support vision per
+  LiteLLM's `supports_vision` field carry `defaultInput: [text, image]`.
+- The script's own chain-consistency check ends with zero warnings for any
+  chain referencing a `command-code` or `opencode-zen` model, including
+  `work-orchestrator` (`opencode-zen/x-preview-f-free`),
+  `personal-orchestrator` (`opencode-zen/hy3-free`,
+  `command-code/xiaomi/mimo-v2.5-pro`, `command-code/deepseek/deepseek-v4-pro`),
+  and `see` (`command-code/Qwen/Qwen3.7-Flash`).
 
 ## Critical context
 
