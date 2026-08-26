@@ -274,7 +274,6 @@ export function apply(ctx: Context, config: unknown): void {
           model: string,
           signal?: AbortSignal,
         ): Promise<{
-          input?: { inputModalities?: readonly string[] };
           inputModalities?: readonly string[];
         }>;
       }
@@ -287,26 +286,37 @@ export function apply(ctx: Context, config: unknown): void {
       const routed = agent.session?.requestHeader?.()?.config;
       const provider = routed?.provider ?? opts?.provider;
       const model = routed?.model ?? opts?.model;
-      if (provider === undefined || model === undefined) return;
+      if (provider === undefined || model === undefined) {
+        console.debug("[see] agent/created: no provider/model resolved, skipping vision gate", {
+          hasRouted: routed !== undefined,
+          hasOpts: opts !== undefined,
+        });
+        return;
+      }
       // Default to no vision. When the image capability is unknown (the adapter
       // omitted the modalities or resolveModelInfo threw), treat the model as
       // non-vision and hide read_image. Only a model that explicitly declares
       // image input keeps read_image. See DESIGN.md Appendix A.
       let hasVision = false;
       try {
+        // dsh-llm 0.1.0-rc.8 exposes inputModalities at the top level of
+        // LlmResolvedModelInfo (verified against the package's own
+        // types.d.ts). There is no nested `.input` wrapper.
         const info = await llm.resolveModelInfo(provider, model);
-        // dsh-llm 0.1.0-rc.8 exposes inputModalities at the top level. Check the
-        // nested input.inputModalities shape first for forward compatibility.
-        const mods = info?.input?.inputModalities ?? info?.inputModalities;
-        if (Array.isArray(mods)) hasVision = mods.includes("image");
-      } catch {
+        const mods = info?.inputModalities;
+        hasVision = Array.isArray(mods) && mods.includes("image");
+        console.debug("[see] resolveModelInfo", { provider, model, inputModalities: mods, hasVision });
+      } catch (err) {
         // Unknown capability; keep the default-deny choice above (read_image hidden).
+        console.debug("[see] resolveModelInfo threw, defaulting to no vision", { provider, model }, err);
       }
       const deny = hasVision ? ["see"] : ["read_image"];
+      console.info("[see] vision gate decision", { provider, model, hasVision, deny });
       try {
         agent.ctx.tools.restrict({ deny });
-      } catch {
+      } catch (err) {
         // Agent scope or tool surface not ready; leave both tools available.
+        console.debug("[see] tools.restrict failed, leaving both tools available", { provider, model }, err);
       }
     });
   }
