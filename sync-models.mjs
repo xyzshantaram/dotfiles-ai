@@ -4,18 +4,21 @@
 // Manual model-seed tool for the personal dsh bundle.
 //
 // What it does:
-//   1. Reads home/settings.yaml (the repo source of truth).
-//   2. For every provider whose `api` is `openai-completions` and that has a
-//      `baseURL`, calls {baseURL}/models and learns the model ids the provider
-//      actually serves. A provider listed in CATALOG_EXCLUDED (a gateway-extras
-//      route) subtracts the pi-ai catalog's own models, so it only lists what
-//      the catalog does not ship.
-//   3. Appends any model id that is not already present to that provider's
-//      `models:` list. It never deletes or rewrites existing entries, and it
-//      is idempotent: a second run adds nothing. Entries carry contextWindow,
-//      maxTokens, defaultInput (image only when LiteLLM declares it), and
-//      reasoningEfforts (from LiteLLM's per-level flags) when --with-meta is
-//      set.
+//   1. Reads home/settings.yaml (the repo source of truth) with the `yaml`
+//      package, keeping the source CST so comments and formatting survive.
+//   2. For the two seeded providers (`command-code`, `opencode-zen`), calls
+//      {baseURL}/models and learns the model ids the provider actually serves.
+//      A provider listed in CATALOG_EXCLUDED (a gateway-extras route)
+//      subtracts the pi-ai catalog's own models, so it only lists what the
+//      catalog does not ship.
+//   3. For `command-code` and `opencode-zen`, regenerates the entire
+//      `models:` sequence between a `# sync-models:begin` / `# sync-models:end`
+//      marker pair from a fresh {baseURL}/models fetch, on every run. It never
+//      appends just the missing ids: the whole marked block is replaced from
+//      scratch. Every other provider and everything outside the markers is left
+//      byte-identical. Entries carry contextWindow, maxTokens, defaultInput
+//      (image only when LiteLLM declares it), and reasoningEfforts (from
+//      LiteLLM's per-level flags) when --with-meta is set.
 //   4. Checks every model referenced by `profile.chains` and warns about any
 //      that are missing from the (now seeded) providers.
 //   5. Writes the sync time to `modelSync.lastRun` so the file records when it
@@ -35,6 +38,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import * as YAML from "yaml";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SETTINGS = process.env.SETTINGS_YAML ?? join(HERE, "home", "settings.yaml");
@@ -74,181 +78,147 @@ async function fetchCatalogModelIds(providerId) {
   }
   return ids;
 }
-const indentOf = (line) => {
-  // Empty or whitespace-only lines carry no structure: -1 skips every indent
-  // test instead of faking a top-level (ind 0) section boundary, which would
-  // reset in-progress provider/chain state.
-  if (line.trim() === "") return -1;
-  // Tabs count as one char here, matching this file's spaces-only indentation.
-  return (line.match(/^(\s*)/) || ["", ""])[1].length;
-};
+// The two providers this script seeds get their entire `models:` sequence
+// regenerated between a marker pair on every run. Content outside the markers
+// (the rest of the provider, every other provider, every other top-level key,
+// hand-written comments and blank lines) is left byte-identical. Every other
+// provider is untouched, exactly as before.
+// Marker comment lines are written at the models value indent (6 spaces),
+// matching the `- id:` entries, per the PLAN.md marker example.
+const MARKER_BEGIN_COMMENT = "# sync-models:begin";
+const MARKER_END_COMMENT = "# sync-models:end";
+const MARKER_BEGIN = "      " + MARKER_BEGIN_COMMENT;
+const MARKER_END = "      " + MARKER_END_COMMENT;
+const SEEDED_PROVIDERS = new Set(["command-code", "opencode-zen"]);
 
-// Parse settings.yaml into (a) provider metadata with line indices and
-// (b) the set of "provider/model" strings referenced by chains.
-//
-// This is a purpose-built parser, not a general YAML reader. It assumes the
-// file keeps a fixed shape: section keys at indent 0, `providers:`/`chains:`
-// at 2, provider/chain names at 4, properties at 6, model entries at 6/8, and
-// spaces (never tabs) for indentation. It does not handle folded or literal
-// scalars, quoted strings, inline lists, anchors, or comment text that looks
-// like a key. Any formatting drift can silently mis-attribute entries.
-//
-// The parser is knowingly fragile. A real `yaml` dependency would replace it
-// (the code review that flagged this wheel reinvention recommends that), but
-// PLAN.md requires user approval before adding a dependency, so this
-// hand-rolled version stays for now.
-function analyze(text) {
-  const lines = text.split("\n");
+// Largest source offset reachable from a CST token, so a block's end offset
+// (inclusive of trailing newlines) can be computed for a safe text splice.
+function maxTokenOffset(tok) {
+  if (!tok || typeof tok !== "object") return -1;
+  let m = (tok.offset ?? 0) + (tok.source?.length ?? 0);
+  for (const key of ["start", "end", "items", "sep", "value", "key"]) {
+    const v = tok[key];
+    if (Array.isArray(v)) {
+      for (const t of v) m = Math.max(m, maxTokenOffset(t));
+    } else if (v && typeof v === "object") {
+      m = Math.max(m, maxTokenOffset(v));
+    }
+  }
+  return m;
+}
+
+// The 0-based line number containing a source offset.
+function lineOfOffset(text, offset) {
+  let n = 0;
+  for (let i = 0; i < offset; i++) if (text.charCodeAt(i) === 10) n++;
+  return n;
+}
+
+// Extract the structured data the rest of the script needs from the parsed
+// YAML document: provider metadata (with model id sets), the chain-referenced
+// "provider/model" strings, and the modelSync section line range. Unlike the
+// old line parser, this reads the real document tree, so it never mis-attrib
+// -utes entries and it needs no assumptions about indentation width.
+function analyzeDocument(doc, text) {
   const providers = [];
   const chainRefs = [];
+  const byName = new Map();
 
-  let inProviders = false;
-  let inChains = false;
-  let cur = null; // current provider
-  let inModels = false;
-  let curChain = null;
-  let curRouteProvider = null;
-  let inModelSync = false;
-  let modelSyncStart = null;
-  let modelSyncEnd = null;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const ind = indentOf(line);
-    const trimmed = line.trim();
-
-    // Section boundaries.
-    if (ind === 0) {
-      if (inModelSync && trimmed !== "modelSync:") {
-        modelSyncEnd = i;
-        inModelSync = false;
+  const lp = doc.get("llm-pi-ai");
+  const provs = lp?.get?.("providers");
+  if (provs && provs.items) {
+    for (const pair of provs.items) {
+      const map = pair.value;
+      const name = pair.key.value;
+      const modelIds = new Set();
+      const models = map?.get?.("models");
+      if (models && models.items) {
+        for (const item of models.items) {
+          const id = item?.get?.("id");
+          if (typeof id === "string") modelIds.add(id);
+        }
       }
-      inProviders = false;
-      inChains = false;
-      cur = null;
-      inModels = false;
-      if (trimmed === "modelSync:") {
-        inModelSync = true;
-        modelSyncStart = i;
-      }
-      continue;
-    }
-    if (ind === 2 && trimmed === "providers:") {
-      inProviders = true;
-      continue;
-    }
-    if (ind === 2 && trimmed === "chains:") {
-      inChains = true;
-      continue;
-    }
-
-    // Provider block.
-    if (
-      inProviders &&
-      ind === 4 &&
-      /^[A-Za-z0-9_-]+:/.test(trimmed) &&
-      !trimmed.startsWith("#") &&
-      !trimmed.includes(" ")
-    ) {
-      cur = {
-        name: trimmed.slice(0, -1),
-        api: null,
-        baseURL: null,
-        apiKeyEnv: null,
-        modelIds: new Set(),
-        modelsKeyLine: null,
-        lastModelLine: null,
-        headerLine: i,
+      const p = {
+        name,
+        map,
+        api: map?.get?.("api"),
+        baseURL: map?.get?.("baseURL"),
+        apiKeyEnv: map?.get?.("apiKeyEnv"),
+        modelIds,
+        models,
       };
-      providers.push(cur);
-      inModels = false;
-      continue;
+      providers.push(p);
+      byName.set(name, p);
     }
-    if (inProviders && cur) {
-      const dedent = ind <= 4 && trimmed !== "";
-      if (dedent) {
-        cur = null;
-        inModels = false;
-        // Re-evaluate this line as a potential new provider header below.
-      } else if (ind === 6) {
-        if (trimmed.startsWith("api:")) cur.api = trimmed.slice(4).trim();
-        else if (trimmed.startsWith("baseURL:")) cur.baseURL = trimmed.slice(8).trim();
-        else if (trimmed.startsWith("apiKeyEnv:")) cur.apiKeyEnv = trimmed.slice(9).trim();
-        else if (trimmed === "models:") {
-          cur.modelsKeyLine = i;
-          inModels = true;
-        } else if (trimmed.startsWith("- id:")) {
-          cur.modelIds.add(trimmed.slice(5).trim());
-          cur.lastModelLine = i;
-        }
-      } else if (ind >= 8 && inModels) {
-        cur.lastModelLine = i;
-      }
-      // Lines that dedented also fall through to the top-level check next loop
-      // iteration only if they are a new header; here we just continue.
-      if (!dedent) continue;
-    }
+  }
 
-    // Chains block.
-    if (ind === 2 && trimmed === "chains:") {
-      inChains = true;
-      continue;
-    }
-    if (
-      ind === 4 &&
-      /^[A-Za-z0-9_-]+:/.test(trimmed) &&
-      !trimmed.startsWith("#") &&
-      !trimmed.includes(" ")
-    ) {
-      if (ind === 4 && /^[A-Za-z0-9_-]+:/.test(trimmed) && !trimmed.includes(" ")) {
-        curChain = { name: trimmed.slice(0, -1), mode: null };
-        curRouteProvider = null;
-        continue;
-      }
-      if (!curChain) continue;
-      if (ind === 6) {
-        if (trimmed === "routes:") {
-          curChain.mode = "routes";
-          continue;
-        }
-        if (trimmed.startsWith("- ")) {
-          const val = trimmed.slice(2).trim();
-          if (curChain.mode === null) curChain.mode = "list";
-          if (val.startsWith("provider:")) {
-            curRouteProvider = val.slice(9).trim();
-            continue;
+  const profileChains = doc.get("profile")?.get?.("chains");
+  if (profileChains && profileChains.items) {
+    for (const pair of profileChains.items) {
+      const chain = pair.value;
+      const routes = chain?.get?.("routes");
+      if (routes && routes.items) {
+        for (const r of routes.items) {
+          const prov = r?.get?.("provider");
+          const model = r?.get?.("model");
+          if (typeof prov === "string" && typeof model === "string") {
+            chainRefs.push(`${prov}/${model}`);
           }
-          if (val.startsWith("model:")) {
-            const m = val.slice(6).trim();
-            if (curRouteProvider) chainRefs.push(`${curRouteProvider}/${m}`);
-            curRouteProvider = null;
-            continue;
+        }
+      } else if (chain && chain.items) {
+        // A plain list of "provider/model" or "chain:name" strings.
+        for (const item of chain.items) {
+          const val = item?.value;
+          if (typeof val === "string" && val.includes("/") && !val.startsWith("chain:")) {
+            chainRefs.push(val);
           }
-          if (val.includes("/") && !val.startsWith("chain:")) chainRefs.push(val);
-          continue;
-        }
-      }
-      if (ind === 8) {
-        if (trimmed.startsWith("provider:")) {
-          curRouteProvider = trimmed.slice(9).trim();
-          continue;
-        }
-        if (trimmed.startsWith("model:")) {
-          const m = trimmed.slice(6).trim();
-          if (curRouteProvider) chainRefs.push(`${curRouteProvider}/${m}`);
-          curRouteProvider = null;
-          continue;
         }
       }
     }
   }
 
-  if (inModelSync) modelSyncEnd = lines.length;
-  const modelSyncRange =
-    modelSyncStart != null && modelSyncEnd != null
-      ? { start: modelSyncStart, end: modelSyncEnd }
-      : null;
-  return { lines, providers, chainRefs, modelSyncRange };
+  // modelSync is a top-level block. Its line range starts at the `modelSync:`
+  // key and ends (exclusive) where the next top-level line begins, or at EOF.
+  const root = doc.contents;
+  let modelSyncRange = null;
+  const msPair = root?.items?.find((p) => p.key?.value === "modelSync");
+  if (msPair) {
+    const start = lineOfOffset(text, msPair.key.srcToken.offset);
+    const lines = text.split("\n");
+    let end = lines.length; // exclusive; the section runs to EOF by default
+    for (let i = start + 1; i < lines.length; i++) {
+      const trimmed = lines[i].trim();
+      if (trimmed !== "" && !/^\s/.test(lines[i])) {
+        end = i;
+        break;
+      }
+    }
+    modelSyncRange = { start, end };
+  }
+
+  return { providers, byName, chainRefs, modelSyncRange };
+}
+
+// Locate a provider's `models:` block as line indices: the line of the
+// `models:` key and the last line of the block. The block ends at the first
+// non-blank line whose indentation drops below the models value indent (6);
+// if none appears, the block runs to EOF. This line scan is stable even when
+// marker comments are present inside the block, which the CST seq range is
+// not. Returns null when the provider has no `models:` list.
+function modelsBlockLines(providerMap, text) {
+  const pair = providerMap?.items?.find((p) => p.key?.value === "models");
+  if (!pair || !pair.value) return null;
+  const keyLine = lineOfOffset(text, pair.key.srcToken.offset);
+  const lines = text.split("\n");
+  let last = keyLine;
+  for (let i = keyLine + 1; i < lines.length; i++) {
+    const t = lines[i];
+    if (t.trim() === "") continue;
+    const ind = (t.match(/^\s*/) || [""])[0].length;
+    if (ind < 6) break;
+    last = i;
+  }
+  return { keyLine, last };
 }
 
 async function fetchModelIds(baseURL, apiKey) {
@@ -364,7 +334,9 @@ function entryText(id, name, meta) {
 
 async function main() {
   const text = readFileSync(SETTINGS, "utf8");
-  const { lines, providers, chainRefs, modelSyncRange } = analyze(text);
+  const doc = YAML.parseDocument(text, { keepSourceTokens: true });
+  const { providers, byName, chainRefs, modelSyncRange } = analyzeDocument(doc, text);
+  const lines = text.split("\n");
 
   let metaDB = null;
   if (WITH_META) {
@@ -375,12 +347,18 @@ async function main() {
     }
   }
 
-  const edits = []; // { at, block: string[] }
+  const edits = []; // { at, deleteCount, block: string[] } in line space
   const summary = [];
 
   for (const p of providers) {
     if (CATALOG_ROUTES.has(p.name)) continue; // catalog route: never seeded
     if (p.api !== "openai-completions" || !p.baseURL) continue;
+    // Only the seeded providers get marker-region regeneration. Every other
+    // provider (catalog routes, non-openai-completions, no baseURL) is skipped
+    // by the guards above; any future provider that passes them but is not in
+    // SEEDED_PROVIDERS is left byte-identical too.
+    if (!SEEDED_PROVIDERS.has(p.name)) continue;
+
     const key = p.apiKeyEnv ? process.env[p.apiKeyEnv] : undefined;
     console.log(`\n→ ${p.name} (${p.baseURL.replace(/\/+$/, "")}/models)`);
     let ids;
@@ -408,39 +386,82 @@ async function main() {
         continue;
       }
     }
-    const newIds = ids.filter((id) => !p.modelIds.has(id));
-    if (newIds.length === 0) {
-      console.log("  nothing new to add");
-      continue;
-    }
+
+    // Build the full regenerated entry set from the fresh fetch, not just the
+    // ids missing from the current list. The whole marker region is replaced
+    // from scratch on every run.
     const block = [];
-    for (const id of newIds) {
+    for (const id of ids) {
       const meta = WITH_META && metaDB ? lookupMeta(id, metaDB) : null;
       block.push(...entryText(id, prettyName(id), meta));
     }
-    let at;
-    if (p.lastModelLine != null) {
-      at = p.lastModelLine + 1;
-    } else {
-      at = lines.length;
-      for (let i = p.headerLine + 1; i < lines.length; i++) {
-        if (indentOf(lines[i]) <= 4 && lines[i].trim() !== "") {
-          at = i;
-          break;
-        }
-      }
-      block.unshift("      models:");
+    const markerBlock = [MARKER_BEGIN, ...block, MARKER_END];
+
+    const blockLines = modelsBlockLines(p.map, text);
+    if (!blockLines) {
+      // The provider has no `models:` list yet. Create one (with markers) after
+      // the provider's last property line, before the next sibling or EOF.
+      const providerEnd = lineOfOffset(text, maxTokenOffset(p.map.srcToken));
+      // Insert right before the next sibling line (skipping blank lines), or
+      // at EOF. A trailing empty split element is kept last.
+      let at = providerEnd + 1;
+      while (at < lines.length && lines[at].trim() === "") at++;
+      if (at === lines.length && lines[lines.length - 1] === "") at = lines.length - 1;
+      edits.push({ at, deleteCount: 0, block: ["      models:", ...markerBlock] });
+      console.info(`  [${p.name}] no models list: creating markers for the first time`);
+      console.debug(`  [${p.name}] insert at line ${at + 1}`);
+      summary.push({ provider: p.name, added: ids.length });
+      console.log(`  + would write ${ids.length} model(s): ${ids.join(", ")}`);
+      p.modelIds = new Set(ids);
+      continue;
     }
-    edits.push({ at, block });
-    p.modelIds = new Set([...p.modelIds, ...newIds]);
-    summary.push({ provider: p.name, added: newIds.length, ids: newIds });
-    console.log(`  + would add ${newIds.length}: ${newIds.join(", ")}`);
+
+    const { keyLine, last } = blockLines;
+
+    // Find the marker comment lines within the models block, if present.
+    let beginLine = -1;
+    let endMarkerLine = -1;
+    for (let i = keyLine; i <= last; i++) {
+      const t = lines[i].trim();
+      if (t === MARKER_BEGIN_COMMENT) beginLine = i;
+      else if (t === MARKER_END_COMMENT) endMarkerLine = i;
+    }
+
+    if (beginLine >= 0 && endMarkerLine > beginLine) {
+      // Markers already present: replace only the entries between them. The
+      // marker lines and everything outside them (the `models:` key, comments,
+      // blank lines) stay byte-identical.
+      console.debug(
+        `  [${p.name}] markers found at lines ${beginLine + 1}..${endMarkerLine + 1}; replacing entries between them`,
+      );
+      edits.push({
+        at: beginLine + 1,
+        deleteCount: endMarkerLine - beginLine - 1,
+        block,
+      });
+    } else {
+      // First-time marker insertion: replace the entries region (everything
+      // after `models:` up to the block end) with markers wrapping the
+      // regenerated set. The `models:` key line is kept.
+      console.info(
+        `  [${p.name}] no markers yet: wrapping models entries (lines ${keyLine + 2}..${last + 1}) with markers`,
+      );
+      edits.push({
+        at: keyLine + 1,
+        deleteCount: last - keyLine,
+        block: markerBlock,
+      });
+    }
+    summary.push({ provider: p.name, added: ids.length });
+    console.log(`  + would write ${ids.length} model(s): ${ids.join(", ")}`);
+    // The whole marker block becomes exactly the freshly fetched ids, so the
+    // chain check below must validate against that post-seed set.
+    p.modelIds = new Set(ids);
   }
 
   // Chain consistency check (against the seeded model sets plus the pi-ai
   // catalog for catalog-backed routes, which have no `models:` list here).
   console.log("\n=== chain consistency ===");
-  const byName = new Map(providers.map((p) => [p.name, p]));
   const catalogCache = new Map();
   let warnings = 0;
   for (const ref of [...new Set(chainRefs)]) {
