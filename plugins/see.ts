@@ -305,10 +305,19 @@ export function apply(ctx: Context, config: unknown): void {
         const info = await llm.resolveModelInfo(provider, model);
         const mods = info?.inputModalities;
         hasVision = Array.isArray(mods) && mods.includes("image");
-        console.debug("[see] resolveModelInfo", { provider, model, inputModalities: mods, hasVision });
+        console.debug("[see] resolveModelInfo", {
+          provider,
+          model,
+          inputModalities: mods,
+          hasVision,
+        });
       } catch (err) {
         // Unknown capability; keep the default-deny choice above (read_image hidden).
-        console.debug("[see] resolveModelInfo threw, defaulting to no vision", { provider, model }, err);
+        console.debug(
+          "[see] resolveModelInfo threw, defaulting to no vision",
+          { provider, model },
+          err,
+        );
       }
       const deny = hasVision ? ["see"] : ["read_image"];
       console.info("[see] vision gate decision", { provider, model, hasVision, deny });
@@ -316,7 +325,11 @@ export function apply(ctx: Context, config: unknown): void {
         agent.ctx.tools.restrict({ deny });
       } catch (err) {
         // Agent scope or tool surface not ready; leave both tools available.
-        console.debug("[see] tools.restrict failed, leaving both tools available", { provider, model }, err);
+        console.debug(
+          "[see] tools.restrict failed, leaving both tools available",
+          { provider, model },
+          err,
+        );
       }
     });
   }

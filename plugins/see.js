@@ -266,16 +266,29 @@ function apply(ctx, config) {
         const info = await llm.resolveModelInfo(provider, model);
         const mods = info?.inputModalities;
         hasVision = Array.isArray(mods) && mods.includes("image");
-        console.debug("[see] resolveModelInfo", { provider, model, inputModalities: mods, hasVision });
+        console.debug("[see] resolveModelInfo", {
+          provider,
+          model,
+          inputModalities: mods,
+          hasVision
+        });
       } catch (err) {
-        console.debug("[see] resolveModelInfo threw, defaulting to no vision", { provider, model }, err);
+        console.debug(
+          "[see] resolveModelInfo threw, defaulting to no vision",
+          { provider, model },
+          err
+        );
       }
       const deny = hasVision ? ["see"] : ["read_image"];
       console.info("[see] vision gate decision", { provider, model, hasVision, deny });
       try {
         agent.ctx.tools.restrict({ deny });
       } catch (err) {
-        console.debug("[see] tools.restrict failed, leaving both tools available", { provider, model }, err);
+        console.debug(
+          "[see] tools.restrict failed, leaving both tools available",
+          { provider, model },
+          err
+        );
       }
     });
   }
