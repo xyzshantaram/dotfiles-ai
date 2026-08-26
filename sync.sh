@@ -207,7 +207,7 @@ step_install_plugins() {
 		# Paste-to-path: pasted files land under <workspace>/.dsh/pastes/ and
 		# the composer carries a PATH reference. Replaced dsh-paste-input.
 		pnpm_ins "github:Johnny-xuan/dsh-paste-to-path#d68fb104ca25a663ba3912bb17f8c2ab32d60e37"
-	pnpm_ins "github:davidgereb/dsh-plugin-better-mobile-ui#16e21548315866b50d5f3f64b91a70f24f3318ba"
+		pnpm_ins "github:davidgereb/dsh-plugin-better-mobile-ui#16e21548315866b50d5f3f64b91a70f24f3318ba"
 
 		pnpm_ins "$HERE/plugins/session-archive"
 		pnpm_ins "$HERE/plugins/subscriptions"
@@ -601,7 +601,7 @@ M18PY
 	# pi-ai provider. Only touch the `profile.active` value.
 	if [ "$active" != "personal" ]; then
 		if ! sed -i "s/^  active: .*$/  active: $active/" "$DSH_HOME/settings.yaml"; then echo "ERROR: failed to patch active" >&2; exit 1; fi
-	if ! rg -q "^  active: $active$" "$DSH_HOME/settings.yaml"; then echo "ERROR: active patch had no effect (expected $active)" >&2; exit 1; fi
+		if ! rg -q "^  active: $active$" "$DSH_HOME/settings.yaml"; then echo "ERROR: active patch had no effect (expected $active)" >&2; exit 1; fi
 	fi
 }
 
