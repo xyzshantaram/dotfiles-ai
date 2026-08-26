@@ -100,10 +100,23 @@ function commandOf(call) {
   }
 }
 
-/** Read one root Tool lifecycle through the conversation snapshot index. */
+/**
+ * Read one root Tool lifecycle through the conversation snapshot index.
+ * Always returns `undefined` for "not present" -- callers rely on that, not
+ * on `null`. `node.data.root` can itself be `null` (a transient state before
+ * the tool call's root lifecycle node is populated); normalize that here so
+ * a stray `"kind" in root` at a call site never sees `null` and throws.
+ */
 function rootToolCall(snapshot, callId) {
   var node = snapshot.chat && snapshot.chat.nodes.get(conversationContextKey("tool-call", callId));
-  return node === undefined || node === null ? undefined : node.data && node.data.root;
+  if (node === undefined || node === null) return undefined;
+  var root = node.data && node.data.root;
+  if (root === undefined) return undefined;
+  if (root === null) {
+    console.debug("[approval-comment] rootToolCall: node.data.root is null", callId);
+    return undefined;
+  }
+  return root;
 }
 
 /** Highlight one command line as bash. Returns HTML, never throws. */
@@ -205,11 +218,13 @@ function makeApprovalCommentCard(steerTo) {
                   : receipt.reason),
             );
           }
+          console.debug("[approval-comment] answered", matched.key, outcome);
           if (outcome === "rejected" && commentText !== "") {
             steerTo(matched.sessionId, matched.payload.toolName, commentText);
           }
         })
-        .catch(function () {
+        .catch(function (error) {
+          console.warn("[approval-comment] answer failed", matched.key, outcome, error);
           setAnswered(false);
         });
     };
