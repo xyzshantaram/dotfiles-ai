@@ -37,7 +37,17 @@ function parseToolsGated(frontmatter) {
   const idx = lines.findIndex((l) => /^tools-gated\s*:/.test(l));
   if (idx < 0) return [];
   const rawLine = lines[idx];
-  const afterColon = rawLine.slice(rawLine.indexOf(":") + 1).trim();
+  let afterColon = rawLine.slice(rawLine.indexOf(":") + 1).trim();
+  const peek = [];
+  if (afterColon.length === 0 || afterColon.startsWith("[") && !afterColon.includes("]")) {
+    for (let i = idx + 1; i < lines.length; i++) {
+      peek.push(lines[i].trim());
+      if (lines[i].includes("]")) break;
+    }
+  }
+  if (peek.length > 0 && peek[0].startsWith("[")) {
+    afterColon = `${afterColon} ${peek.join(" ")}`.trim();
+  }
   if (afterColon.startsWith("[")) {
     const inner = afterColon.slice(1, afterColon.lastIndexOf("]"));
     if (inner.trim() === "") return [];

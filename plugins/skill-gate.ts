@@ -98,16 +98,34 @@ function readFrontmatter(text: string): string {
 
 /**
  * Parse a `tools-gated` declaration from a frontmatter body. Accepts a
- * YAML list (`[a, b]`) or a single bare scalar (`a`). Anything else yields
- * an empty list so a malformed value never gates a tool.
+ * YAML list (`[a, b]`, single-line or multi-line), a bare block list
+ * (`- a` lines under the key), or a single bare scalar (`a`). Anything
+ * else yields an empty list so a malformed value never gates a tool.
  */
 function parseToolsGated(frontmatter: string): string[] {
-  // tools-gated may be inline ([a,b] or scalar), bare block (- a), or [I!] block.
+  // tools-gated may be an inline array ([a,b], single-line or joined
+  // multi-line), a bare block list (- a), or a single bare scalar.
   const lines = frontmatter.split("\n");
   const idx = lines.findIndex((l) => /^tools-gated\s*:/.test(l));
   if (idx < 0) return [];
   const rawLine = lines[idx];
-  const afterColon = rawLine.slice(rawLine.indexOf(":") + 1).trim();
+  let afterColon = rawLine.slice(rawLine.indexOf(":") + 1).trim();
+  // A multi-line flow array opens with "[" on the key line or the next
+  // one and closes on a later line. Join those continuation lines so the
+  // inline branch sees one line — but only when they really open a "[":
+  // a bare key followed by "- x" block entries must stay untouched for
+  // the block branch below. The shipped cordis-plugin-development skill
+  // is formatted exactly this way.
+  const peek: string[] = [];
+  if (afterColon.length === 0 || (afterColon.startsWith("[") && !afterColon.includes("]"))) {
+    for (let i = idx + 1; i < lines.length; i++) {
+      peek.push(lines[i].trim());
+      if (lines[i].includes("]")) break;
+    }
+  }
+  if (peek.length > 0 && peek[0].startsWith("[")) {
+    afterColon = `${afterColon} ${peek.join(" ")}`.trim();
+  }
   if (afterColon.startsWith("[")) {
     const inner = afterColon.slice(1, afterColon.lastIndexOf("]"));
     if (inner.trim() === "") return [];
