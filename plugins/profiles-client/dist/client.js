@@ -15,29 +15,14 @@
   function mergeCss(...parts) {
     return parts.flat().filter(Boolean).join("\n");
   }
-  function fetchJson(url) {
-    return fetch(url, { cache: "no-store" }).then(function(res) {
-      return res.json().catch(function() {
-        return null;
-      }).then(function(json) {
-        return { ok: res.ok, status: res.status, json };
-      });
-    }).then(function(result) {
-      if (result.json !== null && result.json.error) {
-        return { data: null, error: String(result.json.error) };
-      }
-      if (!result.ok) return { data: null, error: "HTTP " + result.status };
-      return { data: result.json, error: null };
-    }).catch(function(e) {
-      return { data: null, error: String(e && e.message || e) };
-    });
-  }
-  function putJson(url, body) {
+  function request(method, url, body) {
+    const hasBody = body !== void 0 && method !== "GET";
+    console.debug("[client-util] " + method + " " + url);
     return fetch(url, {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-      cache: "no-store"
+      method,
+      cache: "no-store",
+      ...hasBody ? { headers: { "content-type": "application/json" } } : {},
+      ...hasBody ? { body: JSON.stringify(body) } : {}
     }).then(function(res) {
       return res.json().catch(function() {
         return null;
@@ -46,13 +31,27 @@
       });
     }).then(function(result) {
       if (result.json !== null && result.json.error) {
+        console.error(
+          "[client-util] " + method + " " + url + " failed: server error " + result.status
+        );
         return { data: null, error: String(result.json.error) };
       }
-      if (!result.ok) return { data: null, error: "HTTP " + result.status };
+      if (!result.ok) {
+        console.error("[client-util] " + method + " " + url + " failed: HTTP " + result.status);
+        return { data: null, error: "HTTP " + result.status };
+      }
+      console.info("[client-util] " + method + " " + url + " ok (HTTP " + result.status + ")");
       return { data: result.json, error: null };
     }).catch(function(e) {
+      console.error("[client-util] " + method + " " + url + " failed: network error");
       return { data: null, error: String(e && e.message || e) };
     });
+  }
+  function fetchJson(url) {
+    return request("GET", url);
+  }
+  function putJson(url, body) {
+    return request("PUT", url, body);
   }
   function registerLocale(ctx, ns, en, zh) {
     return ctx.locale.register(ns, { en, zh });
@@ -62,16 +61,22 @@
   function isRouteCandidate(value) {
     return typeof value === "object" && value !== null && typeof value.provider === "string" && value.provider.length > 0 && typeof value.model === "string" && value.model.length > 0;
   }
-  function normalizeEntry(entry, chains, seen) {
+  function normalizeEntry(entry, chains, seen, ctx) {
     if (isRouteCandidate(entry)) return [entry];
     if (typeof entry === "string") {
       if (entry.startsWith("chain:")) {
         const name = entry.slice("chain:".length);
-        if (chains?.[name] === void 0) return [];
+        if (chains?.[name] === void 0) {
+          ctx?.logger?.debug(`unknown chain reference: ${name}`);
+          return [];
+        }
         const guard = new Set(seen ?? []);
-        if (guard.has(name)) return [];
+        if (guard.has(name)) {
+          ctx?.logger?.debug(`circular chain reference: ${name}`);
+          return [];
+        }
         guard.add(name);
-        return normalizeEntry(chains[name], chains, guard);
+        return normalizeEntry(chains[name], chains, guard, ctx);
       }
       const slash = entry.indexOf("/");
       if (slash > 0) {
@@ -79,10 +84,14 @@
       }
       if (chains?.[entry] !== void 0) {
         const guard = new Set(seen ?? []);
-        if (guard.has(entry)) return [];
+        if (guard.has(entry)) {
+          ctx?.logger?.debug(`circular chain reference: ${entry}`);
+          return [];
+        }
         guard.add(entry);
-        return normalizeEntry(chains[entry], chains, guard);
+        return normalizeEntry(chains[entry], chains, guard, ctx);
       }
+      ctx?.logger?.debug(`unknown chain reference: ${entry}`);
       return [];
     }
     if (typeof entry === "object" && entry !== null) {
@@ -99,36 +108,43 @@
                 const guard = new Set(seen ?? []);
                 if (!guard.has(name)) {
                   guard.add(name);
-                  out.push(...normalizeEntry(chains[name], chains, guard));
+                  out.push(...normalizeEntry(chains[name], chains, guard, ctx));
                 }
               }
             } else if (chains?.[step] !== void 0) {
               const guard = new Set(seen ?? []);
               if (!guard.has(step)) {
                 guard.add(step);
-                out.push(...normalizeEntry(chains[step], chains, guard));
+                out.push(...normalizeEntry(chains[step], chains, guard, ctx));
               }
             } else if (step.indexOf("/") > 0) {
               const slash = step.indexOf("/");
               out.push({ provider: step.slice(0, slash), model: step.slice(slash + 1) });
             }
           } else {
-            out.push(...normalizeEntry(step, chains, seen));
+            out.push(...normalizeEntry(step, chains, seen, ctx));
           }
         }
         return out;
       }
     }
+    ctx?.logger?.debug("profile entry resolved to empty chain");
     return [];
   }
-  function entryHead(entry, chains) {
+  function entryHead(entry, chains, ctx) {
     if (typeof entry === "object" && entry !== null) {
       const obj = entry;
       if ("orchestrator" in obj || "subagent" in obj) {
-        return entryHead(obj.orchestrator, chains) ?? entryHead(obj.subagent, chains);
+        return entryHead(obj.orchestrator, chains, ctx) ?? entryHead(obj.subagent, chains, ctx);
       }
     }
-    return normalizeEntry(entry, chains)[0];
+    const head = normalizeEntry(entry, chains, void 0, ctx)[0];
+    if (head !== void 0) {
+      ctx?.logger?.info(`route head: ${head.provider}/${head.model}`);
+    } else {
+      ctx?.logger?.debug("no route head resolved");
+    }
+    return head;
   }
 
   // css-text:/home/sid/repos/dotfiles-ai/plugins/shared/settings.css
@@ -815,6 +831,26 @@
           };
           var downRungs = (errorCache.down || []).length;
           var chainKeys = Object.keys(config.chains);
+          function modelChainOptions(includeChains) {
+            var groups = [];
+            if (includeChains && chainKeys.length > 0) {
+              groups.push(
+                /* @__PURE__ */ react.createElement("optgroup", { key: "chains", label: "Chains" }, chainKeys.map(function(key) {
+                  return /* @__PURE__ */ react.createElement("option", { key: "chain:" + key, value: "chain:" + key }, "chain:" + key);
+                }))
+              );
+            }
+            for (var g = 0; g < catalogGroups.length; g++) {
+              var group = catalogGroups[g];
+              if (group.models === void 0 || group.models.length === 0) continue;
+              groups.push(
+                /* @__PURE__ */ react.createElement("optgroup", { key: group.id, label: group.name || group.id }, group.models.map(function(m) {
+                  return /* @__PURE__ */ react.createElement("option", { key: group.id + "/" + m.id, value: group.id + "/" + m.id }, (group.name || group.id) + " / " + m.name);
+                }))
+              );
+            }
+            return groups;
+          }
           var entries = ["work", "personal"];
           var currentModel = catalogState !== void 0 && catalogState !== null ? catalogState.current : void 0;
           var currentCat = null;
@@ -935,30 +971,18 @@
               },
               "\xD7"
             )), isComposition ? steps.map(function(row, index) {
-              var stepText = typeof row.step === "string" ? row.step : "";
-              var isRef = stepText.indexOf("chain:") === 0;
-              return /* @__PURE__ */ react.createElement("div", { className: "pf-panel-row", key: index }, isRef ? /* @__PURE__ */ react.createElement(
+              var stepValue = typeof row.step === "string" ? row.step : row.step && row.step.provider && row.step.model ? row.step.provider + "/" + row.step.model : "";
+              return /* @__PURE__ */ react.createElement("div", { className: "pf-panel-row", key: index }, /* @__PURE__ */ react.createElement(
                 "select",
                 {
                   className: "pf-panel-select",
-                  value: stepText,
+                  value: stepValue,
                   onChange: function(event) {
                     setChainField(chainName, index, event.target.value);
                   }
                 },
-                chainKeys.map(function(key) {
-                  return /* @__PURE__ */ react.createElement("option", { key, value: "chain:" + key }, "chain:" + key);
-                })
-              ) : /* @__PURE__ */ react.createElement(
-                "input",
-                {
-                  className: "pf-panel-input",
-                  value: stepText,
-                  placeholder: "provider/model",
-                  onChange: function(event) {
-                    setChainField(chainName, index, event.target.value);
-                  }
-                }
+                /* @__PURE__ */ react.createElement("option", { value: "" }, "\u2014 select step \u2014"),
+                modelChainOptions(true)
               ), /* @__PURE__ */ react.createElement(
                 "button",
                 {
@@ -992,16 +1016,7 @@
                   }
                 },
                 /* @__PURE__ */ react.createElement("option", { value: "" }, "\u2014 select model \u2014"),
-                catalogModels.map(function(m) {
-                  return /* @__PURE__ */ react.createElement(
-                    "option",
-                    {
-                      key: m.provider + "/" + m.model,
-                      value: m.provider + "/" + m.model
-                    },
-                    m.label
-                  );
-                })
+                modelChainOptions(false)
               ), efforts.length > 0 ? /* @__PURE__ */ react.createElement(
                 "select",
                 {
@@ -1047,18 +1062,7 @@
                 }
               },
               /* @__PURE__ */ react.createElement("option", { value: "" }, "+ Add " + (isComposition ? "step" : "rung") + " \u25BE"),
-              isComposition ? chainKeys.map(function(key) {
-                return /* @__PURE__ */ react.createElement("option", { key, value: "chain:" + key }, "chain:" + key);
-              }) : catalogModels.map(function(m) {
-                return /* @__PURE__ */ react.createElement(
-                  "option",
-                  {
-                    key: m.provider + "/" + m.model,
-                    value: m.provider + "/" + m.model
-                  },
-                  m.label
-                );
-              }),
+              isComposition ? modelChainOptions(true) : modelChainOptions(false),
               /* @__PURE__ */ react.createElement("option", { value: "__new__" }, "New named chain\u2026")
             )), resolved.length > 0 ? /* @__PURE__ */ react.createElement("div", { className: "pf-panel-meta" }, "Resolves to " + resolved.length + " route" + (resolved.length === 1 ? "" : "s") + ": " + resolved[0].provider + "/" + resolved[0].model + (resolved.length > 1 ? " \u2026" : "")) : null);
           })), /* @__PURE__ */ react.createElement("div", { className: "pf-panel-meta" }, downRungs > 0 ? /* @__PURE__ */ react.createElement("span", null, downRungs + " rung" + (downRungs === 1 ? "" : "s") + " cached down ", /* @__PURE__ */ react.createElement("button", { type: "button", className: "dsp-refresh", onClick: fetchConfig }, "Retry now")) : null), /* @__PURE__ */ react.createElement("div", { className: "pf-panel-actions" }, /* @__PURE__ */ react.createElement(

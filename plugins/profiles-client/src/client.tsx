@@ -964,6 +964,42 @@ window.__ModuleLoader__.load({
 
         var downRungs = (errorCache.down || []).length;
         var chainKeys = Object.keys(config.chains);
+        /**
+         * One optgroup per catalog provider (skipping empty groups), with an
+         * optional leading Chains optgroup for composition-step references.
+         */
+        function modelChainOptions(includeChains) {
+          var groups = [];
+          if (includeChains && chainKeys.length > 0) {
+            groups.push(
+              <optgroup key="chains" label="Chains">
+                {chainKeys.map(function (key) {
+                  return (
+                    <option key={"chain:" + key} value={"chain:" + key}>
+                      {"chain:" + key}
+                    </option>
+                  );
+                })}
+              </optgroup>
+            );
+          }
+          for (var g = 0; g < catalogGroups.length; g++) {
+            var group = catalogGroups[g];
+            if (group.models === void 0 || group.models.length === 0) continue;
+            groups.push(
+              <optgroup key={group.id} label={group.name || group.id}>
+                {group.models.map(function (m) {
+                  return (
+                    <option key={group.id + "/" + m.id} value={group.id + "/" + m.id}>
+                      {(group.name || group.id) + " / " + m.name}
+                    </option>
+                  );
+                })}
+              </optgroup>
+            );
+          }
+          return groups;
+        }
         var entries = ["work", "personal"];
         /** Current directory selection and its catalog entry. */
         var currentModel =
@@ -1161,36 +1197,24 @@ window.__ModuleLoader__.load({
                       </div>
                       {isComposition
                         ? steps.map(function (row, index) {
-                            var stepText = typeof row.step === "string" ? row.step : "";
-                            var isRef = stepText.indexOf("chain:") === 0;
+                            var stepValue =
+                              typeof row.step === "string"
+                                ? row.step
+                                : row.step && row.step.provider && row.step.model
+                                  ? row.step.provider + "/" + row.step.model
+                                  : "";
                             return (
                               <div className="pf-panel-row" key={index}>
-                                {isRef ? (
-                                  <select
-                                    className="pf-panel-select"
-                                    value={stepText}
-                                    onChange={function (event) {
-                                      setChainField(chainName, index, event.target.value);
-                                    }}
-                                  >
-                                    {chainKeys.map(function (key) {
-                                      return (
-                                        <option key={key} value={"chain:" + key}>
-                                          {"chain:" + key}
-                                        </option>
-                                      );
-                                    })}
-                                  </select>
-                                ) : (
-                                  <input
-                                    className="pf-panel-input"
-                                    value={stepText}
-                                    placeholder="provider/model"
-                                    onChange={function (event) {
-                                      setChainField(chainName, index, event.target.value);
-                                    }}
-                                  />
-                                )}
+                                <select
+                                  className="pf-panel-select"
+                                  value={stepValue}
+                                  onChange={function (event) {
+                                    setChainField(chainName, index, event.target.value);
+                                  }}
+                                >
+                                  <option value="">— select step —</option>
+                                  {modelChainOptions(true)}
+                                </select>
                                 <button
                                   type="button"
                                   className="pf-panel-del"
@@ -1230,16 +1254,7 @@ window.__ModuleLoader__.load({
                                     }}
                                   >
                                     <option value="">— select model —</option>
-                                    {catalogModels.map(function (m) {
-                                      return (
-                                        <option
-                                          key={m.provider + "/" + m.model}
-                                          value={m.provider + "/" + m.model}
-                                        >
-                                          {m.label}
-                                        </option>
-                                      );
-                                    })}
+                                    {modelChainOptions(false)}
                                   </select>
                                   {efforts.length > 0 ? (
                                     <select
@@ -1294,24 +1309,7 @@ window.__ModuleLoader__.load({
                           <option value="">
                             {"+ Add " + (isComposition ? "step" : "rung") + " ▾"}
                           </option>
-                          {isComposition
-                            ? chainKeys.map(function (key) {
-                                return (
-                                  <option key={key} value={"chain:" + key}>
-                                    {"chain:" + key}
-                                  </option>
-                                );
-                              })
-                            : catalogModels.map(function (m) {
-                                return (
-                                  <option
-                                    key={m.provider + "/" + m.model}
-                                    value={m.provider + "/" + m.model}
-                                  >
-                                    {m.label}
-                                  </option>
-                                );
-                              })}
+                          {isComposition ? modelChainOptions(true) : modelChainOptions(false)}
                           <option value="__new__">New named chain…</option>
                         </select>
                       </div>
