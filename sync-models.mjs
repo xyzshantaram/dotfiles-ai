@@ -35,7 +35,7 @@
 // Env:
 //   SETTINGS_YAML   path to the settings file (default: ./home/settings.yaml)
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as YAML from "yaml";
@@ -63,6 +63,130 @@ const CATALOG_ROUTES = new Set(["opencode"]);
 // plugins/llm-pi-ai/package.json (dependencies["@earendil-works/pi-ai"]).
 const PI_AI_VERSION = "0.82.1";
 const PI_AI_CATALOG_BASE = `https://unpkg.com/@earendil-works/pi-ai@${PI_AI_VERSION}/dist/providers/data`;
+
+// Curated vision models: neither the live /models endpoint (it exposes no
+// modality field) nor LiteLLM nor the pi-ai catalog reliably advertise image
+// input for these (too new / gateway-specific ids), yet the upstream gateway
+// serves them with image input. Without this the `see` plugin vision gate
+// would deny `read_image` for agents routed to them. sync-models emits
+// `defaultInput: [text, image]` for them on every run, so the regenerated block
+// keeps it and the runtime recognizes them as vision-capable. Add to this set as
+// new vision models appear. See the see-plugin restriction bug:
+// provider "command-code" model "Qwen/Qwen3.7-Flash" (the `see` chain head).
+const VISION_MODELS = new Set([
+  "Qwen/Qwen3.8-Max",
+  "Qwen/Qwen3.8-27B",
+  "Qwen/Qwen3.8-Flash",
+  "Qwen/Qwen3.7-Max",
+  "Qwen/Qwen3.7-Plus",
+  "Qwen/Qwen3.7-Flash",
+  "Qwen/Qwen3.6-Max-Preview",
+  "Qwen/Qwen3.6-Plus",
+]);
+
+// The pi-ai provider catalogs bundled in node_modules are a second, local source
+// of modality and reasoning-effort data. LiteLLM is incomplete for new models;
+// the pi-ai catalogs carry `input` (modalities) and `thinkingLevelMap` (reasoning
+// efforts) for thousands of models and need no network. We merge both with
+// LiteLLM (and the curated VISION_MODELS override) when computing each model
+// metadata, instead of trusting a single incomplete source. A model may appear
+// under several APIs (e.g. openai-completions vs anthropic-messages) with
+// differing `input`; we union the matches and prefer an image-capable variant.
+const PI_AI_CATALOG_DIR = join(HERE, "node_modules/@earendil-works/pi-ai/dist/providers/data");
+
+function buildPiAiIndex() {
+  const all = [];
+  if (existsSync(PI_AI_CATALOG_DIR)) {
+    for (const f of readdirSync(PI_AI_CATALOG_DIR).filter((x) => x.endsWith(".json"))) {
+      let json;
+      try {
+        json = JSON.parse(readFileSync(join(PI_AI_CATALOG_DIR, f), "utf8"));
+      } catch {
+        continue;
+      }
+      for (const api of Object.values(json)) {
+        if (!api || typeof api !== "object") continue;
+        for (const [id, e] of Object.entries(api)) {
+          if (typeof id !== "string" || !e || typeof e !== "object") continue;
+          all.push({
+            id,
+            input: Array.isArray(e.input) ? e.input : null,
+            thinking:
+              e.thinkingLevelMap && typeof e.thinkingLevelMap === "object"
+                ? e.thinkingLevelMap
+                : null,
+          });
+        }
+      }
+    }
+  }
+  const byId = new Map();
+  for (const e of all) {
+    if (!byId.has(e.id)) byId.set(e.id, []);
+    byId.get(e.id).push(e);
+  }
+  const norm = new Map();
+  const addNorm = (id, e) => {
+    const n = id.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (!norm.has(n)) norm.set(n, []);
+    norm.get(n).push(e);
+  };
+  for (const e of all) addNorm(e.id, e);
+  return { byId, norm };
+}
+
+// Resolve one model id across the pi-ai catalogs. Returns the unioned modality
+// and reasoning data, or null when the catalogs know nothing about the id.
+function lookupPiAi(id, idx) {
+  if (!idx) return null;
+  const found = [];
+  const push = (list) => {
+    if (list) for (const e of list) found.push(e);
+  };
+  push(idx.byId.get(id));
+  const n = id.toLowerCase().replace(/[^a-z0-9]/g, "");
+  push(idx.norm.get(n));
+  const slash = id.indexOf("/");
+  const tail = slash >= 0 ? id.slice(slash + 1) : id;
+  push(idx.byId.get(tail));
+  push(idx.norm.get(tail.toLowerCase().replace(/[^a-z0-9]/g, "")));
+  for (const p of [
+    "Qwen/",
+    "z-ai/",
+    "zai-org/",
+    "MiniMaxAI/",
+    "minimax/",
+    "tencent/",
+    "meta/",
+    "xai/",
+    "google/",
+    "moonshotai/",
+    "xiaomi/",
+    "stepfun/",
+    "thinkingmachines/",
+    "deepseek/",
+    "sakana/",
+    "nvidia/",
+    "poolside/",
+  ]) {
+    if (id.startsWith(p)) {
+      const t = id.slice(p.length);
+      push(idx.byId.get(t));
+      push(idx.norm.get(t.toLowerCase().replace(/[^a-z0-9]/g, "")));
+    }
+  }
+  if (found.length === 0) return null;
+  let vision = false;
+  const efforts = {};
+  for (const e of found) {
+    if (e.input && e.input.includes("image")) vision = true;
+    if (e.thinking)
+      for (const [level, wire] of Object.entries(e.thinking))
+        efforts[level] = wire === null ? null : wire;
+  }
+  return { vision, reasoningEfforts: Object.keys(efforts).length ? efforts : null };
+}
+
 
 /** The model ids pi-ai ships for one catalog provider (union across protocols). */
 async function fetchCatalogModelIds(providerId) {
@@ -346,6 +470,14 @@ async function main() {
       console.warn(`! could not fetch LiteLLM metadata: ${e.message}`);
     }
   }
+  // The pi-ai catalogs are a local, network-free supplement to LiteLLM for
+  // modalities and reasoning efforts. Build the index once, up front.
+  let piAi = null;
+  try {
+    piAi = buildPiAiIndex();
+  } catch (e) {
+    console.warn(`! could not read pi-ai catalogs: ${e.message}`);
+  }
 
   const edits = []; // { at, deleteCount, block: string[] } in line space
   const summary = [];
@@ -392,7 +524,29 @@ async function main() {
     // from scratch on every run.
     const block = [];
     for (const id of ids) {
-      const meta = WITH_META && metaDB ? lookupMeta(id, metaDB) : null;
+      // Merge metadata from every source we have: LiteLLM (when --with-meta),
+      // the pi-ai catalogs (local), and the curated VISION_MODELS override.
+      // Vision is the union of any source claiming it; reasoning efforts union
+      // the declared thinking levels. This closes the single-source gap that
+      // left new gateway models (e.g. Qwen) reporting text-only, which made the
+      // `see` plugin deny `read_image` for them.
+      const lite = WITH_META && metaDB ? lookupMeta(id, metaDB) : null;
+      const pai = lookupPiAi(id, piAi);
+      const vision =
+        (lite?.image === true) || (pai && pai.vision) || VISION_MODELS.has(id);
+      let reasoningEfforts = null;
+      const le = lite?.reasoningEfforts;
+      const pe = pai && pai.reasoningEfforts;
+      if (le || pe) reasoningEfforts = { ...(le ?? {}), ...(pe ?? {}) };
+      // Mirror the `see` plugin rule: a reasoning-efforts map that contains
+      // only `off` is not real reasoning support, so emit nothing for it.
+      if (reasoningEfforts && Object.keys(reasoningEfforts).length === 1 && "off" in reasoningEfforts) reasoningEfforts = null;
+      const meta = {
+        contextWindow: lite?.contextWindow,
+        maxTokens: lite?.maxTokens,
+        image: vision,
+        reasoningEfforts,
+      };
       block.push(...entryText(id, prettyName(id), meta));
     }
     const markerBlock = [MARKER_BEGIN, ...block, MARKER_END];
