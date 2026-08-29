@@ -61,6 +61,12 @@ The personal bundle lives in this repo at the repo root. Its parts are:
 `sync.sh` is a floor, not a ceiling. Re-running it converges to the same state,
 so it is safe after a clone, a rebase, or an edit to the bundle source.
 
+The `log-exporter` host-plane plugin writes every `ctx.logger.*` call to
+stdout (the journal). Its level defaults to **warn**: it shows error, info,
+and warn, and drops debug. Set `DSH_LOG_LEVEL` (error=0, info=1, warn=2,
+debug=3, or the words) in the `dsh-web.service` unit (`Environment=DSH_LOG_LEVEL=debug`)
+to raise verbosity for a debugging session, then restart `dsh-web`.
+
 ## The skill / plugin / preset model
 
 These are three different things. Do not mix them.
