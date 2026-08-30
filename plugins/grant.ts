@@ -338,6 +338,7 @@ export function apply(ctx: Context): void {
       }
       const root = canonicalPath(normalize(raw));
       if (root === "/" || root.length <= 1) {
+        ctx.logger.warn(`refused to grant filesystem root (/) to session ${session.id}`);
         return {
           kind: "error",
           text: "grant: refusing to grant filesystem root (/); choose a narrower path",
@@ -349,6 +350,7 @@ export function apply(ctx: Context): void {
       };
       if (!entry.roots.includes(root)) entry.roots.push(root);
       grants.set(session as object, entry);
+      ctx.logger.info(`granted write access under ${root} for session ${session.id}`);
       return {
         kind: "success",
         text: `granted write access under ${root} for session ${session.id}.`,

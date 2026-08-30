@@ -153,6 +153,7 @@ async function requireManifest(
       // Missing manifest or provider error: try the next candidate.
     }
   }
+  ctx.logger.warn(`refused package command: no ${candidates.join(" or ")} in ${cwd}`);
   throw new Error(
     `no ${candidates.join(" or ")} found in ${cwd}. Refusing to run a package command here, ` +
       "because this directory does not look like an existing project. " +
@@ -429,6 +430,7 @@ export function apply(ctx: Context): void {
           // Task name is a scripts key; keep it to a safe path-like set.
           const taskName = args.taskName ?? "";
           if (!/^[A-Za-z0-9:_\-./]+$/.test(taskName)) {
+            ctx.logger.warn(`refused invalid task name: ${args.taskName}`);
             throw new Error(`invalid task name: ${args.taskName}`);
           }
           // The command is stored verbatim as the scripts value; no shell runs
@@ -436,6 +438,7 @@ export function apply(ctx: Context): void {
           // characters, which would corrupt the manifest.
           const taskCommand = args.taskCommand ?? "";
           if (!/^[^\x00-\x1f\x7f]+$/.test(taskCommand)) {
+            ctx.logger.warn(`refused invalid task command: ${args.taskCommand}`);
             throw new Error(`invalid task command: ${args.taskCommand}`);
           }
           // Fail closed (W15): the write needs a real package.json; refuse to
@@ -460,6 +463,7 @@ export function apply(ctx: Context): void {
             expected,
             signal,
           );
+          ctx.logger.info(`registered task "${taskName}"`);
           return (
             `Registered task "${taskName}" = "${taskCommand}"\n` +
             `Wrote scripts.${taskName} to ${cwd}/package.json`
@@ -474,6 +478,7 @@ export function apply(ctx: Context): void {
         // safe package-name character set to stop injection through quotes,
         // dollars, or backticks.
         if (!/^[A-Za-z0-9@][A-Za-z0-9@._\-/]*$/.test(args.packageName)) {
+          ctx.logger.warn(`refused invalid package name: ${args.packageName}`);
           throw new Error(`invalid package name: ${args.packageName}`);
         }
         const installedVersion = await getInstalledVersion(
@@ -485,12 +490,16 @@ export function apply(ctx: Context): void {
           signal,
         );
         if (action === "add" && installedVersion !== undefined) {
+          ctx.logger.warn(
+            `refused add of ${args.packageName}: already installed at ${installedVersion}`,
+          );
           throw new Error(
             `${args.packageName} is already installed at ${installedVersion}. ` +
               'add refuses to run against an already-installed package. Use action "update" instead.',
           );
         }
         if (action === "update" && installedVersion === undefined) {
+          ctx.logger.warn(`refused update of ${args.packageName}: not installed`);
           throw new Error(
             `${args.packageName} is not installed. update requires an existing install. Use action "add" instead.`,
           );
@@ -517,13 +526,23 @@ export function apply(ctx: Context): void {
             manager === "pip"
               ? `pip install ${args.packageName}==${installedVersion}`
               : buildCommand(manager, "add", `${args.packageName}@${installedVersion}`, dev);
+          ctx.logger.warn(
+            `refused downgrade of ${args.packageName} (${version} < ${installedVersion})`,
+          );
           throw new Error(
             `Resolved version ${version} for ${args.packageName} is older than the installed version ` +
               `${installedVersion}. Refusing to downgrade. To do this deliberately, run by hand: ${manualCommand}`,
           );
         }
         const command = buildCommand(manager, action, args.packageName, dev);
-        const output = await runCommand(ctx, command, cwd, signal);
+        let output: string;
+        try {
+          output = await runCommand(ctx, command, cwd, signal);
+        } catch (error) {
+          ctx.logger.error(`package ${action} failed: ${args.packageName} (${manager})`);
+          throw error;
+        }
+        ctx.logger.info(`package ${action} succeeded: ${args.packageName} (${manager})`);
         const lines: string[] = [];
         if (version) lines.push(`Resolved ${args.packageName} to version ${version}.`);
         lines.push(`Package manager: ${manager}.`);

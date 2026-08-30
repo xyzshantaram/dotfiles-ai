@@ -55,52 +55,26 @@ export function mergeCss(...parts: Array<string | string[]>): string {
 }
 
 /**
- * Fetch one same-origin route and always resolve to a plain object.
+ * Fetch one same-origin route with any method, always resolving to a
+ * plain object.
  *
- * Ported byte-for-byte from the client bundles: a non-JSON response maps to
- * a null body, a `{ error }` body maps to an error, an HTTP failure maps to
- * "HTTP <status>", and a network failure maps to its message.
- */
-export function fetchJson(url: string): Promise<{ data: any; error: string | null }> {
-  return fetch(url, { cache: "no-store" })
-    .then(function (res) {
-      return res
-        .json()
-        .catch(function () {
-          return null;
-        })
-        .then(function (json) {
-          return { ok: res.ok, status: res.status, json: json };
-        });
-    })
-    .then(function (result) {
-      if (result.json !== null && result.json.error) {
-        return { data: null, error: String(result.json.error) };
-      }
-      if (!result.ok) return { data: null, error: "HTTP " + result.status };
-      return { data: result.json, error: null };
-    })
-    .catch(function (e) {
-      return { data: null, error: String((e && e.message) || e) };
-    });
-}
-
-/**
- * POST one same-origin route with a JSON body, same {data, error} shape.
+ * The result always has the shape { data, error }. A non-JSON response
+ * maps to a null body. A { error } body maps to that error. An HTTP
+ * failure maps to "HTTP <status>". A network failure maps to its message.
  *
- * Union of the two historical variants: session-archive posts a JSON body
- * with a content-type header, subscriptions posts without a body. The
- * body-taking behavior is preserved for every call, so a caller that passes
- * no body sends an empty JSON payload; the subscriptions-only callers adopt
- * the header and body it never sent.
+ * The body and its content-type header are attached only when a body is
+ * given and the method is not GET. Logs a debug line on start, an info
+ * line on success, and an error line on any failure.
  */
-export function postJson(
+export function request(
+  method: string,
   url: string,
   body?: unknown,
 ): Promise<{ data: any; error: string | null }> {
-  const hasBody = body !== undefined;
+  const hasBody = body !== undefined && method !== "GET";
+  console.debug("[client-util] " + method + " " + url);
   return fetch(url, {
-    method: "POST",
+    method: method,
     cache: "no-store",
     ...(hasBody ? { headers: { "content-type": "application/json" } } : {}),
     ...(hasBody ? { body: JSON.stringify(body) } : {}),
@@ -117,46 +91,44 @@ export function postJson(
     })
     .then(function (result) {
       if (result.json !== null && result.json.error) {
+        console.error(
+          "[client-util] " + method + " " + url + " failed: server error " + result.status,
+        );
         return { data: null, error: String(result.json.error) };
       }
-      if (!result.ok) return { data: null, error: "HTTP " + result.status };
+      if (!result.ok) {
+        console.error("[client-util] " + method + " " + url + " failed: HTTP " + result.status);
+        return { data: null, error: "HTTP " + result.status };
+      }
+      console.info("[client-util] " + method + " " + url + " ok (HTTP " + result.status + ")");
       return { data: result.json, error: null };
     })
     .catch(function (e) {
+      console.error("[client-util] " + method + " " + url + " failed: network error");
       return { data: null, error: String((e && e.message) || e) };
     });
 }
 
 /**
- * PUT one same-origin route with a JSON body, same {data, error} shape.
+ * Fetch one same-origin route. Thin wrapper over `request` with GET.
  */
-export function putJson(url: string, body: unknown): Promise<{ data: any; error: string | null }> {
-  return fetch(url, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-    cache: "no-store",
-  })
-    .then(function (res) {
-      return res
-        .json()
-        .catch(function () {
-          return null;
-        })
-        .then(function (json) {
-          return { ok: res.ok, status: res.status, json: json };
-        });
-    })
-    .then(function (result) {
-      if (result.json !== null && result.json.error) {
-        return { data: null, error: String(result.json.error) };
-      }
-      if (!result.ok) return { data: null, error: "HTTP " + result.status };
-      return { data: result.json, error: null };
-    })
-    .catch(function (e) {
-      return { data: null, error: String((e && e.message) || e) };
-    });
+export function fetchJson(url: string) {
+  return request("GET", url);
+}
+
+/**
+ * POST one same-origin route. Sends a JSON body only when one is given.
+ * Thin wrapper over `request`.
+ */
+export function postJson(url: string, body?: unknown) {
+  return request("POST", url, body);
+}
+
+/**
+ * PUT one same-origin route with a JSON body. Thin wrapper over `request`.
+ */
+export function putJson(url: string, body: unknown) {
+  return request("PUT", url, body);
 }
 
 /**

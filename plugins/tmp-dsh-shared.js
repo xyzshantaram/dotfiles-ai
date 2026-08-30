@@ -5,13 +5,14 @@ import { tmpdir } from "node:os";
 import { dshHomePath } from "@deepseek-ai/dsh-home-paths";
 var name = "tmp-dsh-shared";
 var inject = ["sandbox"];
-function bindDurableTmp(confined, hostTmpDsh, hostAidosScratch) {
+function bindDurableTmp(confined, hostTmpDsh, hostAidosScratch, logger) {
   const argv = confined.argv;
   const idx = argv.findIndex((arg, i) => arg === "--tmpfs" && argv[i + 1] === "/tmp");
   if (idx < 0) return confined;
   try {
     mkdirSync(hostTmpDsh, { recursive: true });
-  } catch {
+  } catch (err) {
+    logger?.debug(`could not create ${hostTmpDsh}; leaving sandbox untouched: ${err}`);
     return confined;
   }
   const binds = ["--bind", hostTmpDsh, "/tmp/dsh"];
@@ -19,7 +20,8 @@ function bindDurableTmp(confined, hostTmpDsh, hostAidosScratch) {
     try {
       mkdirSync(hostAidosScratch, { recursive: true });
       binds.push("--bind", hostAidosScratch, hostAidosScratch);
-    } catch {
+    } catch (err) {
+      logger?.debug(`could not create ${hostAidosScratch}; skipping its bind: ${err}`);
     }
   }
   const next = [...argv.slice(0, idx + 2), ...binds, ...argv.slice(idx + 2)];
@@ -41,7 +43,7 @@ function apply(ctx) {
   const original = sandbox.confine.bind(sandbox);
   sandbox.confine = (argv, policy) => {
     const confined = original(argv, policy);
-    return bindDurableTmp(confined, hostTmpDsh, hostAidosScratch);
+    return bindDurableTmp(confined, hostTmpDsh, hostAidosScratch, ctx.logger);
   };
   let proto = null;
   try {
@@ -56,7 +58,8 @@ function apply(ctx) {
       return bindDurableTmp(
         protoOriginal.apply(this, args),
         hostTmpDsh,
-        hostAidosScratch
+        hostAidosScratch,
+        ctx.logger
       );
     };
   }
@@ -67,6 +70,9 @@ function apply(ctx) {
     if (proto !== null && protoOriginal !== null && proto.confine === wrappedProto)
       proto.confine = protoOriginal;
   });
+  ctx.logger.info(
+    "sandbox confine patched: host /tmp/dsh and aidos scratch shared into every bwrap bash call"
+  );
 }
 export {
   apply,

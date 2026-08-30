@@ -1101,8 +1101,10 @@ function apply(ctx, config) {
     }
     try {
       if (credentials !== void 0) await credentials.set("DEEPSEEK_PLATFORM_TOKEN", found.token);
+      ctx.logger.info("wrote DEEPSEEK_PLATFORM_TOKEN credential");
       sendJson(res, 200, { ok: true, saved: true });
     } catch (error) {
+      ctx.logger.warn("failed to write DEEPSEEK_PLATFORM_TOKEN credential");
       sendJson(res, 200, {
         ok: false,
         error: "token valid but save failed: " + (error instanceof Error ? error.message : String(error))
@@ -1166,8 +1168,10 @@ function apply(ctx, config) {
     }
     try {
       if (credentials !== void 0) await credentials.set("OPENCODE_SESSION_COOKIE", found.cookie);
+      ctx.logger.info("wrote OPENCODE_SESSION_COOKIE credential");
       sendJson(res, 200, { ok: true, saved: true });
     } catch (error) {
+      ctx.logger.warn("failed to write OPENCODE_SESSION_COOKIE credential");
       sendJson(res, 200, {
         ok: false,
         error: "cookie valid but save failed: " + (error instanceof Error ? error.message : String(error))

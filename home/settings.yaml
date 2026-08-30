@@ -3,7 +3,6 @@ ui-onboarding:
 agent-default-model:
   provider: deepseek-official
   model: deepseek-v4-flash
-  reasoningEffort: false
 log-viewer:
   command: "journalctl --user -u dsh-web.service -n 2000"
 llm-pi-ai:
@@ -98,7 +97,7 @@ llm-pi-ai:
           off:
           xhigh: xhigh
           max: max
-          minimal:
+          minimal: low
           low: low
           medium: medium
           high: high
@@ -113,7 +112,7 @@ llm-pi-ai:
           off:
           xhigh: xhigh
           max: max
-          minimal:
+          minimal: low
           low: low
           medium: medium
           high: high
@@ -128,7 +127,7 @@ llm-pi-ai:
           off:
           xhigh: xhigh
           max: max
-          minimal:
+          minimal: low
           low: low
           medium: medium
           high: high
@@ -142,11 +141,11 @@ llm-pi-ai:
         reasoningEfforts:
           off:
           xhigh: xhigh
-          minimal:
+          minimal: low
           low: low
           medium: medium
           high: high
-          max:
+          max: max
       - id: gpt-5.4
         name: Gpt 5.4
         contextWindow: 1050000
@@ -156,12 +155,12 @@ llm-pi-ai:
         - image
         reasoningEfforts:
           off:
-          minimal:
+          minimal: low
           xhigh: xhigh
           low: low
           medium: medium
           high: high
-          max:
+          max: max
       - id: gpt-5.3-codex
         name: Gpt 5.3 Codex
         contextWindow: 272000
@@ -170,13 +169,13 @@ llm-pi-ai:
         - text
         - image
         reasoningEfforts:
-          minimal:
+          minimal: low
           off:
           xhigh: xhigh
           low: low
           medium: medium
           high: high
-          max:
+          max: max
       - id: gpt-5.4-mini
         name: Gpt 5.4 Mini
         contextWindow: 272000
@@ -187,34 +186,34 @@ llm-pi-ai:
         reasoningEfforts:
           off:
           xhigh: xhigh
-          minimal:
+          minimal: low
           low: low
           medium: medium
           high: high
-          max:
+          max: max
       - id: deepseek/deepseek-v4-pro
         name: Deepseek V4 Pro
         contextWindow: 1000000
         maxTokens: 393216
         reasoningEfforts:
-          minimal:
-          low:
-          medium:
+          minimal: minimal
+          low: low
+          medium: medium
           high: high
           max: max
-          xhigh:
+          xhigh: xhigh
           off:
       - id: deepseek/deepseek-v4-flash
         name: Deepseek V4 Flash
         contextWindow: 1000000
         maxTokens: 393216
         reasoningEfforts:
-          minimal:
-          low:
-          medium:
+          minimal: minimal
+          low: low
+          medium: medium
           high: high
           max: max
-          xhigh:
+          xhigh: xhigh
           off:
       - id: deepseek/deepseek-v4-flash-vision-exp
         name: Deepseek V4 Flash Vision Exp
@@ -230,11 +229,11 @@ llm-pi-ai:
         - image
         reasoningEfforts:
           off:
-          minimal:
-          low:
-          medium:
-          high:
-          xhigh:
+          minimal: minimal
+          low: low
+          medium: medium
+          high: high
+          xhigh: xhigh
           max: max
       - id: moonshotai/Kimi-K2.7-Code
         name: Kimi K2.7 Code
@@ -242,9 +241,9 @@ llm-pi-ai:
         - text
         - image
         reasoningEfforts:
-          minimal:
-          low:
-          medium:
+          minimal: minimal
+          low: low
+          medium: medium
           off:
       - id: moonshotai/Kimi-K2.7-Code-Highspeed
         name: Kimi K2.7 Code Highspeed
@@ -257,9 +256,9 @@ llm-pi-ai:
         - text
         - image
         reasoningEfforts:
-          minimal:
-          low:
-          medium:
+          minimal: minimal
+          low: low
+          medium: medium
       - id: moonshotai/Kimi-K2.5
         name: Kimi K2.5
         defaultInput:
@@ -272,12 +271,12 @@ llm-pi-ai:
       - id: zai-org/GLM-5.2
         name: GLM 5.2
         reasoningEfforts:
-          minimal:
+          minimal: minimal
           low: high
           medium: high
           off:
           high: high
-          xhigh:
+          xhigh: xhigh
           max: max
       - id: zai-org/GLM-5.2-Fast
         name: GLM 5.2 Fast
@@ -291,16 +290,16 @@ llm-pi-ai:
         - text
         - image
         reasoningEfforts:
-          minimal:
-          low:
-          medium:
+          minimal: minimal
+          low: low
+          medium: medium
       - id: MiniMaxAI/MiniMax-M2.7
         name: MiniMax M2.7
         reasoningEfforts:
           off:
-          minimal:
-          low:
-          medium:
+          minimal: minimal
+          low: low
+          medium: medium
       - id: minimax/minimax-m3-free
         name: Minimax M3 Free
       - id: minimax/minimax-m2.7-free
@@ -355,9 +354,9 @@ llm-pi-ai:
         - text
         - image
         reasoningEfforts:
-          minimal:
-          low:
-          medium:
+          minimal: minimal
+          low: low
+          medium: medium
       - id: stepfun/Step-3.7-Flash
         name: Step 3.7 Flash
         defaultInput:
@@ -412,30 +411,30 @@ llm-pi-ai:
       - id: nvidia/nemotron-3-ultra-550b-a55b
         name: Nemotron 3 Ultra 550b A55b
         reasoningEfforts:
-          minimal:
-          low:
-          medium:
+          minimal: minimal
+          low: low
+          medium: medium
       - id: thinkingmachines/inkling
         name: Inkling
         defaultInput:
         - text
         - image
         reasoningEfforts:
-          minimal:
-          low:
-          medium:
+          minimal: minimal
+          low: low
+          medium: medium
       - id: thinkingmachines/inkling-small
         name: Inkling Small
       - id: poolside/laguna-s-2.1-free
         name: Laguna S 2.1 Free
         reasoningEfforts:
           off:
-          minimal:
+          minimal: minimal
           low: low
           medium: medium
           high: high
-          xhigh:
-          max:
+          xhigh: xhigh
+          max: max
       - id: meta/muse-spark-1.1
         name: Muse Spark 1.1
         contextWindow: 1048576
@@ -475,12 +474,12 @@ llm-pi-ai:
         - image
         reasoningEfforts:
           off:
-          minimal:
+          minimal: minimal
           low: low
           medium: medium
           high: high
-          xhigh:
-          max:
+          xhigh: xhigh
+          max: max
       - id: xai/grok-4.6
         name: Grok 4.6
         contextWindow: 500000
@@ -547,11 +546,11 @@ llm-pi-ai:
         reasoningEfforts:
           off:
           xhigh: xhigh
-          minimal:
+          minimal: low
           low: low
           medium: medium
           high: high
-          max:
+          max: max
       - id: grok-4.6
         name: Grok 4.6
       - id: muse-spark-1.2
@@ -563,16 +562,14 @@ llm-pi-ai:
         - image
         reasoningEfforts:
           off:
-          minimal:
-          low:
-          medium:
-          high:
-          xhigh:
+          minimal: minimal
+          low: low
+          medium: medium
+          high: high
+          xhigh: xhigh
           max: max
       - id: muse-spark-1.2-contributor-free
         name: Muse Spark 1.2 Contributor Free
-      - id: hy3-free
-        name: Hy3 Free
       - id: ling-3.0-flash-fin-free
         name: Ling 3.0 Flash Fin Free
       - id: nemotron-3.5-lightning-free
@@ -616,4 +613,4 @@ profile:
 
 
 modelSync:
-  lastRun: 2026-08-29T14:08:32.361Z
+  lastRun: 2026-08-30T17:23:57.462Z

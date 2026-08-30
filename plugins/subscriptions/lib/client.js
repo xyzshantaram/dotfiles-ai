@@ -58,27 +58,11 @@ function injectStyle(pluginName, styleId, cssText) {
 function mergeCss(...parts) {
   return parts.flat().filter(Boolean).join("\n");
 }
-function fetchJson(url) {
-  return fetch(url, { cache: "no-store" }).then(function(res) {
-    return res.json().catch(function() {
-      return null;
-    }).then(function(json) {
-      return { ok: res.ok, status: res.status, json };
-    });
-  }).then(function(result) {
-    if (result.json !== null && result.json.error) {
-      return { data: null, error: String(result.json.error) };
-    }
-    if (!result.ok) return { data: null, error: "HTTP " + result.status };
-    return { data: result.json, error: null };
-  }).catch(function(e) {
-    return { data: null, error: String(e && e.message || e) };
-  });
-}
-function postJson(url, body) {
-  const hasBody = body !== void 0;
+function request(method, url, body) {
+  const hasBody = body !== void 0 && method !== "GET";
+  console.debug("[client-util] " + method + " " + url);
   return fetch(url, {
-    method: "POST",
+    method,
     cache: "no-store",
     ...hasBody ? { headers: { "content-type": "application/json" } } : {},
     ...hasBody ? { body: JSON.stringify(body) } : {}
@@ -90,35 +74,30 @@ function postJson(url, body) {
     });
   }).then(function(result) {
     if (result.json !== null && result.json.error) {
+      console.error(
+        "[client-util] " + method + " " + url + " failed: server error " + result.status
+      );
       return { data: null, error: String(result.json.error) };
     }
-    if (!result.ok) return { data: null, error: "HTTP " + result.status };
+    if (!result.ok) {
+      console.error("[client-util] " + method + " " + url + " failed: HTTP " + result.status);
+      return { data: null, error: "HTTP " + result.status };
+    }
+    console.info("[client-util] " + method + " " + url + " ok (HTTP " + result.status + ")");
     return { data: result.json, error: null };
   }).catch(function(e) {
+    console.error("[client-util] " + method + " " + url + " failed: network error");
     return { data: null, error: String(e && e.message || e) };
   });
 }
+function fetchJson(url) {
+  return request("GET", url);
+}
+function postJson(url, body) {
+  return request("POST", url, body);
+}
 function putJson(url, body) {
-  return fetch(url, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-    cache: "no-store"
-  }).then(function(res) {
-    return res.json().catch(function() {
-      return null;
-    }).then(function(json) {
-      return { ok: res.ok, status: res.status, json };
-    });
-  }).then(function(result) {
-    if (result.json !== null && result.json.error) {
-      return { data: null, error: String(result.json.error) };
-    }
-    if (!result.ok) return { data: null, error: "HTTP " + result.status };
-    return { data: result.json, error: null };
-  }).catch(function(e) {
-    return { data: null, error: String(e && e.message || e) };
-  });
+  return request("PUT", url, body);
 }
 
 // plugins/shared/settings-panel.tsx
@@ -134,16 +113,22 @@ var settings_default = "/* Shared settings-page vocabulary, normalized from the 
 function isRouteCandidate(value) {
   return typeof value === "object" && value !== null && typeof value.provider === "string" && value.provider.length > 0 && typeof value.model === "string" && value.model.length > 0;
 }
-function normalizeEntry(entry, chains, seen) {
+function normalizeEntry(entry, chains, seen, ctx) {
   if (isRouteCandidate(entry)) return [entry];
   if (typeof entry === "string") {
     if (entry.startsWith("chain:")) {
       const name2 = entry.slice("chain:".length);
-      if (chains?.[name2] === void 0) return [];
+      if (chains?.[name2] === void 0) {
+        ctx?.logger?.debug(`unknown chain reference: ${name2}`);
+        return [];
+      }
       const guard = new Set(seen ?? []);
-      if (guard.has(name2)) return [];
+      if (guard.has(name2)) {
+        ctx?.logger?.debug(`circular chain reference: ${name2}`);
+        return [];
+      }
       guard.add(name2);
-      return normalizeEntry(chains[name2], chains, guard);
+      return normalizeEntry(chains[name2], chains, guard, ctx);
     }
     const slash = entry.indexOf("/");
     if (slash > 0) {
@@ -151,10 +136,14 @@ function normalizeEntry(entry, chains, seen) {
     }
     if (chains?.[entry] !== void 0) {
       const guard = new Set(seen ?? []);
-      if (guard.has(entry)) return [];
+      if (guard.has(entry)) {
+        ctx?.logger?.debug(`circular chain reference: ${entry}`);
+        return [];
+      }
       guard.add(entry);
-      return normalizeEntry(chains[entry], chains, guard);
+      return normalizeEntry(chains[entry], chains, guard, ctx);
     }
+    ctx?.logger?.debug(`unknown chain reference: ${entry}`);
     return [];
   }
   if (typeof entry === "object" && entry !== null) {
@@ -171,26 +160,27 @@ function normalizeEntry(entry, chains, seen) {
               const guard = new Set(seen ?? []);
               if (!guard.has(name2)) {
                 guard.add(name2);
-                out.push(...normalizeEntry(chains[name2], chains, guard));
+                out.push(...normalizeEntry(chains[name2], chains, guard, ctx));
               }
             }
           } else if (chains?.[step] !== void 0) {
             const guard = new Set(seen ?? []);
             if (!guard.has(step)) {
               guard.add(step);
-              out.push(...normalizeEntry(chains[step], chains, guard));
+              out.push(...normalizeEntry(chains[step], chains, guard, ctx));
             }
           } else if (step.indexOf("/") > 0) {
             const slash = step.indexOf("/");
             out.push({ provider: step.slice(0, slash), model: step.slice(slash + 1) });
           }
         } else {
-          out.push(...normalizeEntry(step, chains, seen));
+          out.push(...normalizeEntry(step, chains, seen, ctx));
         }
       }
       return out;
     }
   }
+  ctx?.logger?.debug("profile entry resolved to empty chain");
   return [];
 }
 function routesEqual(a, b) {
@@ -579,7 +569,14 @@ function makePanel(ctx, config) {
         });
       }
     }, []);
+    import_react2.default.useEffect(function() {
+      console.debug("[subscriptions] panel mounted");
+      return function() {
+        console.debug("[subscriptions] panel unmounted");
+      };
+    }, []);
     var load = async function() {
+      console.debug("[subscriptions] load: fetching subscription data");
       var now = /* @__PURE__ */ new Date();
       var month = now.getMonth() + 1;
       var year = now.getFullYear();
@@ -598,6 +595,35 @@ function makePanel(ctx, config) {
         fetchJson("/subscriptions/meridian-logs"),
         fetchJson("/profiles/config")
       ]);
+      var loadKeys = [
+        "go",
+        "quota",
+        "telemetry",
+        "balance",
+        "ds",
+        "dsUsageAmount",
+        "dsUsageCost",
+        "cc",
+        "ccUsage",
+        "oz",
+        "health",
+        "logs",
+        "profiles"
+      ];
+      var failedKeys = [];
+      for (var li = 0; li < loadKeys.length; li++) {
+        if (results[li] && results[li].error) failedKeys.push(loadKeys[li]);
+      }
+      if (failedKeys.length === 0) {
+        console.info("[subscriptions] load: subscription data loaded");
+      } else if (failedKeys.length === loadKeys.length) {
+        console.error("[subscriptions] load: all fetches failed", failedKeys.join(", "));
+      } else {
+        console.warn(
+          "[subscriptions] load: " + failedKeys.length + " of " + loadKeys.length + " fetches failed",
+          failedKeys.join(", ")
+        );
+      }
       var snapData = {
         go: results[0],
         quota: results[1],
@@ -654,46 +680,71 @@ function makePanel(ctx, config) {
     var setDsToken = dsTokenState[1];
     var fetchCookie = async function() {
       setCookie({ busy: true, note: null, showLogin: false });
+      console.info("[subscriptions] action: fetch OpenCode GO cookie from Firefox");
       var result = await postJson("/subscriptions/opencode-cookie/extract");
       if (result.data && result.data.ok === true) {
         setCookie({ busy: false, note: "Cookie saved", showLogin: false });
+        console.info("[subscriptions] OpenCode GO cookie saved");
         load();
       } else if (result.data && result.data.invalid === true) {
         setCookie({ busy: false, note: result.error || "Cookie is stale", showLogin: true });
+        console.warn("[subscriptions] OpenCode GO cookie is stale, login required", result.error || "stale");
       } else {
         setCookie({ busy: false, note: result.error || "Extract failed", showLogin: false });
+        console.error("[subscriptions] OpenCode GO cookie extract failed", result.error || "unknown error");
       }
     };
     var openLogin = async function() {
+      console.info("[subscriptions] action: open OpenCode GO login page in Firefox");
       var result = await postJson("/subscriptions/opencode-cookie/login");
       setCookie({
         busy: false,
         note: result.data && result.data.ok ? "Login page opened in Firefox; sign in, then fetch the cookie again" : result.error || "Could not open Firefox",
         showLogin: false
       });
+      if (result.data && result.data.ok) {
+        console.info("[subscriptions] OpenCode GO login page opened");
+      } else {
+        console.error("[subscriptions] failed to open OpenCode GO login page", result.error || "unknown error");
+      }
     };
     var fetchDsToken = async function() {
       setDsToken({ busy: true, note: null, showLogin: false });
+      console.info("[subscriptions] action: fetch DeepSeek token from Firefox");
       var result = await postJson("/subscriptions/deepseek-token/extract");
       if (result.data && result.data.ok === true) {
         setDsToken({ busy: false, note: "Token saved", showLogin: false });
+        console.info("[subscriptions] DeepSeek token saved");
         load();
       } else {
         setDsToken({ busy: false, note: result.error || "Extract failed", showLogin: true });
+        console.error("[subscriptions] DeepSeek token extract failed", result.error || "unknown error");
       }
     };
     var openDsLogin = async function() {
+      console.info("[subscriptions] action: open DeepSeek platform login page in Firefox");
       var result = await postJson("/subscriptions/deepseek-token/login");
       setDsToken({
         busy: false,
         note: result.data && result.data.ok ? "Login page opened in Firefox; sign in, then fetch the token again" : result.error || "Could not open Firefox",
         showLogin: false
       });
+      if (result.data && result.data.ok) {
+        console.info("[subscriptions] DeepSeek platform login page opened");
+      } else {
+        console.error("[subscriptions] failed to open DeepSeek platform login page", result.error || "unknown error");
+      }
     };
     var refreshOz = async function() {
+      console.info("[subscriptions] action: refresh OpenCode Zen balance");
       var result = await fetchJson("/subscriptions/opencode-zen-balance");
       setSnap(Object.assign({}, snap, { oz: result }));
       setStaleTs(Date.now());
+      if (result.error) {
+        console.error("[subscriptions] OpenCode Zen balance refresh failed", result.error);
+      } else {
+        console.info("[subscriptions] OpenCode Zen balance refreshed");
+      }
     };
     var toggleState = import_react2.default.useState(null);
     var toggleBusy = toggleState[0];
@@ -702,11 +753,14 @@ function makePanel(ctx, config) {
       var providers = cfg && cfg.providers || {};
       var next = Object.assign({}, providers, { [key]: !(providers[key] !== false) });
       setToggleBusy(key);
+      console.info("[subscriptions] action: toggle provider " + key + " to " + (next[key] ? "visible" : "hidden"));
       putJson("/subscriptions/config", { providers: next }).then(function(result) {
         setToggleBusy(null);
         if (result.data && result.data.config) {
           setCfg(result.data.config);
+          console.info("[subscriptions] provider " + key + " toggle saved");
         } else if (result.error) {
+          console.error("[subscriptions] provider " + key + " toggle failed", result.error);
         }
       });
     };

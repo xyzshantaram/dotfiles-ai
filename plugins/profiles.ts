@@ -296,6 +296,16 @@ function depthOf(agent: unknown): number {
 }
 
 /**
+ * Human-readable session label for failover log lines, mirroring the session
+ * header shape used elsewhere in this codebase (session.header.id).
+ */
+function sessionLabel(agent: unknown): string {
+  const a = agent as { session?: { header?: { id?: unknown }; id?: unknown } } | null | undefined;
+  const id = a?.session?.header?.id ?? a?.session?.id;
+  return id === undefined ? "unknown" : String(id);
+}
+
+/**
  * The active profile entry's chain for one agent depth. Depth-0 rides the
  * orchestrator chain; any spawned child (depth >= 1) rides the subagent
  * chain. Falls back to the other named chain, then to the legacy single
@@ -305,7 +315,7 @@ function depthOf(agent: unknown): number {
 function chainForDepth(ctx: Context, depth: number): Level[] {
   const settings = service<SettingsService>(ctx, "settings");
   const profile = settings?.get(PROFILE_NS) as ProfileSettings | undefined;
-  return chainOf(activeEntry(profile), depth >= 1 ? "subagent" : "orchestrator", profile?.chains);
+  return chainOf(activeEntry(profile), depth >= 1 ? "subagent" : "orchestrator", profile?.chains, ctx);
 }
 
 /** Install the two agent waterfalls that provide chain failover. */
@@ -387,6 +397,7 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
     if (!s || s.stepKey !== stepKey) {
       s = { stepKey, levels, cursor: 0, retries: 0, failures: [] };
       agentMap.set(stepKey, s);
+      ctx.logger.info(`failover chain reset for session ${sessionLabel(agent)}`);
     } else {
       s.levels = levels;
       if (s.cursor >= s.levels.length) s.cursor = 0;
@@ -443,6 +454,9 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
     }
 
     if (s.cursor >= s.levels.length) {
+      ctx.logger.warn(
+        `failover chain exhausted for session ${sessionLabel(agent)}: tried ${s.levels.map((l) => `${l.provider}/${l.model}`).join(", ") || "no levels"}`,
+      );
       const tried = s.failures
         .map((f) => `  - ${f.level.provider}/${f.level.model}: ${f.code} — ${f.message}`)
         .join("\n");
@@ -450,6 +464,9 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
     }
 
     const level = s.levels[s.cursor];
+    ctx.logger.info(
+      `failover chain selected ${level.provider}/${level.model} for session ${sessionLabel(agent)}`,
+    );
     return buildConfig(proposal, level);
   });
 
@@ -503,17 +520,15 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
 
     if (s.cursor < s.levels.length) {
       const nxt = s.levels[s.cursor];
-      ctx.logger.warn(
-        "profiles: %s/%s failed (%s) -> failing over to %s/%s",
-        cur.provider,
-        cur.model,
-        failure.code ?? "UNKNOWN",
-        nxt.provider,
-        nxt.model,
+      ctx.logger.info(
+        `session ${sessionLabel(agent)} failing over from ${cur.provider}/${cur.model} to ${nxt.provider}/${nxt.model}`,
       );
       return { kind: "retry" } as unknown as Promise<RequestErrorAction>;
     }
 
+    ctx.logger.warn(
+      `failover chain exhausted for session ${sessionLabel(agent)}: tried ${s.levels.map((l) => `${l.provider}/${l.model}`).join(", ") || "no levels"}`,
+    );
     const tried = s.failures
       .map((f) => `  - ${f.level.provider}/${f.level.model}: ${f.code} — ${f.message}`)
       .join("\n");
@@ -529,7 +544,7 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
  * chain for both profiles).
  */
 function syncDefaultModel(ctx: Context, profile: ProfileSettings | undefined): void {
-  const head = chainOf(activeEntry(profile), "orchestrator", profile?.chains)[0];
+  const head = chainOf(activeEntry(profile), "orchestrator", profile?.chains, ctx)[0];
   if (!head) return;
   const agentDefaultModel = service<{
     saveSelection(next: {
@@ -857,11 +872,13 @@ export function apply(ctx: Context, config: unknown): void {
       activeEntry(next as ProfileSettings),
       "orchestrator",
       (next as ProfileSettings)?.chains,
+      ctx,
     )[0];
     const prevHead = chainOf(
       activeEntry(prev as ProfileSettings),
       "orchestrator",
       (prev as ProfileSettings)?.chains,
+      ctx,
     )[0];
     const flipped =
       (nextHead?.provider ?? "") !== (prevHead?.provider ?? "") ||

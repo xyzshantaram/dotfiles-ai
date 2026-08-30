@@ -66,8 +66,10 @@ function makePanel() {
     var setBusy = busyState[1];
 
     var load = function () {
+      console.debug("[session-archive] fetching archived sessions");
       fetchJson("/sessions/archived").then(function (result) {
         if (result.error) {
+          console.error("[session-archive] load failed", result.error);
           setList(function (prev) {
             return { data: prev && prev.data ? prev.data : null, error: result.error };
           });
@@ -75,25 +77,30 @@ function makePanel() {
         }
         var sessions =
           result.data && Array.isArray(result.data.sessions) ? result.data.sessions : [];
+        console.info("[session-archive] loaded archived sessions:", sessions.length);
         setList({ data: sessions, error: null });
       });
     };
 
     react.useEffect(function () {
+      console.debug("[session-archive] panel mounted");
       load();
     }, []);
 
     var remove = function (id) {
       if (busy !== null) return;
       setBusy(id);
+      console.info("[session-archive] deleting archived session", id);
       postJson("/sessions/archived/delete", { id: id }).then(function (result) {
         setBusy(null);
         if (result.error) {
+          console.error("[session-archive] delete failed", id, result.error);
           setList(function (prev) {
             return { data: prev && prev.data ? prev.data : null, error: result.error };
           });
           return;
         }
+        console.info("[session-archive] deleted archived session", id);
         load();
       });
     };

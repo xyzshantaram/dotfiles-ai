@@ -1,5 +1,5 @@
 window.__ModuleLoader__.load({
-	id: "session-archive",
+	id: "log-viewer",
 	factory: (require) => {
 		var module = { exports: {} };
 		var exports = module.exports;
@@ -32,7 +32,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// plugins/session-archive/src/client.tsx
+// plugins/log-viewer/src/client.tsx
 var client_exports = {};
 __export(client_exports, {
   apply: () => apply,
@@ -93,9 +93,6 @@ function request(method, url, body) {
 function fetchJson(url) {
   return request("GET", url);
 }
-function postJson(url, body) {
-  return request("POST", url, body);
-}
 
 // plugins/shared/settings-panel.tsx
 var import_react = __toESM(require("react"));
@@ -106,108 +103,52 @@ function SettingsSection(props) {
 // css-text:/home/sid/repos/dotfiles-ai/plugins/shared/settings.css
 var settings_default = "/* Shared settings-page vocabulary, normalized from the session-archive,\n * subscriptions, and profiles settings panels. One rule set in one file so\n * the three panels cannot drift. Radius and padding disagreements are\n * normalized to the session-archive (or median) value; the var(--dsw-...)\n * aliases the current rules use are kept as-is. */\n\n/* Page-level container:airy vertical rhythm, no own box. */\n.dsp-root {\n  box-sizing: border-box;\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n  padding: 0;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Header row (title + refresh). */\n.dsp-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 0.75rem;\n}\n\n.dsp-title {\n  font-size: 1.5rem;\n  font-weight: 650;\n  margin: 0;\n  line-height: 1.2;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Refresh:session-archive/profiles form (no box, color shift only).\n * subscriptions pads and rounds the hit area; normalized away. */\n.dsp-refresh {\n  cursor: pointer;\n  border: none;\n  background: none;\n  padding: 0;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n}\n.dsp-refresh:hover {\n  color: var(--dsw-alias-label-primary);\n}\n\n.dsp-err {\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-state-error-primary);\n}\n\n/* Large setting card. Padding is the median of 16/20/24 (session-archive\n * 20px); the radius is the two-agreeing 20px, not profiles' 12px. */\n.dsp-section {\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.875rem;\n  padding: 1.25rem;\n  background: var(--dsw-alias-bg-tertiary);\n}\n\n/* Card title:subscriptions' 1.5rem/700 matches the page-title vocabulary;\n * profiles' smaller 16px/600 card title normalized up. */\n.dsp-section-title {\n  font-size: 1.125rem;\n  font-weight: 600;\n  margin: 0;\n  line-height: 1.2;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Setting row:horizontal in session-archive and profiles (subscriptions\n * stacks its label and meta vertically; normalized to the horizontal form). */\n.dsp-row {\n  display: flex;\n  align-items: center;\n  gap: 0.75rem;\n  min-width: 0;\n}\n\n/* Row label:only subscriptions defines one; ported verbatim, with its\n * emphasized <b> children. */\n.dsp-row-label {\n  display: flex;\n  align-items: baseline;\n  gap: 0.625rem;\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.dsp-row-label b {\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n  font-size: 0.9375rem;\n}\n.dsp-row-label b:last-child {\n  margin-left: auto;\n}\n";
 
-// css-text:/home/sid/repos/dotfiles-ai/plugins/session-archive/src/client.module.css
-var client_default = ".sarch-section {\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.875rem;\n  padding: 1.25rem;\n  background: var(--dsw-alias-bg-tertiary);\n}\n.sarch-rows {\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n}\n.sarch-row {\n  display: flex;\n  align-items: center;\n  gap: 0.75rem;\n  min-width: 0;\n}\n.sarch-row-main {\n  display: flex;\n  flex-direction: column;\n  gap: 0.125rem;\n  min-width: 0;\n  flex: 1;\n}\n.sarch-row-id {\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n.sarch-row-meta {\n  display: flex;\n  align-items: center;\n  gap: 0.75rem;\n  min-width: 0;\n}\n.sarch-row-meta > span {\n  font-size: 0.875rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n.sarch-live {\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n  color: var(--dsw-alias-state-success-primary);\n  font-weight: 600;\n  flex: none;\n}\n.sarch-btn {\n  box-sizing: border-box;\n  width: 2rem;\n  height: 2rem;\n  display: inline-grid;\n  place-items: center;\n  flex: none;\n  border: 0;\n  border-radius: 0.5rem;\n  background: transparent;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 1.25rem;\n  padding: 0;\n  cursor: pointer;\n}\n.sarch-btn:hover {\n  background: var(--dsw-alias-interactive-bg-hover);\n  color: var(--dsw-alias-label-primary);\n}\n.sarch-btn:disabled {\n  opacity: 0.5;\n  cursor: default;\n}\n.sarch-empty {\n  font-size: 0.875rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n  font-style: italic;\n}\n";
+// css-text:/home/sid/repos/dotfiles-ai/plugins/log-viewer/src/client.module.css
+var client_default = "/* log-viewer panel styles. Class names are kebab-case only. */\n\n.lv-root {\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n}\n\n.lv-body {\n  box-sizing: border-box;\n  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;\n  font-size: 0.8125rem;\n  line-height: 1.5;\n  white-space: pre;\n  overflow: auto;\n  max-height: 60vh;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.875rem;\n  padding: 1rem;\n  background: var(--dsw-alias-bg-tertiary);\n  color: var(--dsw-alias-label-primary);\n}\n\n.lv-note {\n  font-size: 0.875rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n\n.lv-empty {\n  font-size: 0.875rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n  font-style: italic;\n}\n";
 
-// plugins/session-archive/src/client.tsx
-var PLUGIN_NAME = "session-archive";
-var STYLE_TAG_ID = "session-archive/settings.css";
-function shortId(id) {
-  if (typeof id !== "string") return "";
-  if (id.length <= 16) return id;
-  return id.slice(0, 8) + "\u2026" + id.slice(-6);
-}
-function fmtDate(value) {
-  var date = new Date(value);
-  if (isNaN(date.getTime())) return "";
-  return date.toLocaleString();
-}
-function fmtSize(bytes) {
-  if (bytes === null || bytes === void 0 || bytes < 0 || isNaN(bytes)) return "\u2014";
-  if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + " MiB";
-  return Math.max(1, Math.round(bytes / 1024)) + " KiB";
-}
+// plugins/log-viewer/src/client.tsx
+var PLUGIN_NAME = "log-viewer";
+var STYLE_TAG_ID = "log-viewer/settings.css";
 function makePanel() {
   return function Panel() {
-    var listState = import_react2.default.useState(null);
-    var list = listState[0];
-    var setList = listState[1];
-    var busyState = import_react2.default.useState(null);
-    var busy = busyState[0];
-    var setBusy = busyState[1];
+    var viewState = import_react2.default.useState(null);
+    var view = viewState[0];
+    var setView = viewState[1];
     var load = function() {
-      console.debug("[session-archive] fetching archived sessions");
-      fetchJson("/sessions/archived").then(function(result) {
+      console.debug("[log-viewer] fetching log lines");
+      fetchJson("/log-viewer/lines").then(function(result) {
         if (result.error) {
-          console.error("[session-archive] load failed", result.error);
-          setList(function(prev) {
+          console.error("[log-viewer] load failed " + result.error);
+          setView(function(prev) {
             return { data: prev && prev.data ? prev.data : null, error: result.error };
           });
           return;
         }
-        var sessions = result.data && Array.isArray(result.data.sessions) ? result.data.sessions : [];
-        console.info("[session-archive] loaded archived sessions:", sessions.length);
-        setList({ data: sessions, error: null });
+        var lines = result.data && Array.isArray(result.data.lines) ? result.data.lines : [];
+        var truncated = result.data && result.data.truncated === true;
+        console.info("[log-viewer] log lines loaded: " + lines.length);
+        setView({ data: lines, truncated, error: null });
       });
     };
     import_react2.default.useEffect(function() {
-      console.debug("[session-archive] panel mounted");
+      console.debug("[log-viewer] panel mounted");
       load();
     }, []);
-    var remove = function(id) {
-      if (busy !== null) return;
-      setBusy(id);
-      console.info("[session-archive] deleting archived session", id);
-      postJson("/sessions/archived/delete", { id }).then(function(result) {
-        setBusy(null);
-        if (result.error) {
-          console.error("[session-archive] delete failed", id, result.error);
-          setList(function(prev) {
-            return { data: prev && prev.data ? prev.data : null, error: result.error };
-          });
-          return;
-        }
-        console.info("[session-archive] deleted archived session", id);
-        load();
-      });
+    var refresh = function() {
+      console.info("[log-viewer] refresh clicked");
+      load();
     };
-    var rows = [];
-    if (list && list.data) {
-      for (var i = 0; i < list.data.length; i++) {
-        var session = list.data[i];
-        var live = session.live === true;
-        var action = live ? /* @__PURE__ */ import_react2.default.createElement("span", { className: "sarch-live" }, "live") : /* @__PURE__ */ import_react2.default.createElement(
-          "button",
-          {
-            className: "sarch-btn",
-            disabled: busy === session.id,
-            title: "Delete archived session",
-            "aria-label": "Delete archived session",
-            onClick: /* @__PURE__ */ (function(id) {
-              return function() {
-                remove(id);
-              };
-            })(session.id)
-          },
-          busy === session.id ? "\u2026" : "\xD7"
-        );
-        var label = session.title ? session.title : shortId(session.id);
-        rows.push(
-          /* @__PURE__ */ import_react2.default.createElement("div", { className: "sarch-row", key: session.id }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "sarch-row-main" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "sarch-row-id" }, label), /* @__PURE__ */ import_react2.default.createElement("div", { className: "sarch-row-meta" }, /* @__PURE__ */ import_react2.default.createElement("span", null, session.cwd ? session.cwd : "no cwd"), /* @__PURE__ */ import_react2.default.createElement("span", null, fmtDate(session.createdAt)), /* @__PURE__ */ import_react2.default.createElement("span", null, fmtSize(session.size)))), action)
-        );
-      }
-    }
     var body = null;
-    if (list === null) {
-      body = /* @__PURE__ */ import_react2.default.createElement("div", { className: "sarch-empty" }, "Loading\u2026");
-    } else if (list.error && (!list.data || list.data.length === 0)) {
-      body = /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, list.error);
-    } else if (rows.length === 0) {
-      body = /* @__PURE__ */ import_react2.default.createElement("div", { className: "sarch-empty" }, "No archived sessions");
+    if (view === null) {
+      body = /* @__PURE__ */ import_react2.default.createElement("div", { className: "lv-empty" }, "Loading\u2026");
+    } else if (view.error && (!view.data || view.data.length === 0)) {
+      body = /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, view.error);
+    } else if (!view.data || view.data.length === 0) {
+      body = /* @__PURE__ */ import_react2.default.createElement("div", { className: "lv-empty" }, "No log lines");
     } else {
-      body = /* @__PURE__ */ import_react2.default.createElement("div", { className: "sarch-section" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "sarch-rows" }, rows), list.error ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, list.error) : null);
+      body = /* @__PURE__ */ import_react2.default.createElement("div", { className: "lv-root" }, /* @__PURE__ */ import_react2.default.createElement("pre", { className: "lv-body" }, view.data.join("\n")), view.truncated ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "lv-note" }, "Log truncated to the last 2000 lines") : null, view.error ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, view.error) : null);
     }
-    return /* @__PURE__ */ import_react2.default.createElement(SettingsSection, { title: "Archive", onRefresh: load, refreshLabel: "Refresh" }, body);
+    return /* @__PURE__ */ import_react2.default.createElement(SettingsSection, { title: "Log viewer", onRefresh: refresh, refreshLabel: "Refresh" }, body);
   };
 }
 var name = PLUGIN_NAME;
@@ -215,11 +156,11 @@ var inject = ["slots"];
 function apply(ctx) {
   ctx.effect(function() {
     injectStyle(PLUGIN_NAME, STYLE_TAG_ID, mergeCss(settings_default, client_default));
-  }, "session-archive: styles");
+  }, "log-viewer: styles");
   var Panel = makePanel();
   ctx.slots.inject("settings.section", function() {
     return ctx.slots.register(
-      { name: "settings.section", id: PLUGIN_NAME, order: 28, label: "Archive" },
+      { name: "settings.section", id: PLUGIN_NAME, order: 29, label: "Log viewer" },
       function() {
         return /* @__PURE__ */ import_react2.default.createElement(Panel, null);
       }

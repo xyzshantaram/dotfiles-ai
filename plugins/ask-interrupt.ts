@@ -91,12 +91,15 @@ export function apply(ctx: Context, config: AskInterruptConfig): void {
     if (exec.name !== ASK_USER_QUESTION_TOOL) return outcome;
 
     const failed = result as FailedResultInfo;
-    if (!failed.isError) return outcome;
+    if (!failed.isError) {
+      ctx.logger.info("ask_user_question resolved");
+      return outcome;
+    }
     if (failed.error?.info?.code !== ASK_CANCELLED_CODE) return outcome;
 
     const agent = exec.agent;
     if (agent === undefined) return outcome; // agentless call: nothing to cancel
-
+    ctx.logger.info("ask_user_question cancelled by user");
     agent.cancel("user-dismissed-question" as unknown as AgentCancelCause, { keepInbox: true });
 
     return outcome;

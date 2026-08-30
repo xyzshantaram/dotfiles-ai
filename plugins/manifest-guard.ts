@@ -98,6 +98,7 @@ export function apply(ctx: Context, config: ManifestGuardConfig): void {
   // Deny core: throws for a manifest path, else no-op.
   const denyIfManifest = (target: { displayPath: string }): void => {
     if (!isManifestPath(target.displayPath)) return;
+    ctx.logger.warn(`Denied direct edit of ${basename(target.displayPath)}: use the package tool`);
     throw new FsError(DENY_MESSAGE(basename(target.displayPath)), "FS_PERMISSION_DENIED");
   };
 
@@ -109,6 +110,7 @@ export function apply(ctx: Context, config: ManifestGuardConfig): void {
     "fs/write-intent",
     async (target, _actor, next) => {
       denyIfManifest(target);
+      ctx.logger.info(`Passed: ${target.displayPath}`);
       return next();
     },
     { prepend: true },
@@ -117,6 +119,7 @@ export function apply(ctx: Context, config: ManifestGuardConfig): void {
     "fs/edit-intent",
     async (target, _actor, next) => {
       denyIfManifest(target);
+      ctx.logger.info(`Passed: ${target.displayPath}`);
       return next();
     },
     { prepend: true },

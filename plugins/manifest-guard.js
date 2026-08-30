@@ -33,12 +33,14 @@ function apply(ctx, config) {
   void config;
   const denyIfManifest = (target) => {
     if (!isManifestPath(target.displayPath)) return;
+    ctx.logger.warn(`Denied direct edit of ${basename(target.displayPath)}: use the package tool`);
     throw new FsError(DENY_MESSAGE(basename(target.displayPath)), "FS_PERMISSION_DENIED");
   };
   ctx.on(
     "fs/write-intent",
     async (target, _actor, next) => {
       denyIfManifest(target);
+      ctx.logger.info(`Passed: ${target.displayPath}`);
       return next();
     },
     { prepend: true }
@@ -47,6 +49,7 @@ function apply(ctx, config) {
     "fs/edit-intent",
     async (target, _actor, next) => {
       denyIfManifest(target);
+      ctx.logger.info(`Passed: ${target.displayPath}`);
       return next();
     },
     { prepend: true }

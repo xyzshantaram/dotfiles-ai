@@ -47,6 +47,12 @@ interface ConfinedArgvLike {
   [key: string]: unknown;
 }
 
+/** Minimal logger surface for leveled logging. */
+interface LoggerLike {
+  debug(msg: string): void;
+  info(msg: string): void;
+}
+
 /**
  * Insert `--bind <hostTmpDsh> /tmp/dsh` after bwrap's `--tmpfs /tmp` pair.
  * Returns the input untouched when the pair is absent (read-only mode,
@@ -56,16 +62,18 @@ export function bindDurableTmp(
   confined: ConfinedArgvLike,
   hostTmpDsh: string,
   hostAidosScratch?: string,
+  logger?: LoggerLike,
 ): ConfinedArgvLike {
   const argv = confined.argv;
   const idx = argv.findIndex((arg, i) => arg === "--tmpfs" && argv[i + 1] === "/tmp");
   if (idx < 0) return confined;
   try {
     mkdirSync(hostTmpDsh, { recursive: true });
-  } catch {
+  } catch (err) {
     // A missing source dir makes bwrap fail the whole call. If the host dir
     // cannot be created, leave the sandbox untouched rather than break every
     // bash invocation.
+    logger?.debug(`could not create ${hostTmpDsh}; leaving sandbox untouched: ${err}`);
     return confined;
   }
   // The binds to splice in immediately after `--tmpfs /tmp` (so they win the
@@ -78,10 +86,11 @@ export function bindDurableTmp(
     try {
       mkdirSync(hostAidosScratch, { recursive: true });
       binds.push("--bind", hostAidosScratch, hostAidosScratch);
-    } catch {
+    } catch (err) {
       // If the aidos scratch host dir cannot be prepared, skip its bind rather
       // than risk breaking every bash call. The scratch tools still work on the
       // host regardless of this bind.
+      logger?.debug(`could not create ${hostAidosScratch}; skipping its bind: ${err}`);
     }
   }
   const next = [...argv.slice(0, idx + 2), ...binds, ...argv.slice(idx + 2)];
@@ -114,7 +123,7 @@ export function apply(ctx: Context): void {
   const original = sandbox.confine.bind(sandbox);
   sandbox.confine = (argv, policy) => {
     const confined = original(argv, policy);
-    return bindDurableTmp(confined, hostTmpDsh, hostAidosScratch);
+    return bindDurableTmp(confined, hostTmpDsh, hostAidosScratch, ctx.logger);
   };
 
   // Patch the provider prototype too. If the runtime instantiates a
@@ -135,6 +144,7 @@ export function apply(ctx: Context): void {
         (protoOriginal as (...a: unknown[]) => ConfinedArgvLike).apply(this, args),
         hostTmpDsh,
         hostAidosScratch,
+        ctx.logger,
       );
     };
   }
@@ -151,4 +161,8 @@ export function apply(ctx: Context): void {
     if (proto !== null && protoOriginal !== null && proto.confine === wrappedProto)
       proto.confine = protoOriginal;
   });
+
+  ctx.logger.info(
+    "sandbox confine patched: host /tmp/dsh and aidos scratch shared into every bwrap bash call",
+  );
 }

@@ -11,10 +11,14 @@ function apply(ctx, config) {
     const outcome = await next();
     if (exec.name !== ASK_USER_QUESTION_TOOL) return outcome;
     const failed = result;
-    if (!failed.isError) return outcome;
+    if (!failed.isError) {
+      ctx.logger.info("ask_user_question resolved");
+      return outcome;
+    }
     if (failed.error?.info?.code !== ASK_CANCELLED_CODE) return outcome;
     const agent = exec.agent;
     if (agent === void 0) return outcome;
+    ctx.logger.info("ask_user_question cancelled by user");
     agent.cancel("user-dismissed-question", { keepInbox: true });
     return outcome;
   });

@@ -53,6 +53,15 @@ export type ProfileEntry =
 
 /** The two named chains of a profile entry (W21). */
 export type ChainName = "orchestrator" | "subagent";
+/** Minimal cordis Context surface used for optional route-decision logging. */
+interface RouteCtx {
+  logger?: {
+    error(msg: string): void;
+    warn(msg: string): void;
+    info(msg: string): void;
+    debug(msg: string): void;
+  };
+}
 
 function isRouteCandidate(value: unknown): value is RouteCandidate {
   return (
@@ -79,17 +88,24 @@ export function normalizeEntry(
   entry: unknown,
   chains?: Record<string, unknown>,
   seen?: Set<string>,
+  ctx?: RouteCtx,
 ): RouteCandidate[] {
   if (isRouteCandidate(entry)) return [entry];
   if (typeof entry === "string") {
     // "chain:<name>" extends another chain; "provider/model" is one route.
     if (entry.startsWith("chain:")) {
       const name = entry.slice("chain:".length);
-      if (chains?.[name] === undefined) return [];
+      if (chains?.[name] === undefined) {
+        ctx?.logger?.debug(`unknown chain reference: ${name}`);
+        return [];
+      }
       const guard = new Set(seen ?? []);
-      if (guard.has(name)) return [];
+      if (guard.has(name)) {
+        ctx?.logger?.debug(`circular chain reference: ${name}`);
+        return [];
+      }
       guard.add(name);
-      return normalizeEntry(chains[name], chains, guard);
+      return normalizeEntry(chains[name], chains, guard, ctx);
     }
     const slash = entry.indexOf("/");
     if (slash > 0) {
@@ -99,10 +115,14 @@ export function normalizeEntry(
     // composition array.
     if (chains?.[entry] !== undefined) {
       const guard = new Set(seen ?? []);
-      if (guard.has(entry)) return [];
+      if (guard.has(entry)) {
+        ctx?.logger?.debug(`circular chain reference: ${entry}`);
+        return [];
+      }
       guard.add(entry);
-      return normalizeEntry(chains[entry], chains, guard);
+      return normalizeEntry(chains[entry], chains, guard, ctx);
     }
+    ctx?.logger?.debug(`unknown chain reference: ${entry}`);
     return [];
   }
   if (typeof entry === "object" && entry !== null) {
@@ -122,26 +142,27 @@ export function normalizeEntry(
               const guard = new Set(seen ?? []);
               if (!guard.has(name)) {
                 guard.add(name);
-                out.push(...normalizeEntry(chains[name], chains, guard));
+                out.push(...normalizeEntry(chains[name], chains, guard, ctx));
               }
             }
           } else if (chains?.[step] !== undefined) {
             const guard = new Set(seen ?? []);
             if (!guard.has(step)) {
               guard.add(step);
-              out.push(...normalizeEntry(chains[step], chains, guard));
+              out.push(...normalizeEntry(chains[step], chains, guard, ctx));
             }
           } else if (step.indexOf("/") > 0) {
             const slash = step.indexOf("/");
             out.push({ provider: step.slice(0, slash), model: step.slice(slash + 1) });
           }
         } else {
-          out.push(...normalizeEntry(step, chains, seen));
+          out.push(...normalizeEntry(step, chains, seen, ctx));
         }
       }
       return out;
     }
   }
+  ctx?.logger?.debug("profile entry resolved to empty chain");
   return [];
 }
 
@@ -157,6 +178,7 @@ export function chainOf(
   entry: unknown,
   chainName: ChainName,
   chains?: Record<string, unknown>,
+  ctx?: RouteCtx,
 ): RouteCandidate[] {
   if (typeof entry === "object" && entry !== null) {
     const obj = entry as Record<string, unknown>;
@@ -164,17 +186,37 @@ export function chainOf(
       const own = normalizeEntry(
         chainName === "orchestrator" ? obj.orchestrator : obj.subagent,
         chains,
+        undefined,
+        ctx,
       );
-      if (own.length > 0) return own;
+      if (own.length > 0) {
+        ctx?.logger?.info(`chain resolved: ${chainName} -> ${own[0].provider}/${own[0].model}`);
+        return own;
+      }
+      const otherName = chainName === "orchestrator" ? "subagent" : "orchestrator";
       const other = normalizeEntry(
         chainName === "orchestrator" ? obj.subagent : obj.orchestrator,
         chains,
+        undefined,
+        ctx,
       );
-      if (other.length > 0) return other;
+      if (other.length > 0) {
+        ctx?.logger?.warn(`fallback: ${chainName} chain empty, using ${otherName} chain`);
+        return other;
+      }
+      ctx?.logger?.debug(`no routes in entry for ${chainName} chain`);
       return [];
     }
   }
-  return normalizeEntry(entry, chains);
+  const resolved = normalizeEntry(entry, chains, undefined, ctx);
+  if (resolved.length > 0) {
+    ctx?.logger?.info(
+      `chain resolved: ${chainName} -> ${resolved[0].provider}/${resolved[0].model}`,
+    );
+  } else {
+    ctx?.logger?.debug(`no routes for ${chainName} chain`);
+  }
+  return resolved;
 }
 
 /**
@@ -194,14 +236,21 @@ export function chainOf(
 export function entryHead(
   entry: unknown,
   chains?: Record<string, unknown>,
+  ctx?: RouteCtx,
 ): RouteCandidate | undefined {
   if (typeof entry === "object" && entry !== null) {
     const obj = entry as Record<string, unknown>;
     if ("orchestrator" in obj || "subagent" in obj) {
-      return entryHead(obj.orchestrator, chains) ?? entryHead(obj.subagent, chains);
+      return entryHead(obj.orchestrator, chains, ctx) ?? entryHead(obj.subagent, chains, ctx);
     }
   }
-  return normalizeEntry(entry, chains)[0];
+  const head = normalizeEntry(entry, chains, undefined, ctx)[0];
+  if (head !== undefined) {
+    ctx?.logger?.info(`route head: ${head.provider}/${head.model}`);
+  } else {
+    ctx?.logger?.debug("no route head resolved");
+  }
+  return head;
 }
 
 /**
