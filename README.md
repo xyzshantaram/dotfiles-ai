@@ -27,7 +27,7 @@ This is a personal config. The author's skills, model routes, and accounts will 
 
 Host plane (mounted in the web patch):
 
-- [`plugins/bash-guard.ts`](plugins/bash-guard.ts) — gates model bash calls. It parses the command, not a string. Read-only git verbs run, git mutations ask, everything else is denied. It rewrites `rg -r` to `rg`.
+- [`plugins/bash-guard.ts`](plugins/bash-guard.ts) — gates model bash calls. It parses the command, not a string. Read-only git verbs run, git mutations ask, everything else is denied. It translates `grep` to `rg` and `find` to `fd` rather than denying them, and it rewrites `rg -r` to `rg`.
 - [`plugins/manifest-guard.ts`](plugins/manifest-guard.ts) — denies direct edits to package manifests and lockfiles.
 - [`plugins/package-tool.ts`](plugins/package-tool.ts) — the sanctioned way to change dependencies. It detects the package manager and runs the change.
 - [`plugins/skill-gate.ts`](plugins/skill-gate.ts) — shows a gated tool only while its skill is loaded.
@@ -89,7 +89,12 @@ Model bash commands go through bash-guard:
 - Git read-only verbs (status, log, diff, show) run without a prompt.
 - Git mutations (commit, push, checkout, reset) ask for approval first.
 - Other git subcommands are denied.
-- `find` and `grep` are denied. Use `rg` instead.
+- `grep` and `find` are translated, not denied. The guard rewrites them into the
+  `rg` and `fd` equivalent, runs that, and tells the model once what it changed.
+- A `find` predicate that mutates the filesystem, such as `-delete` or `-exec`,
+  translates and then asks for approval.
+- An expression with no safe equivalent is denied. The message names the exact
+  blocking token, so the next attempt can succeed.
 - `rg -r` is rewritten to plain `rg`. The `-r` flag is substitution, not recursion.
 
 ## Related docs

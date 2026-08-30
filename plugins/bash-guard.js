@@ -4163,6 +4163,25 @@ function resolvePart(part, env) {
   }
 }
 
+// node_modules/.pnpm/@cad0p+unbash-walker@0.1.0/node_modules/@cad0p/unbash-walker/dist/tracker.js
+function isStaticallyResolvable(w) {
+  if (!w)
+    return true;
+  if (!w.parts || w.parts.length === 0)
+    return true;
+  return w.parts.every(isStaticPart);
+}
+function isStaticPart(p) {
+  if (p.type === "Literal")
+    return true;
+  if (p.type === "SingleQuoted")
+    return true;
+  if (p.type === "DoubleQuoted") {
+    return (p.parts ?? []).every((child) => isStaticPart(child));
+  }
+  return false;
+}
+
 // node_modules/.pnpm/@cad0p+unbash-walker@0.1.0/node_modules/@cad0p/unbash-walker/dist/trackers/cwd.js
 import * as path2 from "node:path";
 
@@ -4499,6 +4518,375 @@ function flagSpan(arg, i, args, flagArgs) {
 
 // plugins/bash-guard.ts
 import z from "@deepseek-ai/schemastery";
+
+// plugins/bash-guard-translate.ts
+var SHELL_SAFE = /^[A-Za-z0-9_@%+=:,./-]+$/;
+function shellQuote(word) {
+  if (SHELL_SAFE.test(word)) return word;
+  return "'" + word.split("'").join("'\\''") + "'";
+}
+function blocked(why) {
+  return { kind: "blocked", why };
+}
+function addNote(notes, note) {
+  if (!notes.includes(note)) notes.push(note);
+}
+var GREP_PLAIN_FLAGS = {
+  i: ["-i"],
+  n: ["-n"],
+  v: ["-v"],
+  c: ["-c"],
+  l: ["-l"],
+  L: ["--files-without-match"],
+  w: ["-w"],
+  x: ["-x"],
+  F: ["-F"],
+  E: [],
+  P: ["-P"],
+  o: ["-o"],
+  a: ["-a"],
+  q: ["-q"],
+  s: ["--no-messages"],
+  h: ["--no-filename"],
+  H: ["-H"],
+  z: ["--null-data"],
+  r: [],
+  R: []
+};
+var GREP_PLAIN_NOTES = {
+  E: "rg uses regular expressions by default, so -E was dropped.",
+  r: "rg searches directories by default, so the recursive flag was dropped. rg also skips hidden files and files listed in .gitignore.",
+  R: "rg searches directories by default, so the recursive flag was dropped. rg also skips hidden files and files listed in .gitignore.",
+  h: "grep -h became rg --no-filename. The rg short form is -I, not -h.",
+  z: "grep -z became rg --null-data. The rg -z flag means --search-zip instead."
+};
+var GREP_LONG_PLAIN = {
+  "--ignore-case": "i",
+  "--line-number": "n",
+  "--invert-match": "v",
+  "--count": "c",
+  "--files-with-matches": "l",
+  "--files-without-match": "L",
+  "--word-regexp": "w",
+  "--line-regexp": "x",
+  "--fixed-strings": "F",
+  "--extended-regexp": "E",
+  "--perl-regexp": "P",
+  "--only-matching": "o",
+  "--text": "a",
+  "--quiet": "q",
+  "--silent": "q",
+  "--no-messages": "s",
+  "--no-filename": "h",
+  "--with-filename": "H",
+  "--null-data": "z",
+  "--recursive": "r",
+  "--dereference-recursive": "R"
+};
+var GREP_SHORT_VALUE = {
+  e: "e",
+  f: "f",
+  A: "A",
+  B: "B",
+  C: "C"
+};
+var GREP_LONG_VALUE = {
+  "--regexp": "e",
+  "--file": "f",
+  "--after-context": "A",
+  "--before-context": "B",
+  "--context": "C",
+  "--include": "include",
+  "--exclude": "exclude"
+};
+var GREP_EXCLUDE_NOTE = "grep --exclude became an rg negated glob, written -g !GLOB.";
+var GREP_EGREP_NOTE = "rg uses regular expressions by default, so egrep needed no extra flag.";
+function translateGrep(args, name2) {
+  const flags = [];
+  const notes = [];
+  const positional = [];
+  let patternGiven = false;
+  if (name2 === "fgrep") flags.push("-F");
+  if (name2 === "zgrep") flags.push("-z");
+  if (name2 === "egrep") addNote(notes, GREP_EGREP_NOTE);
+  const applyValue = (key, value) => {
+    if (key === "include") {
+      flags.push("-g", value);
+      return;
+    }
+    if (key === "exclude") {
+      flags.push("-g", "!" + value);
+      addNote(notes, GREP_EXCLUDE_NOTE);
+      return;
+    }
+    if (key === "e" || key === "f") patternGiven = true;
+    flags.push("-" + key, value);
+  };
+  let endOfFlags = false;
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    i += 1;
+    if (endOfFlags || arg === "-" || !arg.startsWith("-")) {
+      positional.push(arg);
+      continue;
+    }
+    if (arg === "--") {
+      endOfFlags = true;
+      continue;
+    }
+    if (arg.startsWith("--")) {
+      const eq = arg.indexOf("=");
+      const flagName = eq === -1 ? arg : arg.slice(0, eq);
+      const inline = eq === -1 ? void 0 : arg.slice(eq + 1);
+      const valueKey = GREP_LONG_VALUE[flagName];
+      if (valueKey !== void 0) {
+        let value = inline;
+        if (value === void 0) {
+          if (i >= args.length) return blocked(`The grep flag ${flagName} needs a value.`);
+          value = args[i];
+          i += 1;
+        }
+        applyValue(valueKey, value);
+        continue;
+      }
+      const plainKey = GREP_LONG_PLAIN[flagName];
+      if (plainKey !== void 0) {
+        if (inline !== void 0) return blocked(`The grep flag ${flagName} takes no value.`);
+        flags.push(...GREP_PLAIN_FLAGS[plainKey]);
+        const note = GREP_PLAIN_NOTES[plainKey];
+        if (note) addNote(notes, note);
+        continue;
+      }
+      return blocked(`rg has no safe equivalent for the grep flag ${flagName}.`);
+    }
+    let rest = arg.slice(1);
+    while (rest.length > 0) {
+      const key = rest[0];
+      rest = rest.slice(1);
+      if (GREP_SHORT_VALUE[key] !== void 0) {
+        let value = rest;
+        rest = "";
+        if (value === "") {
+          if (i >= args.length) return blocked(`The grep flag -${key} needs a value.`);
+          value = args[i];
+          i += 1;
+        }
+        applyValue(GREP_SHORT_VALUE[key], value);
+        continue;
+      }
+      if (GREP_PLAIN_FLAGS[key] === void 0) {
+        return blocked(`rg has no safe equivalent for the grep flag -${key}.`);
+      }
+      flags.push(...GREP_PLAIN_FLAGS[key]);
+      const note = GREP_PLAIN_NOTES[key];
+      if (note) addNote(notes, note);
+    }
+  }
+  if (!patternGiven && positional.length === 0) {
+    return blocked("The grep command has no pattern to translate.");
+  }
+  return { kind: "ok", argv: ["rg", ...flags, ...positional], notes };
+}
+var FIND_TYPES = ["f", "d", "l", "s", "p", "b", "c"];
+var FIND_SIZE_UNITS = {
+  c: "b",
+  k: "ki",
+  M: "mi",
+  G: "gi"
+};
+var FIND_OPERATORS = ["-o", "-or", "-a", "-and", "-not", "!", "(", ")"];
+var FIND_UNSAFE = ["-execdir", "-ok", "-okdir", "-fprint", "-fprintf", "-fls"];
+var FIND_IGNORE_NOTE = "fd skips hidden files and files listed in .gitignore by default. find does not.";
+var FIND_FULLPATH_NOTE = "fd -p matches the full absolute path. find matches the path from the start point.";
+var FIND_REGEX_NOTE = "fd matches a regex anywhere in the path. find -regex must match it all.";
+var FIND_SIZE_NOTE = "fd -S treats + and - as at least and at most. find treats them as strictly more and strictly less.";
+var FIND_LOGICAL_NOTE = "fd has no -H or -P flag. It does not follow symlinks unless --follow is given.";
+function translateFindSize(value) {
+  const match = /^([+-])([0-9]+)([ckMG])$/.exec(value);
+  if (!match) return void 0;
+  return match[1] + match[2] + FIND_SIZE_UNITS[match[3]];
+}
+function translateFind(args) {
+  const searchPaths = [];
+  const flags = [];
+  const notes = [FIND_IGNORE_NOTE];
+  let pattern;
+  let patternFrom;
+  let execFlag;
+  let execCmd = [];
+  let askWhy;
+  let askFrom;
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (arg === "-L") {
+      flags.push("--follow");
+      i += 1;
+      continue;
+    }
+    if (arg === "-H" || arg === "-P") {
+      addNote(notes, FIND_LOGICAL_NOTE);
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("-") || arg === "!" || arg === "(") break;
+    searchPaths.push(arg);
+    i += 1;
+  }
+  const setPattern = (predicate, value) => {
+    if (patternFrom !== void 0) {
+      return blocked(
+        `fd matches one pattern, so ${patternFrom} and ${predicate} can not be combined.`
+      );
+    }
+    patternFrom = predicate;
+    pattern = value;
+    return void 0;
+  };
+  const setAsk = (predicate, why) => {
+    if (askFrom !== void 0) {
+      return blocked(`fd runs one command, so ${askFrom} and ${predicate} can not be combined.`);
+    }
+    askFrom = predicate;
+    askWhy = why;
+    return void 0;
+  };
+  while (i < args.length) {
+    const arg = args[i];
+    i += 1;
+    if (FIND_OPERATORS.includes(arg)) {
+      return blocked(`fd has no boolean expressions, so the find operator ${arg} can not be used.`);
+    }
+    if (FIND_UNSAFE.includes(arg)) {
+      return blocked(`fd has no safe equivalent for the find predicate ${arg}.`);
+    }
+    const takeValue = () => {
+      if (i >= args.length) return void 0;
+      const value = args[i];
+      i += 1;
+      return value;
+    };
+    if (arg === "-name" || arg === "-iname" || arg === "-path" || arg === "-ipath" || arg === "-wholename" || arg === "-iwholename" || arg === "-regex") {
+      const value = takeValue();
+      if (value === void 0) return blocked(`The find predicate ${arg} needs a value.`);
+      const bad = setPattern(arg, value);
+      if (bad) return bad;
+      if (arg === "-regex") {
+        flags.push("--regex", "-p");
+        addNote(notes, FIND_REGEX_NOTE);
+        addNote(notes, FIND_FULLPATH_NOTE);
+        continue;
+      }
+      flags.push("-g");
+      if (arg === "-path" || arg === "-ipath" || arg === "-wholename" || arg === "-iwholename") {
+        flags.push("-p");
+        addNote(notes, FIND_FULLPATH_NOTE);
+      }
+      if (arg === "-iname" || arg === "-ipath" || arg === "-iwholename") flags.push("-i");
+      continue;
+    }
+    if (arg === "-type") {
+      const value = takeValue();
+      if (value === void 0) return blocked(`The find predicate ${arg} needs a value.`);
+      if (!FIND_TYPES.includes(value)) {
+        return blocked(`fd has no equivalent for the find type ${value}.`);
+      }
+      flags.push("-t", value);
+      continue;
+    }
+    if (arg === "-maxdepth" || arg === "-mindepth") {
+      const value = takeValue();
+      if (value === void 0) return blocked(`The find predicate ${arg} needs a value.`);
+      if (!/^[0-9]+$/.test(value)) {
+        return blocked(`The find predicate ${arg} needs a whole number, not ${value}.`);
+      }
+      flags.push(arg === "-maxdepth" ? "-d" : "--min-depth", value);
+      continue;
+    }
+    if (arg === "-size") {
+      const value = takeValue();
+      if (value === void 0) return blocked(`The find predicate ${arg} needs a value.`);
+      const size = translateFindSize(value);
+      if (size === void 0) {
+        return blocked(`fd has no equivalent for the find size ${value}.`);
+      }
+      flags.push("-S", size);
+      addNote(notes, FIND_SIZE_NOTE);
+      continue;
+    }
+    if (arg === "-newer") {
+      return blocked(
+        "fd --newer takes a date or a duration, not a file name, so the find predicate -newer has no translation."
+      );
+    }
+    if (arg === "-empty") {
+      flags.push("-t", "e");
+      continue;
+    }
+    if (arg === "-print0") {
+      flags.push("-0");
+      continue;
+    }
+    if (arg === "-print") {
+      continue;
+    }
+    if (arg === "-follow" || arg === "-L") {
+      flags.push("--follow");
+      continue;
+    }
+    if (arg === "-H" || arg === "-P") {
+      addNote(notes, FIND_LOGICAL_NOTE);
+      continue;
+    }
+    if (arg === "-delete") {
+      return blocked(
+        "fd has no delete flag, and fd skips files listed in .gitignore, so -delete would remove a different set of files than find removes."
+      );
+    }
+    if (arg === "-exec") {
+      const cmd = [];
+      let terminator;
+      while (i < args.length) {
+        const part = args[i];
+        i += 1;
+        if (part === ";" || part === "\\;" || part === "+") {
+          terminator = part === "+" ? "+" : ";";
+          break;
+        }
+        cmd.push(part);
+      }
+      if (terminator === void 0) {
+        return blocked("The find predicate -exec has no ; or + terminator.");
+      }
+      if (cmd.length === 0) {
+        return blocked("The find predicate -exec has no command to run.");
+      }
+      const bad = setAsk(
+        arg,
+        `The find predicate ${arg} runs another command, so it needs approval.`
+      );
+      if (bad) return bad;
+      execFlag = terminator === ";" ? "-x" : "-X";
+      execCmd = cmd;
+      continue;
+    }
+    return blocked(`fd has no safe equivalent for the find predicate ${arg}.`);
+  }
+  const argv = ["fd"];
+  for (const path3 of searchPaths) argv.push("--search-path", path3);
+  argv.push(...flags);
+  if (pattern !== void 0) argv.push(pattern);
+  if (execFlag !== void 0) argv.push(execFlag, ...execCmd);
+  if (askWhy !== void 0) return { kind: "ask", argv, notes, why: askWhy };
+  return { kind: "ok", argv, notes };
+}
+var TRANSLATORS = {
+  grep: translateGrep,
+  find: translateFind
+};
+
+// plugins/bash-guard.ts
 var name = "bash-guard";
 var inject = [];
 var Config = z.object({
@@ -4575,23 +4963,26 @@ async function loadRules(ctx, dir) {
           rewrites.push(cleanRewrite);
         }
       }
-      for (const cmd of clean) {
-        if (!rewrites) {
-          rules.set(cmd, {
-            commands: entry.commands,
-            verdict: entry.verdict,
-            reason: entry.reason,
-            subcommands
-          });
-        } else {
-          rules.set(cmd, {
-            commands: entry.commands,
-            verdict: entry.verdict,
-            reason: entry.reason,
-            subcommands,
-            rewrites
-          });
+      let translate;
+      if (entry.translate !== void 0) {
+        if (typeof entry.translate !== "string" || entry.translate.length === 0) {
+          throw new Error(`bad translate: ${String(entry.translate)}`);
         }
+        if (!Object.hasOwn(TRANSLATORS, entry.translate)) {
+          throw new Error(`unknown translate: ${entry.translate}`);
+        }
+        translate = entry.translate;
+      }
+      for (const cmd of clean) {
+        const built = {
+          commands: entry.commands,
+          verdict: entry.verdict,
+          reason: entry.reason,
+          subcommands
+        };
+        if (rewrites) built.rewrites = rewrites;
+        if (translate) built.translate = translate;
+        rules.set(cmd, built);
       }
       ctx.logger.debug(`bash-guard: loaded ${clean.length} command(s) from rule file ${name2}`);
     } catch (error) {
@@ -4695,7 +5086,28 @@ function scratchAllowed(refs, safePaths, workspaceRoot) {
     return safePaths.some((sp) => isUnderScratch(n, sp));
   });
 }
+var GLOB_CHARS = ["*", "?", "[", "]", "{", "}", "~"];
+var LITERAL_WORDS = /* @__PURE__ */ new Set(["{}"]);
+function translatableRef(ref, command) {
+  if (ref.source !== command) {
+    return {
+      ok: false,
+      why: "it sits inside a wrapper, so its offsets address a rebuilt string"
+    };
+  }
+  if (ref.node.name === void 0) return { ok: false, why: "it has no command word" };
+  for (const word of [ref.node.name, ...ref.node.suffix]) {
+    if (!isStaticallyResolvable(word)) {
+      return { ok: false, why: `\`${word.text}\` depends on a shell expansion` };
+    }
+    if (word.text === (word.value ?? word.text) && !LITERAL_WORDS.has(word.text) && GLOB_CHARS.some((c) => word.text.includes(c))) {
+      return { ok: false, why: `the shell expands \`${word.text}\` before the command runs` };
+    }
+  }
+  return { ok: true };
+}
 async function evaluate(ctx, dirs, command, depth, safePaths, workspaceRoot, templates) {
+  const notes = [];
   let script;
   try {
     script = parse(command);
@@ -4704,6 +5116,7 @@ async function evaluate(ctx, dirs, command, depth, safePaths, workspaceRoot, tem
     ctx.logger.warn(`bash-guard: parse error in command; denying: ${command} (error: ${errorMsg})`);
     return {
       command,
+      notes,
       decision: {
         kind: "deny",
         reason: `bash-guard: could not parse the command; refusing to run it unparsed. ${errorMsg}`
@@ -4715,6 +5128,7 @@ async function evaluate(ctx, dirs, command, depth, safePaths, workspaceRoot, tem
     ctx.logger.warn(`bash-guard: script parse errors; denying: ${command} (errors: ${messages})`);
     return {
       command,
+      notes,
       decision: {
         kind: "deny",
         reason: `bash-guard: parse errors in command; refusing to run it unparsed. ${messages}`
@@ -4727,7 +5141,7 @@ async function evaluate(ctx, dirs, command, depth, safePaths, workspaceRoot, tem
   ctx.logger.debug(`bash-guard: extracted ${all.length} command(s) from: ${command}`);
   if (safePaths.length > 0 && scratchAllowed(all, safePaths, workspaceRoot)) {
     ctx.logger.info(`bash-guard: scratch write allowed: ${command}`);
-    return { command, decision: null };
+    return { command, notes, decision: null };
   }
   const rules = await loadRulesMulti(ctx, dirs);
   const hits = all.map((ref) => {
@@ -4779,18 +5193,132 @@ async function evaluate(ctx, dirs, command, depth, safePaths, workspaceRoot, tem
         `bash-guard: rewrite (${logBecauses.join("; ")}) ${command} -> ${rewritten}`
       );
       if (depth < 5) {
-        return evaluate(ctx, dirs, rewritten, depth + 1, safePaths, workspaceRoot, templates);
+        const inner = await evaluate(
+          ctx,
+          dirs,
+          rewritten,
+          depth + 1,
+          safePaths,
+          workspaceRoot,
+          templates
+        );
+        return { ...inner, notes: [...notes, ...inner.notes] };
       }
       command = rewritten;
     }
   }
+  if (depth === 0 && hits.some((h) => h.rule.translate)) {
+    const ranges = [];
+    for (const hit of hits) {
+      const key = hit.rule.translate;
+      if (key === void 0) continue;
+      const translator = TRANSLATORS[key];
+      if (translator === void 0) {
+        ctx.logger.warn(`bash-guard: no translator named "${key}"; leaving ${hit.name} as written`);
+        continue;
+      }
+      const node = hit.ref.node;
+      const splice = translatableRef(hit.ref, command);
+      if (splice.ok === false) {
+        ctx.logger.debug(`bash-guard: not translating ${hit.name} in ${command}: ${splice.why}`);
+        continue;
+      }
+      const outcome = translator(getCommandArgs(hit.ref), hit.name);
+      if (outcome.kind === "blocked") {
+        const text = command.slice(node.pos, node.end);
+        ctx.logger.warn(`bash-guard: translation blocked for ${hit.name}: ${outcome.why}`);
+        return {
+          command,
+          notes,
+          decision: {
+            kind: "deny",
+            reason: `bash-guard: could not translate \`${text}\`. ${outcome.why} Run the rg or fd equivalent yourself.`
+          }
+        };
+      }
+      const start = node.name.pos;
+      const end = node.suffix.length > 0 ? node.suffix[node.suffix.length - 1].end : node.name.end;
+      if (node.redirects.some((r) => r.pos >= start && r.pos < end)) {
+        return {
+          command,
+          notes,
+          decision: {
+            kind: "deny",
+            reason: `bash-guard: could not translate \`${command.slice(start, end)}\`. A redirect sits between the arguments. Run the rg or fd equivalent yourself.`
+          }
+        };
+      }
+      const shown = outcome.argv.map(shellQuote).join(" ");
+      const lines = [
+        `bash-guard: ran \`${shown}\` instead of \`${command.slice(start, end)}\`. Call rg and fd directly next time.`
+      ];
+      for (const note of outcome.notes) {
+        if (note.length > 0) lines.push(note);
+      }
+      ranges.push({
+        start,
+        end,
+        text: outcome.argv.map(shellQuote).join(" "),
+        lines,
+        why: outcome.kind === "ask" ? outcome.why : void 0
+      });
+    }
+    if (ranges.length > 0) {
+      ranges.sort((a, b) => a.start - b.start);
+      let translated = "";
+      let lastEnd = 0;
+      const whys = [];
+      for (const range of ranges) {
+        if (range.start < lastEnd) continue;
+        translated += command.slice(lastEnd, range.start) + range.text;
+        lastEnd = range.end;
+        notes.push(...range.lines);
+        if (range.why !== void 0) whys.push(range.why);
+      }
+      translated += command.slice(lastEnd);
+      ctx.logger.info(`bash-guard: translated ${command} -> ${translated}`);
+      if (depth < 5) {
+        const inner = await evaluate(
+          ctx,
+          dirs,
+          translated,
+          depth + 1,
+          safePaths,
+          workspaceRoot,
+          templates
+        );
+        const merged = [...notes, ...inner.notes];
+        if (whys.length > 0 && inner.decision?.kind !== "deny") {
+          return {
+            command: inner.command,
+            notes: merged,
+            decision: {
+              kind: "ask",
+              // The caveats must appear in the PROMPT. A note delivered after
+              // the run reaches the user too late to inform the approval, and
+              // never arrives at all when the user rejects the call.
+              reason: `bash-guard: the translated command needs approval:
+
+  ${inner.command}
+
+` + whys.map((w) => `  \u2022 ${w}`).join("\n") + (merged.length > 0 ? `
+
+${merged.join("\n")}` : "")
+            }
+          };
+        }
+        return { ...inner, notes: merged };
+      }
+      command = translated;
+    }
+  }
   if (all.length === 0) {
     ctx.logger.debug(`bash-guard: no actual commands found in: ${command}`);
-    return { command, decision: null };
+    return { command, notes, decision: null };
   }
   if (hits.length === 0) {
     ctx.logger.debug(`bash-guard: no rules matched for: ${command}`);
-    return { command, decision: null };
+    return { command, notes, decision: null };
   }
   const verdicts = hits.map((h) => h.verdict);
   const overall = mostRestrictive(verdicts);
@@ -4803,7 +5331,7 @@ async function evaluate(ctx, dirs, command, depth, safePaths, workspaceRoot, tem
       });
       const ruleNames = [...new Set(denying.map((h) => h.name))].join(", ");
       ctx.logger.warn(`bash-guard: command denied by rules [${ruleNames}]: ${command}`);
-      return { command, decision: { kind: "deny", reason } };
+      return { command, notes, decision: { kind: "deny", reason } };
     }
     case "ask": {
       const asking = hits.filter((h) => h.verdict === "ask");
@@ -4815,6 +5343,7 @@ async function evaluate(ctx, dirs, command, depth, safePaths, workspaceRoot, tem
       ctx.logger.warn(`bash-guard: command asks for approval by rules [${ruleNames}]: ${command}`);
       return {
         command,
+        notes,
         decision: { kind: "ask", reason }
       };
     }
@@ -4822,11 +5351,13 @@ async function evaluate(ctx, dirs, command, depth, safePaths, workspaceRoot, tem
     case "none":
     default:
       ctx.logger.debug(`bash-guard: command allowed: ${command}`);
-      return { command, decision: null };
+      return { command, notes, decision: null };
   }
 }
 function apply(ctx, config) {
   const baseDir = resolveHome(config.guardsDir ?? "$DSH_HOME/plugins/guards");
+  const pendingNotes = /* @__PURE__ */ new Map();
+  const MAX_PENDING_NOTES = 64;
   ctx.on("tools/pre-execute", async (exec, next) => {
     if (exec.name !== "bash") return next();
     const command = exec.arguments?.command;
@@ -4855,11 +5386,58 @@ function apply(ctx, config) {
       try {
         exec.arguments.command = result.command;
       } catch {
-        ctx.logger.warn("bash-guard: could not apply rewritten command; running original");
+        ctx.logger.warn("bash-guard: could not apply rewritten command; refusing the call");
+        pendingNotes.delete(exec.callId);
+        return {
+          kind: "deny",
+          reason: "bash-guard: could not apply the translated command; refusing to run the original."
+        };
+      }
+    }
+    if (result.decision?.kind === "deny") {
+      pendingNotes.delete(exec.callId);
+    } else if (result.notes.length > 0) {
+      pendingNotes.set(exec.callId, result.notes.join("\n"));
+      while (pendingNotes.size > MAX_PENDING_NOTES) {
+        const oldest = pendingNotes.keys().next().value;
+        if (oldest === void 0) break;
+        pendingNotes.delete(oldest);
       }
     }
     if (result.decision === null) return next();
     return result.decision;
+  });
+  ctx.on("tools/post-execute", async (exec, result, next) => {
+    if (exec.name !== "bash") return next();
+    let decision;
+    try {
+      const note = pendingNotes.get(exec.callId);
+      if (note === void 0) return next();
+      pendingNotes.delete(exec.callId);
+      const block = { type: "text", text: note };
+      decision = await next();
+      if (decision.kind === "block") {
+        return {
+          kind: "block",
+          feedback: [block, ...decision.feedback],
+          additionalContexts: decision.additionalContexts
+        };
+      }
+      if (Object.hasOwn(decision, "value")) {
+        ctx.logger.debug("bash-guard: post-execute decision carries a value; dropping the note");
+        return decision;
+      }
+      return {
+        kind: "accept",
+        content: [block, ...decision.content ?? result.content],
+        additionalContexts: decision.additionalContexts
+      };
+    } catch (error) {
+      ctx.logger.warn(
+        `bash-guard: could not attach the translation note: ${error instanceof Error ? error.message : String(error)}`
+      );
+      return decision ?? next();
+    }
   });
 }
 export {

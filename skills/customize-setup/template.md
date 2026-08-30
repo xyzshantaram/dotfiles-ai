@@ -49,7 +49,8 @@ The personal bundle lives in this repo at the repo root. Its parts are:
   with `name`, `description`, and `whenToUse` in frontmatter.
 - `plugins/*.ts` with bundled `*.js` — the personal host-plane plugins and
   their esbuild bundles.
-- `guards/*.json` — the bash-guard deny rule drop-ins (git, find, grep).
+- `guards/*.json` — the bash-guard rule drop-ins (git, find, grep). A rule sets
+  a verdict, and it may also name a built-in translator with `translate`.
 - `home/` — files that sync verbatim into `$DSH_HOME` (`AGENTS.md`, the
   dsh-better-edit guidance overrides).
 - `build.mjs` — bundles the host-plane plugins into self-contained ESM.
