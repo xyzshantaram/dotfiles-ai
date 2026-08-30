@@ -292,6 +292,7 @@ function analyzeDocument(doc, text) {
       }
       const p = {
         name,
+        keyOffset: pair.key.srcToken.offset,
         map,
         api: map?.get?.("api"),
         baseURL: map?.get?.("baseURL"),
@@ -382,6 +383,21 @@ function modelsBlockLines(providerMap, text) {
   return { keyLine, last };
 }
 
+// Line extent of a whole provider block: its key line through its last
+// property line. A provider key sits at indent 4 and its properties at 6.
+function providerBlockLines(p, text) {
+  const lines = text.split("\n");
+  const keyLine = lineOfOffset(text, p.keyOffset);
+  let last = keyLine;
+  for (let i = keyLine + 1; i < lines.length; i++) {
+    const t = lines[i];
+    if (t.trim() === "") continue;
+    const ind = (t.match(/^\s*/) || [""])[0].length;
+    if (ind < 6) break;
+    last = i;
+  }
+  return { keyLine, last };
+}
 async function fetchModelIds(baseURL, apiKey, path = "/models") {
   const url = baseURL.replace(/\/+$/, "") + path;
   const headers = {};
@@ -428,7 +444,16 @@ function entryText(id, name, meta) {
     if (typeof meta.contextWindow === "number")
       out.push(`        contextWindow: ${meta.contextWindow}`);
     if (typeof meta.maxTokens === "number") out.push(`        maxTokens: ${meta.maxTokens}`);
-    if (meta.image) out.push(`        defaultInput:`, `        - text`, `        - image`);
+    // A models entry declares its modalities as `input`, NOT `defaultInput`.
+    // `defaultInput` is a PROVIDER-level key that supplies the fallback for
+    // entries that declare no `input` (dsh-llm-pi-ai `modelFields` vs
+    // `profile`). Writing `defaultInput` on an entry is silently ignored, so
+    // every model inherited its provider default instead.
+    // Always emit `input`, text-only included. Leaving it off would make the
+    // entry fall back to the provider default, and meridian defaults to
+    // [text, image], which would report a text-only model as vision-capable.
+    out.push(`        input:`, `        - text`);
+    if (meta.image) out.push(`        - image`);
     if (meta.reasoningEfforts) {
       out.push(`        reasoningEfforts:`);
       for (const [level, wire] of Object.entries(meta.reasoningEfforts)) {
@@ -528,10 +553,12 @@ async function main() {
       };
       block.push(...entryText(id, displayName(id, entry), meta));
       chainVision.set(`${p.name}/${id}`, tierVision);
-      // Track the defaultInput delta against the file's current entries.
+      // Track the image-input delta against the file's current entries. Read
+      // both key names: `input` is what we write now, `defaultInput` is the
+      // wrong key older runs wrote, and a file mid-migration can hold either.
       const existing = p.models?.items?.find((it) => it?.get?.("id") === id);
       if (existing) {
-        const di = existing.get("defaultInput");
+        const di = existing.get("input") ?? existing.get("defaultInput");
         const hadImage = !!di?.items?.some((n) => n?.value === "image");
         if (vision && !hadImage) defaultInputChanges.gained++;
         if (!vision && hadImage) defaultInputChanges.lost++;
@@ -540,26 +567,28 @@ async function main() {
     const markerBlock = [MARKER_BEGIN, ...block, MARKER_END];
 
     const blockLines = modelsBlockLines(p.map, text);
-    // A gateway-extras route whose extras set is empty must not keep an empty
-    // `models:` block. pi-ai validates that every provider resolves at least
-    // one model ("resolves no models; the installed catalog does not describe
-    // this route"), so an empty list breaks startup. The schema itself is no
-    // help: it coerces a null `models:` to `[]`, and the emptiness check runs
-    // later. Delete the whole block instead. A later run recreates the markers
-    // if the gateway ever ships something the catalog lacks.
+    // A gateway-extras route whose extras set is empty leaves nothing to
+    // declare. pi-ai rejects any provider that resolves no models ("resolves
+    // no models; the installed catalog does not describe this route"), and the
+    // schema is no help: it coerces a null `models:` to `[]`, then the
+    // emptiness check runs later and fails. Removing only the `models:` key
+    // does not save it either, because the provider still resolves nothing.
     if (ids.length === 0) {
-      if (blockLines) {
-        edits.push({
-          at: blockLines.keyLine,
-          deleteCount: blockLines.last - blockLines.keyLine + 1,
-          block: [],
-        });
-        console.log("  + would remove the empty models: block (catalog covers every id)");
-        summary.push({ provider: p.name, added: 0 });
-      } else {
-        console.log("  + no extras and no models: block; nothing to do");
-      }
+      // Delete the WHOLE provider block, not just its `models:` key. pi-ai
+      // rejects any provider that resolves no models, so a provider left
+      // behind with no models breaks startup exactly as an empty list does.
+      const pb = providerBlockLines(p, text);
+      edits.push({
+        at: pb.keyLine,
+        deleteCount: pb.last - pb.keyLine + 1,
+        block: [],
+      });
+      console.log(
+        `  + would remove the whole ${p.name} provider block (catalog covers every id it serves)`,
+      );
+      summary.push({ provider: p.name, added: 0 });
       p.modelIds = new Set();
+      byName.delete(p.name);
       continue;
     }
 
@@ -718,7 +747,7 @@ async function main() {
     `  metadata tiers: ${tierCounts[1]} tier-1, ${tierCounts[2]} tier-2, ${tierCounts[3]} tier-3, ${tierCounts.none} unmatched.`,
   );
   console.log(
-    `  defaultInput: ${defaultInputChanges.gained} gained, ${defaultInputChanges.lost} lost.`,
+    `  image input: ${defaultInputChanges.gained} gained, ${defaultInputChanges.lost} lost.`,
   );
 }
 
