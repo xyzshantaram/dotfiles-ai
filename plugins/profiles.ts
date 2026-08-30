@@ -906,8 +906,8 @@ export function apply(ctx: Context, config: unknown): void {
     name: "tool:profiles",
     order: 116.4,
     text:
-      "Every subagent runs on the profile-routed worker chain with automatic " +
-      "failover: the subagent tool is pinned to the worker chain head and a " +
+      "Every subagent runs on the profile-routed subagent chain with automatic " +
+      "failover: the subagent tool is pinned to the subagent chain head and a " +
       "fault advances to the next rung (see the profile settings panel). " +
       "Start independent delegations together in one message.",
   });

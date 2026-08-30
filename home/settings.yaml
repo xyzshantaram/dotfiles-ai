@@ -266,6 +266,9 @@ llm-pi-ai:
         - image
       - id: z-ai/glm-5.3-flash
         name: Glm 5.3 Flash
+        defaultInput:
+        - text
+        - image
       - id: zai-org/GLM-5.3
         name: GLM 5.3
       - id: zai-org/GLM-5.2
@@ -606,11 +609,11 @@ profile:
       - chain:see
   work:
     orchestrator: work-orchestrator
-    subagent: worker
+    subagent: subagent-work
   personal:
     orchestrator: personal-orchestrator
-    subagent: worker
+    subagent: subagent
 
 
 modelSync:
-  lastRun: 2026-08-30T17:23:57.462Z
+  lastRun: 2026-08-30T17:50:04.938Z
