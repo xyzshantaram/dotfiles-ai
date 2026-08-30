@@ -82,6 +82,9 @@ const VISION_MODELS = new Set([
   "Qwen/Qwen3.7-Flash",
   "Qwen/Qwen3.6-Max-Preview",
   "Qwen/Qwen3.6-Plus",
+  // Z.AI ships GLM-5.3-Flash as a VLM (docs.z.ai/guides/vlm/glm-5.3-flash),
+  // but the gateway id carries the `z-ai/` prefix, which no catalog indexes.
+  "z-ai/glm-5.3-flash",
 ]);
 
 // The pi-ai provider catalogs bundled in node_modules are a second, local source
