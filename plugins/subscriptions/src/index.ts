@@ -840,8 +840,10 @@ export function apply(ctx, config) {
     }
     try {
       if (credentials !== undefined) await credentials.set("DEEPSEEK_PLATFORM_TOKEN", found.token);
+      ctx.logger.info("wrote DEEPSEEK_PLATFORM_TOKEN credential");
       sendJson(res, 200, { ok: true, saved: true });
     } catch (error) {
+      ctx.logger.warn("failed to write DEEPSEEK_PLATFORM_TOKEN credential");
       sendJson(res, 200, {
         ok: false,
         error:
@@ -919,8 +921,10 @@ export function apply(ctx, config) {
     }
     try {
       if (credentials !== undefined) await credentials.set("OPENCODE_SESSION_COOKIE", found.cookie);
+      ctx.logger.info("wrote OPENCODE_SESSION_COOKIE credential");
       sendJson(res, 200, { ok: true, saved: true });
     } catch (error) {
+      ctx.logger.warn("failed to write OPENCODE_SESSION_COOKIE credential");
       sendJson(res, 200, {
         ok: false,
         error:

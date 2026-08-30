@@ -8,16 +8,22 @@ import { scopeOf } from "@deepseek-ai/dsh-scope";
 function isRouteCandidate(value) {
   return typeof value === "object" && value !== null && typeof value.provider === "string" && value.provider.length > 0 && typeof value.model === "string" && value.model.length > 0;
 }
-function normalizeEntry(entry, chains, seen) {
+function normalizeEntry(entry, chains, seen, ctx) {
   if (isRouteCandidate(entry)) return [entry];
   if (typeof entry === "string") {
     if (entry.startsWith("chain:")) {
       const name2 = entry.slice("chain:".length);
-      if (chains?.[name2] === void 0) return [];
+      if (chains?.[name2] === void 0) {
+        ctx?.logger?.debug(`unknown chain reference: ${name2}`);
+        return [];
+      }
       const guard = new Set(seen ?? []);
-      if (guard.has(name2)) return [];
+      if (guard.has(name2)) {
+        ctx?.logger?.debug(`circular chain reference: ${name2}`);
+        return [];
+      }
       guard.add(name2);
-      return normalizeEntry(chains[name2], chains, guard);
+      return normalizeEntry(chains[name2], chains, guard, ctx);
     }
     const slash = entry.indexOf("/");
     if (slash > 0) {
@@ -25,10 +31,14 @@ function normalizeEntry(entry, chains, seen) {
     }
     if (chains?.[entry] !== void 0) {
       const guard = new Set(seen ?? []);
-      if (guard.has(entry)) return [];
+      if (guard.has(entry)) {
+        ctx?.logger?.debug(`circular chain reference: ${entry}`);
+        return [];
+      }
       guard.add(entry);
-      return normalizeEntry(chains[entry], chains, guard);
+      return normalizeEntry(chains[entry], chains, guard, ctx);
     }
+    ctx?.logger?.debug(`unknown chain reference: ${entry}`);
     return [];
   }
   if (typeof entry === "object" && entry !== null) {
@@ -45,46 +55,67 @@ function normalizeEntry(entry, chains, seen) {
               const guard = new Set(seen ?? []);
               if (!guard.has(name2)) {
                 guard.add(name2);
-                out.push(...normalizeEntry(chains[name2], chains, guard));
+                out.push(...normalizeEntry(chains[name2], chains, guard, ctx));
               }
             }
           } else if (chains?.[step] !== void 0) {
             const guard = new Set(seen ?? []);
             if (!guard.has(step)) {
               guard.add(step);
-              out.push(...normalizeEntry(chains[step], chains, guard));
+              out.push(...normalizeEntry(chains[step], chains, guard, ctx));
             }
           } else if (step.indexOf("/") > 0) {
             const slash = step.indexOf("/");
             out.push({ provider: step.slice(0, slash), model: step.slice(slash + 1) });
           }
         } else {
-          out.push(...normalizeEntry(step, chains, seen));
+          out.push(...normalizeEntry(step, chains, seen, ctx));
         }
       }
       return out;
     }
   }
+  ctx?.logger?.debug("profile entry resolved to empty chain");
   return [];
 }
-function chainOf(entry, chainName, chains) {
+function chainOf(entry, chainName, chains, ctx) {
   if (typeof entry === "object" && entry !== null) {
     const obj = entry;
     if ("orchestrator" in obj || "subagent" in obj) {
       const own = normalizeEntry(
         chainName === "orchestrator" ? obj.orchestrator : obj.subagent,
-        chains
+        chains,
+        void 0,
+        ctx
       );
-      if (own.length > 0) return own;
+      if (own.length > 0) {
+        ctx?.logger?.info(`chain resolved: ${chainName} -> ${own[0].provider}/${own[0].model}`);
+        return own;
+      }
+      const otherName = chainName === "orchestrator" ? "subagent" : "orchestrator";
       const other = normalizeEntry(
         chainName === "orchestrator" ? obj.subagent : obj.orchestrator,
-        chains
+        chains,
+        void 0,
+        ctx
       );
-      if (other.length > 0) return other;
+      if (other.length > 0) {
+        ctx?.logger?.warn(`fallback: ${chainName} chain empty, using ${otherName} chain`);
+        return other;
+      }
+      ctx?.logger?.debug(`no routes in entry for ${chainName} chain`);
       return [];
     }
   }
-  return normalizeEntry(entry, chains);
+  const resolved = normalizeEntry(entry, chains, void 0, ctx);
+  if (resolved.length > 0) {
+    ctx?.logger?.info(
+      `chain resolved: ${chainName} -> ${resolved[0].provider}/${resolved[0].model}`
+    );
+  } else {
+    ctx?.logger?.debug(`no routes for ${chainName} chain`);
+  }
+  return resolved;
 }
 
 // plugins/shared/output-text.ts

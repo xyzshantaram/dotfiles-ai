@@ -12,14 +12,23 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#61155267d13b4823e8c5a12e0f52c4d94c3e817b}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#daf1f9634a7eb5b47d337ef2a623e52c263fa2d8}"
 
 step_install_deps() {
 	(cd "$REPO" && pnpm install)
 }
 
 step_build_plugins() {
-	(cd "$HERE" && node build.mjs)
+	local out rc
+	out="$(cd "$HERE" && node build.mjs 2>&1)"
+	rc=$?
+	if [ "$rc" -ne 0 ]; then
+		printf '%s\n' "$out"
+		return "$rc"
+	fi
+	# esbuild prints, per bundle: a blank line, a "⚡ Done in Nms" line, and a
+	# "<path> <size>" line. Keep only the filename+size lines.
+	printf '%s\n' "$out" | rg 'plugins/\S+\s+\d+(\.\d+)?k?b\s*$' || true
 }
 
 step_sync_skills() {
@@ -28,6 +37,7 @@ step_sync_skills() {
 }
 
 step_sync_agents_md() {
+  echo "  syncing AGENTS.md -> $DSH_HOME/AGENTS.md"
 	cp "$HERE/home/AGENTS.md" "$DSH_HOME/AGENTS.md"
 }
 
@@ -218,6 +228,7 @@ step_install_plugins() {
 		pnpm_ins "$HERE/plugins/tool-render"
 		pnpm_ins "$HERE/plugins/profiles-client"
 		pnpm_ins "$HERE/plugins/approval-comment"
+		pnpm_ins "$HERE/plugins/log-viewer"
 		pnpm_ins "$HERE/plugins/llm-pi-ai"
 	else
 		echo "WARNING: dsh not on PATH; skipping third-party plugin installs."
@@ -258,6 +269,7 @@ step_report_extra_plugins() {
 		"profiles-client"
 		"session-archive"
 		"subscriptions"
+		"log-viewer"
 		"tool-render"
 
 		"dsh-plugin-better-mobile-ui"
@@ -401,6 +413,7 @@ step_register_aidos_preset() {
 	# deployed preset re-exports via an absolute shim, so rewrite that row.
 	# Keep every other row (tool-bash, tool-fs, etc) verbatim.
 	if rg -q '^[[:space:]]*-[[:space:]]*name:[[:space:]]*\./aidos-tools\.js' "$DSH_HOME/.agent-presets/aidos/agent.cordis.yml"; then
+    echo "  rewrote aidos-tools.js row -> aidos-loader.js"
 		sed -i 's#^[[:space:]]*-[[:space:]]*name:[[:space:]]*\./aidos-tools\.js#- name: ./aidos-loader.js#' "$DSH_HOME/.agent-presets/aidos/agent.cordis.yml"
 	else
 		if ! rg -q 'aidos-loader\.js' "$DSH_HOME/.agent-presets/aidos/agent.cordis.yml"; then
@@ -432,6 +445,7 @@ EOF
 		return 0
 	fi
 	if rg -q '^[[:space:]]*order:' "$DSH_HOME/.agent-presets/aidos/preset.yml"; then
+    echo "  pinned aidos preset order: 3"
 		sed -i 's/^[[:space:]]*order:.*/order: 3/' "$DSH_HOME/.agent-presets/aidos/preset.yml"
 	else
 		echo "order: 3" >> "$DSH_HOME/.agent-presets/aidos/preset.yml"
@@ -440,14 +454,14 @@ EOF
 
 step_patch_standard_preset_tool_subagent() {
 	# Pin every subagent dispatched through the shipped `standard` preset
-	# onto the `worker` profile chain (its first route). Done by editing the
+	# onto the `subagent` profile chain (its first route). Done by editing the
 	# shipped standard preset in place: the bundle owns the dsh install on
 	# this machine, and re-running sync is idempotent. A dsh reinstall that
 	# re-extracts the preset would silently revert; rerun sync to restore.
 	#
 	# Why: subagents inherit the parent agent's provider/model unless pinned,
 	# so without this the main agent's orchestrator head (e.g. hy3-free)
-	# leaks into subagent dispatches and the worker chain is never walked.
+	# leaks into subagent dispatches and the subagent chain is never walked.
 	#
 	# Why not copy the preset: the user owns the install and prefers the
 	# direct edit. The patch is one row in one file; no new preset directory.
@@ -464,21 +478,68 @@ step_patch_standard_preset_tool_subagent() {
 		return 0
 	fi
 
-	local worker_head
-	worker_head="$(WORKER_YAML="$HERE/home/settings.yaml" python3 - <<'PY'
+	local subagent_head
+	subagent_head="$(SUBAGENT_YAML="$HERE/home/settings.yaml" python3 - <<'PY'
 import os, sys, yaml
-d = yaml.safe_load(open(os.environ['WORKER_YAML'])) or {}
-routes = ((d.get('profile') or {}).get('chains') or {}).get('worker', {}).get('routes') or []
+
+# Mirrors plugins/profile-routes.ts's normalizeEntry: a chain entry may be a
+# single route dict, a "provider/model" string (split on the FIRST slash, so
+# a sub-provider model id like command-code/deepseek/deepseek-v4-flash keeps
+# its slash), a "chain:<name>" or bare chain-name ref into the `chains` map,
+# a {routes: [...]} object, or an array composing any of those in order.
+def normalize_entry(entry, chains, seen=None):
+    seen = seen or set()
+    if (isinstance(entry, dict) and isinstance(entry.get('provider'), str) and entry.get('provider')
+            and isinstance(entry.get('model'), str) and entry.get('model')):
+        return [entry]
+    if isinstance(entry, str):
+        if entry.startswith('chain:'):
+            name = entry[len('chain:'):]
+            if name not in chains or name in seen:
+                return []
+            return normalize_entry(chains[name], chains, seen | {name})
+        slash = entry.find('/')
+        if slash > 0:
+            return [{'provider': entry[:slash], 'model': entry[slash + 1:]}]
+        if entry in chains and entry not in seen:
+            return normalize_entry(chains[entry], chains, seen | {entry})
+        return []
+    if isinstance(entry, dict):
+        routes = entry.get('routes')
+        if isinstance(routes, list):
+            return [r for r in routes if isinstance(r, dict) and r.get('provider') and r.get('model')]
+        return []
+    if isinstance(entry, list):
+        out = []
+        for step in entry:
+            if isinstance(step, str):
+                if step.startswith('chain:'):
+                    name = step[len('chain:'):]
+                    if name in chains and name not in seen:
+                        out.extend(normalize_entry(chains[name], chains, seen | {name}))
+                elif step in chains and step not in seen:
+                    out.extend(normalize_entry(chains[step], chains, seen | {step}))
+                elif step.find('/') > 0:
+                    s = step.find('/')
+                    out.append({'provider': step[:s], 'model': step[s + 1:]})
+            else:
+                out.extend(normalize_entry(step, chains, seen))
+        return out
+    return []
+
+d = yaml.safe_load(open(os.environ['SUBAGENT_YAML'])) or {}
+chains = (d.get('profile') or {}).get('chains') or {}
+routes = normalize_entry(chains.get('subagent'), chains)
 if not routes:
-    sys.exit('no worker chain routes in home/settings.yaml')
+    sys.exit('no subagent chain routes in home/settings.yaml')
 r = routes[0]
 print(f"{r['provider']} {r['model']}")
 PY
-	)" || { echo "  ERROR: failed to read worker head: $worker_head"; return 1; }
-	local w_provider="${worker_head%% *}"
-	local w_model="${worker_head#* }"
+	)" || { echo "  ERROR: failed to read subagent head: $subagent_head"; return 1; }
+	local s_provider="${subagent_head%% *}"
+	local s_model="${subagent_head#* }"
 
-	python3 - "$preset_yaml" "$w_provider" "$w_model" <<'PY'
+	python3 - "$preset_yaml" "$s_provider" "$s_model" <<'PY'
 import re, sys
 # Comment-preserving patch of the shipped standard preset. PyYAML round-trip
 # drops comments and rewrites indentation, making the resulting diff huge.
@@ -494,7 +555,7 @@ import re, sys
 #         toolName: subagent[_fork]
 #         backgroundMode: continuable
 #
-# We insert (or replace) `agentOptions:` with the worker head immediately
+# We insert (or replace) `agentOptions:` with the subagent head immediately
 # after `backgroundMode: continuable`, matching the existing 6/8-space
 # indent used by the surrounding keys.
 path, provider, model = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -587,6 +648,7 @@ except Exception:
 print(d.get('profile', {}).get('active', 'personal'))
 PY
 )"
+  echo "  regenerating settings.yaml -> $DSH_HOME/settings.yaml"
 	cp "$HERE/home/settings.yaml" "$DSH_HOME/settings.yaml"
 	# Strip build-time modelSync timestamp: it is local state, not template (M18)
 	if rg -q "^modelSync:" "$DSH_HOME/settings.yaml"; then
@@ -606,7 +668,8 @@ M18PY
 	if [ "$active" != "personal" ]; then
 		if ! sed -i "s/^  active: .*$/  active: $active/" "$DSH_HOME/settings.yaml"; then echo "ERROR: failed to patch active" >&2; exit 1; fi
 		if ! rg -q "^  active: $active$" "$DSH_HOME/settings.yaml"; then echo "ERROR: active patch had no effect (expected $active)" >&2; exit 1; fi
-	fi
+    echo "  set profile.active -> $active"
+  fi
 }
 
 step_ignore_better_edit_dir() {
@@ -656,7 +719,7 @@ STEPS=(
 	"Allow aidos build scripts in web pnpm-workspace.yaml|step_allow_aidos_build"
 	"Install the aidos plugin from git|step_install_aidos"
 	"Sync aidos skills from pinned commit|step_sync_aidos_skills"
-	"Pin subagents onto the worker chain (patch standard preset)|step_patch_standard_preset_tool_subagent"
+	"Pin subagents onto the subagent chain (patch standard preset)|step_patch_standard_preset_tool_subagent"
 	"Register the aidos agent preset|step_register_aidos_preset"
 	"Regenerate settings.yaml from the repo template|step_set_defaults"
 	"Ensure .dsh_better_edit/ is ignored by git machine-wide|step_ignore_better_edit_dir"

@@ -43,6 +43,7 @@ function makeListHandler(ctx) {
     const persistence = service(ctx, "sessionPersistence");
     if (workspace === void 0 || persistence === void 0) {
       sendJson(res, 200, { ok: false, error: "session archive services unavailable" });
+      ctx.logger.warn("archived sessions list: services unavailable");
       return;
     }
     try {
@@ -85,11 +86,15 @@ function makeListHandler(ctx) {
         }
       }
       sendJson(res, 200, { ok: true, sessions: rows });
+      ctx.logger.info(`listed ${rows.length} archived sessions`);
     } catch (error) {
       sendJson(res, 200, {
         ok: false,
         error: error instanceof Error ? error.message : String(error)
       });
+      ctx.logger.error(
+        "archived sessions list failed: " + (error instanceof Error ? error.message : String(error))
+      );
     }
   };
 }
@@ -98,6 +103,7 @@ function makeDeleteHandler(ctx) {
     const persistence = service(ctx, "sessionPersistence");
     if (persistence === void 0) {
       sendJson(res, 200, { ok: false, error: "session persistence service unavailable" });
+      ctx.logger.warn("delete refused: session persistence service unavailable");
       return;
     }
     let body;
@@ -108,21 +114,25 @@ function makeDeleteHandler(ctx) {
         ok: false,
         error: error instanceof Error ? error.message : String(error)
       });
+      ctx.logger.warn("delete refused: invalid request body");
       return;
     }
     const id = typeof body === "object" && body !== null && typeof body.id === "string" ? body.id : null;
     if (id === null) {
       sendJson(res, 400, { ok: false, error: "missing id" });
+      ctx.logger.warn("delete refused: missing session id");
       return;
     }
     const sessions = service(ctx, "sessions");
     if (sessions?.get(id) !== void 0) {
       sendJson(res, 200, { ok: false, error: "session is live" });
+      ctx.logger.warn(`delete refused for session ${id}: session is live`);
       return;
     }
     const workspace = service(ctx, "workspaceRegistry");
     if (workspace !== void 0 && !workspace.archivedSessionIds.includes(id)) {
       sendJson(res, 200, { ok: false, error: "not archived" });
+      ctx.logger.warn(`delete refused for session ${id}: not archived`);
       return;
     }
     try {
@@ -130,24 +140,31 @@ function makeDeleteHandler(ctx) {
       const header = headers.find((candidate) => candidate.id === id);
       if (header === void 0) {
         sendJson(res, 200, { ok: false, error: "not found" });
+        ctx.logger.warn(`delete refused for session ${id}: not found`);
         return;
       }
       const located = persistence.locate(header);
       if (located === void 0) {
         sendJson(res, 200, { ok: false, error: "not found" });
+        ctx.logger.warn(`delete refused for session ${id}: log not found`);
         return;
       }
       if (basename(dirname(located.path)) !== id) {
         sendJson(res, 200, { ok: false, error: "path mismatch; refusing to delete" });
+        ctx.logger.warn(`delete refused for session ${id}: path mismatch`);
         return;
       }
       await rm(dirname(located.path), { recursive: true, force: true });
       sendJson(res, 200, { ok: true });
+      ctx.logger.info(`deleted archived session ${id}`);
     } catch (error) {
       sendJson(res, 200, {
         ok: false,
         error: error instanceof Error ? error.message : String(error)
       });
+      ctx.logger.error(
+        "delete failed for session " + id + ": " + (error instanceof Error ? error.message : String(error))
+      );
     }
   };
 }

@@ -1,0 +1,35 @@
+/* log-viewer panel styles. Class names are kebab-case only. */
+
+.lv-root {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.lv-body {
+  box-sizing: border-box;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  white-space: pre;
+  overflow: auto;
+  max-height: 60vh;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 0.875rem;
+  padding: 1rem;
+  background: var(--dsw-alias-bg-tertiary);
+  color: var(--dsw-alias-label-primary);
+}
+
+.lv-note {
+  font-size: 0.875rem;
+  line-height: 1.375rem;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.lv-empty {
+  font-size: 0.875rem;
+  line-height: 1.375rem;
+  color: var(--dsw-alias-label-secondary);
+  font-style: italic;
+}

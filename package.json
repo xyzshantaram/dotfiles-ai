@@ -31,13 +31,15 @@
     "esbuild": "0.28.2",
     "prettier": "^3.9.6",
     "semver": "7.8.5",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
   },
   "scripts": {
     "gen:customize-setup": "node generate-customize-setup.mjs",
     "build": "node build.mjs",
     "format": "prettier --write \"**/*.{ts,tsx,css}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,css}\"",
-    "sync-models": "node sync-models.mjs --with-meta"
+    "sync-models": "node sync-models.mjs --with-meta",
+    "test": "vitest run"
   }
 }

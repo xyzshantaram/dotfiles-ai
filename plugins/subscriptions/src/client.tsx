@@ -585,7 +585,14 @@ function makePanel(ctx, config) {
           .catch(function () {});
       }
     }, []);
+    react.useEffect(function () {
+      console.debug("[subscriptions] panel mounted");
+      return function () {
+        console.debug("[subscriptions] panel unmounted");
+      };
+    }, []);
     var load = async function () {
+      console.debug("[subscriptions] load: fetching subscription data");
       var now = new Date();
       var month = now.getMonth() + 1;
       var year = now.getFullYear();
@@ -604,6 +611,35 @@ function makePanel(ctx, config) {
         fetchJson("/subscriptions/meridian-logs"),
         fetchJson("/profiles/config"),
       ]);
+      var loadKeys = [
+        "go",
+        "quota",
+        "telemetry",
+        "balance",
+        "ds",
+        "dsUsageAmount",
+        "dsUsageCost",
+        "cc",
+        "ccUsage",
+        "oz",
+        "health",
+        "logs",
+        "profiles",
+      ];
+      var failedKeys = [];
+      for (var li = 0; li < loadKeys.length; li++) {
+        if (results[li] && results[li].error) failedKeys.push(loadKeys[li]);
+      }
+      if (failedKeys.length === 0) {
+        console.info("[subscriptions] load: subscription data loaded");
+      } else if (failedKeys.length === loadKeys.length) {
+        console.error("[subscriptions] load: all fetches failed", failedKeys.join(", "));
+      } else {
+        console.warn(
+          "[subscriptions] load: " + failedKeys.length + " of " + loadKeys.length + " fetches failed",
+          failedKeys.join(", "),
+        );
+      }
       var snapData = {
         go: results[0],
         quota: results[1],
@@ -666,18 +702,23 @@ function makePanel(ctx, config) {
 
     var fetchCookie = async function () {
       setCookie({ busy: true, note: null, showLogin: false });
+      console.info("[subscriptions] action: fetch OpenCode GO cookie from Firefox");
       var result = await postJson("/subscriptions/opencode-cookie/extract");
       if (result.data && result.data.ok === true) {
         setCookie({ busy: false, note: "Cookie saved", showLogin: false });
+        console.info("[subscriptions] OpenCode GO cookie saved");
         load();
       } else if (result.data && result.data.invalid === true) {
         setCookie({ busy: false, note: result.error || "Cookie is stale", showLogin: true });
+        console.warn("[subscriptions] OpenCode GO cookie is stale, login required", result.error || "stale");
       } else {
         setCookie({ busy: false, note: result.error || "Extract failed", showLogin: false });
+        console.error("[subscriptions] OpenCode GO cookie extract failed", result.error || "unknown error");
       }
     };
 
     var openLogin = async function () {
+      console.info("[subscriptions] action: open OpenCode GO login page in Firefox");
       var result = await postJson("/subscriptions/opencode-cookie/login");
       setCookie({
         busy: false,
@@ -687,20 +728,29 @@ function makePanel(ctx, config) {
             : result.error || "Could not open Firefox",
         showLogin: false,
       });
+      if (result.data && result.data.ok) {
+        console.info("[subscriptions] OpenCode GO login page opened");
+      } else {
+        console.error("[subscriptions] failed to open OpenCode GO login page", result.error || "unknown error");
+      }
     };
 
     var fetchDsToken = async function () {
       setDsToken({ busy: true, note: null, showLogin: false });
+      console.info("[subscriptions] action: fetch DeepSeek token from Firefox");
       var result = await postJson("/subscriptions/deepseek-token/extract");
       if (result.data && result.data.ok === true) {
         setDsToken({ busy: false, note: "Token saved", showLogin: false });
+        console.info("[subscriptions] DeepSeek token saved");
         load();
       } else {
         setDsToken({ busy: false, note: result.error || "Extract failed", showLogin: true });
+        console.error("[subscriptions] DeepSeek token extract failed", result.error || "unknown error");
       }
     };
 
     var openDsLogin = async function () {
+      console.info("[subscriptions] action: open DeepSeek platform login page in Firefox");
       var result = await postJson("/subscriptions/deepseek-token/login");
       setDsToken({
         busy: false,
@@ -710,12 +760,23 @@ function makePanel(ctx, config) {
             : result.error || "Could not open Firefox",
         showLogin: false,
       });
+      if (result.data && result.data.ok) {
+        console.info("[subscriptions] DeepSeek platform login page opened");
+      } else {
+        console.error("[subscriptions] failed to open DeepSeek platform login page", result.error || "unknown error");
+      }
     };
 
     var refreshOz = async function () {
+      console.info("[subscriptions] action: refresh OpenCode Zen balance");
       var result = await fetchJson("/subscriptions/opencode-zen-balance");
       setSnap(Object.assign({}, snap, { oz: result }));
       setStaleTs(Date.now());
+      if (result.error) {
+        console.error("[subscriptions] OpenCode Zen balance refresh failed", result.error);
+      } else {
+        console.info("[subscriptions] OpenCode Zen balance refreshed");
+      }
     };
 
     // Provider visibility toggle state and persistence.
@@ -727,12 +788,15 @@ function makePanel(ctx, config) {
       var providers = (cfg && cfg.providers) || {};
       var next = Object.assign({}, providers, { [key]: !(providers[key] !== false) });
       setToggleBusy(key);
+      console.info("[subscriptions] action: toggle provider " + key + " to " + (next[key] ? "visible" : "hidden"));
       putJson("/subscriptions/config", { providers: next }).then(function (result) {
         setToggleBusy(null);
         if (result.data && result.data.config) {
           setCfg(result.data.config);
+          console.info("[subscriptions] provider " + key + " toggle saved");
         } else if (result.error) {
           // Keep the local map unchanged on failure.
+          console.error("[subscriptions] provider " + key + " toggle failed", result.error);
         }
       });
     };

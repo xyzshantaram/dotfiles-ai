@@ -181,8 +181,23 @@ function lookupPiAi(id, idx) {
   for (const e of found) {
     if (e.input && e.input.includes("image")) vision = true;
     if (e.thinking)
-      for (const [level, wire] of Object.entries(e.thinking))
-        efforts[level] = wire === null ? null : wire;
+      for (const [level, wire] of Object.entries(e.thinking)) {
+        // The catalogs disagree about a level's wire value. For gpt-5.6-sol,
+        // opencode.json gives "minimal": null while github-copilot.json gives
+        // "low". Plain last-write-wins let the null win on readdir order, and
+        // llm-pi-ai rejects a null on every level except "off"
+        // (plugins/llm-pi-ai/lib/index.js:1236). So keep a real spelling once
+        // one catalog supplies it, and never let a later null overwrite it.
+        // "off" keeps the old behavior: a null there is legal and meaningful.
+        if (wire === null && level !== "off" && efforts[level] != null) continue;
+        efforts[level] = wire;
+      }
+  }
+  // A non-"off" level that is still null means no catalog carried a spelling
+  // for it. Fall back to the level name, the same literal choice the LiteLLM
+  // path makes (see REASONING_FLAGS).
+  for (const [level, wire] of Object.entries(efforts)) {
+    if (wire === null && level !== "off") efforts[level] = level;
   }
   return { vision, reasoningEfforts: Object.keys(efforts).length ? efforts : null };
 }

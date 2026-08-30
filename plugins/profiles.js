@@ -6,16 +6,22 @@ import { settingsNamespace } from "@deepseek-ai/dsh-settings";
 function isRouteCandidate(value) {
   return typeof value === "object" && value !== null && typeof value.provider === "string" && value.provider.length > 0 && typeof value.model === "string" && value.model.length > 0;
 }
-function normalizeEntry(entry, chains, seen) {
+function normalizeEntry(entry, chains, seen, ctx) {
   if (isRouteCandidate(entry)) return [entry];
   if (typeof entry === "string") {
     if (entry.startsWith("chain:")) {
       const name2 = entry.slice("chain:".length);
-      if (chains?.[name2] === void 0) return [];
+      if (chains?.[name2] === void 0) {
+        ctx?.logger?.debug(`unknown chain reference: ${name2}`);
+        return [];
+      }
       const guard = new Set(seen ?? []);
-      if (guard.has(name2)) return [];
+      if (guard.has(name2)) {
+        ctx?.logger?.debug(`circular chain reference: ${name2}`);
+        return [];
+      }
       guard.add(name2);
-      return normalizeEntry(chains[name2], chains, guard);
+      return normalizeEntry(chains[name2], chains, guard, ctx);
     }
     const slash = entry.indexOf("/");
     if (slash > 0) {
@@ -23,10 +29,14 @@ function normalizeEntry(entry, chains, seen) {
     }
     if (chains?.[entry] !== void 0) {
       const guard = new Set(seen ?? []);
-      if (guard.has(entry)) return [];
+      if (guard.has(entry)) {
+        ctx?.logger?.debug(`circular chain reference: ${entry}`);
+        return [];
+      }
       guard.add(entry);
-      return normalizeEntry(chains[entry], chains, guard);
+      return normalizeEntry(chains[entry], chains, guard, ctx);
     }
+    ctx?.logger?.debug(`unknown chain reference: ${entry}`);
     return [];
   }
   if (typeof entry === "object" && entry !== null) {
@@ -43,46 +53,67 @@ function normalizeEntry(entry, chains, seen) {
               const guard = new Set(seen ?? []);
               if (!guard.has(name2)) {
                 guard.add(name2);
-                out.push(...normalizeEntry(chains[name2], chains, guard));
+                out.push(...normalizeEntry(chains[name2], chains, guard, ctx));
               }
             }
           } else if (chains?.[step] !== void 0) {
             const guard = new Set(seen ?? []);
             if (!guard.has(step)) {
               guard.add(step);
-              out.push(...normalizeEntry(chains[step], chains, guard));
+              out.push(...normalizeEntry(chains[step], chains, guard, ctx));
             }
           } else if (step.indexOf("/") > 0) {
             const slash = step.indexOf("/");
             out.push({ provider: step.slice(0, slash), model: step.slice(slash + 1) });
           }
         } else {
-          out.push(...normalizeEntry(step, chains, seen));
+          out.push(...normalizeEntry(step, chains, seen, ctx));
         }
       }
       return out;
     }
   }
+  ctx?.logger?.debug("profile entry resolved to empty chain");
   return [];
 }
-function chainOf(entry, chainName, chains) {
+function chainOf(entry, chainName, chains, ctx) {
   if (typeof entry === "object" && entry !== null) {
     const obj = entry;
     if ("orchestrator" in obj || "subagent" in obj) {
       const own = normalizeEntry(
         chainName === "orchestrator" ? obj.orchestrator : obj.subagent,
-        chains
+        chains,
+        void 0,
+        ctx
       );
-      if (own.length > 0) return own;
+      if (own.length > 0) {
+        ctx?.logger?.info(`chain resolved: ${chainName} -> ${own[0].provider}/${own[0].model}`);
+        return own;
+      }
+      const otherName = chainName === "orchestrator" ? "subagent" : "orchestrator";
       const other = normalizeEntry(
         chainName === "orchestrator" ? obj.subagent : obj.orchestrator,
-        chains
+        chains,
+        void 0,
+        ctx
       );
-      if (other.length > 0) return other;
+      if (other.length > 0) {
+        ctx?.logger?.warn(`fallback: ${chainName} chain empty, using ${otherName} chain`);
+        return other;
+      }
+      ctx?.logger?.debug(`no routes in entry for ${chainName} chain`);
       return [];
     }
   }
-  return normalizeEntry(entry, chains);
+  const resolved = normalizeEntry(entry, chains, void 0, ctx);
+  if (resolved.length > 0) {
+    ctx?.logger?.info(
+      `chain resolved: ${chainName} -> ${resolved[0].provider}/${resolved[0].model}`
+    );
+  } else {
+    ctx?.logger?.debug(`no routes for ${chainName} chain`);
+  }
+  return resolved;
 }
 
 // plugins/shared/http.ts
@@ -217,10 +248,15 @@ function depthOf(agent) {
   const options = a?.options?.subagentDepth ?? 0;
   return Math.max(header, options);
 }
+function sessionLabel(agent) {
+  const a = agent;
+  const id = a?.session?.header?.id ?? a?.session?.id;
+  return id === void 0 ? "unknown" : String(id);
+}
 function chainForDepth(ctx, depth) {
   const settings = service(ctx, "settings");
   const profile = settings?.get(PROFILE_NS);
-  return chainOf(activeEntry(profile), depth >= 1 ? "subagent" : "orchestrator", profile?.chains);
+  return chainOf(activeEntry(profile), depth >= 1 ? "subagent" : "orchestrator", profile?.chains, ctx);
 }
 function registerFailover(ctx, alwaysMaxRetries) {
   const state = /* @__PURE__ */ new WeakMap();
@@ -287,6 +323,7 @@ function registerFailover(ctx, alwaysMaxRetries) {
     if (!s || s.stepKey !== stepKey) {
       s = { stepKey, levels, cursor: 0, retries: 0, failures: [] };
       agentMap.set(stepKey, s);
+      ctx.logger.info(`failover chain reset for session ${sessionLabel(agent)}`);
     } else {
       s.levels = levels;
       if (s.cursor >= s.levels.length) s.cursor = 0;
@@ -340,11 +377,17 @@ function registerFailover(ctx, alwaysMaxRetries) {
       break;
     }
     if (s.cursor >= s.levels.length) {
+      ctx.logger.warn(
+        `failover chain exhausted for session ${sessionLabel(agent)}: tried ${s.levels.map((l) => `${l.provider}/${l.model}`).join(", ") || "no levels"}`
+      );
       const tried = s.failures.map((f) => `  - ${f.level.provider}/${f.level.model}: ${f.code} \u2014 ${f.message}`).join("\n");
       throw new Error(`profiles: no level can serve the active chain:
 ${tried}`);
     }
     const level = s.levels[s.cursor];
+    ctx.logger.info(
+      `failover chain selected ${level.provider}/${level.model} for session ${sessionLabel(agent)}`
+    );
     return buildConfig(proposal, level);
   });
   ctx.on("agent/request-error", (payload, next) => {
@@ -383,16 +426,14 @@ ${tried}`);
     while (s.cursor < s.levels.length && isCachedDown(s.levels[s.cursor])) s.cursor += 1;
     if (s.cursor < s.levels.length) {
       const nxt = s.levels[s.cursor];
-      ctx.logger.warn(
-        "profiles: %s/%s failed (%s) -> failing over to %s/%s",
-        cur.provider,
-        cur.model,
-        failure.code ?? "UNKNOWN",
-        nxt.provider,
-        nxt.model
+      ctx.logger.info(
+        `session ${sessionLabel(agent)} failing over from ${cur.provider}/${cur.model} to ${nxt.provider}/${nxt.model}`
       );
       return { kind: "retry" };
     }
+    ctx.logger.warn(
+      `failover chain exhausted for session ${sessionLabel(agent)}: tried ${s.levels.map((l) => `${l.provider}/${l.model}`).join(", ") || "no levels"}`
+    );
     const tried = s.failures.map((f) => `  - ${f.level.provider}/${f.level.model}: ${f.code} \u2014 ${f.message}`).join("\n");
     agentMap.delete(keyOf(p.turn, p.step));
     throw new Error(`profiles: all levels exhausted for the active chain:
@@ -400,7 +441,7 @@ ${tried}`);
   });
 }
 function syncDefaultModel(ctx, profile) {
-  const head = chainOf(activeEntry(profile), "orchestrator", profile?.chains)[0];
+  const head = chainOf(activeEntry(profile), "orchestrator", profile?.chains, ctx)[0];
   if (!head) return;
   const agentDefaultModel = service(ctx, "agentDefaultModel");
   void agentDefaultModel?.saveSelection({
@@ -666,12 +707,14 @@ function apply(ctx, config) {
     const nextHead = chainOf(
       activeEntry(next),
       "orchestrator",
-      next?.chains
+      next?.chains,
+      ctx
     )[0];
     const prevHead = chainOf(
       activeEntry(prev),
       "orchestrator",
-      prev?.chains
+      prev?.chains,
+      ctx
     )[0];
     const flipped = (nextHead?.provider ?? "") !== (prevHead?.provider ?? "") || (nextHead?.model ?? "") !== (prevHead?.model ?? "") || (nextHead?.reasoningEffort ?? "") !== (prevHead?.reasoningEffort ?? "");
     if (flipped) syncDefaultModel(ctx, next);

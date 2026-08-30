@@ -2072,6 +2072,7 @@ async function requireManifest(ctx, ecosystem, cwd, signal) {
     } catch {
     }
   }
+  ctx.logger.warn(`refused package command: no ${candidates.join(" or ")} in ${cwd}`);
   throw new Error(
     `no ${candidates.join(" or ")} found in ${cwd}. Refusing to run a package command here, because this directory does not look like an existing project. Pass a cwd naming the actual project directory, or create the project manifest first.`
   );
@@ -2272,10 +2273,12 @@ function apply(ctx) {
         if (action === "add_task") {
           const taskName = args.taskName ?? "";
           if (!/^[A-Za-z0-9:_\-./]+$/.test(taskName)) {
+            ctx.logger.warn(`refused invalid task name: ${args.taskName}`);
             throw new Error(`invalid task name: ${args.taskName}`);
           }
           const taskCommand = args.taskCommand ?? "";
           if (!/^[^\x00-\x1f\x7f]+$/.test(taskCommand)) {
+            ctx.logger.warn(`refused invalid task command: ${args.taskCommand}`);
             throw new Error(`invalid task command: ${args.taskCommand}`);
           }
           await requireManifest(ctx, "nodejs", cwd, signal);
@@ -2295,12 +2298,14 @@ function apply(ctx) {
             expected,
             signal
           );
+          ctx.logger.info(`registered task "${taskName}"`);
           return `Registered task "${taskName}" = "${taskCommand}"
 Wrote scripts.${taskName} to ${cwd}/package.json`;
         }
         const manager = args.manager ?? await detectManager(ctx, args.ecosystem, cwd, signal);
         await requireManifest(ctx, args.ecosystem, cwd, signal);
         if (!/^[A-Za-z0-9@][A-Za-z0-9@._\-/]*$/.test(args.packageName)) {
+          ctx.logger.warn(`refused invalid package name: ${args.packageName}`);
           throw new Error(`invalid package name: ${args.packageName}`);
         }
         const installedVersion = await getInstalledVersion(
@@ -2312,11 +2317,15 @@ Wrote scripts.${taskName} to ${cwd}/package.json`;
           signal
         );
         if (action === "add" && installedVersion !== void 0) {
+          ctx.logger.warn(
+            `refused add of ${args.packageName}: already installed at ${installedVersion}`
+          );
           throw new Error(
             `${args.packageName} is already installed at ${installedVersion}. add refuses to run against an already-installed package. Use action "update" instead.`
           );
         }
         if (action === "update" && installedVersion === void 0) {
+          ctx.logger.warn(`refused update of ${args.packageName}: not installed`);
           throw new Error(
             `${args.packageName} is not installed. update requires an existing install. Use action "add" instead.`
           );
@@ -2332,12 +2341,22 @@ Wrote scripts.${taskName} to ${cwd}/package.json`;
         }
         if (isDowngrade) {
           const manualCommand = manager === "pip" ? `pip install ${args.packageName}==${installedVersion}` : buildCommand(manager, "add", `${args.packageName}@${installedVersion}`, dev);
+          ctx.logger.warn(
+            `refused downgrade of ${args.packageName} (${version} < ${installedVersion})`
+          );
           throw new Error(
             `Resolved version ${version} for ${args.packageName} is older than the installed version ${installedVersion}. Refusing to downgrade. To do this deliberately, run by hand: ${manualCommand}`
           );
         }
         const command = buildCommand(manager, action, args.packageName, dev);
-        const output = await runCommand(ctx, command, cwd, signal);
+        let output;
+        try {
+          output = await runCommand(ctx, command, cwd, signal);
+        } catch (error) {
+          ctx.logger.error(`package ${action} failed: ${args.packageName} (${manager})`);
+          throw error;
+        }
+        ctx.logger.info(`package ${action} succeeded: ${args.packageName} (${manager})`);
         const lines = [];
         if (version) lines.push(`Resolved ${args.packageName} to version ${version}.`);
         lines.push(`Package manager: ${manager}.`);

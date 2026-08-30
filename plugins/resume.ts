@@ -149,18 +149,24 @@ export function apply(ctx: Context): void {
       input: { hint: "<natural-language query>" },
       handler: (invocation: ResumeInvocation) => executeResume(invocation, ctx),
     });
+    ctx.logger.info("resume command registered");
   }, "resume command lifecycle");
 }
 
 async function executeResume(invocation: ResumeInvocation, ctx: Context): Promise<any> {
   const query = (invocation?.rawInput ?? "").trim();
   if (!query) {
+    ctx.logger.warn("resume invoked with an empty query");
     return { kind: "error", text: "usage: /resume <natural-language query>" };
   }
   const session = invocation?.agent?.session;
   if (!session || !Array.isArray(session.events)) {
+    ctx.logger.warn("resume invoked without an active session log");
     return { kind: "error", text: "no active session log available" };
   }
+  ctx.logger.info(
+    `resume invoked for session ${shortId(session.requestHeader?.()?.id ?? session.header?.id)}`,
+  );
 
   const matcher = makeMatcher(query);
   const hits: Hit[] = [];
@@ -178,6 +184,7 @@ async function executeResume(invocation: ResumeInvocation, ctx: Context): Promis
     try {
       headers = (await sp.list()) ?? [];
     } catch {
+      ctx.logger.warn("failed to list workspace sessions; workspace-session layer skipped");
       headers = [];
     }
     const others = headers
@@ -189,9 +196,12 @@ async function executeResume(invocation: ResumeInvocation, ctx: Context): Promis
         const insp = await sp.load(h.id);
         search(insp?.events, matcher, "session:" + shortId(h.id), hits);
       } catch {
+        ctx.logger.debug(`failed to load session ${shortId(h.id)}; skipping`);
         // skip unreadable sessions
       }
     }
+  } else {
+    ctx.logger.debug("sessionPersistence unavailable; workspace-session layer skipped");
   }
 
   if (hits.length === 0) {

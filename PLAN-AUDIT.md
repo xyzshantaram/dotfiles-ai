@@ -13,81 +13,11 @@ at `6115526` (aidos's `A-BASH1` fix, `dotfiles-ai@6e0265d`).
 
 ## Checklist
 
-- [ ] **D-LOG2 — Host-layer logging: gaps and happy paths.**
-  Add leveled `ctx.logger` calls across the first-party host plugins
-  (`bash-guard.ts`, `grant.ts`, `manifest-guard.ts`, `ask-interrupt.ts`,
-  `profiles.ts`, `profile-routes.ts`, `skill-gate.ts`, `package-tool.ts`,
-  `resume.ts`, `tmp-dsh-shared.ts`, `session-archive`, `subscriptions`). Cover
-  the happy paths, not only the failures, so a working plugin is visible.
-  Named gaps to close: manifest denial reason
-  (`manifest-guard.ts:99-102`), ask-interrupt cancel (`ask-interrupt.ts:100`),
-  archived-session delete (`session-archive/src/index.ts:198`), credential
-  writes (`subscriptions/src/index.ts:842,921`), successful grant
-  (`grant.ts:350-355`), the exhausted-chain throw (`profiles.ts:453`), and the
-  silent catches in `tmp-dsh-shared.ts:65,82`.
-  Failover visibility, per the settled decision, is leveled logs only, no panel:
-  `profiles.ts` logs which session fails over from which model to which model, and
-  when a chain resets, at a level that can be filtered without flooding.
-  Also add `echo` lines to the silent `sync.sh` steps: `step_set_defaults`
-  (line 584 overwrite), `step_sync_agents_md` (lines 30-32), the preset `sed` at
-  line 398, and the successful `profile.active` patch near line 601.
-  Follow the level convention in Critical context.
-  **Evaluate:** trigger an archived-session delete and observe the new log line.
-  Force one profile failover and confirm the log names both models and the
-  session. `tsc --noEmit` passes.
 
-- [ ] **D-LOG3 — Client-layer logging.**
-  Add the same leveled logging to the first-party client packages
-  (`session-archive`, `subscriptions`, `shared/client-util.ts`, and the profiles
-  panel client). Cover panel mount, data load, each user action that reaches the
-  host, and each response. Keep routine chatter at `debug`.
-  **Evaluate:** `node build.mjs` passes. Human review: open each panel with the
-  browser console at `debug` and confirm the log reads clearly and does not
-  flood.
 
-- [ ] **D-HYG1 — Collapse `fetchJson`/`postJson`/`putJson` into one helper.**
-  `plugins/shared/client-util.ts:64-160` holds three near-identical 20-line
-  bodies that differ only by method and body. Replace with one
-  `request(method, url, body)` and thin wrappers.
-  **Evaluate:** `tsc --noEmit` and `node build.mjs` pass. Human review: exercise
-  the settings panels in the browser and confirm no behavior change.
 
-- [ ] **D-FEAT1 — Log-viewer plugin.**
-  A new first-party plugin with a settings panel that shows the dsh web server
-  log, so the log is readable from a remote browser instead of only from a
-  terminal on the laptop. The host side runs a configurable command and returns
-  its output. Default command: `journalctl --user -u dsh-web.service`. The
-  command is a plugin setting so it can be repointed. One-shot fetch, manual
-  refresh button only, no streaming and no polling. The panel is a scrolling
-  view in a monospace/readable font, not a raw dump. Follow the existing
-  plugin shape: a `.ts` host plugin plus a client package, installed from
-  `sync.sh`, bundled by `build.mjs`, styled per `src/DESIGN.md`.
-  **Evaluate:** the panel loads and shows recent `dsh-web` lines. The refresh
-  button fetches newer lines. Changing the configured command changes what the
-  panel shows. Human review: open the panel from a phone over the LAN and
-  confirm it is readable there.
 
-- [ ] **D-TEST1 — Add a test runner and first tests.**
-  No test runner exists. Add vitest, matching aidos, with a `test` script.
-  Write tests for what this sweep touched: the `sync.sh:600-604` fix (or the
-  logic extracted from it), the `client-util.ts` `request` helper, and the
-  log-viewer host handler.
-  **Evaluate:** `pnpm test` passes locally and covers the three named areas.
-
-- [ ] **D-SYNC2 — One-time purge and reseed of `command-code` and `opencode-zen`.**
-  `sync-models.mjs`'s real-YAML-parsing rewrite (formerly D-SYNC1) has already
-  landed (`635fd78`; independently re-verified this session via a `tester`
-  subagent dispatch, all 6 evaluation criteria pass), so this ticket is
-  unblocked. Clear the `models:` list under
-  `command-code` and under `opencode-zen` in `home/settings.yaml`; `meridian`
-  and `opencode` are untouched. Run `node sync-models.mjs --with-meta` to
-  repopulate both providers under the new markers.
-  **Evaluate:** reseeded models that support vision per LiteLLM's
-  `supports_vision` field carry `defaultInput: [text, image]`. The script's
-  chain-consistency check ends with zero warnings for every chain referencing
-  a `command-code` or `opencode-zen` model (`work-orchestrator`,
-  `personal-orchestrator`, `see`).
-
+- [x] All six tickets (D-LOG2, D-LOG3, D-HYG1, D-FEAT1, D-TEST1, D-SYNC2) implemented and closed.
 ## Critical context
 
 - `ctx.logger.*` calls do not reach the journal or console on their own:
@@ -141,6 +71,8 @@ at `6115526` (aidos's `A-BASH1` fix, `dotfiles-ai@6e0265d`).
   `info` = a state change a person would want in a normal-volume log.
   `debug` = per-call trace and payload detail.
 
+- Build note: `node build.mjs` rebuilds EVERY bundle and must run once, sequentially, after all source edits land. Parallel subagent dispatches that each ran it raced and corrupted intermediate state, so rebuild and typecheck only after edits settle.
+
 ## User preferences and special rules
 
 - Never commit without explicit approval.
@@ -152,5 +84,6 @@ at `6115526` (aidos's `A-BASH1` fix, `dotfiles-ai@6e0265d`).
       log is readable and not flooded.
 - [ ] D-HYG1 — exercise the settings panels in the browser, confirm the shared
       `request` helper changed no behavior.
+- [ ] D-LOG2 — trigger an archived-session delete and confirm the new `deleted archived session <id>` journal line; force one profile failover and confirm the log names both models and the session.
 - [ ] D-FEAT1 — open the log panel from a phone over the LAN, confirm the dsh-web
       log is readable there.
