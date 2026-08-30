@@ -1,138 +1,19 @@
-# Plan — profiles plugin audit and hardening, plus sync-models.mjs hardening
+# Plan — sync-models.mjs catalog swap, plus profiles verification
 
 ## Vision
 
-Make the profiles plugin correct under concurrency and honest about failure.
-Every fallback path must pick the right chain, isolate its state per agent, and
-degrade to a working route instead of failing the turn.
+Replace the two model-metadata catalogs in `sync-models.mjs` with models.dev.
+The current pair is incomplete: the vendored pi-ai catalog knows 47 of the 70
+ids we sync and has no entry for GLM 5.3 at all, and LiteLLM does not carry the
+gateway-prefixed ids. That gap is why the image gate silently denied
+`read_image` on a vision-capable model until someone hit it by hand.
 
-This plan also tracks a second, unrelated effort found in the same session:
-hardening `sync-models.mjs`'s model-seeding pipeline (real YAML parsing,
-marker-region regeneration, and a one-time reseed of `command-code` and
-`opencode-zen`). The two efforts share this file only because T6 below cannot
-be verified until this second effort lands; they are otherwise independent.
-
-## Verified harness facts
-
-These facts were read from the installed dsh packages in this session. Treat
-them as settled. Do not re-research them.
-
-- `agentEvents` fuses the agent into every payload. A listener of
-  `agent/request` receives `{ turn, step, signal, agent }`. A listener of
-  `agent/request-error` receives `{ turn, step, provider, failure, retryPolicy,
-signal, agent }`. Source: `dsh-agent/lib/index.js`, function `agentEvents`.
-- `turn` and `step` are per-agent counters on `this.phase`. Two live agents may
-  hold the same pair at the same time. Source: `dsh-agent-loop/lib/index.js`
-  lines 521, 533, 603.
-- Depth reads as `Math.max(agent.session.header.delegationDepth ?? 0,
-agent.options.subagentDepth ?? 0)`. Source: `dsh-subagent/lib/index.js`
-  lines 43-47.
-- `agent/request-error` must return `{ kind: "retry" }` to retry. Any other
-  value throws `LlmError`. Source: `dsh-agent-loop/lib/index.js` line 662.
-- An empty provider or model in the returned proposal throws
-  `agent "<id>" has no provider/model`. Source: `dsh-agent-loop/lib/index.js`
-  line 722.
-- `resolveCallConfig` throws `LlmError` with a `code` field. Known codes
-  include `NO_ADAPTER`, `INVALID_MODEL_INFO`, and
-  `UNSUPPORTED_REASONING_EFFORT`. Source: `dsh-llm/lib/index.js` lines 1394,
-  1403, 1412, 1415.
-- The harness default retryable codes are `EMPTY_RESPONSE`, `RATE_LIMIT`,
-  `SERVER`, `TIMEOUT`, and `TRANSPORT`. Source: `dsh-llm/lib/index.js`
-  lines 360-367.
-- `settings/updated` calls a listener with `(ns, next, prev, source)`.
-  Source: `dsh-settings/lib/index.js` lines 561-569.
-
-## Settled decisions
-
-- An off-chain manual pick becomes the head of the level list and then fails
-  over along the depth-correct chain.
-- The down-cache classifies on structured codes first. Auth, no-credits, and
-  model-unavailable hold for 10 minutes. Rate limit holds for 30 seconds. A
-  generic 400 is never cached.
-- Scope covers the host plugin, the shared route model, and the client panel.
-- Cleanup items land in the same pass.
+One residual ticket from the finished profiles effort also lives here. T6 is a
+verification sweep that has not been run.
 
 ## Tickets
 
-### T1 — route model safety (`plugins/profile-routes.ts`)
-
-**Status:** done
-**Fixes:** A11, plus the `routesEqual` effort gap.
-**Acceptance criteria:**
-
-- `isRouteCandidate` rejects an empty `provider` or an empty `model`.
-- `routesEqual` compares `reasoningEffort` as well as provider and model.
-- The module doc states that a blank route row is dropped, and why.
-- `pnpm exec tsc --noEmit` reports no new error.
-
-### T2 — down-cache retune (`plugins/profiles.ts`)
-
-**Status:** done
-**Fixes:** A4.
-**Acceptance criteria:**
-
-- Classification reads `failure.code` against an explicit code table first.
-- Message matching survives only as a narrow fallback for auth and no-credits
-  wording. No bare `model`, `400`, or `404` substring test remains.
-- Each class carries its own time to live. Rate limit uses 30 seconds. The
-  other three use 10 minutes.
-- `isCachedDown` honors the per-class time to live.
-
-### T3 — failover rewrite (`plugins/profiles.ts`, `registerFailover`)
-
-**Status:** done
-**Fixes:** A1, A2, A3, A5, A6, A7, A10.
-**Acceptance criteria:**
-
-- Per-step state lives in a `WeakMap` keyed by the agent object. The stored
-  `stepKey` still guards a stale step.
-- A payload with no agent passes through untouched and logs one warning.
-- Depth comes from `depthOf(payload.agent)`. The both-chains guess is gone.
-- The level list is the proposal followed by the depth chain minus that route.
-  The `agentDefaultModel.currentSelection()` prefix is gone.
-- A level whose route differs from the proposal drops the inherited
-  `reasoningEffort` unless the level supplies one. The probe builds the same
-  config it would return.
-- When every level is cached down, the walk retries while ignoring the cache
-  and logs a warning. It never throws for cache reasons alone.
-- The unreachable `!s` branch and its `"(no levels)"` string are gone.
-- `STATE_CAP`, `stateOrder`, and the linear eviction are gone.
-
-### T4 — host routes and flip detection (`plugins/profiles.ts`)
-
-**Status:** done
-**Fixes:** A8, A9, A12.
-**Acceptance criteria:**
-
-- The local `sendJson`, `readBody`, `isPlainObject`, and `MAX_BODY_BYTES`
-  copies are gone. The module imports them from `plugins/shared/http.ts`.
-  The `TODO(dedup)` comment is gone.
-- `GET` and `PUT` return the raw entry fields plus a `resolved` view, and
-  `chains` is always an object.
-- The `settings/updated` listener uses `prev`. It clears the cache on any
-  profile write. It calls `syncDefaultModel` only when the resolved
-  orchestrator head of the active entry changed.
-- The module header no longer claims that `agent` is absent from the payload.
-
-### T5 — panel correctness (`plugins/profiles-client/src/client.tsx`)
-
-**Status:** done
-**Fixes:** B1, B2, B3, B4, B5, B6.
-**Acceptance criteria:**
-
-- The entry chain select renders an option for the current inline or
-  composition value, so a populated field never displays as `— none —`.
-- The panel edits the raw entry fields served by T4 and never recovers a chain
-  name by guessing.
-- `cloneRoutes` preserves `reasoningEffort`.
-- The save state initializes to a real object, not `null`.
-- `useSyncExternalStore` receives stable `subscribe` and `getSnapshot`
-  references.
-- `addChain` creates an empty chain, not a blank placeholder rung.
-- Dead code is gone: the unused `exports` binding, `addChainRung`, and the
-  unused `field` parameter of `setChainField`.
-
-### T6 — verification
+### T6 — verification (profiles effort)
 
 **Status:** todo
 **Acceptance criteria:**
@@ -141,148 +22,120 @@ agent.options.subagentDepth ?? 0)`. Source: `dsh-subagent/lib/index.js`
   `profile-routes`: `profiles.js`, `see.js`, `profiles-client/dist/client.js`,
   and `subscriptions/lib/client.js`.
 - `pnpm exec tsc --noEmit` reports only the known pre-existing errors.
-- `pnpm exec prettier --check .` passes.
+- `pnpm exec prettier --check .` passes. It fails today on
+  `plugins/profiles.ts`, `plugins/profiles-client/src/client.tsx`, and
+  `plugins/subscriptions/src/client.tsx`. That drift predates this effort.
 - The orchestrator independently verifies at least one concrete behavior claim
   per ticket before closing it.
 
-The tickets below are a THIRD, unrelated effort: make `bash-guard` translate
-`grep` and `find` into `rg` and `fd` instead of denying them. A weaker model
-does not learn from a denial. It retries another denied form and burns tokens.
-This effort does not close T6.
-
-**Settled decisions for this effort.** `find` translation is best effort. Keep
-`rg` and `fd` default behavior, so do not add flags to reproduce POSIX
-traversal. Warn the model every time a translation fires, with one short line.
-A mutating `find` predicate translates and then returns `ask`. An
-untranslatable expression denies and names the exact blocking token.
-
-**Verified facts for this effort.** Read from the installed dsh packages,
-`node_modules`, and the installed tools in this session. Treat them as settled.
-
-- `PreToolDecision` is `{ kind: 'allow' } | { kind: 'deny', reason } |
-{ kind: 'ask', reason? }`. An allow carries no message field, so a warning
-  cannot ride a pre-execute allow. Source: `dsh-tools` types, lines 418 to 426.
-- The same declaration states at line 415 that input rewriting is excluded from
-  the pre-execute contract because arguments are already logged and presented.
-  The guard mutates `exec.arguments.command` anyway, so the transcript shows the
-  ORIGINAL command while the rewritten one runs. That is why the note exists.
-- `PostToolDecision` accept may replace `content` OR `value`, never both. The
-  runtime throws `TypeError` when a decision carries both. Source: same file,
-  lines 431 to 445.
-- `ToolExecutionInput.callId` exists and `ToolExecution` extends it. It is the
-  pre-execute to post-execute correlation key. Source: same file, lines 196 and 260.
-- Both result variants carry `content: ContentBlock[]`. A text block is
-  `{ type: 'text', text: string }`.
-- unbash `Command` is `{ type, pos, end, name: Word | undefined, prefix,
-suffix: Word[], redirects }`. `Word` carries absolute `pos` and `end`.
-- The existing `RewriteRule` only deletes byte ranges. It cannot rename the
-  command word, so translation is new machinery.
-- ripgrep 15.2.0 has NO `--include` and NO `--exclude`. Use `-g GLOB` and
-  `-g !GLOB`. `rg -I` is `--no-filename`, not `-h`. `rg -z` is `--search-zip`,
-  which is not `grep -z`. `grep -z` maps to `rg --null-data`.
-- fd 10.4.2 has `--search-path`, `-d/--max-depth`, `--min-depth`, `-g/--glob`,
-  `-t/--type`, `-p/--full-path`, `-S/--size`, `-0/--print0`, `-x/--exec`, and
-  `-X/--exec-batch`. `-t e` means empty.
-- `build.mjs` bundles `plugins/bash-guard.ts` with `bundle: true`, so a sibling
-  source file costs nothing at runtime.
-
-### T7 — translator plumbing (`plugins/bash-guard.ts`)
+### S1 — replace both catalogs with models.dev (`sync-models.mjs`)
 
 **Status:** done
+
+**Outcome.** Landed, with two additions found during the work.
+
+- `meridian` is now seeded like the other gateways. It was hand-maintained and
+  carried no `reasoningEfforts` at all, so the work profile showed no effort
+  picker. It serves its list at `/v1/models`, not `/models`, so the script
+  gained a per-provider listing path. Its `api` is `anthropic-messages`, so the
+  `api === "openai-completions"` guard was dropped; `SEEDED_PROVIDERS` is the
+  allowlist and does that job alone.
+- Entry names now come from the models.dev `name` field. Deriving them from the
+  id turned `claude-sonnet-4-6` into "Claude Sonnet 4 6".
+- `opencode-zen` correctly seeds to zero models, because the models.dev
+  `opencode` catalog covers every id the gateway serves. The old pi-ai catalog
+  was stale, which is the only reason that block ever held 8 entries. An empty
+  `models:` block is NOT harmless: pi-ai rejects a provider that resolves no
+  models, so the block is deleted outright when the extras set is empty.
+
+One cohesive swap inside one file, staged internally rather than split. The
+steps are many but the design is decided. Each stage below is its own
+checkpoint.
+
+**Settled decisions.**
+
+- models.dev becomes the only metadata source. LiteLLM and pi-ai both go.
+- Fetch `https://models.dev/api.json` live on every run. Do not commit a
+  snapshot.
+- Keep `VISION_MODELS` as a manual override of last resort. After the swap only
+  three entries still earn their place: `Qwen/Qwen3.7-Max`, where the vendor
+  says text but 28 resellers say image, and `Qwen/Qwen3.8-27B` and
+  `Qwen/Qwen3.7-Flash`, which only a tier-3 reseller matched. The other five
+  were dropped because the first-party vendor now declares image input.
+  `tencent/hy3-paid` is text-only and was never in this set.
+- Resolve a model id in this order, first hit wins: the models.dev provider
+  matching our route, then the first-party vendor provider, then the union
+  across every provider. The SAME order applies to vision and to reasoning
+  efforts.
+- Effort churn is accepted, not avoided. Every one of the 31 models that carry
+  efforts today will change, and about 25 more will gain a block. Vendor values
+  were chosen over reseller values deliberately.
+
+**Stage 1 — research.** Confirm the first-party provider id for every vendor we
+route to, and settle the id-to-vendor mapping. `anthropic`, `zai`, `zhipuai`,
+`alibaba`, `deepseek`, `moonshotai`, and `minimax` all exist. Produce the
+mapping table and the exact diff the swap would make to `home/settings.yaml`.
+Do not edit anything in this stage.
+
+**Stage 2 — implement.**
+
+- Add the models.dev fetch, index, and ordered lookup.
+- Point `vision`, `contextWindow`, and `maxTokens` at it. `modalities.input`
+  carries image, `limit.context` and `limit.output` carry the sizes.
+- Point `fetchCatalogModelIds` at the models.dev `opencode` provider.
+- Build `reasoningEfforts` from `reasoning_options` entries of type `effort`.
+  Map the value `none` to the key `off` with a null wire value. Ignore
+  `toggle` and `budget_tokens`.
+- Delete `LITELLM_URL`, `lookupMeta`, `buildPiAiIndex`, `lookupPiAi`,
+  `PI_AI_VERSION`, and `PI_AI_CATALOG_BASE`.
+- Delete the `--with-meta` flag outright. Always fetch the richest data. That
+  means `WITH_META` at line 47, the `if (WITH_META)` block at line 484, the
+  gated lookup at line 551, and the comments at lines 21, 33, 451, and 545.
+  The `sync-models` script in `package.json` passes the flag, so it becomes
+  `node sync-models.mjs`. Change that through the sanctioned package tool, not
+  by hand-editing the manifest.
+- Warn when a chain-referenced model resolves to no vision data from any
+  source. This is the check that would have caught the GLM 5.3 gap at sync
+  time instead of at image-read time.
+- Re-check all nine `VISION_MODELS` entries and drop the ones models.dev now
+  covers.
+
+**Stage 3 — review.** Dispatch a review pass, then read the diff directly.
+
 **Acceptance criteria:**
 
-- `GuardEntry` gains an optional `translate` field. `loadRules` accepts only a
-  known translator name and skips the rule file otherwise, with the existing
-  warning log.
-- The two near-identical `rules.set` branches collapse into one object build.
-  A third copy is not added.
-- A translation pass runs in `evaluate` after the rewrite pass, only at
-  `depth === 0`.
-- `ok` splices the new argv in and re-enters `evaluate` at `depth + 1`, so the
-  result is re-checked against `guards/rg.json`, the profile overlay, and the
-  scratch escape.
-- `ask` splices, re-enters, and forces the final decision to `ask` even when the
-  re-entry would allow.
-- `blocked` returns `deny` whose reason names the exact blocking token.
-- A redirect inside the splice range returns `deny` rather than a re-emission
-  attempt.
-- A failed mutation of `exec.arguments.command` returns `deny`. The original
-  `grep` or `find` never runs. This is the safety fix and it must ship in the
-  same pass.
-- `shellQuote` round trips a word with a space, a single quote, and a glob.
-
-### T8 — grep translator (`plugins/bash-guard-translate.ts`)
-
-**Status:** done
-**Acceptance criteria:**
-
-- `grep`, `egrep`, `fgrep`, `zgrep` map to `rg`. `fgrep` adds `-F`. `zgrep`
-  adds `-z`. `egrep` adds nothing and carries a note.
-- `-r` and `-R` drop, because `rg` recurses by default.
-- `--include=GLOB` maps to `-g GLOB`. `--exclude=GLOB` maps to `-g !GLOB`.
-- `-h` maps to `--no-filename`, not to a short `-h`.
-- `-z` maps to `--null-data`, not to `-z`.
-- An unmapped flag returns `blocked` naming that flag.
-- The first non-flag argument is the pattern unless `-e` or `-f` supplied one.
-  Every later positional is a path.
-
-### T9 — find translator (`plugins/bash-guard-translate.ts`)
-
-**Status:** done
-**Acceptance criteria:**
-
-- `find` maps to `fd`. Leading path arguments become `--search-path` entries.
-- `-name`, `-iname`, `-path`, `-type`, `-maxdepth`, `-mindepth`, `-size`,
-  `-newer`, `-empty`, `-print0`, `-print`, and `-follow` map to their confirmed
-  fd equivalents.
-- `-delete`, `-exec`, and `-execdir` style predicates translate and return
-  `ask`, or return `blocked` when fd has no safe equivalent.
-- `-o`, `-a`, `-not`, `!`, and parentheses return `blocked` naming the operator.
-  fd has no general boolean expression language.
-- Any other predicate returns `blocked` naming that exact predicate.
-
-### T10 — warning channel (`plugins/bash-guard.ts`)
-
-**Status:** done
-**Acceptance criteria:**
-
-- `evaluate` returns the notes it produced.
-- `apply` registers a `tools/post-execute` listener that prepends one text block
-  to the result content for a bash call carrying a stored note.
-- The note map is keyed by `exec.callId`, is deleted on read, is deleted on
-  deny, and is capped at 64 entries with oldest-first eviction.
-- The listener calls `next()` for a non-bash tool and for a call with no note.
-- An accept decision that owns `value` passes through untouched, because the
-  runtime rejects a decision carrying both `content` and `value`.
-- A failing listener cannot fail the tool call. The body is wrapped in
-  try/catch and falls back to `next()`.
-
-### T11 — rules, docs, build, tests
-
-**Status:** done, pending the user's own hands-on check
-**Acceptance criteria:**
-
-- `guards/grep.json` gains `"translate": "grep"`. `guards/find.json` gains
-  `"translate": "find"`. Both keep `verdict: "deny"` as the fallback, so a
-  broken translator cannot open a hole.
-- Both `reason` strings change to wording that fits the new behavior, because
-  the reason now appears only when translation fails.
-- `README.md` line 30 is updated. It currently claims only that the guard
-  rewrites `rg -r` to `rg`.
-- `skills/customize-setup/SKILL.md` and `template.md` line 52 are updated.
-  Check whether `generate-customize-setup.mjs` regenerates one from the other
-  before editing by hand.
-- The module doc comment in `plugins/bash-guard.ts` documents the `translate`
-  field, the recursion, and the post-execute note.
-- `plugins/bash-guard-translate.test.ts` covers a plain recursive grep, an
-  `fgrep` case, an unmapped grep flag, an include glob, an exclude glob, a
-  `find -name` case, a `find -delete` ask case, a `find -o` blocked case, and
-  `shellQuote`. Every test must be shown to fail against the pre-change
-  behavior.
-- `node build.mjs` regenerates `plugins/bash-guard.js`, which is committed.
-- `pnpm exec tsc --noEmit` reports only the known pre-existing errors.
-- `pnpm exec prettier --check .` passes.
+- `pnpm run sync-models` completes and reports zero chain warnings.
+- The regenerated `home/settings.yaml` gives `z-ai/glm-5.3-flash` a
+  `defaultInput` of `[text, image]` with no entry in `VISION_MODELS`. This is
+  the whole point of the swap and must be shown, not assumed.
+- `tencent/hy3-paid` still appears. It is text-only and needs no override; the
+  earlier note claiming it needed one was wrong.
+- No model loses a `defaultInput` it has today. Any model that gains one is
+  listed in the report with the reason.
+- The `reasoningEfforts` diff is reviewed model by model before it lands.
+  Expect all 31 existing blocks to change and about 25 more to appear. A SMALL
+  diff means the resolution order never reached the vendor entry, which is a
+  bug, not a success.
 - `pnpm test` passes.
+- `PI_AI_VERSION` is gone, and nothing else in the repo still needs it in step
+  with `plugins/llm-pi-ai/package.json`.
+- `Qwen/Qwen3.6-Max-Preview` is removed from `VISION_MODELS`. Both the vendor
+  entry and the union agree it takes text only.
+
+**Verified.** `pnpm run sync-models` exits 0 with zero chain warnings.
+`z-ai/glm-5.3-flash` gets `defaultInput: [text, image]` with its override
+removed, matched on an exact `glm-5.3-flash` key under the models.dev `zai`
+provider. A before/after comparison shows no model lost an image input.
+`pnpm test` passes, 55 tests. `PI_AI_VERSION` is gone.
+`Qwen/Qwen3.6-Max-Preview` is out of `VISION_MODELS`.
+
+The vision warning was checked against a negative control rather than trusted
+for being quiet: pointing the `see` chain at `command-code/tencent/hy3-paid`
+makes it fire. That caught a real bug where the tier-vision test had been
+dropped, leaving the warning firing for every model not in `VISION_MODELS`.
+
+**Still owed by the human.** Run the tool and read the settings diff. A passing
+sync is not evidence the effort values are the ones you want.
 
 ## Critical context
 
@@ -297,6 +150,34 @@ suffix: Word[], redirects }`. `Word` carries absolute `pos` and `end`.
   removed rule file leaves a stale copy behind.
 - The guard re-reads its rule files on every call, so a rule edit needs only a
   sync. A plugin code change needs a restart of the running session.
+- pi-ai serves TWO jobs in `sync-models.mjs`, not one. It supplies metadata,
+  and `fetchCatalogModelIds` also pulls the opencode model id LIST from unpkg
+  to exclude those ids from the opencode-zen block. Retiring pi-ai must cover
+  both. models.dev lists 94 opencode models against the 58 excluded today, so
+  the opencode-zen block WILL change.
+- `command-code` and `meridian` do not exist in models.dev. They are private
+  gateways. Only `opencode-zen` maps to a real provider there, `opencode`,
+  which covers 8 of its 8 ids. This is why the lookup falls back to the
+  first-party vendor.
+- pi-ai gives a level-to-wire MAP, such as `low: high`. models.dev gives a flat
+  vocabulary. The mapping cannot survive the swap, so the wire value always
+  equals the level. Some models will offer fewer effort levels than today.
+- The union across providers is noisy. `claude-opus-5` is hosted by 30
+  providers carrying 5 different effort vocabularies. `glm-5.3-flash` is hosted
+  by 38 carrying 6.
+- REFUTED, do not retry: preferring the first-party vendor does NOT reduce
+  effort churn. Measured on the 31 ids carrying efforts today, first-party
+  changes 31 and the union changes 23. pi-ai encoded a level-to-wire MAP that
+  no models.dev strategy can reproduce, so churn is unavoidable. The vendor
+  order was kept for value quality, not for diff size.
+- `Qwen/Qwen3.6-Max-Preview` is NOT a vision model. The vendor entry and the
+  union both report text only, so the current `VISION_MODELS` entry is a live
+  bug that predates the swap.
+- `Qwen/Qwen3.7-Max` is genuinely disputed. The vendor reports text only and 28
+  reseller entries report image. It stays in `VISION_MODELS` and keeps vision.
+- The old code comment blaming the `z-ai/` prefix for the GLM 5.3 miss is
+  wrong. `lookupPiAi` already strips known prefixes and normalizes. The real
+  cause is that pinned pi-ai 0.82.1 stops at GLM 5.2.
 
 ## Human review queue
 
@@ -309,6 +190,11 @@ suffix: Word[], redirects }`. `Word` carries absolute `pos` and `end`.
 - Run `find . -delete` against scratch and confirm the approval prompt appears.
 - Confirm the transcript shows the original command while the translated one
   runs. Decide whether that is acceptable or needs a follow-up ticket.
+- After `sync.sh` and a `dsh-web` restart, confirm the `fallback: subagent
+  chain empty` warn stops and a new subagent picks the subagent chain head.
+- Paste an image on a glm-5.3-flash route and confirm `read_image` works.
+- After S1 lands, spot-check the reasoning effort picker for a Claude model and
+  a GLM model. The available levels are expected to change.
 
 ## User preferences and special rules
 
