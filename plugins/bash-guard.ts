@@ -23,13 +23,27 @@
  *     "subcommands": {              // optional, per-subcommand refinement
  *       "status": "allow",          // read-only verbs run without prompting
  *       "worktree": "ask"           // useful mutations prompt the user
- *     }
+ *     },
+ *     "translate": "grep"           // optional, built-in command translator
  *   }
  *
  * A subcommands entry refines the base verdict by the invoked subcommand
  * (the first non-option argument). Subcommands the map does not name
  * inherit the base verdict, so an allow-list stays closed under every verb
  * it does not name.
+ *
+ * A translate entry names a built-in translator that rewrites the whole matched
+ * command into a preferred tool before the verdict is decided. The value must
+ * be a key of TRANSLATORS in ./bash-guard-translate. The translator turns
+ * `grep` into `rg` and `find` into `fd`. The translated command is re-checked
+ * by the recursion, so the rule file for the replacement command, the phase
+ * profile overlay, and the scratch escape all still apply to it. A translator
+ * that cannot map the command reports a blocker, and the guard denies the call
+ * with that blocker in the reason.
+ *
+ * The model learns about a swap through a note attached in `tools/post-execute`.
+ * The note cannot ride the allow decision, because an allow decision carries no
+ * message field.
  *
  * Files are re-read on every call (they are tiny; no watcher needed).
  * A file that does not parse is logged and skipped (fail-safe: its commands
@@ -74,11 +88,14 @@ import {
   expandWrapperCommands,
   getBasename,
   getCommandArgs,
+  isStaticallyResolvable,
 } from "@cad0p/unbash-walker";
 import type { CommandRef } from "@cad0p/unbash-walker";
 import type { Context } from "@deepseek-ai/cordis";
 import z from "@deepseek-ai/schemastery";
-import type { PreToolDecision } from "@deepseek-ai/dsh-tools";
+import type { PreToolDecision, PostToolDecision } from "@deepseek-ai/dsh-tools";
+import type { ContentBlock } from "@deepseek-ai/dsh-llm";
+import { TRANSLATORS, shellQuote } from "./bash-guard-translate";
 
 export const name = "bash-guard";
 
@@ -120,6 +137,8 @@ interface GuardEntry {
   subcommands?: Record<string, "deny" | "ask" | "allow">;
   /** Optional flag-rewriting pass applied to matching commands before verdicting. */
   rewrites?: RewriteRule[];
+  /** Names a built-in translator applied to matching commands before verdicting. */
+  translate?: string;
 }
 
 /** Resolve $DSH_HOME in a configured path. */
@@ -191,24 +210,28 @@ async function loadRules(ctx: Context, dir: string): Promise<Map<string, GuardEn
           rewrites.push(cleanRewrite);
         }
       }
-      for (const cmd of clean) {
-        if (!rewrites) {
-          rules.set(cmd, {
-            commands: entry.commands,
-            verdict: entry.verdict,
-            reason: entry.reason,
-            subcommands,
-          });
-        } else {
-          rules.set(cmd, {
-            commands: entry.commands,
-            verdict: entry.verdict,
-            reason: entry.reason,
-            subcommands,
-            rewrites,
-          });
+      let translate: string | undefined;
+      if (entry.translate !== undefined) {
+        if (typeof entry.translate !== "string" || entry.translate.length === 0) {
+          throw new Error(`bad translate: ${String(entry.translate)}`);
         }
+        if (!Object.hasOwn(TRANSLATORS, entry.translate)) {
+          throw new Error(`unknown translate: ${entry.translate}`);
+        }
+        translate = entry.translate;
       }
+      for (const cmd of clean) {
+        const built: GuardEntry = {
+          commands: entry.commands,
+          verdict: entry.verdict,
+          reason: entry.reason,
+          subcommands,
+        };
+        if (rewrites) built.rewrites = rewrites;
+        if (translate) built.translate = translate;
+        rules.set(cmd, built);
+      }
+
       ctx.logger.debug(`bash-guard: loaded ${clean.length} command(s) from rule file ${name}`);
     } catch (error) {
       ctx.logger.warn(
@@ -378,9 +401,67 @@ function scratchAllowed(refs: CommandRef[], safePaths: string[], workspaceRoot?:
     return safePaths.some((sp) => isUnderScratch(n, sp));
   });
 }
-/** Re-evaluate a command for the pre-execute hook. Returns the (possibly rewritten)
- * command string and a decision: null means allow (caller calls next()).
- * depth guards recursion after a rewrite. */
+
+/** Characters the shell expands itself when a word reaches it unquoted. */
+const GLOB_CHARS = ["*", "?", "[", "]", "{", "}", "~"];
+
+/**
+ * Words that carry a GLOB_CHARS character but that the shell leaves alone.
+ * Bash expands a brace only when the braces hold a comma or a range, so a bare
+ * `{}` reaches the command as written. `find -exec` uses `{}` as its result
+ * placeholder, so treating it as a glob would skip every -exec translation.
+ */
+const LITERAL_WORDS = new Set(["{}"]);
+
+/**
+ * True when one command ref can be spliced back into `command` safely.
+ *
+ * The splice replaces the byte range that runs from the command word to the
+ * last suffix word. Every one of those offsets must address `command` itself,
+ * and every word must survive a round trip through shellQuote.
+ *
+ * A ref that came out of expandWrapperCommands fails the first test.
+ * expandWrapperCommands rebuilds the inner command text and parses that as a
+ * fresh source, so the ref carries offsets into the rebuilt string and not into
+ * the outer command. A top-level ref carries the outer command as its source.
+ *
+ * A word that is not statically resolvable fails, because only the shell can
+ * compute its value.
+ *
+ * An unquoted glob fails too. getCommandArgs hands back the unquoted value, so
+ * shellQuote would put quotes around the glob and stop the shell from expanding
+ * it. A quoted glob is safe, because its text still carries the original
+ * quotes, which is why the test compares the text against the value.
+ */
+function translatableRef(
+  ref: CommandRef,
+  command: string,
+): { ok: true } | { ok: false; why: string } {
+  if (ref.source !== command) {
+    return {
+      ok: false,
+      why: "it sits inside a wrapper, so its offsets address a rebuilt string",
+    };
+  }
+  if (ref.node.name === undefined) return { ok: false, why: "it has no command word" };
+  for (const word of [ref.node.name, ...ref.node.suffix]) {
+    if (!isStaticallyResolvable(word)) {
+      return { ok: false, why: `\`${word.text}\` depends on a shell expansion` };
+    }
+    if (
+      word.text === (word.value ?? word.text) &&
+      !LITERAL_WORDS.has(word.text) &&
+      GLOB_CHARS.some((c) => word.text.includes(c))
+    ) {
+      return { ok: false, why: `the shell expands \`${word.text}\` before the command runs` };
+    }
+  }
+  return { ok: true };
+}
+/** Re-evaluate a command for the pre-execute hook. Returns the (possibly rewritten
+ * or translated) command string, a decision (null means allow, so the caller calls
+ * next()), and the model-facing notes produced by the translation pass.
+ * depth guards recursion after a rewrite or a translation. */
 async function evaluate(
   ctx: Context,
   dirs: string[],
@@ -389,7 +470,10 @@ async function evaluate(
   safePaths: string[],
   workspaceRoot: string | undefined,
   templates: { deny?: string; ask?: string },
-): Promise<{ command: string; decision: PreToolDecision | null }> {
+): Promise<{ command: string; decision: PreToolDecision | null; notes: string[] }> {
+  // Notes produced by the translation pass below. They ride the tool result and
+  // not the decision, because an allow decision carries no message field.
+  const notes: string[] = [];
   // Parse (fail-closed)
   let script;
   try {
@@ -399,6 +483,7 @@ async function evaluate(
     ctx.logger.warn(`bash-guard: parse error in command; denying: ${command} (error: ${errorMsg})`);
     return {
       command,
+      notes,
       decision: {
         kind: "deny",
         reason: `bash-guard: could not parse the command; refusing to run it unparsed. ${errorMsg}`,
@@ -410,6 +495,7 @@ async function evaluate(
     ctx.logger.warn(`bash-guard: script parse errors; denying: ${command} (errors: ${messages})`);
     return {
       command,
+      notes,
       decision: {
         kind: "deny",
         reason: `bash-guard: parse errors in command; refusing to run it unparsed. ${messages}`,
@@ -429,7 +515,7 @@ async function evaluate(
   // scratch at any time.
   if (safePaths.length > 0 && scratchAllowed(all, safePaths, workspaceRoot)) {
     ctx.logger.info(`bash-guard: scratch write allowed: ${command}`);
-    return { command, decision: null };
+    return { command, notes, decision: null };
   }
   const rules = await loadRulesMulti(ctx, dirs);
   const hits = all
@@ -490,20 +576,154 @@ async function evaluate(
         `bash-guard: rewrite (${logBecauses.join("; ")}) ${command} -> ${rewritten}`,
       );
       if (depth < 5) {
-        return evaluate(ctx, dirs, rewritten, depth + 1, safePaths, workspaceRoot, templates);
+        const inner = await evaluate(
+          ctx,
+          dirs,
+          rewritten,
+          depth + 1,
+          safePaths,
+          workspaceRoot,
+          templates,
+        );
+        return { ...inner, notes: [...notes, ...inner.notes] };
       }
       command = rewritten;
     }
   }
 
+  // Translation pass — only at top level (depth 0). A rule may name a built-in
+  // translator that maps a whole matched command onto a preferred tool, for
+  // example `grep` onto `rg`. The splice writes back into the original command
+  // string, so only a ref that translatableRef accepts may take part. A ref
+  // from a wrapper expansion carries offsets into a rebuilt string, so it is
+  // skipped.
+  if (depth === 0 && hits.some((h) => h.rule.translate)) {
+    const ranges: {
+      start: number;
+      end: number;
+      text: string;
+      lines: string[];
+      why?: string;
+    }[] = [];
+    for (const hit of hits) {
+      const key = hit.rule.translate;
+      if (key === undefined) continue;
+      const translator = TRANSLATORS[key];
+      if (translator === undefined) {
+        ctx.logger.warn(`bash-guard: no translator named "${key}"; leaving ${hit.name} as written`);
+        continue;
+      }
+      const node = hit.ref.node;
+      // Check the splice BEFORE translating. A hit that fails here must fall
+      // through to the rule's own base verdict. It must not raise a deny that
+      // names a translator blocker, because the real reason is different.
+      const splice = translatableRef(hit.ref, command);
+      if (splice.ok === false) {
+        ctx.logger.debug(`bash-guard: not translating ${hit.name} in ${command}: ${splice.why}`);
+        continue;
+      }
+      const outcome = translator(getCommandArgs(hit.ref), hit.name);
+      if (outcome.kind === "blocked") {
+        const text = command.slice(node.pos, node.end);
+        ctx.logger.warn(`bash-guard: translation blocked for ${hit.name}: ${outcome.why}`);
+        return {
+          command,
+          notes,
+          decision: {
+            kind: "deny",
+            reason: `bash-guard: could not translate \`${text}\`. ${outcome.why} Run the rg or fd equivalent yourself.`,
+          },
+        };
+      }
+      const start = node.name.pos;
+      const end = node.suffix.length > 0 ? node.suffix[node.suffix.length - 1].end : node.name.end;
+      // A redirect parked between the command word and the last argument would
+      // have to be re-emitted inside the replacement. That is not worth the bug
+      // surface, so deny instead.
+      if (node.redirects.some((r) => r.pos >= start && r.pos < end)) {
+        return {
+          command,
+          notes,
+          decision: {
+            kind: "deny",
+            reason: `bash-guard: could not translate \`${command.slice(start, end)}\`. A redirect sits between the arguments. Run the rg or fd equivalent yourself.`,
+          },
+        };
+      }
+      // Quote the replacement the same way the splice does. An unquoted form
+      // here would teach the model a command the shell would expand differently.
+      const shown = outcome.argv.map(shellQuote).join(" ");
+      const lines = [
+        `bash-guard: ran \`${shown}\` instead of \`${command.slice(start, end)}\`. Call rg and fd directly next time.`,
+      ];
+      for (const note of outcome.notes) {
+        if (note.length > 0) lines.push(note);
+      }
+      ranges.push({
+        start,
+        end,
+        text: outcome.argv.map(shellQuote).join(" "),
+        lines,
+        why: outcome.kind === "ask" ? outcome.why : undefined,
+      });
+    }
+    if (ranges.length > 0) {
+      ranges.sort((a, b) => a.start - b.start);
+      let translated = "";
+      let lastEnd = 0;
+      const whys: string[] = [];
+      for (const range of ranges) {
+        if (range.start < lastEnd) continue;
+        translated += command.slice(lastEnd, range.start) + range.text;
+        lastEnd = range.end;
+        notes.push(...range.lines);
+        if (range.why !== undefined) whys.push(range.why);
+      }
+      translated += command.slice(lastEnd);
+      ctx.logger.info(`bash-guard: translated ${command} -> ${translated}`);
+      if (depth < 5) {
+        const inner = await evaluate(
+          ctx,
+          dirs,
+          translated,
+          depth + 1,
+          safePaths,
+          workspaceRoot,
+          templates,
+        );
+        const merged = [...notes, ...inner.notes];
+        // A translator that asks for approval outranks an allow from the
+        // re-check. A deny from the re-check is stricter, so it stands.
+        if (whys.length > 0 && inner.decision?.kind !== "deny") {
+          return {
+            command: inner.command,
+            notes: merged,
+            decision: {
+              kind: "ask",
+              // The caveats must appear in the PROMPT. A note delivered after
+              // the run reaches the user too late to inform the approval, and
+              // never arrives at all when the user rejects the call.
+              reason:
+                `bash-guard: the translated command needs approval:\n\n  ${inner.command}\n\n` +
+                whys.map((w) => `  \u2022 ${w}`).join("\n") +
+                (merged.length > 0 ? `\n\n${merged.join("\n")}` : ""),
+            },
+          };
+        }
+        return { ...inner, notes: merged };
+      }
+      command = translated;
+    }
+  }
+
   if (all.length === 0) {
     ctx.logger.debug(`bash-guard: no actual commands found in: ${command}`);
-    return { command, decision: null };
+    return { command, notes, decision: null };
   }
 
   if (hits.length === 0) {
     ctx.logger.debug(`bash-guard: no rules matched for: ${command}`);
-    return { command, decision: null };
+    return { command, notes, decision: null };
   }
 
   const verdicts = hits.map((h) => h.verdict);
@@ -517,7 +737,7 @@ async function evaluate(
       });
       const ruleNames = [...new Set(denying.map((h) => h.name))].join(", ");
       ctx.logger.warn(`bash-guard: command denied by rules [${ruleNames}]: ${command}`);
-      return { command, decision: { kind: "deny", reason } };
+      return { command, notes, decision: { kind: "deny", reason } };
     }
     case "ask": {
       const asking = hits.filter((h) => h.verdict === "ask");
@@ -529,6 +749,7 @@ async function evaluate(
       ctx.logger.warn(`bash-guard: command asks for approval by rules [${ruleNames}]: ${command}`);
       return {
         command,
+        notes,
         decision: { kind: "ask", reason },
       };
     }
@@ -536,12 +757,19 @@ async function evaluate(
     case "none":
     default:
       ctx.logger.debug(`bash-guard: command allowed: ${command}`);
-      return { command, decision: null };
+      return { command, notes, decision: null };
   }
 }
 
 export function apply(ctx: Context, config: BashGuardConfig): void {
   const baseDir = resolveHome(config.guardsDir ?? "$DSH_HOME/plugins/guards");
+
+  // Model-facing notes produced by the translation pass, keyed by callId. The
+  // pre-execute listener fills this map and the post-execute listener drains it.
+  // A note cannot ride an allow decision, because an allow decision carries no
+  // message field.
+  const pendingNotes = new Map<string, string>();
+  const MAX_PENDING_NOTES = 64;
 
   ctx.on("tools/pre-execute", async (exec, next) => {
     if (exec.name !== "bash") return next();
@@ -579,13 +807,77 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
     const templates = { deny: config.denyMessage, ask: config.askMessage };
     const result = await evaluate(ctx, dirs, command, 0, safePaths, workspaceRoot, templates);
     if (result.command !== command) {
+      // The dsh types state at the PreToolDecision declaration that input
+      // rewriting is excluded from the pre-execute contract, because arguments
+      // are already logged and presented. This guard mutates anyway, so the
+      // transcript shows the ORIGINAL command while the translated one runs.
+      // That is exactly why the post-execute note below exists.
       try {
         (exec.arguments as { command: string }).command = result.command;
       } catch {
-        ctx.logger.warn("bash-guard: could not apply rewritten command; running original");
+        // Never fall through to the original command. A failed mutation used to
+        // be safe because every rewrite target was already allowed. It is not
+        // safe now, because the original grep or find would run unguarded.
+        ctx.logger.warn("bash-guard: could not apply rewritten command; refusing the call");
+        pendingNotes.delete(exec.callId);
+        return {
+          kind: "deny",
+          reason:
+            "bash-guard: could not apply the translated command; refusing to run the original.",
+        };
+      }
+    }
+    if (result.decision?.kind === "deny") {
+      pendingNotes.delete(exec.callId);
+    } else if (result.notes.length > 0) {
+      pendingNotes.set(exec.callId, result.notes.join("\n"));
+      // A Map keeps insertion order, so the first key is the oldest entry.
+      while (pendingNotes.size > MAX_PENDING_NOTES) {
+        const oldest = pendingNotes.keys().next().value;
+        if (oldest === undefined) break;
+        pendingNotes.delete(oldest);
       }
     }
     if (result.decision === null) return next();
     return result.decision;
+  });
+
+  // Deliver the translation note to the model. The note rides the tool result,
+  // because a pre-execute allow decision has no field to carry it.
+  ctx.on("tools/post-execute", async (exec, result, next) => {
+    if (exec.name !== "bash") return next();
+    let decision: PostToolDecision | undefined;
+    try {
+      const note = pendingNotes.get(exec.callId);
+      if (note === undefined) return next();
+      pendingNotes.delete(exec.callId);
+      const block: ContentBlock = { type: "text", text: note };
+      decision = await next();
+      if (decision.kind === "block") {
+        return {
+          kind: "block",
+          feedback: [block, ...decision.feedback],
+          additionalContexts: decision.additionalContexts,
+        };
+      }
+      if (Object.hasOwn(decision, "value")) {
+        // The runtime throws a TypeError when an accept decision carries both
+        // content and value, so this note has nowhere to go.
+        ctx.logger.debug("bash-guard: post-execute decision carries a value; dropping the note");
+        return decision;
+      }
+      return {
+        kind: "accept",
+        content: [block, ...(decision.content ?? result.content)],
+        additionalContexts: decision.additionalContexts,
+      };
+    } catch (error) {
+      // A note is never worth failing a tool call. Reuse the downstream decision
+      // when there is one, so next() is never called twice.
+      ctx.logger.warn(
+        `bash-guard: could not attach the translation note: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return decision ?? next();
+    }
   });
 }

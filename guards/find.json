@@ -1,5 +1,6 @@
 {
   "commands": ["find"],
   "verdict": "deny",
-  "reason": "find is denied. Use fd or rg instead. They respect .gitignore and have saner defaults."
+  "reason": "find is normally translated to fd automatically. This call could not be translated, so it is denied. That happens when the command sits inside a wrapper such as sh -c, when an argument is an unquoted glob, or when an argument depends on a shell expansion. Write the fd command yourself.",
+  "translate": "find"
 }

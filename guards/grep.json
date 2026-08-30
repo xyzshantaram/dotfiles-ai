@@ -1,5 +1,6 @@
 {
   "commands": ["grep", "egrep", "fgrep", "zgrep"],
   "verdict": "deny",
-  "reason": "grep is denied. Use rg (ripgrep) instead. It is faster and respects .gitignore."
+  "reason": "grep is normally translated to rg automatically. This call could not be translated, so it is denied. That happens when the command sits inside a wrapper such as sh -c, when an argument is an unquoted glob, or when an argument depends on a shell expansion. Write the rg command yourself.",
+  "translate": "grep"
 }

@@ -145,6 +145,145 @@ agent.options.subagentDepth ?? 0)`. Source: `dsh-subagent/lib/index.js`
 - The orchestrator independently verifies at least one concrete behavior claim
   per ticket before closing it.
 
+The tickets below are a THIRD, unrelated effort: make `bash-guard` translate
+`grep` and `find` into `rg` and `fd` instead of denying them. A weaker model
+does not learn from a denial. It retries another denied form and burns tokens.
+This effort does not close T6.
+
+**Settled decisions for this effort.** `find` translation is best effort. Keep
+`rg` and `fd` default behavior, so do not add flags to reproduce POSIX
+traversal. Warn the model every time a translation fires, with one short line.
+A mutating `find` predicate translates and then returns `ask`. An
+untranslatable expression denies and names the exact blocking token.
+
+**Verified facts for this effort.** Read from the installed dsh packages,
+`node_modules`, and the installed tools in this session. Treat them as settled.
+
+- `PreToolDecision` is `{ kind: 'allow' } | { kind: 'deny', reason } |
+{ kind: 'ask', reason? }`. An allow carries no message field, so a warning
+  cannot ride a pre-execute allow. Source: `dsh-tools` types, lines 418 to 426.
+- The same declaration states at line 415 that input rewriting is excluded from
+  the pre-execute contract because arguments are already logged and presented.
+  The guard mutates `exec.arguments.command` anyway, so the transcript shows the
+  ORIGINAL command while the rewritten one runs. That is why the note exists.
+- `PostToolDecision` accept may replace `content` OR `value`, never both. The
+  runtime throws `TypeError` when a decision carries both. Source: same file,
+  lines 431 to 445.
+- `ToolExecutionInput.callId` exists and `ToolExecution` extends it. It is the
+  pre-execute to post-execute correlation key. Source: same file, lines 196 and 260.
+- Both result variants carry `content: ContentBlock[]`. A text block is
+  `{ type: 'text', text: string }`.
+- unbash `Command` is `{ type, pos, end, name: Word | undefined, prefix,
+suffix: Word[], redirects }`. `Word` carries absolute `pos` and `end`.
+- The existing `RewriteRule` only deletes byte ranges. It cannot rename the
+  command word, so translation is new machinery.
+- ripgrep 15.2.0 has NO `--include` and NO `--exclude`. Use `-g GLOB` and
+  `-g !GLOB`. `rg -I` is `--no-filename`, not `-h`. `rg -z` is `--search-zip`,
+  which is not `grep -z`. `grep -z` maps to `rg --null-data`.
+- fd 10.4.2 has `--search-path`, `-d/--max-depth`, `--min-depth`, `-g/--glob`,
+  `-t/--type`, `-p/--full-path`, `-S/--size`, `-0/--print0`, `-x/--exec`, and
+  `-X/--exec-batch`. `-t e` means empty.
+- `build.mjs` bundles `plugins/bash-guard.ts` with `bundle: true`, so a sibling
+  source file costs nothing at runtime.
+
+### T7 — translator plumbing (`plugins/bash-guard.ts`)
+
+**Status:** done
+**Acceptance criteria:**
+
+- `GuardEntry` gains an optional `translate` field. `loadRules` accepts only a
+  known translator name and skips the rule file otherwise, with the existing
+  warning log.
+- The two near-identical `rules.set` branches collapse into one object build.
+  A third copy is not added.
+- A translation pass runs in `evaluate` after the rewrite pass, only at
+  `depth === 0`.
+- `ok` splices the new argv in and re-enters `evaluate` at `depth + 1`, so the
+  result is re-checked against `guards/rg.json`, the profile overlay, and the
+  scratch escape.
+- `ask` splices, re-enters, and forces the final decision to `ask` even when the
+  re-entry would allow.
+- `blocked` returns `deny` whose reason names the exact blocking token.
+- A redirect inside the splice range returns `deny` rather than a re-emission
+  attempt.
+- A failed mutation of `exec.arguments.command` returns `deny`. The original
+  `grep` or `find` never runs. This is the safety fix and it must ship in the
+  same pass.
+- `shellQuote` round trips a word with a space, a single quote, and a glob.
+
+### T8 — grep translator (`plugins/bash-guard-translate.ts`)
+
+**Status:** done
+**Acceptance criteria:**
+
+- `grep`, `egrep`, `fgrep`, `zgrep` map to `rg`. `fgrep` adds `-F`. `zgrep`
+  adds `-z`. `egrep` adds nothing and carries a note.
+- `-r` and `-R` drop, because `rg` recurses by default.
+- `--include=GLOB` maps to `-g GLOB`. `--exclude=GLOB` maps to `-g !GLOB`.
+- `-h` maps to `--no-filename`, not to a short `-h`.
+- `-z` maps to `--null-data`, not to `-z`.
+- An unmapped flag returns `blocked` naming that flag.
+- The first non-flag argument is the pattern unless `-e` or `-f` supplied one.
+  Every later positional is a path.
+
+### T9 — find translator (`plugins/bash-guard-translate.ts`)
+
+**Status:** done
+**Acceptance criteria:**
+
+- `find` maps to `fd`. Leading path arguments become `--search-path` entries.
+- `-name`, `-iname`, `-path`, `-type`, `-maxdepth`, `-mindepth`, `-size`,
+  `-newer`, `-empty`, `-print0`, `-print`, and `-follow` map to their confirmed
+  fd equivalents.
+- `-delete`, `-exec`, and `-execdir` style predicates translate and return
+  `ask`, or return `blocked` when fd has no safe equivalent.
+- `-o`, `-a`, `-not`, `!`, and parentheses return `blocked` naming the operator.
+  fd has no general boolean expression language.
+- Any other predicate returns `blocked` naming that exact predicate.
+
+### T10 — warning channel (`plugins/bash-guard.ts`)
+
+**Status:** done
+**Acceptance criteria:**
+
+- `evaluate` returns the notes it produced.
+- `apply` registers a `tools/post-execute` listener that prepends one text block
+  to the result content for a bash call carrying a stored note.
+- The note map is keyed by `exec.callId`, is deleted on read, is deleted on
+  deny, and is capped at 64 entries with oldest-first eviction.
+- The listener calls `next()` for a non-bash tool and for a call with no note.
+- An accept decision that owns `value` passes through untouched, because the
+  runtime rejects a decision carrying both `content` and `value`.
+- A failing listener cannot fail the tool call. The body is wrapped in
+  try/catch and falls back to `next()`.
+
+### T11 — rules, docs, build, tests
+
+**Status:** done, pending the user's own hands-on check
+**Acceptance criteria:**
+
+- `guards/grep.json` gains `"translate": "grep"`. `guards/find.json` gains
+  `"translate": "find"`. Both keep `verdict: "deny"` as the fallback, so a
+  broken translator cannot open a hole.
+- Both `reason` strings change to wording that fits the new behavior, because
+  the reason now appears only when translation fails.
+- `README.md` line 30 is updated. It currently claims only that the guard
+  rewrites `rg -r` to `rg`.
+- `skills/customize-setup/SKILL.md` and `template.md` line 52 are updated.
+  Check whether `generate-customize-setup.mjs` regenerates one from the other
+  before editing by hand.
+- The module doc comment in `plugins/bash-guard.ts` documents the `translate`
+  field, the recursion, and the post-execute note.
+- `plugins/bash-guard-translate.test.ts` covers a plain recursive grep, an
+  `fgrep` case, an unmapped grep flag, an include glob, an exclude glob, a
+  `find -name` case, a `find -delete` ask case, a `find -o` blocked case, and
+  `shellQuote`. Every test must be shown to fail against the pre-change
+  behavior.
+- `node build.mjs` regenerates `plugins/bash-guard.js`, which is committed.
+- `pnpm exec tsc --noEmit` reports only the known pre-existing errors.
+- `pnpm exec prettier --check .` passes.
+- `pnpm test` passes.
+
 ## Critical context
 
 - Bundle outputs under `plugins/*.js`, `plugins/*/dist`, and `plugins/*/lib`
@@ -153,12 +292,23 @@ agent.options.subagentDepth ?? 0)`. Source: `dsh-subagent/lib/index.js`
 - `see.ts` and `plugins/subscriptions/src/client.tsx` also import from
   `profile-routes`. A change there reaches both bundles.
 - Do not add a runtime dependency without asking the user.
+- `sync.sh` step `step_sync_guard_rules` copies `guards/.` into
+  `$DSH_HOME/plugins/guards/`. It copies and never deletes, so a renamed or
+  removed rule file leaves a stale copy behind.
+- The guard re-reads its rule files on every call, so a rule edit needs only a
+  sync. A plugin code change needs a restart of the running session.
 
 ## Human review queue
 
 - Confirm in the running web GUI that the profiles panel shows the correct
   chain name for each entry field, that a reasoning effort survives a save,
   and that the model seat still applies a profile.
+- Run a real `grep -rn foo src/` and a real `find . -name '*.ts'` in a live
+  session. Confirm the translated command runs, the output is correct, and the
+  note appears once above the output.
+- Run `find . -delete` against scratch and confirm the approval prompt appears.
+- Confirm the transcript shows the original command while the translated one
+  runs. Decide whether that is acceptable or needs a follow-up ticket.
 
 ## User preferences and special rules
 
