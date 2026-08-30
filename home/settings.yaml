@@ -20,7 +20,7 @@ llm-pi-ai:
         name: Claude Sonnet 5
         contextWindow: 1000000
         maxTokens: 128000
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -33,7 +33,7 @@ llm-pi-ai:
         name: Claude Sonnet 4.6
         contextWindow: 1000000
         maxTokens: 128000
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -45,7 +45,7 @@ llm-pi-ai:
         name: Claude Fable 5
         contextWindow: 1000000
         maxTokens: 128000
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -58,7 +58,7 @@ llm-pi-ai:
         name: Claude Opus 5
         contextWindow: 1000000
         maxTokens: 128000
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -71,7 +71,7 @@ llm-pi-ai:
         name: Claude Opus 4.8
         contextWindow: 1000000
         maxTokens: 128000
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -84,7 +84,7 @@ llm-pi-ai:
         name: Claude Opus 4.7
         contextWindow: 1000000
         maxTokens: 128000
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -97,14 +97,14 @@ llm-pi-ai:
         name: Claude Haiku 4.5
         contextWindow: 200000
         maxTokens: 64000
-        defaultInput:
+        input:
         - text
         - image
       - id: gpt-5.6-sol
         name: GPT-5.6 Sol
         contextWindow: 1050000
         maxTokens: 128000
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -118,7 +118,7 @@ llm-pi-ai:
         name: GPT-5.6 Terra
         contextWindow: 1050000
         maxTokens: 128000
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -132,7 +132,7 @@ llm-pi-ai:
         name: GPT-5.6 Luna
         contextWindow: 1050000
         maxTokens: 128000
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -146,7 +146,7 @@ llm-pi-ai:
         name: GPT-5.5
         contextWindow: 1050000
         maxTokens: 128000
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -159,7 +159,7 @@ llm-pi-ai:
         name: GPT-5.4
         contextWindow: 1050000
         maxTokens: 128000
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -172,7 +172,7 @@ llm-pi-ai:
         name: GPT-5.3 Codex
         contextWindow: 400000
         maxTokens: 128000
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -185,7 +185,7 @@ llm-pi-ai:
         name: GPT-5.4 mini
         contextWindow: 400000
         maxTokens: 128000
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -198,6 +198,8 @@ llm-pi-ai:
         name: DeepSeek V4 Pro
         contextWindow: 1000000
         maxTokens: 384000
+        input:
+        - text
         reasoningEfforts:
           high: high
           max: max
@@ -205,6 +207,8 @@ llm-pi-ai:
         name: DeepSeek V4 Flash
         contextWindow: 1000000
         maxTokens: 384000
+        input:
+        - text
         reasoningEfforts:
           low: low
           high: high
@@ -213,7 +217,7 @@ llm-pi-ai:
         name: DeepSeek V4 Flash Vision Exp
         contextWindow: 1000000
         maxTokens: 384000
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -224,7 +228,7 @@ llm-pi-ai:
         name: Kimi K3
         contextWindow: 1048576
         maxTokens: 131072
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -235,35 +239,35 @@ llm-pi-ai:
         name: Kimi K2.7 Code
         contextWindow: 262144
         maxTokens: 262144
-        defaultInput:
+        input:
         - text
         - image
       - id: moonshotai/Kimi-K2.7-Code-Highspeed
         name: Kimi K2.7 Code HighSpeed
         contextWindow: 262144
         maxTokens: 262144
-        defaultInput:
+        input:
         - text
         - image
       - id: moonshotai/Kimi-K2.6
         name: Kimi K2.6
         contextWindow: 262144
         maxTokens: 262144
-        defaultInput:
+        input:
         - text
         - image
       - id: moonshotai/Kimi-K2.5
         name: Kimi K2.5
         contextWindow: 262144
         maxTokens: 262144
-        defaultInput:
+        input:
         - text
         - image
       - id: z-ai/glm-5.3-flash
         name: GLM-5.3-Flash
         contextWindow: 1000000
         maxTokens: 131072
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -274,6 +278,8 @@ llm-pi-ai:
         name: GLM-5.3
         contextWindow: 1000000
         maxTokens: 131072
+        input:
+        - text
         reasoningEfforts:
           low: low
           high: high
@@ -282,6 +288,8 @@ llm-pi-ai:
         name: GLM-5.2
         contextWindow: 1000000
         maxTokens: 131072
+        input:
+        - text
         reasoningEfforts:
           high: high
           max: max
@@ -289,7 +297,7 @@ llm-pi-ai:
         name: GLM 5.2 Fast
         contextWindow: 1048576
         maxTokens: 262144
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -300,52 +308,64 @@ llm-pi-ai:
         name: GLM-5.1
         contextWindow: 200000
         maxTokens: 131072
+        input:
+        - text
       - id: zai-org/GLM-5
         name: GLM-5
         contextWindow: 204800
         maxTokens: 131072
+        input:
+        - text
       - id: MiniMaxAI/MiniMax-M3
         name: MiniMax-M3
         contextWindow: 1048576
         maxTokens: 512000
-        defaultInput:
+        input:
         - text
         - image
       - id: MiniMaxAI/MiniMax-M2.7
         name: MiniMax-M2.7
         contextWindow: 204800
         maxTokens: 131072
+        input:
+        - text
       - id: minimax/minimax-m3-free
         name: MiniMax M3 (Free)
         contextWindow: 1048576
         maxTokens: 1048576
-        defaultInput:
+        input:
         - text
         - image
       - id: minimax/minimax-m2.7-free
         name: Minimax M2.7 (Free)
         contextWindow: 196608
         maxTokens: 196608
+        input:
+        - text
       - id: MiniMaxAI/MiniMax-M2.5
         name: MiniMax-M2.5
         contextWindow: 204800
         maxTokens: 131072
+        input:
+        - text
       - id: xiaomi/mimo-v2.5-pro
         name: MiMo-V2.5-Pro
         contextWindow: 1048576
         maxTokens: 131072
+        input:
+        - text
       - id: xiaomi/mimo-v2.5
         name: MiMo-V2.5
         contextWindow: 1048576
         maxTokens: 131072
-        defaultInput:
+        input:
         - text
         - image
       - id: Qwen/Qwen3.8-Max
         name: Qwen3.8 Max
         contextWindow: 1000000
         maxTokens: 131072
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -356,7 +376,7 @@ llm-pi-ai:
         name: Qwen3.8 27B
         contextWindow: 262144
         maxTokens: 32768
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -367,7 +387,7 @@ llm-pi-ai:
         name: Qwen3.8 Flash
         contextWindow: 1000000
         maxTokens: 131072
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -378,39 +398,41 @@ llm-pi-ai:
         name: Qwen3.7 Max
         contextWindow: 1000000
         maxTokens: 65536
-        defaultInput:
+        input:
         - text
         - image
       - id: Qwen/Qwen3.7-Plus
         name: Qwen3.7 Plus
         contextWindow: 1000000
         maxTokens: 65536
-        defaultInput:
+        input:
         - text
         - image
       - id: Qwen/Qwen3.7-Flash
         name: Qwen3.7 Flash
         contextWindow: 1000000
         maxTokens: 65536
-        defaultInput:
+        input:
         - text
         - image
       - id: Qwen/Qwen3.6-Max-Preview
         name: Qwen3.6 Max Preview
         contextWindow: 262144
         maxTokens: 65536
+        input:
+        - text
       - id: Qwen/Qwen3.6-Plus
         name: Qwen3.6 Plus
         contextWindow: 1000000
         maxTokens: 65536
-        defaultInput:
+        input:
         - text
         - image
       - id: stepfun/Step-3.7-Flash
         name: Step 3.7 Flash
         contextWindow: 256000
         maxTokens: 256000
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -421,15 +443,21 @@ llm-pi-ai:
         name: Step 3.5 Flash
         contextWindow: 256000
         maxTokens: 256000
+        input:
+        - text
         reasoningEfforts:
           low: low
           high: high
       - id: tencent/hy3-paid
         name: Hy3 Paid
+        input:
+        - text
       - id: tencent/hy4-preview
         name: Tencent Hy4 Preview
         contextWindow: 1048576
         maxTokens: 64000
+        input:
+        - text
         reasoningEfforts:
           off:
           low: low
@@ -438,7 +466,7 @@ llm-pi-ai:
         name: Gemini 3.7 Flash
         contextWindow: 1048576
         maxTokens: 65536
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -449,7 +477,7 @@ llm-pi-ai:
         name: Gemini 3.6 Flash
         contextWindow: 1048576
         maxTokens: 65536
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -461,7 +489,7 @@ llm-pi-ai:
         name: Gemini 3.5 Flash
         contextWindow: 1048576
         maxTokens: 65536
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -473,7 +501,7 @@ llm-pi-ai:
         name: Gemini 3.5 Flash Lite
         contextWindow: 1048576
         maxTokens: 65536
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -485,7 +513,7 @@ llm-pi-ai:
         name: Gemini 3.1 Flash Lite
         contextWindow: 1048576
         maxTokens: 65536
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -497,7 +525,7 @@ llm-pi-ai:
         name: Fugu Ultra
         contextWindow: 1000000
         maxTokens: 1000000
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -507,11 +535,13 @@ llm-pi-ai:
         name: Nemotron 3 Ultra 550B A55B
         contextWindow: 1000000
         maxTokens: 65536
+        input:
+        - text
       - id: thinkingmachines/inkling
         name: Inkling
         contextWindow: 65536
         maxTokens: 65536
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -524,7 +554,7 @@ llm-pi-ai:
         name: Inkling Small
         contextWindow: 1048576
         maxTokens: 262144
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -538,11 +568,13 @@ llm-pi-ai:
         name: Laguna S 2.1 Free
         contextWindow: 256000
         maxTokens: 32768
+        input:
+        - text
       - id: meta/muse-spark-1.1
         name: Muse Spark 1.1
         contextWindow: 1000000
         maxTokens: 32000
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -555,7 +587,7 @@ llm-pi-ai:
         name: Muse Spark 1.2
         contextWindow: 1048576
         maxTokens: 131072
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -568,7 +600,7 @@ llm-pi-ai:
         name: Muse Spark 1.2 Contributor
         contextWindow: 1048576
         maxTokens: 131072
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -581,7 +613,7 @@ llm-pi-ai:
         name: Grok 4.5
         contextWindow: 500000
         maxTokens: 500000
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -592,7 +624,7 @@ llm-pi-ai:
         name: Grok 4.6
         contextWindow: 500000
         maxTokens: 500000
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -617,7 +649,7 @@ llm-pi-ai:
         name: Claude Sonnet 5
         contextWindow: 1000000
         maxTokens: 128000
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -630,7 +662,7 @@ llm-pi-ai:
         name: Claude Sonnet 4.6
         contextWindow: 1000000
         maxTokens: 128000
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -642,7 +674,7 @@ llm-pi-ai:
         name: Claude Opus 5
         contextWindow: 1000000
         maxTokens: 128000
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -655,7 +687,7 @@ llm-pi-ai:
         name: Claude Opus 4.6
         contextWindow: 1000000
         maxTokens: 128000
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -667,7 +699,7 @@ llm-pi-ai:
         name: Claude Opus 4.7
         contextWindow: 1000000
         maxTokens: 128000
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -680,7 +712,7 @@ llm-pi-ai:
         name: Claude Opus 4.8
         contextWindow: 1000000
         maxTokens: 128000
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -693,7 +725,7 @@ llm-pi-ai:
         name: Claude Fable 5
         contextWindow: 1000000
         maxTokens: 128000
-        defaultInput:
+        input:
         - text
         - image
         reasoningEfforts:
@@ -706,7 +738,7 @@ llm-pi-ai:
         name: Claude Haiku 4.5
         contextWindow: 200000
         maxTokens: 64000
-        defaultInput:
+        input:
         - text
         - image
       # sync-models:end
@@ -715,13 +747,6 @@ llm-pi-ai:
       apiKeyEnv: OPENCODE_ZEN_API_KEY
       api: openai-completions
       baseURL: https://opencode.ai/zen/v1/
-    opencode-zen:
-      displayName: Opencode Zen (gateway)
-      apiKeyEnv: OPENCODE_ZEN_API_KEY
-      api: openai-completions
-      baseURL: https://opencode.ai/zen/v1/
-      defaultInput:
-      - text
 agent-presets:
   default: standard
 profile:
@@ -760,4 +785,4 @@ profile:
 
 
 modelSync:
-  lastRun: 2026-08-30T19:15:44.360Z
+  lastRun: 2026-08-30T19:38:23.810Z

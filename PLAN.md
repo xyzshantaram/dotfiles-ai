@@ -139,6 +139,24 @@ sync is not evidence the effort values are the ones you want.
 
 ## Critical context
 
+- A `models:` entry declares its modalities as `input`. `defaultInput` is a
+  PROVIDER-level key only, and it supplies the fallback for entries that
+  declare no `input`. See `modelFields` versus `profile` in
+  `dsh-llm-pi-ai/lib/index.js`. An unknown key on an entry is dropped in
+  silence, so `defaultInput` written on a model does nothing at all. This
+  defeated an earlier fix that looked correct in the YAML and never took
+  effect at runtime: `command-code` defaults to `[text]`, so every one of its
+  models reported text-only and `see` denied `read_image`. sync-models now
+  writes `input` on every entry, text-only included, so nothing relies on the
+  provider default.
+- A provider that resolves no models is rejected outright, so an empty
+  `models:` list and a provider with the key removed fail the same way. When a
+  gateway-extras route has no extras left, delete the WHOLE provider block.
+- Deleting the `opencode-zen` block ends the gateway-extras mechanism for that
+  route: the seed loop only walks providers already present in the file, so it
+  will not come back on its own. If the gateway ever ships a model the
+  models.dev `opencode` catalog lacks, add the provider block back by hand.
+
 - Bundle outputs under `plugins/*.js`, `plugins/*/dist`, and `plugins/*/lib`
   are committed. `build.mjs` regenerates them. Rebuild after every TypeScript
   change.
