@@ -15,6 +15,20 @@ verification sweep that has not been run.
 
 ### T6 — verification (profiles effort)
 
+**Found and fixed during verification.** Subagent dispatches rode the
+orchestrator head, not the subagent chain. The session log proved the child
+carried `delegationDepth: 1` while every step ran on
+`meridian/claude-opus-5`, which appears in no personal chain at all. The cause
+was never the chain config: `sync.sh` writes the pinned subagent head as
+`agentOptions:` BESIDE the tool row's `config:` key, but
+`@deepseek-ai/dsh-tool-subagent` declares `agentOptions` as a field of its own
+`Config` object and reads `config.agentOptions`. A sibling key parses and is
+then ignored, so every child inherited the parent's creation route
+(`resolveChildAgentOptions` spreads the parent's provider and model first, and
+the request overrides win only when they exist). The patcher's `indent6`
+comment said "config keys" when 6 spaces is the indent of `config:` itself.
+The patcher now nests at 8 and recognizes both the legacy sibling shape and
+the nested shape, migrating in place.
 **Status:** todo
 **Acceptance criteria:**
 

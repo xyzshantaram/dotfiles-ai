@@ -559,12 +559,19 @@ import re, sys
 # after `backgroundMode: continuable`, matching the existing 6/8-space
 # indent used by the surrounding keys.
 path, provider, model = sys.argv[1], sys.argv[2], sys.argv[3]
-indent6 = '      '   # config keys
-indent8 = '        '  # agentOptions values
+# `agentOptions` is a field of the tool's OWN config: dsh-tool-subagent
+# declares it inside `Config = z.object({...})` and reads `config.agentOptions`.
+# So it must nest INSIDE `config:`, not sit beside it. A sibling key is parsed
+# and then ignored, which silently leaves every child inheriting the parent's
+# creation route, i.e. the orchestrator head.
+# `config:` sits at 6, so its children sit at 8 and their values at 10.
+key_indent = '        '    # 8: `agentOptions:` inside `config:`
+val_indent = '          '  # 10: its provider/model values
+legacy_key = '      '      # 6: the wrong sibling placement written before
 new_block = (
-    f"{indent6}agentOptions:\n"
-    f"{indent8}provider: {provider}\n"
-    f"{indent8}model: {model}\n"
+    f"{key_indent}agentOptions:\n"
+    f"{val_indent}provider: {provider}\n"
+    f"{val_indent}model: {model}\n"
 )
 with open(path) as f:
     lines = f.read().splitlines(keepends=True)
@@ -598,9 +605,31 @@ while i < len(lines):
         if re.search(r'^\s+disabled:\s*true\s*$', row_text, re.MULTILINE):
             skipped += 1; out.extend(row_lines); i = j; continue
         # Already pinned with these values? Leave as-is.
-        if re.search(rf'^{re.escape(indent6)}agentOptions:\s*$', row_text, re.MULTILINE):
+        # Already pinned? Two shapes exist. The LEGACY wrong shape has
+        # `agentOptions:` beside `config:` (6 spaces); rewriting it in place
+        # with the nested indent fixes it, because it directly follows the
+        # last `config:` child. The correct shape is already nested at 8.
+        legacy_pinned = re.search(
+            rf'^{re.escape(legacy_key)}agentOptions:\s*$\n(?:{re.escape(legacy_key)}  (?:provider|model):[^\n]*\n)+',
+            row_text, re.MULTILINE,
+        )
+        nested_pinned = re.search(
+            rf'^{re.escape(key_indent)}agentOptions:\s*$\n(?:{re.escape(val_indent)}(?:provider|model):[^\n]*\n)+',
+            row_text, re.MULTILINE,
+        )
+        if legacy_pinned:
             new_row_text = re.sub(
-                rf'^{re.escape(indent6)}agentOptions:\n(?:{re.escape(indent8)}(?:provider|model):[^\n]*\n)+',
+                rf'^{re.escape(legacy_key)}agentOptions:\n(?:{re.escape(legacy_key)}  (?:provider|model):[^\n]*\n)+',
+                new_block, row_text, count=1, flags=re.MULTILINE,
+            )
+            if new_row_text != row_text:
+                edits += 1; out.append(new_row_text)
+            else:
+                skipped += 1; out.append(row_text)
+            i = j; continue
+        if nested_pinned:
+            new_row_text = re.sub(
+                rf'^{re.escape(key_indent)}agentOptions:\n(?:{re.escape(val_indent)}(?:provider|model):[^\n]*\n)+',
                 new_block, row_text, count=1, flags=re.MULTILINE,
             )
             if new_row_text != row_text:
