@@ -9,16 +9,16 @@
 //   2. For the two seeded providers (`command-code`, `opencode-zen`), calls
 //      {baseURL}/models and learns the model ids the provider actually serves.
 //      A provider listed in CATALOG_EXCLUDED (a gateway-extras route)
-//      subtracts the pi-ai catalog's own models, so it only lists what the
-//      catalog does not ship.
+//      subtracts the models.dev provider's own models, so it only lists
+//      what that provider does not ship.
 //   3. For `command-code` and `opencode-zen`, regenerates the entire
 //      `models:` sequence between a `# sync-models:begin` / `# sync-models:end`
 //      marker pair from a fresh {baseURL}/models fetch, on every run. It never
 //      appends just the missing ids: the whole marked block is replaced from
 //      scratch. Every other provider and everything outside the markers is left
 //      byte-identical. Entries carry contextWindow, maxTokens, defaultInput
-//      (image only when LiteLLM declares it), and reasoningEfforts (from
-//      LiteLLM's per-level flags) when --with-meta is set.
+//      (image when models.dev declares the model as vision-capable), and
+//      reasoningEfforts derived from models.dev's per-level reasoning flags.
 //   4. Checks every model referenced by `profile.chains` and warns about any
 //      that are missing from the (now seeded) providers.
 //   5. Writes the sync time to `modelSync.lastRun` so the file records when it
@@ -30,12 +30,10 @@
 // Usage:
 //   node sync-models.mjs                 # seed, then write home/settings.yaml
 //   node sync-models.mjs --dry-run       # print what would change, write nothing
-//   node sync-models.mjs --with-meta     # also fill contextWindow/maxTokens/reasoningEfforts from LiteLLM
-//
 // Env:
 //   SETTINGS_YAML   path to the settings file (default: ./home/settings.yaml)
 
-import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as YAML from "yaml";
@@ -44,181 +42,185 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const SETTINGS = process.env.SETTINGS_YAML ?? join(HERE, "home", "settings.yaml");
 
 const DRY_RUN = process.argv.includes("--dry-run") || process.argv.includes("-n");
-const WITH_META = process.argv.includes("--with-meta");
 
-const LITELLM_URL =
-  "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json";
+// Single source of model metadata: models.dev. The response is a JSON object
+// keyed by provider id, with each provider's `models` mapping model id to a
+// record carrying `modalities.input`, `limit.context`, `limit.output`, and
+// `reasoning_options`. We fetch it once per run and index it.
+const MODELS_DEV_URL = "https://models.dev/api.json";
 
 // Gateway-extras providers: a hand-declared route whose `models:` list is
-// seeded from the live gateway MINUS the pi-ai catalog models for a catalog
-// route, so the hand-declared route only lists what the catalog does not ship.
-// Key = the hand-declared provider route; value = the pi-ai catalog provider
-// whose model ids are excluded from the live listing before seeding.
+// seeded from the live gateway MINUS the models.dev provider's model ids for
+// a catalog route, so the hand-declared route only lists what the catalog
+// does not ship. Key = the hand-declared provider route; value = the
+// models.dev provider whose model ids are excluded before seeding. An empty
+// result is normal and correct: it means the catalog already covers every
+// model the gateway serves.
 const CATALOG_EXCLUDED = { "opencode-zen": "opencode" };
-// Catalog routes: the settings block serves the installed pi-ai catalog as-is
-// (no `models:` list to seed). The seed loop must not touch them, and the
-// chain check verifies their refs against the catalog.
+// Catalog routes: the settings block serves the installed models.dev provider
+// as-is (no `models:` list to seed). The seed loop must not touch them, and
+// the chain check verifies their refs against the models.dev provider.
 const CATALOG_ROUTES = new Set(["opencode"]);
-// The pi-ai version the vendored fork declares; keep in sync with
-// plugins/llm-pi-ai/package.json (dependencies["@earendil-works/pi-ai"]).
-const PI_AI_VERSION = "0.82.1";
-const PI_AI_CATALOG_BASE = `https://unpkg.com/@earendil-works/pi-ai@${PI_AI_VERSION}/dist/providers/data`;
 
 // Curated vision models: neither the live /models endpoint (it exposes no
-// modality field) nor LiteLLM nor the pi-ai catalog reliably advertise image
-// input for these (too new / gateway-specific ids), yet the upstream gateway
-// serves them with image input. Without this the `see` plugin vision gate
-// would deny `read_image` for agents routed to them. sync-models emits
-// `defaultInput: [text, image]` for them on every run, so the regenerated block
-// keeps it and the runtime recognizes them as vision-capable. Add to this set as
-// new vision models appear. See the see-plugin restriction bug:
-// provider "command-code" model "Qwen/Qwen3.7-Flash" (the `see` chain head).
+// modality field) nor models.dev reliably advertise image input for these
+// (too new or gateway-specific ids), yet the upstream gateway serves them
+// with image input. Without this the `see` plugin vision gate would deny
+// `read_image` for agents routed to them. sync-models emits
+// `defaultInput: [text, image]` for them on every run, so the regenerated
+// block keeps it and the runtime recognizes them as vision-capable. Add to
+// this set as new vision models appear.
 const VISION_MODELS = new Set([
-  "Qwen/Qwen3.8-Max",
-  "Qwen/Qwen3.8-27B",
-  "Qwen/Qwen3.8-Flash",
+  // Kept because the first-party vendor entry disagrees with the gateway.
+  // alibaba reports Qwen3.7-Max as text-only while 28 reseller providers
+  // report image input. The gateway serves images, so the override wins.
   "Qwen/Qwen3.7-Max",
-  "Qwen/Qwen3.7-Plus",
+  // Kept because only a tier-3 reseller matched these two, not the vendor.
+  // A reseller entry is weaker evidence, so do not depend on it for a gate
+  // that decides whether `read_image` is allowed.
+  "Qwen/Qwen3.8-27B",
   "Qwen/Qwen3.7-Flash",
-  "Qwen/Qwen3.6-Max-Preview",
-  "Qwen/Qwen3.6-Plus",
-  // Z.AI ships GLM-5.3-Flash as a VLM (docs.z.ai/guides/vlm/glm-5.3-flash),
-  // but the gateway id carries the `z-ai/` prefix, which no catalog indexes.
-  "z-ai/glm-5.3-flash",
+  // Dropped from this list because the models.dev first-party vendor entry now
+  // declares image input for them, which is the source we trust most:
+  // Qwen3.8-Max, Qwen3.8-Flash, Qwen3.7-Plus, Qwen3.6-Plus (all alibaba), and
+  // z-ai/glm-5.3-flash (an exact `glm-5.3-flash` key under zai reporting
+  // text, image, video, pdf). Re-add an entry here if a sync ever drops its
+  // `defaultInput: [text, image]`.
 ]);
 
-// The pi-ai provider catalogs bundled in node_modules are a second, local source
-// of modality and reasoning-effort data. LiteLLM is incomplete for new models;
-// the pi-ai catalogs carry `input` (modalities) and `thinkingLevelMap` (reasoning
-// efforts) for thousands of models and need no network. We merge both with
-// LiteLLM (and the curated VISION_MODELS override) when computing each model
-// metadata, instead of trusting a single incomplete source. A model may appear
-// under several APIs (e.g. openai-completions vs anthropic-messages) with
-// differing `input`; we union the matches and prefer an image-capable variant.
-const PI_AI_CATALOG_DIR = join(HERE, "node_modules/@earendil-works/pi-ai/dist/providers/data");
+// Map our provider route to the models.dev provider we should look at first.
+const TIER1_ROUTE = { "opencode-zen": "opencode" };
+// Map a regex of model id to the first-party vendor's models.dev provider.
+// Every value is confirmed present in models.dev. There is deliberately no
+// tencent entry: models.dev has no tencent provider.
+const TIER2_PREFIX = [
+  ["^claude-", "anthropic"],
+  ["^gpt-", "openai"],
+  ["^z-ai/", "zai"],
+  ["^zai-org/", "zai"],
+  ["^Qwen/", "alibaba"],
+  ["^deepseek/", "deepseek"],
+  ["^moonshotai/", "moonshotai"],
+  ["^MiniMaxAI/", "minimax"],
+  ["^minimax/", "minimax"],
+  ["^google/", "google"],
+  ["^xai/", "xai"],
+  ["^meta/", "meta"],
+  ["^stepfun/", "stepfun"],
+  ["^xiaomi/", "xiaomi"],
+  ["^nvidia/", "nvidia"],
+  ["^sakana/", "sakana"],
+  ["^poolside/", "poolside"],
+  ["^thinkingmachines/", "thinkingmachines"],
+];
+const TIER2_PREFIX_RE = TIER2_PREFIX.map(([pat, pid]) => [new RegExp(pat), pid]);
 
-function buildPiAiIndex() {
-  const all = [];
-  if (existsSync(PI_AI_CATALOG_DIR)) {
-    for (const f of readdirSync(PI_AI_CATALOG_DIR).filter((x) => x.endsWith(".json"))) {
-      let json;
-      try {
-        json = JSON.parse(readFileSync(join(PI_AI_CATALOG_DIR, f), "utf8"));
-      } catch {
-        continue;
-      }
-      for (const api of Object.values(json)) {
-        if (!api || typeof api !== "object") continue;
-        for (const [id, e] of Object.entries(api)) {
-          if (typeof id !== "string" || !e || typeof e !== "object") continue;
-          all.push({
-            id,
-            input: Array.isArray(e.input) ? e.input : null,
-            thinking:
-              e.thinkingLevelMap && typeof e.thinkingLevelMap === "object"
-                ? e.thinkingLevelMap
-                : null,
-          });
-        }
-      }
-    }
-  }
+let modelsDevIndex = null;
+
+function indexProviderModels(models) {
   const byId = new Map();
-  for (const e of all) {
-    if (!byId.has(e.id)) byId.set(e.id, []);
-    byId.get(e.id).push(e);
-  }
   const norm = new Map();
-  const addNorm = (id, e) => {
+  for (const [id, m] of Object.entries(models || {})) {
+    if (!m || typeof m !== "object") continue;
+    if (!byId.has(id)) byId.set(id, []);
+    byId.get(id).push(m);
     const n = id.toLowerCase().replace(/[^a-z0-9]/g, "");
     if (!norm.has(n)) norm.set(n, []);
-    norm.get(n).push(e);
-  };
-  for (const e of all) addNorm(e.id, e);
+    norm.get(n).push(m);
+  }
   return { byId, norm };
 }
 
-// Resolve one model id across the pi-ai catalogs. Returns the unioned modality
-// and reasoning data, or null when the catalogs know nothing about the id.
-function lookupPiAi(id, idx) {
-  if (!idx) return null;
-  const found = [];
-  const push = (list) => {
-    if (list) for (const e of list) found.push(e);
-  };
-  push(idx.byId.get(id));
-  const n = id.toLowerCase().replace(/[^a-z0-9]/g, "");
-  push(idx.norm.get(n));
-  const slash = id.indexOf("/");
-  const tail = slash >= 0 ? id.slice(slash + 1) : id;
-  push(idx.byId.get(tail));
-  push(idx.norm.get(tail.toLowerCase().replace(/[^a-z0-9]/g, "")));
-  for (const p of [
-    "Qwen/",
-    "z-ai/",
-    "zai-org/",
-    "MiniMaxAI/",
-    "minimax/",
-    "tencent/",
-    "meta/",
-    "xai/",
-    "google/",
-    "moonshotai/",
-    "xiaomi/",
-    "stepfun/",
-    "thinkingmachines/",
-    "deepseek/",
-    "sakana/",
-    "nvidia/",
-    "poolside/",
-  ]) {
-    if (id.startsWith(p)) {
-      const t = id.slice(p.length);
-      push(idx.byId.get(t));
-      push(idx.norm.get(t.toLowerCase().replace(/[^a-z0-9]/g, "")));
+async function fetchModelsDev() {
+  const res = await fetch(MODELS_DEV_URL);
+  if (!res.ok) throw new Error(`models.dev HTTP ${res.status}`);
+  const json = await res.json();
+  const providers = {};
+  for (const [pid, p] of Object.entries(json || {})) {
+    if (!p || typeof p !== "object") continue;
+    providers[pid] = indexProviderModels(p.models);
+  }
+  const unionById = new Map();
+  const unionNorm = new Map();
+  for (const idx of Object.values(providers)) {
+    for (const [id, list] of idx.byId) {
+      if (!unionById.has(id)) unionById.set(id, []);
+      unionById.get(id).push(...list);
+    }
+    for (const [n, list] of idx.norm) {
+      if (!unionNorm.has(n)) unionNorm.set(n, []);
+      unionNorm.get(n).push(...list);
     }
   }
-  if (found.length === 0) return null;
-  let vision = false;
-  const efforts = {};
-  for (const e of found) {
-    if (e.input && e.input.includes("image")) vision = true;
-    if (e.thinking)
-      for (const [level, wire] of Object.entries(e.thinking)) {
-        // The catalogs disagree about a level's wire value. For gpt-5.6-sol,
-        // opencode.json gives "minimal": null while github-copilot.json gives
-        // "low". Plain last-write-wins let the null win on readdir order, and
-        // llm-pi-ai rejects a null on every level except "off"
-        // (plugins/llm-pi-ai/lib/index.js:1236). So keep a real spelling once
-        // one catalog supplies it, and never let a later null overwrite it.
-        // "off" keeps the old behavior: a null there is legal and meaningful.
-        if (wire === null && level !== "off" && efforts[level] != null) continue;
-        efforts[level] = wire;
-      }
-  }
-  // A non-"off" level that is still null means no catalog carried a spelling
-  // for it. Fall back to the level name, the same literal choice the LiteLLM
-  // path makes (see REASONING_FLAGS).
-  for (const [level, wire] of Object.entries(efforts)) {
-    if (wire === null && level !== "off") efforts[level] = level;
-  }
-  return { vision, reasoningEfforts: Object.keys(efforts).length ? efforts : null };
+  return { providers, union: { byId: unionById, norm: unionNorm } };
 }
 
+// Within a single index, try exact id, normalized id, exact tail-after-slash,
+// normalized tail. The first strategy that yields a non-empty list wins.
+function matchId(idx, id) {
+  const candidates = [
+    idx.byId.get(id),
+    idx.norm.get(id.toLowerCase().replace(/[^a-z0-9]/g, "")),
+  ];
+  const slash = id.indexOf("/");
+  const tail = slash >= 0 ? id.slice(slash + 1) : id;
+  candidates.push(idx.byId.get(tail));
+  candidates.push(idx.norm.get(tail.toLowerCase().replace(/[^a-z0-9]/g, "")));
+  for (const list of candidates) if (list && list.length) return list[0];
+  return null;
+}
 
-/** The model ids pi-ai ships for one catalog provider (union across protocols). */
-async function fetchCatalogModelIds(providerId) {
-  const url = `${PI_AI_CATALOG_BASE}/${providerId}.json`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`catalog ${providerId} HTTP ${res.status}`);
-  const json = await res.json();
-  const ids = new Set();
-  for (const api of Object.values(json)) {
-    if (api && typeof api === "object") {
-      for (const id of Object.keys(api)) ids.add(id);
+// Three-tier ordered lookup. First hit wins, never unioned across tiers.
+function lookupModelsDev(id, db, routeProviderId) {
+  if (!db) return null;
+  const t1 = TIER1_ROUTE[routeProviderId];
+  if (t1 && db.providers[t1]) {
+    const hit = matchId(db.providers[t1], id);
+    if (hit) return { entry: hit, tier: 1 };
+  }
+  for (const [re, pid] of TIER2_PREFIX_RE) {
+    if (!re.test(id)) continue;
+    if (!db.providers[pid]) continue;
+    const hit = matchId(db.providers[pid], id);
+    if (hit) return { entry: hit, tier: 2 };
+  }
+  const hit = matchId(db.union, id);
+  if (hit) return { entry: hit, tier: 3 };
+  return null;
+}
+
+function isVisionEntry(entry) {
+  const mods = entry?.modalities?.input;
+  return Array.isArray(mods) && mods.includes("image");
+}
+
+// Build a pi-ai `reasoningEfforts` dict from one models.dev entry, taking
+// only `effort` reasoning options. `toggle` and `budget_tokens` are ignored.
+// "none" becomes the pi-ai "off" level with a null wire value. The caller is
+// responsible for the "only off" suppression rule.
+function reasoningEffortsForEntry(entry) {
+  if (!entry) return null;
+  const opts = Array.isArray(entry.reasoning_options) ? entry.reasoning_options : null;
+  if (!opts) return null;
+  const out = {};
+  for (const opt of opts) {
+    if (!opt || opt.type !== "effort") continue;
+    const values = Array.isArray(opt.values) ? opt.values : [];
+    for (const v of values) {
+      if (typeof v !== "string") continue;
+      const key = v === "none" ? "off" : v;
+      out[key] = v === "none" ? null : v;
     }
   }
-  return ids;
+  return Object.keys(out).length ? out : null;
+}
+
+/** The model ids models.dev lists for one provider. */
+async function fetchCatalogModelIds(providerId) {
+  if (!modelsDevIndex) throw new Error("models.dev metadata not loaded");
+  const idx = modelsDevIndex.providers[providerId];
+  if (!idx) throw new Error(`models.dev has no provider ${providerId}`);
+  return new Set(idx.byId.keys());
 }
 // The two providers this script seeds get their entire `models:` sequence
 // regenerated between a marker pair on every run. Content outside the markers
@@ -231,7 +233,11 @@ const MARKER_BEGIN_COMMENT = "# sync-models:begin";
 const MARKER_END_COMMENT = "# sync-models:end";
 const MARKER_BEGIN = "      " + MARKER_BEGIN_COMMENT;
 const MARKER_END = "      " + MARKER_END_COMMENT;
-const SEEDED_PROVIDERS = new Set(["command-code", "opencode-zen"]);
+const SEEDED_PROVIDERS = new Set(["command-code", "opencode-zen", "meridian"]);
+// Model-listing path for a provider whose endpoint is not at `{baseURL}/models`.
+// meridian proxies the Anthropic API and serves an OpenAI-shaped list at
+// /v1/models; a GET on /models returns "Endpoint not supported".
+const LISTING_PATH = { meridian: "/v1/models" };
 
 // Largest source offset reachable from a CST token, so a block's end offset
 // (inclusive of trailing newlines) can be computed for a safe text splice.
@@ -264,6 +270,10 @@ function lineOfOffset(text, offset) {
 function analyzeDocument(doc, text) {
   const providers = [];
   const chainRefs = [];
+  // Refs that reach the `see` tool. see.ts picks chain `see` (personal) or
+  // `see-<profile>`, so only those chains must resolve to a vision model.
+  // Every other chain is allowed to be text-only.
+  const visionChainRefs = [];
   const byName = new Map();
 
   const lp = doc.get("llm-pi-ai");
@@ -298,6 +308,8 @@ function analyzeDocument(doc, text) {
   if (profileChains && profileChains.items) {
     for (const pair of profileChains.items) {
       const chain = pair.value;
+      const chainName = pair.key?.value;
+      const needsVision = typeof chainName === "string" && /^see(-|$)/.test(chainName);
       const routes = chain?.get?.("routes");
       if (routes && routes.items) {
         for (const r of routes.items) {
@@ -305,6 +317,7 @@ function analyzeDocument(doc, text) {
           const model = r?.get?.("model");
           if (typeof prov === "string" && typeof model === "string") {
             chainRefs.push(`${prov}/${model}`);
+            if (needsVision) visionChainRefs.push(`${prov}/${model}`);
           }
         }
       } else if (chain && chain.items) {
@@ -313,6 +326,7 @@ function analyzeDocument(doc, text) {
           const val = item?.value;
           if (typeof val === "string" && val.includes("/") && !val.startsWith("chain:")) {
             chainRefs.push(val);
+            if (needsVision) visionChainRefs.push(val);
           }
         }
       }
@@ -338,7 +352,7 @@ function analyzeDocument(doc, text) {
     modelSyncRange = { start, end };
   }
 
-  return { providers, byName, chainRefs, modelSyncRange };
+  return { providers, byName, chainRefs, visionChainRefs, modelSyncRange };
 }
 
 // Locate a provider's `models:` block as line indices: the line of the
@@ -349,7 +363,12 @@ function analyzeDocument(doc, text) {
 // not. Returns null when the provider has no `models:` list.
 function modelsBlockLines(providerMap, text) {
   const pair = providerMap?.items?.find((p) => p.key?.value === "models");
-  if (!pair || !pair.value) return null;
+  // Only the key must exist. A `models:` key whose value is empty (the key
+  // followed by nothing but marker comments) still parses to a null value, and
+  // treating that as "no block" would make the caller insert a second
+  // `models:` key beside the first. The line scan below finds the real extent
+  // either way.
+  if (!pair) return null;
   const keyLine = lineOfOffset(text, pair.key.srcToken.offset);
   const lines = text.split("\n");
   let last = keyLine;
@@ -363,8 +382,8 @@ function modelsBlockLines(providerMap, text) {
   return { keyLine, last };
 }
 
-async function fetchModelIds(baseURL, apiKey) {
-  const url = baseURL.replace(/\/+$/, "") + "/models";
+async function fetchModelIds(baseURL, apiKey, path = "/models") {
+  const url = baseURL.replace(/\/+$/, "") + path;
   const headers = {};
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   const res = await fetch(url, { headers });
@@ -383,6 +402,17 @@ async function fetchModelIds(baseURL, apiKey) {
   return ids;
 }
 
+// Display name for one model. models.dev carries a curated name ("Claude
+// Sonnet 4.6"), which beats anything derived from the id: prettyName splits on
+// dashes and turns `claude-sonnet-4-6` into "Claude Sonnet 4 6". Some entries
+// carry a " (latest)" suffix that means nothing once the id is pinned, so drop
+// it. Fall back to prettyName when models.dev has no entry.
+function displayName(id, entry) {
+  const n = entry?.name;
+  if (typeof n === "string" && n.trim()) return n.replace(/\s*\(latest\)$/i, "").trim();
+  return prettyName(id);
+}
+
 function prettyName(id) {
   const tail = id.includes("/") ? id.slice(id.lastIndexOf("/") + 1) : id;
   return tail
@@ -391,71 +421,6 @@ function prettyName(id) {
     .join(" ");
 }
 
-// LiteLLM's per-level reasoning-effort flags -> pi-ai thinking levels, in
-// escalation order. LiteLLM publishes no "medium" or "high" flag, so those two
-// levels are never derived from it. "none" maps to pi-ai's "off" (supported,
-// send nothing). Each derived level's wire spelling is the level name itself:
-// the openai-completions catalog pi-ai ships uses literal spellings for these
-// gateways ("high":"high", "max":"max"), and LiteLLM carries no wire value, so
-// literal is the only automatable choice. A model with `supports_reasoning`
-// but no per-level flags yields nothing (no level set to emit).
-const REASONING_FLAGS = [
-  ["none", "off"],
-  ["minimal", "minimal"],
-  ["low", "low"],
-  ["xhigh", "xhigh"],
-  ["max", "max"],
-];
-
-/** Derive a pi-ai `reasoningEfforts` dict from one LiteLLM model entry. */
-function reasoningEffortsFor(entry) {
-  if (!entry) return null;
-  const out = {};
-  let hasThinking = false;
-  for (const [flag, level] of REASONING_FLAGS) {
-    if (entry["supports_" + flag + "_reasoning_effort"] === true) {
-      out[level] = level === "off" ? null : level;
-      if (level !== "off") hasThinking = true;
-    }
-  }
-  // A dict with only "off" is invalid to pi-ai (it demands a thinking level);
-  // a model that only supports "none" stays undeclared.
-  return hasThinking ? out : null;
-}
-
-let liteLLMCache = null;
-async function getLiteLLM() {
-  if (liteLLMCache) return liteLLMCache;
-  const res = await fetch(LITELLM_URL);
-  if (!res.ok) throw new Error(`LiteLLM HTTP ${res.status}`);
-  liteLLMCache = await res.json();
-  return liteLLMCache;
-}
-
-function lookupMeta(id, db) {
-  if (!db) return null;
-  const variants = [id];
-  const slash = id.indexOf("/");
-  if (slash >= 0) variants.push(id.slice(slash + 1));
-  for (const v of variants) {
-    const e = db[v];
-    if (!e) continue;
-    const out = {};
-    if (typeof e.max_input_tokens === "number") out.contextWindow = e.max_input_tokens;
-    if (typeof e.max_output_tokens === "number") out.maxTokens = e.max_output_tokens;
-    // LiteLLM reports vision as a top-level `supports_vision` boolean, not a
-    // `supported_openai_params` array containing "image" (that field does not
-    // exist anywhere in LiteLLM's model_prices_and_context_window.json;
-    // confirmed against a live fetch, 0 of ~3200 entries carry it). The
-    // previous check always evaluated to `[] .includes("image")` -> false, so
-    // no model synced through --with-meta ever got defaultInput: [text, image].
-    out.image = e.supports_vision === true;
-    const efforts = reasoningEffortsFor(e);
-    if (efforts) out.reasoningEfforts = efforts;
-    return out;
-  }
-  return null;
-}
 
 function entryText(id, name, meta) {
   const out = [`      - id: ${id}`, `        name: ${name}`];
@@ -477,52 +442,53 @@ function entryText(id, name, meta) {
 async function main() {
   const text = readFileSync(SETTINGS, "utf8");
   const doc = YAML.parseDocument(text, { keepSourceTokens: true });
-  const { providers, byName, chainRefs, modelSyncRange } = analyzeDocument(doc, text);
+  const { providers, byName, chainRefs, visionChainRefs, modelSyncRange } =
+    analyzeDocument(doc, text);
   const lines = text.split("\n");
 
-  let metaDB = null;
-  if (WITH_META) {
-    try {
-      metaDB = await getLiteLLM();
-    } catch (e) {
-      console.warn(`! could not fetch LiteLLM metadata: ${e.message}`);
-    }
-  }
-  // The pi-ai catalogs are a local, network-free supplement to LiteLLM for
-  // modalities and reasoning efforts. Build the index once, up front.
-  let piAi = null;
+  // Single source of metadata: models.dev. Fetched once and indexed.
   try {
-    piAi = buildPiAiIndex();
+    modelsDevIndex = await fetchModelsDev();
   } catch (e) {
-    console.warn(`! could not read pi-ai catalogs: ${e.message}`);
+    console.warn(`! could not fetch models.dev metadata: ${e.message}`);
   }
+
+  // Counters and trackers for the dry-run report.
+  const tierCounts = { 1: 0, 2: 0, 3: 0, none: 0 };
+  const defaultInputChanges = { gained: 0, lost: 0 };
+  // Map of `prov/model` -> vision result from the resolved tier alone
+  // (true = image input declared, false = entry found but text-only,
+  // null = no tier resolved the id). The chain warning pass flags refs
+  // whose value is not true and that VISION_MODELS does not cover.
+  const chainVision = new Map();
 
   const edits = []; // { at, deleteCount, block: string[] } in line space
   const summary = [];
 
   for (const p of providers) {
     if (CATALOG_ROUTES.has(p.name)) continue; // catalog route: never seeded
-    if (p.api !== "openai-completions" || !p.baseURL) continue;
-    // Only the seeded providers get marker-region regeneration. Every other
-    // provider (catalog routes, non-openai-completions, no baseURL) is skipped
-    // by the guards above; any future provider that passes them but is not in
-    // SEEDED_PROVIDERS is left byte-identical too.
+    if (!p.baseURL) continue;
+    // SEEDED_PROVIDERS is the explicit allowlist, so it alone decides what gets
+    // marker-region regeneration. Do not also gate on `api`: meridian speaks
+    // anthropic-messages and still serves an OpenAI-shaped model list. Any
+    // provider outside the allowlist is left byte-identical.
     if (!SEEDED_PROVIDERS.has(p.name)) continue;
 
     const key = p.apiKeyEnv ? process.env[p.apiKeyEnv] : undefined;
-    console.log(`\n→ ${p.name} (${p.baseURL.replace(/\/+$/, "")}/models)`);
+    const listPath = LISTING_PATH[p.name] ?? "/models";
+    console.log(`\n→ ${p.name} (${p.baseURL.replace(/\/+$/, "")}${listPath})`);
     let ids;
     try {
-      ids = await fetchModelIds(p.baseURL, key);
+      ids = await fetchModelIds(p.baseURL, key, listPath);
     } catch (e) {
       console.warn(`  ! skip: ${e.message}`);
       continue;
     }
     console.log(`  provider exposes ${ids.length} model id(s)`);
-    // Gateway-extras: subtract the pi-ai catalog's own models so this route
-    // only lists models the catalog does not already ship. Fail closed: if the
-    // catalog cannot be fetched, do not seed (seeding everything would duplicate
-    // the catalog's models here).
+    // Gateway-extras: subtract the catalog provider's own models so this route
+    // only lists what the catalog does not already ship. Fail closed: if the
+    // catalog cannot be resolved, do not seed, because seeding everything
+    // would duplicate the catalog's models here.
     const excludeCatalog = CATALOG_EXCLUDED[p.name];
     if (excludeCatalog) {
       try {
@@ -536,40 +502,67 @@ async function main() {
         continue;
       }
     }
-
     // Build the full regenerated entry set from the fresh fetch, not just the
     // ids missing from the current list. The whole marker region is replaced
     // from scratch on every run.
     const block = [];
     for (const id of ids) {
-      // Merge metadata from every source we have: LiteLLM (when --with-meta),
-      // the pi-ai catalogs (local), and the curated VISION_MODELS override.
-      // Vision is the union of any source claiming it; reasoning efforts union
-      // the declared thinking levels. This closes the single-source gap that
-      // left new gateway models (e.g. Qwen) reporting text-only, which made the
-      // `see` plugin deny `read_image` for them.
-      const lite = WITH_META && metaDB ? lookupMeta(id, metaDB) : null;
-      const pai = lookupPiAi(id, piAi);
-      const vision =
-        (lite?.image === true) || (pai && pai.vision) || VISION_MODELS.has(id);
-      let reasoningEfforts = null;
-      const le = lite?.reasoningEfforts;
-      const pe = pai && pai.reasoningEfforts;
-      if (le || pe) reasoningEfforts = { ...(le ?? {}), ...(pe ?? {}) };
+      // Single source: models.dev. Tier 1 is our route's own provider, tier 2
+      // is the first-party vendor chosen from the model id prefix, tier 3 is
+      // the union across every models.dev provider. First hit wins.
+      const hit = lookupModelsDev(id, modelsDevIndex, p.name);
+      tierCounts[hit ? hit.tier : "none"]++;
+      const entry = hit?.entry;
+      // models.dev reports vision via `modalities.input` containing "image".
+      const tierVision = entry ? isVisionEntry(entry) : null;
+      const vision = tierVision === true || VISION_MODELS.has(id);
       // Mirror the `see` plugin rule: a reasoning-efforts map that contains
       // only `off` is not real reasoning support, so emit nothing for it.
+      let reasoningEfforts = reasoningEffortsForEntry(entry);
       if (reasoningEfforts && Object.keys(reasoningEfforts).length === 1 && "off" in reasoningEfforts) reasoningEfforts = null;
       const meta = {
-        contextWindow: lite?.contextWindow,
-        maxTokens: lite?.maxTokens,
+        contextWindow: entry?.limit?.context,
+        maxTokens: entry?.limit?.output,
         image: vision,
         reasoningEfforts,
       };
-      block.push(...entryText(id, prettyName(id), meta));
+      block.push(...entryText(id, displayName(id, entry), meta));
+      chainVision.set(`${p.name}/${id}`, tierVision);
+      // Track the defaultInput delta against the file's current entries.
+      const existing = p.models?.items?.find((it) => it?.get?.("id") === id);
+      if (existing) {
+        const di = existing.get("defaultInput");
+        const hadImage = !!di?.items?.some((n) => n?.value === "image");
+        if (vision && !hadImage) defaultInputChanges.gained++;
+        if (!vision && hadImage) defaultInputChanges.lost++;
+      }
     }
     const markerBlock = [MARKER_BEGIN, ...block, MARKER_END];
 
     const blockLines = modelsBlockLines(p.map, text);
+    // A gateway-extras route whose extras set is empty must not keep an empty
+    // `models:` block. pi-ai validates that every provider resolves at least
+    // one model ("resolves no models; the installed catalog does not describe
+    // this route"), so an empty list breaks startup. The schema itself is no
+    // help: it coerces a null `models:` to `[]`, and the emptiness check runs
+    // later. Delete the whole block instead. A later run recreates the markers
+    // if the gateway ever ships something the catalog lacks.
+    if (ids.length === 0) {
+      if (blockLines) {
+        edits.push({
+          at: blockLines.keyLine,
+          deleteCount: blockLines.last - blockLines.keyLine + 1,
+          block: [],
+        });
+        console.log("  + would remove the empty models: block (catalog covers every id)");
+        summary.push({ provider: p.name, added: 0 });
+      } else {
+        console.log("  + no extras and no models: block; nothing to do");
+      }
+      p.modelIds = new Set();
+      continue;
+    }
+
     if (!blockLines) {
       // The provider has no `models:` list yet. Create one (with markers) after
       // the provider's last property line, before the next sibling or EOF.
@@ -644,8 +637,8 @@ async function main() {
     if (!p) continue; // built-in provider with no block here: cannot verify
     let present = p.modelIds.has(model);
     // Catalog-backed route: the settings block carries no `models:` list, so
-    // verify against the installed pi-ai catalog instead. Keyed by the route
-    // name, which is the catalog provider id (e.g. `opencode`).
+    // verify against the models.dev provider instead. Keyed by the route
+    // name, which is the models.dev provider id (e.g. `opencode`).
     if (!present && CATALOG_ROUTES.has(prov)) {
       let catalogIds = catalogCache.get(prov);
       if (catalogIds === undefined) {
@@ -662,6 +655,23 @@ async function main() {
       console.warn(`  ⚠ chain references ${ref} but it is NOT in ${prov}'s models`);
       warnings++;
     }
+  }
+  // Warn for `see`-chain models that no tier declared as vision-capable and
+  // that VISION_MODELS does not cover. Such a model would sync as text-only
+  // and the `see` plugin would deny `read_image` for it. Other chains are
+  // expected to hold text-only models, so they are not checked here.
+  for (const ref of new Set(visionChainRefs)) {
+    const slash = ref.indexOf("/");
+    const model = slash >= 0 ? ref.slice(slash + 1) : "";
+    // chainVision only gets an entry inside the seed loop, so this check also
+    // covers catalog routes and external providers whose tier we never look up.
+    if (!chainVision.has(ref)) continue; // not a seeded provider: skip
+    if (chainVision.get(ref) === true) continue; // a tier declared image input
+    if (VISION_MODELS.has(model)) continue; // curated override covers it
+    console.warn(
+      `  ⚠ chain references ${ref} but no metadata tier reports vision input`,
+    );
+    warnings++;
   }
   if (warnings === 0) console.log("  all chain-referenced models are present");
   // Record the last sync time in the file's modelSync section.
@@ -703,6 +713,12 @@ async function main() {
   const total = summary.reduce((n, s) => n + s.added, 0);
   console.log(
     `\nsummary: ${summary.length} provider(s) updated (+${total} models), ${warnings} chain warning(s).`,
+  );
+  console.log(
+    `  metadata tiers: ${tierCounts[1]} tier-1, ${tierCounts[2]} tier-2, ${tierCounts[3]} tier-3, ${tierCounts.none} unmatched.`,
+  );
+  console.log(
+    `  defaultInput: ${defaultInputChanges.gained} gained, ${defaultInputChanges.lost} lost.`,
   );
 }
 
