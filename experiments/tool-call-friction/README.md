@@ -141,16 +141,38 @@ You want the GitHub pin, not `^0.5.1`. Restart dsh so the new tools load.
 
 ## How to retest
 
-Set `SINCE` to the deploy date. Without it the scan reads every session ever
+Set `SINCE` to the deploy moment. Without it the scan reads every session ever
 recorded, and the old data hides the effect.
+
+`SINCE` filters on the **event** timestamp, not the session file's mtime. A
+session that started before the deploy and kept running still writes new bytes,
+so its mtime looks recent while most of its events are old. An mtime filter
+counts those pre-deploy failures as post-deploy ones. It reported a 23.49
+`drifted_after_edit` rate against a 12.11 baseline on the first check here, when
+the true rate was zero. A time component is allowed, and matters when the deploy
+lands part way through a working day.
 
 ```sh
 cd ~/repos/dotfiles-ai/experiments/tool-call-friction
-SINCE=2026-08-31 node scan-hashline-friction.mjs ~/.dsh/sessions /tmp/dsh/retest
+SINCE=2026-08-31T20:36 node scan-hashline-friction.mjs ~/.dsh/sessions /tmp/dsh/retest
 cat /tmp/dsh/retest/summary.txt
 ```
 
 Compare the three headline numbers against the baseline above.
+
+### First check, 2026-08-31, about 25 minutes after deploy
+
+The fork went live at 20:35 and dsh restarted at 20:35:52.
+
+- Live reproduction: four sequential edits at lines 3, 10, 27, and 29, all
+  anchored on one original read with no re-read. All four applied. The file
+  ended correct at 35 lines. Before the fix the second of those edits failed.
+- Logs: 0 `E_RANGE_UNVERIFIED` in 47 edit calls. At the pre-deploy rate of 10.18
+  per 100 that predicts about 4.8 failures, so p is about 0.006.
+- Sandbox nudges: no verdict. Only a handful of denials happened in the window.
+
+The sample is small and weighted toward one analysis session, so let the week
+run before calling it settled.
 
 ## How to read the result
 
@@ -281,7 +303,7 @@ after an OPAQUE failure: 54% escalate, 14/64 succeed
 
 ```sh
 cd ~/repos/dotfiles-ai/experiments/tool-call-friction
-SINCE=2026-08-31 node scan-sandbox-friction.mjs ~/.dsh/sessions /tmp/dsh/sandbox-retest
+SINCE=2026-08-31T20:36 node scan-sandbox-friction.mjs ~/.dsh/sessions /tmp/dsh/sandbox-retest
 ```
 
 ## How to read the result
