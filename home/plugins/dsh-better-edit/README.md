@@ -1,7 +1,7 @@
 # dsh-better-edit guidance (personal bundle)
 
 This directory is the per-preset guidance override home for dsh-better-edit.
-The plugin resolves each of its four prompt sections as
+The plugin resolves each of its three prompt sections as
 `$DSH_HOME/plugins/dsh-better-edit/<preset>/<section>.md`, falling back to the
 compiled defaults when a file is absent. Layout and semantics verified against
 the installed package README (~/.dsh/profiles/web/node_modules/dsh-better-edit/
@@ -13,8 +13,10 @@ README.md "Configuring Guidance per Preset") and lib/guidance.js.
 | --- | --- | --- |
 | `read.md` | `tool:read` | 130 |
 | `edit.md` | `tool:edit` | 131 |
-| `batch_edit.md` | `tool:batch_edit` | 132 |
 | `undo_last_edit.md` | `tool:undo_last_edit` | 133 |
+
+Upstream removed the `batch_edit` section in 0.3.1 (its seam folded into
+`edit`); the order number 132 stays retired.
 
 ## Personal preset overrides
 
@@ -48,5 +50,4 @@ session-start, so edits apply to new sessions.
 
 The plugin seeds `standard/`, `code/`, `minimal/`, and `cordis/` on first boot
 and never rewrites existing files, so `personal/` is safe from seeding. Add
-`batch_edit.md` and `undo_last_edit.md` here to override those sections for the
-personal preset.
+`undo_last_edit.md` here to override that section for the personal preset.
