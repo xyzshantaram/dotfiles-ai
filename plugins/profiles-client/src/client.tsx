@@ -653,7 +653,18 @@ window.__ModuleLoader__.load({
         Object.keys(chains).forEach(function (name) {
           var value = chains[name];
           if (Array.isArray(value)) {
-            out[name] = value.slice();
+            // Deep-copy steps: object route pairs must not alias the
+            // previous draft, or effort edits would mutate server state.
+            out[name] = value.map(function (step) {
+              if (step === null || typeof step !== "object") return step;
+              var copy: Record<string, unknown> = {
+                provider: step.provider,
+                model: step.model,
+              };
+              if (typeof step.reasoningEffort === "string" && step.reasoningEffort !== "")
+                copy.reasoningEffort = step.reasoningEffort;
+              return copy;
+            });
           } else {
             out[name] = { routes: cloneRoutes(value && value.routes) };
           }
@@ -790,7 +801,17 @@ window.__ModuleLoader__.load({
             var chain = next.chains[chainName];
             if (chain === void 0) return next;
             if (Array.isArray(chain)) {
-              // Composition string steps cannot carry an effort; ignore.
+              // A route-pair step carries its own effort; picking one on a
+              // string step converts it to a pair, and clearing converts it
+              // back to the compact string form.
+              var step = chain[index];
+              if (step !== null && typeof step === "object" && step.provider !== void 0) {
+                if (effort === "") {
+                  chain[index] = step.provider + "/" + step.model;
+                } else {
+                  step.reasoningEffort = effort;
+                }
+              }
               return next;
             }
             if (chain.routes !== void 0 && chain.routes[index] !== void 0) {
@@ -799,6 +820,31 @@ window.__ModuleLoader__.load({
               } else {
                 chain.routes[index].reasoningEffort = effort;
               }
+            }
+            return next;
+          });
+        };
+        /**
+         * Replace a composition step's model. A pair step stays a pair (the
+         * new model drops the old effort, matching the routes-branch rung
+         * editor); a string step stays a string.
+         */
+        var setChainStepModel = function (chainName, index, value) {
+          setDraft(function (prev) {
+            var next = cloneConfig(prev);
+            var chain = next.chains[chainName];
+            if (chain === void 0 || !Array.isArray(chain)) return next;
+            if (value === "") {
+              chain[index] = "";
+              return next;
+            }
+            var slash = value.indexOf("/");
+            if (slash <= 0) return next;
+            var step = chain[index];
+            if (step !== null && typeof step === "object") {
+              chain[index] = { provider: value.slice(0, slash), model: value.slice(slash + 1) };
+            } else {
+              chain[index] = value;
             }
             return next;
           });
@@ -893,17 +939,6 @@ window.__ModuleLoader__.load({
             return next;
           });
         };
-        var setChainField = function (chainName, index, value) {
-          setDraft(function (prev) {
-            var next = cloneConfig(prev);
-            var chain = next.chains[chainName];
-            if (chain === void 0) return next;
-            if (Array.isArray(chain)) {
-              chain[index] = value;
-            }
-            return next;
-          });
-        };
         var removeChainRung = function (chainName, index) {
           setDraft(function (prev) {
             var next = cloneConfig(prev);
@@ -980,7 +1015,7 @@ window.__ModuleLoader__.load({
                     </option>
                   );
                 })}
-              </optgroup>
+              </optgroup>,
             );
           }
           for (var g = 0; g < catalogGroups.length; g++) {
@@ -995,7 +1030,7 @@ window.__ModuleLoader__.load({
                     </option>
                   );
                 })}
-              </optgroup>
+              </optgroup>,
             );
           }
           return groups;
@@ -1203,18 +1238,67 @@ window.__ModuleLoader__.load({
                                 : row.step && row.step.provider && row.step.model
                                   ? row.step.provider + "/" + row.step.model
                                   : "";
+                            var step = row.step;
+                            var isPair =
+                              step !== null &&
+                              typeof step === "object" &&
+                              typeof step.provider === "string" &&
+                              step.provider !== "" &&
+                              typeof step.model === "string" &&
+                              step.model !== "";
+                            var catModel = null;
+                            if (isPair) {
+                              for (var ci = 0; ci < catalogModels.length; ci++) {
+                                if (
+                                  catalogModels[ci].provider === step.provider &&
+                                  catalogModels[ci].model === step.model
+                                ) {
+                                  catModel = catalogModels[ci];
+                                  break;
+                                }
+                              }
+                            }
+                            var efforts = catModel !== null ? effortsOf(catModel.reasoning) : [];
+                            var currentEffort =
+                              isPair && typeof step.reasoningEffort === "string"
+                                ? step.reasoningEffort
+                                : "";
                             return (
                               <div className="pf-panel-row" key={index}>
                                 <select
                                   className="pf-panel-select"
                                   value={stepValue}
                                   onChange={function (event) {
-                                    setChainField(chainName, index, event.target.value);
+                                    setChainStepModel(chainName, index, event.target.value);
                                   }}
                                 >
                                   <option value="">— select step —</option>
                                   {modelChainOptions(true)}
                                 </select>
+                                {efforts.length > 0 ? (
+                                  <select
+                                    className="pf-panel-effort"
+                                    value={currentEffort}
+                                    onChange={function (event) {
+                                      setChainRungEffort(chainName, index, event.target.value);
+                                    }}
+                                  >
+                                    <option value="">Default effort</option>
+                                    {efforts.map(function (eff) {
+                                      return (
+                                        <option
+                                          key={eff.id}
+                                          value={eff.id}
+                                          title={
+                                            eff.description !== void 0 ? eff.description : undefined
+                                          }
+                                        >
+                                          {eff.name}
+                                        </option>
+                                      );
+                                    })}
+                                  </select>
+                                ) : null}
                                 <button
                                   type="button"
                                   className="pf-panel-del"

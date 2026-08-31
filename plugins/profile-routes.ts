@@ -79,8 +79,9 @@ function isRouteCandidate(value: unknown): value is RouteCandidate {
  * the entry is absent or malformed, so callers fall through to their own
  * defaults instead of throwing on hand-edited settings. A string entry names
  * a chain by name ("chain:<name>"), or one "provider/model" route. An entry
- * may also be an ARRAY of steps — route pairs, "provider/model" strings,
- * "chain:<name>" refs, and bare chain names — flattened in order. A
+ * may also be an ARRAY of steps — route pairs (which may carry a
+ * reasoningEffort), "provider/model" strings, "chain:<name>" refs, and bare
+ * chain names — flattened in order. A
  * malformed or unknown step
  * resolves to [] for that step.
  */
