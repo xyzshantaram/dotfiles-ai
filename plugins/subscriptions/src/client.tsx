@@ -532,7 +532,11 @@ function makePanel(ctx, config) {
       var now = new Date();
       var month = now.getMonth() + 1;
       var year = now.getFullYear();
-      var results = await Promise.all([
+      // allSettled, not all: one provider's failure (a 403, a timeout, a
+      // rejected promise) must never stop the other endpoints from updating
+      // the snapshot. A rejection maps to the same {error} shape the
+      // handlers themselves answer with, so every consumer stays uniform.
+      var settled = await Promise.allSettled([
         fetchJson("/subscriptions/opencode-usage"),
         fetchJson("/subscriptions/meridian-quota"),
         fetchJson("/subscriptions/opencode-balance"),
@@ -545,6 +549,17 @@ function makePanel(ctx, config) {
         fetchJson("/subscriptions/zai-quota"),
         fetchJson("/subscriptions/zai-usage"),
       ]);
+      var results = settled.map(function (entry) {
+        if (entry.status === "fulfilled") return entry.value;
+        console.warn(
+          "[subscriptions] load: endpoint rejected",
+          entry.reason instanceof Error ? entry.reason.message : String(entry.reason),
+        );
+        return {
+          data: null,
+          error: String((entry.reason && entry.reason.message) || entry.reason),
+        };
+      });
       var loadKeys = [
         "go",
         "quota",
