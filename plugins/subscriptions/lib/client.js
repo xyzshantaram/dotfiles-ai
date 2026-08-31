@@ -109,101 +109,8 @@ function SettingsSection(props) {
 // css-text:/home/sid/repos/dotfiles-ai/plugins/shared/settings.css
 var settings_default = "/* Shared settings-page vocabulary, normalized from the session-archive,\n * subscriptions, and profiles settings panels. One rule set in one file so\n * the three panels cannot drift. Radius and padding disagreements are\n * normalized to the session-archive (or median) value; the var(--dsw-...)\n * aliases the current rules use are kept as-is. */\n\n/* Page-level container:airy vertical rhythm, no own box. */\n.dsp-root {\n  box-sizing: border-box;\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n  padding: 0;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Header row (title + refresh). */\n.dsp-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 0.75rem;\n}\n\n.dsp-title {\n  font-size: 1.5rem;\n  font-weight: 650;\n  margin: 0;\n  line-height: 1.2;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Refresh:session-archive/profiles form (no box, color shift only).\n * subscriptions pads and rounds the hit area; normalized away. */\n.dsp-refresh {\n  cursor: pointer;\n  border: none;\n  background: none;\n  padding: 0;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n}\n.dsp-refresh:hover {\n  color: var(--dsw-alias-label-primary);\n}\n\n.dsp-err {\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-state-error-primary);\n}\n\n/* Large setting card. Padding is the median of 16/20/24 (session-archive\n * 20px); the radius is the two-agreeing 20px, not profiles' 12px. */\n.dsp-section {\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.875rem;\n  padding: 1.25rem;\n  background: var(--dsw-alias-bg-tertiary);\n}\n\n/* Card title:subscriptions' 1.5rem/700 matches the page-title vocabulary;\n * profiles' smaller 16px/600 card title normalized up. */\n.dsp-section-title {\n  font-size: 1.125rem;\n  font-weight: 600;\n  margin: 0;\n  line-height: 1.2;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Setting row:horizontal in session-archive and profiles (subscriptions\n * stacks its label and meta vertically; normalized to the horizontal form). */\n.dsp-row {\n  display: flex;\n  align-items: center;\n  gap: 0.75rem;\n  min-width: 0;\n}\n\n/* Row label:only subscriptions defines one; ported verbatim, with its\n * emphasized <b> children. */\n.dsp-row-label {\n  display: flex;\n  align-items: baseline;\n  gap: 0.625rem;\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.dsp-row-label b {\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n  font-size: 0.9375rem;\n}\n.dsp-row-label b:last-child {\n  margin-left: auto;\n}\n";
 
-// plugins/profile-routes.ts
-function isRouteCandidate(value) {
-  return typeof value === "object" && value !== null && typeof value.provider === "string" && value.provider.length > 0 && typeof value.model === "string" && value.model.length > 0;
-}
-function normalizeEntry(entry, chains, seen, ctx) {
-  if (isRouteCandidate(entry)) return [entry];
-  if (typeof entry === "string") {
-    if (entry.startsWith("chain:")) {
-      const name2 = entry.slice("chain:".length);
-      if (chains?.[name2] === void 0) {
-        ctx?.logger?.debug(`unknown chain reference: ${name2}`);
-        return [];
-      }
-      const guard = new Set(seen ?? []);
-      if (guard.has(name2)) {
-        ctx?.logger?.debug(`circular chain reference: ${name2}`);
-        return [];
-      }
-      guard.add(name2);
-      return normalizeEntry(chains[name2], chains, guard, ctx);
-    }
-    const slash = entry.indexOf("/");
-    if (slash > 0) {
-      return [{ provider: entry.slice(0, slash), model: entry.slice(slash + 1) }];
-    }
-    if (chains?.[entry] !== void 0) {
-      const guard = new Set(seen ?? []);
-      if (guard.has(entry)) {
-        ctx?.logger?.debug(`circular chain reference: ${entry}`);
-        return [];
-      }
-      guard.add(entry);
-      return normalizeEntry(chains[entry], chains, guard, ctx);
-    }
-    ctx?.logger?.debug(`unknown chain reference: ${entry}`);
-    return [];
-  }
-  if (typeof entry === "object" && entry !== null) {
-    if (Array.isArray(entry.routes)) {
-      return entry.routes.filter(isRouteCandidate);
-    }
-    if (Array.isArray(entry)) {
-      const out = [];
-      for (const step of entry) {
-        if (typeof step === "string") {
-          if (step.startsWith("chain:")) {
-            const name2 = step.slice("chain:".length);
-            if (chains?.[name2] !== void 0) {
-              const guard = new Set(seen ?? []);
-              if (!guard.has(name2)) {
-                guard.add(name2);
-                out.push(...normalizeEntry(chains[name2], chains, guard, ctx));
-              }
-            }
-          } else if (chains?.[step] !== void 0) {
-            const guard = new Set(seen ?? []);
-            if (!guard.has(step)) {
-              guard.add(step);
-              out.push(...normalizeEntry(chains[step], chains, guard, ctx));
-            }
-          } else if (step.indexOf("/") > 0) {
-            const slash = step.indexOf("/");
-            out.push({ provider: step.slice(0, slash), model: step.slice(slash + 1) });
-          }
-        } else {
-          out.push(...normalizeEntry(step, chains, seen, ctx));
-        }
-      }
-      return out;
-    }
-  }
-  ctx?.logger?.debug("profile entry resolved to empty chain");
-  return [];
-}
-function routesEqual(a, b) {
-  if (a === b) return true;
-  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    const left = a[i];
-    const right = b[i];
-    if (left.provider !== right.provider || left.model !== right.model || left.reasoningEffort !== right.reasoningEffort)
-      return false;
-  }
-  return true;
-}
-function chainNameForRoutes(routes, chains) {
-  if (chains === void 0 || chains === null) return void 0;
-  for (const name2 of Object.keys(chains)) {
-    if (routesEqual(normalizeEntry(chains[name2], chains), routes)) return name2;
-  }
-  return void 0;
-}
-
 // css-text:/home/sid/repos/dotfiles-ai/plugins/subscriptions/src/client.module.css
-var client_default = ".ocgs-stale {\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  color: var(--dsw-alias-label-secondary);\n  white-space: nowrap;\n}\n.ocgs-section {\n  display: flex;\n  flex-direction: column;\n  gap: 0.8125rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.875rem;\n  padding: 1.25rem;\n  background: var(--dsw-alias-bg-tertiary);\n}\n.ocgs-section-title {\n  font-size: 1.125rem;\n  font-weight: 600;\n  margin: 0;\n  line-height: 1.2;\n  color: var(--dsw-alias-label-primary);\n}\n.ocgs-balance {\n  font-size: 1.125rem;\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n}\n.ocgs-telemetry {\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.ocgs-rows {\n  display: flex;\n  flex-direction: column;\n  gap: 0.8125rem;\n}\n.ocgs-row {\n  display: flex;\n  flex-direction: column;\n  gap: 0.3125rem;\n  min-width: 0;\n}\n.ocgs-row-label {\n  display: flex;\n  align-items: baseline;\n  gap: 0.625rem;\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.ocgs-row-label b {\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n  font-size: 0.9375rem;\n}\n.ocgs-row-label b:last-child {\n  margin-left: auto;\n}\n.ocgs-meta {\n  display: flex;\n  align-items: center;\n  gap: 0.625rem;\n  min-width: 0;\n}\n.ocgs-meta > span {\n  font-size: 0.8125rem;\n  line-height: 1.125rem;\n  color: var(--dsw-alias-label-secondary);\n  white-space: nowrap;\n  flex: none;\n}\n.ocgs-track {\n  box-sizing: border-box;\n  flex: 1;\n  min-width: 0;\n  height: 0.5rem;\n  border-radius: 0.4375rem;\n  background: var(--dsw-alias-border-l2);\n  overflow: hidden;\n}\n.ocgs-fill {\n  height: 100%;\n  border-radius: 0.4375rem;\n  transition: width 0.4s ease;\n}\n.ocgs-pace {\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.ocgs-cookie {\n  display: flex;\n  align-items: center;\n  gap: 0.625rem;\n  flex-wrap: wrap;\n  margin: 0.1875rem 0 0.375rem;\n}\n.ocgs-btn {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 62.4375rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n  padding: 0.4375rem 0.9375rem;\n  cursor: pointer;\n  min-height: 2.25rem;\n}\n.ocgs-btn:hover {\n  color: var(--dsw-alias-label-primary);\n  border-color: var(--dsw-alias-border-l3);\n}\n.ocgs-btn:disabled {\n  opacity: 0.5;\n  cursor: default;\n}\n.ocgs-cookie-note {\n  font-size: 0.875rem;\n  line-height: 1.125rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.ocgs-toggles {\n  display: flex;\n  flex-direction: column;\n  gap: 0.625rem;\n}\n.ocgs-toggle {\n  display: flex;\n  align-items: center;\n  gap: 0.625rem;\n  min-width: 0;\n  cursor: pointer;\n}\n.ocgs-toggle-label {\n  flex: 1;\n  min-width: 0;\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.ocgs-toggle input {\n  flex: none;\n  width: 1.5rem;\n  height: 1.5rem;\n  cursor: pointer;\n  accent-color: var(--dsw-alias-state-business-primary);\n}\n.ocgs-details {\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.75rem;\n  background: var(--dsw-alias-bg-tertiary);\n  padding: 0.8125rem;\n  margin-top: 0.25rem;\n}\n.ocgs-summary {\n  cursor: pointer;\n  font-size: 0.9375rem;\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n  list-style: none;\n}\n.ocgs-summary::-webkit-details-marker {\n  display: none;\n}\n.ocgs-details[open] .ocgs-toggles {\n  padding-top: 0.625rem;\n}\n.ds-dashboard {\n  display: flex;\n  flex-direction: column;\n  gap: 0.8125rem;\n}\n.ds-hero {\n  display: flex;\n  flex-direction: column;\n  gap: 0.3125rem;\n  padding: 0.8125rem;\n  background: var(--dsw-alias-bg-tertiary);\n  border-radius: 0.75rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n}\n.ds-hero-total {\n  font-size: 2rem;\n  font-weight: 700;\n  color: var(--dsw-alias-label-primary);\n  line-height: 1.2;\n}\n.ds-hero-breakdown {\n  font-size: 0.9375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.ds-usage-grid {\n  display: grid;\n  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));\n  gap: 0.625rem;\n}\n.ds-usage-card {\n  padding: 0.8125rem;\n  background: var(--dsw-alias-bg-tertiary);\n  border-radius: 0.75rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n}\n.ds-usage-label {\n  font-size: 0.75rem;\n  color: var(--dsw-alias-label-secondary);\n  text-transform: uppercase;\n  letter-spacing: 0.0313rem;\n}\n.ds-usage-value {\n  font-size: 1.25rem;\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n  margin-top: 0.375rem;\n}\n.ds-usage-sub {\n  font-size: 0.875rem;\n  color: var(--dsw-alias-label-secondary);\n  margin-top: 0.25rem;\n}\n.ds-token-row {\n  display: flex;\n  gap: 0.625rem;\n  flex-wrap: wrap;\n}\n.ds-token-card {\n  flex: 1;\n  min-width: 8.75rem;\n  padding: 0.6875rem;\n  background: var(--dsw-alias-bg-tertiary);\n  border-radius: 0.75rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n}\n.ds-token-label {\n  font-size: 0.75rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.ds-token-value {\n  font-size: 1.125rem;\n  font-weight: 600;\n  color: var(--dsw-alias-state-success-primary);\n}\n.ds-token-value.out {\n  color: var(--dsw-alias-state-error-primary);\n}\n.ds-empty {\n  font-size: 0.875rem;\n  color: var(--dsw-alias-label-secondary);\n  font-style: italic;\n}\n.ocgs-note {\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n:focus-visible {\n  outline: 2px solid var(--dsw-alias-state-business-primary);\n  outline-offset: -0.125rem;\n}\n";
+var client_default = ".ocgs-stale {\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  color: var(--dsw-alias-label-secondary);\n  white-space: nowrap;\n}\n.ocgs-section {\n  display: flex;\n  flex-direction: column;\n  gap: 0.8125rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.875rem;\n  padding: 1.25rem;\n  background: var(--dsw-alias-bg-tertiary);\n}\n.ocgs-section-title {\n  font-size: 1.125rem;\n  font-weight: 600;\n  margin: 0;\n  line-height: 1.2;\n  color: var(--dsw-alias-label-primary);\n}\n.ocgs-balance {\n  font-size: 1.125rem;\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n}\n.ocgs-rows {\n  display: flex;\n  flex-direction: column;\n  gap: 0.8125rem;\n}\n.ocgs-row {\n  display: flex;\n  flex-direction: column;\n  gap: 0.3125rem;\n  min-width: 0;\n}\n.ocgs-row-label {\n  display: flex;\n  align-items: baseline;\n  gap: 0.625rem;\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.ocgs-row-label b {\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n  font-size: 0.9375rem;\n}\n.ocgs-row-label b:last-child {\n  margin-left: auto;\n}\n.ocgs-meta {\n  display: flex;\n  align-items: center;\n  gap: 0.625rem;\n  min-width: 0;\n}\n.ocgs-meta > span {\n  font-size: 0.8125rem;\n  line-height: 1.125rem;\n  color: var(--dsw-alias-label-secondary);\n  white-space: nowrap;\n  flex: none;\n}\n.ocgs-track {\n  box-sizing: border-box;\n  flex: 1;\n  min-width: 0;\n  height: 0.5rem;\n  border-radius: 0.4375rem;\n  background: var(--dsw-alias-border-l2);\n  overflow: hidden;\n}\n.ocgs-fill {\n  height: 100%;\n  border-radius: 0.4375rem;\n  transition: width 0.4s ease;\n}\n.ocgs-pace {\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.ocgs-cookie {\n  display: flex;\n  align-items: center;\n  gap: 0.625rem;\n  flex-wrap: wrap;\n  margin: 0.1875rem 0 0.375rem;\n}\n.ocgs-btn {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 62.4375rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n  padding: 0.4375rem 0.9375rem;\n  cursor: pointer;\n  min-height: 2.25rem;\n}\n.ocgs-btn:hover {\n  color: var(--dsw-alias-label-primary);\n  border-color: var(--dsw-alias-border-l3);\n}\n.ocgs-btn:disabled {\n  opacity: 0.5;\n  cursor: default;\n}\n.ocgs-cookie-note {\n  font-size: 0.875rem;\n  line-height: 1.125rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.ocgs-toggles {\n  display: flex;\n  flex-direction: column;\n  gap: 0.625rem;\n}\n.ocgs-toggle {\n  display: flex;\n  align-items: center;\n  gap: 0.625rem;\n  min-width: 0;\n  cursor: pointer;\n}\n.ocgs-toggle-label {\n  flex: 1;\n  min-width: 0;\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.ocgs-toggle input {\n  flex: none;\n  width: 1.5rem;\n  height: 1.5rem;\n  cursor: pointer;\n  accent-color: var(--dsw-alias-state-business-primary);\n}\n.ocgs-details {\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.75rem;\n  background: var(--dsw-alias-bg-tertiary);\n  padding: 0.8125rem;\n  margin-top: 0.25rem;\n}\n.ocgs-summary {\n  cursor: pointer;\n  font-size: 0.9375rem;\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n  list-style: none;\n}\n.ocgs-summary::-webkit-details-marker {\n  display: none;\n}\n.ocgs-details[open] .ocgs-toggles {\n  padding-top: 0.625rem;\n}\n.ds-dashboard {\n  display: flex;\n  flex-direction: column;\n  gap: 0.8125rem;\n}\n.ds-hero {\n  display: flex;\n  flex-direction: column;\n  gap: 0.3125rem;\n  padding: 0.8125rem;\n  background: var(--dsw-alias-bg-tertiary);\n  border-radius: 0.75rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n}\n.ds-hero-total {\n  font-size: 2rem;\n  font-weight: 700;\n  color: var(--dsw-alias-label-primary);\n  line-height: 1.2;\n}\n.ds-hero-breakdown {\n  font-size: 0.9375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.ds-usage-grid {\n  display: grid;\n  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));\n  gap: 0.625rem;\n}\n.ds-usage-card {\n  padding: 0.8125rem;\n  background: var(--dsw-alias-bg-tertiary);\n  border-radius: 0.75rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n}\n.ds-usage-label {\n  font-size: 0.75rem;\n  color: var(--dsw-alias-label-secondary);\n  text-transform: uppercase;\n  letter-spacing: 0.0313rem;\n}\n.ds-usage-value {\n  font-size: 1.25rem;\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n  margin-top: 0.375rem;\n}\n.ds-usage-sub {\n  font-size: 0.875rem;\n  color: var(--dsw-alias-label-secondary);\n  margin-top: 0.25rem;\n}\n.ds-token-row {\n  display: flex;\n  gap: 0.625rem;\n  flex-wrap: wrap;\n}\n.ds-token-card {\n  flex: 1;\n  min-width: 8.75rem;\n  padding: 0.6875rem;\n  background: var(--dsw-alias-bg-tertiary);\n  border-radius: 0.75rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n}\n.ds-token-label {\n  font-size: 0.75rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.ds-token-value {\n  font-size: 1.125rem;\n  font-weight: 600;\n  color: var(--dsw-alias-state-success-primary);\n}\n.ds-token-value.out {\n  color: var(--dsw-alias-state-error-primary);\n}\n.ds-empty {\n  font-size: 0.875rem;\n  color: var(--dsw-alias-label-secondary);\n  font-style: italic;\n}\n.ocgs-note {\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n:focus-visible {\n  outline: 2px solid var(--dsw-alias-state-business-primary);\n  outline-offset: -0.125rem;\n}\n";
 
 // plugins/subscriptions/src/client.tsx
 var PLUGIN_NAME = "subscriptions";
@@ -213,6 +120,10 @@ var GO_WINDOWS = [
   { key: "weekly", label: "Weekly", hint: null },
   { key: "monthly", label: "Monthly", hint: null }
 ];
+var ZAI_WINDOWS = [
+  { key: "fiveHour", label: "5-hour", hint: "5h" },
+  { key: "weekly", label: "Weekly", hint: null }
+];
 function windowLabel(type) {
   return String(type || "").split("_").filter(Boolean).map(function(word) {
     return word.charAt(0).toUpperCase() + word.slice(1);
@@ -220,6 +131,7 @@ function windowLabel(type) {
 }
 var PROVIDER_TOGGLES = [
   { key: "commandcode", label: "Command Code" },
+  { key: "zai", label: "Z.ai (GLM)" },
   { key: "claude", label: "Claude (meridian)" },
   { key: "deepseek", label: "DeepSeek" },
   { key: "opencode", label: "OpenCode GO" },
@@ -249,53 +161,6 @@ function fmtCount(n) {
   if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
   if (n >= 1e3) return (n / 1e3).toFixed(1) + "K";
   return String(Math.round(n));
-}
-function renderTelemetry(t) {
-  var usage = t.tokenUsage || {};
-  var totalTokens = (usage.totalInputTokens || 0) + (usage.totalOutputTokens || 0) + (usage.totalCacheReadTokens || 0) + (usage.totalCacheCreationTokens || 0);
-  var usd = t.costEstimate && typeof t.costEstimate.totalUsd === "number" ? "$" + t.costEstimate.totalUsd.toFixed(2) + " est" : "\u2014 est";
-  var req = typeof t.totalRequests === "number" ? String(t.totalRequests) : "\u2014";
-  var parts = ["24h: " + req + " req"];
-  if (typeof t.requestsPerMinute === "number") parts.push(t.requestsPerMinute.toFixed(1) + "/min");
-  parts.push(usd);
-  parts.push(fmtCount(totalTokens) + " tokens");
-  if (typeof usage.avgCacheHitRate === "number")
-    parts.push("cache " + (usage.avgCacheHitRate * 100).toFixed(2) + "%");
-  if (typeof t.errorCount === "number" && t.errorCount > 0) parts.push(t.errorCount + " errors");
-  return parts.join(" \xB7 ");
-}
-function renderHealth(h) {
-  var auth = h && typeof h === "object" ? h.auth || {} : {};
-  var parts = [];
-  if (typeof auth.subscriptionType === "string" && auth.subscriptionType.length > 0)
-    parts.push(auth.subscriptionType);
-  if (typeof auth.daysUntilRenewal === "number")
-    parts.push("renews in " + auth.daysUntilRenewal + "d");
-  if (auth.renewalRequiredSoon === true) parts.push("renewal required soon");
-  return parts.length > 0 ? parts.join(" \xB7 ") : null;
-}
-function renderLogSummary(logs) {
-  var arr = Array.isArray(logs) ? logs : logs && (Array.isArray(logs.logs) ? logs.logs : Array.isArray(logs.entries) ? logs.entries : null);
-  if (!arr || arr.length === 0) return null;
-  var errors = 0, warnings = 0, first = null;
-  for (var i = 0; i < arr.length; i++) {
-    var entry = arr[i];
-    var lvl = entry && typeof entry.level === "string" ? entry.level.toLowerCase() : "";
-    var isErr = lvl === "error" || lvl === "err";
-    var isWarn = lvl === "warn" || lvl === "warning";
-    if (isErr) errors++;
-    else if (isWarn) warnings++;
-    if ((isErr || isWarn) && first === null && entry)
-      first = typeof entry.message === "string" ? entry.message : entry.msg || entry.text || "";
-  }
-  var n = errors + warnings;
-  if (n === 0) return null;
-  var counts = [];
-  if (errors > 0) counts.push(errors + " error" + (errors > 1 ? "s" : ""));
-  if (warnings > 0) counts.push(warnings + " warning" + (warnings > 1 ? "s" : ""));
-  var line = "recent logs: " + counts.join(" \xB7 ");
-  if (first && first.length > 0) line += " \u2014 " + first;
-  return line;
 }
 function windowPercent(win) {
   var pct = null;
@@ -583,7 +448,6 @@ function makePanel(ctx, config) {
       var results = await Promise.all([
         fetchJson("/subscriptions/opencode-usage"),
         fetchJson("/subscriptions/meridian-quota"),
-        fetchJson("/subscriptions/meridian-telemetry"),
         fetchJson("/subscriptions/opencode-balance"),
         fetchJson("/subscriptions/deepseek-balance"),
         fetchJson("/subscriptions/deepseek-usage/amount?month=" + month + "&year=" + year),
@@ -591,14 +455,12 @@ function makePanel(ctx, config) {
         fetchJson("/subscriptions/commandcode-credits"),
         fetchJson("/subscriptions/commandcode-usage"),
         fetchJson("/subscriptions/opencode-zen-balance"),
-        fetchJson("/subscriptions/meridian-health"),
-        fetchJson("/subscriptions/meridian-logs"),
-        fetchJson("/profiles/config")
+        fetchJson("/subscriptions/zai-quota"),
+        fetchJson("/subscriptions/zai-usage")
       ]);
       var loadKeys = [
         "go",
         "quota",
-        "telemetry",
         "balance",
         "ds",
         "dsUsageAmount",
@@ -606,9 +468,8 @@ function makePanel(ctx, config) {
         "cc",
         "ccUsage",
         "oz",
-        "health",
-        "logs",
-        "profiles"
+        "zaiQuota",
+        "zaiUsage"
       ];
       var failedKeys = [];
       for (var li = 0; li < loadKeys.length; li++) {
@@ -627,17 +488,15 @@ function makePanel(ctx, config) {
       var snapData = {
         go: results[0],
         quota: results[1],
-        telemetry: results[2],
-        balance: results[3],
-        ds: results[4],
-        dsUsageAmount: results[5],
-        dsUsageCost: results[6],
-        cc: results[7],
-        ccUsage: results[8],
-        oz: results[9],
-        health: results[10],
-        logs: results[11],
-        profiles: results[12]
+        balance: results[2],
+        ds: results[3],
+        dsUsageAmount: results[4],
+        dsUsageCost: results[5],
+        cc: results[6],
+        ccUsage: results[7],
+        oz: results[8],
+        zaiQuota: results[9],
+        zaiUsage: results[10]
       };
       setSnap(snapData);
       setStaleTs(Date.now());
@@ -661,17 +520,15 @@ function makePanel(ctx, config) {
     }, []);
     var go = snap ? snap.go : null;
     var quota = snap ? snap.quota : null;
-    var telemetry = snap ? snap.telemetry : null;
     var balance = snap ? snap.balance : null;
     var ds = snap ? snap.ds : null;
     var dsUsageAmount = snap ? snap.dsUsageAmount : null;
     var dsUsageCost = snap ? snap.dsUsageCost : null;
     var cc = snap ? snap.cc : null;
     var ccUsage = snap ? snap.ccUsage : null;
-    var profiles = snap ? snap.profiles : null;
     var oz = snap ? snap.oz : null;
-    var health = snap ? snap.health : null;
-    var logs = snap ? snap.logs : null;
+    var zaiQuota = snap ? snap.zaiQuota : null;
+    var zaiUsage = snap ? snap.zaiUsage : null;
     var cookieState = import_react2.default.useState({ busy: false, note: null, showLogin: false });
     var cookie = cookieState[0];
     var setCookie = cookieState[1];
@@ -688,10 +545,16 @@ function makePanel(ctx, config) {
         load();
       } else if (result.data && result.data.invalid === true) {
         setCookie({ busy: false, note: result.error || "Cookie is stale", showLogin: true });
-        console.warn("[subscriptions] OpenCode GO cookie is stale, login required", result.error || "stale");
+        console.warn(
+          "[subscriptions] OpenCode GO cookie is stale, login required",
+          result.error || "stale"
+        );
       } else {
         setCookie({ busy: false, note: result.error || "Extract failed", showLogin: false });
-        console.error("[subscriptions] OpenCode GO cookie extract failed", result.error || "unknown error");
+        console.error(
+          "[subscriptions] OpenCode GO cookie extract failed",
+          result.error || "unknown error"
+        );
       }
     };
     var openLogin = async function() {
@@ -705,7 +568,10 @@ function makePanel(ctx, config) {
       if (result.data && result.data.ok) {
         console.info("[subscriptions] OpenCode GO login page opened");
       } else {
-        console.error("[subscriptions] failed to open OpenCode GO login page", result.error || "unknown error");
+        console.error(
+          "[subscriptions] failed to open OpenCode GO login page",
+          result.error || "unknown error"
+        );
       }
     };
     var fetchDsToken = async function() {
@@ -718,7 +584,10 @@ function makePanel(ctx, config) {
         load();
       } else {
         setDsToken({ busy: false, note: result.error || "Extract failed", showLogin: true });
-        console.error("[subscriptions] DeepSeek token extract failed", result.error || "unknown error");
+        console.error(
+          "[subscriptions] DeepSeek token extract failed",
+          result.error || "unknown error"
+        );
       }
     };
     var openDsLogin = async function() {
@@ -732,7 +601,10 @@ function makePanel(ctx, config) {
       if (result.data && result.data.ok) {
         console.info("[subscriptions] DeepSeek platform login page opened");
       } else {
-        console.error("[subscriptions] failed to open DeepSeek platform login page", result.error || "unknown error");
+        console.error(
+          "[subscriptions] failed to open DeepSeek platform login page",
+          result.error || "unknown error"
+        );
       }
     };
     var refreshOz = async function() {
@@ -753,7 +625,9 @@ function makePanel(ctx, config) {
       var providers = cfg && cfg.providers || {};
       var next = Object.assign({}, providers, { [key]: !(providers[key] !== false) });
       setToggleBusy(key);
-      console.info("[subscriptions] action: toggle provider " + key + " to " + (next[key] ? "visible" : "hidden"));
+      console.info(
+        "[subscriptions] action: toggle provider " + key + " to " + (next[key] ? "visible" : "hidden")
+      );
       putJson("/subscriptions/config", { providers: next }).then(function(result) {
         setToggleBusy(null);
         if (result.data && result.data.config) {
@@ -832,18 +706,6 @@ function makePanel(ctx, config) {
         ozBalanceLine = "$" + oz.data.balance.toFixed(2) + " " + ozCurrency + " balance";
       }
     }
-    var telemetryLine = null;
-    if (telemetry) {
-      if (telemetry.error) telemetryLine = "telemetry: " + telemetry.error;
-      else if (telemetry.data) telemetryLine = renderTelemetry(telemetry.data);
-    }
-    var healthLine = null;
-    if (health) {
-      if (health.error) healthLine = "meridian: " + health.error;
-      else if (health.data) healthLine = renderHealth(health.data);
-    }
-    var logsLine = null;
-    if (logs && !logs.error && logs.data) logsLine = renderLogSummary(logs.data);
     var goPaceLine = null;
     var goWeekly = goUsage ? goUsage.weekly : null;
     if (goWeekly && windowPercent(goWeekly) !== null) {
@@ -871,28 +733,6 @@ function makePanel(ctx, config) {
         );
       }
     }
-    var profileInfo = null;
-    if (profiles && !profiles.error && profiles.data && profiles.data.config) {
-      var pcfg = profiles.data.config;
-      var activeName = typeof pcfg.active === "string" ? pcfg.active : "work";
-      var profileEntry = activeName === "personal" ? pcfg.personal : pcfg.work;
-      var orcRoutes = profileEntry && profileEntry.orchestrator && Array.isArray(profileEntry.orchestrator.routes) ? profileEntry.orchestrator.routes : [];
-      profileInfo = {
-        active: activeName,
-        chain: chainNameForRoutes(orcRoutes, pcfg.chains),
-        head: orcRoutes.length > 0 ? orcRoutes[0] : null
-      };
-    }
-    var quotaPick = null;
-    var headProvider = profileInfo && profileInfo.head ? String(profileInfo.head.provider) : null;
-    if (headProvider === "command-code") {
-      var ccPickRows = buildCcMeters(cc);
-      if (ccPickRows.length > 0) quotaPick = { rows: ccPickRows, pace: null };
-    } else if (headProvider === "meridian" && claudeWindows) {
-      quotaPick = { rows: buildRows(null, claudeWindows, windowLabel), pace: claudePaceLine };
-    } else if ((headProvider === "opencode-zen" || headProvider === "opencode-go") && goUsage) {
-      quotaPick = { rows: buildRows(GO_WINDOWS, goUsage), pace: goPaceLine };
-    }
     var staleText = null;
     if (cacheOk === true && staleTs !== null) {
       staleText = "Last fetched " + fmtStale(staleTs);
@@ -903,7 +743,6 @@ function makePanel(ctx, config) {
       var dataKeys = [
         "go",
         "quota",
-        "telemetry",
         "balance",
         "ds",
         "dsUsageAmount",
@@ -911,9 +750,8 @@ function makePanel(ctx, config) {
         "cc",
         "ccUsage",
         "oz",
-        "health",
-        "logs",
-        "profiles"
+        "zaiQuota",
+        "zaiUsage"
       ];
       var failCount = 0;
       for (var di = 0; di < dataKeys.length; di++) {
@@ -939,7 +777,10 @@ function makePanel(ctx, config) {
           }
         }
       ), /* @__PURE__ */ import_react2.default.createElement("span", { className: "ocgs-toggle-label" }, def.label));
-    }))), snap === null ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note" }, "Loading subscription data\u2026") : null, allFailed ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, "Could not load subscription data. " + (firstError || "Check that the subscriptions plugin is mounted.")) : null, profileInfo || quotaPick || telemetryLine || healthLine || logsLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "Quota"), profileInfo ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-row" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-row-label" }, /* @__PURE__ */ import_react2.default.createElement("b", null, "Profile: " + profileInfo.active), profileInfo.chain ? /* @__PURE__ */ import_react2.default.createElement("span", { className: "ocgs-stale" }, "chain: " + profileInfo.chain) : null))) : null, quotaPick ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, quotaPick.rows) : null, quotaPick && quotaPick.pace ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-pace" }, quotaPick.pace) : null, telemetryLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-telemetry" }, telemetryLine) : null, healthLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-telemetry" }, healthLine) : null, logsLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-telemetry" }, logsLine) : null) : null, providerVisible(cfg, "commandcode") ? renderCcSection(cc, ccUsage) : null, providerVisible(cfg, "claude") ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "Claude (meridian)"), quota && quota.error ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, "Claude (meridian): " + quota.error) : null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, buildRows(null, claudeWindows, windowLabel)), claudePaceLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-pace" }, claudePaceLine) : null) : null, providerVisible(cfg, "deepseek") ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "DeepSeek"), ds && ds.error ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, "DeepSeek: " + ds.error) : null, ds || dsUsageAmount || dsUsageCost ? renderDsDashboard(
+    }))), snap === null ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note" }, "Loading subscription data\u2026") : null, allFailed ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, "Could not load subscription data. " + (firstError || "Check that the subscriptions plugin is mounted.")) : null, providerVisible(cfg, "commandcode") ? renderCcSection(cc, ccUsage) : null, providerVisible(cfg, "zai") ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "Z.ai (GLM)"), zaiQuota && zaiQuota.error ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, "Z.ai: " + zaiQuota.error) : null, zaiQuota && zaiQuota.data && zaiQuota.data.ok === false ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, "Z.ai: " + (zaiQuota.data.error || "quota unavailable")) : null, zaiQuota && zaiQuota.data && zaiQuota.data.ok === true ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-balance" }, "Z.ai Coding Plan" + (typeof zaiQuota.data.level === "string" && zaiQuota.data.level !== "" ? " \xB7 " + zaiQuota.data.level : "")) : null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, buildRows(
+      ZAI_WINDOWS,
+      zaiQuota && zaiQuota.data && zaiQuota.data.ok === true ? { fiveHour: zaiQuota.data.fiveHour, weekly: zaiQuota.data.weekly } : null
+    )), zaiUsage && zaiUsage.data && zaiUsage.data.ok === true ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-pace" }, "7d " + fmtCount(zaiUsage.data.totalCalls) + " calls \xB7 " + fmtCount(zaiUsage.data.totalTokens) + " tokens") : null) : null, providerVisible(cfg, "claude") ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "Claude (meridian)"), quota && quota.error ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, "Claude (meridian): " + quota.error) : null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, buildRows(null, claudeWindows, windowLabel)), claudePaceLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-pace" }, claudePaceLine) : null) : null, providerVisible(cfg, "deepseek") ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "DeepSeek"), ds && ds.error ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, "DeepSeek: " + ds.error) : null, ds || dsUsageAmount || dsUsageCost ? renderDsDashboard(
       ds && ds.data && Array.isArray(ds.data.balance_infos) && ds.data.balance_infos.length > 0 ? ds.data.balance_infos[0] : null,
       dsUsageAmount,
       dsUsageCost

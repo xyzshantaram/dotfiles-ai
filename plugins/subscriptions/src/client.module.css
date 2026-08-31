@@ -25,11 +25,6 @@
   font-weight: 600;
   color: var(--dsw-alias-label-primary);
 }
-.ocgs-telemetry {
-  font-size: 0.9375rem;
-  line-height: 1.375rem;
-  color: var(--dsw-alias-label-secondary);
-}
 .ocgs-rows {
   display: flex;
   flex-direction: column;

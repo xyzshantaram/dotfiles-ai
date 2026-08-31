@@ -1,232 +1,157 @@
-# Plan — sync-models.mjs catalog swap, plus profiles verification
+# Plan — zai provider: sync-models seeding + subscriptions usage panel
 
 ## Vision
 
-Replace the two model-metadata catalogs in `sync-models.mjs` with models.dev.
-The current pair is incomplete: the vendored pi-ai catalog knows 47 of the 70
-ids we sync and has no entry for GLM 5.3 at all, and LiteLLM does not carry the
-gateway-prefixed ids. That gap is why the image gate silently denied
-`read_image` on a vision-capable model until someone hit it by hand.
+The user added a `zai` provider block (Zhipu AI, `https://api.z.ai/api/coding/paas/v4`,
+`ZAI_API_KEY`) to `home/settings.yaml` and wants:
 
-One residual ticket from the finished profiles effort also lives here. T6 is a
-verification sweep that has not been run.
+1. `sync-models.mjs` to seed its `models:` list like the other seeded providers,
+   so chains can reference `zai/<model>` routes.
+2. The subscriptions plugin to show Z.ai Coding Plan usage (quota windows +
+   call/token totals) in the settings panel, like DeepSeek/Command Code.
+
+## Verified API facts (do not re-research)
+
+- `GET https://api.z.ai/api/coding/paas/v4/models` with `Authorization: Bearer <key>`
+  returns a plain OpenAI list: `{"object":"list","data":[{"id":"glm-4.5","object":"model",...}]}`.
+  10 ids on this account: glm-4.5, glm-4.5-air, glm-4.6, glm-4.7, glm-5,
+  glm-5-turbo, glm-5.1, glm-5.2, glm-5.3, glm-5.3-flash. `fetchModelIds` already
+  handles this shape.
+- `GET https://api.z.ai/api/monitor/usage/quota/limit` (Bearer accepted) returns
+  `{"code":200,"msg":"Operation successful","success":true,"data":{"limits":[...],"level":"lite"}}`.
+  Live limits on this account: `{"type":"CREDIT_LIMIT","unit":3,"number":5,
+  "usage":2000,"currentValue":0,"remaining":2000,"percentage":0}` and the same
+  type with `unit:6,"number":1,"usage":10000,...,"nextResetTime":1788776603998`
+  (epoch ms, ~weekly out).
+- Unit semantics (from pi-zai-usage, which cites z.ai frontend source):
+  unit 3 = 5-hour rolling window, unit 6 = weekly quota, TIME_LIMIT (unit 5) =
+  monthly tool/search quota. Type strings can be TOKENS_LIMIT or CREDIT_LIMIT
+  depending on plan — filter on `unit`, never on `type`.
+- `GET .../api/monitor/usage/model-usage?startTime=YYYY-MM-DD HH:mm:ss&endTime=...`
+  returns envelope `data` = `{x_time[], modelCallCount[], tokensUsage[],
+  totalUsage:{totalModelCallCount,totalTokensUsage,modelSummaryList[]},
+  modelDataList[], modelSummaryList[], granularity:"hourly"}`. Local-time
+  `YYYY-MM-DD HH:mm:ss` query params, URL-encode the space.
+- Auth failures return HTTP 200 with `{"code":1001,...,"success":false}` (no
+  header) or `{"code":401,"msg":"token expired or incorrect","success":false}`
+  (bad key). ALWAYS check the envelope, never `res.ok` alone.
+- models.dev has a `zai` provider: exact keys `glm-5.3-flash` (name GLM-5.3-Flash,
+  ctx 1M, out 131072, input text/image/video/pdf, efforts low/high/max) and the
+  other ids. `TIER2_PREFIX` already routes `^z-ai/` and `^zai-org/` to it, and
+  bare ids hit tier-3 union fallback; `glm-4.5` style ids also match the zai
+  provider's exact keys through `matchId` normalization.
+
+## Design decisions
+
+- sync-models: `SEEDED_PROVIDERS` is an explicit allowlist on purpose; add
+  `zai` there and nowhere else. No CATALOG_EXCLUDED/TIER1_ROUTE entry (its
+  models.dev metadata flows through tier-2/3).
+- subscriptions host: two routes, `/subscriptions/zai-quota` (30s cache) and
+  `/subscriptions/zai-usage` (60s cache), fetch `ZAI_API_KEY` through the
+  credentials service like every other provider, return
+  `{ok:true,...}` / `{ok:false,error}` at HTTP 200 like the other handlers.
+- Quota parsing maps limits by unit: unit 3 -> fiveHour {used: currentValue,
+  cap: usage, percent: percentage, resetsAt}, unit 6 -> weekly (same shape).
+- Usage route returns `{ok:true, level, totalCalls, totalTokens, modelSummary}`
+  from a 7-day window ending at `now` (never end-of-today: the API accepts
+  future-ending windows and pads with zeros).
+- Client: a "Z.ai (GLM)" section — provider toggle key `zai` — with two window
+  meters via the existing `buildRows`, a plan-level line, and a 7-day calls +
+  tokens line. `PROVIDER_TOGGLES`, the fetch list, snap keys, and dataKeys gain
+  matching entries.
 
 ## Tickets
 
-### T6 — verification (profiles effort)
-
-**Found and fixed during verification.** Subagent dispatches rode the
-orchestrator head, not the subagent chain. The session log proved the child
-carried `delegationDepth: 1` while every step ran on
-`meridian/claude-opus-5`, which appears in no personal chain at all. The cause
-was never the chain config: `sync.sh` writes the pinned subagent head as
-`agentOptions:` BESIDE the tool row's `config:` key, but
-`@deepseek-ai/dsh-tool-subagent` declares `agentOptions` as a field of its own
-`Config` object and reads `config.agentOptions`. A sibling key parses and is
-then ignored, so every child inherited the parent's creation route
-(`resolveChildAgentOptions` spreads the parent's provider and model first, and
-the request overrides win only when they exist). The patcher's `indent6`
-comment said "config keys" when 6 spaces is the indent of `config:` itself.
-The patcher now nests at 8 and recognizes both the legacy sibling shape and
-the nested shape, migrating in place.
-**Status:** todo
-**Acceptance criteria:**
-
-- `node build.mjs` passes and rebuilds every bundle that embeds
-  `profile-routes`: `profiles.js`, `see.js`, `profiles-client/dist/client.js`,
-  and `subscriptions/lib/client.js`.
-- `pnpm exec tsc --noEmit` reports only the known pre-existing errors.
-- `pnpm exec prettier --check .` passes. It fails today on
-  `plugins/profiles.ts`, `plugins/profiles-client/src/client.tsx`, and
-  `plugins/subscriptions/src/client.tsx`. That drift predates this effort.
-- The orchestrator independently verifies at least one concrete behavior claim
-  per ticket before closing it.
-
-### S1 — replace both catalogs with models.dev (`sync-models.mjs`)
+### T1 — sync-models seeds zai
 
 **Status:** done
-
-**Outcome.** Landed, with two additions found during the work.
-
-- `meridian` is now seeded like the other gateways. It was hand-maintained and
-  carried no `reasoningEfforts` at all, so the work profile showed no effort
-  picker. It serves its list at `/v1/models`, not `/models`, so the script
-  gained a per-provider listing path. Its `api` is `anthropic-messages`, so the
-  `api === "openai-completions"` guard was dropped; `SEEDED_PROVIDERS` is the
-  allowlist and does that job alone.
-- Entry names now come from the models.dev `name` field. Deriving them from the
-  id turned `claude-sonnet-4-6` into "Claude Sonnet 4 6".
-- `opencode-zen` correctly seeds to zero models, because the models.dev
-  `opencode` catalog covers every id the gateway serves. The old pi-ai catalog
-  was stale, which is the only reason that block ever held 8 entries. An empty
-  `models:` block is NOT harmless: pi-ai rejects a provider that resolves no
-  models, so the block is deleted outright when the extras set is empty.
-
-One cohesive swap inside one file, staged internally rather than split. The
-steps are many but the design is decided. Each stage below is its own
-checkpoint.
-
-**Settled decisions.**
-
-- models.dev becomes the only metadata source. LiteLLM and pi-ai both go.
-- Fetch `https://models.dev/api.json` live on every run. Do not commit a
-  snapshot.
-- Keep `VISION_MODELS` as a manual override of last resort. After the swap only
-  three entries still earn their place: `Qwen/Qwen3.7-Max`, where the vendor
-  says text but 28 resellers say image, and `Qwen/Qwen3.8-27B` and
-  `Qwen/Qwen3.7-Flash`, which only a tier-3 reseller matched. The other five
-  were dropped because the first-party vendor now declares image input.
-  `tencent/hy3-paid` is text-only and was never in this set.
-- Resolve a model id in this order, first hit wins: the models.dev provider
-  matching our route, then the first-party vendor provider, then the union
-  across every provider. The SAME order applies to vision and to reasoning
-  efforts.
-- Effort churn is accepted, not avoided. Every one of the 31 models that carry
-  efforts today will change, and about 25 more will gain a block. Vendor values
-  were chosen over reseller values deliberately.
-
-**Stage 1 — research.** Confirm the first-party provider id for every vendor we
-route to, and settle the id-to-vendor mapping. `anthropic`, `zai`, `zhipuai`,
-`alibaba`, `deepseek`, `moonshotai`, and `minimax` all exist. Produce the
-mapping table and the exact diff the swap would make to `home/settings.yaml`.
-Do not edit anything in this stage.
-
-**Stage 2 — implement.**
-
-- Add the models.dev fetch, index, and ordered lookup.
-- Point `vision`, `contextWindow`, and `maxTokens` at it. `modalities.input`
-  carries image, `limit.context` and `limit.output` carry the sizes.
-- Point `fetchCatalogModelIds` at the models.dev `opencode` provider.
-- Build `reasoningEfforts` from `reasoning_options` entries of type `effort`.
-  Map the value `none` to the key `off` with a null wire value. Ignore
-  `toggle` and `budget_tokens`.
-- Delete `LITELLM_URL`, `lookupMeta`, `buildPiAiIndex`, `lookupPiAi`,
-  `PI_AI_VERSION`, and `PI_AI_CATALOG_BASE`.
-- Delete the `--with-meta` flag outright. Always fetch the richest data. That
-  means `WITH_META` at line 47, the `if (WITH_META)` block at line 484, the
-  gated lookup at line 551, and the comments at lines 21, 33, 451, and 545.
-  The `sync-models` script in `package.json` passes the flag, so it becomes
-  `node sync-models.mjs`. Change that through the sanctioned package tool, not
-  by hand-editing the manifest.
-- Warn when a chain-referenced model resolves to no vision data from any
-  source. This is the check that would have caught the GLM 5.3 gap at sync
-  time instead of at image-read time.
-- Re-check all nine `VISION_MODELS` entries and drop the ones models.dev now
-  covers.
-
-**Stage 3 — review.** Dispatch a review pass, then read the diff directly.
-
+**Change:** `sync-models.mjs` header comment + `SEEDED_PROVIDERS` gains `zai`.
 **Acceptance criteria:**
+- `node sync-models.mjs` runs with ZAI_API_KEY present, reports the zai fetch,
+  and writes a marker-wrapped `models:` block into the zai provider in
+  `home/settings.yaml`; non-zai regions byte-identical except modelSync.lastRun.
+- Chain check passes for a test `zai/glm-5.3-flash` chain ref.
 
-- `pnpm run sync-models` completes and reports zero chain warnings.
-- The regenerated `home/settings.yaml` gives `z-ai/glm-5.3-flash` a
-  `defaultInput` of `[text, image]` with no entry in `VISION_MODELS`. This is
-  the whole point of the swap and must be shown, not assumed.
-- `tencent/hy3-paid` still appears. It is text-only and needs no override; the
-  earlier note claiming it needed one was wrong.
-- No model loses a `defaultInput` it has today. Any model that gains one is
-  listed in the report with the reason.
-- The `reasoningEfforts` diff is reviewed model by model before it lands.
-  Expect all 31 existing blocks to change and about 25 more to appear. A SMALL
-  diff means the resolution order never reached the vendor entry, which is a
-  bug, not a success.
+### T2 — subscriptions host: zai routes
+
+**Status:** done
+**Change:** `plugins/subscriptions/src/index.ts` gains the quota/usage fetchers,
+handlers, two route registrations, and header-doc lines.
+**Acceptance criteria:**
+- `node build.mjs` rebuilds `plugins/subscriptions/lib/index.js` cleanly.
+- `curl localhost:<port>/subscriptions/zai-quota` returns `ok:true` with the
+  lite plan, two windows, and nextResetTime; missing key returns
+  `ok:false,error:"ZAI_API_KEY credential not configured"`.
+
+### T3 — subscriptions client: Z.ai section
+
+**Status:** done
+**Change:** `plugins/subscriptions/src/client.tsx` gains the section, toggle,
+fetch, snap fields.
+**Acceptance criteria:**
+- Build passes; section renders under the "Show sections" toggle `zai`.
+- Hidden by default-config toggle behaves like other providers.
+
+### T4 — verify
+
+**Status:** done
+**Acceptance criteria:** build.mjs, `pnpm exec tsc --noEmit` (no new errors
+beyond pre-existing), `pnpm test`, prettier on touched files; real-route curl
+for both zai endpoints; sync-models dry-run + real run reviewed.
+
+### T5 — bash-guard: add a `warn` verdict and additive rewrites
+
+**Status:** open
+**Why:** `experiments/tool-call-friction/README.md` measured 118 sandbox
+failures that carry no `[sandbox: ...]` marker, plus 248 calls that escalated to
+the mode the session already held. Guard rules cannot help yet. `GuardEntry` in
+`plugins/bash-guard.ts` matches on command and subcommand name only, `reason`
+reaches the model only on `deny`, and `rewrites` can only drop a flag.
+**Change:** `plugins/bash-guard.ts` — add a `warn` verdict that runs the command
+and still surfaces `reason` to the model, and add `rewrites[].add` that inserts
+a flag only when it is absent.
+**Acceptance criteria:**
+- `pnpm exec tsc --noEmit` reports no new errors and `node build.mjs` rebuilds
+  `plugins/bash-guard.js`.
+- New cases in `plugins/bash-guard.test.ts`: a `warn` rule allows the command
+  and returns the reason text; an additive rewrite inserts the flag when absent
+  and does not duplicate it when already present.
 - `pnpm test` passes.
-- `PI_AI_VERSION` is gone, and nothing else in the repo still needs it in step
-  with `plugins/llm-pi-ai/package.json`.
-- `Qwen/Qwen3.6-Max-Preview` is removed from `VISION_MODELS`. Both the vendor
-  entry and the union agree it takes text only.
 
-**Verified.** `pnpm run sync-models` exits 0 with zero chain warnings.
-`z-ai/glm-5.3-flash` gets `defaultInput: [text, image]` with its override
-removed, matched on an exact `glm-5.3-flash` key under the models.dev `zai`
-provider. A before/after comparison shows no model lost an image input.
-`pnpm test` passes, 55 tests. `PI_AI_VERSION` is gone.
-`Qwen/Qwen3.6-Max-Preview` is out of `VISION_MODELS`.
+### T6 — guard rules for podman and the npm/pnpm cache
 
-The vision warning was checked against a negative control rather than trusted
-for being quiet: pointing the `see` chain at `command-code/tencent/hy3-paid`
-makes it fire. That caught a real bug where the tier-vision test had been
-dropped, leaving the warning firing for every model not in `VISION_MODELS`.
+**Status:** open. Blocked on T5.
+**Change:** add `guards/podman.json` and `guards/npm.json`.
+**Acceptance criteria:**
+- The podman rule uses `warn`, names `/run/user/1000` and
+  `sandbox_permissions: danger-full-access`, and still lets `podman ps` run. A
+  `deny` here is wrong: it would break podman when the session already holds
+  `danger-full-access`, because the guard gates bash calls independently of the
+  sandbox mode.
+- The npm rule adds `--cache /tmp/dsh/npm-cache` to `install` and `ci` when the
+  flag is absent, and leaves an explicit `--cache` untouched.
+- After `./sync.sh`, both files exist in `$DSH_HOME/plugins/guards`.
+- Manual check: run `podman ps` under `workspace-write` and confirm the note
+  reaches the model instead of a bare read-only error.
+- Re-run `SINCE=<deploy-date> node experiments/tool-call-friction/scan-sandbox-friction.mjs`
+  and confirm the opaque-failure count for podman and npm drops.
 
-**Still owed by the human.** Run the tool and read the settings diff. A passing
-sync is not evidence the effort values are the ones you want.
+**Note:** these criteria are a proposal, not settled with the user yet. Grill
+them before dispatching T5.
 
-## Critical context
-
-- A `models:` entry declares its modalities as `input`. `defaultInput` is a
-  PROVIDER-level key only, and it supplies the fallback for entries that
-  declare no `input`. See `modelFields` versus `profile` in
-  `dsh-llm-pi-ai/lib/index.js`. An unknown key on an entry is dropped in
-  silence, so `defaultInput` written on a model does nothing at all. This
-  defeated an earlier fix that looked correct in the YAML and never took
-  effect at runtime: `command-code` defaults to `[text]`, so every one of its
-  models reported text-only and `see` denied `read_image`. sync-models now
-  writes `input` on every entry, text-only included, so nothing relies on the
-  provider default.
-- A provider that resolves no models is rejected outright, so an empty
-  `models:` list and a provider with the key removed fail the same way. When a
-  gateway-extras route has no extras left, delete the WHOLE provider block.
-- Deleting the `opencode-zen` block ends the gateway-extras mechanism for that
-  route: the seed loop only walks providers already present in the file, so it
-  will not come back on its own. If the gateway ever ships a model the
-  models.dev `opencode` catalog lacks, add the provider block back by hand.
-
-- Bundle outputs under `plugins/*.js`, `plugins/*/dist`, and `plugins/*/lib`
-  are committed. `build.mjs` regenerates them. Rebuild after every TypeScript
-  change.
-- `see.ts` and `plugins/subscriptions/src/client.tsx` also import from
-  `profile-routes`. A change there reaches both bundles.
-- Do not add a runtime dependency without asking the user.
-- `sync.sh` step `step_sync_guard_rules` copies `guards/.` into
-  `$DSH_HOME/plugins/guards/`. It copies and never deletes, so a renamed or
-  removed rule file leaves a stale copy behind.
-- The guard re-reads its rule files on every call, so a rule edit needs only a
-  sync. A plugin code change needs a restart of the running session.
-- pi-ai serves TWO jobs in `sync-models.mjs`, not one. It supplies metadata,
-  and `fetchCatalogModelIds` also pulls the opencode model id LIST from unpkg
-  to exclude those ids from the opencode-zen block. Retiring pi-ai must cover
-  both. models.dev lists 94 opencode models against the 58 excluded today, so
-  the opencode-zen block WILL change.
-- `command-code` and `meridian` do not exist in models.dev. They are private
-  gateways. Only `opencode-zen` maps to a real provider there, `opencode`,
-  which covers 8 of its 8 ids. This is why the lookup falls back to the
-  first-party vendor.
-- pi-ai gives a level-to-wire MAP, such as `low: high`. models.dev gives a flat
-  vocabulary. The mapping cannot survive the swap, so the wire value always
-  equals the level. Some models will offer fewer effort levels than today.
-- The union across providers is noisy. `claude-opus-5` is hosted by 30
-  providers carrying 5 different effort vocabularies. `glm-5.3-flash` is hosted
-  by 38 carrying 6.
-- REFUTED, do not retry: preferring the first-party vendor does NOT reduce
-  effort churn. Measured on the 31 ids carrying efforts today, first-party
-  changes 31 and the union changes 23. pi-ai encoded a level-to-wire MAP that
-  no models.dev strategy can reproduce, so churn is unavoidable. The vendor
-  order was kept for value quality, not for diff size.
-- `Qwen/Qwen3.6-Max-Preview` is NOT a vision model. The vendor entry and the
-  union both report text only, so the current `VISION_MODELS` entry is a live
-  bug that predates the swap.
-- `Qwen/Qwen3.7-Max` is genuinely disputed. The vendor reports text only and 28
-  reseller entries report image. It stays in `VISION_MODELS` and keeps vision.
-- The old code comment blaming the `z-ai/` prefix for the GLM 5.3 miss is
-  wrong. `lookupPiAi` already strips known prefixes and normalizes. The real
-  cause is that pinned pi-ai 0.82.1 stops at GLM 5.2.
 
 ## Human review queue
 
-- Confirm in the running web GUI that the profiles panel shows the correct
-  chain name for each entry field, that a reasoning effort survives a save,
-  and that the model seat still applies a profile.
-- Run a real `grep -rn foo src/` and a real `find . -name '*.ts'` in a live
-  session. Confirm the translated command runs, the output is correct, and the
-  note appears once above the output.
-- Run `find . -delete` against scratch and confirm the approval prompt appears.
-- Confirm the transcript shows the original command while the translated one
-  runs. Decide whether that is acceptable or needs a follow-up ticket.
-- After `sync.sh` and a `dsh-web` restart, confirm the `fallback: subagent
-  chain empty` warn stops and a new subagent picks the subagent chain head.
-- Paste an image on a glm-5.3-flash route and confirm `read_image` works.
-- After S1 lands, spot-check the reasoning effort picker for a Claude model and
-  a GLM model. The available levels are expected to change.
+- Run `pnpm run sync-models` yourself (needs ZAI_API_KEY in env), review the
+  settings.yaml diff, then run `sync.sh` and restart the session before chains
+  pick the zai routes up.
+- Check the panel section in the web GUI: meters render, reset countdown shows.
+- Decide whether to add `zai/<model>` routes to `profile.chains` now.
+## Follow-ups (done after initial implementation)
+
+- sync.sh aidos pin bumped to `6721bb90734bb9c1cf88d4fa0d506959346cb182`.
+- `zai/glm-5.3-flash` added to the top of the `personal-orchestrator` and
+  `subagent` chains. sync-models dry run reports zero chain warnings.
 
 ## User preferences and special rules
 

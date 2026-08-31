@@ -726,6 +726,74 @@ function parseCommandCodeUsage(subJson, usageJson) {
   }
   return out;
 }
+var ZAI_MONITOR_BASE = "https://api.z.ai";
+var ZAI_TIMEOUT_MS = 15e3;
+function parseZaiQuota(data) {
+  const source = data !== null && typeof data === "object" ? data : {};
+  const limits = Array.isArray(source.limits) ? source.limits : [];
+  const level = typeof source.level === "string" ? source.level : null;
+  const toWindow = (entry) => {
+    const used = Number(entry.currentValue) || 0;
+    const cap = Number(entry.usage) || 0;
+    const percent = typeof entry.percentage === "number" ? entry.percentage : cap > 0 ? used / cap * 100 : 0;
+    return {
+      used,
+      cap,
+      percent: Math.max(0, Math.min(100, percent)),
+      resetsAt: typeof entry.nextResetTime === "number" ? entry.nextResetTime : null
+    };
+  };
+  let fiveHour = null;
+  let weekly = null;
+  for (const item of limits) {
+    if (item === null || typeof item !== "object") continue;
+    const entry = item;
+    if (entry.unit === 3 && fiveHour === null) fiveHour = toWindow(entry);
+    if (entry.unit === 6 && weekly === null) weekly = toWindow(entry);
+  }
+  return { level, fiveHour, weekly };
+}
+function zaiTimestamp(date) {
+  const pad = (n) => String(n).padStart(2, "0");
+  const day = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  const time = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  return `${day} ${time}`;
+}
+function parseZaiUsage(data) {
+  const source = data !== null && typeof data === "object" ? data : {};
+  const totals = source.totalUsage !== null && typeof source.totalUsage === "object" ? source.totalUsage : {};
+  const modelSummary = [];
+  const items = Array.isArray(source.modelSummaryList) ? source.modelSummaryList : [];
+  for (const item of items) {
+    if (item === null || typeof item !== "object") continue;
+    const entry = item;
+    const model = typeof entry.modelCode === "string" ? entry.modelCode : typeof entry.model === "string" ? entry.model : "?";
+    const calls = Number(entry.modelCallCount ?? entry.calls ?? 0) || 0;
+    const tokens = Number(entry.modelTokensUsage ?? entry.tokens ?? 0) || 0;
+    if (calls === 0 && tokens === 0) continue;
+    modelSummary.push({ model, calls, tokens });
+  }
+  return {
+    totalCalls: Number(totals.totalModelCallCount) || 0,
+    totalTokens: Number(totals.totalTokensUsage) || 0,
+    modelSummary
+  };
+}
+async function zaiMonitorGet(path, key) {
+  const res = await fetch(`${ZAI_MONITOR_BASE}${path}`, {
+    headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
+    signal: AbortSignal.timeout(ZAI_TIMEOUT_MS)
+  });
+  if (!res.ok) throw new Error(`zai monitor HTTP ${res.status}`);
+  const body = await res.json();
+  if (body === null || typeof body !== "object" || body.success !== true) {
+    const envelope = body;
+    throw new Error(
+      `zai monitor error ${envelope && typeof envelope.code !== "undefined" ? envelope.code : "?"}: ${envelope && typeof envelope.msg === "string" ? envelope.msg : "malformed envelope"}`
+    );
+  }
+  return body.data;
+}
 function apply(ctx, config) {
   const credentials = ctx.get("credentials");
   installSettingsSection(ctx, CONFIG_NS, Config, config ?? {}, {
@@ -1006,6 +1074,49 @@ function apply(ctx, config) {
       sendJson(res, 200, { error: error instanceof Error ? error.message : String(error) });
     }
   };
+  const resolveZaiKey = async () => credentials === void 0 ? null : (await credentials.resolve("ZAI_API_KEY"))?.value;
+  const zaiQuotaOnce = cachedOnce(
+    async (key) => parseZaiQuota(await zaiMonitorGet("/api/monitor/usage/quota/limit", key)),
+    3e4
+  );
+  const zaiUsageOnce = cachedOnce(async (key) => {
+    const end = /* @__PURE__ */ new Date();
+    const start = new Date(end.getTime() - 7 * 24 * 3600 * 1e3);
+    const query = `startTime=${encodeURIComponent(
+      zaiTimestamp(start)
+    )}&endTime=${encodeURIComponent(zaiTimestamp(end))}`;
+    return parseZaiUsage(await zaiMonitorGet(`/api/monitor/usage/model-usage?${query}`, key));
+  }, 6e4);
+  const handleZaiQuota = async (_req, res) => {
+    try {
+      const key = await resolveZaiKey();
+      if (!key) {
+        sendJson(res, 200, { ok: false, error: "ZAI_API_KEY credential not configured" });
+        return;
+      }
+      sendJson(res, 200, { ok: true, ...await zaiQuotaOnce(key) });
+    } catch (error) {
+      sendJson(res, 200, {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  };
+  const handleZaiUsage = async (_req, res) => {
+    try {
+      const key = await resolveZaiKey();
+      if (!key) {
+        sendJson(res, 200, { ok: false, error: "ZAI_API_KEY credential not configured" });
+        return;
+      }
+      sendJson(res, 200, { ok: true, ...await zaiUsageOnce(key) });
+    } catch (error) {
+      sendJson(res, 200, {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  };
   const firefoxProfileDirs = () => {
     const root = join(homedir(), ".mozilla", "firefox");
     if (!existsSync(root)) return [];
@@ -1250,6 +1361,16 @@ function apply(ctx, config) {
     path: "/subscriptions/deepseek-usage/cost",
     handler: handleDsUsageCost
   });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/zai-quota",
+    handler: handleZaiQuota
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/zai-usage",
+    handler: handleZaiUsage
+  });
   const CMD_API_BASE = "https://api.commandcode.ai/alpha";
   const commandCodeOrgOnce = cachedOnce(async (key) => {
     const whoami = await commandCodeGet(key, CMD_API_BASE, "/whoami", null);
@@ -1410,5 +1531,7 @@ export {
   inject,
   name,
   parseCommandCodeCredits,
-  parseCommandCodeUsage
+  parseCommandCodeUsage,
+  parseZaiQuota,
+  parseZaiUsage
 };
