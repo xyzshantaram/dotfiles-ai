@@ -6,12 +6,12 @@
 // What it does:
 //   1. Reads home/settings.yaml (the repo source of truth) with the `yaml`
 //      package, keeping the source CST so comments and formatting survive.
-//   2. For the two seeded providers (`command-code`, `opencode-zen`), calls
+//   2. For the seeded providers (`command-code`, `opencode-zen`, `zai`), calls
 //      {baseURL}/models and learns the model ids the provider actually serves.
 //      A provider listed in CATALOG_EXCLUDED (a gateway-extras route)
 //      subtracts the models.dev provider's own models, so it only lists
 //      what that provider does not ship.
-//   3. For `command-code` and `opencode-zen`, regenerates the entire
+//   3. For `command-code`, `opencode-zen`, and `zai`, regenerates the entire
 //      `models:` sequence between a `# sync-models:begin` / `# sync-models:end`
 //      marker pair from a fresh {baseURL}/models fetch, on every run. It never
 //      appends just the missing ids: the whole marked block is replaced from
@@ -32,6 +32,12 @@
 //   node sync-models.mjs --dry-run       # print what would change, write nothing
 // Env:
 //   SETTINGS_YAML   path to the settings file (default: ./home/settings.yaml)
+//
+// Credentials:
+//   API keys come from the environment first (`apiKeyEnv` per provider). When
+//   unset, the key is read from ~/.dsh/.credentials.yaml (same file the dsh
+//   credentials service stores). A missing key is not fatal: the provider is
+//   skipped with a warning, exactly like a failed fetch.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -42,6 +48,25 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const SETTINGS = process.env.SETTINGS_YAML ?? join(HERE, "home", "settings.yaml");
 
 const DRY_RUN = process.argv.includes("--dry-run") || process.argv.includes("-n");
+
+// Fallback credential store: the dsh credentials domain. Flat YAML mapping
+// NAME -> secret, optionally quoted. Only consulted when the env var named by
+// the provider's `apiKeyEnv` is unset. A missing or unreadable file just means
+// no fallback keys.
+const CREDENTIALS_PATH = join(process.env.HOME ?? "", ".dsh", ".credentials.yaml");
+
+/** Read one key from ~/.dsh/.credentials.yaml, or null when absent. */
+function credentialsKey(name) {
+  let text;
+  try {
+    text = readFileSync(CREDENTIALS_PATH, "utf8");
+  } catch {
+    return null;
+  }
+  const re = new RegExp(`^${name}:\\s*["']?([^"'\\n]+)["']?\\s*$`, "m");
+  const m = re.exec(text);
+  return m ? m[1].trim() : null;
+}
 
 // Single source of model metadata: models.dev. The response is a JSON object
 // keyed by provider id, with each provider's `models` mapping model id to a
@@ -222,7 +247,7 @@ async function fetchCatalogModelIds(providerId) {
   if (!idx) throw new Error(`models.dev has no provider ${providerId}`);
   return new Set(idx.byId.keys());
 }
-// The two providers this script seeds get their entire `models:` sequence
+// The seeded providers get their entire `models:` sequence
 // regenerated between a marker pair on every run. Content outside the markers
 // (the rest of the provider, every other provider, every other top-level key,
 // hand-written comments and blank lines) is left byte-identical. Every other
@@ -233,27 +258,11 @@ const MARKER_BEGIN_COMMENT = "# sync-models:begin";
 const MARKER_END_COMMENT = "# sync-models:end";
 const MARKER_BEGIN = "      " + MARKER_BEGIN_COMMENT;
 const MARKER_END = "      " + MARKER_END_COMMENT;
-const SEEDED_PROVIDERS = new Set(["command-code", "opencode-zen", "meridian"]);
+const SEEDED_PROVIDERS = new Set(["command-code", "opencode-zen", "meridian", "zai"]);
 // Model-listing path for a provider whose endpoint is not at `{baseURL}/models`.
 // meridian proxies the Anthropic API and serves an OpenAI-shaped list at
 // /v1/models; a GET on /models returns "Endpoint not supported".
 const LISTING_PATH = { meridian: "/v1/models" };
-
-// Largest source offset reachable from a CST token, so a block's end offset
-// (inclusive of trailing newlines) can be computed for a safe text splice.
-function maxTokenOffset(tok) {
-  if (!tok || typeof tok !== "object") return -1;
-  let m = (tok.offset ?? 0) + (tok.source?.length ?? 0);
-  for (const key of ["start", "end", "items", "sep", "value", "key"]) {
-    const v = tok[key];
-    if (Array.isArray(v)) {
-      for (const t of v) m = Math.max(m, maxTokenOffset(t));
-    } else if (v && typeof v === "object") {
-      m = Math.max(m, maxTokenOffset(v));
-    }
-  }
-  return m;
-}
 
 // The 0-based line number containing a source offset.
 function lineOfOffset(text, offset) {
@@ -499,7 +508,12 @@ async function main() {
     // provider outside the allowlist is left byte-identical.
     if (!SEEDED_PROVIDERS.has(p.name)) continue;
 
-    const key = p.apiKeyEnv ? process.env[p.apiKeyEnv] : undefined;
+    // Env var first, then the dsh credentials file fallback. Both may be
+    // absent; fetchModelIds treats an absent key as an anonymous request and
+    // the skip below reports the failure.
+    const key = p.apiKeyEnv
+      ? (process.env[p.apiKeyEnv] ?? credentialsKey(p.apiKeyEnv) ?? undefined)
+      : undefined;
     const listPath = LISTING_PATH[p.name] ?? "/models";
     console.log(`\n→ ${p.name} (${p.baseURL.replace(/\/+$/, "")}${listPath})`);
     let ids;
@@ -593,14 +607,15 @@ async function main() {
     }
 
     if (!blockLines) {
-      // The provider has no `models:` list yet. Create one (with markers) after
-      // the provider's last property line, before the next sibling or EOF.
-      const providerEnd = lineOfOffset(text, maxTokenOffset(p.map.srcToken));
-      // Insert right before the next sibling line (skipping blank lines), or
-      // at EOF. A trailing empty split element is kept last.
-      let at = providerEnd + 1;
-      while (at < lines.length && lines[at].trim() === "") at++;
-      if (at === lines.length && lines[lines.length - 1] === "") at = lines.length - 1;
+      // The provider has no `models:` list yet. Create one directly after the
+      // provider's last property line. providerBlockLines scans by indent, so
+      // it returns the true last property line even when the provider is the
+      // last one before the next sibling key (the CST-token end offset used
+      // here before included the trailing newline and landed on the next
+      // provider's key, which nested the new models block inside that
+      // sibling and produced a duplicate `models:` key).
+      const pb = providerBlockLines(p, text);
+      const at = pb.last + 1;
       edits.push({ at, deleteCount: 0, block: ["      models:", ...markerBlock] });
       console.info(`  [${p.name}] no models list: creating markers for the first time`);
       console.debug(`  [${p.name}] insert at line ${at + 1}`);
