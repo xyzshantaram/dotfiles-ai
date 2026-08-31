@@ -27,7 +27,7 @@ This is a personal config. The author's skills, model routes, and accounts will 
 
 Host plane (mounted in the web patch):
 
-- [`plugins/bash-guard.ts`](plugins/bash-guard.ts) — gates model bash calls. It parses the command, not a string. Read-only git verbs run, git mutations ask, everything else is denied. It translates `grep` to `rg` and `find` to `fd` rather than denying them, and it rewrites `rg -r` to `rg`.
+- [`plugins/bash-guard.ts`](plugins/bash-guard.ts) — gates model bash calls. It parses the command, not a string. Read-only git verbs run, git mutations ask, everything else is denied. For `grep` and `find` it denies, but the denial carries the exact `rg` or `fd` command to run instead, so the model does not have to guess.
 - [`plugins/manifest-guard.ts`](plugins/manifest-guard.ts) — denies direct edits to package manifests and lockfiles.
 - [`plugins/package-tool.ts`](plugins/package-tool.ts) — the sanctioned way to change dependencies. It detects the package manager and runs the change.
 - [`plugins/skill-gate.ts`](plugins/skill-gate.ts) — shows a gated tool only while its skill is loaded.
@@ -89,13 +89,22 @@ Model bash commands go through bash-guard:
 - Git read-only verbs (status, log, diff, show) run without a prompt.
 - Git mutations (commit, push, checkout, reset) ask for approval first.
 - Other git subcommands are denied.
-- `grep` and `find` are translated, not denied. The guard rewrites them into the
-  `rg` and `fd` equivalent, runs that, and tells the model once what it changed.
-- A `find` predicate that mutates the filesystem, such as `-delete` or `-exec`,
-  translates and then asks for approval.
-- An expression with no safe equivalent is denied. The message names the exact
-  blocking token, so the next attempt can succeed.
-- `rg -r` is rewritten to plain `rg`. The `-r` flag is substitution, not recursion.
+- `grep` and `find` are denied, but the denial carries the exact replacement
+  command. The guard translates the call into its `rg` or `fd` equivalent and
+  puts that command in the message, so the model runs it verbatim on the next
+  turn instead of guessing.
+- A `find` predicate that changes files, such as `-exec`, is shown with a line
+  telling the model to get the user's approval before running it.
+- An expression with no safe equivalent is denied with no suggestion. The
+  message names the exact blocking token, so the next attempt can succeed.
+- `rg -r` is denied with plain `rg` suggested. The `-r` flag is substitution,
+  not recursion.
+
+The guard cannot rewrite a command in place. The harness deep-freezes
+`exec.arguments` before a `tools/pre-execute` listener sees it, and the
+`PreToolDecision` contract excludes input rewriting because arguments are
+already logged and shown to the user. So the guard denies and suggests, and it
+never silently runs something other than what the model asked for.
 
 ## Related docs
 

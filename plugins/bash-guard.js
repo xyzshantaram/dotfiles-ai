@@ -5106,7 +5106,28 @@ function translatableRef(ref, command) {
   }
   return { ok: true };
 }
-async function evaluate(ctx, dirs, command, depth, safePaths, workspaceRoot, templates) {
+function suggestionDeny(suggested, notes, mutatingWhy) {
+  let reason = `bash-guard: that command is not run directly. Run this instead:
+
+  ${suggested}
+`;
+  if (mutatingWhy.length > 0) {
+    reason += `
+This command changes files. Ask the user before you run it.
+`;
+    for (const why of mutatingWhy) reason += `  ${why}
+`;
+  }
+  if (notes.length > 0) {
+    reason += `
+Why: ${notes[0]}
+`;
+    for (const note of notes.slice(1)) reason += `     ${note}
+`;
+  }
+  return { kind: "deny", reason };
+}
+async function evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates) {
   const notes = [];
   let script;
   try {
@@ -5115,24 +5136,16 @@ async function evaluate(ctx, dirs, command, depth, safePaths, workspaceRoot, tem
     const errorMsg = error instanceof Error ? error.message : String(error);
     ctx.logger.warn(`bash-guard: parse error in command; denying: ${command} (error: ${errorMsg})`);
     return {
-      command,
-      notes,
-      decision: {
-        kind: "deny",
-        reason: `bash-guard: could not parse the command; refusing to run it unparsed. ${errorMsg}`
-      }
+      kind: "deny",
+      reason: `bash-guard: could not parse the command; refusing to run it unparsed. ${errorMsg}`
     };
   }
   if (script.errors && script.errors.length > 0) {
     const messages = script.errors.map((e) => e.message).join("; ");
     ctx.logger.warn(`bash-guard: script parse errors; denying: ${command} (errors: ${messages})`);
     return {
-      command,
-      notes,
-      decision: {
-        kind: "deny",
-        reason: `bash-guard: parse errors in command; refusing to run it unparsed. ${messages}`
-      }
+      kind: "deny",
+      reason: `bash-guard: parse errors in command; refusing to run it unparsed. ${messages}`
     };
   }
   const refs = extractAllCommandsFromAST(script, command);
@@ -5141,7 +5154,7 @@ async function evaluate(ctx, dirs, command, depth, safePaths, workspaceRoot, tem
   ctx.logger.debug(`bash-guard: extracted ${all.length} command(s) from: ${command}`);
   if (safePaths.length > 0 && scratchAllowed(all, safePaths, workspaceRoot)) {
     ctx.logger.info(`bash-guard: scratch write allowed: ${command}`);
-    return { command, notes, decision: null };
+    return null;
   }
   const rules = await loadRulesMulti(ctx, dirs);
   const hits = all.map((ref) => {
@@ -5152,7 +5165,7 @@ async function evaluate(ctx, dirs, command, depth, safePaths, workspaceRoot, tem
   }).filter(
     (h) => h !== void 0
   );
-  if (depth === 0 && hits.some((h) => h.rule.rewrites)) {
+  if (!hits.some((h) => h.rule.translate) && hits.some((h) => h.rule.rewrites)) {
     const ranges = [];
     for (const hit of hits) {
       if (!hit.rule.rewrites) continue;
@@ -5182,7 +5195,9 @@ async function evaluate(ctx, dirs, command, depth, safePaths, workspaceRoot, tem
       const logBecauses = [];
       for (const [start, end, because] of ranges) {
         if (start < lastEnd) continue;
-        rewritten += command.slice(lastEnd, start);
+        let from = start;
+        if (from > lastEnd && command[from - 1] === " ") from -= 1;
+        rewritten += command.slice(lastEnd, from);
         lastEnd = end;
         if (because && logBecauses.indexOf(because) === -1) {
           logBecauses.push(because);
@@ -5192,22 +5207,10 @@ async function evaluate(ctx, dirs, command, depth, safePaths, workspaceRoot, tem
       ctx.logger.debug(
         `bash-guard: rewrite (${logBecauses.join("; ")}) ${command} -> ${rewritten}`
       );
-      if (depth < 5) {
-        const inner = await evaluate(
-          ctx,
-          dirs,
-          rewritten,
-          depth + 1,
-          safePaths,
-          workspaceRoot,
-          templates
-        );
-        return { ...inner, notes: [...notes, ...inner.notes] };
-      }
-      command = rewritten;
+      return suggestionDeny(rewritten, logBecauses, []);
     }
   }
-  if (depth === 0 && hits.some((h) => h.rule.translate)) {
+  if (hits.some((h) => h.rule.translate)) {
     const ranges = [];
     for (const hit of hits) {
       const key = hit.rule.translate;
@@ -5228,30 +5231,19 @@ async function evaluate(ctx, dirs, command, depth, safePaths, workspaceRoot, tem
         const text = command.slice(node.pos, node.end);
         ctx.logger.warn(`bash-guard: translation blocked for ${hit.name}: ${outcome.why}`);
         return {
-          command,
-          notes,
-          decision: {
-            kind: "deny",
-            reason: `bash-guard: could not translate \`${text}\`. ${outcome.why} Run the rg or fd equivalent yourself.`
-          }
+          kind: "deny",
+          reason: `bash-guard: could not translate \`${text}\`. ${outcome.why} Run the rg or fd equivalent yourself.`
         };
       }
       const start = node.name.pos;
       const end = node.suffix.length > 0 ? node.suffix[node.suffix.length - 1].end : node.name.end;
       if (node.redirects.some((r) => r.pos >= start && r.pos < end)) {
         return {
-          command,
-          notes,
-          decision: {
-            kind: "deny",
-            reason: `bash-guard: could not translate \`${command.slice(start, end)}\`. A redirect sits between the arguments. Run the rg or fd equivalent yourself.`
-          }
+          kind: "deny",
+          reason: `bash-guard: could not translate \`${command.slice(start, end)}\`. A redirect sits between the arguments. Run the rg or fd equivalent yourself.`
         };
       }
-      const shown = outcome.argv.map(shellQuote).join(" ");
-      const lines = [
-        `bash-guard: ran \`${shown}\` instead of \`${command.slice(start, end)}\`. Call rg and fd directly next time.`
-      ];
+      const lines = [];
       for (const note of outcome.notes) {
         if (note.length > 0) lines.push(note);
       }
@@ -5276,49 +5268,17 @@ async function evaluate(ctx, dirs, command, depth, safePaths, workspaceRoot, tem
         if (range.why !== void 0) whys.push(range.why);
       }
       translated += command.slice(lastEnd);
-      ctx.logger.info(`bash-guard: translated ${command} -> ${translated}`);
-      if (depth < 5) {
-        const inner = await evaluate(
-          ctx,
-          dirs,
-          translated,
-          depth + 1,
-          safePaths,
-          workspaceRoot,
-          templates
-        );
-        const merged = [...notes, ...inner.notes];
-        if (whys.length > 0 && inner.decision?.kind !== "deny") {
-          return {
-            command: inner.command,
-            notes: merged,
-            decision: {
-              kind: "ask",
-              // The caveats must appear in the PROMPT. A note delivered after
-              // the run reaches the user too late to inform the approval, and
-              // never arrives at all when the user rejects the call.
-              reason: `bash-guard: the translated command needs approval:
-
-  ${inner.command}
-
-` + whys.map((w) => `  \u2022 ${w}`).join("\n") + (merged.length > 0 ? `
-
-${merged.join("\n")}` : "")
-            }
-          };
-        }
-        return { ...inner, notes: merged };
-      }
-      command = translated;
+      ctx.logger.info(`bash-guard: suggesting \`${translated}\` instead of \`${command}\``);
+      return suggestionDeny(translated, notes, whys);
     }
   }
   if (all.length === 0) {
     ctx.logger.debug(`bash-guard: no actual commands found in: ${command}`);
-    return { command, notes, decision: null };
+    return null;
   }
   if (hits.length === 0) {
     ctx.logger.debug(`bash-guard: no rules matched for: ${command}`);
-    return { command, notes, decision: null };
+    return null;
   }
   const verdicts = hits.map((h) => h.verdict);
   const overall = mostRestrictive(verdicts);
@@ -5331,7 +5291,7 @@ ${merged.join("\n")}` : "")
       });
       const ruleNames = [...new Set(denying.map((h) => h.name))].join(", ");
       ctx.logger.warn(`bash-guard: command denied by rules [${ruleNames}]: ${command}`);
-      return { command, notes, decision: { kind: "deny", reason } };
+      return { kind: "deny", reason };
     }
     case "ask": {
       const asking = hits.filter((h) => h.verdict === "ask");
@@ -5341,23 +5301,17 @@ ${merged.join("\n")}` : "")
       });
       const ruleNames = [...new Set(asking.map((h) => h.name))].join(", ");
       ctx.logger.warn(`bash-guard: command asks for approval by rules [${ruleNames}]: ${command}`);
-      return {
-        command,
-        notes,
-        decision: { kind: "ask", reason }
-      };
+      return { kind: "ask", reason };
     }
     case "allow":
     case "none":
     default:
       ctx.logger.debug(`bash-guard: command allowed: ${command}`);
-      return { command, notes, decision: null };
+      return null;
   }
 }
 function apply(ctx, config) {
   const baseDir = resolveHome(config.guardsDir ?? "$DSH_HOME/plugins/guards");
-  const pendingNotes = /* @__PURE__ */ new Map();
-  const MAX_PENDING_NOTES = 64;
   ctx.on("tools/pre-execute", async (exec, next) => {
     if (exec.name !== "bash") return next();
     const command = exec.arguments?.command;
@@ -5381,63 +5335,8 @@ function apply(ctx, config) {
     }
     const dirs = profile === "none" ? [baseDir] : [baseDir, join2(baseDir, `profile-${profile}`)];
     const templates = { deny: config.denyMessage, ask: config.askMessage };
-    const result = await evaluate(ctx, dirs, command, 0, safePaths, workspaceRoot, templates);
-    if (result.command !== command) {
-      try {
-        exec.arguments.command = result.command;
-      } catch {
-        ctx.logger.warn("bash-guard: could not apply rewritten command; refusing the call");
-        pendingNotes.delete(exec.callId);
-        return {
-          kind: "deny",
-          reason: "bash-guard: could not apply the translated command; refusing to run the original."
-        };
-      }
-    }
-    if (result.decision?.kind === "deny") {
-      pendingNotes.delete(exec.callId);
-    } else if (result.notes.length > 0) {
-      pendingNotes.set(exec.callId, result.notes.join("\n"));
-      while (pendingNotes.size > MAX_PENDING_NOTES) {
-        const oldest = pendingNotes.keys().next().value;
-        if (oldest === void 0) break;
-        pendingNotes.delete(oldest);
-      }
-    }
-    if (result.decision === null) return next();
-    return result.decision;
-  });
-  ctx.on("tools/post-execute", async (exec, result, next) => {
-    if (exec.name !== "bash") return next();
-    let decision;
-    try {
-      const note = pendingNotes.get(exec.callId);
-      if (note === void 0) return next();
-      pendingNotes.delete(exec.callId);
-      const block = { type: "text", text: note };
-      decision = await next();
-      if (decision.kind === "block") {
-        return {
-          kind: "block",
-          feedback: [block, ...decision.feedback],
-          additionalContexts: decision.additionalContexts
-        };
-      }
-      if (Object.hasOwn(decision, "value")) {
-        ctx.logger.debug("bash-guard: post-execute decision carries a value; dropping the note");
-        return decision;
-      }
-      return {
-        kind: "accept",
-        content: [block, ...decision.content ?? result.content],
-        additionalContexts: decision.additionalContexts
-      };
-    } catch (error) {
-      ctx.logger.warn(
-        `bash-guard: could not attach the translation note: ${error instanceof Error ? error.message : String(error)}`
-      );
-      return decision ?? next();
-    }
+    const decision = await evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates);
+    return decision === null ? next() : decision;
   });
 }
 export {
