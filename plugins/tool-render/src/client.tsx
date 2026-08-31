@@ -1784,7 +1784,7 @@ function SubagentRow(props) {
       ? firstLineOfError(errorText)
       : undefined;
   var background = args !== null && args.run_in_background === true;
-  var title = background ? "Parallel sub-agent" : "Sub-agent";
+  var title = background ? "Background subagent" : "Subagent";
   var summary =
     description !== undefined ? firstLine(relativizeToCwd(description, props.cwd)) : title;
   var body = null;
