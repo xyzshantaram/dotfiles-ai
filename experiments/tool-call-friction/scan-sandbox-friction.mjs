@@ -29,13 +29,24 @@ import path from 'node:path';
 const root = process.argv[2];
 const outDir = process.argv[3] || '/tmp/dsh/sandbox-report';
 
-// SINCE=YYYY-MM-DD limits the scan to sessions modified on or after that date.
-// Use it for a retest. Without it the scan covers every session ever recorded,
-// and the old data hides any change.
+// SINCE=YYYY-MM-DD (a time such as 2026-09-07T20:36 is also allowed) counts
+// only events at or after that moment. The filter applies to the EVENT
+// timestamp, not the session file's mtime: a session that started before the
+// cut and kept running looks recent by mtime while most of its events are old,
+// so an mtime filter counts pre-cut failures as post-cut ones. File mtime is
+// still used to skip whole files that cannot hold a matching event, which is
+// safe because a file's mtime is never older than its newest event.
 const sinceMs = process.env.SINCE ? Date.parse(process.env.SINCE) : null;
 if (process.env.SINCE && Number.isNaN(sinceMs)) {
   console.error(`Bad SINCE value: ${process.env.SINCE}`);
   process.exit(1);
+}
+
+/** True when an event timestamp falls inside the requested window. */
+function inWindow(time) {
+  if (sinceMs === null) return true;
+  if (typeof time !== 'number') return false;
+  return time >= sinceMs;
 }
 
 const MARKER_RE = /\[sandbox:/i;
@@ -119,11 +130,14 @@ function scan(entry) {
         const exitMatch = text.match(EXIT_RE);
         if (!failed && call.name === 'bash' && exitMatch && exitMatch[1] !== '0') failed = true;
 
+        // Classify every failure so the "what happened next" pass below has
+        // full history. Only the counters are gated to the window.
+        const counts = inWindow(ev.time);
         let kind = null;
         if (failed) {
           if (NOT_WIDER_RE.test(text)) {
             kind = 'not_wider';
-            stats.notWider += 1;
+            if (counts) stats.notWider += 1;
             if (stats.notWiderSamples.length < 4) {
               stats.notWiderSamples.push({
                 tool: call.name, target: call.escTarget,
@@ -132,15 +146,15 @@ function scan(entry) {
             }
           } else if (REJECTED_RE.test(text)) {
             kind = 'rejected';
-            stats.rejected += 1;
+            if (counts) stats.rejected += 1;
           } else if (MARKER_RE.test(text)) {
             kind = 'marked';
-            stats.marked += 1;
-            stats.markedByTool[call.name] = (stats.markedByTool[call.name] || 0) + 1;
+            if (counts) stats.marked += 1;
+            if (counts) stats.markedByTool[call.name] = (stats.markedByTool[call.name] || 0) + 1;
           } else if (OPAQUE_RE.test(text)) {
             kind = 'opaque';
-            stats.opaque += 1;
-            stats.opaqueByTool[call.name] = (stats.opaqueByTool[call.name] || 0) + 1;
+            if (counts) stats.opaque += 1;
+            if (counts) stats.opaqueByTool[call.name] = (stats.opaqueByTool[call.name] || 0) + 1;
             if (stats.opaqueSamples.length < 6) {
               stats.opaqueSamples.push({
                 project: entry.project, sessionId: entry.sessionId,
@@ -155,7 +169,7 @@ function scan(entry) {
         ordered.push({
           ordinal: call.ordinal, tool: call.name,
           hasEscalation: call.hasEscalation, escTarget: call.escTarget,
-          failed, kind, ok: !failed,
+          failed, kind, ok: !failed, counts,
         });
       }
     });
@@ -196,6 +210,9 @@ async function worker() {
     for (let n = 0; n < ordered.length; n++) {
       const cur = ordered[n];
       if (cur.kind !== 'marked' && cur.kind !== 'opaque') continue;
+      // The failure itself must fall in the window. Its follow-up call may sit
+      // just outside, which is fine: the response belongs to the failure.
+      if (!cur.counts) continue;
       const bucket = cur.kind === 'marked' ? total.afterMarked : total.afterOpaque;
       const next = ordered[n + 1];
       if (!next) { bucket.other += 1; continue; }

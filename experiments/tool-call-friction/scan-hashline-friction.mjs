@@ -6,10 +6,19 @@
  *   node scan-hashline-friction.mjs [sessionsRoot] [outDir]
  *
  * Environment:
- *   SINCE=2026-09-07   Only scan session files modified on or after this date.
- *                      Use this for the retest. Without it the scan covers
- *                      every session ever recorded, and old data hides the
- *                      effect of the fix.
+ *   SINCE=2026-09-07        Count only events at or after this time.
+ *   SINCE=2026-09-07T20:36   A time is allowed, and matters when a deploy
+ *                           lands part way through a working day.
+ *
+ * The filter applies to the EVENT timestamp, not the session file's mtime.
+ * That distinction is not cosmetic. A session that started before the deploy
+ * and kept running writes new bytes, so its mtime looks recent while most of
+ * its events are old. Filtering by mtime therefore counts pre-deploy failures
+ * as post-deploy ones, and can report a change in the wrong direction.
+ *
+ * File mtime is still used, but only to skip whole files that cannot hold a
+ * matching event. That is safe, because a file's mtime is never older than
+ * its newest event.
  *
  * The script reads compressed session logs with zstdcat. It pairs every
  * tool/call with its tool/result and counts the failures. It never prints
@@ -47,6 +56,13 @@ if (process.env.SINCE && Number.isNaN(sinceMs)) {
 	process.exit(1);
 }
 
+/** True when an event timestamp falls inside the requested window. */
+function inWindow(time) {
+	if (sinceMs === null) return true;
+	if (typeof time !== "number") return false;
+	return time >= sinceMs;
+}
+
 function findSessionFiles(root) {
 	const out = [];
 	let projects;
@@ -81,6 +97,8 @@ function findSessionFiles(root) {
 				const full = path.join(dir, file);
 				if (sinceMs !== null) {
 					try {
+						// Safe pre-filter only: a file whose mtime predates the cut cannot
+						// hold an event after it. Per-event filtering still happens below.
 						if (fs.statSync(full).mtimeMs < sinceMs) continue;
 					} catch {
 						continue;
@@ -136,7 +154,11 @@ function scanOne({ project, sessionId, file }) {
 				if (!data || !ALL.has(data.name)) return;
 				ordinal += 1;
 				const args = String(data.arguments || "");
-				toolCallCounts[data.name] = (toolCallCounts[data.name] || 0) + 1;
+				// Count the call only when it falls in the window. The call is still
+				// registered below, because a post-window result may pair with it.
+				if (inWindow(event.time)) {
+					toolCallCounts[data.name] = (toolCallCounts[data.name] || 0) + 1;
+				}
 				calls.set(data.callId, {
 					name: data.name,
 					ordinal,
@@ -190,6 +212,11 @@ function scanOne({ project, sessionId, file }) {
 					}
 					continue;
 				}
+
+				// Anchor and edit history above is tracked for EVERY event, in or out
+				// of the window, because bucket classification needs the full history.
+				// Only the failure counters below are gated.
+				if (!inWindow(event.time)) continue;
 
 				const bracket = text.match(/\[([A-Z_]+)\]/);
 				const structured = data.error && data.error.code ? data.error.code : null;
