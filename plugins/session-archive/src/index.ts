@@ -6,6 +6,8 @@
  *     cwd, createdAt, log file size, live flag)
  *   - POST /sessions/archived/delete  — remove one archived session log
  *     directory from disk
+ *   - POST /sessions/archived/delete-batch  — remove many archived session
+ *     log directories in one request (body { ids: string[] })
  *
  * The archive set is read-only here. There is no unarchive or remove API,
  * so the panel never mutates the workspace registry. Deletion removes the
@@ -30,7 +32,7 @@ import { stat, rm } from "node:fs/promises";
 import { basename, dirname } from "node:path";
 import type { Context } from "@deepseek-ai/cordis";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { sendJson, readBody } from "../../shared/http";
+import { sendJson, readBody, isPlainObject } from "../../shared/http";
 
 /** Stable Cordis plugin name; also the client loader entry id. */
 export const name = "session-archive";
@@ -149,15 +151,59 @@ function makeListHandler(ctx: Context) {
   };
 }
 
-/** The archived session deletion handler. */
+/** The result of one archived-session delete attempt. */
+export interface DeleteOutcome {
+  id: string;
+  ok: boolean;
+  error?: string;
+}
+
+/** Delete one archived session log directory. This helper never throws. */
+export async function deleteArchivedSession(ctx: Context, id: string): Promise<DeleteOutcome> {
+  const persistence = service<SessionPersistenceService>(ctx, "sessionPersistence");
+  if (persistence === undefined) {
+    ctx.logger.warn("delete refused: session persistence service unavailable");
+    return { id, ok: false, error: "session persistence service unavailable" };
+  }
+  const sessions = service<SessionsService>(ctx, "sessions");
+  if (sessions?.get(id) !== undefined) {
+    ctx.logger.warn(`delete refused for session ${id}: session is live`);
+    return { id, ok: false, error: "session is live" };
+  }
+  const workspace = service<WorkspaceRegistryService>(ctx, "workspaceRegistry");
+  if (workspace !== undefined && !workspace.archivedSessionIds.includes(id)) {
+    ctx.logger.warn(`delete refused for session ${id}: not archived`);
+    return { id, ok: false, error: "not archived" };
+  }
+  try {
+    const headers = await persistence.list();
+    const header = headers.find((candidate) => candidate.id === id);
+    if (header === undefined) {
+      ctx.logger.warn(`delete refused for session ${id}: not found`);
+      return { id, ok: false, error: "not found" };
+    }
+    const located = persistence.locate(header);
+    if (located === undefined) {
+      ctx.logger.warn(`delete refused for session ${id}: log not found`);
+      return { id, ok: false, error: "not found" };
+    }
+    if (basename(dirname(located.path)) !== id) {
+      ctx.logger.warn(`delete refused for session ${id}: path mismatch`);
+      return { id, ok: false, error: "path mismatch; refusing to delete" };
+    }
+    await rm(dirname(located.path), { recursive: true, force: true });
+    ctx.logger.info(`deleted archived session ${id}`);
+    return { id, ok: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    ctx.logger.error("delete failed for session " + id + ": " + message);
+    return { id, ok: false, error: message };
+  }
+}
+
+/** The single archived session deletion handler. */
 function makeDeleteHandler(ctx: Context) {
   return async (req: IncomingMessage, res: ServerResponse) => {
-    const persistence = service<SessionPersistenceService>(ctx, "sessionPersistence");
-    if (persistence === undefined) {
-      sendJson(res, 200, { ok: false, error: "session persistence service unavailable" });
-      ctx.logger.warn("delete refused: session persistence service unavailable");
-      return;
-    }
     let body: unknown;
     try {
       body = await readBody(req, 16 * 1024);
@@ -170,7 +216,7 @@ function makeDeleteHandler(ctx: Context) {
       return;
     }
     const id =
-      typeof body === "object" && body !== null && typeof (body as { id?: unknown }).id === "string"
+      isPlainObject(body) && typeof (body as { id?: unknown }).id === "string"
         ? (body as { id: string }).id
         : null;
     if (id === null) {
@@ -178,52 +224,46 @@ function makeDeleteHandler(ctx: Context) {
       ctx.logger.warn("delete refused: missing session id");
       return;
     }
-    const sessions = service<SessionsService>(ctx, "sessions");
-    if (sessions?.get(id) !== undefined) {
-      sendJson(res, 200, { ok: false, error: "session is live" });
-      ctx.logger.warn(`delete refused for session ${id}: session is live`);
-      return;
-    }
-    const workspace = service<WorkspaceRegistryService>(ctx, "workspaceRegistry");
-    if (workspace !== undefined && !workspace.archivedSessionIds.includes(id)) {
-      sendJson(res, 200, { ok: false, error: "not archived" });
-      ctx.logger.warn(`delete refused for session ${id}: not archived`);
-      return;
-    }
+    const outcome = await deleteArchivedSession(ctx, id);
+    const payload: { ok: boolean; error?: string } = { ok: outcome.ok };
+    if (outcome.error !== undefined) payload.error = outcome.error;
+    sendJson(res, 200, payload);
+  };
+}
+
+/** The batch archived session deletion handler. */
+export function makeBatchDeleteHandler(ctx: Context) {
+  return async (req: IncomingMessage, res: ServerResponse) => {
+    let body: unknown;
     try {
-      const headers = await persistence.list();
-      const header = headers.find((candidate) => candidate.id === id);
-      if (header === undefined) {
-        sendJson(res, 200, { ok: false, error: "not found" });
-        ctx.logger.warn(`delete refused for session ${id}: not found`);
-        return;
-      }
-      const located = persistence.locate(header);
-      if (located === undefined) {
-        sendJson(res, 200, { ok: false, error: "not found" });
-        ctx.logger.warn(`delete refused for session ${id}: log not found`);
-        return;
-      }
-      if (basename(dirname(located.path)) !== id) {
-        sendJson(res, 200, { ok: false, error: "path mismatch; refusing to delete" });
-        ctx.logger.warn(`delete refused for session ${id}: path mismatch`);
-        return;
-      }
-      await rm(dirname(located.path), { recursive: true, force: true });
-      sendJson(res, 200, { ok: true });
-      ctx.logger.info(`deleted archived session ${id}`);
+      body = await readBody(req, 16 * 1024);
     } catch (error) {
-      sendJson(res, 200, {
+      sendJson(res, 400, {
         ok: false,
         error: error instanceof Error ? error.message : String(error),
       });
-      ctx.logger.error(
-        "delete failed for session " +
-          id +
-          ": " +
-          (error instanceof Error ? error.message : String(error)),
-      );
+      ctx.logger.warn("batch delete refused: invalid request body");
+      return;
     }
+    const ids =
+      isPlainObject(body) &&
+      Array.isArray(body.ids) &&
+      body.ids.length > 0 &&
+      body.ids.every((entry) => typeof entry === "string")
+        ? (body.ids as string[])
+        : null;
+    if (ids === null) {
+      sendJson(res, 400, { ok: false, error: "missing ids" });
+      ctx.logger.warn("batch delete refused: missing ids");
+      return;
+    }
+    const results: DeleteOutcome[] = [];
+    for (const id of ids) {
+      results.push(await deleteArchivedSession(ctx, id));
+    }
+    const deleted = results.filter((outcome) => outcome.ok).length;
+    ctx.logger.info(`batch deleted ${deleted} of ${ids.length} archived sessions`);
+    sendJson(res, 200, { ok: true, results });
   };
 }
 
@@ -239,6 +279,11 @@ export function apply(ctx: Context): void {
         kind: "exact",
         path: "/sessions/archived/delete",
         handler: makeDeleteHandler(ctx),
+      });
+      server.register({
+        kind: "exact",
+        path: "/sessions/archived/delete-batch",
+        handler: makeBatchDeleteHandler(ctx),
       });
     });
   } catch {

@@ -7,12 +7,17 @@
  *   - GET  /sessions/archived  -> { ok, sessions: [{ id, title, cwd,
  *     createdAt, size, live }] }
  *   - POST /sessions/archived/delete  (body { id }) -> { ok }
+ *   - POST /sessions/archived/delete-batch  (body { ids }) ->
+ *     { ok, results: [{ id, ok, error? }] }
  *
  * Each row shows the session title, its cwd, its createdAt as a locale date
  * string, and its log file size in KiB/MiB. A session with no title shows
- * its shortened id instead. A live session
- * shows "live" instead of a Delete button. A Refresh button re-fetches the
- * list. An empty list shows "No archived sessions".
+ * its shortened id instead. Each non-live row has a selection checkbox.
+ * A header row offers a select-all checkbox and a Delete selected button
+ * that sends one batch request. A live session shows "live" instead of
+ * a checkbox and Delete button.
+ * A Refresh button re-fetches the list and clears the selection. An empty
+ * list shows "No archived sessions".
  *
  * The seam. This file is the package's `./client` source. build.mjs
  * bundles it with esbuild (browser, cjs, es2022): react external, wrapped
@@ -65,9 +70,19 @@ function makePanel() {
     var busy = busyState[0];
     var setBusy = busyState[1];
 
+    var selectedState = react.useState(function () {
+      return new Set();
+    });
+    var selected = selectedState[0];
+    var setSelected = selectedState[1];
+
+    var batchBusyState = react.useState(false);
+    var batchBusy = batchBusyState[0];
+    var setBatchBusy = batchBusyState[1];
     var load = function () {
       console.debug("[session-archive] fetching archived sessions");
       fetchJson("/sessions/archived").then(function (result) {
+        setSelected(new Set());
         if (result.error) {
           console.error("[session-archive] load failed", result.error);
           setList(function (prev) {
@@ -88,22 +103,110 @@ function makePanel() {
     }, []);
 
     var remove = function (id) {
-      if (busy !== null) return;
+      if (busy !== null || batchBusy) return;
       setBusy(id);
-      console.info("[session-archive] deleting archived session", id);
-      postJson("/sessions/archived/delete", { id: id }).then(function (result) {
-        setBusy(null);
-        if (result.error) {
-          console.error("[session-archive] delete failed", id, result.error);
-          setList(function (prev) {
-            return { data: prev && prev.data ? prev.data : null, error: result.error };
-          });
-          return;
+      postJson("/sessions/archived/delete", { id: id })
+        .then(function (result) {
+          setBusy(null);
+          if (result.error) {
+            console.error("[session-archive] delete failed", id, result.error);
+            setList(function (prev) {
+              return { data: prev && prev.data ? prev.data : null, error: result.error };
+            });
+            return;
+          }
+          console.info("[session-archive] deleted archived session", id);
+          load();
+        })
+        .catch(function (error) {
+          setBusy(null);
+          console.error("[session-archive] delete failed", id, error);
+        });
+    };
+
+    var deleteSelected = function () {
+      if (batchBusy || busy !== null || selected.size === 0) return;
+      var ids = Array.from(selected);
+      setBatchBusy(true);
+      console.info("[session-archive] batch deleting archived sessions", ids.length);
+      postJson("/sessions/archived/delete-batch", { ids: ids })
+        .then(function (result) {
+          setBatchBusy(false);
+          if (result.error) {
+            console.error("[session-archive] batch delete failed", result.error);
+            setList(function (prev) {
+              return { data: prev && prev.data ? prev.data : null, error: result.error };
+            });
+            return;
+          }
+          var results =
+            result.data && Array.isArray(result.data.results) ? result.data.results : [];
+          for (var i = 0; i < results.length; i++) {
+            if (results[i].ok === false) {
+              console.warn(
+                "[session-archive] batch delete failed for session",
+                results[i].id,
+                results[i].error,
+              );
+            }
+          }
+          load();
+        })
+        .catch(function (error) {
+          setBatchBusy(false);
+          console.error("[session-archive] batch delete failed", error);
+        });
+    };
+
+    var toggle = function (id) {
+      setSelected(function (prev) {
+        var next = new Set(prev);
+        if (next.has(id)) {
+          next.delete(id);
+        } else {
+          next.add(id);
         }
-        console.info("[session-archive] deleted archived session", id);
-        load();
+        return next;
       });
     };
+
+    var selectableIds = [];
+    if (list && list.data) {
+      for (var i = 0; i < list.data.length; i++) {
+        if (list.data[i].live !== true) selectableIds.push(list.data[i].id);
+      }
+    }
+    var allSelected = selectableIds.length > 0 && selected.size === selectableIds.length;
+    var toggleAll = function () {
+      setSelected(allSelected ? new Set() : new Set(selectableIds));
+    };
+
+    var batchControls = null;
+    if (list && list.data && list.data.length > 0) {
+      batchControls = (
+        <div className="sarch-batch">
+          <label className="sarch-select-all">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              disabled={batchBusy || busy !== null}
+              onChange={toggleAll}
+            />
+            Select all
+          </label>
+          <button
+            className="sarch-btn sarch-batch-delete"
+            disabled={selected.size === 0 || batchBusy || busy !== null}
+            title="Delete selected archived sessions"
+            onClick={deleteSelected}
+          >
+            {batchBusy
+              ? "Deleting " + selected.size + "…"
+              : "Delete selected (" + selected.size + ")"}
+          </button>
+        </div>
+      );
+    }
 
     var rows = [];
     if (list && list.data) {
@@ -115,7 +218,7 @@ function makePanel() {
         ) : (
           <button
             className="sarch-btn"
-            disabled={busy === session.id}
+            disabled={busy === session.id || batchBusy}
             title="Delete archived session"
             aria-label="Delete archived session"
             onClick={(function (id) {
@@ -127,9 +230,24 @@ function makePanel() {
             {busy === session.id ? "…" : "×"}
           </button>
         );
+        var checkbox = live ? null : (
+          <input
+            type="checkbox"
+            className="sarch-check"
+            checked={selected.has(session.id)}
+            disabled={batchBusy || busy !== null}
+            aria-label="Select archived session"
+            onChange={(function (id) {
+              return function () {
+                toggle(id);
+              };
+            })(session.id)}
+          />
+        );
         var label = session.title ? session.title : shortId(session.id);
         rows.push(
           <div className="sarch-row" key={session.id}>
+            {checkbox}
             <div className="sarch-row-main">
               <div className="sarch-row-id">{label}</div>
               <div className="sarch-row-meta">
@@ -154,6 +272,7 @@ function makePanel() {
     } else {
       body = (
         <div className="sarch-section">
+          {batchControls}
           <div className="sarch-rows">{rows}</div>
           {list.error ? <div className="dsp-err">{list.error}</div> : null}
         </div>
