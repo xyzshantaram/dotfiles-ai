@@ -12,7 +12,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#daf1f9634a7eb5b47d337ef2a623e52c263fa2d8}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#6721bb90734bb9c1cf88d4fa0d506959346cb182}"
 
 step_install_deps() {
 	(cd "$REPO" && pnpm install)
@@ -222,6 +222,13 @@ step_install_plugins() {
 		# the composer carries a PATH reference. Replaced dsh-paste-input.
 		pnpm_ins "github:Johnny-xuan/dsh-paste-to-path#d68fb104ca25a663ba3912bb17f8c2ab32d60e37"
 		pnpm_ins "github:davidgereb/dsh-plugin-better-mobile-ui#16e21548315866b50d5f3f64b91a70f24f3318ba"
+		# Hash-anchored read/edit/undo tools. Pinned to OUR fork
+		# (github.com/xyzshantaram/dsh-better-edit, branch
+		# fix/served-mirror-rebase) while we measure two fixes upstream does
+		# not have yet: the served-mirror re-base after an edit, and numeric
+		# string coercion for read offset/limit. See
+		# experiments/tool-call-friction/README.md. Upgrade = bump the pin.
+		pnpm_ins "github:xyzshantaram/dsh-better-edit#873b9fd53e71a8bbe587297944dbf4542ce7d64a"
 
 		pnpm_ins "$HERE/plugins/session-archive"
 		pnpm_ins "$HERE/plugins/subscriptions"
