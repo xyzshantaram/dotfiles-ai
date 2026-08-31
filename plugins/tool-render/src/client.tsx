@@ -661,8 +661,9 @@ function BashRow(props) {
   var setExpanded = expandedState[1];
   var block = props.block;
   var done = doneOf(block);
-  var args = parseArgs(argsRawOf(block));
-  var command = args !== null ? pickString(args, ["command", "description"]) : undefined;
+  var argsObj = parseArgs(argsRawOf(block));
+  var command = argsObj !== null ? pickString(argsObj, ["command"]) : undefined;
+  var description = argsObj !== null ? pickString(argsObj, ["description"]) : undefined;
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = bashErrorState(rowStateOf(block), output);
@@ -670,7 +671,12 @@ function BashRow(props) {
     state === "error" && errorText !== null && errorText !== ""
       ? firstLineOfError(errorText)
       : undefined;
-  var summary = command !== undefined ? firstLine(command) : "Bash";
+  var summary =
+    description !== undefined && description !== ""
+      ? firstLine(description)
+      : command !== undefined
+        ? firstLine(command)
+        : "Bash";
   var body = null;
   if (command !== undefined || (output !== null && output !== "")) {
     var inner = [];
