@@ -8432,13 +8432,14 @@ function BashRow(props) {
   var setExpanded = expandedState[1];
   var block = props.block;
   var done = doneOf(block);
-  var args = parseArgs(argsRawOf(block));
-  var command = args !== null ? pickString(args, ["command", "description"]) : void 0;
+  var argsObj = parseArgs(argsRawOf(block));
+  var command = argsObj !== null ? pickString(argsObj, ["command"]) : void 0;
+  var description = argsObj !== null ? pickString(argsObj, ["description"]) : void 0;
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = bashErrorState(rowStateOf(block), output);
   var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
-  var summary = command !== void 0 ? firstLine(command) : "Bash";
+  var summary = description !== void 0 && description !== "" ? firstLine(description) : command !== void 0 ? firstLine(command) : "Bash";
   var body = null;
   if (command !== void 0 || output !== null && output !== "") {
     var inner = [];
