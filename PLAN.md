@@ -153,6 +153,33 @@ them before dispatching T5.
 - `zai/glm-5.3-flash` added to the top of the `personal-orchestrator` and
   `subagent` chains. sync-models dry run reports zero chain warnings.
 
+## Ticket: session-archive batch delete + loading states
+
+**Status:** done — implemented, reviewed, fixed, verified (72/72 tests, build, format clean). Uncommitted.
+
+The panel deletes one session per `POST /sessions/archived/delete` call, so
+clearing many archives costs one network roundtrip each. Settled with the user:
+checkboxes on every non-live row, a header select-all checkbox, and a
+"Delete selected (n)" button that sends one batch request.
+
+**Contract**
+
+- New host route `POST /sessions/archived/delete-batch`, body `{ ids: string[] }`,
+  same 16 KiB cap. Answer `{ ok: true, results: [{ id, ok, error? }] }` with one
+  entry per requested id; per-item failures never abort the batch.
+- Refactor the single-delete route so the per-id logic (live check, archived
+  check, locate, path-mismatch guard, rm) lives in one helper both routes use.
+- Client: one batch request for all selected ids, then reload and clear
+  selection. Loading states: existing "Loading…" on first load, a busy state on
+  the batch button while the request runs ("Deleting n…"), and the existing
+  per-row "…" on single deletes.
+
+**Acceptance criteria**
+
+- Batch route covered by a vitest module (validation, per-id results, live and
+  non-archived ids reported as failures without aborting the rest). `pnpm test`
+  passes; `pnpm run build` and `pnpm run format:check` pass.
+
 ## User preferences and special rules
 
 - Never commit without explicit approval.
