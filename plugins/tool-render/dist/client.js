@@ -1627,7 +1627,7 @@ function escapeHtml(s) {
 }
 
 // css-text:/home/sid/repos/dotfiles-ai/plugins/tool-render/src/client.module.css
-var client_default = '.tool-render-row {\n  align-items: center;\n  min-width: 0;\n  height: 1.5rem;\n  display: flex;\n  position: relative;\n  overflow: hidden;\n}\n.tool-render-row[data-expandable] {\n  cursor: pointer;\n}\n.tool-render-leading {\n  width: 1rem;\n  height: 1rem;\n  color: var(--dsw-alias-label-tertiary);\n  flex: none;\n  justify-content: center;\n  align-items: center;\n  margin-right: 0.375rem;\n  display: inline-flex;\n}\n.tool-render-chevron {\n  color: var(--dsw-alias-label-secondary);\n}\n.tool-render-title {\n  color: var(--dsw-alias-label-secondary);\n  flex: none;\n  font-size: 0.875rem;\n  line-height: 1.5rem;\n}\n.tool-render-sep {\n  background: var(--dsw-alias-label-caption);\n  border-radius: 0.0625rem;\n  flex: none;\n  width: 0.125rem;\n  height: 0.125rem;\n  margin: 0 0.5rem;\n}\n.tool-render-summary {\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  min-width: 0;\n  color: var(--dsw-alias-label-tertiary);\n  flex: auto;\n  font-size: 0.875rem;\n  line-height: 1.5rem;\n  overflow: hidden;\n}\n.tool-render-summary[tool-render-error] {\n  color: var(--dsw-alias-state-error-primary);\n  font-weight: 500;\n}\n.tool-render-path {\n  color: var(--dsw-alias-label-tertiary);\n  cursor: pointer;\n  min-width: 0;\n  max-width: 100%;\n  display: inline-block;\n  vertical-align: bottom;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 0.875rem;\n  line-height: 1.5rem;\n}\n.tool-render-path:hover {\n  color: var(--dsw-alias-label-primary);\n  text-decoration: underline;\n}\n.tool-render-body {\n  flex-direction: column;\n  display: flex;\n}\n.tool-render-io {\n  flex-direction: column;\n  display: flex;\n}\n.tool-render-command {\n  font-family: var(--ds-font-family-code);\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-tertiary);\n  margin: 0.25rem 0 0 0.25rem;\n  padding: 0.125rem 0;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n}\n.tool-render-command code.hljs {\n  background: transparent;\n  padding: 0;\n  font-family: inherit;\n  font-size: inherit;\n  line-height: inherit;\n  white-space: inherit;\n}\n.tool-render-output {\n  box-sizing: border-box;\n  background: var(--dsw-alias-markdown-code-block);\n  font-family: var(--ds-font-family-code);\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-primary);\n  border-radius: 0.625rem;\n  margin: 0.25rem 0 0.25rem 0.25rem;\n  padding: 0.625rem 0.8125rem;\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  max-height: 17.5rem;\n  overflow-y: auto;\n}\n.tool-render-output[tool-render-error] {\n  color: var(--dsw-alias-state-error-primary);\n  border-color: rgba(255, 85, 85, 0.45);\n  background: rgba(255, 85, 85, 0.08);\n  font-weight: 500;\n}\n.tool-render-row[data-state="error"] {\n  background: rgba(255, 85, 85, 0.07);\n  box-shadow: inset 3px 0 0 var(--dsw-alias-state-error-primary);\n  padding-left: 0.5rem;\n}\n.tool-render-row[data-state="error"] .tool-render-leading {\n  transform: scale(1.3);\n}\n.tool-render-row[data-state="error"] .tool-render-title {\n  color: var(--dsw-alias-state-error-primary);\n  font-weight: 500;\n}\n.tool-render-code {\n  box-sizing: border-box;\n  background: var(--dsw-alias-markdown-code-block);\n  font-family: var(--ds-font-family-code);\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-primary);\n  border-radius: 0.75rem;\n  margin: 0.25rem 0 0.25rem 0.25rem;\n  padding: 0.625rem 0.8125rem;\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  max-height: 25rem;\n  overflow-y: auto;\n}\n.tool-render-inspect {\n  border: 1px solid var(--dsw-alias-border-l2);\n  background: var(--dsw-alias-bg-base);\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  opacity: 0;\n  border-radius: 0.4375rem;\n  align-self: flex-start;\n  align-items: center;\n  gap: 0.25rem;\n  margin: 0.25rem 0 0.125rem 0.25rem;\n  padding: 0.125rem 0.375rem;\n  font-size: 0.6875rem;\n  line-height: 1rem;\n  transition: opacity 0.1s;\n  display: inline-flex;\n}\n.tool-render-card:hover .tool-render-inspect,\n.tool-render-inspect:focus-visible {\n  opacity: 1;\n}\n.tool-render-inspect:hover {\n  background: var(--dsw-alias-interactive-bg-hover-solid);\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-diff-fallback {\n  box-sizing: border-box;\n  background: var(--dsw-alias-markdown-code-block);\n  font-family: var(--ds-font-family-code);\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-primary);\n  border-radius: 0.75rem;\n  margin: 0.25rem 0 0.25rem 0.25rem;\n  padding: 0.625rem 0.8125rem;\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  max-height: 25rem;\n  overflow-y: auto;\n}\n.tool-render-fallback-note {\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  margin-bottom: 0.375rem;\n}\n.tool-render-write {\n  flex-direction: column;\n  display: flex;\n}\n.tool-render-write-diff {\n  box-sizing: border-box;\n  background: var(--dsw-alias-markdown-code-block);\n  font-family: var(--ds-font-family-code);\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-primary);\n  border-radius: 0.75rem;\n  margin: 0.25rem 0 0.25rem 0.25rem;\n  padding: 0.625rem 0.8125rem;\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  max-height: 25rem;\n  overflow-y: auto;\n}\n.tool-render-line-same {\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-diff-row.tool-render-line-del,\n.tool-render-diff-cell.tool-render-line-del {\n  background: rgba(255, 166, 87, 0.16);\n}\n.tool-render-diff-row.tool-render-line-add,\n.tool-render-diff-cell.tool-render-line-add {\n  background: rgba(125, 180, 255, 0.16);\n}\n.tool-render-diff-marker {\n  flex: none;\n  width: 2ch;\n  text-align: center;\n  align-self: flex-start;\n  user-select: none;\n  color: var(--dsw-alias-label-tertiary);\n}\n.tool-render-diff-marker-del {\n  color: #ffb86c;\n}\n.tool-render-diff-marker-add {\n  color: #7db4ff;\n}\n.tool-render-write-note {\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  margin-bottom: 0.375rem;\n}\n.tool-render-code-row,\n.tool-render-diff-row {\n  display: flex;\n  align-items: flex-start;\n  min-width: 0;\n}\n.tool-render-diff-pair {\n  display: flex;\n  align-items: stretch;\n  min-width: 0;\n}\n.tool-render-diff-cell {\n  flex: 1 1 0;\n  min-width: 0;\n  display: flex;\n  align-items: flex-start;\n}\n.tool-render-diff-cell + .tool-render-diff-cell {\n  border-left: 0.0625rem solid var(--dsw-alias-border-l2);\n}\n.tool-render-gutter {\n  flex: none;\n  align-self: flex-start;\n  padding-right: 0.75rem;\n  text-align: right;\n  color: var(--dsw-alias-label-tertiary);\n  user-select: none;\n  font-family: var(--ds-font-family-code);\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n}\n.tool-render-line-cell {\n  flex: auto;\n  min-width: 0;\n  display: block;\n  font-family: var(--ds-font-family-code);\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  white-space: pre-wrap;\n  word-break: break-word;\n}\n.tool-render-line-cell.hljs {\n  background: transparent;\n  padding: 0;\n  font-family: inherit;\n  font-size: inherit;\n  line-height: inherit;\n  white-space: inherit;\n}\n.tool-render-diff-path {\n  color: var(--dsw-alias-label-secondary);\n  font-family: var(--ds-font-family-code);\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  border-bottom: 0.0625rem solid var(--dsw-alias-border-l2);\n  padding-bottom: 0.25rem;\n  margin-bottom: 0.375rem;\n}\n.tool-render-diff-sep {\n  display: flex;\n  align-items: center;\n  gap: 0.625rem;\n  color: var(--dsw-alias-label-caption);\n  font-family: var(--ds-font-family-code);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  margin: 0.5rem 0;\n}\n.tool-render-diff-sep::before,\n.tool-render-diff-sep::after {\n  content: "";\n  flex: 1;\n  height: 0.0625rem;\n  background: var(--dsw-alias-border-l2);\n}\n.tool-render-card {\n  box-sizing: border-box;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.75rem;\n  background: var(--dsw-alias-bg-layer-1);\n  padding: 0.3125rem 0.5rem;\n}\n.tool-render-card:hover {\n  border-color: var(--dsw-alias-border-l3);\n}\n.tool-render-title {\n  font-weight: 500;\n}\n.tool-render-summary,\n.tool-render-path {\n  font-size: 0.8125rem;\n}\n.tool-render-output,\n.tool-render-code,\n.tool-render-write-diff,\n.tool-render-diff-fallback {\n  border: 1px solid var(--dsw-alias-border-l1);\n}\n.tool-render-row:focus-visible {\n  outline: 2px solid var(--dsw-alias-state-business-primary);\n  outline-offset: -0.125rem;\n}\n';
+var client_default = '.tool-render-row {\n  align-items: center;\n  min-width: 0;\n  height: 1.5rem;\n  display: flex;\n  position: relative;\n  overflow: hidden;\n}\n.tool-render-row[data-expandable] {\n  cursor: pointer;\n}\n.tool-render-leading {\n  width: 1rem;\n  height: 1rem;\n  color: var(--dsw-alias-label-tertiary);\n  flex: none;\n  justify-content: center;\n  align-items: center;\n  margin-right: 0.375rem;\n  display: inline-flex;\n}\n.tool-render-chevron {\n  color: var(--dsw-alias-label-secondary);\n}\n.tool-render-title {\n  color: var(--dsw-alias-label-secondary);\n  flex: none;\n  font-size: 0.875rem;\n  line-height: 1.5rem;\n}\n.tool-render-sep {\n  background: var(--dsw-alias-label-caption);\n  border-radius: 0.0625rem;\n  flex: none;\n  width: 0.125rem;\n  height: 0.125rem;\n  margin: 0 0.5rem;\n}\n.tool-render-summary {\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  min-width: 0;\n  color: var(--dsw-alias-label-tertiary);\n  flex: auto;\n  font-size: 0.875rem;\n  line-height: 1.5rem;\n  overflow: hidden;\n}\n.tool-render-summary[tool-render-error] {\n  color: var(--dsw-alias-state-error-primary);\n  font-weight: 500;\n}\n.tool-render-path {\n  color: var(--dsw-alias-label-tertiary);\n  cursor: pointer;\n  min-width: 0;\n  max-width: 100%;\n  display: inline-block;\n  vertical-align: bottom;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 0.875rem;\n  line-height: 1.5rem;\n}\n.tool-render-path:hover {\n  color: var(--dsw-alias-label-primary);\n  text-decoration: underline;\n}\n.tool-render-body {\n  flex-direction: column;\n  display: flex;\n}\n.tool-render-io {\n  flex-direction: column;\n  display: flex;\n}\n.tool-render-command {\n  font-family: var(--ds-font-family-code);\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-tertiary);\n  margin: 0.25rem 0 0 0.25rem;\n  padding: 0.125rem 0;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n}\n.tool-render-command code.hljs {\n  background: transparent;\n  padding: 0;\n  font-family: inherit;\n  font-size: inherit;\n  line-height: inherit;\n  white-space: inherit;\n}\n.tool-render-output {\n  box-sizing: border-box;\n  background: var(--dsw-alias-markdown-code-block);\n  font-family: var(--ds-font-family-code);\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-primary);\n  border-radius: 0.625rem;\n  margin: 0.25rem 0 0.25rem 0.25rem;\n  padding: 0.625rem 0.8125rem;\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  max-height: 17.5rem;\n  overflow-y: auto;\n}\n.tool-render-output[tool-render-error] {\n  color: var(--dsw-alias-state-error-primary);\n  border-color: rgba(255, 85, 85, 0.45);\n  background: rgba(255, 85, 85, 0.08);\n  font-weight: 500;\n}\n.tool-render-row[data-state="error"] {\n  background: rgba(255, 85, 85, 0.07);\n  box-shadow: inset 3px 0 0 var(--dsw-alias-state-error-primary);\n  padding-left: 0.5rem;\n}\n.tool-render-row[data-state="error"] .tool-render-leading {\n  transform: scale(1.3);\n}\n.tool-render-row[data-state="error"] .tool-render-title {\n  color: var(--dsw-alias-state-error-primary);\n  font-weight: 500;\n}\n.tool-render-code {\n  box-sizing: border-box;\n  background: var(--dsw-alias-markdown-code-block);\n  font-family: var(--ds-font-family-code);\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-primary);\n  border-radius: 0.75rem;\n  margin: 0.25rem 0 0.25rem 0.25rem;\n  padding: 0.625rem 0.8125rem;\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  max-height: 25rem;\n  overflow-y: auto;\n}\n.tool-render-inspect {\n  border: 1px solid var(--dsw-alias-border-l2);\n  background: var(--dsw-alias-bg-base);\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  opacity: 0;\n  border-radius: 0.4375rem;\n  align-self: flex-start;\n  align-items: center;\n  gap: 0.25rem;\n  margin: 0.25rem 0 0.125rem 0.25rem;\n  padding: 0.125rem 0.375rem;\n  font-size: 0.6875rem;\n  line-height: 1rem;\n  transition: opacity 0.1s;\n  display: inline-flex;\n}\n.tool-render-card:hover .tool-render-inspect,\n.tool-render-inspect:focus-visible {\n  opacity: 1;\n}\n.tool-render-inspect:hover {\n  background: var(--dsw-alias-interactive-bg-hover-solid);\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-diff-fallback {\n  box-sizing: border-box;\n  background: var(--dsw-alias-markdown-code-block);\n  font-family: var(--ds-font-family-code);\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-primary);\n  border-radius: 0.75rem;\n  margin: 0.25rem 0 0.25rem 0.25rem;\n  padding: 0.625rem 0.8125rem;\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  max-height: 25rem;\n  overflow-y: auto;\n}\n.tool-render-fallback-note {\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  margin-bottom: 0.375rem;\n}\n.tool-render-write {\n  flex-direction: column;\n  display: flex;\n}\n.tool-render-write-diff {\n  box-sizing: border-box;\n  background: var(--dsw-alias-markdown-code-block);\n  font-family: var(--ds-font-family-code);\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-primary);\n  border-radius: 0.75rem;\n  margin: 0.25rem 0 0.25rem 0.25rem;\n  padding: 0.625rem 0.8125rem;\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  max-height: 25rem;\n  overflow-y: auto;\n}\n.tool-render-line-same {\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-diff-row.tool-render-line-del,\n.tool-render-diff-cell.tool-render-line-del {\n  background: rgba(255, 166, 87, 0.16);\n}\n.tool-render-diff-row.tool-render-line-add,\n.tool-render-diff-cell.tool-render-line-add {\n  background: rgba(125, 180, 255, 0.16);\n}\n.tool-render-diff-marker {\n  flex: none;\n  width: 2ch;\n  text-align: center;\n  align-self: flex-start;\n  user-select: none;\n  color: var(--dsw-alias-label-tertiary);\n}\n.tool-render-diff-marker-del {\n  color: #ffb86c;\n}\n.tool-render-diff-marker-add {\n  color: #7db4ff;\n}\n.tool-render-write-note {\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  margin-bottom: 0.375rem;\n}\n.tool-render-code-row,\n.tool-render-diff-row {\n  display: flex;\n  align-items: flex-start;\n  min-width: 0;\n}\n.tool-render-diff-pair {\n  display: flex;\n  align-items: stretch;\n  min-width: 0;\n}\n.tool-render-diff-cell {\n  flex: 1 1 0;\n  min-width: 0;\n  display: flex;\n  align-items: flex-start;\n}\n.tool-render-diff-cell + .tool-render-diff-cell {\n  border-left: 0.0625rem solid var(--dsw-alias-border-l2);\n}\n.tool-render-gutter {\n  flex: none;\n  align-self: flex-start;\n  padding-right: 0.75rem;\n  text-align: right;\n  color: var(--dsw-alias-label-tertiary);\n  user-select: none;\n  font-family: var(--ds-font-family-code);\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n}\n.tool-render-line-cell {\n  flex: auto;\n  min-width: 0;\n  display: block;\n  font-family: var(--ds-font-family-code);\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  white-space: pre-wrap;\n  word-break: break-word;\n}\n.tool-render-line-cell.hljs {\n  background: transparent;\n  padding: 0;\n  font-family: inherit;\n  font-size: inherit;\n  line-height: inherit;\n  white-space: inherit;\n}\n.tool-render-diff-path {\n  color: var(--dsw-alias-label-secondary);\n  font-family: var(--ds-font-family-code);\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  border-bottom: 0.0625rem solid var(--dsw-alias-border-l2);\n  padding-bottom: 0.25rem;\n  margin-bottom: 0.375rem;\n}\n.tool-render-diff-sep {\n  display: flex;\n  align-items: center;\n  gap: 0.625rem;\n  color: var(--dsw-alias-label-caption);\n  font-family: var(--ds-font-family-code);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  margin: 0.5rem 0;\n}\n.tool-render-diff-sep::before,\n.tool-render-diff-sep::after {\n  content: "";\n  flex: 1;\n  height: 0.0625rem;\n  background: var(--dsw-alias-border-l2);\n}\n.tool-render-card {\n  box-sizing: border-box;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.75rem;\n  background: var(--dsw-alias-bg-layer-1);\n  padding: 0.3125rem 0.5rem;\n}\n.tool-render-card:hover {\n  border-color: var(--dsw-alias-border-l3);\n}\n.tool-render-title {\n  font-weight: 500;\n}\n.tool-render-summary,\n.tool-render-path {\n  font-size: 0.8125rem;\n}\n.tool-render-output,\n.tool-render-code,\n.tool-render-write-diff,\n.tool-render-diff-fallback {\n  border: 1px solid var(--dsw-alias-border-l1);\n}\n.tool-render-row:focus-visible {\n  outline: 2px solid var(--dsw-alias-state-business-primary);\n  outline-offset: -0.125rem;\n}\n\n/* todo_write and ask_user_question shared body layout. */\n.tool-render-plan {\n  flex-direction: column;\n  display: flex;\n}\n.tool-render-plan-item {\n  align-items: baseline;\n  display: flex;\n  gap: 0.375rem;\n  padding: 0.125rem 0 0.125rem 0.25rem;\n}\n/* Status checkbox: empty for pending, dash bar for in progress, green\n   check for done. Drawn in CSS so the glyphs never depend on fonts. */\n.tool-render-checkbox {\n  align-self: center;\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 0.1875rem;\n  flex: none;\n  height: 0.875rem;\n  position: relative;\n  width: 0.875rem;\n}\n.tool-render-plan-item[data-done] .tool-render-checkbox {\n  border-color: var(--dsw-alias-state-success-primary);\n}\n.tool-render-plan-item[data-done] .tool-render-checkbox::after {\n  color: var(--dsw-alias-state-success-primary);\n  content: "\u2713";\n  display: block;\n  font-size: 0.6875rem;\n  line-height: 0.8125rem;\n  text-align: center;\n}\n.tool-render-plan-item[data-active] .tool-render-checkbox::after {\n  background: var(--dsw-alias-label-tertiary);\n  content: "";\n  height: 0.09375rem;\n  left: 0.1875rem;\n  position: absolute;\n  right: 0.1875rem;\n  top: 50%;\n}\n.tool-render-plan-content {\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  overflow-wrap: anywhere;\n}\n.tool-render-plan-item[data-done] .tool-render-plan-content {\n  color: var(--dsw-alias-label-tertiary);\n}\n.tool-render-plan-item[data-active] .tool-render-plan-content {\n  color: var(--dsw-alias-label-primary);\n  font-weight: 500;\n}\n.tool-render-plan-item[data-pending] .tool-render-plan-content {\n  color: var(--dsw-alias-label-secondary);\n}\n\n/* ask_user_question questions, options, and answers. */\n.tool-render-ask {\n  flex-direction: column;\n  display: flex;\n}\n.tool-render-question {\n  flex-direction: column;\n  display: flex;\n  padding: 0.125rem 0;\n}\n.tool-render-question + .tool-render-question {\n  border-top: 1px solid var(--dsw-alias-border-l1);\n  margin-top: 0.25rem;\n  padding-top: 0.375rem;\n}\n.tool-render-question-prompt {\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  overflow-wrap: anywhere;\n  padding: 0 0 0.125rem 0.25rem;\n}\n.tool-render-option {\n  align-items: baseline;\n  display: flex;\n  gap: 0.375rem;\n  padding: 0.125rem 0 0.125rem 0.25rem;\n}\n.tool-render-option-marker {\n  flex: none;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  width: 1rem;\n}\n.tool-render-option-label {\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  overflow-wrap: anywhere;\n}\n.tool-render-option[data-selected] .tool-render-option-label {\n  color: var(--dsw-alias-label-primary);\n  font-weight: 700;\n}\n.tool-render-answer-note {\n  color: var(--dsw-alias-label-caption);\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  font-style: italic;\n  padding: 0.125rem 0 0 1.625rem;\n  overflow-wrap: anywhere;\n}\n.tool-render-ask[tool-render-error] .tool-render-question-prompt {\n  color: var(--dsw-alias-label-tertiary);\n}\n\n/* subagent row: capped, scrollable rendered prompt. */\n.tool-render-subagent-prompt {\n  border: 1px solid var(--dsw-alias-border-l1);\n  border-radius: 0.375rem;\n  margin: 0.25rem 0 0.125rem 0.25rem;\n  max-height: 16rem;\n  overflow-y: auto;\n  padding: 0.5rem 0.625rem;\n}\n.tool-render-subagent-prompt :where(h1, h2, h3, h4, h5, h6) {\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  margin: 0.5rem 0 0.25rem;\n}\n.tool-render-subagent-prompt :where(h1, h2, h3, h4, h5, h6):first-child {\n  margin-top: 0;\n}\n.tool-render-subagent-prompt :where(p, ul, ol, pre, blockquote, table) {\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  margin: 0.25rem 0;\n}\n.tool-render-subagent-prompt :where(ul, ol) {\n  padding-left: 1.125rem;\n}\n.tool-render-subagent-prompt :where(pre) {\n  background: var(--dsw-alias-bg-base);\n  border-radius: 0.25rem;\n  overflow-x: auto;\n  padding: 0.375rem 0.5rem;\n}\n.tool-render-subagent-prompt :where(code) {\n  font-family: var(--ds-font-family-code);\n}\n.tool-render-subagent-prompt :where(code):not(:where(pre code)) {\n  background: var(--dsw-alias-bg-base);\n  border-radius: 0.1875rem;\n  padding: 0 0.1875rem;\n}\n';
 
 // node_modules/.pnpm/highlight.js@11.12.0/node_modules/highlight.js/es/languages/javascript.js
 var IDENT_RE = "[A-Za-z$_][0-9A-Za-z$_]*";
@@ -8059,6 +8059,10 @@ var IconEditOutline162 = primitives.IconEditOutline16;
 var IconApiOutline142 = primitives.IconApiOutline14;
 var IconChevronDownOutline142 = primitives.IconChevronDownOutline14;
 var IconInspectOutline122 = primitives.IconInspectOutline12;
+var IconChecklistOutline142 = primitives.IconChecklistOutline14;
+var IconQuestionOutline142 = primitives.IconQuestionOutline14;
+var IconAgentPresetOutline162 = primitives.IconAgentPresetOutline16;
+var MarkdownText2 = primitives.MarkdownText;
 var PLUGIN_NAME = "tool-render";
 var STYLE_TAG_ID = "tool-render/client.module.css";
 var HLJS_THEME_CSS = [
@@ -9081,6 +9085,260 @@ function WriteRow(props) {
     inspect: props.inspect
   });
 }
+function todoItems(args) {
+  if (args === null || typeof args !== "object" || !Array.isArray(args.todos)) return null;
+  var out = [];
+  for (var i = 0; i < args.todos.length; i++) {
+    var item = args.todos[i];
+    if (item === null || typeof item !== "object") return null;
+    if (typeof item.content !== "string" || item.content === "") return null;
+    var status = item.status === "in_progress" || item.status === "completed" ? item.status : "pending";
+    out.push({ content: item.content, status });
+  }
+  return out;
+}
+function planSummary(todos) {
+  var active = 0;
+  var done = 0;
+  for (var i = 0; i < todos.length; i++) {
+    if (todos[i].status === "in_progress") active++;
+    else if (todos[i].status === "completed") done++;
+  }
+  return { done, total: todos.length, active };
+}
+function planBody(todos) {
+  var children = [];
+  for (var i = 0; i < todos.length; i++) {
+    var todo = todos[i];
+    var attrs = todo.status === "completed" ? { "data-done": true } : todo.status === "in_progress" ? { "data-active": true } : { "data-pending": true };
+    children.push(
+      /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-plan-item", ...attrs }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-checkbox", "aria-hidden": true }), /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-plan-content" }, todo.content))
+    );
+  }
+  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-plan" }, children);
+}
+function TodoRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var block = props.block;
+  var done = doneOf(block);
+  var args = parseArgs(argsRawOf(block));
+  var todos = todoItems(args);
+  var output = done ? resultTextOf(block) : null;
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var counts = todos !== null ? planSummary(todos) : null;
+  var summary;
+  if (counts !== null && (done === false || state !== "error")) {
+    var head = counts.done + "/" + counts.total + " completed";
+    var firstActive = null;
+    for (var i = 0; i < todos.length; i++) {
+      if (todos[i].status === "in_progress") {
+        firstActive = todos[i].content;
+        break;
+      }
+    }
+    summary = firstActive !== null ? head + " \xB7 " + firstActive : head;
+  } else {
+    summary = "Todo list";
+  }
+  var body = null;
+  if (todos !== null && output !== null && output !== "") {
+    body = planBody(todos);
+  }
+  return toolRenderRow({
+    icon: /* @__PURE__ */ import_react.default.createElement(IconChecklistOutline142, { size: 14 }),
+    title: "Todo list",
+    summary,
+    state,
+    expandable: body !== null,
+    expanded,
+    onToggle: function() {
+      setExpanded(!expanded);
+    },
+    body,
+    errorSummary,
+    inspect: props.inspect
+  });
+}
+function askQuestions(args) {
+  if (args === null || typeof args !== "object" || !Array.isArray(args.questions)) return null;
+  var out = [];
+  for (var i = 0; i < args.questions.length; i++) {
+    var q = args.questions[i];
+    if (q === null || typeof q !== "object") return null;
+    if (typeof q.question !== "string" || q.question === "") return null;
+    var options = [];
+    if (q.options !== void 0 && q.options !== null) {
+      if (!Array.isArray(q.options)) return null;
+      for (var j = 0; j < q.options.length; j++) {
+        var option = q.options[j];
+        if (option === null || typeof option !== "object") return null;
+        if (typeof option.label !== "string" || option.label === "") return null;
+        options.push({ label: option.label });
+      }
+    }
+    out.push({
+      id: typeof q.id === "string" ? q.id : null,
+      question: q.question,
+      options
+    });
+  }
+  return out;
+}
+function askAnswers(block) {
+  if (!doneOf(block) || block.isError === true) return null;
+  var parsed = parseArgs(resultTextOf(block) || "");
+  if (parsed === null || typeof parsed !== "object" || !Array.isArray(parsed.answers)) return null;
+  var byId = {};
+  var order = [];
+  for (var i = 0; i < parsed.answers.length; i++) {
+    var answer = parsed.answers[i];
+    if (answer === null || typeof answer !== "object") return null;
+    if (typeof answer.id !== "string") return null;
+    if (byId[answer.id] === void 0) order.push(answer.id);
+    var selected = Array.isArray(answer.selected) ? answer.selected : [];
+    var texts = [];
+    for (var j = 0; j < selected.length; j++) {
+      if (typeof selected[j] === "string" && selected[j] !== "") texts.push(selected[j]);
+    }
+    byId[answer.id] = {
+      selected: texts,
+      custom: typeof answer.custom === "string" ? answer.custom : null
+    };
+  }
+  return { byId, order };
+}
+function askBody(questions, answers) {
+  var children = [];
+  for (var i = 0; i < questions.length; i++) {
+    var q = questions[i];
+    var answer = answers !== null && q.id !== null ? answers.byId[q.id] : void 0;
+    var picked = answer === void 0 ? null : answer.selected;
+    var rows = [];
+    for (var j = 0; j < q.options.length; j++) {
+      var label = q.options[j].label;
+      var isSelected = picked !== null && picked.indexOf(label) !== -1;
+      rows.push(
+        /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-option", "data-selected": isSelected || void 0 }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-option-marker", "aria-hidden": true }, isSelected ? "\u25C9" : "\u25CB"), /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-option-label" }, label))
+      );
+    }
+    if (picked !== null) {
+      for (var j = 0; j < picked.length; j++) {
+        var known = false;
+        for (var k = 0; k < q.options.length; k++) {
+          if (q.options[k].label === picked[j]) {
+            known = true;
+            break;
+          }
+        }
+        if (!known) {
+          rows.push(
+            /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-option", "data-selected": true }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-option-marker", "aria-hidden": true }, "\u25C9"), /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-option-label" }, picked[j]))
+          );
+        }
+      }
+    }
+    var note = null;
+    if (answer !== void 0 && typeof answer.custom === "string" && answer.custom !== "") {
+      note = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-answer-note" }, answer.custom);
+    }
+    children.push(
+      /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-question" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-question-prompt" }, q.question), rows, note)
+    );
+  }
+  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-ask" }, children);
+}
+function AskRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var block = props.block;
+  var done = doneOf(block);
+  var args = parseArgs(argsRawOf(block));
+  var questions = askQuestions(args);
+  var answers = done ? askAnswers(block) : null;
+  var output = done ? resultTextOf(block) : null;
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var summary;
+  if (state === "error") {
+    summary = "Ask user";
+  } else if (!done) {
+    var count = questions !== null ? questions.length : 0;
+    summary = count === 1 ? "waiting for answer" : "waiting for " + count + " answers";
+  } else if (answers !== null) {
+    var answered = 0;
+    for (var i = 0; i < answers.order.length; i++) {
+      var a = answers.byId[answers.order[i]];
+      if (a.selected.length > 0 || a.custom !== null) answered++;
+    }
+    summary = answered + "/" + questions.length + " answered";
+  } else {
+    summary = "Ask user";
+  }
+  var body = null;
+  if (questions !== null && output !== null && output !== "" && state !== "error") {
+    body = askBody(questions, answers);
+  }
+  return toolRenderRow({
+    icon: /* @__PURE__ */ import_react.default.createElement(IconQuestionOutline142, { size: 14 }),
+    title: "Ask user",
+    summary,
+    state,
+    expandable: body !== null,
+    expanded,
+    onToggle: function() {
+      setExpanded(!expanded);
+    },
+    body,
+    errorSummary,
+    inspect: props.inspect
+  });
+}
+function subagentPrompt(args) {
+  if (args === null || typeof args !== "object") return null;
+  if (typeof args.prompt !== "string" || args.prompt === "") return null;
+  return args.prompt;
+}
+function SubagentRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var block = props.block;
+  var done = doneOf(block);
+  var args = parseArgs(argsRawOf(block));
+  var description = args !== null ? pickString(args, ["description"]) : void 0;
+  var prompt = subagentPrompt(args);
+  var output = done ? resultTextOf(block) : null;
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var background = args !== null && args.run_in_background === true;
+  var title = background ? "Parallel sub-agent" : "Sub-agent";
+  var summary = description !== void 0 ? firstLine(relativizeToCwd(description, props.cwd)) : title;
+  var body = null;
+  if (state !== "error" && prompt !== null) {
+    body = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-subagent-prompt" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: prompt }));
+  }
+  return toolRenderRow({
+    icon: /* @__PURE__ */ import_react.default.createElement(IconAgentPresetOutline162, { size: 14 }),
+    title,
+    summary,
+    state,
+    expandable: body !== null,
+    expanded,
+    onToggle: function() {
+      setExpanded(!expanded);
+    },
+    body,
+    errorSummary,
+    inspect: props.inspect
+  });
+}
 var inject = ["slots"];
 var name = PLUGIN_NAME;
 function apply(ctx) {
@@ -9140,6 +9398,30 @@ function apply(ctx) {
         priority: -100
       },
       UndoEditRow
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "todo_write",
+        priority: -100
+      },
+      TodoRow
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "ask_user_question",
+        priority: -100
+      },
+      AskRow
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "subagent",
+        priority: -100
+      },
+      SubagentRow
     );
   });
 }
