@@ -256,7 +256,12 @@ function sessionLabel(agent) {
 function chainForDepth(ctx, depth) {
   const settings = service(ctx, "settings");
   const profile = settings?.get(PROFILE_NS);
-  return chainOf(activeEntry(profile), depth >= 1 ? "subagent" : "orchestrator", profile?.chains, ctx);
+  return chainOf(
+    activeEntry(profile),
+    depth >= 1 ? "subagent" : "orchestrator",
+    profile?.chains,
+    ctx
+  );
 }
 function registerFailover(ctx, alwaysMaxRetries) {
   const state = /* @__PURE__ */ new WeakMap();

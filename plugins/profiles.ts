@@ -315,7 +315,12 @@ function sessionLabel(agent: unknown): string {
 function chainForDepth(ctx: Context, depth: number): Level[] {
   const settings = service<SettingsService>(ctx, "settings");
   const profile = settings?.get(PROFILE_NS) as ProfileSettings | undefined;
-  return chainOf(activeEntry(profile), depth >= 1 ? "subagent" : "orchestrator", profile?.chains, ctx);
+  return chainOf(
+    activeEntry(profile),
+    depth >= 1 ? "subagent" : "orchestrator",
+    profile?.chains,
+    ctx,
+  );
 }
 
 /** Install the two agent waterfalls that provide chain failover. */
