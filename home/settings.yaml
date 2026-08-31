@@ -7,6 +7,87 @@ log-viewer:
   command: "journalctl --user -u dsh-web.service -n 2000"
 llm-pi-ai:
   providers:
+    zai:
+      displayName: Zhipu AI
+      apiKeyEnv: ZAI_API_KEY
+      api: openai-completions
+      baseURL: https://api.z.ai/api/coding/paas/v4
+      models:
+      # sync-models:begin
+      - id: glm-4.5
+        name: GLM 4.5
+        contextWindow: 131072
+        maxTokens: 98304
+        input:
+        - text
+      - id: glm-4.5-air
+        name: GLM 4.5 Air
+        contextWindow: 131000
+        maxTokens: 4096
+        input:
+        - text
+      - id: glm-4.6
+        name: GLM-4.6
+        contextWindow: 200000
+        maxTokens: 128000
+        input:
+        - text
+      - id: glm-4.7
+        name: GLM-4.7
+        contextWindow: 202752
+        maxTokens: 198000
+        input:
+        - text
+      - id: glm-5
+        name: GLM-5
+        contextWindow: 202752
+        maxTokens: 202752
+        input:
+        - text
+      - id: glm-5-turbo
+        name: GLM-5-Turbo
+        contextWindow: 202752
+        maxTokens: 202752
+        input:
+        - text
+      - id: glm-5.1
+        name: GLM-5.1
+        contextWindow: 202752
+        maxTokens: 202752
+        input:
+        - text
+      - id: glm-5.2
+        name: GLM 5.2
+        contextWindow: 1048560
+        maxTokens: 1048560
+        input:
+        - text
+        reasoningEfforts:
+          off:
+          high: high
+          max: max
+      - id: glm-5.3
+        name: GLM 5.3
+        contextWindow: 1048560
+        maxTokens: 1048560
+        input:
+        - text
+        reasoningEfforts:
+          low: low
+          high: high
+          max: max
+      - id: glm-5.3-flash
+        name: GLM-5.3-Flash
+        contextWindow: 1000000
+        maxTokens: 131072
+        input:
+        - text
+        - image
+        reasoningEfforts:
+          low: low
+          high: high
+          max: max
+      # sync-models:end
     command-code:
       displayName: Command Code
       apiKeyEnv: CMD_API_KEY
@@ -757,12 +838,15 @@ profile:
       - meridian/claude-sonnet-5
       - chain:personal-orchestrator
     personal-orchestrator:
-      - command-code/minimax/minimax-m3-free
+      - zai/glm-5.3-flash
       - command-code/z-ai/glm-5.3-flash
-      - command-code/tencent/hy3-paid
+      - command-code/tencent/hy4-preview
       - command-code/deepseek/deepseek-v4-pro
+      - command-code/minimax/minimax-m3-free
+      - opencode/hy3-free
       - deepseek-official/deepseek-v4-flash
     subagent:
+      - zai/glm-5.3-flash
       - command-code/z-ai/glm-5.3-flash
       - command-code/deepseek/deepseek-v4-flash-vision-exp
       - opencode/deepseek-v4-flash-free
@@ -785,4 +869,4 @@ profile:
 
 
 modelSync:
-  lastRun: 2026-08-30T19:38:23.810Z
+  lastRun: 2026-08-31T11:56:39.393Z
