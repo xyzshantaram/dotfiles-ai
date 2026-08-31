@@ -377,6 +377,14 @@
   background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary);
 }
+/* Dropdown group headings invert — black on white — so they never render
+   white-on-white against the dropdown surface in the dark theme. */
+.pf-panel-select optgroup,
+.pf-panel-effort optgroup {
+  color: #000;
+  background: #fff;
+  font-weight: 700;
+}
 .pf-panel-model-row {
   display: flex;
   flex-direction: column;
