@@ -15,22 +15,22 @@
  * SlotCore.register() throws when a second entry declares the same child
  * slot name (`slot "tool.call.toolview" is already declared`, verified by
  * running the shipped SlotCore). So this bundle shadows the per-tool ROWS:
- * it registers the `read`, `bash`, `edit`, `batch_edit`, `write`,
- * `undo_edit`, `undo_last_edit`, `todo_write`, and `ask_user_question`
- * keys of `tool.call.toolview` at
- * priority -100. Keyed slots sort ascending by
+ * it registers the `read`, `bash`, `edit`, `write`, `undo_edit`,
+ * `undo_last_edit`, `todo_write`, and `ask_user_question` keys of
+ * `tool.call.toolview` at priority -100. Keyed slots sort ascending by
  * priority and the lowest live entry renders (dsh-client-ui-slots SlotCore:
  * entries sort by `options.priority ?? 0`; `entriesOfSlot` keeps the first
  * entry per key); a same key at a different priority never throws; there is
- * no origin privilege for shipped entries. `batch_edit` has no shipped row
- * at all, so it previously fell through to the generic JSON card.
+ * no origin privilege for shipped entries. `batch_edit` rows stopped being
+ * rendered here when dsh-better-edit 0.6.0 removed the tool; historical
+ * batch_edit blocks fall through to the generic JSON card.
  * todo_write and ask_user_question shadow shipped rows (dsh-client-ui-tool
  * client.js: todoToolview key "todo_write", askQuestionToolview key
  * "ask_user_question", both priority 0) whose expanded card is the generic
  * IN/OUT JSON dump.
  *
- * The requirements. edit, batch_edit, and write render real before/after
- * diffs. edit and batch_edit use the tool-declared `card: "diff"` views
+ * The requirements. edit and write render real before/after diffs. They use
+ * the tool-declared `card: "diff"` views
  * when present, else a diff reconstructed from the args and the
  * conversation's own read history — the personal dsh-better-edit tools
  * declare no views and their args carry only 3-char anchors. write
@@ -712,7 +712,7 @@ function BashRow(props) {
   });
 }
 
-// ---- edit/batch_edit rows (R1): a real before/after diff block. ----
+// ---- edit row (R1): a real before/after diff block. ----
 // Prefer the tool-declared `card: "diff"` views (callView while running,
 // resultView once settled). dsh-better-edit declares no views and its args
 // carry only 3-char anchors, so for those we reconstruct the before text
@@ -906,17 +906,31 @@ function diffLines(oldText, newText) {
   }
   return ops;
 }
-/** Arg-shaped edit requests across the edit and batch_edit contracts. */
+/**
+ * Arg-shaped edit requests across the edit contracts.
+ *
+ * dsh-better-edit 0.6.0 sends {path: string|null, edits: [[remove_from,
+ * remove_to, replacement_text], ...]} — tuple edits with a top-level path,
+ * where file_path is accepted as a path alias. The path may be null (infer
+ * from anchors); such requests cannot be matched against read history, so
+ * they yield no request and the row falls back to the generic body.
+ */
 function collectEditRequests(args) {
   var out = [];
   if (typeof args !== "object" || args === null) return out;
-  if (typeof args.file_path === "string" && args.file_path !== "") {
+  // Built-in edit: file_path + old/new strings.
+  if (
+    typeof args.file_path === "string" &&
+    args.file_path !== "" &&
+    typeof args.old_string === "string"
+  ) {
     out.push({
       path: args.file_path,
-      oldText: typeof args.old_string === "string" ? args.old_string : null,
+      oldText: args.old_string,
       newText: typeof args.new_string === "string" ? args.new_string : "",
     });
   }
+  // dsh-better-edit < 0.6 single-edit shape: path + flat anchors.
   if (typeof args.path === "string" && args.path !== "" && typeof args.remove_from === "string") {
     out.push({
       path: args.path,
@@ -926,27 +940,31 @@ function collectEditRequests(args) {
       removeTo: typeof args.remove_to === "string" ? args.remove_to : undefined,
     });
   }
-  if (Array.isArray(args.edits)) {
+  // dsh-better-edit >= 0.6: tuple edits against one top-level path.
+  var editPath =
+    typeof args.path === "string" && args.path !== ""
+      ? args.path
+      : typeof args.file_path === "string" && args.file_path !== ""
+        ? args.file_path
+        : undefined;
+  if (editPath !== undefined && Array.isArray(args.edits)) {
     for (var i = 0; i < args.edits.length; i++) {
       var item = args.edits[i];
-      if (typeof item !== "object" || item === null) continue;
-      var itemPath = typeof item.path === "string" && item.path !== "" ? item.path : undefined;
-      if (itemPath === undefined) continue;
-      if (typeof item.remove_from === "string") {
-        out.push({
-          path: itemPath,
-          oldText: null,
-          newText: typeof item.replacement_text === "string" ? item.replacement_text : "",
-          removeFrom: item.remove_from,
-          removeTo: typeof item.remove_to === "string" ? item.remove_to : undefined,
-        });
-      } else if (typeof item.old_string === "string") {
-        out.push({
-          path: itemPath,
-          oldText: item.old_string,
-          newText: typeof item.new_string === "string" ? item.new_string : "",
-        });
-      }
+      if (
+        !Array.isArray(item) ||
+        item.length !== 3 ||
+        typeof item[0] !== "string" ||
+        typeof item[1] !== "string" ||
+        typeof item[2] !== "string"
+      )
+        continue;
+      out.push({
+        path: editPath,
+        oldText: null,
+        newText: item[2],
+        removeFrom: item[0],
+        removeTo: item[1] === "" ? undefined : item[1],
+      });
     }
   }
   return out;
@@ -1160,7 +1178,6 @@ function makeEditRow(toolTitle) {
 }
 
 var EditRow = makeEditRow("Edit");
-var BatchEditRow = makeEditRow("Batch edit");
 var UndoEditRow = makeEditRow("Undo edit");
 
 // ---- Line-number gutter. ----
@@ -1220,7 +1237,7 @@ function diffLineRow(type, text, number, width, language) {
   );
 }
 
-// Diff body for edit and batch_edit rows: a side-by-side before/after
+// Diff body for edit rows: a side-by-side before/after
 // layout, one row per LCS-aligned pair of old/new lines. Changed lines
 // carry -/+ markers with orange/blue tints; unchanged context fills both
 // columns. The container reuses the write-diff block styling.
@@ -1613,7 +1630,11 @@ function askQuestions(args) {
         var option = q.options[j];
         if (option === null || typeof option !== "object") return null;
         if (typeof option.label !== "string" || option.label === "") return null;
-        options.push({ label: option.label });
+        var description =
+          typeof option.description === "string" && option.description !== ""
+            ? option.description
+            : null;
+        options.push({ label: option.label, description: description });
       }
     }
     out.push({
@@ -1657,14 +1678,20 @@ function askBody(questions, answers) {
     var picked = answer === undefined ? null : answer.selected;
     var rows = [];
     for (var j = 0; j < q.options.length; j++) {
-      var label = q.options[j].label;
+      var option = q.options[j];
+      var label = option.label;
       var isSelected = picked !== null && picked.indexOf(label) !== -1;
       rows.push(
         <div className="tool-render-option" data-selected={isSelected || undefined}>
           <span className="tool-render-option-marker" aria-hidden={true}>
             {isSelected ? "◉" : "○"}
           </span>
-          <span className="tool-render-option-label">{label}</span>
+          <span className="tool-render-option-text">
+            <span className="tool-render-option-label">{label}</span>
+            {option.description !== null && option.description !== undefined ? (
+              <span className="tool-render-option-description">{option.description}</span>
+            ) : null}
+          </span>
         </div>,
       );
     }
@@ -1840,14 +1867,6 @@ function apply(ctx) {
         priority: -100,
       },
       EditRow,
-    );
-    yield ctx.slots.register(
-      {
-        name: "tool.call.toolview",
-        key: "batch_edit",
-        priority: -100,
-      },
-      BatchEditRow,
     );
     yield ctx.slots.register(
       {

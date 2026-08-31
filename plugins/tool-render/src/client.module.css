@@ -432,10 +432,22 @@
   line-height: 1.25rem;
   width: 1rem;
 }
+.tool-render-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.0625rem;
+  min-width: 0;
+}
 .tool-render-option-label {
   color: var(--dsw-alias-label-tertiary);
   font-size: 0.8125rem;
   line-height: 1.25rem;
+  overflow-wrap: anywhere;
+}
+.tool-render-option-description {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
   overflow-wrap: anywhere;
 }
 .tool-render-option[data-selected] .tool-render-option-label {
