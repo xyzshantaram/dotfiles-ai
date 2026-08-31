@@ -1,12 +1,42 @@
 #!/usr/bin/env bash
 # dsh personal bundle installer — idempotent.
-#
 # Usage:  clone the dotfiles-ai repo, cd into it, run ./sync.sh
 #   ./sync.sh                          # installs into $DSH_HOME (default ~/.dsh)
+#   ./sync.sh --verbose                # show the full output of every muted command
 #   DSH_HOME=/path/to/home ./sync.sh
 #   AIDOS_PLUGIN_SPEC=github:you/aidos ./sync.sh   # override the aidos git spec
 #                                                  # always use the full git commit sha
 #
+set -euo pipefail
+
+# 0 = default: muted steps print only warnings, errors, and summaries.
+# 1 = --verbose: muted commands run with full output, nothing filtered.
+VERBOSE=0
+for arg in "$@"; do
+	case "$arg" in
+	--verbose | -v) VERBOSE=1 ;;
+	*)
+		echo "unknown option: $arg" >&2
+		echo "usage: sync.sh [--verbose|-v]" >&2
+		exit 2
+		;;
+	esac
+done
+
+# Diagnostic-output sink for commands whose stderr is muted. --verbose points
+# it at stderr so the underlying failures are visible.
+ERR_OUT="/dev/null"
+if [ "$VERBOSE" -eq 1 ]; then
+	ERR_OUT="/dev/stderr"
+fi
+
+# Git-hosted specs whose build scripts pnpm must be allowed to run. pnpm 10+
+# blocks lifecycle scripts (prepare/postinstall) unless the exact resolved
+# tarball URL is listed under allowBuilds in the profile's pnpm-workspace.yaml.
+# Both entries build on install: aidos runs a postinstall, dsh-better-edit
+# compiles lib/ via prepare and ships no lib in the repo. step_allow_builds
+# reconstructs the codeload URL from each spec, so bumping a pin here is all
+# an upgrade needs.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -14,21 +44,43 @@ REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
 AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#6721bb90734bb9c1cf88d4fa0d506959346cb182}"
 
+# Git-hosted specs whose build scripts pnpm must be allowed to run. pnpm 10+
+# blocks lifecycle scripts (prepare/postinstall) unless the exact resolved
+# tarball URL is listed under allowBuilds in the profile's pnpm-workspace.yaml.
+# Both entries build on install: aidos runs a postinstall, dsh-better-edit
+# compiles lib/ via prepare and ships no lib in the repo. step_allow_builds
+# reconstructs the codeload URL from each spec, so bumping a pin here is all
+# an upgrade needs.
+BUILD_SPECS=(
+	"$AIDOS_PLUGIN_SPEC"
+	"github:xyzshantaram/dsh-better-edit#873b9fd53e71a8bbe587297944dbf4542ce7d64a"
+)
+
 step_install_deps() {
 	(cd "$REPO" && pnpm install)
 }
 
 step_build_plugins() {
 	local out rc
-	out="$(cd "$HERE" && node build.mjs 2>&1)"
-	rc=$?
+	# rc is captured the safe way: a failing command substitution under
+	# set -e aborts the script at the assignment before an rc=$? line runs.
+	if out="$(cd "$HERE" && node build.mjs 2>&1)"; then
+		rc=0
+	else
+		rc=$?
+	fi
 	if [ "$rc" -ne 0 ]; then
 		printf '%s\n' "$out"
 		return "$rc"
 	fi
 	# esbuild prints, per bundle: a blank line, a "⚡ Done in Nms" line, and a
-	# "<path> <size>" line. Keep only the filename+size lines.
-	printf '%s\n' "$out" | rg 'plugins/\S+\s+\d+(\.\d+)?k?b\s*$' || true
+	# "<path> <size>" line. Keep only the filename+size lines. --verbose
+	# prints everything instead.
+	if [ "$VERBOSE" -eq 1 ]; then
+		printf '%s\n' "$out"
+	else
+		printf '%s\n' "$out" | rg 'plugins/\S+\s+\d+(\.\d+)?k?b\s*$' || true
+	fi
 }
 
 step_sync_skills() {
@@ -186,15 +238,26 @@ step_install_plugins() {
 			name="$(printf '%s' "$spec" | sed -E 's#.*github.com/[^/]+/([^/#]+)/archive.*#\1#; s/#[^/]*$//; s#.*[/:]##')"
 			name="${name%%@*}"
 			echo "  installing ${name:-$spec}"
-			local out rc
-			out="$(dsh plugin --profile web add "$spec" 2>&1)"
+		local out rc
+		# rc is captured the safe way: a failing command substitution under
+		# set -e aborts the script at the assignment before an rc=$? line
+		# runs. The old form turned every install failure into a silent
+		# script exit with the real error still inside $out, never printed.
+		if out="$(dsh plugin --profile web add "$spec" 2>&1)"; then
+			rc=0
+		else
 			rc=$?
-			if [ "$rc" -ne 0 ]; then printf '%s\n' "$out"; return "$rc"; fi
-			# pnpm's peer-dependency notice fires on nearly every install in
-			# this bundle (each plugin declares its own dsh peer range) and
-			# carries no actionable info here; drop only that one line, keep
-			# every other warn/error.
+		fi
+		if [ "$rc" -ne 0 ]; then printf '%s\n' "$out"; return "$rc"; fi
+		# pnpm's peer-dependency notice fires on nearly every install in
+		# this bundle (each plugin declares its own dsh peer range) and
+		# carries no actionable info here; drop only that one line, keep
+		# every other warn/error. --verbose prints everything instead.
+		if [ "$VERBOSE" -eq 1 ]; then
+			printf '%s\n' "$out"
+		else
 			printf '%s\n' "$out" | rg -i 'warn|error' | rg -v -i 'peer dependenc' || true
+		fi
 		}
 		pnpm_ins "github:sunshaobei/dsh-input-history#9b5b7a494a5c"
 		pnpm_ins "github:omdsh-dev/dsh-tool-calculator#05090e946113721c5295518cc20e74f427022c55"
@@ -287,7 +350,7 @@ step_report_extra_plugins() {
 		"dsh-better-edit"
 	)
 	local installed extra=0 name
-	installed="$(dsh plugin --profile web list --depth 0 --json 2>/dev/null | python3 -c '
+	installed="$(dsh plugin --profile web list --depth 0 --json 2>"$ERR_OUT" | python3 -c '
 import json, sys
 try:
     data = json.load(sys.stdin)
@@ -321,33 +384,34 @@ for key in (proj.get("dependencies") or {}):
 	return 0
 }
 
-step_allow_aidos_build() {
+step_allow_builds() {
 	# pnpm refuses to run a package's install/build scripts unless its exact
 	# resolved tarball URL is listed under `allowBuilds` in the web profile's
-	# pnpm-workspace.yaml. aidos needs its postinstall, so add the entry for the
-	# CURRENT pin (AIDOS_PLUGIN_SPEC) idempotently. The pin changes per bump, so
-	# we reconstruct the codeload tarball URL the same way pnpm does from the
-	# github spec (owner/repo#ref -> tarball, name = repo basename).
+	# pnpm-workspace.yaml. Every spec in BUILD_SPECS needs that (see the list
+	# comment), so add an entry for each, idempotently. The pin changes per
+	# bump, so we reconstruct the codeload tarball URL the same way pnpm does
+	# from the github spec (owner/repo#ref -> tarball, name = repo basename).
 	local ws="$DSH_HOME/profiles/web/pnpm-workspace.yaml"
-	local spec="${AIDOS_PLUGIN_SPEC}"
-	local path ref name tarball key
-	path="${spec#github:}"
-	ref="${spec##*#}"
-	path="${path%#*}"
-	name="$(basename "$path")"
-	tarball="https://codeload.github.com/${path}/tar.gz/${ref}"
-	key="${name}@${tarball}"
+	local spec path ref name tarball key
 	mkdir -p "$(dirname "$ws")"
 	touch "$ws"
-	if ! grep -qxF "  ${key}: true" "$ws"; then
-		grep -q '^allowBuilds:' "$ws" || printf 'allowBuilds:\n' >> "$ws"
-		awk -v k="  ${key}: true" '
-			BEGIN { done=0 }
-			/^allowBuilds:/ && !done { print; print k; done=1; next }
-			{ print }
-		' "$ws" > "$ws.tmp" && mv "$ws.tmp" "$ws"
-		echo "    added allowBuilds: ${key}"
-	fi
+	for spec in "${BUILD_SPECS[@]}"; do
+		path="${spec#github:}"
+		ref="${spec##*#}"
+		path="${path%#*}"
+		name="$(basename "$path")"
+		tarball="https://codeload.github.com/${path}/tar.gz/${ref}"
+		key="${name}@${tarball}"
+		if ! grep -qxF "  ${key}: true" "$ws"; then
+			grep -q '^allowBuilds:' "$ws" || printf 'allowBuilds:\n' >> "$ws"
+			awk -v k="  ${key}: true" '
+				BEGIN { done=0 }
+				/^allowBuilds:/ && !done { print; print k; done=1; next }
+				{ print }
+			' "$ws" > "$ws.tmp" && mv "$ws.tmp" "$ws"
+			echo "    added allowBuilds: ${key}"
+		fi
+	done
 }
 
 step_install_aidos() {
@@ -376,12 +440,12 @@ step_sync_aidos_skills() {
 	url="https://github.com/${owner}/${repo}.git"
 	tmp="$(mktemp -d)"
 	echo "=== cloning aidos skills ($url @ ${ref:0:12}) ==="
-	if ! git clone "$url" "$tmp" 2>/dev/null; then
+	if ! git clone "$url" "$tmp" 2>"$ERR_OUT"; then
 		echo "PANIC: could not clone $url"
 		rm -rf "$tmp"
 		exit 1
 	fi
-	if ! git -C "$tmp" checkout "$ref" 2>/dev/null; then
+	if ! git -C "$tmp" checkout "$ref" 2>"$ERR_OUT"; then
 		echo "PANIC: pinned commit $ref does not exist in $url"
 		rm -rf "$tmp"
 		exit 1
@@ -750,9 +814,9 @@ STEPS=(
 	"Sync dsh-better-edit guidance overrides|step_sync_better_edit_guidance"
 	"Sync bash-guard rule drop-ins -> $DSH_HOME/plugins/guards|step_sync_guard_rules"
 	"Write the web-profile patch (host-plane rows)|step_write_web_patch"
+	"Allow pnpm build scripts for git-hosted plugins|step_allow_builds"
 	"Install the third-party plugin set on the web profile|step_install_plugins"
 	"Report extra plugins (removal commands)|step_report_extra_plugins"
-	"Allow aidos build scripts in web pnpm-workspace.yaml|step_allow_aidos_build"
 	"Install the aidos plugin from git|step_install_aidos"
 	"Sync aidos skills from pinned commit|step_sync_aidos_skills"
 	"Pin subagents onto the subagent chain (patch standard preset)|step_patch_standard_preset_tool_subagent"
