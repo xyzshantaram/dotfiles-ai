@@ -3,6 +3,20 @@
 * `/tmp/dsh` is the sanctioned scratch space. The sandbox allows writes there
   without approval, and the dsh-remote `files.roots` config exposes it to the
   file panel. Use it for temporary files instead of asking for wider access.
+* Escalate to the next mode UP, never to the mode you already hold. The runtime
+  context states the current file policy. If it says `workspace-write` and an
+  operation is denied, the only wider mode is `danger-full-access`. Asking for
+  `workspace-write` again always fails with "not strictly wider" and wastes the
+  turn. Check the stated current mode before you set `sandbox_permissions`.
+* A raw `EROFS`, `read-only file system`, `EACCES`, or `Permission denied` on a
+  path outside the workspace is the sandbox, not a broken machine. Common cases:
+  `/run/user/1000` (podman, systemd, PID files), `~/.npm/_cacache`, the pnpm
+  store, and `~/.local/share`. These errors carry no `[sandbox: ...]` marker, so
+  read the path first. If it sits outside the workspace, retry the same command
+  once with `sandbox_permissions: danger-full-access` and a justification. Do
+  not invent a workaround, and do not report the environment as broken, until
+  that retry also fails. Redirecting the write into `/tmp/dsh` (for example
+  `npm install --cache /tmp/dsh/npm-cache`) is the other correct fix.
 * NEVER EVER instruct subagents to return entire file contents. If you need to read a file,
   read it yourself. Subagents are to be used for tasks which can be compartmentalized
   easily and which you only need the indirect result off, like self-contained patches,
