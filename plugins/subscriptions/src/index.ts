@@ -13,6 +13,8 @@
  *   - GET /subscriptions/opencode-zen-balance — OpenCode Zen balance (same
  *     cookie payload as GO; zen has no public billing endpoint)
  *   - GET /subscriptions/deepseek-balance    — DeepSeek platform balance
+ *   - GET /subscriptions/zai-quota         — Z.ai Coding Plan quota windows (cached 30s)
+ *   - GET /subscriptions/zai-usage         — Z.ai 7-day model usage (cached 60s)
  *   - POST /subscriptions/opencode-cookie/extract — pull the opencode.ai
  *     session cookie out of a local Firefox profile, validate it against the
  *     `_server` RPC, and save it as the OPENCODE_SESSION_COOKIE credential
@@ -383,6 +385,121 @@ export function parseCommandCodeUsage(subJson, usageJson) {
   return out;
 }
 
+const ZAI_MONITOR_BASE = "https://api.z.ai";
+const ZAI_TIMEOUT_MS = 15_000;
+
+/** One Z.ai quota window, mapped for the panel's window-meter rows. */
+export interface ZaiWindow {
+  used: number;
+  cap: number;
+  percent: number;
+  resetsAt: number | null;
+}
+
+/**
+ * Map quota limits to the fiveHour and weekly windows by `unit` (3 = 5-hour
+ * rolling, 6 = weekly), ignoring the `type` string, which varies by plan.
+ * First entry per unit wins. In one limit entry, `usage` is the window cap,
+ * `currentValue` is the consumed amount, and `percentage` is the percent used.
+ */
+export function parseZaiQuota(data: unknown): {
+  level: string | null;
+  fiveHour: ZaiWindow | null;
+  weekly: ZaiWindow | null;
+} {
+  const source: Record<string, unknown> =
+    data !== null && typeof data === "object" ? (data as Record<string, unknown>) : {};
+  const limits = Array.isArray(source.limits) ? source.limits : [];
+  const level = typeof source.level === "string" ? source.level : null;
+  const toWindow = (entry: Record<string, unknown>): ZaiWindow => {
+    const used = Number(entry.currentValue) || 0;
+    const cap = Number(entry.usage) || 0;
+    const percent =
+      typeof entry.percentage === "number" ? entry.percentage : cap > 0 ? (used / cap) * 100 : 0;
+    return {
+      used,
+      cap,
+      percent: Math.max(0, Math.min(100, percent)),
+      resetsAt: typeof entry.nextResetTime === "number" ? entry.nextResetTime : null,
+    };
+  };
+  let fiveHour: ZaiWindow | null = null;
+  let weekly: ZaiWindow | null = null;
+  for (const item of limits) {
+    if (item === null || typeof item !== "object") continue;
+    const entry = item as Record<string, unknown>;
+    if (entry.unit === 3 && fiveHour === null) fiveHour = toWindow(entry);
+    if (entry.unit === 6 && weekly === null) weekly = toWindow(entry);
+  }
+  return { level, fiveHour, weekly };
+}
+
+/** Local "YYYY-MM-DD HH:mm:ss", the timestamp format the monitor API expects. */
+function zaiTimestamp(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const day = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  const time = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  return `${day} ${time}`;
+}
+
+/** Model-usage data -> totals plus a tolerant per-model summary. */
+export function parseZaiUsage(data: unknown): {
+  totalCalls: number;
+  totalTokens: number;
+  modelSummary: { model: string; calls: number; tokens: number }[];
+} {
+  const source: Record<string, unknown> =
+    data !== null && typeof data === "object" ? (data as Record<string, unknown>) : {};
+  const totals: Record<string, unknown> =
+    source.totalUsage !== null && typeof source.totalUsage === "object"
+      ? (source.totalUsage as Record<string, unknown>)
+      : {};
+  const modelSummary: { model: string; calls: number; tokens: number }[] = [];
+  const items = Array.isArray(source.modelSummaryList) ? source.modelSummaryList : [];
+  for (const item of items) {
+    if (item === null || typeof item !== "object") continue;
+    const entry = item as Record<string, unknown>;
+    const model =
+      typeof entry.modelCode === "string"
+        ? entry.modelCode
+        : typeof entry.model === "string"
+          ? entry.model
+          : "?";
+    const calls = Number(entry.modelCallCount ?? entry.calls ?? 0) || 0;
+    const tokens = Number(entry.modelTokensUsage ?? entry.tokens ?? 0) || 0;
+    if (calls === 0 && tokens === 0) continue;
+    modelSummary.push({ model, calls, tokens });
+  }
+  return {
+    totalCalls: Number(totals.totalModelCallCount) || 0,
+    totalTokens: Number(totals.totalTokensUsage) || 0,
+    modelSummary,
+  };
+}
+
+/** Envelope-aware GET for the Z.ai monitor API. Auth failures answer HTTP 200 with success false. */
+async function zaiMonitorGet(path: string, key: string): Promise<unknown> {
+  const res = await fetch(`${ZAI_MONITOR_BASE}${path}`, {
+    headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
+    signal: AbortSignal.timeout(ZAI_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(`zai monitor HTTP ${res.status}`);
+  const body: unknown = await res.json();
+  if (
+    body === null ||
+    typeof body !== "object" ||
+    (body as { success?: unknown }).success !== true
+  ) {
+    const envelope = body as { code?: unknown; msg?: unknown } | null;
+    throw new Error(
+      `zai monitor error ${
+        envelope && typeof envelope.code !== "undefined" ? envelope.code : "?"
+      }: ${envelope && typeof envelope.msg === "string" ? envelope.msg : "malformed envelope"}`,
+    );
+  }
+  return (body as { data: unknown }).data;
+}
+
 export function apply(ctx, config) {
   const credentials = ctx.get("credentials");
 
@@ -733,6 +850,56 @@ export function apply(ctx, config) {
     }
   };
 
+  // ── Z.ai (GLM) quota and usage (monitor API, Bearer ZAI_API_KEY) ────────
+  const resolveZaiKey = async () =>
+    credentials === undefined ? null : (await credentials.resolve("ZAI_API_KEY"))?.value;
+
+  const zaiQuotaOnce = cachedOnce(
+    async (key) => parseZaiQuota(await zaiMonitorGet("/api/monitor/usage/quota/limit", key)),
+    30_000,
+  );
+
+  const zaiUsageOnce = cachedOnce(async (key) => {
+    const end = new Date();
+    const start = new Date(end.getTime() - 7 * 24 * 3600 * 1000);
+    const query = `startTime=${encodeURIComponent(
+      zaiTimestamp(start),
+    )}&endTime=${encodeURIComponent(zaiTimestamp(end))}`;
+    return parseZaiUsage(await zaiMonitorGet(`/api/monitor/usage/model-usage?${query}`, key));
+  }, 60_000);
+
+  const handleZaiQuota = async (_req, res) => {
+    try {
+      const key = await resolveZaiKey();
+      if (!key) {
+        sendJson(res, 200, { ok: false, error: "ZAI_API_KEY credential not configured" });
+        return;
+      }
+      sendJson(res, 200, { ok: true, ...(await zaiQuotaOnce(key)) });
+    } catch (error) {
+      sendJson(res, 200, {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
+  const handleZaiUsage = async (_req, res) => {
+    try {
+      const key = await resolveZaiKey();
+      if (!key) {
+        sendJson(res, 200, { ok: false, error: "ZAI_API_KEY credential not configured" });
+        return;
+      }
+      sendJson(res, 200, { ok: true, ...(await zaiUsageOnce(key)) });
+    } catch (error) {
+      sendJson(res, 200, {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
   // Firefox platform.deepseek.com localStorage userToken extraction ──────────
   const firefoxProfileDirs = () => {
     const root = join(homedir(), ".mozilla", "firefox");
@@ -1006,6 +1173,16 @@ export function apply(ctx, config) {
     kind: "exact",
     path: "/subscriptions/deepseek-usage/cost",
     handler: handleDsUsageCost,
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/zai-quota",
+    handler: handleZaiQuota,
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/zai-usage",
+    handler: handleZaiUsage,
   });
   // ── Command Code (api.commandcode.ai) balance + usage ─────────────────────
   const CMD_API_BASE = "https://api.commandcode.ai/alpha";

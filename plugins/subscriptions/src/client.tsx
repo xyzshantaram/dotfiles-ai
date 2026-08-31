@@ -7,17 +7,12 @@
  *
  * The panel. A settings.section view (order 26, right after ds-api-usage at
  * 25) that shows, in order:
- *   0. Quota summary at the TOP: the active profile, the active orchestrator
- *      chain's name, the quota model (the chain head's provider/model), the
- *      chain head provider's window meters + pace line, and the 24h meridian
- *      telemetry line. The profile/chain data comes from /profiles/config
- *      (owned by the profiles plugin); the pick follows the active chain's
- *      head, so switching profiles moves the meters.
- *   1. Command Code balance + window limits from
+ *   0. Command Code balance + window limits from
  *      /subscriptions/commandcode-credits and the monthly cost from
  *      /subscriptions/commandcode-usage (Bearer CMD_API_KEY, /alpha surface).
- *   2. Claude (meridian) windows from /subscriptions/meridian-quota (the
- *      telemetry line moved up to the Quota summary).
+ *   1. Z.ai (GLM) Coding Plan quota windows from /subscriptions/zai-quota and
+ *      7-day model usage from /subscriptions/zai-usage (Bearer ZAI_API_KEY).
+ *   2. Claude (meridian) windows from /subscriptions/meridian-quota.
  *   3. DeepSeek balance from /subscriptions/deepseek-balance (cookie-based).
  *   4. OpenCode GO windows from /opencode-go/usage (owned by
  *      dsh-opencode-go-usage; never duplicated here), the OpenCode GO balance
@@ -35,7 +30,6 @@ import react from "react";
 import { injectStyle, mergeCss, fetchJson, postJson, putJson } from "../../shared/client-util";
 import { SettingsSection } from "../../shared/settings-panel";
 import settingsCss from "../../shared/settings.css";
-import { chainNameForRoutes } from "../../profile-routes";
 import localCss from "./client.module.css";
 
 /** Stable plugin identity, also the loader entry id in cordis.patch.yml. */
@@ -49,6 +43,12 @@ var GO_WINDOWS = [
   { key: "rolling", label: "Rolling (5h)", hint: "5h" },
   { key: "weekly", label: "Weekly", hint: null },
   { key: "monthly", label: "Monthly", hint: null },
+];
+
+/** Z.ai quota windows, keyed the way parseZaiQuota emits them. */
+var ZAI_WINDOWS = [
+  { key: "fiveHour", label: "5-hour", hint: "5h" },
+  { key: "weekly", label: "Weekly", hint: null },
 ];
 
 /** Readable label from a meridian window type: "seven_day_opus" -> "Seven Day Opus". */
@@ -67,6 +67,7 @@ function windowLabel(type) {
 /** Provider visibility toggles, in the order they render in the panel. */
 var PROVIDER_TOGGLES = [
   { key: "commandcode", label: "Command Code" },
+  { key: "zai", label: "Z.ai (GLM)" },
   { key: "claude", label: "Claude (meridian)" },
   { key: "deepseek", label: "DeepSeek" },
   { key: "opencode", label: "OpenCode GO" },
@@ -104,71 +105,6 @@ function fmtCount(n) {
   if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
   if (n >= 1e3) return (n / 1e3).toFixed(1) + "K";
   return String(Math.round(n));
-}
-
-/** The 24h telemetry summary line. */
-function renderTelemetry(t) {
-  var usage = t.tokenUsage || {};
-  var totalTokens =
-    (usage.totalInputTokens || 0) +
-    (usage.totalOutputTokens || 0) +
-    (usage.totalCacheReadTokens || 0) +
-    (usage.totalCacheCreationTokens || 0);
-  var usd =
-    t.costEstimate && typeof t.costEstimate.totalUsd === "number"
-      ? "$" + t.costEstimate.totalUsd.toFixed(2) + " est"
-      : "— est";
-  var req = typeof t.totalRequests === "number" ? String(t.totalRequests) : "—";
-  var parts = ["24h: " + req + " req"];
-  if (typeof t.requestsPerMinute === "number") parts.push(t.requestsPerMinute.toFixed(1) + "/min");
-  parts.push(usd);
-  parts.push(fmtCount(totalTokens) + " tokens");
-  if (typeof usage.avgCacheHitRate === "number")
-    parts.push("cache " + (usage.avgCacheHitRate * 100).toFixed(2) + "%");
-  if (typeof t.errorCount === "number" && t.errorCount > 0) parts.push(t.errorCount + " errors");
-  return parts.join(" · ");
-}
-
-/** Meridian subscription health: tier + days until renewal. */
-function renderHealth(h) {
-  var auth = h && typeof h === "object" ? h.auth || {} : {};
-  var parts = [];
-  if (typeof auth.subscriptionType === "string" && auth.subscriptionType.length > 0)
-    parts.push(auth.subscriptionType);
-  if (typeof auth.daysUntilRenewal === "number")
-    parts.push("renews in " + auth.daysUntilRenewal + "d");
-  if (auth.renewalRequiredSoon === true) parts.push("renewal required soon");
-  return parts.length > 0 ? parts.join(" · ") : null;
-}
-
-/** Compact "recent errors/warnings" line from the meridian log tail. */
-function renderLogSummary(logs) {
-  var arr = Array.isArray(logs)
-    ? logs
-    : logs &&
-      (Array.isArray(logs.logs) ? logs.logs : Array.isArray(logs.entries) ? logs.entries : null);
-  if (!arr || arr.length === 0) return null;
-  var errors = 0,
-    warnings = 0,
-    first = null;
-  for (var i = 0; i < arr.length; i++) {
-    var entry = arr[i];
-    var lvl = entry && typeof entry.level === "string" ? entry.level.toLowerCase() : "";
-    var isErr = lvl === "error" || lvl === "err";
-    var isWarn = lvl === "warn" || lvl === "warning";
-    if (isErr) errors++;
-    else if (isWarn) warnings++;
-    if ((isErr || isWarn) && first === null && entry)
-      first = typeof entry.message === "string" ? entry.message : entry.msg || entry.text || "";
-  }
-  var n = errors + warnings;
-  if (n === 0) return null;
-  var counts = [];
-  if (errors > 0) counts.push(errors + " error" + (errors > 1 ? "s" : ""));
-  if (warnings > 0) counts.push(warnings + " warning" + (warnings > 1 ? "s" : ""));
-  var line = "recent logs: " + counts.join(" · ");
-  if (first && first.length > 0) line += " — " + first;
-  return line;
 }
 
 /** Usage percent of a window: go sends percent, meridian sends utilization,
@@ -599,7 +535,6 @@ function makePanel(ctx, config) {
       var results = await Promise.all([
         fetchJson("/subscriptions/opencode-usage"),
         fetchJson("/subscriptions/meridian-quota"),
-        fetchJson("/subscriptions/meridian-telemetry"),
         fetchJson("/subscriptions/opencode-balance"),
         fetchJson("/subscriptions/deepseek-balance"),
         fetchJson("/subscriptions/deepseek-usage/amount?month=" + month + "&year=" + year),
@@ -607,14 +542,12 @@ function makePanel(ctx, config) {
         fetchJson("/subscriptions/commandcode-credits"),
         fetchJson("/subscriptions/commandcode-usage"),
         fetchJson("/subscriptions/opencode-zen-balance"),
-        fetchJson("/subscriptions/meridian-health"),
-        fetchJson("/subscriptions/meridian-logs"),
-        fetchJson("/profiles/config"),
+        fetchJson("/subscriptions/zai-quota"),
+        fetchJson("/subscriptions/zai-usage"),
       ]);
       var loadKeys = [
         "go",
         "quota",
-        "telemetry",
         "balance",
         "ds",
         "dsUsageAmount",
@@ -622,9 +555,8 @@ function makePanel(ctx, config) {
         "cc",
         "ccUsage",
         "oz",
-        "health",
-        "logs",
-        "profiles",
+        "zaiQuota",
+        "zaiUsage",
       ];
       var failedKeys = [];
       for (var li = 0; li < loadKeys.length; li++) {
@@ -636,24 +568,26 @@ function makePanel(ctx, config) {
         console.error("[subscriptions] load: all fetches failed", failedKeys.join(", "));
       } else {
         console.warn(
-          "[subscriptions] load: " + failedKeys.length + " of " + loadKeys.length + " fetches failed",
+          "[subscriptions] load: " +
+            failedKeys.length +
+            " of " +
+            loadKeys.length +
+            " fetches failed",
           failedKeys.join(", "),
         );
       }
       var snapData = {
         go: results[0],
         quota: results[1],
-        telemetry: results[2],
-        balance: results[3],
-        ds: results[4],
-        dsUsageAmount: results[5],
-        dsUsageCost: results[6],
-        cc: results[7],
-        ccUsage: results[8],
-        oz: results[9],
-        health: results[10],
-        logs: results[11],
-        profiles: results[12],
+        balance: results[2],
+        ds: results[3],
+        dsUsageAmount: results[4],
+        dsUsageCost: results[5],
+        cc: results[6],
+        ccUsage: results[7],
+        oz: results[8],
+        zaiQuota: results[9],
+        zaiUsage: results[10],
       };
       setSnap(snapData);
       setStaleTs(Date.now());
@@ -679,17 +613,15 @@ function makePanel(ctx, config) {
 
     var go = snap ? snap.go : null;
     var quota = snap ? snap.quota : null;
-    var telemetry = snap ? snap.telemetry : null;
     var balance = snap ? snap.balance : null;
     var ds = snap ? snap.ds : null;
     var dsUsageAmount = snap ? snap.dsUsageAmount : null;
     var dsUsageCost = snap ? snap.dsUsageCost : null;
     var cc = snap ? snap.cc : null;
     var ccUsage = snap ? snap.ccUsage : null;
-    var profiles = snap ? snap.profiles : null;
     var oz = snap ? snap.oz : null;
-    var health = snap ? snap.health : null;
-    var logs = snap ? snap.logs : null;
+    var zaiQuota = snap ? snap.zaiQuota : null;
+    var zaiUsage = snap ? snap.zaiUsage : null;
     // Firefox cookie fetch state and handlers.
     var cookieState = react.useState({ busy: false, note: null, showLogin: false });
     var cookie = cookieState[0];
@@ -710,10 +642,16 @@ function makePanel(ctx, config) {
         load();
       } else if (result.data && result.data.invalid === true) {
         setCookie({ busy: false, note: result.error || "Cookie is stale", showLogin: true });
-        console.warn("[subscriptions] OpenCode GO cookie is stale, login required", result.error || "stale");
+        console.warn(
+          "[subscriptions] OpenCode GO cookie is stale, login required",
+          result.error || "stale",
+        );
       } else {
         setCookie({ busy: false, note: result.error || "Extract failed", showLogin: false });
-        console.error("[subscriptions] OpenCode GO cookie extract failed", result.error || "unknown error");
+        console.error(
+          "[subscriptions] OpenCode GO cookie extract failed",
+          result.error || "unknown error",
+        );
       }
     };
 
@@ -731,7 +669,10 @@ function makePanel(ctx, config) {
       if (result.data && result.data.ok) {
         console.info("[subscriptions] OpenCode GO login page opened");
       } else {
-        console.error("[subscriptions] failed to open OpenCode GO login page", result.error || "unknown error");
+        console.error(
+          "[subscriptions] failed to open OpenCode GO login page",
+          result.error || "unknown error",
+        );
       }
     };
 
@@ -745,7 +686,10 @@ function makePanel(ctx, config) {
         load();
       } else {
         setDsToken({ busy: false, note: result.error || "Extract failed", showLogin: true });
-        console.error("[subscriptions] DeepSeek token extract failed", result.error || "unknown error");
+        console.error(
+          "[subscriptions] DeepSeek token extract failed",
+          result.error || "unknown error",
+        );
       }
     };
 
@@ -763,7 +707,10 @@ function makePanel(ctx, config) {
       if (result.data && result.data.ok) {
         console.info("[subscriptions] DeepSeek platform login page opened");
       } else {
-        console.error("[subscriptions] failed to open DeepSeek platform login page", result.error || "unknown error");
+        console.error(
+          "[subscriptions] failed to open DeepSeek platform login page",
+          result.error || "unknown error",
+        );
       }
     };
 
@@ -788,7 +735,12 @@ function makePanel(ctx, config) {
       var providers = (cfg && cfg.providers) || {};
       var next = Object.assign({}, providers, { [key]: !(providers[key] !== false) });
       setToggleBusy(key);
-      console.info("[subscriptions] action: toggle provider " + key + " to " + (next[key] ? "visible" : "hidden"));
+      console.info(
+        "[subscriptions] action: toggle provider " +
+          key +
+          " to " +
+          (next[key] ? "visible" : "hidden"),
+      );
       putJson("/subscriptions/config", { providers: next }).then(function (result) {
         setToggleBusy(null);
         if (result.data && result.data.config) {
@@ -888,23 +840,6 @@ function makePanel(ctx, config) {
       }
     }
 
-    // Telemetry line
-    var telemetryLine = null;
-    if (telemetry) {
-      if (telemetry.error) telemetryLine = "telemetry: " + telemetry.error;
-      else if (telemetry.data) telemetryLine = renderTelemetry(telemetry.data);
-    }
-
-    // Meridian subscription health line (tier + renewal).
-    var healthLine = null;
-    if (health) {
-      if (health.error) healthLine = "meridian: " + health.error;
-      else if (health.data) healthLine = renderHealth(health.data);
-    }
-
-    // Meridian recent errors/warnings line; best-effort, silent on failure.
-    var logsLine = null;
-    if (logs && !logs.error && logs.data) logsLine = renderLogSummary(logs.data);
     // Weekly pace for OpenCode GO (weekly window, percent/100)
     var goPaceLine = null;
     var goWeekly = goUsage ? goUsage.weekly : null;
@@ -935,37 +870,6 @@ function makePanel(ctx, config) {
         );
       }
     }
-    // Active profile + chain: /profiles/config names the active profile and
-    // its orchestrator chain. The top quota block shows that chain and picks
-    // the windows of its head provider, so the pick follows the chain in use.
-    var profileInfo = null;
-    if (profiles && !profiles.error && profiles.data && profiles.data.config) {
-      var pcfg = profiles.data.config;
-      var activeName = typeof pcfg.active === "string" ? pcfg.active : "work";
-      var profileEntry = activeName === "personal" ? pcfg.personal : pcfg.work;
-      var orcRoutes =
-        profileEntry && profileEntry.orchestrator && Array.isArray(profileEntry.orchestrator.routes)
-          ? profileEntry.orchestrator.routes
-          : [];
-      profileInfo = {
-        active: activeName,
-        chain: chainNameForRoutes(orcRoutes, pcfg.chains),
-        head: orcRoutes.length > 0 ? orcRoutes[0] : null,
-      };
-    }
-
-    // Quota pick: windows of the active orchestrator chain's head provider.
-    var quotaPick = null;
-    var headProvider = profileInfo && profileInfo.head ? String(profileInfo.head.provider) : null;
-    if (headProvider === "command-code") {
-      var ccPickRows = buildCcMeters(cc);
-      if (ccPickRows.length > 0) quotaPick = { rows: ccPickRows, pace: null };
-    } else if (headProvider === "meridian" && claudeWindows) {
-      quotaPick = { rows: buildRows(null, claudeWindows, windowLabel), pace: claudePaceLine };
-    } else if ((headProvider === "opencode-zen" || headProvider === "opencode-go") && goUsage) {
-      quotaPick = { rows: buildRows(GO_WINDOWS, goUsage), pace: goPaceLine };
-    }
-
     var staleText = null;
     if (cacheOk === true && staleTs !== null) {
       staleText = "Last fetched " + fmtStale(staleTs);
@@ -979,7 +883,6 @@ function makePanel(ctx, config) {
       var dataKeys = [
         "go",
         "quota",
-        "telemetry",
         "balance",
         "ds",
         "dsUsageAmount",
@@ -987,9 +890,8 @@ function makePanel(ctx, config) {
         "cc",
         "ccUsage",
         "oz",
-        "health",
-        "logs",
-        "profiles",
+        "zaiQuota",
+        "zaiUsage",
       ];
       var failCount = 0;
       for (var di = 0; di < dataKeys.length; di++) {
@@ -1038,30 +940,46 @@ function makePanel(ctx, config) {
           </div>
         ) : null}
 
-        {profileInfo || quotaPick || telemetryLine || healthLine || logsLine ? (
+        {providerVisible(cfg, "commandcode") ? renderCcSection(cc, ccUsage) : null}
+
+        {providerVisible(cfg, "zai") ? (
           <div className="ocgs-section">
-            <h4 className="ocgs-section-title">Quota</h4>
-            {profileInfo ? (
-              <div className="ocgs-rows">
-                <div className="ocgs-row">
-                  <div className="ocgs-row-label">
-                    <b>{"Profile: " + profileInfo.active}</b>
-                    {profileInfo.chain ? (
-                      <span className="ocgs-stale">{"chain: " + profileInfo.chain}</span>
-                    ) : null}
-                  </div>
-                </div>
+            <h4 className="ocgs-section-title">Z.ai (GLM)</h4>
+            {zaiQuota && zaiQuota.error ? (
+              <div className="dsp-err">{"Z.ai: " + zaiQuota.error}</div>
+            ) : null}
+            {zaiQuota && zaiQuota.data && zaiQuota.data.ok === false ? (
+              <div className="dsp-err">
+                {"Z.ai: " + (zaiQuota.data.error || "quota unavailable")}
               </div>
             ) : null}
-            {quotaPick ? <div className="ocgs-rows">{quotaPick.rows}</div> : null}
-            {quotaPick && quotaPick.pace ? <div className="ocgs-pace">{quotaPick.pace}</div> : null}
-            {telemetryLine ? <div className="ocgs-telemetry">{telemetryLine}</div> : null}
-            {healthLine ? <div className="ocgs-telemetry">{healthLine}</div> : null}
-            {logsLine ? <div className="ocgs-telemetry">{logsLine}</div> : null}
+            {zaiQuota && zaiQuota.data && zaiQuota.data.ok === true ? (
+              <div className="ocgs-balance">
+                {"Z.ai Coding Plan" +
+                  (typeof zaiQuota.data.level === "string" && zaiQuota.data.level !== ""
+                    ? " · " + zaiQuota.data.level
+                    : "")}
+              </div>
+            ) : null}
+            <div className="ocgs-rows">
+              {buildRows(
+                ZAI_WINDOWS,
+                zaiQuota && zaiQuota.data && zaiQuota.data.ok === true
+                  ? { fiveHour: zaiQuota.data.fiveHour, weekly: zaiQuota.data.weekly }
+                  : null,
+              )}
+            </div>
+            {zaiUsage && zaiUsage.data && zaiUsage.data.ok === true ? (
+              <div className="ocgs-pace">
+                {"7d " +
+                  fmtCount(zaiUsage.data.totalCalls) +
+                  " calls · " +
+                  fmtCount(zaiUsage.data.totalTokens) +
+                  " tokens"}
+              </div>
+            ) : null}
           </div>
         ) : null}
-
-        {providerVisible(cfg, "commandcode") ? renderCcSection(cc, ccUsage) : null}
 
         {providerVisible(cfg, "claude") ? (
           <div className="ocgs-section">
