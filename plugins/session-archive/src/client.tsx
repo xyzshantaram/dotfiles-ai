@@ -195,7 +195,7 @@ function makePanel() {
             Select all
           </label>
           <button
-            className="sarch-btn sarch-batch-delete"
+            className="sarch-batch-delete"
             disabled={selected.size === 0 || batchBusy || busy !== null}
             title="Delete selected archived sessions"
             onClick={deleteSelected}

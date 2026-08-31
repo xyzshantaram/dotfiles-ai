@@ -16,12 +16,28 @@
   flex: none;
 }
 .sarch-batch-delete {
-  width: auto;
-  height: auto;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  white-space: nowrap;
   font-size: 0.875rem;
   line-height: 1.375rem;
+  font-weight: 600;
   padding: 0.25rem 0.75rem;
   border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 0.5rem;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+}
+.sarch-batch-delete:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+.sarch-batch-delete:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 .sarch-section {
   display: flex;
