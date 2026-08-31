@@ -16,13 +16,18 @@
  * slot name (`slot "tool.call.toolview" is already declared`, verified by
  * running the shipped SlotCore). So this bundle shadows the per-tool ROWS:
  * it registers the `read`, `bash`, `edit`, `batch_edit`, `write`,
- * `undo_edit`, and `undo_last_edit` keys of `tool.call.toolview` at
+ * `undo_edit`, `undo_last_edit`, `todo_write`, and `ask_user_question`
+ * keys of `tool.call.toolview` at
  * priority -100. Keyed slots sort ascending by
  * priority and the lowest live entry renders (dsh-client-ui-slots SlotCore:
  * entries sort by `options.priority ?? 0`; `entriesOfSlot` keeps the first
  * entry per key); a same key at a different priority never throws; there is
  * no origin privilege for shipped entries. `batch_edit` has no shipped row
  * at all, so it previously fell through to the generic JSON card.
+ * todo_write and ask_user_question shadow shipped rows (dsh-client-ui-tool
+ * client.js: todoToolview key "todo_write", askQuestionToolview key
+ * "ask_user_question", both priority 0) whose expanded card is the generic
+ * IN/OUT JSON dump.
  *
  * The requirements. edit, batch_edit, and write render real before/after
  * diffs. edit and batch_edit use the tool-declared `card: "diff"` views
@@ -145,6 +150,10 @@ var IconEditOutline16 = primitives.IconEditOutline16;
 var IconApiOutline14 = primitives.IconApiOutline14;
 var IconChevronDownOutline14 = primitives.IconChevronDownOutline14;
 var IconInspectOutline12 = primitives.IconInspectOutline12;
+var IconChecklistOutline14 = primitives.IconChecklistOutline14;
+var IconQuestionOutline14 = primitives.IconQuestionOutline14;
+var IconAgentPresetOutline16 = primitives.IconAgentPresetOutline16;
+var MarkdownText = primitives.MarkdownText;
 
 /** Stable plugin identity, also the loader entry id in cordis.patch.yml. */
 var PLUGIN_NAME = "tool-render";
@@ -1485,6 +1494,323 @@ function WriteRow(props) {
     inspect: props.inspect,
   });
 }
+// ---- todo_write row: one line per task, checkbox per status. ----
+// The model sends the WHOLE list on every call, so the expanded body is a
+// snapshot, not a delta: done items a checked box, active items an
+// indeterminate dash, pending items an empty box. The collapsed summary
+// keeps the shipped row's
+// shape ("n/m completed" plus the first active item).
+
+function todoItems(args) {
+  if (args === null || typeof args !== "object" || !Array.isArray(args.todos)) return null;
+  var out = [];
+  for (var i = 0; i < args.todos.length; i++) {
+    var item = args.todos[i];
+    if (item === null || typeof item !== "object") return null;
+    if (typeof item.content !== "string" || item.content === "") return null;
+    var status =
+      item.status === "in_progress" || item.status === "completed" ? item.status : "pending";
+    out.push({ content: item.content, status: status });
+  }
+  return out;
+}
+
+function planSummary(todos) {
+  var active = 0;
+  var done = 0;
+  for (var i = 0; i < todos.length; i++) {
+    if (todos[i].status === "in_progress") active++;
+    else if (todos[i].status === "completed") done++;
+  }
+  return { done: done, total: todos.length, active: active };
+}
+
+function planBody(todos) {
+  var children = [];
+  for (var i = 0; i < todos.length; i++) {
+    var todo = todos[i];
+    var attrs =
+      todo.status === "completed"
+        ? { "data-done": true }
+        : todo.status === "in_progress"
+          ? { "data-active": true }
+          : { "data-pending": true };
+    children.push(
+      <div className="tool-render-plan-item" {...attrs}>
+        <span className="tool-render-checkbox" aria-hidden={true} />
+        <span className="tool-render-plan-content">{todo.content}</span>
+      </div>,
+    );
+  }
+  return <div className="tool-render-plan">{children}</div>;
+}
+
+function TodoRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var block = props.block;
+  var done = doneOf(block);
+  var args = parseArgs(argsRawOf(block));
+  var todos = todoItems(args);
+  var output = done ? resultTextOf(block) : null;
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary =
+    state === "error" && errorText !== null && errorText !== ""
+      ? firstLineOfError(errorText)
+      : undefined;
+  var counts = todos !== null ? planSummary(todos) : null;
+  var summary;
+  if (counts !== null && (done === false || state !== "error")) {
+    var head = counts.done + "/" + counts.total + " completed";
+    var firstActive = null;
+    for (var i = 0; i < todos.length; i++) {
+      if (todos[i].status === "in_progress") {
+        firstActive = todos[i].content;
+        break;
+      }
+    }
+    summary = firstActive !== null ? head + " · " + firstActive : head;
+  } else {
+    summary = "Todo list";
+  }
+  var body = null;
+  if (todos !== null && output !== null && output !== "") {
+    body = planBody(todos);
+  }
+  return toolRenderRow({
+    icon: <IconChecklistOutline14 size={14} />,
+    title: "Todo list",
+    summary: summary,
+    state: state,
+    expandable: body !== null,
+    expanded: expanded,
+    onToggle: function () {
+      setExpanded(!expanded);
+    },
+    body: body,
+    errorSummary: errorSummary,
+    inspect: props.inspect,
+  });
+}
+
+// ---- ask_user_question row: questions with options and picked answers. ----
+// Expanded, each question shows its prompt and its options; an option the
+// user picked gets a filled marker. A free-text answer renders as an
+// indented note under the question. Errors keep the plain error body.
+function askQuestions(args) {
+  if (args === null || typeof args !== "object" || !Array.isArray(args.questions)) return null;
+  var out = [];
+  for (var i = 0; i < args.questions.length; i++) {
+    var q = args.questions[i];
+    if (q === null || typeof q !== "object") return null;
+    if (typeof q.question !== "string" || q.question === "") return null;
+    var options = [];
+    if (q.options !== undefined && q.options !== null) {
+      if (!Array.isArray(q.options)) return null;
+      for (var j = 0; j < q.options.length; j++) {
+        var option = q.options[j];
+        if (option === null || typeof option !== "object") return null;
+        if (typeof option.label !== "string" || option.label === "") return null;
+        options.push({ label: option.label });
+      }
+    }
+    out.push({
+      id: typeof q.id === "string" ? q.id : null,
+      question: q.question,
+      options: options,
+    });
+  }
+  return out;
+}
+
+function askAnswers(block) {
+  if (!doneOf(block) || block.isError === true) return null;
+  var parsed = parseArgs(resultTextOf(block) || "");
+  if (parsed === null || typeof parsed !== "object" || !Array.isArray(parsed.answers)) return null;
+  var byId = {};
+  var order = [];
+  for (var i = 0; i < parsed.answers.length; i++) {
+    var answer = parsed.answers[i];
+    if (answer === null || typeof answer !== "object") return null;
+    if (typeof answer.id !== "string") return null;
+    if (byId[answer.id] === undefined) order.push(answer.id);
+    var selected = Array.isArray(answer.selected) ? answer.selected : [];
+    var texts = [];
+    for (var j = 0; j < selected.length; j++) {
+      if (typeof selected[j] === "string" && selected[j] !== "") texts.push(selected[j]);
+    }
+    byId[answer.id] = {
+      selected: texts,
+      custom: typeof answer.custom === "string" ? answer.custom : null,
+    };
+  }
+  return { byId: byId, order: order };
+}
+
+function askBody(questions, answers) {
+  var children = [];
+  for (var i = 0; i < questions.length; i++) {
+    var q = questions[i];
+    var answer = answers !== null && q.id !== null ? answers.byId[q.id] : undefined;
+    var picked = answer === undefined ? null : answer.selected;
+    var rows = [];
+    for (var j = 0; j < q.options.length; j++) {
+      var label = q.options[j].label;
+      var isSelected = picked !== null && picked.indexOf(label) !== -1;
+      rows.push(
+        <div className="tool-render-option" data-selected={isSelected || undefined}>
+          <span className="tool-render-option-marker" aria-hidden={true}>
+            {isSelected ? "◉" : "○"}
+          </span>
+          <span className="tool-render-option-label">{label}</span>
+        </div>,
+      );
+    }
+    if (picked !== null) {
+      for (var j = 0; j < picked.length; j++) {
+        var known = false;
+        for (var k = 0; k < q.options.length; k++) {
+          if (q.options[k].label === picked[j]) {
+            known = true;
+            break;
+          }
+        }
+        if (!known) {
+          rows.push(
+            <div className="tool-render-option" data-selected={true}>
+              <span className="tool-render-option-marker" aria-hidden={true}>
+                {"◉"}
+              </span>
+              <span className="tool-render-option-label">{picked[j]}</span>
+            </div>,
+          );
+        }
+      }
+    }
+    var note = null;
+    if (answer !== undefined && typeof answer.custom === "string" && answer.custom !== "") {
+      note = <div className="tool-render-answer-note">{answer.custom}</div>;
+    }
+    children.push(
+      <div className="tool-render-question">
+        <div className="tool-render-question-prompt">{q.question}</div>
+        {rows}
+        {note}
+      </div>,
+    );
+  }
+  return <div className="tool-render-ask">{children}</div>;
+}
+
+function AskRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var block = props.block;
+  var done = doneOf(block);
+  var args = parseArgs(argsRawOf(block));
+  var questions = askQuestions(args);
+  var answers = done ? askAnswers(block) : null;
+  var output = done ? resultTextOf(block) : null;
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary =
+    state === "error" && errorText !== null && errorText !== ""
+      ? firstLineOfError(errorText)
+      : undefined;
+  var summary;
+  if (state === "error") {
+    summary = "Ask user";
+  } else if (!done) {
+    var count = questions !== null ? questions.length : 0;
+    summary = count === 1 ? "waiting for answer" : "waiting for " + count + " answers";
+  } else if (answers !== null) {
+    var answered = 0;
+    for (var i = 0; i < answers.order.length; i++) {
+      var a = answers.byId[answers.order[i]];
+      if (a.selected.length > 0 || a.custom !== null) answered++;
+    }
+    summary = answered + "/" + questions.length + " answered";
+  } else {
+    summary = "Ask user";
+  }
+  var body = null;
+  if (questions !== null && output !== null && output !== "" && state !== "error") {
+    body = askBody(questions, answers);
+  }
+  return toolRenderRow({
+    icon: <IconQuestionOutline14 size={14} />,
+    title: "Ask user",
+    summary: summary,
+    state: state,
+    expandable: body !== null,
+    expanded: expanded,
+    onToggle: function () {
+      setExpanded(!expanded);
+    },
+    body: body,
+    errorSummary: errorSummary,
+    inspect: props.inspect,
+  });
+}
+
+// ---- subagent row: description while collapsed, rendered prompt when open. ----
+// Args are { description, prompt, run_in_background? }. The collapsed row
+// shows "Parallel sub-agent" / "Sub-agent" plus the short description;
+// expanded it renders the prompt through MarkdownText inside a capped,
+// scrollable block. A failed call falls back to the plain error card.
+function subagentPrompt(args) {
+  if (args === null || typeof args !== "object") return null;
+  if (typeof args.prompt !== "string" || args.prompt === "") return null;
+  return args.prompt;
+}
+
+function SubagentRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var block = props.block;
+  var done = doneOf(block);
+  var args = parseArgs(argsRawOf(block));
+  var description = args !== null ? pickString(args, ["description"]) : undefined;
+  var prompt = subagentPrompt(args);
+  var output = done ? resultTextOf(block) : null;
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary =
+    state === "error" && errorText !== null && errorText !== ""
+      ? firstLineOfError(errorText)
+      : undefined;
+  var background = args !== null && args.run_in_background === true;
+  var title = background ? "Parallel sub-agent" : "Sub-agent";
+  var summary =
+    description !== undefined ? firstLine(relativizeToCwd(description, props.cwd)) : title;
+  var body = null;
+  if (state !== "error" && prompt !== null) {
+    body = (
+      <div className="tool-render-subagent-prompt">
+        <MarkdownText text={prompt} />
+      </div>
+    );
+  }
+  return toolRenderRow({
+    icon: <IconAgentPresetOutline16 size={14} />,
+    title: title,
+    summary: summary,
+    state: state,
+    expandable: body !== null,
+    expanded: expanded,
+    onToggle: function () {
+      setExpanded(!expanded);
+    },
+    body: body,
+    errorSummary: errorSummary,
+    inspect: props.inspect,
+  });
+}
+
 // ---- Cordis plugin face. ----
 var inject = ["slots"];
 var name = PLUGIN_NAME;
@@ -1546,6 +1872,30 @@ function apply(ctx) {
         priority: -100,
       },
       UndoEditRow,
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "todo_write",
+        priority: -100,
+      },
+      TodoRow,
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "ask_user_question",
+        priority: -100,
+      },
+      AskRow,
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "subagent",
+        priority: -100,
+      },
+      SubagentRow,
     );
   });
 }
