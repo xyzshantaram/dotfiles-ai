@@ -1,0 +1,5 @@
+{
+  "commands": ["node"],
+  "verdict": "ask",
+  "reason": "node runs arbitrary code, so it asks during planning instead of refusing outright. A read-only script, such as a plan parser check, is the normal case here."
+}
