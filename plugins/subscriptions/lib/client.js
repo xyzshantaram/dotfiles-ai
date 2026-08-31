@@ -445,7 +445,7 @@ function makePanel(ctx, config) {
       var now = /* @__PURE__ */ new Date();
       var month = now.getMonth() + 1;
       var year = now.getFullYear();
-      var results = await Promise.all([
+      var settled = await Promise.allSettled([
         fetchJson("/subscriptions/opencode-usage"),
         fetchJson("/subscriptions/meridian-quota"),
         fetchJson("/subscriptions/opencode-balance"),
@@ -458,6 +458,17 @@ function makePanel(ctx, config) {
         fetchJson("/subscriptions/zai-quota"),
         fetchJson("/subscriptions/zai-usage")
       ]);
+      var results = settled.map(function(entry2) {
+        if (entry2.status === "fulfilled") return entry2.value;
+        console.warn(
+          "[subscriptions] load: endpoint rejected",
+          entry2.reason instanceof Error ? entry2.reason.message : String(entry2.reason)
+        );
+        return {
+          data: null,
+          error: String(entry2.reason && entry2.reason.message || entry2.reason)
+        };
+      });
       var loadKeys = [
         "go",
         "quota",
