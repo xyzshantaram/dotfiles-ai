@@ -1,0 +1,4 @@
+# Effort 4 - our own MCP manager. Owns every MCP server, both transports.
+- insert:
+    - id: mcp-servers
+      name: mcp-servers
