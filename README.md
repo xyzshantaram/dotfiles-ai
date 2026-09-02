@@ -57,12 +57,15 @@ Client packages (each ships its own `cordis.patch.yml` and built bundle):
 - dsh-remote — remote browser access to dsh web. Pinned to a fork. From [xyzshantaram/dsh-remote](https://github.com/xyzshantaram/dsh-remote).
 - dsh-better-markdown — a streaming markdown renderer (Mermaid, KaTeX, Shiki). Client only. From npm.
 - dsh-paste-to-path — pasted files land in `<workspace>/.dsh/pastes/`. The composer carries a path reference. From [Johnny-xuan/dsh-paste-to-path](https://github.com/Johnny-xuan/dsh-paste-to-path).
+- dsh-mcp-manager — a Settings → MCP page. It adds MCP servers at run time and runs the OAuth login the built-in client cannot. Self-mounts through its own bundle patch. Server state lives in `~/.dsh/mcp-manager.json`, which this repo does not track. From [hyqhyq3/dsh-mcp-manager](https://github.com/hyqhyq3/dsh-mcp-manager).
 
 ### Mounted by the web patch
 
 These rows come from the harness install, not from git specs:
 
-- MCP clients through `@deepseek-ai/dsh-mcp-client`: nostrbook, gitlab, swiggy-food, swiggy-instamart, and git. Each runs a third-party MCP server.
+- MCP clients through `@deepseek-ai/dsh-mcp-client`: nostrbook, gitlab, and easyeda. Each runs a third-party MCP server over stdio.
+- Servers that need a browser login run on dsh-mcp-manager instead, not on the built-in client, which has no OAuth support. `sync-mcp.py` declares that roster: swiggy-food, swiggy-instamart, zepto, and blinkit. swiggy-food and swiggy-instamart each need a single Authenticate click in Settings → MCP on a fresh machine. blinkit logs in by OTP through its own tools. zepto cannot log in from a remote browser, because mcp-remote opens its OAuth callback on the server loopback. See PLAN.md for the detail.
+- `sync-mcp.py` writes the mcp-manager state file only when nothing answers on the web port. dsh-remote guards the API, so to apply a roster edit, stop dsh web and run `python3 sync-mcp.py` by hand.
 - `@deepseek-ai/dsh-tool-cordis` — the `cordis_*` tools, gated behind the cordis skills.
 - `@deepseek-ai/dsh-compaction-basic` — instant compaction plus the recall tools.
 
