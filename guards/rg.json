@@ -3,9 +3,9 @@
   "verdict": "allow",
   "rewrites": [
     {
-      "drop": ["-r", "--replace"],
+      "drop": ["-r"],
       "value": true,
-      "because": "rg recurses by default; -r/--replace is substitution, not recursion"
+      "because": "bare -r is ambiguous: grep uses it for recursion, rg for output replacement. rg already recurses by default. For output substitution, write --replace explicitly."
     }
   ]
 }

@@ -19,7 +19,7 @@
  *   {
  *     "commands": ["git", "git-foo"],
  *     "verdict": "deny",            // "deny" | "ask" | "allow"
- *     "reason": "Raw git is denied. Use the mcp__git__* tools or ask the user.",
+ *     "reason": "Raw git is denied. Useful mutations prompt first.",
  *     "subcommands": {              // optional, per-subcommand refinement
  *       "status": "allow",          // read-only verbs run without prompting
  *       "worktree": "ask"           // useful mutations prompt the user
@@ -560,6 +560,8 @@ async function evaluate(
           const word = hit.ref.node.suffix[i];
           for (const flag of rw.drop) {
             if (word.text === flag) {
+              // Standalone flag: drop it, and its next token when that token
+              // holds the flag's value.
               ranges.push([word.pos, word.end, rw.because]);
               if (rw.value && i + 1 < hit.ref.node.suffix.length) {
                 const next = hit.ref.node.suffix[i + 1];
@@ -568,6 +570,23 @@ async function evaluate(
                 }
               }
             } else if (word.text.startsWith(flag + "=")) {
+              // Long flag with an inline value: --replace=FOO drops whole.
+              ranges.push([word.pos, word.end, rw.because]);
+            } else if (
+              rw.value &&
+              flag.length === 2 &&
+              word.text.length > 2 &&
+              word.text.startsWith(flag)
+            ) {
+              // Short-flag cluster with an attached value, e.g. rg -rln: rg
+              // parses that as -r plus the value "ln", so the whole word is
+              // flag+value and all of it goes. The `rw.value` guard keeps this
+              // branch to value-taking drop flags: a bare no-value letter (say
+              // -rn where r means recursion) parses as two flags, and rg -n foo
+              // stays a plain search. Dropping a no-value letter with its
+              // cluster would eat unrelated flags. Multi-flag
+              // clusters that end in a value flag, like -xr foo, hit the
+              // standalone branch above: the -x survives, -r and foo go.
               ranges.push([word.pos, word.end, rw.because]);
             }
           }

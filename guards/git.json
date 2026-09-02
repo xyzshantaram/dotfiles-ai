@@ -1,7 +1,7 @@
 {
   "commands": ["git"],
   "verdict": "deny",
-  "reason": "Raw git is denied for this subcommand. Read-only git verbs are allowed; useful mutations prompt first. The mcp__git__* tools are the sanctioned path for commits. Note: plugin git via ctx.subprocess (dsh-worktree, dsh-git-plugin) and the git MCP both bypass this guard \u2014 it gates only model bash calls.",
+  "reason": "Raw git is denied for this subcommand. Read-only git verbs are allowed; useful mutations prompt first. Note: plugin git via ctx.subprocess (dsh-worktree, dsh-git-plugin) bypasses this guard — it gates only model bash calls.",
   "subcommands": {
     "clone": "ask",
     "status": "allow",

@@ -112,6 +112,20 @@ describe("bash-guard pre-execute", () => {
     expect(decision?.reason).not.toContain("Run this instead");
   });
 
+  it("drops a short-flag cluster whose flag takes the rest as its value", async () => {
+    // rg parses -rln as -r with the attached value "ln". Dropping just the
+    // letter would leave a cluster rg reads differently, so the whole word
+    // must go.
+    const command = "rg -rln foo /tmp";
+    const { decision, args, next } = await run(command);
+
+    expect(decision?.kind).toBe("deny");
+    expect(decision?.reason).toContain("rg foo /tmp");
+    expect(decision?.reason).toContain("--replace");
+    expect(args.command).toBe(command);
+    expect(next).not.toHaveBeenCalled();
+  });
+
   it("allows rg", async () => {
     const { decision, next } = await run("rg -n foo src/");
     expect(next).toHaveBeenCalled();
