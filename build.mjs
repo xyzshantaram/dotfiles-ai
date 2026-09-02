@@ -130,6 +130,25 @@ await wrapClientBundle(
   "approval-comment",
 );
 
+// durable-todos: the todo panel that survives interrupts and restarts. The
+// host half registers a mirror session projection that never clears at
+// turn/start, so zod bundles into it (only @deepseek-ai/* and node:* stay
+// external). The client half reads that projection in the input dock.
+await build({
+  entryPoints: [join(here, "plugins/durable-todos/src/index.ts")],
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  external: ["@deepseek-ai/*", "node:*"],
+  outfile: join(here, "plugins/durable-todos/lib/index.js"),
+  logLevel: "info",
+});
+await wrapClientBundle(
+  join(here, "plugins/durable-todos/src/client.tsx"),
+  join(here, "plugins/durable-todos/lib/client.js"),
+  "durable-todos",
+);
+
 // W18: combined subscription panel (OpenCode GO + Claude/meridian) CLIENT
 // plugin package. The host half bundles via esbuild; lz4 stays
 // external (native .node addons esbuild cannot bundle; runtime
