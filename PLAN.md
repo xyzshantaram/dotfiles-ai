@@ -325,7 +325,13 @@ checkboxes on every non-live row, a header select-all checkbox, and a
 ## Vision
 
 A small dsh plugin, `durable-todos`, that keeps the session todo list visible and
-usable across dsh restarts. The official todo panel data path stays untouched.
+usable across dsh restarts and across interrupts. The official `todos`
+projection clears to `null` on `turn/start` and on nothing else (verified in
+`dsh-tool-todo/lib/index.js:85-87`). An interrupted turn therefore keeps its
+list only until the next message goes out, and the panel then blanks with items
+still unfinished. A mirror that ignores `turn/start` fixes the restart case and
+the interrupt case with the same mechanism. The official todo panel data path
+stays untouched.
 Upstream dsh-todo-guard solves persistence with a mirror projection that follows
 official `todo/write` events but never clears at `turn/start`; we reuse that
 concept with our own code, minus its evidence-verification half.
@@ -352,14 +358,46 @@ concept with our own code, minus its evidence-verification half.
 
 ## Verified API facts (do not re-research)
 
-- Projection contract (0.1.1-rc.1+): `ctx.inject(['sessionProjections'], ...)`;
-  `sessionProjections.register({ key, init, apply(state, event), stateVersion,
-  stateSchema, wire: { viewSchema, view } })`. Schema must be zod (`.parse`),
-  NOT schemastery — the projection engine calls `.parse`. Event types:
-  `todo/write` carries `{ todos }` (last-wins whole list). The official todos
-  unit is cleared to null at `turn/start`; a mirror that ignores that event
-  keeps the last list. `sessionProjections.snapshot(session)` forces a snapshot
-  so the client gets data on connect. zod 4.4.3 is already a repo dependency.
+- Projection contract, re-verified 2026-09-03 against the installed packages.
+  The earlier note here was WRONG: there is no `stateSchema` and no
+  `wire: { viewSchema, view }` wrapper. The definition object is flat and every
+  field is required:
+  `register({ key, schema, init(): S, apply(state, event): S, view(state): V, stateVersion })`,
+  returning a disposer (`dsh-session-projection/lib/types/index.d.ts:41-95,176`).
+  `apply` is a synchronous pure function. `schema` is a zod `ZodType` and the
+  engine calls `schema.parse(view(state))`
+  (`dsh-session-projection/lib/index.js:109,183,221,267`). Acquire the service
+  with `ctx.inject(['sessionProjections'], (pctx) => ...)`, exact service name
+  `sessionProjections` (`dsh-tool-todo/lib/types/index.js:98-101`).
+  `snapshot(session)` exists and returns `{ asOfSeq, values }`
+  (`index.d.ts:199`).
+- Dependencies: neither `zod` nor `@deepseek-ai/dsh-session-projection` was a
+  repo dependency, contrary to the earlier note here. Both were added on
+  2026-09-03: `zod` 4.5.4 as a runtime dependency (the host half bundles it,
+  since build.mjs marks only `@deepseek-ai/*` and `node:*` external), and
+  `@deepseek-ai/dsh-session-projection` as a devDependency for types.
+- Version skew, deliberate: the registry `latest` tag for
+  `@deepseek-ai/dsh-session-projection` is `0.0.1-rc.1`, while the dsh install
+  runs `0.1.0-rc.8` and every other dsh devDependency here is `0.1.0-rc.8`. The
+  package tool resolves `latest`, so the repo holds `0.0.1-rc.1`. The
+  `ProjectionDefinition` type block is byte-identical between the two, checked
+  with diff, so it typechecks against the runtime.
+- Custom projection keys need declaration merging. `SessionProjectionMap` is an
+  empty merge-extensible interface
+  (`dsh-session-projection/lib/types/types.d.ts:16`). Follow the pattern in
+  `dsh-tool-todo/lib/types/types.d.ts:12-20`:
+  `declare module '@deepseek-ai/dsh-session-projection/types' { interface SessionProjectionMap { 'durable-todos/todos': View | null } }`.
+  `TodoItem` imports from `@deepseek-ai/dsh-session/types`.
+- `apply` MUST return the same state reference for events it ignores. An
+  unchanged reference produces zero downstream work
+  (`dsh-session-projection/lib/types/index.d.ts:51-53`).
+- Event shapes: `todo/write` data is `{ todos: TodoItem[] }` where `TodoItem` is
+  `{ content: string, status: 'pending' | 'in_progress' | 'completed' }`.
+  `turn/start` data is `{ turn: number }`
+  (`dsh-session/lib/types/types.d.ts:180-184,230-232,320`). The official `todos`
+  projection returns `null` on `turn/start` and on nothing else
+  (`dsh-tool-todo/lib/index.js:85-87`), so ignoring that one event is the whole
+  of the persistence fix.
 - Sessions warm events: `session/created` (session) and `agent/session-start`
   (payload.agent.session) both exist (todo-guard uses them with delayed re-warms
   at 300ms and 1500ms to cover log loading). `ctx.setTimeout` exists on host.
@@ -387,25 +425,37 @@ concept with our own code, minus its evidence-verification half.
 
 ### T1 — host half: mirror projection + warm listeners
 
-Create `plugins/durable-todos.ts` (host): register the `durable-todos/todos`
-projection (zod schema, last-wins on todo/write, no clear at turn/start) and
-the session warm listeners. Unit test with vitest: feed a todo/write event and
-assert apply() keeps the list; feed turn/start and assert it does NOT clear.
+Create the package `plugins/durable-todos` in the same shape as
+`plugins/approval-comment`: a `package.json` with `main`, an `exports` map for
+`.` and `./client`, `dsh.bundle.patch`, and `dsh.client` with platform `web`, a
+`cordis.patch.yml` inserting one row named `durable-todos`, and `src/index.ts`
+for the host half. A flat `plugins/durable-todos.ts` cannot work, because a
+client half is only discovered through a package's `dsh.client` entry.
+
+The host registers the `durable-todos/todos` mirror projection and the session
+warm listeners. Projection state is `{ todos, carriedOver }`. A `todo/write`
+event replaces `todos` and sets `carriedOver` false. A `turn/start` event keeps
+`todos` and sets `carriedOver` true, so the panel can mark a list that outlived
+the turn that wrote it. No event clears the list.
 
 **Acceptance criteria**
 
-- `pnpm vitest run plugins/durable-todos.test.ts` passes (projection apply
-  semantics + warm listener registration with a stub ctx).
-- `pnpm run build` emits `plugins/durable-todos.js`.
+- `pnpm vitest run plugins/durable-todos/src/projection.test.ts` passes: a
+  todo/write sets the list, a following turn/start keeps the items and flips
+  carriedOver, and a second todo/write clears carriedOver again.
+- `pnpm run build` emits `plugins/durable-todos/lib/index.js`.
 
-### T2 — client half: dock + Remind button
+### T2 — client half: dock panel + Remind button
 
-Create `plugins/durable-todos/client.tsx`: module-loader client registering the
-`conversation.input.dock` entry. Always-visible card: header ("Todos" + Remind
-button), list of items with pending/in-progress/completed glyphs, "no todos"
-empty state. Remind: compose verbatim unfinished list, setDraft + submit,
-disabled while the input machine is busy, hidden with no unfinished items.
-dsw tokens only; kebab-case classes; idempotent style tag.
+Create `plugins/durable-todos/src/client.tsx`, bundled through
+`wrapClientBundle` to `plugins/durable-todos/lib/client.js`. It registers a
+`conversation.input.dock` entry at order 10. The card is always visible: a
+header with the title and the Remind button, the item list with pending,
+in-progress and completed glyphs, and a compact empty state. A carried-over
+list carries a label, so a stale list is never mistaken for a fresh one.
+Remind composes the unfinished items verbatim, calls setDraft then submit,
+stays disabled while the turn is running, and hides when nothing is unfinished.
+Use dsw tokens only, kebab-case classes, and an idempotent style tag.
 
 **Acceptance criteria**
 
@@ -415,12 +465,14 @@ dsw tokens only; kebab-case classes; idempotent style tag.
   no todos; after a todo write, items render; after dsh restart + reopen, list
   still shows; Remind sends the reminder message into the session.
 
-### T3 — wire-up: build.mjs entry + sync.sh rows + docs
+### T3 — wire-up: build.mjs entries + sync.sh install
 
-Add the client build entry to build.mjs (mirroring profiles-client), add the
-host row to the sync.sh insert list, copy the client bundle to the profile in
-sync.sh (same step pattern as profiles-client), and add a line to the bundle
-README listing the plugin.
+Add the host esbuild block and the `wrapClientBundle` call to build.mjs,
+mirroring the approval-comment pair. The package self-mounts through its own
+`cordis.patch.yml`, so the web patch needs no row. Add
+`pnpm_ins "$HERE/plugins/durable-todos"` to `step_install_plugins` and
+`durable-todos` to the expected list in `step_report_extra_plugins`. Add the
+plugin to the bundle README.
 
 **Acceptance criteria**
 
@@ -442,6 +494,9 @@ restart, then hand the Human review queue items to the user.
 - [ ] After deploy restart: open a fresh session — durable-todos panel shows
   "no todos" state; run a todo write — items render; restart dsh-web and reopen
   the session — list survives.
+- [ ] Interrupt: with unfinished todos on screen, interrupt the agent and send
+  another message — the durable panel still lists the items after the new turn
+  starts, while the official panel blanks as it does today.
 - [ ] Remind button: click while idle — reminder message appears in the
   session; click during a running turn — button disabled.
 - [ ] `/compact` appears in the slash autocomplete after the restart and runs
@@ -550,3 +605,241 @@ Source: `dsh-mcp-manager` at pin `69d5cbc`, `lib/index.js`. Probes run 2026-09-0
 - easyeda exposes no project-list tool, and the bridge advertises no
   `project.list` capability. Every tool reads the document EasyEDA Pro has
   focused, so a project must be open in the editor first.
+
+# Effort 4 — our own MCP manager plugin
+
+## Vision
+
+One plugin owns every MCP server. It replaces both the static `dsh-mcp-client`
+rows and the vendored hyqhyq3 manager. The official MCP SDK supplies both
+transports and the whole OAuth flow, so the plugin stays small. The SDK follows
+the `resource_metadata` pointer that hyqhyq3 ignores, which gives zepto a real
+chance to authenticate for the first time.
+
+## Settled decisions (from grilling, 2026-09-02)
+
+- The plugin owns all seven servers and both transports. stdio: nostrbook,
+  gitlab, easyeda, blinkit. http with OAuth: swiggy-food, swiggy-instamart,
+  zepto. zepto drops the mcp-remote hop and becomes a direct http server.
+- Config is `mcp-servers.json` in this repo, in the Claude and Codex
+  `mcpServers` shape. sync.sh copies it to `$DSH_HOME` on every run. Git owns
+  the file. The panel never writes it.
+- The panel is one English Settings section. It lists every server with status
+  and tool count and offers Authenticate on OAuth servers. No add, edit or
+  delete.
+- OAuth tokens live in their own `$DSH_HOME` file, never in git and never in
+  the roster file.
+- Public tool names stay `mcp__<name>__*`. This is a hard constraint: the
+  expense-split skill names `mcp__blinkit__*`, `mcp__swiggy-food__*` and
+  `mcp__zepto__*` directly.
+- Rejected: vendoring and translating hyqhyq3. Rejected: Js2Hou, dsh-toolkit,
+  dsh-skill-mcp-panel, dsh-mcphub and EricXu20266/dsh-mcpmanager. All five are
+  visual editors for `cordis.patch.yml` that delegate to `dsh-mcp-client`, so
+  none can perform a browser login, and all of them write the file sync.sh
+  regenerates.
+
+## Verified API facts (do not re-research)
+
+@modelcontextprotocol/sdk 1.30.0 ships with the dsh install.
+
+- `StdioServerParameters` = `{ command, args?, env?, cwd?, stderr?, maxBufferSize? }`.
+- `StdioClientTransport` spawns with `{ ...getDefaultEnvironment(), ...params.env }`,
+  so passing an empty `env` is safe. On POSIX the inherited allowlist is only
+  HOME, LOGNAME, PATH, SHELL, TERM and USER. That is enough for npx, and for
+  glab, which reads its token from `~/.config/glab-cli/config.yml` and so needs
+  only HOME. A server needing anything else, for example XDG_CONFIG_HOME, must
+  name it explicitly in the roster `env` block.
+- Testing note: a smoke test that spawns an `npx` server fails inside the agent
+  sandbox, because `~/.npm/_cacache` is read only there, and the child dies with
+  "MCP error -32000: Connection closed". This is not a code fault. dsh web runs
+  unsandboxed and npx works there. Use a local binary such as `glab` for smoke
+  tests, or set `npm_config_cache`.
+- `StreamableHTTPClientTransport.finishAuth(authorizationCode)` exchanges the
+  code for tokens. Keep the transport instance alive to call it after the
+  browser redirect, then reconnect.
+- `OAuthClientMetadata` requires only `redirect_uris`. Everything else,
+  including `client_name`, `grant_types`, `response_types` and
+  `token_endpoint_auth_method`, is optional.
+- The OAuth `redirect_uri` must carry the browser's exact origin, port included.
+  A guessed default such as `http://127.0.0.1` produces a callback on port 80
+  that no browser can reach. The host therefore keeps the origin empty until a
+  request arrives, and defers any http login until then. Covered by
+  `connect.test.ts`.
+- The callback must compare the OAuth `state` against a value this host stored
+  when it started the login. Without it, another page can steer the browser to
+  the callback with a foreign code and bind that account here. Covered by
+  `callback.test.ts`.
+- The token store loads the file once at apply time and writes the whole object
+  back. Nothing else may edit `mcp-oauth.json` while dsh web runs.
+- `StreamableHTTPClientTransport` options include `authProvider`, `requestInit`,
+  `fetch`, `reconnectionOptions`, `sessionId`. With `authProvider` set it tries
+  the stored token, refreshes it when expired, and calls
+  `redirectToAuthorization` then throws `UnauthorizedError` when a login is
+  needed.
+- `auth(provider, { serverUrl, authorizationCode?, scope?, resourceMetadataUrl?, fetchFn? })`.
+- `OAuthClientProvider` members: `redirectUrl`, `clientMetadata`,
+  `clientInformation()`, `saveClientInformation?()`, `tokens()`,
+  `saveTokens()`, `redirectToAuthorization()`, `saveCodeVerifier()`,
+  `codeVerifier()`, optional `state()` and `clientMetadataUrl`.
+- Discovery helpers: `extractResourceMetadataUrl(res)`,
+  `discoverOAuthProtectedResourceMetadata`, `discoverAuthorizationServerMetadata`,
+  `registerClient`, `startAuthorization`, `exchangeAuthorization`,
+  `refreshAuthorization`.
+
+DSH host plane:
+
+- `inject = ['tools', 'webServer']`.
+- `ctx.tools.register(definition)` returns a disposer. Definition shape, taken
+  from dsh-mcp-client `createDefinition`: `{ name, description, parameters,
+  output: { schema, render(args, value) }, execute, finalizeContent? }`.
+- `ctx.webServer.register({ kind: 'prefix', path: '/<prefix>', async handler(req, res) })`.
+  Derive the browser origin from `req.headers.host`, never hardcode it.
+- A local plugin package needs three separate wiring points, or it builds and
+  never mounts: a `build.mjs` entry, a `pnpm_ins "$HERE/plugins/<name>"` line in
+  `step_install_plugins`, and a matching entry in the `expected` array. The
+  package's own `cordis.patch.yml` alone does nothing until the package is
+  installed into the profile.
+
+DSH client plane:
+
+- `inject = ['slots']`, then
+  `ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id, order, label }, Component))`.
+- build.mjs `wrapClientBundle(src, out, id)` wraps a client half, so our source
+  may use TSX. See the approval-comment and profiles-client entries.
+
+## Tickets
+
+### T1 — config file, schema and sync step
+
+Create `plugins/mcp-servers` with its host half, add `mcp-servers.json` with all
+seven servers, and add a sync.sh step that copies it to
+`$DSH_HOME/mcp-servers.json`. Add the reader that parses the file and
+normalizes each entry to a server record.
+
+**Eval:** sync.sh copies the file. A malformed file logs one clear error and
+leaves the previous config active rather than crashing the host.
+
+### T2 — host: transports and tool registration
+
+Connect each server through the SDK, list its tools, and register them as
+`mcp__<name>__*` with per-server disposers. stdio and http both.
+
+**Eval:** `mcp__nostrbook__*`, `mcp__gitlab__*` and `mcp__easyeda__*` appear in
+a fresh session and one easyeda call returns real data. Disposal unregisters
+every tool.
+
+### Closed — T3 OAuth, with the zepto verdict kept
+
+The OAuth work is done. The zepto measurement stays here, because it explains a
+roster choice that would otherwise look arbitrary.
+
+**Verdict, measured 2026-09-02 against the live endpoints.** swiggy-food reaches
+`needs-auth` and produces a complete authorization URL: PKCE `S256`,
+`client_id=swiggy-mcp`, and the correct redirect back to this host. zepto fails
+earlier, at dynamic client registration on `https://auth.zepto.co.in`, with a
+plain nginx `403 Forbidden` page. The SDK does follow the `resource_metadata`
+pointer and does find the right authorization server, so discovery is not the
+problem: registration itself is refused. curl was refused the same way, with and
+without a browser user agent, so this is not a user-agent filter.
+
+Decision, 2026-09-02: zepto goes back to the `npx -y mcp-remote` stdio hop it
+used before. mcp-remote carries its own client registration, so it never needs
+the registration our SDK is refused. Its OAuth callback still binds to the server
+loopback, so that login must be finished from a browser on the server itself, not
+from a remote browser.
+
+### T5 remainder — remove the stale mcp-manager state file
+
+Every code change for T4 and T5 is done. One host-side leftover is not: delete
+`~/.dsh/mcp-manager.json` after the next sync. sync.sh does not remove it,
+because the file holds the OAuth tokens of a plugin that is now uninstalled, and
+deleting a secrets file behind the user's back is worse than leaving it.
+
+**Eval:** after the next sync and restart, the journal shows no `mcp-manager`
+row, and no tool name is registered twice.
+
+---
+
+## Vision
+
+Fork `dsh-compaction-instant` and fix the defects that make automatic compaction
+fail on this machine. Today the engine compiles a checkpoint, refuses it because
+it is not smaller than the span it would replace, and repeats that on every
+pre-step. The context never shrinks. The fork lives at
+`github.com/xyzshantaram/dsh-compaction-instant` and sync.sh pins it by commit,
+the same pattern as dsh-better-edit and dsh-remote.
+
+## Settled decisions (from grilling, 2026-09-02)
+
+- Fork base is `f6f300f`, the commit npm published as 0.1.4. The `v0.1.4` git
+  tag is stale: it points at `03a5346`, three commits earlier, and its source
+  does not match the published tarball.
+- `main` HEAD is unusable here. Commit `28107e6` imports
+  `@deepseek-ai/dsh-util-values`, which dsh 0.1.0-rc.7 does not ship. Revisit it
+  when dsh reaches 0.1.2.
+- The two Chinese checkpoint lines become English.
+- The shrink gate keeps a bounded retry at a tighter cap before it throws.
+- The install stays under the alias `@deepseek-ai/dsh-compaction-basic`. A
+  direct install under the real package name activates the package's own bundle
+  patch, which inserts rows the web patch already inserts, and boot dies on a
+  duplicate loader entry id.
+
+## Verified API facts (do not re-research)
+
+The fork clone is `/home/sid/repos/dsh-compaction-instant`, branch
+`fix/retention-and-shrink-gate`, based on `f6f300f`. `pnpm test` runs
+`node --test`. Peer deps install with plain `pnpm install`. The suite was 99
+passing at the base commit and is 103 passing on the branch.
+
+## Critical context
+
+- Measured from the journal, every failure has a constant delta of about 164
+  tokens between the framed checkpoint and the span. That is the fixed framing
+  cost: preamble, `RECALL:` guide, header, tags. The compiled body was the same
+  size as its source, so the compiler saved nothing on those spans.
+- Root cause of the tiny spans: in 0.1.3 the retention loop stops as soon as the
+  accumulated tail reaches `retainTokens`, so one oversized node satisfies the
+  whole budget by itself and is retained verbatim. Everything before it becomes
+  the compactable head, which can be a few hundred tokens while the session sits
+  above the pressure threshold. The tokens causing the pressure are exempt.
+- The compiler counts tokens with its own regex tokenizer, but the gate prices
+  with `ctx.tokenMeter.estimateMessage`. A cap expressed in compiler tokens is
+  not a guarantee at the gate. That is why the retry exists.
+- Automatic failures are soft: `agent/pre-step` catches and logs `step
+  compaction failed: ...; continuing the turn`. A manual `/compact` surfaces the
+  same fault as a `summary` failure.
+
+## Tickets
+
+### T5 — translate the settings card in `src/client.js`
+
+The Settings and Plugins card for this engine still renders in Chinese
+(`title: "即时压缩"` and its field labels). The checkpoint framing is already
+English. This is upstream text, not a regression, and it was deliberately left
+out of the first commit.
+
+**Eval:** the card reads in English in Settings and Plugins, `pnpm test` stays
+green, and the pin in sync.sh moves to the new commit.
+
+## Human review queue
+
+- [ ] Compaction on a real long session — run sync.sh, restart dsh-web, then
+      watch `journalctl --user -u dsh-web.service -f | rg compaction` across a
+      working session. Expect `compaction (step pressure): shadowed N surface
+      nodes` lines that commit, and no repeating `step compaction failed` line.
+- [ ] Checkpoint readability — expand one compacted checkpoint row in the web UI
+      and confirm the English framing reads correctly and the entries are useful.
+- [ ] MCP panel after sync and restart: open Settings and find the MCP section.
+      It must list all seven servers. nostrbook, gitlab, easyeda, blinkit and
+      zepto should reach connected with a tool count. swiggy-food and
+      swiggy-instamart should show needs-auth with an Authenticate button.
+- [ ] Click Authenticate on swiggy-food, finish the browser login, and confirm
+      the row reaches connected. Then restart dsh web and confirm it reconnects
+      with no second login.
+- [ ] Call one `mcp__easyeda__*` tool after the cutover. The static patch row is
+      gone, so this proves the new plugin replaced it with no loss.
+- [ ] Check the journal for a duplicate tool registration. Two registrars for
+      one server name was the risk the cutover removed.
+- [ ] zepto only: its mcp-remote login opens a callback on the server loopback,
+      so finish that one from a browser on the server itself.
+

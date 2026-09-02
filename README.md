@@ -41,6 +41,7 @@ Client packages (each ships its own `cordis.patch.yml` and built bundle):
 
 - [`plugins/approval-comment`](plugins/approval-comment) — lets you reject an approval with a comment.
 - [`plugins/profiles-client`](plugins/profiles-client) — profile-aware model seat in the composer.
+- [`plugins/mcp-servers`](plugins/mcp-servers) — owns every MCP server, both transports, plus the OAuth login and a Settings panel. The roster is [`mcp-servers.json`](mcp-servers.json), which sync copies to `~/.dsh/mcp-servers.json`. OAuth tokens live in `~/.dsh/mcp-oauth.json`, which this repo does not track.
 - [`plugins/session-archive`](plugins/session-archive) — cleanup panel for archived session logs.
 - [`plugins/subscriptions`](plugins/subscriptions) — usage panel for Command Code, Claude, DeepSeek, and OpenCode.
 - [`plugins/tool-render`](plugins/tool-render) — custom render cells for tool calls.
@@ -57,15 +58,12 @@ Client packages (each ships its own `cordis.patch.yml` and built bundle):
 - dsh-remote — remote browser access to dsh web. Pinned to a fork. From [xyzshantaram/dsh-remote](https://github.com/xyzshantaram/dsh-remote).
 - dsh-better-markdown — a streaming markdown renderer (Mermaid, KaTeX, Shiki). Client only. From npm.
 - dsh-paste-to-path — pasted files land in `<workspace>/.dsh/pastes/`. The composer carries a path reference. From [Johnny-xuan/dsh-paste-to-path](https://github.com/Johnny-xuan/dsh-paste-to-path).
-- dsh-mcp-manager — a Settings → MCP page. It adds MCP servers at run time and runs the OAuth login the built-in client cannot. Self-mounts through its own bundle patch. Server state lives in `~/.dsh/mcp-manager.json`, which this repo does not track. From [hyqhyq3/dsh-mcp-manager](https://github.com/hyqhyq3/dsh-mcp-manager).
 
 ### Mounted by the web patch
 
 These rows come from the harness install, not from git specs:
 
-- MCP clients through `@deepseek-ai/dsh-mcp-client`: nostrbook, gitlab, and easyeda. Each runs a third-party MCP server over stdio.
-- Servers that need a browser login run on dsh-mcp-manager instead, not on the built-in client, which has no OAuth support. `sync-mcp.py` declares that roster: swiggy-food, swiggy-instamart, zepto, and blinkit. swiggy-food and swiggy-instamart each need a single Authenticate click in Settings → MCP on a fresh machine. blinkit logs in by OTP through its own tools. zepto cannot log in from a remote browser, because mcp-remote opens its OAuth callback on the server loopback. See PLAN.md for the detail.
-- `sync-mcp.py` writes the mcp-manager state file only when nothing answers on the web port. dsh-remote guards the API, so to apply a roster edit, stop dsh web and run `python3 sync-mcp.py` by hand.
+- MCP servers all run through [`plugins/mcp-servers`](plugins/mcp-servers), not through `@deepseek-ai/dsh-mcp-client`. The built-in client takes a static header map only, so it cannot run a browser login. Our plugin speaks both transports through the official MCP SDK and owns the OAuth flow, so it registers every tool as `mcp__<server>__*`.
 - `@deepseek-ai/dsh-tool-cordis` — the `cordis_*` tools, gated behind the cordis skills.
 - `@deepseek-ai/dsh-compaction-basic` — instant compaction plus the recall tools.
 
