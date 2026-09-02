@@ -108,12 +108,26 @@ await build({
 // Effort 4: mcp-servers host half. The roster reader and the later MCP
 // transports bundle here. @modelcontextprotocol/sdk is a real dependency and
 // MUST be bundled, so it is deliberately not in external.
+//
+// The banner is load-bearing. cross-spawn, pulled in by the SDK's stdio
+// transport, calls `require("child_process")` with a bare specifier, which the
+// `node:*` external pattern does not match. esbuild therefore inlines its
+// __require shim, and that shim throws in ESM output because no `require`
+// binding exists. Restoring a real `require` through createRequire satisfies
+// the shim, which checks `typeof require !== "undefined"` before it throws.
+// Without this the whole plugin tree fails to load and dsh does not boot.
 await build({
   entryPoints: [join(here, "plugins/mcp-servers/src/index.ts")],
   bundle: true,
   platform: "node",
   format: "esm",
   external: ["@deepseek-ai/*", "node:*"],
+  banner: {
+    js: [
+      'import { createRequire as __dshCreateRequire } from "node:module";',
+      "const require = __dshCreateRequire(import.meta.url);",
+    ].join("\n"),
+  },
   outfile: join(here, "plugins/mcp-servers/lib/index.js"),
   logLevel: "info",
 });

@@ -1,3 +1,5 @@
+import { createRequire as __dshCreateRequire } from "node:module";
+const require = __dshCreateRequire(import.meta.url);
 var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
