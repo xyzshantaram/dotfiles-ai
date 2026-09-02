@@ -105,6 +105,25 @@ await build({
   logLevel: "info",
 });
 
+// Effort 4: mcp-servers host half. The roster reader and the later MCP
+// transports bundle here. @modelcontextprotocol/sdk is a real dependency and
+// MUST be bundled, so it is deliberately not in external.
+await build({
+  entryPoints: [join(here, "plugins/mcp-servers/src/index.ts")],
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  external: ["@deepseek-ai/*", "node:*"],
+  outfile: join(here, "plugins/mcp-servers/lib/index.js"),
+  logLevel: "info",
+});
+
+await wrapClientBundle(
+  join(here, "plugins/mcp-servers/src/client.tsx"),
+  join(here, "plugins/mcp-servers/lib/client.js"),
+  "mcp-servers",
+);
+
 await wrapClientBundle(
   join(here, "plugins/approval-comment/src/client.tsx"),
   join(here, "plugins/approval-comment/lib/client.js"),

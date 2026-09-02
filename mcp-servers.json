@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "nostrbook": { "type": "stdio", "command": "npx", "args": ["-y", "@nostrbook/mcp@latest"] },
+    "gitlab": { "type": "stdio", "command": "glab", "args": ["mcp", "serve"] },
+    "easyeda": { "type": "stdio", "command": "npx", "args": ["-y", "easyeda-mcp-pro@latest"], "env": { "TOOL_PROFILE": "core" } },
+    "blinkit": { "type": "stdio", "command": "node", "args": ["~/installs/blinkit-mcp/dist/index.js"] },
+    "swiggy-food": { "type": "http", "url": "https://mcp.swiggy.com/food" },
+    "swiggy-instamart": { "type": "http", "url": "https://mcp.swiggy.com/im" },
+    "zepto": { "type": "stdio", "command": "npx", "args": ["-y", "mcp-remote", "https://mcp.zepto.co.in/mcp"] }
+  }
+}
