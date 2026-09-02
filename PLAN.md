@@ -225,6 +225,30 @@ concept with our own code, minus its evidence-verification half.
   `agent/session-start` with 300ms/1500ms delayed re-warms, so the panel renders
   right after reopen/restart instead of waiting for the next todo write.
 - Plugin name: durable-todos.
+- REWORKED 2026-09-03. The hand-rolled panel was ugly, it rendered in ADDITION
+  to the built-in one rather than replacing it, and it did not collapse. The
+  fix was to feed the built-in panel durable data and wrap it.
+- REVERSED 2026-09-03, later the same day. Wrapping the built-in panel cannot
+  be done. `TodoDock` is a local function at
+  `dsh-client-ui-conversation/lib/client.js:6554` and is absent from the package
+  export surface (`lib/types/client/index.d.ts:16-23` exports only `apply`,
+  `inject`, `ConversationController`, and types). So the panel stays
+  hand-rolled. We style it properly and hide the shipped one with a CSS rule on
+  its stable `data-testid="todo-panel"` hook. Owning the panel keeps the Remind
+  button and the carried-over label with no compromise, at the cost of more
+  front-end work, which the owner accepted.
+- Disabling the shipped panel any other way is blocked. Starving the `todos`
+  projection needs the `tool-todo` row disabled, but that row lives in the agent
+  preset, and `editing-cordis-compositions` forbids forking a shipped preset.
+  Same-id displacement is unverified for list slots: the SlotCore note in
+  `plugins/tool-render/src/client.tsx` proves shadowing works for KEYED slots by
+  priority, but `conversation.input.dock` is a list slot keyed by `id`/`order`,
+  which is why both panels render today.
+- The carried-over label SURVIVES the rework. The `todos` projection type is
+  `TodoItem[] | null` with no room for a flag, so the flag moves to its own
+  tiny projection key, `durable-todos/carried`, holding a boolean. Our wrapper
+  reads both keys: it passes `todos` through to the built-in `TodoDock` and
+  renders the badge itself.
 - Carried-over marking (decided 2026-09-03, when the interrupt case was
   raised). A list that outlived the turn that wrote it gets a `carried over`
   label in the panel header. The alternative offered was to show the list
@@ -312,22 +336,111 @@ concept with our own code, minus its evidence-verification half.
 
 ## Tickets
 
-### T4 — restart and verify
+### T5 — host: take over the todo tool and the `todos` projection
 
-The package is built, installed on the web profile, and smoke-tested against a
-real Context: `register` runs with key `durable-todos/todos`, a `todo/write`
-sets the list, a following `turn/start` keeps the items and flips
-`carriedOver`, and a second `turn/start` returns the same state reference. What
-remains is the restart. The user asked to build and deploy, so this is owed
-work rather than an optional extra. The agent deferred it on purpose, because a
-restart drops the server that runs the live session and that timing is the
-user's call.
+**SUPERSEDED 2026-09-03.** Dropped with the reversal above. The host keeps its
+existing `durable-todos/todos` mirror projection and does not take over
+`todo_write`. Kept here because the acceptance criteria still describe the
+behaviour the mirror must preserve.
+
+Disable the `tool-todo` row. Our host plugin registers `todo_write` with the
+same parameter schema and description as `@deepseek-ai/dsh-tool-todo` (195
+lines, worth copying faithfully because the model's behaviour depends on the
+wording), plus TWO projections. First, `todos` under that exact key, holding
+`TodoItem[] | null` and never clearing on `turn/start`, so the built-in panel
+reads it. Second, `durable-todos/carried`, a boolean set true by `turn/start`
+and cleared by the next `todo/write`, which carries the flag the `todos` type
+has no room for. Replace the old `durable-todos/todos` projection with this
+pair.
+
+The built-in `TodoDock` then renders durable todos with no client work, so the
+styling, the chevron, the progress line and the collapse all come for free.
 
 **Acceptance criteria**
 
-- After the restart the journal shows the `durable-todos` row mounting with no
-  duplicate loader entry id.
-- The human review queue items below pass.
+- `todo_write` accepts the same arguments as before and still rejects a call
+  that marks several items in progress when `allowParallelInProgress` is false.
+- After an interrupt and a new message, the built-in panel still lists the
+  items.
+- No duplicate registration of the `todos` projection key at boot.
+
+### T6 — client: displace the built-in dock entry and keep Remind
+
+**SUPERSEDED 2026-09-03.** Replaced by T7 below. The import this ticket depends
+on does not exist.
+
+Register at `conversation.input.dock` with id `todo` and order 0, the same id
+the built-in uses, to displace it. Render the imported `TodoDock` from
+`@deepseek-ai/dsh-client-ui-conversation`, passing the standard props through
+untouched, and add two things of our own around it: the Remind button, and the
+`carried over` badge driven by `useProjection("durable-todos/carried")`.
+Delete the hand-rolled list markup and most of `client.module.css`.
+
+RISK, unverified: this assumes a second registration at the same slot id
+replaces the built-in rather than rendering both. The shipped types do not say.
+Test it on the first restart. If both render, move Remind to
+`conversation.input.left` or `.right` instead, which is what the dock's own
+catalog doc says clickable elements are for, and drop the wrapper.
+
+**Acceptance criteria**
+
+- Exactly one todo panel renders, and it collapses.
+- Remind still fills the composer with the unfinished items and submits.
+- The `carried over` badge appears after a turn boundary and clears on the next
+  write, which keeps the existing review-queue check valid.
+
+### T7 — client: style the hand-rolled panel and hide the shipped one
+
+The panel stays ours. Restyle it and make it collapsible. Registration does not
+change: list slot `conversation.input.dock`, id `durable-todos`, order 10. The
+host side does not change.
+
+- Collapsible, and it starts collapsed. It never auto-hides. With no todos it
+  still renders, collapsed, showing the compact `No todos` text.
+- Remind and the `carried over` badge stay in the header at all times, collapsed
+  or expanded. Remind still hides with nothing unfinished and stays disabled
+  mid-turn.
+- The collapsed header carries a counts summary: the total, then the non-zero
+  status counts, for example `5 todos · 1 in progress · 3 pending · 1 done`.
+- While a turn runs AND an item is in_progress, one extra line under the header
+  shows that item's content, truncated to one line. It never shows when idle.
+- Body markup mirrors `tool-render`, so the two read the same: a CSS-drawn
+  checkbox plus content, with the status on a `data-done` / `data-active` /
+  `data-pending` attribute. No text glyphs. No strikethrough on completed items,
+  which use `--dsw-alias-label-tertiary` instead.
+- The card mirrors the composer width: `width: 100%` with
+  `max-width: var(--dsh-composer-card-max-width)`. No media queries, because the
+  shipped panel uses none.
+- One CSS rule hides the shipped panel: `[data-testid="todo-panel"]`.
+
+**Acceptance criteria**
+
+- Exactly one todo panel renders, and it collapses and expands.
+- Remind fills the composer with the unfinished items and submits.
+- The `carried over` badge appears after a turn boundary and clears on the next
+  write.
+- The panel body is visually indistinguishable from a `todo_write` tool card.
+- The active-item line appears only while a turn is running.
+
+**Risk.** The hide rule depends on the shipped `data-testid`. If an upgrade
+renames it, the shipped panel returns. That failure is visible, not silent.
+
+### T8 — an empty panel says "No work items"
+
+DONE 2026-09-03, pending the owner's visual check.
+
+The collapsed header rendered its counts summary only when the list had items,
+so an empty panel read as a bare `To-do` title with nothing beside it. The
+summary is now always rendered, and it reads `No work items` when the list is
+empty.
+
+**Acceptance criteria**
+
+- With no todos, the collapsed header reads `To-do` then `No work items`.
+- With todos, the counts summary is unchanged.
+
+NOTE: the expanded body still reads `No todos` for its empty state. Align the
+two if that reads oddly side by side.
 
 ## Human review queue (shared, both efforts)
 
@@ -337,12 +450,18 @@ user's call.
 - [ ] Interrupt: with unfinished todos on screen, interrupt the agent and send
   another message — the durable panel still lists the items after the new turn
   starts, while the official panel blanks as it does today.
+- [ ] Carried-over label: after the interrupt check above, confirm the header
+  reads `carried over`. Then let the agent write the list again in the new turn
+  and confirm the label clears. This is the marking you chose over showing the
+  list plainly.
 - [ ] Remind button: click while idle — reminder message appears in the
   session; click during a running turn — button disabled.
 - [ ] `/compact` appears in the slash autocomplete after the restart and runs
   on a long session.
 - [ ] `rg -rln foo /tmp/dsh/file` gets a deny suggesting `rg foo /tmp/dsh/file`;
-  `rg --replace x y file` runs untouched.
+  `rg --replace x y file` runs untouched. Observed once on 2026-09-03: a
+  `rg -rn --hidden -l` call was denied with the ambiguous-`-r` explanation and
+  the suggested rewrite. The `--replace` half is still unchecked.
 - [ ] Approval prompt: trigger one and confirm the card shows a 3px orange
   outline and no 1px warn border.
 - [ ] After the next sync and restart: log in normally, and confirm `/compact`
@@ -597,3 +716,200 @@ green, and the pin in sync.sh moves to the new commit.
 - [ ] zepto only: its mcp-remote login opens a callback on the server loopback,
       so finish that one from a browser on the server itself.
 
+# Effort 6 — job viewer: clickable job rows and an output modal
+
+## Vision
+
+The session header lists background jobs but the rows do nothing. Reading a
+job means asking the agent to call `job_output`. This effort makes each row
+clickable and shows that job's output in a modal, so a long command can be
+watched from any device, including a phone over dsh-remote.
+
+## Settled decisions (from grilling, 2026-09-03)
+
+- No tmux. It re-parents the command onto the tmux server, outside the argv
+  that `ctx.sandbox` wraps, and the workspace-write policy is doing real work.
+  The attach-from-a-laptop-terminal case is dropped on purpose. The modal
+  replaces it and also works from a phone, which tmux never would have.
+- For an interactive command the agent must drive, use the shipped
+  `dsh-tool-bash-persistent` over the PTY seam. That is a separate one-row
+  change, not part of this effort.
+- A host plugin becomes the SOLE consumer of job output. It polls each running
+  job and buffers the deltas.
+- The plugin replaces the three model tools so they read from that buffer.
+  Side effect worth keeping: `job_output` stops being one-shot and the agent
+  can re-read a job.
+- The client half replaces the shipped dropdown rather than adding a second
+  button next to it.
+
+## Verified API facts (do not re-research)
+
+Paths are relative to the dsh install at
+`.../lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/`.
+
+- Service name `jobs`, type `JobRegistry` (`dsh-jobs/lib/types/index.d.ts:8`).
+  Methods `start`, `list`, `get`, `read`, `kill`, `wait`, `onJobDone`,
+  `onJobsChanged`, `attachController` (`index.d.ts:47-118`).
+- `JobSnapshot`: `id` (`<kind>-N`), `kind`, `label`, `status`
+  (`running | stopping | completed | killed | failed`), `detail?`, `startedAt`,
+  `finishedAt?`, `reported`, `ownerSession?`, `outputLimitBytes?`
+  (`dsh-jobs/lib/types/types.d.ts:46-81`).
+- THE CONSTRAINT: `JobRead` is `{ text, snapshot }` and `text` is the consuming
+  delta since the previous read, with ONE cursor, not one per caller
+  (`types.d.ts:121-130`). Whoever reads first takes it. This is the whole
+  reason the plugin must own consumption.
+- The client cannot read output today. The wire frame is `session/jobs` with
+  `jobs: JobView[]` (`dsh-host-apiproxy/lib/types/api/events.d.ts:124-127`),
+  mirrored last-wins into `jobsBySession`
+  (`dsh-client-runtime/lib/types/client/sessions/service.d.ts:82`), read with
+  `useSessions((s) => s.jobsBySession[sessionId])`. `JobView` carries `id`,
+  `kind`, `label`, `status`, `detail?`, `startedAt`, `finishedAt` and NO output
+  field. "The live records never cross the wire"
+  (`dsh-host-apiproxy/lib/types/api/jobs.d.ts:3-5`).
+- The dropdown is `JobListAction`
+  (`dsh-client-ui-jobs/lib/types/client/JobListAction.d.ts:12`), registered at
+  `conversation.session.header.actions`, entry id `job-list`, order 20
+  (`dsh-client-ui-jobs/lib/client.js:266-272`). Rows are `<li>` with no
+  `onClick` (`client.js:264-286`). The slot is `kind: list`, `scope: session`
+  (`dsh-client-ui-conversation/lib/types/client/contract/slots.d.ts:86-90`).
+- `Modal` comes from `@deepseek-ai/dsh-client-ui-primitives`, which the web
+  boot injects as a static module into every dynamic client package. Props:
+  `{ open, onClose, title, closeLabel, description, children, footer,
+  className, contentClassName, headless }`. It portals to `document.body` with
+  a mask, `role="dialog"` and Escape handling.
+- The model-facing tools live in `dsh-tool-jobs`, mounted as row `tool-jobs` in
+  `config/agent-presets/standard/agent.cordis.yml:73-74`.
+- The host route pattern already used in this bundle is
+  `ctx.inject(["webServer"], ...)`, see `plugins/log-viewer/src/index.ts:75`.
+- `JobKindMap` is merge-extensible by declaration merging
+  (`dsh-jobs/lib/types/types.d.ts:19-24`), the same shape as
+  `SessionProjectionMap`.
+- The subprocess layer keeps a bounded tail in memory and spills past
+  64 MiB per stream (`dsh-subprocess-local/lib/types/index.d.ts:88-90`).
+
+## Tickets
+
+### T1 — host: the output buffer and its poller
+
+A per-job append buffer with a byte cap and a retention window for finished
+jobs. A poller reads every running job on a timer and appends the delta.
+
+**Acceptance criteria**
+
+- Vitest covers: deltas accumulate in order, the cap drops the oldest bytes,
+  and a finished job keeps its output for the retention window.
+- The poller stops for a job once it reaches a terminal status.
+
+### T2 — host: replacement tools and the output route
+
+Replacement `job_list`, `job_output` and `job_kill` reading from the buffer,
+plus an HTTP route serving one job's buffer to the browser.
+
+**Acceptance criteria**
+
+- The three tools return what the agent expects, including a job that finishes
+  between two reads.
+- With the modal open and polling, an agent `job_output` call on the same job
+  still returns the full output with no gap. This is the regression that
+  matters, so it gets its own test.
+
+### T3 — client: the replacement dropdown and the modal
+
+Own entry at `conversation.session.header.actions`, rows clickable, click opens
+`Modal` showing that job's buffer.
+
+**Acceptance criteria**
+
+- The header shows one jobs button, not two.
+- Rows render dot, kind, label, status and duration as before.
+- The modal fetches and displays output, and refreshes while the job runs.
+
+### T4 — wire-up and deploy
+
+Disable the `tool-jobs` row and the `dsh-client-ui-jobs` row. Add the build
+entries and the sync.sh install.
+
+**Acceptance criteria**
+
+- `./sync.sh` exits 0 and the journal shows no duplicate tool registration for
+  `job_output`, `job_list` or `job_kill`.
+
+## Human review queue
+
+- [ ] Start a long background command. Open the dropdown, click the row, and
+      watch output arrive in the modal.
+- [ ] While that modal is open and polling, have the agent call `job_output` on
+      the same job. It must see the full output, not a gap.
+- [ ] Confirm the header shows one jobs button and the rows still read the way
+      they did before.
+- [ ] Open the modal from the phone over dsh-remote and confirm it loads.
+
+
+# Effort 7 — tool-render: error styling and image tool cards
+
+## Vision
+
+`read_image` and `see` tool calls render as generic cards today. The image
+itself never appears, and the `see` description comes back as plain dumped text.
+Make both cards show the image and present their text well.
+
+## Requested scope (verbatim, 2026-09-03)
+
+> add tool-render ticket: make read_image and see tool calls embed the image,
+> click to open enlarged preview modal, and make see also show the description
+> that the subagent returned in a pretty way, and make read_image display
+> metadata in a pretty way too
+
+## Critical context
+
+- The plugin is `plugins/tool-render`. It shadows shipped per-tool rows by
+  registering the same key of `tool.call.toolview` at priority -100. Keyed slots
+  sort ascending and the lowest live entry renders. A same key at a different
+  priority never throws. See the header comment in `src/client.tsx`.
+- `SlotCore.register()` DOES throw when a second entry declares the same child
+  slot name, so shadow rows, never slot declarations.
+- Effort 6 also needs an output modal for background jobs. Check whether one
+  modal component can serve both before designing either. Do not build two.
+
+## Open questions, settle before planning
+
+- Where does the image data come from for each tool, and is it on the call args
+  or the result? This is unverified. Establish it before any ticket is written.
+- Which metadata fields matter for `read_image`, and in what order?
+- Does the enlarged preview need zoom and pan, or is a plain larger view enough?
+- Should the collapsed row show a thumbnail, or only the expanded card?
+
+## Tickets
+
+### T1 — errored calls: outline the card, and let them collapse
+
+DONE 2026-09-03, pending the owner's visual check.
+
+Three changes, in `plugins/tool-render/`.
+
+1. An errored call was marked by a tinted row background plus a 3px inset left
+   bar, and that bar pushed the row 0.5rem right of every normal row. It is now
+   outlined the way an escalated call is, on the CARD rather than the row, so
+   the outline follows the card's rounded corners:
+   `.tool-render-card[data-error] { outline: 2px solid ... }` beside the
+   existing `[data-escalated]` rule. The card gets `data-error` next to
+   `data-escalated`. The enlarged red status dot is unchanged.
+2. Errored calls are collapsible and start collapsed, like every other call.
+   Previously `interactive` excluded them on purpose and the body rendered
+   unconditionally, so an errored call was always expanded and never clicked.
+   Both overrides are gone.
+3. An errored call reports its tool name and error message on the row instead
+   of its arguments. The tool name is already the row title. The summary now
+   prefers `errorSummary`, and the path-link branch is skipped when an error
+   message exists, so an errored `read` shows the error and not the file path.
+
+**Acceptance criteria**
+
+- An errored call shows a 2px red outline around its card, no red fill, no bar.
+- The red status dot still shows, still enlarged, while collapsed.
+- Clicking an errored call expands and collapses it, and it starts collapsed.
+- The collapsed row reads as tool name plus error message, not arguments.
+
+### T2 — see and read_image cards
+
+Not started. Scope is unsettled. Grill the owner, then ticket it.

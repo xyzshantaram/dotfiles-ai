@@ -23,12 +23,6 @@ interface DockProps {
   t(key: string): string;
 }
 
-var GLYPHS: Record<TodoItem["status"], string> = {
-  pending: "○",
-  in_progress: "◐",
-  completed: "●",
-};
-
 function isUnfinished(item: TodoItem): boolean {
   return item.status === "pending" || item.status === "in_progress";
 }
@@ -51,6 +45,7 @@ function makePanel() {
     var todos = value === null || value === undefined ? null : value.todos;
     var carriedOver = value !== null && value !== undefined ? value.carriedOver : false;
     var unfinished = todos === null ? [] : todos.filter(isUnfinished);
+    var [collapsed, setCollapsed] = react.useState(true);
 
     var onRemind = function () {
       var text = reminderText(unfinished);
@@ -58,10 +53,58 @@ function makePanel() {
       props.inputActions.submit();
     };
 
+    var inProgressItem =
+      running && todos
+        ? todos.find(function (item) {
+            return item.status === "in_progress";
+          })
+        : null;
+
+    var pendingCount = todos
+      ? todos.filter(function (item) {
+          return item.status === "pending";
+        }).length
+      : 0;
+    var inProgressCount = todos
+      ? todos.filter(function (item) {
+          return item.status === "in_progress";
+        }).length
+      : 0;
+    var completedCount = todos
+      ? todos.filter(function (item) {
+          return item.status === "completed";
+        }).length
+      : 0;
+    var totalCount = todos ? todos.length : 0;
+
+    var buildSummary = function () {
+      // An empty list still says something, so the collapsed header never
+      // reads as a bare title with no state beside it.
+      if (totalCount === 0) return "No work items";
+      var parts = [totalCount + " total"];
+      if (inProgressCount > 0) parts.push(inProgressCount + " in progress");
+      if (pendingCount > 0) parts.push(pendingCount + " pending");
+      if (completedCount > 0) parts.push(completedCount + " done");
+      return parts.join(" · ");
+    };
+
     return (
       <div className="durable-todos-card">
         <div className="durable-todos-header">
-          <div className="durable-todos-title">Todos</div>
+          <button
+            type="button"
+            className="durable-todos-toggle"
+            aria-expanded={!collapsed}
+            onClick={function () {
+              setCollapsed(!collapsed);
+            }}
+          >
+            <span className="durable-todos-chevron" aria-hidden={true}>
+              {collapsed ? "▶" : "▼"}
+            </span>
+            <span className="durable-todos-title">To-do</span>
+            <span className="durable-todos-summary">{buildSummary()}</span>
+          </button>
           {carriedOver ? <span className="durable-todos-carried">carried over</span> : null}
           {unfinished.length > 0 ? (
             <button
@@ -74,27 +117,33 @@ function makePanel() {
             </button>
           ) : null}
         </div>
-        {todos === null || todos.length === 0 ? (
-          <div className="durable-todos-empty">No todos</div>
-        ) : (
-          <div className="durable-todos-rows">
-            {todos.map(function (item, index) {
-              return (
-                <div
-                  key={index}
-                  className={
+        {inProgressItem ? (
+          <div className="durable-todos-running-line">{"Current: " + inProgressItem.content}</div>
+        ) : null}
+        {!collapsed ? (
+          <>
+            {todos === null || todos.length === 0 ? (
+              <div className="durable-todos-empty">No todos</div>
+            ) : (
+              <div className="durable-todos-plan">
+                {todos.map(function (item, index) {
+                  var attrs =
                     item.status === "completed"
-                      ? "durable-todos-row durable-todos-row-completed"
-                      : "durable-todos-row"
-                  }
-                >
-                  <span className="durable-todos-glyph">{GLYPHS[item.status]}</span>
-                  <span>{item.content}</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                      ? { "data-done": true }
+                      : item.status === "in_progress"
+                        ? { "data-active": true }
+                        : { "data-pending": true };
+                  return (
+                    <div key={index} className="durable-todos-plan-item" {...attrs}>
+                      <span className="durable-todos-checkbox" aria-hidden={true} />
+                      <span className="durable-todos-plan-content">{item.content}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        ) : null}
       </div>
     );
   };
