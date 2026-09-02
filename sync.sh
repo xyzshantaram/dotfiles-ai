@@ -117,29 +117,9 @@ step_write_web_patch() {
 - insert:
     - id: log-exporter
       name: $HERE/plugins/log-exporter.js
-    - id: mcp-nostrbook
-      name: '@deepseek-ai/dsh-mcp-client'
-      config:
-        serverName: nostrbook
-        transport: stdio
-        command: npx
-        args: ['-y', '@nostrbook/mcp@latest']
-    - id: mcp-gitlab
-      name: '@deepseek-ai/dsh-mcp-client'
-      config:
-        serverName: gitlab
-        transport: stdio
-        command: glab
-        args: ['mcp', 'serve']
-    - id: mcp-easyeda
-      name: '@deepseek-ai/dsh-mcp-client'
-      config:
-        serverName: easyeda
-        transport: stdio
-        command: npx
-        args: ['-y', 'easyeda-mcp-pro@latest']
-        env:
-          TOOL_PROFILE: core
+    # Every MCP server now lives in the mcp-servers plugin, which reads
+    # $DSH_HOME/mcp-servers.json. The built-in dsh-mcp-client rows are gone:
+    # two registrars for one server name would register each tool twice.
     - id: bash-guard
       name: $HERE/plugins/bash-guard.js
       config:
@@ -299,13 +279,9 @@ step_install_plugins() {
 		# the composer carries a PATH reference. Replaced dsh-paste-input.
 		pnpm_ins "github:Johnny-xuan/dsh-paste-to-path#d68fb104ca25a663ba3912bb17f8c2ab32d60e37"
 		pnpm_ins "github:davidgereb/dsh-plugin-better-mobile-ui#16e21548315866b50d5f3f64b91a70f24f3318ba"
-		# Settings -> MCP page: add MCP servers at run time, and log in to the
-		# ones that need OAuth. The built-in dsh-mcp-client accepts only static
-		# headers, so it cannot run an OAuth login. This package self-mounts
-		# through its own dsh.bundle.patch, so it needs no row in the patch
-		# above. Its server state lives in $DSH_HOME/mcp-manager.json, which
-		# this repo does NOT track. Upgrade = bump the pin.
-		pnpm_ins "github:hyqhyq3/dsh-mcp-manager#69d5cbc76e21606867f6dbef05025e2e2dfdbd04"
+		# The MCP manager plugins on npm and GitHub are all visual editors for
+		# cordis.patch.yml that delegate to dsh-mcp-client, so none of them can
+		# run a browser login. Our own plugins/mcp-servers replaced them.
 		# Hash-anchored read/edit/undo tools. Pinned to OUR fork
 		# (github.com/xyzshantaram/dsh-better-edit, branch
 		# fix/served-mirror-rebase) while we measure two fixes upstream does
@@ -313,6 +289,22 @@ step_install_plugins() {
 		# string coercion for read offset/limit. See
 		# experiments/tool-call-friction/README.md. Upgrade = bump the pin.
 		pnpm_ins "github:xyzshantaram/dsh-better-edit#873b9fd53e71a8bbe587297944dbf4542ce7d64a"
+		# Deterministic instant compaction, installed UNDER THE BASIC NAME on
+		# purpose. The package declares its own dsh.bundle patch, so a direct
+		# install under its real name inserts compaction rows the web patch
+		# already inserts and boot dies on a duplicate loader entry id. The
+		# alias shadows the builtin instead, and the patch above names
+		# @deepseek-ai/dsh-compaction-basic for all three rows.
+		#
+		# Pinned to OUR fork (github.com/xyzshantaram/dsh-compaction-instant,
+		# branch fix/retention-and-shrink-gate) off published 0.1.4. Upstream
+		# fails every automatic compaction on some sessions: a node larger than
+		# the retain ceiling crashes range selection, the checkpoint cap ignores
+		# the span so the compiler elides nothing, and the fixed framing cost
+		# then makes the checkpoint larger than what it replaces. Do NOT track
+		# upstream main: it imports @deepseek-ai/dsh-util-values, which needs
+		# dsh 0.1.2. Upgrade = bump the pin.
+		pnpm_ins "@deepseek-ai/dsh-compaction-basic@github:xyzshantaram/dsh-compaction-instant#076217b93a702e6dd8b6b775e4b30332b0631ce9"
 
 		pnpm_ins "$HERE/plugins/session-archive"
 		pnpm_ins "$HERE/plugins/subscriptions"
@@ -320,6 +312,9 @@ step_install_plugins() {
 		pnpm_ins "$HERE/plugins/profiles-client"
 		pnpm_ins "$HERE/plugins/approval-comment"
 		pnpm_ins "$HERE/plugins/log-viewer"
+		# Owns every MCP server, both transports, and the OAuth login. Its
+		# roster is $DSH_HOME/mcp-servers.json, written by step_sync_mcp_config.
+		pnpm_ins "$HERE/plugins/mcp-servers"
 		pnpm_ins "$HERE/plugins/llm-pi-ai"
 	else
 		echo "WARNING: dsh not on PATH; skipping third-party plugin installs."
@@ -327,16 +322,11 @@ step_install_plugins() {
 	fi
 }
 
-step_sync_mcp_roster() {
-	# Declare the dsh-mcp-manager roster: the MCP servers that need a browser
-	# login. The built-in dsh-mcp-client accepts only a static headers map, so it
-	# cannot run an OAuth flow, and those servers cannot live in the patch above.
-	# The script uses mcp-manager's HTTP API when it answers. It writes the state
-	# file only when nothing is listening at all, because a live host owns that
-	# file. dsh-remote guards the API, so a normal run while dsh web is up just
-	# reports that it changed nothing. Each OAuth server still needs one
-	# Authenticate click in Settings -> MCP the first time.
-	python3 "$HERE/sync-mcp.py"
+step_sync_mcp_config() {
+	# The MCP server roster. Git owns this file, so the panel never writes it
+	# and sync overwrites it every run.
+	echo "  syncing mcp-servers.json -> $DSH_HOME/mcp-servers.json"
+	cp "$HERE/mcp-servers.json" "$DSH_HOME/mcp-servers.json"
 }
 
 step_report_extra_plugins() {
@@ -368,12 +358,12 @@ step_report_extra_plugins() {
 		"dsh-at-file"
 		"dsh-better-markdown"
 		"dsh-input-history"
-		"dsh-mcp-manager"
 		"dsh-paste-to-path"
 		"profiles-client"
 		"session-archive"
 		"subscriptions"
 		"log-viewer"
+		"mcp-servers"
 		"tool-render"
 
 		"dsh-plugin-better-mobile-ui"
@@ -847,10 +837,10 @@ STEPS=(
 	"Sync AGENTS.md -> $DSH_HOME/AGENTS.md|step_sync_agents_md"
 	"Sync dsh-better-edit guidance overrides|step_sync_better_edit_guidance"
 	"Sync bash-guard rule drop-ins -> $DSH_HOME/plugins/guards|step_sync_guard_rules"
+	"Sync the MCP server roster|step_sync_mcp_config"
 	"Write the web-profile patch (host-plane rows)|step_write_web_patch"
 	"Allow pnpm build scripts for git-hosted plugins|step_allow_builds"
 	"Install the third-party plugin set on the web profile|step_install_plugins"
-	"Declare the dsh-mcp-manager server roster|step_sync_mcp_roster"
 	"Report extra plugins (removal commands)|step_report_extra_plugins"
 	"Install the aidos plugin from git|step_install_aidos"
 	"Sync aidos skills from pinned commit|step_sync_aidos_skills"
