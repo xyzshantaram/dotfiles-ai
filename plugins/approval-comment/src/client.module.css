@@ -7,7 +7,7 @@
 .approval-comment-card {
   width: 100%;
   max-width: var(--dsh-chat-content-width);
-  border: 1px solid var(--dsw-alias-state-warn-secondary);
+  outline: 3px solid #ff8c00;
   background: var(--dsw-specific-input-major);
   box-shadow: var(--dsw-shadow-lv2);
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
