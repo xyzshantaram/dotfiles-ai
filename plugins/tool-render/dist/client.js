@@ -1627,7 +1627,519 @@ function escapeHtml(s) {
 }
 
 // css-text:/home/sid/repos/dotfiles-ai/plugins/tool-render/src/client.module.css
-var client_default = '.tool-render-row {\n  align-items: center;\n  min-width: 0;\n  height: 1.5rem;\n  display: flex;\n  position: relative;\n  overflow: hidden;\n}\n.tool-render-row[data-expandable] {\n  cursor: pointer;\n}\n.tool-render-leading {\n  width: 1rem;\n  height: 1rem;\n  color: var(--dsw-alias-label-tertiary);\n  flex: none;\n  justify-content: center;\n  align-items: center;\n  margin-right: 0.375rem;\n  display: inline-flex;\n}\n.tool-render-chevron {\n  color: var(--dsw-alias-label-secondary);\n}\n.tool-render-title {\n  color: var(--dsw-alias-label-secondary);\n  flex: none;\n  font-size: 0.875rem;\n  line-height: 1.5rem;\n}\n.tool-render-sep {\n  background: var(--dsw-alias-label-caption);\n  border-radius: 0.0625rem;\n  flex: none;\n  width: 0.125rem;\n  height: 0.125rem;\n  margin: 0 0.5rem;\n}\n.tool-render-summary {\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  min-width: 0;\n  color: var(--dsw-alias-label-tertiary);\n  flex: auto;\n  font-size: 0.875rem;\n  line-height: 1.5rem;\n  overflow: hidden;\n}\n.tool-render-summary[tool-render-error] {\n  color: var(--dsw-alias-state-error-primary);\n  font-weight: 500;\n}\n.tool-render-path {\n  color: var(--dsw-alias-label-tertiary);\n  cursor: pointer;\n  min-width: 0;\n  max-width: 100%;\n  display: inline-block;\n  vertical-align: bottom;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 0.875rem;\n  line-height: 1.5rem;\n}\n.tool-render-path:hover {\n  color: var(--dsw-alias-label-primary);\n  text-decoration: underline;\n}\n.tool-render-body {\n  flex-direction: column;\n  display: flex;\n}\n.tool-render-io {\n  flex-direction: column;\n  display: flex;\n}\n.tool-render-command {\n  font-family: var(--ds-font-family-code);\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-tertiary);\n  margin: 0.25rem 0 0 0.25rem;\n  padding: 0.125rem 0;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n}\n.tool-render-command code.hljs {\n  background: transparent;\n  padding: 0;\n  font-family: inherit;\n  font-size: inherit;\n  line-height: inherit;\n  white-space: inherit;\n}\n.tool-render-output {\n  box-sizing: border-box;\n  background: var(--dsw-alias-markdown-code-block);\n  font-family: var(--ds-font-family-code);\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-primary);\n  border-radius: 0.625rem;\n  margin: 0.25rem 0 0.25rem 0.25rem;\n  padding: 0.625rem 0.8125rem;\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  max-height: 17.5rem;\n  overflow-y: auto;\n}\n.tool-render-output[tool-render-error] {\n  color: var(--dsw-alias-state-error-primary);\n  border-color: rgba(255, 85, 85, 0.45);\n  background: rgba(255, 85, 85, 0.08);\n  font-weight: 500;\n}\n.tool-render-row[data-state="error"] {\n  background: rgba(255, 85, 85, 0.07);\n  box-shadow: inset 3px 0 0 var(--dsw-alias-state-error-primary);\n  padding-left: 0.5rem;\n}\n.tool-render-row[data-state="error"] .tool-render-leading {\n  transform: scale(1.3);\n}\n.tool-render-row[data-state="error"] .tool-render-title {\n  color: var(--dsw-alias-state-error-primary);\n  font-weight: 500;\n}\n.tool-render-code {\n  box-sizing: border-box;\n  background: var(--dsw-alias-markdown-code-block);\n  font-family: var(--ds-font-family-code);\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-primary);\n  border-radius: 0.75rem;\n  margin: 0.25rem 0 0.25rem 0.25rem;\n  padding: 0.625rem 0.8125rem;\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  max-height: 25rem;\n  overflow-y: auto;\n}\n.tool-render-inspect {\n  border: 1px solid var(--dsw-alias-border-l2);\n  background: var(--dsw-alias-bg-base);\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  opacity: 0;\n  border-radius: 0.4375rem;\n  align-self: flex-start;\n  align-items: center;\n  gap: 0.25rem;\n  margin: 0.25rem 0 0.125rem 0.25rem;\n  padding: 0.125rem 0.375rem;\n  font-size: 0.6875rem;\n  line-height: 1rem;\n  transition: opacity 0.1s;\n  display: inline-flex;\n}\n.tool-render-card:hover .tool-render-inspect,\n.tool-render-inspect:focus-visible {\n  opacity: 1;\n}\n.tool-render-inspect:hover {\n  background: var(--dsw-alias-interactive-bg-hover-solid);\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-diff-fallback {\n  box-sizing: border-box;\n  background: var(--dsw-alias-markdown-code-block);\n  font-family: var(--ds-font-family-code);\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-primary);\n  border-radius: 0.75rem;\n  margin: 0.25rem 0 0.25rem 0.25rem;\n  padding: 0.625rem 0.8125rem;\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  max-height: 25rem;\n  overflow-y: auto;\n}\n.tool-render-fallback-note {\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  margin-bottom: 0.375rem;\n}\n.tool-render-write {\n  flex-direction: column;\n  display: flex;\n}\n.tool-render-write-diff {\n  box-sizing: border-box;\n  background: var(--dsw-alias-markdown-code-block);\n  font-family: var(--ds-font-family-code);\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-primary);\n  border-radius: 0.75rem;\n  margin: 0.25rem 0 0.25rem 0.25rem;\n  padding: 0.625rem 0.8125rem;\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  max-height: 25rem;\n  overflow-y: auto;\n}\n.tool-render-line-same {\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-diff-row.tool-render-line-del,\n.tool-render-diff-cell.tool-render-line-del {\n  background: rgba(255, 166, 87, 0.16);\n}\n.tool-render-diff-row.tool-render-line-add,\n.tool-render-diff-cell.tool-render-line-add {\n  background: rgba(125, 180, 255, 0.16);\n}\n.tool-render-diff-marker {\n  flex: none;\n  width: 2ch;\n  text-align: center;\n  align-self: flex-start;\n  user-select: none;\n  color: var(--dsw-alias-label-tertiary);\n}\n.tool-render-diff-marker-del {\n  color: #ffb86c;\n}\n.tool-render-diff-marker-add {\n  color: #7db4ff;\n}\n.tool-render-write-note {\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  margin-bottom: 0.375rem;\n}\n.tool-render-code-row,\n.tool-render-diff-row {\n  display: flex;\n  align-items: flex-start;\n  min-width: 0;\n}\n.tool-render-diff-pair {\n  display: flex;\n  align-items: stretch;\n  min-width: 0;\n}\n.tool-render-diff-cell {\n  flex: 1 1 0;\n  min-width: 0;\n  display: flex;\n  align-items: flex-start;\n}\n.tool-render-diff-cell + .tool-render-diff-cell {\n  border-left: 0.0625rem solid var(--dsw-alias-border-l2);\n}\n.tool-render-gutter {\n  flex: none;\n  align-self: flex-start;\n  padding-right: 0.75rem;\n  text-align: right;\n  color: var(--dsw-alias-label-tertiary);\n  user-select: none;\n  font-family: var(--ds-font-family-code);\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n}\n.tool-render-line-cell {\n  flex: auto;\n  min-width: 0;\n  display: block;\n  font-family: var(--ds-font-family-code);\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  white-space: pre-wrap;\n  word-break: break-word;\n}\n.tool-render-line-cell.hljs {\n  background: transparent;\n  padding: 0;\n  font-family: inherit;\n  font-size: inherit;\n  line-height: inherit;\n  white-space: inherit;\n}\n.tool-render-diff-path {\n  color: var(--dsw-alias-label-secondary);\n  font-family: var(--ds-font-family-code);\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  border-bottom: 0.0625rem solid var(--dsw-alias-border-l2);\n  padding-bottom: 0.25rem;\n  margin-bottom: 0.375rem;\n}\n.tool-render-diff-sep {\n  display: flex;\n  align-items: center;\n  gap: 0.625rem;\n  color: var(--dsw-alias-label-caption);\n  font-family: var(--ds-font-family-code);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  margin: 0.5rem 0;\n}\n.tool-render-diff-sep::before,\n.tool-render-diff-sep::after {\n  content: "";\n  flex: 1;\n  height: 0.0625rem;\n  background: var(--dsw-alias-border-l2);\n}\n.tool-render-card {\n  box-sizing: border-box;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.75rem;\n  background: var(--dsw-alias-bg-layer-1);\n  padding: 0.3125rem 0.5rem;\n}\n.tool-render-card[data-escalated] {\n  outline: 3px solid #ff8c00;\n}\n.tool-render-card:hover {\n  border-color: var(--dsw-alias-border-l3);\n}\n.tool-render-title {\n  font-weight: 500;\n}\n.tool-render-summary,\n.tool-render-path {\n  font-size: 0.8125rem;\n}\n.tool-render-output,\n.tool-render-code,\n.tool-render-write-diff,\n.tool-render-diff-fallback {\n  border: 1px solid var(--dsw-alias-border-l1);\n}\n.tool-render-row:focus-visible {\n  outline: 2px solid var(--dsw-alias-state-business-primary);\n  outline-offset: -0.125rem;\n}\n\n/* todo_write and ask_user_question shared body layout. */\n.tool-render-plan {\n  flex-direction: column;\n  display: flex;\n}\n.tool-render-plan-item {\n  align-items: baseline;\n  display: flex;\n  gap: 0.375rem;\n  padding: 0.125rem 0 0.125rem 0.25rem;\n}\n/* Status checkbox: empty for pending, dash bar for in progress, green\n   check for done. Drawn in CSS so the glyphs never depend on fonts. */\n.tool-render-checkbox {\n  align-self: center;\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 0.1875rem;\n  flex: none;\n  height: 0.875rem;\n  position: relative;\n  width: 0.875rem;\n}\n.tool-render-plan-item[data-done] .tool-render-checkbox {\n  border-color: var(--dsw-alias-state-success-primary);\n}\n.tool-render-plan-item[data-done] .tool-render-checkbox::after {\n  color: var(--dsw-alias-state-success-primary);\n  content: "\u2713";\n  display: block;\n  font-size: 0.6875rem;\n  line-height: 0.8125rem;\n  text-align: center;\n}\n.tool-render-plan-item[data-active] .tool-render-checkbox::after {\n  background: var(--dsw-alias-label-tertiary);\n  content: "";\n  height: 0.09375rem;\n  left: 0.1875rem;\n  position: absolute;\n  right: 0.1875rem;\n  top: 50%;\n}\n.tool-render-plan-content {\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  overflow-wrap: anywhere;\n}\n.tool-render-plan-item[data-done] .tool-render-plan-content {\n  color: var(--dsw-alias-label-tertiary);\n}\n.tool-render-plan-item[data-active] .tool-render-plan-content {\n  color: var(--dsw-alias-label-primary);\n  font-weight: 500;\n}\n.tool-render-plan-item[data-pending] .tool-render-plan-content {\n  color: var(--dsw-alias-label-secondary);\n}\n\n/* ask_user_question questions, options, and answers. */\n.tool-render-ask {\n  flex-direction: column;\n  display: flex;\n}\n.tool-render-question {\n  flex-direction: column;\n  display: flex;\n  padding: 0.125rem 0;\n}\n.tool-render-question + .tool-render-question {\n  border-top: 1px solid var(--dsw-alias-border-l1);\n  margin-top: 0.25rem;\n  padding-top: 0.375rem;\n}\n.tool-render-question-prompt {\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  overflow-wrap: anywhere;\n  padding: 0 0 0.125rem 0.25rem;\n}\n.tool-render-option {\n  align-items: baseline;\n  display: flex;\n  gap: 0.375rem;\n  padding: 0.125rem 0 0.125rem 0.25rem;\n}\n.tool-render-option-marker {\n  flex: none;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  width: 1rem;\n}\n.tool-render-option-text {\n  display: flex;\n  flex-direction: column;\n  gap: 0.0625rem;\n  min-width: 0;\n}\n.tool-render-option-label {\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  overflow-wrap: anywhere;\n}\n.tool-render-option-description {\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.8125rem;\n  line-height: 1.125rem;\n  overflow-wrap: anywhere;\n}\n.tool-render-option[data-selected] .tool-render-option-label {\n  color: var(--dsw-alias-label-primary);\n  font-weight: 700;\n}\n.tool-render-answer-note {\n  color: var(--dsw-alias-label-caption);\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  font-style: italic;\n  padding: 0.125rem 0 0 1.625rem;\n  overflow-wrap: anywhere;\n}\n.tool-render-ask[tool-render-error] .tool-render-question-prompt {\n  color: var(--dsw-alias-label-tertiary);\n}\n\n/* subagent row: capped, scrollable rendered prompt. */\n.tool-render-subagent-prompt {\n  border: 1px solid var(--dsw-alias-border-l1);\n  border-radius: 0.375rem;\n  margin: 0.25rem 0 0.125rem 0.25rem;\n  max-height: 16rem;\n  overflow-y: auto;\n  padding: 0.5rem 0.625rem;\n}\n.tool-render-subagent-prompt :where(h1, h2, h3, h4, h5, h6) {\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  margin: 0.5rem 0 0.25rem;\n}\n.tool-render-subagent-prompt :where(h1, h2, h3, h4, h5, h6):first-child {\n  margin-top: 0;\n}\n.tool-render-subagent-prompt :where(p, ul, ol, pre, blockquote, table) {\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  margin: 0.25rem 0;\n}\n.tool-render-subagent-prompt :where(ul, ol) {\n  padding-left: 1.125rem;\n}\n.tool-render-subagent-prompt :where(pre) {\n  background: var(--dsw-alias-bg-base);\n  border-radius: 0.25rem;\n  overflow-x: auto;\n  padding: 0.375rem 0.5rem;\n}\n.tool-render-subagent-prompt :where(code) {\n  font-family: var(--ds-font-family-code);\n}\n.tool-render-subagent-prompt :where(code):not(:where(pre code)) {\n  background: var(--dsw-alias-bg-base);\n  border-radius: 0.1875rem;\n  padding: 0 0.1875rem;\n}\n';
+var client_default = `.tool-render-row {
+  align-items: center;
+  min-width: 0;
+  height: 1.5rem;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+}
+.tool-render-row[data-expandable] {
+  cursor: pointer;
+}
+.tool-render-leading {
+  width: 1rem;
+  height: 1rem;
+  color: var(--dsw-alias-label-tertiary);
+  flex: none;
+  justify-content: center;
+  align-items: center;
+  margin-right: 0.375rem;
+  display: inline-flex;
+}
+.tool-render-chevron {
+  color: var(--dsw-alias-label-secondary);
+}
+.tool-render-title {
+  color: var(--dsw-alias-label-secondary);
+  flex: none;
+  font-size: 0.875rem;
+  line-height: 1.5rem;
+}
+.tool-render-sep {
+  background: var(--dsw-alias-label-caption);
+  border-radius: 0.0625rem;
+  flex: none;
+  width: 0.125rem;
+  height: 0.125rem;
+  margin: 0 0.5rem;
+}
+.tool-render-summary {
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  color: var(--dsw-alias-label-tertiary);
+  flex: auto;
+  font-size: 0.875rem;
+  line-height: 1.5rem;
+  overflow: hidden;
+}
+.tool-render-summary[tool-render-error] {
+  color: var(--dsw-alias-state-error-primary);
+  font-weight: 500;
+}
+.tool-render-path {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  min-width: 0;
+  max-width: 100%;
+  display: inline-block;
+  vertical-align: bottom;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.875rem;
+  line-height: 1.5rem;
+}
+.tool-render-path:hover {
+  color: var(--dsw-alias-label-primary);
+  text-decoration: underline;
+}
+.tool-render-body {
+  flex-direction: column;
+  display: flex;
+}
+.tool-render-io {
+  flex-direction: column;
+  display: flex;
+}
+.tool-render-command {
+  font-family: var(--ds-font-family-code);
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--dsw-alias-label-tertiary);
+  margin: 0.25rem 0 0 0.25rem;
+  padding: 0.125rem 0;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+}
+.tool-render-command code.hljs {
+  background: transparent;
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: inherit;
+}
+.tool-render-output {
+  box-sizing: border-box;
+  background: var(--dsw-alias-markdown-code-block);
+  font-family: var(--ds-font-family-code);
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--dsw-alias-label-primary);
+  border-radius: 0.625rem;
+  margin: 0.25rem 0 0.25rem 0.25rem;
+  padding: 0.625rem 0.8125rem;
+  font-size: 0.8125rem;
+  line-height: 1.375rem;
+  max-height: 17.5rem;
+  overflow-y: auto;
+}
+.tool-render-output[tool-render-error] {
+  color: var(--dsw-alias-state-error-primary);
+  border-color: rgba(255, 85, 85, 0.45);
+  background: rgba(255, 85, 85, 0.08);
+  font-weight: 500;
+}
+.tool-render-row[data-state="error"] .tool-render-leading {
+  transform: scale(1.3);
+}
+.tool-render-row[data-state="error"] .tool-render-title {
+  color: var(--dsw-alias-state-error-primary);
+  font-weight: 500;
+}
+.tool-render-code {
+  box-sizing: border-box;
+  background: var(--dsw-alias-markdown-code-block);
+  font-family: var(--ds-font-family-code);
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--dsw-alias-label-primary);
+  border-radius: 0.75rem;
+  margin: 0.25rem 0 0.25rem 0.25rem;
+  padding: 0.625rem 0.8125rem;
+  font-size: 0.8125rem;
+  line-height: 1.375rem;
+  max-height: 25rem;
+  overflow-y: auto;
+}
+.tool-render-inspect {
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  opacity: 0;
+  border-radius: 0.4375rem;
+  align-self: flex-start;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0.25rem 0 0.125rem 0.25rem;
+  padding: 0.125rem 0.375rem;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  transition: opacity 0.1s;
+  display: inline-flex;
+}
+.tool-render-card:hover .tool-render-inspect,
+.tool-render-inspect:focus-visible {
+  opacity: 1;
+}
+.tool-render-inspect:hover {
+  background: var(--dsw-alias-interactive-bg-hover-solid);
+  color: var(--dsw-alias-label-primary);
+}
+.tool-render-diff-fallback {
+  box-sizing: border-box;
+  background: var(--dsw-alias-markdown-code-block);
+  font-family: var(--ds-font-family-code);
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--dsw-alias-label-primary);
+  border-radius: 0.75rem;
+  margin: 0.25rem 0 0.25rem 0.25rem;
+  padding: 0.625rem 0.8125rem;
+  font-size: 0.8125rem;
+  line-height: 1.375rem;
+  max-height: 25rem;
+  overflow-y: auto;
+}
+.tool-render-fallback-note {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+  margin-bottom: 0.375rem;
+}
+.tool-render-write {
+  flex-direction: column;
+  display: flex;
+}
+.tool-render-write-diff {
+  box-sizing: border-box;
+  background: var(--dsw-alias-markdown-code-block);
+  font-family: var(--ds-font-family-code);
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--dsw-alias-label-primary);
+  border-radius: 0.75rem;
+  margin: 0.25rem 0 0.25rem 0.25rem;
+  padding: 0.625rem 0.8125rem;
+  font-size: 0.8125rem;
+  line-height: 1.375rem;
+  max-height: 25rem;
+  overflow-y: auto;
+}
+.tool-render-line-same {
+  color: var(--dsw-alias-label-primary);
+}
+.tool-render-diff-row.tool-render-line-del,
+.tool-render-diff-cell.tool-render-line-del {
+  background: rgba(255, 166, 87, 0.16);
+}
+.tool-render-diff-row.tool-render-line-add,
+.tool-render-diff-cell.tool-render-line-add {
+  background: rgba(125, 180, 255, 0.16);
+}
+.tool-render-diff-marker {
+  flex: none;
+  width: 2ch;
+  text-align: center;
+  align-self: flex-start;
+  user-select: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+.tool-render-diff-marker-del {
+  color: #ffb86c;
+}
+.tool-render-diff-marker-add {
+  color: #7db4ff;
+}
+.tool-render-write-note {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+  margin-bottom: 0.375rem;
+}
+.tool-render-code-row,
+.tool-render-diff-row {
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
+}
+.tool-render-diff-pair {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+.tool-render-diff-cell {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+}
+.tool-render-diff-cell + .tool-render-diff-cell {
+  border-left: 0.0625rem solid var(--dsw-alias-border-l2);
+}
+.tool-render-gutter {
+  flex: none;
+  align-self: flex-start;
+  padding-right: 0.75rem;
+  text-align: right;
+  color: var(--dsw-alias-label-tertiary);
+  user-select: none;
+  font-family: var(--ds-font-family-code);
+  font-size: 0.8125rem;
+  line-height: 1.375rem;
+}
+.tool-render-line-cell {
+  flex: auto;
+  min-width: 0;
+  display: block;
+  font-family: var(--ds-font-family-code);
+  font-size: 0.8125rem;
+  line-height: 1.375rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.tool-render-line-cell.hljs {
+  background: transparent;
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: inherit;
+}
+.tool-render-diff-path {
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+  font-size: 0.8125rem;
+  line-height: 1.375rem;
+  border-bottom: 0.0625rem solid var(--dsw-alias-border-l2);
+  padding-bottom: 0.25rem;
+  margin-bottom: 0.375rem;
+}
+.tool-render-diff-sep {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  color: var(--dsw-alias-label-caption);
+  font-family: var(--ds-font-family-code);
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+  margin: 0.5rem 0;
+}
+.tool-render-diff-sep::before,
+.tool-render-diff-sep::after {
+  content: "";
+  flex: 1;
+  height: 0.0625rem;
+  background: var(--dsw-alias-border-l2);
+}
+.tool-render-card {
+  box-sizing: border-box;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 0.75rem;
+  background: var(--dsw-alias-bg-layer-1);
+  padding: 0.3125rem 0.5rem;
+}
+.tool-render-card[data-escalated] {
+  outline: 3px solid #ff8c00;
+}
+/* An errored call is outlined the way an escalated one is, in red and a little
+   thinner. The outline follows the card's rounded corners. It replaces the old
+   tinted row background and inset left bar. The enlarged red status dot on the
+   row is kept. */
+.tool-render-card[data-error] {
+  outline: 2px solid var(--dsw-alias-state-error-primary);
+}
+.tool-render-card:hover {
+  border-color: var(--dsw-alias-border-l3);
+}
+.tool-render-title {
+  font-weight: 500;
+}
+.tool-render-summary,
+.tool-render-path {
+  font-size: 0.8125rem;
+}
+.tool-render-output,
+.tool-render-code,
+.tool-render-write-diff,
+.tool-render-diff-fallback {
+  border: 1px solid var(--dsw-alias-border-l1);
+}
+.tool-render-row:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -0.125rem;
+}
+
+/* todo_write and ask_user_question shared body layout. */
+.tool-render-plan {
+  flex-direction: column;
+  display: flex;
+}
+.tool-render-plan-item {
+  align-items: baseline;
+  display: flex;
+  gap: 0.375rem;
+  padding: 0.125rem 0 0.125rem 0.25rem;
+}
+/* Status checkbox: empty for pending, dash bar for in progress, green
+   check for done. Drawn in CSS so the glyphs never depend on fonts. */
+.tool-render-checkbox {
+  align-self: center;
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: 0.1875rem;
+  flex: none;
+  height: 0.875rem;
+  position: relative;
+  width: 0.875rem;
+}
+.tool-render-plan-item[data-done] .tool-render-checkbox {
+  border-color: var(--dsw-alias-state-success-primary);
+}
+.tool-render-plan-item[data-done] .tool-render-checkbox::after {
+  color: var(--dsw-alias-state-success-primary);
+  content: "\u2713";
+  display: block;
+  font-size: 0.6875rem;
+  line-height: 0.8125rem;
+  text-align: center;
+}
+.tool-render-plan-item[data-active] .tool-render-checkbox::after {
+  background: var(--dsw-alias-label-tertiary);
+  content: "";
+  height: 0.09375rem;
+  left: 0.1875rem;
+  position: absolute;
+  right: 0.1875rem;
+  top: 50%;
+}
+.tool-render-plan-content {
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  overflow-wrap: anywhere;
+}
+.tool-render-plan-item[data-done] .tool-render-plan-content {
+  color: var(--dsw-alias-label-tertiary);
+}
+.tool-render-plan-item[data-active] .tool-render-plan-content {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+}
+.tool-render-plan-item[data-pending] .tool-render-plan-content {
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* ask_user_question questions, options, and answers. */
+.tool-render-ask {
+  flex-direction: column;
+  display: flex;
+}
+.tool-render-question {
+  flex-direction: column;
+  display: flex;
+  padding: 0.125rem 0;
+}
+.tool-render-question + .tool-render-question {
+  border-top: 1px solid var(--dsw-alias-border-l1);
+  margin-top: 0.25rem;
+  padding-top: 0.375rem;
+}
+.tool-render-question-prompt {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  overflow-wrap: anywhere;
+  padding: 0 0 0.125rem 0.25rem;
+}
+.tool-render-option {
+  align-items: baseline;
+  display: flex;
+  gap: 0.375rem;
+  padding: 0.125rem 0 0.125rem 0.25rem;
+}
+.tool-render-option-marker {
+  flex: none;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  width: 1rem;
+}
+.tool-render-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.0625rem;
+  min-width: 0;
+}
+.tool-render-option-label {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  overflow-wrap: anywhere;
+}
+.tool-render-option-description {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+  overflow-wrap: anywhere;
+}
+.tool-render-option[data-selected] .tool-render-option-label {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 700;
+}
+.tool-render-answer-note {
+  color: var(--dsw-alias-label-caption);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  font-style: italic;
+  padding: 0.125rem 0 0 1.625rem;
+  overflow-wrap: anywhere;
+}
+.tool-render-ask[tool-render-error] .tool-render-question-prompt {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* subagent row: capped, scrollable rendered prompt. */
+.tool-render-subagent-prompt {
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 0.375rem;
+  margin: 0.25rem 0 0.125rem 0.25rem;
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: 0.5rem 0.625rem;
+}
+.tool-render-subagent-prompt :where(h1, h2, h3, h4, h5, h6) {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  margin: 0.5rem 0 0.25rem;
+}
+.tool-render-subagent-prompt :where(h1, h2, h3, h4, h5, h6):first-child {
+  margin-top: 0;
+}
+.tool-render-subagent-prompt :where(p, ul, ol, pre, blockquote, table) {
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  margin: 0.25rem 0;
+}
+.tool-render-subagent-prompt :where(ul, ol) {
+  padding-left: 1.125rem;
+}
+.tool-render-subagent-prompt :where(pre) {
+  background: var(--dsw-alias-bg-base);
+  border-radius: 0.25rem;
+  overflow-x: auto;
+  padding: 0.375rem 0.5rem;
+}
+.tool-render-subagent-prompt :where(code) {
+  font-family: var(--ds-font-family-code);
+}
+.tool-render-subagent-prompt :where(code):not(:where(pre code)) {
+  background: var(--dsw-alias-bg-base);
+  border-radius: 0.1875rem;
+  padding: 0 0.1875rem;
+}
+`;
 
 // node_modules/.pnpm/highlight.js@11.12.0/node_modules/highlight.js/es/languages/javascript.js
 var IDENT_RE = "[A-Za-z$_][0-9A-Za-z$_]*";
@@ -8322,7 +8834,7 @@ function highlightCode(text, language) {
   return escapeHtml(text);
 }
 function toolRenderRow(options) {
-  var interactive = options.expandable === true && options.state !== "error";
+  var interactive = options.expandable === true;
   var open = options.expanded === true && interactive;
   var leading;
   if (open) {
@@ -8335,7 +8847,8 @@ function toolRenderRow(options) {
     leading = options.icon;
   }
   var summary;
-  if (options.path !== void 0 && options.path !== null && options.onOpenFile !== void 0) {
+  var showsError = options.state === "error" && options.errorSummary !== void 0;
+  if (!showsError && options.path !== void 0 && options.path !== null && options.onOpenFile !== void 0) {
     summary = /* @__PURE__ */ import_react.default.createElement(
       "span",
       {
@@ -8367,28 +8880,37 @@ function toolRenderRow(options) {
       options.errorSummary !== void 0 ? options.errorSummary : options.summary
     );
   }
-  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-card", "data-escalated": options.escalated || void 0 }, /* @__PURE__ */ import_react.default.createElement(
+  return /* @__PURE__ */ import_react.default.createElement(
     "div",
     {
-      className: "tool-render-row",
-      "data-state": options.state,
-      "data-expandable": interactive || void 0,
-      role: interactive ? "button" : void 0,
-      tabIndex: interactive ? 0 : void 0,
-      "aria-expanded": interactive ? open : void 0,
-      onClick: interactive ? options.onToggle : void 0,
-      onKeyDown: interactive ? function(event) {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          options.onToggle();
-        }
-      } : void 0
+      className: "tool-render-card",
+      "data-escalated": options.escalated || void 0,
+      "data-error": options.state === "error" || void 0
     },
-    /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-leading" }, leading),
-    /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-title" }, options.title),
-    /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-sep", "aria-hidden": true }),
-    summary
-  ), open === true || options.state === "error" && options.body !== null ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-body" }, options.body, options.inspect !== void 0 ? /* @__PURE__ */ import_react.default.createElement("button", { type: "button", className: "tool-render-inspect", onClick: options.inspect }, /* @__PURE__ */ import_react.default.createElement(IconInspectOutline122, null), " Inspect") : null) : null);
+    /* @__PURE__ */ import_react.default.createElement(
+      "div",
+      {
+        className: "tool-render-row",
+        "data-state": options.state,
+        "data-expandable": interactive || void 0,
+        role: interactive ? "button" : void 0,
+        tabIndex: interactive ? 0 : void 0,
+        "aria-expanded": interactive ? open : void 0,
+        onClick: interactive ? options.onToggle : void 0,
+        onKeyDown: interactive ? function(event) {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            options.onToggle();
+          }
+        } : void 0
+      },
+      /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-leading" }, leading),
+      /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-title" }, options.title),
+      /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-sep", "aria-hidden": true }),
+      summary
+    ),
+    open === true ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-body" }, options.body, options.inspect !== void 0 ? /* @__PURE__ */ import_react.default.createElement("button", { type: "button", className: "tool-render-inspect", onClick: options.inspect }, /* @__PURE__ */ import_react.default.createElement(IconInspectOutline122, null), " Inspect") : null) : null
+  );
 }
 function ReadRow(props) {
   var expandedState = useState(false);
