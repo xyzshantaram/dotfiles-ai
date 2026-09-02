@@ -5183,6 +5183,8 @@ async function evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates)
               }
             } else if (word.text.startsWith(flag + "=")) {
               ranges.push([word.pos, word.end, rw.because]);
+            } else if (rw.value && flag.length === 2 && word.text.length > 2 && word.text.startsWith(flag)) {
+              ranges.push([word.pos, word.end, rw.because]);
             }
           }
         }
