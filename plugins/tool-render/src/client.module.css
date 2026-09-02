@@ -319,6 +319,9 @@
   background: var(--dsw-alias-bg-layer-1);
   padding: 0.3125rem 0.5rem;
 }
+.tool-render-card[data-escalated] {
+  outline: 3px solid #ff8c00;
+}
 .tool-render-card:hover {
   border-color: var(--dsw-alias-border-l3);
 }

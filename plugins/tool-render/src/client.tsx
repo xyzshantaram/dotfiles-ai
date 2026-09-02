@@ -376,6 +376,14 @@ function relativizeToCwd(text, cwd) {
   return text;
 }
 
+function escalatedOf(args) {
+  var mode =
+    args !== null && args !== undefined
+      ? pickString(args, ["sandbox_permissions"])
+      : undefined;
+  return mode === "workspace-write" || mode === "danger-full-access";
+}
+
 function pickString(value, keys) {
   for (var i = 0; i < keys.length; i++) {
     var v = value[keys[i]];
@@ -565,7 +573,7 @@ function toolRenderRow(options) {
     );
   }
   return (
-    <div className="tool-render-card">
+    <div className="tool-render-card" data-escalated={options.escalated || undefined}>
       <div
         className="tool-render-row"
         data-state={options.state}
@@ -640,6 +648,7 @@ function ReadRow(props) {
     icon: <IconBrowseOutline16 size={14} />,
     title: "Read",
     summary: summary,
+    escalated: escalatedOf(args),
     path: path,
     onOpenFile: props.openFile,
     state: state,
@@ -677,6 +686,7 @@ function BashRow(props) {
       : command !== undefined
         ? firstLine(command)
         : "Bash";
+  var escalated = escalatedOf(argsObj);
   var body = null;
   if (command !== undefined || (output !== null && output !== "")) {
     var inner = [];
@@ -706,6 +716,7 @@ function BashRow(props) {
     icon: <IconApiOutline14 size={14} />,
     title: "Bash",
     summary: summary,
+    escalated: escalated,
     state: state,
     expandable: body !== null,
     expanded: expanded,
@@ -1168,6 +1179,7 @@ function makeEditRow(toolTitle) {
       icon: <IconEditOutline16 size={14} />,
       title: toolTitle,
       summary: summary,
+      escalated: escalatedOf(args),
       path: summaryPath,
       onOpenFile: props.openFile,
       state: state,
@@ -1504,6 +1516,7 @@ function WriteRow(props) {
     icon: <IconEditOutline16 size={14} />,
     title: "Write",
     summary: summary,
+    escalated: escalatedOf(args),
     path: path,
     onOpenFile: props.openFile,
     state: state,
