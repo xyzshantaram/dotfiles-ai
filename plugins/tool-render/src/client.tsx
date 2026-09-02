@@ -378,9 +378,7 @@ function relativizeToCwd(text, cwd) {
 
 function escalatedOf(args) {
   var mode =
-    args !== null && args !== undefined
-      ? pickString(args, ["sandbox_permissions"])
-      : undefined;
+    args !== null && args !== undefined ? pickString(args, ["sandbox_permissions"]) : undefined;
   return mode === "workspace-write" || mode === "danger-full-access";
 }
 
@@ -524,10 +522,10 @@ function highlightCode(text, language) {
 
 // ---- Row chrome (shared look, mirrors the shipped ToolRow seating). ----
 function toolRenderRow(options) {
-  // Error rows show their error body unconditionally below the row, so
-  // they never need the expand toggle. Non-error rows keep the shipped
-  // expand behavior.
-  var interactive = options.expandable === true && options.state !== "error";
+  // Every expandable row toggles, errored ones included. An errored row starts
+  // collapsed like any other and reports its tool name and error message on the
+  // row, so the failure reads at a glance without opening the card.
+  var interactive = options.expandable === true;
   var open = options.expanded === true && interactive;
   var leading;
   if (open) {
@@ -540,7 +538,15 @@ function toolRenderRow(options) {
     leading = options.icon;
   }
   var summary;
-  if (options.path !== undefined && options.path !== null && options.onOpenFile !== undefined) {
+  // An errored call reports its error on the row instead of its arguments, so
+  // the path link is skipped whenever there is an error message to show.
+  var showsError = options.state === "error" && options.errorSummary !== undefined;
+  if (
+    !showsError &&
+    options.path !== undefined &&
+    options.path !== null &&
+    options.onOpenFile !== undefined
+  ) {
     summary = (
       <span
         className="tool-render-path"
@@ -573,7 +579,11 @@ function toolRenderRow(options) {
     );
   }
   return (
-    <div className="tool-render-card" data-escalated={options.escalated || undefined}>
+    <div
+      className="tool-render-card"
+      data-escalated={options.escalated || undefined}
+      data-error={options.state === "error" || undefined}
+    >
       <div
         className="tool-render-row"
         data-state={options.state}
@@ -598,7 +608,7 @@ function toolRenderRow(options) {
         <span className="tool-render-sep" aria-hidden={true} />
         {summary}
       </div>
-      {open === true || (options.state === "error" && options.body !== null) ? (
+      {open === true ? (
         <div className="tool-render-body">
           {options.body}
           {options.inspect !== undefined ? (
