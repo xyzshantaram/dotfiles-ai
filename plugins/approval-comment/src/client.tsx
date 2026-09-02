@@ -131,26 +131,21 @@ function highlightCommand(command) {
 }
 
 /**
- * One best-effort steering send. This is the same wire path the composer
- * uses for a steer (`session.prompt` with mode `steer`): the message
- * enters the running agent at the nearest step boundary. The result is
- * observed, never trusted. The promise always resolves, so the caller
- * can fire it and forget it.
+ * One best-effort steering send carrying the user's comment verbatim. This is
+ * the same wire the composer uses for a steer (`session.prompt` with mode
+ * `steer`), so the message enters the running agent at the nearest step
+ * boundary. Nothing is added around the comment: the agent reads what the user
+ * wrote, not a generated instruction. The result is observed, never trusted.
+ * The promise always resolves, so the caller can fire it and forget it.
  */
 function buildSteerTo(sessions) {
-  return function steerTo(sessionId, toolName, comment) {
-    var text =
-      "The user rejected the " +
-      toolName +
-      " call. Comment: " +
-      comment +
-      " Adjust your next action.";
+  return function steerTo(sessionId, comment) {
     var binding = sessions.binding(sessionId);
     if (binding === undefined || binding.session === undefined) {
       console.warn("[approval-comment] steering skipped, session binding is gone", sessionId);
       return Promise.resolve(false);
     }
-    return binding.session.prompt([{ type: "text", text: text }], "steer").then(
+    return binding.session.prompt([{ type: "text", text: comment }], "steer").then(
       function (result) {
         if (!result.ok)
           console.warn(
@@ -172,8 +167,9 @@ function buildSteerTo(sessions) {
  * The card. `matched` is the approval wait the chain elected. The two
  * action buttons behave as before. The comment field is collapsed by
  * default, so a plain rejection stays one click. Enter in the field
- * rejects with the comment. The answer goes first. The steer is a
- * fire-and-forget promise that can never undo the rejection.
+ * rejects with the comment. The steer goes first, so it reaches the agent
+ * while the turn is still running. It is fire-and-forget and can never undo
+ * the rejection.
  */
 function makeApprovalCommentCard(steerTo) {
   return function ApprovalCommentCard(props) {
@@ -212,6 +208,13 @@ function makeApprovalCommentCard(steerTo) {
       console.debug("[approval-comment] answer:", outcome);
       setAnswered(true);
       var commentText = draft.trim();
+      // The steer goes out BEFORE the rejection is answered, while the turn is
+      // still running, so it rides the next step boundary. Sending it after the
+      // rejection resolved let the turn end first, and the steer then started a
+      // fresh turn, so the agent appeared to stop and then restart.
+      if (outcome === "rejected" && commentText !== "") {
+        steerTo(matched.sessionId, commentText);
+      }
       matched
         .respond({
           ok: true,
@@ -231,9 +234,6 @@ function makeApprovalCommentCard(steerTo) {
             );
           }
           console.debug("[approval-comment] answered", matched.key, outcome);
-          if (outcome === "rejected" && commentText !== "") {
-            steerTo(matched.sessionId, matched.payload.toolName, commentText);
-          }
         })
         .catch(function (error) {
           console.warn("[approval-comment] answer failed", matched.key, outcome, error);
