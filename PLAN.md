@@ -1,103 +1,13 @@
-# Plan — zai provider: sync-models seeding + subscriptions usage panel
+# Effort 1 — harness friction: guards, aidos patches, attachment drop
 
 ## Vision
 
-The user added a `zai` provider block (Zhipu AI, `https://api.z.ai/api/coding/paas/v4`,
-`ZAI_API_KEY`) to `home/settings.yaml` and wants:
-
-1. `sync-models.mjs` to seed its `models:` list like the other seeded providers,
-   so chains can reference `zai/<model>` routes.
-2. The subscriptions plugin to show Z.ai Coding Plan usage (quota windows +
-   call/token totals) in the settings panel, like DeepSeek/Command Code.
-
-## Verified API facts (do not re-research)
-
-- `GET https://api.z.ai/api/coding/paas/v4/models` with `Authorization: Bearer <key>`
-  returns a plain OpenAI list: `{"object":"list","data":[{"id":"glm-4.5","object":"model",...}]}`.
-  10 ids on this account: glm-4.5, glm-4.5-air, glm-4.6, glm-4.7, glm-5,
-  glm-5-turbo, glm-5.1, glm-5.2, glm-5.3, glm-5.3-flash. `fetchModelIds` already
-  handles this shape.
-- `GET https://api.z.ai/api/monitor/usage/quota/limit` (Bearer accepted) returns
-  `{"code":200,"msg":"Operation successful","success":true,"data":{"limits":[...],"level":"lite"}}`.
-  Live limits on this account: `{"type":"CREDIT_LIMIT","unit":3,"number":5,
-  "usage":2000,"currentValue":0,"remaining":2000,"percentage":0}` and the same
-  type with `unit:6,"number":1,"usage":10000,...,"nextResetTime":1788776603998`
-  (epoch ms, ~weekly out).
-- Unit semantics (from pi-zai-usage, which cites z.ai frontend source):
-  unit 3 = 5-hour rolling window, unit 6 = weekly quota, TIME_LIMIT (unit 5) =
-  monthly tool/search quota. Type strings can be TOKENS_LIMIT or CREDIT_LIMIT
-  depending on plan — filter on `unit`, never on `type`.
-- `GET .../api/monitor/usage/model-usage?startTime=YYYY-MM-DD HH:mm:ss&endTime=...`
-  returns envelope `data` = `{x_time[], modelCallCount[], tokensUsage[],
-  totalUsage:{totalModelCallCount,totalTokensUsage,modelSummaryList[]},
-  modelDataList[], modelSummaryList[], granularity:"hourly"}`. Local-time
-  `YYYY-MM-DD HH:mm:ss` query params, URL-encode the space.
-- Auth failures return HTTP 200 with `{"code":1001,...,"success":false}` (no
-  header) or `{"code":401,"msg":"token expired or incorrect","success":false}`
-  (bad key). ALWAYS check the envelope, never `res.ok` alone.
-- models.dev has a `zai` provider: exact keys `glm-5.3-flash` (name GLM-5.3-Flash,
-  ctx 1M, out 131072, input text/image/video/pdf, efforts low/high/max) and the
-  other ids. `TIER2_PREFIX` already routes `^z-ai/` and `^zai-org/` to it, and
-  bare ids hit tier-3 union fallback; `glm-4.5` style ids also match the zai
-  provider's exact keys through `matchId` normalization.
-
-## Design decisions
-
-- sync-models: `SEEDED_PROVIDERS` is an explicit allowlist on purpose; add
-  `zai` there and nowhere else. No CATALOG_EXCLUDED/TIER1_ROUTE entry (its
-  models.dev metadata flows through tier-2/3).
-- subscriptions host: two routes, `/subscriptions/zai-quota` (30s cache) and
-  `/subscriptions/zai-usage` (60s cache), fetch `ZAI_API_KEY` through the
-  credentials service like every other provider, return
-  `{ok:true,...}` / `{ok:false,error}` at HTTP 200 like the other handlers.
-- Quota parsing maps limits by unit: unit 3 -> fiveHour {used: currentValue,
-  cap: usage, percent: percentage, resetsAt}, unit 6 -> weekly (same shape).
-- Usage route returns `{ok:true, level, totalCalls, totalTokens, modelSummary}`
-  from a 7-day window ending at `now` (never end-of-today: the API accepts
-  future-ending windows and pads with zeros).
-- Client: a "Z.ai (GLM)" section — provider toggle key `zai` — with two window
-  meters via the existing `buildRows`, a plan-level line, and a 7-day calls +
-  tokens line. `PROVIDER_TOGGLES`, the fetch list, snap keys, and dataKeys gain
-  matching entries.
+The zai provider work this effort started is shipped and its tickets are gone.
+What remains is unrelated harness work: a `warn` verdict for bash-guard and the
+two guard rules that need it, a sync step for the aidos dsh patches, our own
+attachment-drop plugin, and one dsh-better-edit fix.
 
 ## Tickets
-
-### T1 — sync-models seeds zai
-
-**Status:** done
-**Change:** `sync-models.mjs` header comment + `SEEDED_PROVIDERS` gains `zai`.
-**Acceptance criteria:**
-- `node sync-models.mjs` runs with ZAI_API_KEY present, reports the zai fetch,
-  and writes a marker-wrapped `models:` block into the zai provider in
-  `home/settings.yaml`; non-zai regions byte-identical except modelSync.lastRun.
-- Chain check passes for a test `zai/glm-5.3-flash` chain ref.
-
-### T2 — subscriptions host: zai routes
-
-**Status:** done
-**Change:** `plugins/subscriptions/src/index.ts` gains the quota/usage fetchers,
-handlers, two route registrations, and header-doc lines.
-**Acceptance criteria:**
-- `node build.mjs` rebuilds `plugins/subscriptions/lib/index.js` cleanly.
-- `curl localhost:<port>/subscriptions/zai-quota` returns `ok:true` with the
-  lite plan, two windows, and nextResetTime; missing key returns
-  `ok:false,error:"ZAI_API_KEY credential not configured"`.
-
-### T3 — subscriptions client: Z.ai section
-
-**Status:** done
-**Change:** `plugins/subscriptions/src/client.tsx` gains the section, toggle,
-fetch, snap fields.
-**Acceptance criteria:**
-- Build passes; section renders under the "Show sections" toggle `zai`.
-- Hidden by default-config toggle behaves like other providers.
-
-### T4 — verify
-
-**Status:** done
-**Acceptance criteria:** build.mjs, `pnpm exec tsc --noEmit` (no new errors
-beyond pre-existing), `pnpm test`, prettier on touched files; real-route curl
-for both zai endpoints; sync-models dry-run + real run reviewed.
 
 ### T5 — bash-guard: add a `warn` verdict and additive rewrites
 
@@ -274,46 +184,6 @@ burns a call, gets the same denial, and has no way to tell a policy refusal from
 argument. Worth checking whether upstream `@deepseek-ai/dsh-tool-fs` has the same shape.
 
 
-## Human review queue
-
-- Run `pnpm run sync-models` yourself (needs ZAI_API_KEY in env), review the
-  settings.yaml diff, then run `sync.sh` and restart the session before chains
-  pick the zai routes up.
-- Check the panel section in the web GUI: meters render, reset countdown shows.
-- Decide whether to add `zai/<model>` routes to `profile.chains` now.
-## Follow-ups (done after initial implementation)
-
-- sync.sh aidos pin bumped to `6721bb90734bb9c1cf88d4fa0d506959346cb182`.
-- `zai/glm-5.3-flash` added to the top of the `personal-orchestrator` and
-  `subagent` chains. sync-models dry run reports zero chain warnings.
-
-## Ticket: session-archive batch delete + loading states
-
-**Status:** done — implemented, reviewed, fixed, verified (72/72 tests, build, format clean). Uncommitted.
-
-The panel deletes one session per `POST /sessions/archived/delete` call, so
-clearing many archives costs one network roundtrip each. Settled with the user:
-checkboxes on every non-live row, a header select-all checkbox, and a
-"Delete selected (n)" button that sends one batch request.
-
-**Contract**
-
-- New host route `POST /sessions/archived/delete-batch`, body `{ ids: string[] }`,
-  same 16 KiB cap. Answer `{ ok: true, results: [{ id, ok, error? }] }` with one
-  entry per requested id; per-item failures never abort the batch.
-- Refactor the single-delete route so the per-id logic (live check, archived
-  check, locate, path-mismatch guard, rm) lives in one helper both routes use.
-- Client: one batch request for all selected ids, then reload and clear
-  selection. Loading states: existing "Loading…" on first load, a busy state on
-  the batch button while the request runs ("Deleting n…"), and the existing
-  per-row "…" on single deletes.
-
-**Acceptance criteria**
-
-- Batch route covered by a vitest module (validation, per-id results, live and
-  non-archived ids reported as failures without aborting the rest). `pnpm test`
-  passes; `pnpm run build` and `pnpm run format:check` pass.
-
 ## User preferences and special rules
 
 - Never commit without explicit approval.
@@ -355,6 +225,13 @@ concept with our own code, minus its evidence-verification half.
   `agent/session-start` with 300ms/1500ms delayed re-warms, so the panel renders
   right after reopen/restart instead of waiting for the next todo write.
 - Plugin name: durable-todos.
+- Carried-over marking (decided 2026-09-03, when the interrupt case was
+  raised). A list that outlived the turn that wrote it gets a `carried over`
+  label in the panel header. The alternative offered was to show the list
+  plainly with no marker. Marking won because after an interrupt the mirror can
+  still hold items the agent finished but never recorded, so an unlabelled list
+  invites trust it has not earned. The projection carries the flag as
+  `carriedOver`, set true by `turn/start` and cleared by the next `todo/write`.
 
 ## Critical context
 
@@ -441,8 +318,10 @@ The package is built, installed on the web profile, and smoke-tested against a
 real Context: `register` runs with key `durable-todos/todos`, a `todo/write`
 sets the list, a following `turn/start` keeps the items and flips
 `carriedOver`, and a second `turn/start` returns the same state reference. What
-remains is the restart, which drops the running server and so belongs to the
-user.
+remains is the restart. The user asked to build and deploy, so this is owed
+work rather than an optional extra. The agent deferred it on purpose, because a
+restart drops the server that runs the live session and that timing is the
+user's call.
 
 **Acceptance criteria**
 
@@ -464,82 +343,16 @@ user.
   on a long session.
 - [ ] `rg -rln foo /tmp/dsh/file` gets a deny suggesting `rg foo /tmp/dsh/file`;
   `rg --replace x y file` runs untouched.
-- [ ] MCP roster after sync: Settings → MCP lists swiggy-food, swiggy-instamart,
-  zepto, blinkit. Click Authenticate on swiggy-food and swiggy-instamart,
-  finish the browser login, and confirm both badges reach `connected (N tools)`.
-  zepto stays unauthenticated by decision.
 - [ ] Approval prompt: trigger one and confirm the card shows a 3px orange
   outline and no 1px warn border.
 - [ ] After the next sync and restart: log in normally, and confirm `/compact`
   still appears in the slash autocomplete.
 
-# Effort 3 — MCP roster: easyeda + move the OAuth servers to dsh-mcp-manager
+# Retired — MCP roster (Effort 3). Live notes only.
 
-## Vision
-
-The two swiggy rows fail on every boot. The built-in `@deepseek-ai/dsh-mcp-client`
-accepts only a static `headers` map, so it cannot run an OAuth login, and the
-journal shows both giving up after 10 reconnect attempts with
-`invalid_token / Authentication required`. Install `dsh-mcp-manager`, move every
-server that needs a browser login onto it, add easyeda-mcp-pro over stdio, and
-declare the mcp-manager roster from a repo script, so a fresh machine needs only
-one browser login per server.
-
-## Verified API facts (do not re-research)
-
-Source: `dsh-mcp-manager` at pin `69d5cbc`, `lib/index.js`. Probes run 2026-09-02.
-
-- State file `~/.dsh/mcp-manager.json`, shape
-  `{ servers: [...], workspaceTokens: {}, onDemandToolInjection: false }` (`index.js:57-67`).
-- `apply()` calls `loadState()` once into memory, and every mutation calls
-  `saveState(state)` writing the whole object back. A file edit made under a
-  running host is reverted on the next mutation. Offline writes need
-  `dsh-web.service` stopped.
-- The OAuth client id and tokens live inside the server record at `server.oauth`
-  (`index.js:239-240`). A wholesale rewrite wipes them and forces a re-login.
-  Any writer must upsert by `name` and preserve `id`, `oauth`, and `enabled`.
-- `POST /mcp-manager/api/servers` accepts ONLY these fields. It ignores `oauth`.
-  - stdio: `{ name, type:'stdio', command, args, env, cwd? }`
-  - http: `{ name, type:'http', url, authMode:'oauth'|'static', headers, headerEnv, tokenEnv? }`
-  - `name` must match `/^[A-Za-z0-9_-]{1,32}$/`. It becomes the `mcp__<name>__` prefix.
-  - Returns 201 `{server}`, or 409 when the name is taken.
-    `GET /mcp-manager/api/servers` lists the current set.
-- stdio servers spawn `command` + `args` directly, with no shell. Use
-  `command: "node"`, never `sh -c`.
-- `discoverOauthMetadata` probes only
-  `<url-origin>/.well-known/oauth-authorization-server`, then falls back to
-  guessed `/oauth/authorize`, `/oauth/token`, `/register`. It does NOT follow the
-  `www-authenticate: resource_metadata=...` pointer. `issuerOf()` prefers
-  `server.oauth.issuer` when that field is already set.
-- swiggy: `https://mcp.swiggy.com/.well-known/oauth-authorization-server` returns
-  200 with `registration_endpoint: https://mcp.swiggy.com/auth/register`. A probe
-  POST there returned 201 with `client_id: "swiggy-mcp"` and echoed back an
-  arbitrary `redirect_uri`. mcp-manager's dynamic registration therefore works.
-- zepto: `https://mcp.zepto.co.in/.well-known/oauth-authorization-server` returns
-  404. The real authorization server is `https://auth.zepto.co.in`, named in
-  `/.well-known/oauth-protected-resource`. Native OAuth would need
-  `server.oauth.issuer` pre-seeded, which `POST /servers` cannot do.
-- `@deepseek-ai/dsh-mcp-client` `StdioConfig` does accept `env: Record<string,string>`.
-- sync.sh has no restart step. It prints a "Restart dsh web" reminder at the end.
-
-## Design decisions
-
-- easyeda stays a static `dsh-mcp-client` row. It runs over stdio (`TRANSPORT`
-  defaults to `stdio`) and needs no login. The OAuth settings in its README are
-  inbound auth for when you host it over HTTP, and do not apply here.
-- zepto goes on mcp-manager as a **stdio** server running
-  `npx mcp-remote https://mcp.zepto.co.in/mcp`. This matches the opencode config
-  that worked, where mcp-remote ran its own browser login. Rejected: native
-  HTTP + OAuth, because mcp-manager cannot discover zepto's authorization server
-  and the API cannot seed `oauth.issuer`.
-- blinkit goes on mcp-manager as stdio `node ~/installs/blinkit-mcp/dist/index.js`.
-  It authenticates by OTP through its own tools, not OAuth.
-- The roster lives in `sync-mcp.py`, not inline in sync.sh. It does not go in a
-  per-workspace `.dsh/dshmm/mcp.json`, because workspace servers register only
-  into sessions whose cwd is that workspace, which is wrong for servers used
-  everywhere.
-
-## Critical context
+The effort is gone: commit `c7b9734` removed `dsh-mcp-manager`, `sync-mcp.py`
+and the static `dsh-mcp-client` rows. These four facts still describe live
+behaviour, so they outlive it.
 
 - A patch row id must be unique across every bundle layer. `dsh-base` already
   mounts `command-compact`, and `dsh-web-app` then disables it, because the web
@@ -550,19 +363,7 @@ Source: `dsh-mcp-manager` at pin `69d5cbc`, `lib/index.js`. Probes run 2026-09-0
   carries the same warning.
 - `step_write_web_patch` writes an UNQUOTED heredoc, so `$var` and backticks
   expand. Never put backticks in a comment inside it.
-- The mcp-manager API sits behind the dsh-remote auth guard. A local
-  `GET /mcp-manager/api/servers` returns 403. sync-mcp.py cannot use its online
-  path while dsh web runs, and it refuses to touch the state file then. To
-  apply a roster edit, stop dsh web and run the script again.
-- zepto authenticates through neither path. mcp-remote opens its OAuth callback
-  listener on the server loopback, which a remote browser cannot reach, and
-  zepto's own auth server returns 403 to dynamic client registration, so
-  mcp-manager OAuth cannot replace it. It stays in the roster and stays
-  unauthenticated by decision.
-- The mcp-manager UI is Chinese only at pin 69d5cbc: 85 hardcoded Chinese
-  literals, no locale detection, no translation table.
-- easyeda is a static `dsh-mcp-client` row, so it never shows in Settings →
-  MCP. That page lists only the servers mcp-manager owns.
+- sync.sh has no restart step. It prints a "Restart dsh web" reminder at the end.
 - easyeda exposes no project-list tool, and the bridge advertises no
   `project.list` capability. Every tool reads the document EasyEDA Pro has
   focused, so a project must be open in the editor first.
@@ -580,8 +381,9 @@ chance to authenticate for the first time.
 ## Settled decisions (from grilling, 2026-09-02)
 
 - The plugin owns all seven servers and both transports. stdio: nostrbook,
-  gitlab, easyeda, blinkit. http with OAuth: swiggy-food, swiggy-instamart,
-  zepto. zepto drops the mcp-remote hop and becomes a direct http server.
+  gitlab, easyeda, blinkit, and zepto through `npx -y mcp-remote`. http with
+  OAuth: swiggy-food and swiggy-instamart. zepto tried the direct http path
+  first, and its own auth server refused our dynamic client registration.
 - Config is `mcp-servers.json` in this repo, in the Claude and Codex
   `mcpServers` shape. sync.sh copies it to `$DSH_HOME` on every run. Git owns
   the file. The panel never writes it.
@@ -670,26 +472,7 @@ DSH client plane:
 
 ## Tickets
 
-### T1 — config file, schema and sync step
-
-Create `plugins/mcp-servers` with its host half, add `mcp-servers.json` with all
-seven servers, and add a sync.sh step that copies it to
-`$DSH_HOME/mcp-servers.json`. Add the reader that parses the file and
-normalizes each entry to a server record.
-
-**Eval:** sync.sh copies the file. A malformed file logs one clear error and
-leaves the previous config active rather than crashing the host.
-
-### T2 — host: transports and tool registration
-
-Connect each server through the SDK, list its tools, and register them as
-`mcp__<name>__*` with per-server disposers. stdio and http both.
-
-**Eval:** `mcp__nostrbook__*`, `mcp__gitlab__*` and `mcp__easyeda__*` appear in
-a fresh session and one easyeda call returns real data. Disposal unregisters
-every tool.
-
-### Closed — T3 OAuth, with the zepto verdict kept
+### Closed — the zepto verdict, kept for the roster choice it explains
 
 The OAuth work is done. The zepto measurement stays here, because it explains a
 roster choice that would otherwise look arbitrary.
@@ -709,7 +492,7 @@ the registration our SDK is refused. Its OAuth callback still binds to the serve
 loopback, so that login must be finished from a browser on the server itself, not
 from a remote browser.
 
-### T5 remainder — remove the stale mcp-manager state file
+### T1 — remove the stale mcp-manager state file
 
 Every code change for T4 and T5 is done. One host-side leftover is not: delete
 `~/.dsh/mcp-manager.json` after the next sync. sync.sh does not remove it,
@@ -720,6 +503,8 @@ deleting a secrets file behind the user's back is worse than leaving it.
 row, and no tool name is registered twice.
 
 ---
+
+# Effort 5 — dsh-compaction-instant fork
 
 ## Vision
 
@@ -769,10 +554,18 @@ passing at the base commit and is 103 passing on the branch.
 - Automatic failures are soft: `agent/pre-step` catches and logs `step
   compaction failed: ...; continuing the turn`. A manual `/compact` surfaces the
   same fault as a `summary` failure.
+- Edit this fork from the primary session. The clone at
+  `/home/sid/repos/dsh-compaction-instant` sits outside the session workspace,
+  and subagents cannot write there. A dispatched coder was denied, and its one
+  sanctioned escalation retry was refused outright, so it could only hand back
+  code for the parent to apply. Two faults compound here. The `edit` tool also
+  drops its own escalation (see Effort 1, T10), so only `bash` escalation
+  reaches that path, and every source change in this fork went through a
+  `python3` exact-string replacement instead of the edit tool.
 
 ## Tickets
 
-### T5 — translate the settings card in `src/client.js`
+### T1 — translate the settings card in `src/client.js`
 
 The Settings and Plugins card for this engine still renders in Chinese
 (`title: "即时压缩"` and its field labels). The checkpoint framing is already
