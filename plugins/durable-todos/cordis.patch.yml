@@ -1,0 +1,6 @@
+# Durable todos (host-side mirror projection).
+# The host row exists so the host registers the projection and the
+# client-module registry serves the ./client bundle.
+- insert:
+    - id: durable-todos
+      name: durable-todos

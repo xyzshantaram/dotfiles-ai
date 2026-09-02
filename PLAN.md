@@ -356,6 +356,18 @@ concept with our own code, minus its evidence-verification half.
   right after reopen/restart instead of waiting for the next todo write.
 - Plugin name: durable-todos.
 
+## Critical context
+
+- The host bundle is about 708 KB because zod bundles into it. build.mjs marks
+  only `@deepseek-ai/*` and `node:*` external. That matches `mcp-servers` at
+  689 KB, so it is in line with this repo. The alternative, if it ever matters,
+  is to mark `zod` external in the build entry and declare it as a real
+  dependency of `plugins/durable-todos/package.json`, the way `subscriptions`
+  handles `lz4`.
+- The client half imports `TodoItem` and `DurableTodosView` from
+  `./projection.js` with `import type`, so esbuild erases it and zod stays out
+  of the 7 KB browser bundle. Verified by grepping the emitted client bundle.
+
 ## Verified API facts (do not re-research)
 
 - Projection contract, re-verified 2026-09-03 against the installed packages.
@@ -423,71 +435,20 @@ concept with our own code, minus its evidence-verification half.
 
 ## Tickets
 
-### T1 — host half: mirror projection + warm listeners
+### T4 — restart and verify
 
-Create the package `plugins/durable-todos` in the same shape as
-`plugins/approval-comment`: a `package.json` with `main`, an `exports` map for
-`.` and `./client`, `dsh.bundle.patch`, and `dsh.client` with platform `web`, a
-`cordis.patch.yml` inserting one row named `durable-todos`, and `src/index.ts`
-for the host half. A flat `plugins/durable-todos.ts` cannot work, because a
-client half is only discovered through a package's `dsh.client` entry.
-
-The host registers the `durable-todos/todos` mirror projection and the session
-warm listeners. Projection state is `{ todos, carriedOver }`. A `todo/write`
-event replaces `todos` and sets `carriedOver` false. A `turn/start` event keeps
-`todos` and sets `carriedOver` true, so the panel can mark a list that outlived
-the turn that wrote it. No event clears the list.
+The package is built, installed on the web profile, and smoke-tested against a
+real Context: `register` runs with key `durable-todos/todos`, a `todo/write`
+sets the list, a following `turn/start` keeps the items and flips
+`carriedOver`, and a second `turn/start` returns the same state reference. What
+remains is the restart, which drops the running server and so belongs to the
+user.
 
 **Acceptance criteria**
 
-- `pnpm vitest run plugins/durable-todos/src/projection.test.ts` passes: a
-  todo/write sets the list, a following turn/start keeps the items and flips
-  carriedOver, and a second todo/write clears carriedOver again.
-- `pnpm run build` emits `plugins/durable-todos/lib/index.js`.
-
-### T2 — client half: dock panel + Remind button
-
-Create `plugins/durable-todos/src/client.tsx`, bundled through
-`wrapClientBundle` to `plugins/durable-todos/lib/client.js`. It registers a
-`conversation.input.dock` entry at order 10. The card is always visible: a
-header with the title and the Remind button, the item list with pending,
-in-progress and completed glyphs, and a compact empty state. A carried-over
-list carries a label, so a stale list is never mistaken for a fresh one.
-Remind composes the unfinished items verbatim, calls setDraft then submit,
-stays disabled while the turn is running, and hides when nothing is unfinished.
-Use dsw tokens only, kebab-case classes, and an idempotent style tag.
-
-**Acceptance criteria**
-
-- `pnpm run build` emits the client bundle; `pnpm test` and
-  `pnpm run format:check` pass.
-- Manual check by the user after deploy: panel visible on a fresh session with
-  no todos; after a todo write, items render; after dsh restart + reopen, list
-  still shows; Remind sends the reminder message into the session.
-
-### T3 — wire-up: build.mjs entries + sync.sh install
-
-Add the host esbuild block and the `wrapClientBundle` call to build.mjs,
-mirroring the approval-comment pair. The package self-mounts through its own
-`cordis.patch.yml`, so the web patch needs no row. Add
-`pnpm_ins "$HERE/plugins/durable-todos"` to `step_install_plugins` and
-`durable-todos` to the expected list in `step_report_extra_plugins`. Add the
-plugin to the bundle README.
-
-**Acceptance criteria**
-
-- `grep -n 'durable-todos' sync.sh build.mjs` shows the rows; `./sync.sh`
-  completes with the new row installed (run in deploy ticket).
-
-### T4 — deploy: sync + restart + user verification
-
-Run `./sync.sh` (needs danger-full-access for ~/.dsh), schedule the dsh-web
-restart, then hand the Human review queue items to the user.
-
-**Acceptance criteria**
-
-- sync.sh exits 0 and the journal shows the durable-todos rows mounting; the
-  rg -rln fix and /compact fix from this session also ship in the same restart.
+- After the restart the journal shows the `durable-todos` row mounting with no
+  duplicate loader entry id.
+- The human review queue items below pass.
 
 ## Human review queue (shared, both efforts)
 

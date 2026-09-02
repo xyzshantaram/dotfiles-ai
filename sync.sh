@@ -311,6 +311,12 @@ step_install_plugins() {
 		pnpm_ins "$HERE/plugins/tool-render"
 		pnpm_ins "$HERE/plugins/profiles-client"
 		pnpm_ins "$HERE/plugins/approval-comment"
+		# The todo panel that survives an interrupt. The official todos
+		# projection clears on every turn/start, so the panel blanks as soon as
+		# the next message goes out. This package mirrors the list in a
+		# projection that ignores turn/start. It self-mounts through its own
+		# cordis.patch.yml, so the web patch needs no row.
+		pnpm_ins "$HERE/plugins/durable-todos"
 		pnpm_ins "$HERE/plugins/log-viewer"
 		# Owns every MCP server, both transports, and the OAuth login. Its
 		# roster is $DSH_HOME/mcp-servers.json, written by step_sync_mcp_config.
@@ -359,6 +365,7 @@ step_report_extra_plugins() {
 		"dsh-better-markdown"
 		"dsh-input-history"
 		"dsh-paste-to-path"
+		"durable-todos"
 		"profiles-client"
 		"session-archive"
 		"subscriptions"
