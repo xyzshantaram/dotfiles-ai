@@ -2097,14 +2097,13 @@ function highlightCommand(command) {
   }
 }
 function buildSteerTo(sessions) {
-  return function steerTo(sessionId, toolName, comment) {
-    var text = "The user rejected the " + toolName + " call. Comment: " + comment + " Adjust your next action.";
+  return function steerTo(sessionId, comment) {
     var binding = sessions.binding(sessionId);
     if (binding === void 0 || binding.session === void 0) {
       console.warn("[approval-comment] steering skipped, session binding is gone", sessionId);
       return Promise.resolve(false);
     }
-    return binding.session.prompt([{ type: "text", text }], "steer").then(
+    return binding.session.prompt([{ type: "text", text: comment }], "steer").then(
       function(result) {
         if (!result.ok)
           console.warn(
@@ -2155,6 +2154,9 @@ function makeApprovalCommentCard(steerTo) {
       console.debug("[approval-comment] answer:", outcome);
       setAnswered(true);
       var commentText = draft.trim();
+      if (outcome === "rejected" && commentText !== "") {
+        steerTo(matched.sessionId, commentText);
+      }
       matched.respond({
         ok: true,
         value: {
@@ -2169,9 +2171,6 @@ function makeApprovalCommentCard(steerTo) {
           );
         }
         console.debug("[approval-comment] answered", matched.key, outcome);
-        if (outcome === "rejected" && commentText !== "") {
-          steerTo(matched.sessionId, matched.payload.toolName, commentText);
-        }
       }).catch(function(error) {
         console.warn("[approval-comment] answer failed", matched.key, outcome, error);
         setAnswered(false);
