@@ -42,7 +42,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#debf69f2a48e592dc4428e97bbc26f4969ba4efb}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#72874b538df587135e4ef9984c3a8f48eabbcc3b}"
 
 # Git-hosted specs whose build scripts pnpm must be allowed to run. pnpm 10+
 # blocks lifecycle scripts (prepare/postinstall) unless the exact resolved
@@ -131,18 +131,15 @@ step_write_web_patch() {
         transport: stdio
         command: glab
         args: ['mcp', 'serve']
-    - id: mcp-swiggy-food
+    - id: mcp-easyeda
       name: '@deepseek-ai/dsh-mcp-client'
       config:
-        serverName: swiggy-food
-        transport: streamable-http
-        url: https://mcp.swiggy.com/food
-    - id: mcp-swiggy-instamart
-      name: '@deepseek-ai/dsh-mcp-client'
-      config:
-        serverName: swiggy-instamart
-        transport: streamable-http
-        url: https://mcp.swiggy.com/im
+        serverName: easyeda
+        transport: stdio
+        command: npx
+        args: ['-y', 'easyeda-mcp-pro@latest']
+        env:
+          TOOL_PROFILE: core
     - id: bash-guard
       name: $HERE/plugins/bash-guard.js
       config:
@@ -190,6 +187,17 @@ step_write_web_patch() {
 # the fork mounts as llm-pi-ai-affinity in the insert list above.
 - id: llm-pi-ai
   disabled: true
+
+# Re-enable the /compact command. dsh-base mounts command-compact on the host
+# plane, and dsh-web-app then disables it, because the web app moves the
+# compaction backend into the preset plane. This bundle keeps a compaction
+# engine on the host plane (compaction-instant above), so /compact belongs
+# there too and should not depend on which preset a session uses. This MUST be
+# a top-level override row, NOT a child of the insert list: dsh-base already
+# owns that id, and a second one kills boot with
+# "duplicate loader entry id: command-compact".
+- id: command-compact
+  disabled: false
 
 # Config override for the self-mounting dsh-remote plugin (the plugin
 # install step pins our fork). The plugin creates the remote row from its
@@ -270,6 +278,12 @@ step_install_plugins() {
 		pnpm_ins "github:omdsh-dev/dsh-tool-regex#5afda86cd6862a25f6684056b378c330a5aa86b3"
 		pnpm_ins "github:omdsh-dev/dsh-tool-markdown#267871b115c49c5cde072d05d0d2cef6982ae8f8"
 		pnpm_ins "github:omdsh-dev/dsh-tool-encoding#dbf829b5a755d27ed64a146a4bfa50a62f985f6c"
+		# The cordis_* tools the two cordis skills gate are NOT installed from
+		# npm here: the registry's latest (0.0.1-rc.1) registers only three
+		# tools, while the DSH install bundles 0.1.0-rc.8 with the full set
+		# (inspect_list/query/self, define, run, stop, undefine). The tool-cordis
+		# composition row resolves against the host base when the profile does
+		# not shadow it — do NOT pnpm_ins this name.
 		pnpm_ins "https://github.com/omdsh-dev/dsh-at-file/archive/refs/tags/v0.6.7.tar.gz"
 		# dsh plugin --profile web add dsh-worktree
 		pnpm_ins "github:Tieboyh/dsh-session-search#82990a0e9804"
@@ -285,6 +299,13 @@ step_install_plugins() {
 		# the composer carries a PATH reference. Replaced dsh-paste-input.
 		pnpm_ins "github:Johnny-xuan/dsh-paste-to-path#d68fb104ca25a663ba3912bb17f8c2ab32d60e37"
 		pnpm_ins "github:davidgereb/dsh-plugin-better-mobile-ui#16e21548315866b50d5f3f64b91a70f24f3318ba"
+		# Settings -> MCP page: add MCP servers at run time, and log in to the
+		# ones that need OAuth. The built-in dsh-mcp-client accepts only static
+		# headers, so it cannot run an OAuth login. This package self-mounts
+		# through its own dsh.bundle.patch, so it needs no row in the patch
+		# above. Its server state lives in $DSH_HOME/mcp-manager.json, which
+		# this repo does NOT track. Upgrade = bump the pin.
+		pnpm_ins "github:hyqhyq3/dsh-mcp-manager#69d5cbc76e21606867f6dbef05025e2e2dfdbd04"
 		# Hash-anchored read/edit/undo tools. Pinned to OUR fork
 		# (github.com/xyzshantaram/dsh-better-edit, branch
 		# fix/served-mirror-rebase) while we measure two fixes upstream does
@@ -304,6 +325,18 @@ step_install_plugins() {
 		echo "WARNING: dsh not on PATH; skipping third-party plugin installs."
 		echo "         Re-run './sync.sh' from a shell where dsh is installed."
 	fi
+}
+
+step_sync_mcp_roster() {
+	# Declare the dsh-mcp-manager roster: the MCP servers that need a browser
+	# login. The built-in dsh-mcp-client accepts only a static headers map, so it
+	# cannot run an OAuth flow, and those servers cannot live in the patch above.
+	# The script uses mcp-manager's HTTP API when it answers. It writes the state
+	# file only when nothing is listening at all, because a live host owns that
+	# file. dsh-remote guards the API, so a normal run while dsh web is up just
+	# reports that it changed nothing. Each OAuth server still needs one
+	# Authenticate click in Settings -> MCP the first time.
+	python3 "$HERE/sync-mcp.py"
 }
 
 step_report_extra_plugins() {
@@ -335,6 +368,7 @@ step_report_extra_plugins() {
 		"dsh-at-file"
 		"dsh-better-markdown"
 		"dsh-input-history"
+		"dsh-mcp-manager"
 		"dsh-paste-to-path"
 		"profiles-client"
 		"session-archive"
@@ -816,6 +850,7 @@ STEPS=(
 	"Write the web-profile patch (host-plane rows)|step_write_web_patch"
 	"Allow pnpm build scripts for git-hosted plugins|step_allow_builds"
 	"Install the third-party plugin set on the web profile|step_install_plugins"
+	"Declare the dsh-mcp-manager server roster|step_sync_mcp_roster"
 	"Report extra plugins (removal commands)|step_report_extra_plugins"
 	"Install the aidos plugin from git|step_install_aidos"
 	"Sync aidos skills from pinned commit|step_sync_aidos_skills"
