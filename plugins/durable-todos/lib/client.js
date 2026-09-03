@@ -118,7 +118,7 @@ function makePanel() {
         }
       },
       /* @__PURE__ */ react.createElement("span", { className: "durable-todos-chevron", "aria-hidden": true }, collapsed ? "\u25B6" : "\u25BC"),
-      /* @__PURE__ */ react.createElement("span", { className: "durable-todos-title" }, "To-do"),
+      /* @__PURE__ */ react.createElement("span", { className: "durable-todos-title" }, "To-do list"),
       /* @__PURE__ */ react.createElement("span", { className: "durable-todos-summary" }, buildSummary())
     ), carriedOver ? /* @__PURE__ */ react.createElement("span", { className: "durable-todos-carried" }, "carried over") : null, unfinished.length > 0 ? /* @__PURE__ */ react.createElement(
       "button",

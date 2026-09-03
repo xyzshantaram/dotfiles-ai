@@ -102,7 +102,7 @@ function makePanel() {
             <span className="durable-todos-chevron" aria-hidden={true}>
               {collapsed ? "▶" : "▼"}
             </span>
-            <span className="durable-todos-title">To-do</span>
+            <span className="durable-todos-title">To-do list</span>
             <span className="durable-todos-summary">{buildSummary()}</span>
           </button>
           {carriedOver ? <span className="durable-todos-carried">carried over</span> : null}
