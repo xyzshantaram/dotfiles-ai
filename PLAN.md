@@ -780,6 +780,24 @@ passing at the base commit and is 103 passing on the branch.
   drops its own escalation (see Effort 1, T10), so only `bash` escalation
   reaches that path, and every source change in this fork went through a
   `python3` exact-string replacement instead of the edit tool.
+- The four defects from the 2026-09-03 checkpoint-destruction report are fixed and
+  pinned at `9525c72`: a checkpoint entry is now elided last, the worth gate
+  counts `compilableTokens` (span minus checkpoint nodes minus tool-result
+  nodes), and `effectiveMaxTokens` floors the cap at the incoming checkpoint's
+  own size.
+- `@deepseek-ai/dsh-compaction-tool-result-pruner` was considered and REJECTED.
+  Its purpose was to stop tool results dominating a span, and `compilableTokens`
+  now does that at the gate instead. The retained tail cannot hoard a giant tool
+  result either, because the selection loop only keeps nodes that fit under
+  `retainTokens`, so an oversized node falls into the compactable span. Pruning
+  would rewrite the middle of tool results still on the live surface, which the
+  model is actively reading, and DSH already truncates long tool output at the
+  tool layer. Do not install it without new evidence.
+- `scripts/unshadow-compactions.py` rewrites a stored checkpoint's `surfaceOp`
+  from `replace` to `"append"`, which un-shadows a compaction and restores the
+  original conversation. A session log that shows a compaction checkpoint with
+  `surfaceOp: "append"` was almost certainly rewritten by that script and is not
+  evidence of a compaction bug. Two hours were lost to that confusion once.
 
 ## Tickets
 
@@ -1117,3 +1135,143 @@ renders as a broken-image state, never as an empty box.
 - An image narrower than the card is centred, not upscaled.
 - Clicking the image opens it in a new tab at its route URL.
 - A moved or deleted file renders as a broken-image state, not an empty box.
+
+---
+
+# Effort 8 — context meter: a heuristic ring with provider meta on hover
+
+## Vision
+
+The composer's context ring reports a number that only ever grows, so it cannot
+be used to decide when to compact. Replace it with a ring driven by what DSH is
+about to send, and move the provider's own claims into the hover panel where
+they can be read as provider claims rather than as truth.
+
+## Critical context
+
+- The `meridian` provider returns `cache_read_input_tokens` as a session
+  cumulative value, not a per-request value. Verified over 70 consecutive calls
+  in session `67464291-...-4b5ec7`: `cache_read` on request N equals the
+  cumulative total of request N-1, exactly, with zero mismatches, and the totals
+  never fall.
+- `@earendil-works/pi-ai` 0.82.1 does not accumulate. `dist/api/anthropic-messages.js`
+  builds a fresh zeroed `usage` per `stream()` call and only ever assigns, never
+  adds. The fault is the provider's, not the adapter's.
+- Compaction itself is correct and reaches the wire. Measured at the `llm/stream`
+  waterfall across one `/compact`: 153 messages and 468,921 bytes fell to 16
+  messages and 73,162 bytes.
+- The compaction trigger is already immune. `dsh-compaction-instant/src/index.js`
+  compares `measurement.surfaceTokens` at lines 806, 811 and 818, which is the
+  heuristic surface fold, not provider usage. Do not change it.
+- Still unresolved, and it decides money rather than pixels: either Meridian's
+  bookkeeping is wrong, or Meridian keeps its own server-side history and really
+  is sending the model the full transcript. Compare a Meridian invoice against
+  these numbers to tell them apart.
+
+## Settled decisions (from grilling, 2026-09-03)
+
+- Ring numerator is the heuristic prompt size, so it stays provider agnostic.
+- Ring denominator is the route's context window.
+- The hover panel has two titled halves, the true prompt size first and the
+  provider's claims second, each with its own total.
+- The shipped meter is hidden with injected CSS. The owner accepted that this
+  couples us to shipped markup.
+- If hiding fails, still render ours and log a warning. Two rings is the
+  acceptable failure, a missing fix is not.
+- Build it as a dynamic Cordis client package first, iterate on it live, then
+  port the same code to a tracked plugin.
+
+## Verified API facts (do not re-research)
+
+- `useProjection("contextBreakdown")` returns
+  `{ systemTokens, toolsTokens, messageTokens }`. `messageTokens` rides the
+  surface fold, equals `measure().surfaceTokens`, and shrinks on compaction by
+  the logged shadow price. `systemTokens` and `toolsTokens` are re-estimated on
+  each `request/header`. Source: `dsh-token-meter/lib/index.js:153-190`.
+- `useProjection("contextPressure")` returns `{ contextWindow?, pressureTokens?, projectedTokens? }`.
+  `pressureTokens` is the contaminated provider figure. `contextWindow` comes
+  from `request/context` and is independent of usage.
+  Source: `dsh-token-meter/lib/index.js:273-340`.
+- `useProjection("tokenUsage")` returns
+  `{ uncachedInputTokens, outputTokens, cacheReadTokens, cacheWriteTokens }`.
+  Source: `dsh-token-meter/lib/index.js:216-266`.
+- The shipped `ContextMeter` is hardcoded inside `InputBar` at
+  `dsh-client-ui-conversation/lib/client.js:4000`, between the model seat and
+  the send button. It is not in a slot and cannot be displaced.
+- Its ring percent is `projectedTokens / contextWindow` and its bar segments are
+  scaled by that same percent, so the segment proportions are right and the
+  magnitude is wrong. Source: same file, lines 3053-3100.
+- Its CSS arrives in `<style data-plugin-css="@deepseek-ai/dsh-client-ui-conversation/ContextMeter.module.css">`,
+  and the text begins `.JObwrW_root{display:inline-flex;position:relative}`.
+  The hash changes per DSH build, so read the class out of that tag at runtime.
+  Source: same file, lines 2996-3005.
+- `conversation.input.right` is a `list` slot, scope `session`, replaceRisk
+  `none`, registration key `id` (required) plus optional `order` and `label`.
+  It renders before the model seat, so the meter needs reordering to sit right
+  of the model picker.
+- Reordering the meter works ONLY by setting `order` on every element from our
+  root up to the tool row's direct child, plus a higher order on the row's last
+  child (always the send button, since the stop button is conditional). Verified
+  by A/B: setting `order` on the row's direct child alone did nothing, and the
+  chain walk fixed it. The likely reason is that the slot wrapper is
+  `display: contents`, which is not a flex item, so order on it is inert. That
+  explanation is deduced from the A/B result, not observed. A pure CSS rule
+  cannot do this either: one unsupported `:has()` selector voids the whole rule
+  group.
+- Do not debug a dynamic client package with `console.log`. Package-tagged
+  logging did not reach the browser console at all, so its silence proves
+  nothing. Put a diagnostic in the rendered UI instead.
+
+## Tickets
+
+### T2 — port the package to a tracked plugin
+
+Currently live as dynamic package `ctxmtr-2/pkg-6`, which dies on restart.
+
+Move the same client code into a new plugin under `plugins/`, wire it into
+`sync.sh`, and remove the dynamic package.
+
+**Acceptance criteria**
+
+- The meter survives a restart with no dynamic package running.
+- `./sync.sh` installs it without manual steps.
+
+## Human review queue
+
+- [x] Context meter — ring reads 82k against the probe's 62k of messages plus
+      4.6k system and 13k tools, and `/compact` moves it. Confirmed 2026-09-03.
+- [ ] Context meter panel — check both light and dark themes, and confirm the
+      panel is readable at its new height without clipping the composer.
+- [ ] Meridian billing — compare an invoice against the session totals in the
+      panel. If Meridian bills what it reports, this session cost roughly two to
+      three times what the measured prompts justify. This is the only open
+      question that decides money rather than pixels.
+
+---
+
+# Effort 9 — resume and recall rework
+
+## Vision
+
+`/resume` is a built-in command and recall is a default plugin. Neither lets the
+agent search its own history on demand. Rebuild `/resume` as a skill, give the
+agent keyword search and history lookup as real tools, and demote the default
+recall plugin once those tools cover its job.
+
+## Critical context
+
+- Carried over from the compaction work, not yet started. Nothing is designed.
+- Scope is not settled. Grill before writing any ticket.
+
+## Tickets
+
+### T1 — settle scope
+
+Not started. Decide what `/resume` as a skill should do, what the search and
+lookup tools take and return, and what "demote the default recall plugin" means
+concretely. Produce tickets from that.
+
+**Acceptance criteria**
+
+- Effort 9 has real tickets with evaluation criteria the owner agreed to.
+
