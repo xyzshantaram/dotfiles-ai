@@ -1279,7 +1279,18 @@ repository shows what it actually does.
 - Not every installed plugin has a UI. The pass must state which ones were
   checked and found to have none, so a later reader does not redo that work.
 - The repository has no image files today and `.gitignore` has no image rules,
-  so adding binaries is a deliberate first.
+  so adding binaries is a deliberate first. The owner approved committing them.
+- Shots are WebP, scaled to 720p. This command is verified on this machine and
+  turned a 2560x1440 PNG of 50,027 bytes into a 1280x720 WebP of 6,182 bytes:
+
+  ```
+  magick <in>.png -resize x720 -quality 82 -define webp:method=6 <out>.webp
+  ```
+
+  ImageMagick carries libwebp 1.6.0 here, so nothing needs installing. `cwebp`,
+  `oxipng`, and `pngquant` are all absent and none of them are needed.
+- `-resize x720` fixes the height and keeps the aspect ratio, so a wide shot
+  stays wide. Do not force both dimensions.
 
 ## Tickets
 
@@ -1308,7 +1319,10 @@ the gallery reads consistently, and say in the README which theme it is.
 
 **Acceptance criteria**
 
-- Every row marked "needs a shot" has a file, and no file is orphaned.
+- Every row marked "needs a shot" has a `.webp` file, and no file is orphaned.
+- `magick identify` reports a height of 720 for every shot.
+- No shot exceeds 150 KB. The verified command lands far under that, so a file
+  above it means the source was captured wrong.
 - Each image is legible at the width GitHub renders it in the README.
 - The owner agrees each shot shows the feature rather than an empty panel.
 
