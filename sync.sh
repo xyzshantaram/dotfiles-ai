@@ -42,7 +42,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#8a92578b52022174db9c0dc9d611970733fa0f68}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#f7beff5169ea065f133370036494db5814a8aef3}"
 
 # Git-hosted specs whose build scripts pnpm must be allowed to run. pnpm 10+
 # blocks lifecycle scripts (prepare/postinstall) unless the exact resolved
@@ -226,26 +226,7 @@ step_install_plugins() {
 			name="$(printf '%s' "$spec" | sed -E 's#.*github.com/[^/]+/([^/#]+)/archive.*#\1#; s/#[^/]*$//; s#.*[/:]##')"
 			name="${name%%@*}"
 			echo "  installing ${name:-$spec}"
-		local out rc
-		# rc is captured the safe way: a failing command substitution under
-		# set -e aborts the script at the assignment before an rc=$? line
-		# runs. The old form turned every install failure into a silent
-		# script exit with the real error still inside $out, never printed.
-		if out="$(dsh plugin --profile web add "$spec" 2>&1)"; then
-			rc=0
-		else
-			rc=$?
-		fi
-		if [ "$rc" -ne 0 ]; then printf '%s\n' "$out"; return "$rc"; fi
-		# pnpm's peer-dependency notice fires on nearly every install in
-		# this bundle (each plugin declares its own dsh peer range) and
-		# carries no actionable info here; drop only that one line, keep
-		# every other warn/error. --verbose prints everything instead.
-		if [ "$VERBOSE" -eq 1 ]; then
-			printf '%s\n' "$out"
-		else
-			printf '%s\n' "$out" | rg -i 'warn|error' | rg -v -i 'peer dependenc' || true
-		fi
+			dsh_plugin_add "$spec"
 		}
 		pnpm_ins "github:sunshaobei/dsh-input-history#9b5b7a494a5c"
 		pnpm_ins "github:omdsh-dev/dsh-tool-calculator#05090e946113721c5295518cc20e74f427022c55"
@@ -462,12 +443,38 @@ step_allow_builds() {
 	done
 }
 
+# Run one `dsh plugin add` quietly. Silent on success, full output on failure,
+# and pnpm's peer-dependency notice dropped: it fires on nearly every install in
+# this bundle, because each plugin declares its own dsh peer range, and it says
+# nothing actionable. VERBOSE=1 prints everything. Takes one or more specs.
+dsh_plugin_add() {
+	local out rc
+	# rc is captured the safe way: a failing command substitution under set -e
+	# aborts at the assignment before an rc=$? line runs. The old form turned
+	# every install failure into a silent exit with the error still inside $out.
+	if out="$(dsh plugin --profile web add "$@" 2>&1)"; then
+		rc=0
+	else
+		rc=$?
+	fi
+	if [ "$rc" -ne 0 ]; then
+		printf '%s\n' "$out"
+		return "$rc"
+	fi
+	if [ "$VERBOSE" -eq 1 ]; then
+		printf '%s\n' "$out"
+	else
+		printf '%s\n' "$out" | rg -i 'warn|error' | rg -v -i 'peer dependenc' || true
+	fi
+}
+
 step_install_aidos() {
 	# The aidos preset's tools run against a host-plane `aidos` core service
 	# that the package's own dsh.bundle.patch mounts; `dsh plugin add`
 	# installs it AND auto-mounts the patch (idempotent).
 	if command -v dsh >/dev/null 2>&1; then
-		dsh plugin --profile web add "$AIDOS_PLUGIN_SPEC"
+		echo "  installing aidos"
+		dsh_plugin_add "$AIDOS_PLUGIN_SPEC"
 	else
 		echo "WARNING: dsh not on PATH; skipping aidos plugin install."
 		echo "         Re-run './sync.sh' from a shell where dsh is installed."
