@@ -572,8 +572,8 @@ selection state. No spinner.
   is appended after a blank line, the typed text is untouched. Confirmed
   2026-09-03: the owner pasted the appended checklist plus their own added
   text (`---` and "Worked?") in one sent message.
-- [ ] Remind button: click during a running turn — it still works, the button
-  is never disabled. Not yet confirmed.
+- [x] Remind button: click during a running turn — it still works, the button
+  is never disabled. Confirmed 2026-09-03.
 - [ ] `/compact` appears in the slash autocomplete after the restart and runs
   on a long session.
 - [ ] `rg -rln foo /tmp/dsh/file` gets a deny suggesting `rg foo /tmp/dsh/file`;
