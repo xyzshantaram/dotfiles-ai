@@ -63,7 +63,12 @@ async function wrapClientBundle(entryPath, outPath, id) {
     platform: "browser",
     format: "cjs",
     target: "es2022",
-    external: ["react", "react-dom/client", "@deepseek-ai/*"],
+    // Bare `react-dom` is external too, not just `react-dom/client`. The module
+    // loader supplies it: four shipped bundles already require it that way
+    // (dsh-client-ui-trajectory, -renderer, -message-feedback, -attachment).
+    // Without this, any dependency that portals pulls a second copy of
+    // react-dom into the bundle, about 130 KB.
+    external: ["react", "react-dom", "react-dom/client", "@deepseek-ai/*"],
     jsx: "transform",
     jsxFactory: "react.createElement",
     jsxFragment: "react.Fragment",
