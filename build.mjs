@@ -163,6 +163,23 @@ await wrapClientBundle(
   "durable-todos",
 );
 
+// context-meter: the ring reads the token-meter projections in the
+// composer tool row. It needs no host logic, so the host half stays a stub.
+await build({
+  entryPoints: [join(here, "plugins/context-meter/src/index.ts")],
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  external: ["@deepseek-ai/*", "node:*"],
+  outfile: join(here, "plugins/context-meter/lib/index.js"),
+  logLevel: "info",
+});
+await wrapClientBundle(
+  join(here, "plugins/context-meter/src/client.tsx"),
+  join(here, "plugins/context-meter/lib/client.js"),
+  "context-meter",
+);
+
 // W18: combined subscription panel (OpenCode GO + Claude/meridian) CLIENT
 // plugin package. The host half bundles via esbuild; lz4 stays
 // external (native .node addons esbuild cannot bundle; runtime
