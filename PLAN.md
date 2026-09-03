@@ -1216,17 +1216,8 @@ they can be read as provider claims rather than as truth.
 
 ## Tickets
 
-### T2 — port the package to a tracked plugin
-
-Currently live as dynamic package `ctxmtr-2/pkg-6`, which dies on restart.
-
-Move the same client code into a new plugin under `plugins/`, wire it into
-`sync.sh`, and remove the dynamic package.
-
-**Acceptance criteria**
-
-- The meter survives a restart with no dynamic package running.
-- `./sync.sh` installs it without manual steps.
+None open. The meter is a tracked plugin at `plugins/context-meter`, wired into
+`build.mjs` and `sync.sh`, and confirmed working after a sync and restart.
 
 ## Human review queue
 
@@ -1266,4 +1257,78 @@ concretely. Produce tickets from that.
 **Acceptance criteria**
 
 - Effort 9 has real tickets with evaluation criteria the owner agreed to.
+
+---
+
+# Effort 10 — screenshot every UI difference from stock
+
+## Vision
+
+This bundle changes a lot of the DSH interface and none of it is shown anywhere.
+Capture every visible difference from stock DeepSeek Harness, collect them in a
+`screenshots/` gallery, and promote the best few into the main README so the
+repository shows what it actually does.
+
+## Critical context
+
+- "UI change" means any visible difference from stock DSH, whether this repo
+  wrote it or only installs it. A third-party plugin we install counts.
+- `sync.sh` is the audit point. Its `pnpm_ins` calls and the roster array in
+  `step_report_extra_plugins` together name every installed plugin, so the
+  screenshot list is derived from there rather than from memory.
+- Not every installed plugin has a UI. The pass must state which ones were
+  checked and found to have none, so a later reader does not redo that work.
+- The repository has no image files today and `.gitignore` has no image rules,
+  so adding binaries is a deliberate first.
+
+## Tickets
+
+### T1 — derive the shot list from sync.sh
+
+Not started.
+
+Walk the `pnpm_ins` calls and the roster array in `sync.sh`. Produce a table of
+every installed plugin with one of three verdicts: has UI and needs a shot, has
+UI but is already covered by another shot, or has no UI. Put the table in
+`screenshots/README.md` as the gallery's skeleton.
+
+**Acceptance criteria**
+
+- Every `pnpm_ins` spec in `sync.sh` appears in the table exactly once.
+- Each row carries a verdict and, for a no-UI verdict, one line saying why.
+
+### T2 — capture the shots
+
+Blocked on T1.
+
+Take one screenshot per row that needs one. Store them under `screenshots/` with
+names that match the plugin id, for example `context-meter.png`. Prefer a shot
+that shows the feature in use over an empty state. Use one theme throughout so
+the gallery reads consistently, and say in the README which theme it is.
+
+**Acceptance criteria**
+
+- Every row marked "needs a shot" has a file, and no file is orphaned.
+- Each image is legible at the width GitHub renders it in the README.
+- The owner agrees each shot shows the feature rather than an empty panel.
+
+### T3 — write the gallery and promote the best to the main README
+
+Blocked on T2.
+
+Fill in `screenshots/README.md`: one section per shot with the image, the plugin
+name, and one or two sentences saying what changed against stock. Then pick the
+few that best show the bundle off and add them to the main `README.md`, linking
+through to the full gallery.
+
+**Acceptance criteria**
+
+- Every image renders on GitHub from both READMEs, with no broken links.
+- The main README carries a small selection, not the whole gallery.
+- Each caption says what is different from stock, not just what the thing is.
+
+## Human review queue
+
+- [ ] Screenshot gallery — the owner picks which shots reach the main README,
+      because that is a taste call and not a checkable one.
 
