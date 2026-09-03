@@ -19383,19 +19383,64 @@ function extractText(content) {
   }
   return JSON.stringify(content);
 }
+function sanitizeSchema(schema) {
+  if (typeof schema !== "object" || schema === null || Array.isArray(schema)) {
+    return schema;
+  }
+  const node2 = schema;
+  const out = {};
+  const bounds = [];
+  for (const key of Object.keys(node2)) {
+    const value = node2[key];
+    if (key === "properties" && typeof value === "object" && value !== null && !Array.isArray(value)) {
+      const props = {};
+      for (const [name2, prop] of Object.entries(value)) {
+        props[name2] = sanitizeSchema(prop);
+      }
+      out[key] = props;
+    } else if (key === "items") {
+      out[key] = sanitizeSchema(value);
+    } else if (key === "oneOf" && Array.isArray(value)) {
+      out[key] = value.map((member) => sanitizeSchema(member));
+    } else if (KEEP.has(key)) {
+      out[key] = value;
+    } else if (key === "minimum" || key === "maximum") {
+      const kind = key === "minimum" ? "minimum" : "maximum";
+      bounds.push(`${kind} ${String(value)}`);
+    }
+  }
+  if (bounds.length > 0) {
+    const text = `(${bounds.join(", ")})`;
+    const base = typeof out.description === "string" ? out.description : "";
+    out.description = base.length > 0 ? `${base} ${text}` : text;
+  }
+  return out;
+}
+var KEEP = /* @__PURE__ */ new Set([
+  "type",
+  "oneOf",
+  "properties",
+  "required",
+  "additionalProperties",
+  "items",
+  "enum",
+  "const",
+  "description",
+  "title"
+]);
 function buildDefinition(opts) {
   const { server, tool, execute } = opts;
   const hasStructured = tool.outputSchema !== void 0;
   return {
     name: publicToolName(server, tool.name),
+    parameters: sanitizeSchema(tool.inputSchema),
     description: tool.description ?? "",
-    parameters: tool.inputSchema,
     output: {
       schema: {
         type: "object",
         properties: {
           content: { type: "array", items: {} },
-          structuredContent: hasStructured ? tool.outputSchema : {}
+          structuredContent: hasStructured ? sanitizeSchema(tool.outputSchema) : {}
         },
         required: hasStructured ? ["content", "structuredContent"] : ["content"],
         additionalProperties: false
