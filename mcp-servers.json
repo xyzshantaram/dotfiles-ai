@@ -6,6 +6,6 @@
     "blinkit": { "type": "stdio", "command": "node", "args": ["~/installs/blinkit-mcp/dist/index.js"] },
     "swiggy-food": { "type": "http", "url": "https://mcp.swiggy.com/food" },
     "swiggy-instamart": { "type": "http", "url": "https://mcp.swiggy.com/im" },
-    "zepto": { "type": "stdio", "command": "npx", "args": ["-y", "mcp-remote", "https://mcp.zepto.co.in/mcp"] }
+    "zepto": { "type": "http", "url": "https://mcp.zepto.co.in/mcp" }
   }
 }
