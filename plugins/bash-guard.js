@@ -5001,20 +5001,34 @@ async function loadRulesMulti(ctx, dirs) {
   }
   return merged;
 }
-var DEFAULT_DENY_TEMPLATE = "bash-guard: the following command was denied:\n\n  {command}\n\nMatched rule(s):\n{matches}";
-var DEFAULT_ASK_TEMPLATE = "bash-guard: the following command needs approval:\n\n  {command}\n\nMatched rule(s):\n{matches}";
+var DEFAULT_DENY_TEMPLATE = "bash-guard: {name} denied by {count} ({detail})\n\n  {command}\n\nMatched rule(s):\n{matches}";
+var DEFAULT_ASK_TEMPLATE = "bash-guard: {name} blocked by {count} ({detail}) \u2014 needs your approval";
+function shortDetail(match) {
+  if (match.subcommand) return `${match.subcommand} is blocked`;
+  const first = match.reason.split(/(?<=[.!?])\s/u)[0] ?? match.reason;
+  const trimmed = first.trim().replace(/[.]$/u, "");
+  return trimmed.length > 60 ? `${trimmed.slice(0, 59)}\u2026` : trimmed;
+}
 function formatMessage(template, ctx) {
   const matchesText = ctx.matches.map((m) => {
     const sub = m.subcommand ? ` (${m.subcommand})` : "";
     return `  \u2022 ${m.name}${sub}: ${m.reason}`;
   }).join("\n");
   const primary = ctx.matches[0];
-  return template.replace(/(\{command\}|\{matches\}|\{name\}|\{reason\})/g, (token) => {
-    if (token === "{command}") return ctx.command;
-    if (token === "{matches}") return matchesText;
-    if (token === "{name}") return primary?.name ?? "unknown";
-    return primary?.reason ?? "";
-  });
+  const details = ctx.matches.slice(0, 2).map(shortDetail);
+  if (ctx.matches.length > 2) details.push(`+${ctx.matches.length - 2} more`);
+  return template.replace(
+    /(\{command\}|\{matches\}|\{name\}|\{reason\}|\{count\}|\{detail\})/g,
+    (token) => {
+      if (token === "{command}") return ctx.command;
+      if (token === "{matches}") return matchesText;
+      if (token === "{name}") return primary?.name ?? "unknown";
+      if (token === "{count}")
+        return `${ctx.matches.length} filter${ctx.matches.length === 1 ? "" : "s"}`;
+      if (token === "{detail}") return details.join(", ") || "no detail";
+      return primary?.reason ?? "";
+    }
+  );
 }
 function matchLines(hits) {
   const seen = /* @__PURE__ */ new Set();
