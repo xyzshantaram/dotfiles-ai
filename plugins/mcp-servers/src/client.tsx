@@ -115,24 +115,29 @@ function makePanel() {
         };
         return next;
       });
-      postJson("/mcp-servers/api/servers/" + encodeURIComponent(name) + "/authorize").then(function (result) {
-        if (result.error) {
-          console.error("[mcp-servers] authorize failed for " + name + ": " + result.error);
-          failRow(name, result.error);
-          return;
-        }
-        // The host can answer with no error and no URL, when the reconnect
-        // failed for a reason other than a missing login. Assigning an empty
-        // string to location.href reloads the page and hides that cause.
-        var target = result.data && result.data.authorizeUrl ? result.data.authorizeUrl : "";
-        if (target === "") {
-          console.error("[mcp-servers] no authorize URL returned for " + name);
-          failRow(name, "The server did not return an authorization URL. Refresh to see its status.");
-          return;
-        }
-        console.info("[mcp-servers] navigating to authorize URL for " + name);
-        window.location.href = target;
-      });
+      postJson("/mcp-servers/api/servers/" + encodeURIComponent(name) + "/authorize").then(
+        function (result) {
+          if (result.error) {
+            console.error("[mcp-servers] authorize failed for " + name + ": " + result.error);
+            failRow(name, result.error);
+            return;
+          }
+          // The host can answer with no error and no URL, when the reconnect
+          // failed for a reason other than a missing login. Assigning an empty
+          // string to location.href reloads the page and hides that cause.
+          var target = result.data && result.data.authorizeUrl ? result.data.authorizeUrl : "";
+          if (target === "") {
+            console.error("[mcp-servers] no authorize URL returned for " + name);
+            failRow(
+              name,
+              "The server did not return an authorization URL. Refresh to see its status.",
+            );
+            return;
+          }
+          console.info("[mcp-servers] navigating to authorize URL for " + name);
+          window.location.href = target;
+        },
+      );
     };
 
     var body = null;
@@ -152,7 +157,9 @@ function makePanel() {
                 <div className="mcp-row-main">
                   <span className="mcp-name">{server.name}</span>
                   <span className="mcp-type">{server.type}</span>
-                  <span className={"mcp-status " + statusClass(server.status)}>{server.status}</span>
+                  <span className={"mcp-status " + statusClass(server.status)}>
+                    {server.status}
+                  </span>
                   <span className="mcp-tools">
                     {server.toolCount}
                     {server.toolCount === 1 ? " tool" : " tools"}

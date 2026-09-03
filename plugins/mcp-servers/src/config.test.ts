@@ -47,7 +47,12 @@ describe("mcp-servers config reader", () => {
 
   it("skips an invalid server name and reports it", () => {
     const { servers, error } = parseConfig(
-      JSON.stringify({ mcpServers: { "bad name!": { url: "https://x.example" }, good: { url: "https://y.example" } } }),
+      JSON.stringify({
+        mcpServers: {
+          "bad name!": { url: "https://x.example" },
+          good: { url: "https://y.example" },
+        },
+      }),
     );
     expect(servers.map((s) => s.name)).toEqual(["good"]);
     expect(error).toContain("bad name!");
@@ -55,7 +60,15 @@ describe("mcp-servers config reader", () => {
 
   it("expands a leading ~/ in args", () => {
     const { servers, error } = parseConfig(
-      JSON.stringify({ mcpServers: { blinkit: { type: "stdio", command: "node", args: ["~/installs/blinkit-mcp/dist/index.js"] } } }),
+      JSON.stringify({
+        mcpServers: {
+          blinkit: {
+            type: "stdio",
+            command: "node",
+            args: ["~/installs/blinkit-mcp/dist/index.js"],
+          },
+        },
+      }),
     );
     expect(error).toBe("");
     const stdio = servers[0] as { type: "stdio"; command: string; args: string[] };
@@ -64,13 +77,17 @@ describe("mcp-servers config reader", () => {
   });
 
   it("defaults type to http", () => {
-    const { servers, error } = parseConfig(JSON.stringify({ mcpServers: { zepto: { url: "https://mcp.zepto.co.in/mcp" } } }));
+    const { servers, error } = parseConfig(
+      JSON.stringify({ mcpServers: { zepto: { url: "https://mcp.zepto.co.in/mcp" } } }),
+    );
     expect(error).toBe("");
     expect(servers[0]).toEqual({ name: "zepto", type: "http", url: "https://mcp.zepto.co.in/mcp" });
   });
 
   it("rejects an http entry with a bad url", () => {
-    const { servers, error } = parseConfig(JSON.stringify({ mcpServers: { broken: { type: "http", url: "ftp://nope" } } }));
+    const { servers, error } = parseConfig(
+      JSON.stringify({ mcpServers: { broken: { type: "http", url: "ftp://nope" } } }),
+    );
     expect(servers).toEqual([]);
     expect(error).toContain("broken");
     expect(error).toContain("http:// or https://");

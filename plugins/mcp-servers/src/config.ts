@@ -115,7 +115,9 @@ export function parseConfig(text: string): ReadResult {
       }
       servers.push({ name, type: "http", url });
     } else {
-      errors.push(`server "${name}" has unknown type ${JSON.stringify(type)} (expected "stdio" or "http")`);
+      errors.push(
+        `server "${name}" has unknown type ${JSON.stringify(type)} (expected "stdio" or "http")`,
+      );
     }
   }
 
