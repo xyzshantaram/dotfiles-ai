@@ -6354,7 +6354,7 @@ function postJson(url, body) {
 }
 
 // css-text:/home/sid/repos/dotfiles-ai/plugins/composer-menu/src/client.module.css
-var client_default = '/* Composer overflow menu, styled after the context meter panel. */\n.composer-menu-trigger {\n  width: 28px;\n  height: 28px;\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  background: 0 0;\n  border: none;\n  border-radius: 999px;\n  flex: none;\n  place-items: center;\n  display: grid;\n  padding: 0;\n}\n.composer-menu-trigger:hover,\n.composer-menu-trigger[data-state="open"] {\n  background: var(--dsw-alias-interactive-bg-hover);\n  color: var(--dsw-alias-label-primary);\n}\n.composer-menu-content {\n  z-index: 100;\n  box-sizing: border-box;\n  min-width: 208px;\n  border: 1px solid var(--dsw-alias-border-inverted);\n  background: var(--dsw-specific-menu);\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-primary);\n  border-radius: 12px;\n  padding: 6px;\n  font-size: 13px;\n  line-height: 20px;\n  user-select: none;\n}\n.composer-menu-item {\n  align-items: center;\n  gap: 8px;\n  display: flex;\n  cursor: default;\n  outline: none;\n  border-radius: 8px;\n  padding: 7px 10px;\n  white-space: nowrap;\n  color: var(--dsw-alias-label-primary);\n}\n/* Radix marks the row under the pointer or the keyboard cursor. Both use the\n   same token, so mouse and keyboard read identically. */\n.composer-menu-item[data-highlighted] {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.composer-menu-item[data-disabled] {\n  color: var(--dsw-alias-label-tertiary);\n}\n/* A fixed leading slot, present whether or not the row is selected, so labels\n   line up in a column instead of shifting when the check mark appears. */\n.composer-menu-mark {\n  width: 14px;\n  flex: none;\n  place-items: center;\n  display: grid;\n  color: var(--dsw-alias-label-secondary);\n}\n.composer-menu-indicator {\n  display: inline-flex;\n}\n.composer-menu-label {\n  flex: auto;\n}\n.composer-menu-chevron {\n  flex: none;\n  color: var(--dsw-alias-label-tertiary);\n  padding-left: 8px;\n}\n.composer-menu-separator {\n  height: 1px;\n  background: var(--dsw-alias-border-l3);\n  margin: 6px 4px;\n}\n';
+var client_default = '/* Composer overflow menu, styled after the context meter panel. */\n.composer-menu-trigger {\n  width: 28px;\n  height: 28px;\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  background: 0 0;\n  border: none;\n  border-radius: 999px;\n  flex: none;\n  place-items: center;\n  display: grid;\n  padding: 0;\n}\n.composer-menu-trigger:hover,\n.composer-menu-trigger[data-state="open"] {\n  background: var(--dsw-alias-interactive-bg-hover);\n  color: var(--dsw-alias-label-primary);\n}\n.composer-menu-content {\n  z-index: 100;\n  box-sizing: border-box;\n  min-width: 208px;\n  border: 1px solid var(--dsw-alias-border-inverted);\n  background: var(--dsw-specific-menu);\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-primary);\n  border-radius: 12px;\n  padding: 6px;\n  font-size: 13px;\n  line-height: 20px;\n  user-select: none;\n}\n.composer-menu-item {\n  align-items: center;\n  gap: 8px;\n  display: flex;\n  cursor: default;\n  outline: none;\n  border-radius: 8px;\n  padding: 7px 10px;\n  white-space: nowrap;\n  color: var(--dsw-alias-label-primary);\n}\n/* Radix marks the row under the pointer or the keyboard cursor. Both use the\n   same token, so mouse and keyboard read identically. */\n.composer-menu-item[data-highlighted] {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.composer-menu-item[data-disabled] {\n  color: var(--dsw-alias-label-tertiary);\n}\n/* A fixed leading icon column, present whether or not a row has an icon, so\n   labels line up in a column instead of shifting between rows. */\n.composer-menu-icon {\n  width: 16px;\n  flex: none;\n  place-items: center;\n  display: grid;\n  color: var(--dsw-alias-label-secondary);\n}\n/* A fixed trailing slot for the selection check, present whether or not the\n   row is selected, so labels line up in a column instead of shifting when\n   the check mark appears. */\n.composer-menu-mark {\n  width: 14px;\n  flex: none;\n  place-items: center;\n  display: grid;\n  color: var(--dsw-alias-label-secondary);\n}\n.composer-menu-indicator {\n  display: inline-flex;\n}\n.composer-menu-label {\n  flex: auto;\n}\n.composer-menu-chevron {\n  flex: none;\n  color: var(--dsw-alias-label-tertiary);\n  padding-left: 8px;\n}\n.composer-menu-separator {\n  height: 1px;\n  background: var(--dsw-alias-border-l3);\n  margin: 6px 4px;\n}\n';
 
 // plugins/composer-menu/src/client.tsx
 var PLUGIN_NAME = "composer-menu";
@@ -6423,16 +6423,78 @@ function apply(ctx) {
       ensureShippedHidden();
     });
     const [open, setOpen] = react.useState(false);
+    const extraRef = react.useRef(null);
+    const [hasExtra, setHasExtra] = react.useState(false);
+    react.useEffect(() => {
+      const el = extraRef.current;
+      if (el === null) return;
+      const update = () => setHasExtra(el.childElementCount > 0);
+      update();
+      const observer = new MutationObserver(update);
+      observer.observe(el, { childList: true });
+      return () => observer.disconnect();
+    });
     const permissions = props.useProjection("permissions");
     const options2 = permissions === void 0 ? [] : permissions.options.filter((option) => option.value !== "custom");
+    const SHIELD_OUTLINE = "M8.20554 0.899994L14.7901 3.36857V7.01026C14.7901 12 11.0466 14.2103 8.20554 15.3C5.36446 14.2103 1.62012 12 1.62012 7.01026V3.36857L8.20554 0.899994Z";
+    const PERMISSION_PATHS = {
+      "read-only": [
+        {
+          d: SHIELD_OUTLINE,
+          stroke: "currentColor",
+          strokeWidth: "1.31831",
+          strokeLinejoin: "round"
+        },
+        {
+          d: "M12.1654 5.7552L8.9447 9.41475C8.73044 9.65816 8.53628 9.8804 8.35774 10.0423C8.1713 10.2114 7.94235 10.3717 7.64016 10.4254C7.48207 10.4535 7.32 10.4552 7.16151 10.4294C6.85843 10.3801 6.62728 10.2223 6.43836 10.0559C6.25752 9.89653 6.06037 9.67732 5.84264 9.43705L4.72925 8.20897L5.63557 7.38707L6.74897 8.61594C6.98603 8.87755 7.12974 9.03533 7.24673 9.13839C7.31033 9.19443 7.34485 9.21476 7.35823 9.22122C7.38068 9.22484 7.40352 9.22515 7.42593 9.22122C7.40522 9.22502 7.42893 9.23294 7.53583 9.136C7.65132 9.03126 7.79316 8.87139 8.02643 8.60638L11.2479 4.94763L12.1654 5.7552Z",
+          fill: "currentColor"
+        }
+      ],
+      "workspace-write": [
+        {
+          d: "M8.08887 0.251709C8.20479 0.23085 8.32486 0.241168 8.43652 0.282959L15.0215 2.75171C15.2787 2.84819 15.4492 3.09414 15.4492 3.3689V7.0105C15.4492 7.10986 15.4441 7.2081 15.4414 7.30542C15.0285 7.07175 14.5905 6.87695 14.1309 6.73022V3.82495L8.20508 1.60327L2.2793 3.82495V7.0105C2.27936 9.7171 3.4745 11.5379 5.02734 12.7947C5.01025 12.9942 5 13.1962 5 13.4001C5.00001 13.7617 5.02722 14.1169 5.08008 14.4636C2.91555 13.0393 0.961014 10.752 0.960938 7.0105V3.3689C0.960938 3.09417 1.13146 2.84821 1.38867 2.75171L7.97461 0.282959L8.08887 0.251709Z",
+          fill: "currentColor"
+        },
+        { d: "M11.3525 5.64688V6.85688H5V5.64688H11.3525Z", fill: "currentColor" },
+        { d: "M9.5824 8.29376V9.50376H5V8.29376H9.5824Z", fill: "currentColor" },
+        {
+          d: "M14.6647 15.6852H10.0338C10.3878 15.3751 10.7567 15.0517 11.0772 14.7706C11.2531 14.6164 11.4144 14.4746 11.5511 14.3547H14.6647V15.6852Z",
+          fill: "currentColor"
+        },
+        {
+          d: "M8.14852 14.1308L7.33925 15.4976C7.22458 15.6912 7.42245 15.9194 7.63037 15.8333L9.09785 15.2254L15.0399 10.0719L14.0905 8.97733L8.14852 14.1308Z",
+          fill: "currentColor"
+        }
+      ],
+      "danger-full-access": [
+        {
+          d: SHIELD_OUTLINE,
+          stroke: "currentColor",
+          strokeWidth: "1.31831",
+          strokeLinejoin: "round"
+        },
+        { d: "M9.10094 4.5V8.75939H7.59888V4.5H9.10094Z", fill: "currentColor" },
+        { d: "M9.10094 9.8114V11.5H7.59888V9.8114H9.10094Z", fill: "currentColor" }
+      ]
+    };
+    function permissionIcon(value) {
+      const paths = PERMISSION_PATHS[value];
+      if (paths === void 0) return null;
+      return react.createElement(
+        "svg",
+        { width: 14, height: 14, viewBox: "0 0 16 16", fill: "none", "aria-hidden": true },
+        paths.map((path, i) => react.createElement("path", { key: i, ...path }))
+      );
+    }
     const check = () => react.createElement(
       ItemIndicator2,
       { className: "composer-menu-indicator" },
       "\u2713"
     );
-    const row = (label) => [
-      react.createElement("span", { key: "mark", className: "composer-menu-mark" }, check()),
-      react.createElement("span", { key: "label", className: "composer-menu-label" }, label)
+    const row = (label, icon) => [
+      react.createElement("span", { key: "icon", className: "composer-menu-icon" }, icon ?? null),
+      react.createElement("span", { key: "label", className: "composer-menu-label" }, label),
+      react.createElement("span", { key: "mark", className: "composer-menu-mark" }, check())
     ];
     let sandboxBody;
     if (permissions === void 0) {
@@ -6454,7 +6516,7 @@ function apply(ctx) {
               className: "composer-menu-item",
               onSelect: () => choose(props.sessionId, option.value)
             },
-            row(option.label ?? option.value)
+            row(option.label ?? option.value, permissionIcon(option.value))
           )
         )
       );
@@ -6527,11 +6589,18 @@ function apply(ctx) {
           Content22,
           { side: "top", align: "start", sideOffset: 8, className: "composer-menu-content" },
           sandboxSub,
-          react.createElement(Separator2, { className: "composer-menu-separator" }),
-          // The renderer only binds renderSlot when the entry declares children,
-          // so a future edit that drops the declaration would crash the menu
-          // rather than just lose the contributed items. Fail soft instead.
-          typeof props.renderSlot === "function" ? props.renderSlot("composer.overflow.item", {}) : null
+          hasExtra ? react.createElement(Separator2, { className: "composer-menu-separator" }) : null,
+          // display: contents keeps this div out of layout entirely, so it is
+          // purely a measuring point for the MutationObserver above; it never
+          // shows as an empty row. The renderer only binds renderSlot when the
+          // entry declares children, so a future edit that drops the
+          // declaration would crash the menu rather than just lose the
+          // contributed items. Fail soft instead.
+          react.createElement(
+            "div",
+            { ref: extraRef, style: { display: "contents" } },
+            typeof props.renderSlot === "function" ? props.renderSlot("composer.overflow.item", {}) : null
+          )
         )
       )
     );
