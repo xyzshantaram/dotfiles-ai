@@ -42,7 +42,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#0341cf6ece23d7533778e88c2bd89abf50b8ff3f}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#8a92578b52022174db9c0dc9d611970733fa0f68}"
 
 # Git-hosted specs whose build scripts pnpm must be allowed to run. pnpm 10+
 # blocks lifecycle scripts (prepare/postinstall) unless the exact resolved
@@ -330,6 +330,9 @@ step_install_plugins() {
 		# projection that ignores turn/start. It self-mounts through its own
 		# cordis.patch.yml, so the web patch needs no row.
 		pnpm_ins "$HERE/plugins/durable-todos"
+		# The shipped context ring reads a provider figure that only ever grows.
+		# This package replaces it with one measured from the surface.
+		pnpm_ins "$HERE/plugins/context-meter"
 		pnpm_ins "$HERE/plugins/log-viewer"
 		# Owns every MCP server, both transports, and the OAuth login. Its
 		# roster is $DSH_HOME/mcp-servers.json, written by step_sync_mcp_config.
@@ -374,6 +377,7 @@ step_report_extra_plugins() {
 		"@xgone/dsh-remote"
 		"aidos"
 		"approval-comment"
+		"context-meter"
 		"dsh-at-file"
 		"dsh-better-markdown"
 		"dsh-input-history"
