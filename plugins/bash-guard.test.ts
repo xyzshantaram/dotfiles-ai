@@ -145,3 +145,28 @@ describe("bash-guard pre-execute", () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("bash-guard message summaries", () => {
+  // A person reads the approval text on a card that already shows the command
+  // underneath, so the ask message must be ONE scannable line and must not
+  // repeat the command. A model reads the deny text and needs the full reason,
+  // so the deny message keeps the command and the bulleted rules.
+  it("summarises an approval in one line, without repeating the command", async () => {
+    const { decision } = await run("git commit -m wip");
+    expect(decision?.kind).toBe("ask");
+    expect(decision?.reason).toBe(
+      "bash-guard: git blocked by 1 filter (commit is blocked) — needs your approval",
+    );
+    expect(decision?.reason).not.toContain("\n");
+    expect(decision?.reason).not.toContain("wip");
+  });
+
+  it("keeps the command and the rule list in a denial", async () => {
+    const { decision } = await run("git filter-branch --all");
+    expect(decision?.kind).toBe("deny");
+    const lines = (decision?.reason ?? "").split("\n");
+    expect(lines[0]).toBe("bash-guard: git denied by 1 filter (filter-branch is blocked)");
+    expect(decision?.reason).toContain("git filter-branch --all");
+    expect(decision?.reason).toContain("Matched rule(s):");
+  });
+});
