@@ -1,0 +1,53 @@
+/* Composer overflow menu, styled after the context meter panel. */
+.composer-menu-trigger {
+  width: 28px;
+  height: 28px;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  background: 0 0;
+  border: none;
+  border-radius: 999px;
+  flex: none;
+  place-items: center;
+  display: grid;
+  padding: 0;
+}
+.composer-menu-trigger:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+.composer-menu-content {
+  z-index: 100;
+  box-sizing: border-box;
+  min-width: 200px;
+  border: 1px solid var(--dsw-alias-border-inverted);
+  background: var(--dsw-specific-menu);
+  box-shadow: var(--dsw-shadow-lv3);
+  color: var(--dsw-alias-label-secondary);
+  border-radius: 12px;
+  padding: 4px;
+  font-size: 12px;
+}
+.composer-menu-item {
+  align-items: center;
+  display: flex;
+  cursor: default;
+  outline: none;
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+.composer-menu-item[data-highlighted] {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+.composer-menu-item[data-disabled] {
+  color: var(--dsw-alias-label-tertiary);
+}
+.composer-menu-indicator {
+  width: 16px;
+  flex: none;
+  display: inline-flex;
+}
+.composer-menu-separator {
+  height: 1px;
+  background: var(--dsw-alias-border-l3);
+  margin: 4px 0;
+}

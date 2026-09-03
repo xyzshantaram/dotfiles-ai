@@ -1,0 +1,32 @@
+{
+  "name": "composer-menu",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Composer overflow menu. Holds the sandbox picker and offers a slot for other plugins.",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@radix-ui/react-dropdown-menu": "^2.1.24"
+  }
+}
