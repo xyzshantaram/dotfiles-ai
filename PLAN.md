@@ -184,6 +184,30 @@ burns a call, gets the same denial, and has no way to tell a policy refusal from
 argument. Worth checking whether upstream `@deepseek-ai/dsh-tool-fs` has the same shape.
 
 
+### Known cause — rejecting an approval cancels the turn
+
+NOT a defect in our `approval-comment` plugin. Recorded 2026-09-03 after a live
+test, so nobody re-diagnoses it.
+
+Rejecting an approval cancels the running turn and injects a fixed instruction.
+The shipped `@deepseek-ai/dsh-user-approval/lib/index.js`, lines 215-226, calls
+`agent.cancel({ kind: "user", reason: "approval-rejected" }, ...)` and delivers
+the text `"The user rejected your approval request. Stop and explain what
+happened. Do not retry the rejected action."` That cancel plus injected followup
+is what makes the agent appear to stop and then restart.
+
+There is no setting for it. `ApprovalPolicy` is only `'ask' | 'never'`, and the
+early return at line 216 fires only under `'never'`, which auto-rejects every
+request. The behaviour is hard-coded.
+
+Changing it means shadowing that row, the same pattern as the compaction fork.
+The owner deferred that on 2026-09-03.
+
+Our `approval-comment` fix is unrelated and stands on its own: the steer used to
+fire after the rejection resolved, so it reached an idle agent and started a new
+turn, and the user's comment was wrapped in a generated instruction. The steer
+now goes first and carries the comment verbatim.
+
 ## User preferences and special rules
 
 - Never commit without explicit approval.
@@ -868,16 +892,75 @@ Make both cards show the image and present their text well.
   priority never throws. See the header comment in `src/client.tsx`.
 - `SlotCore.register()` DOES throw when a second entry declares the same child
   slot name, so shadow rows, never slot declarations.
-- Effort 6 also needs an output modal for background jobs. Check whether one
-  modal component can serve both before designing either. Do not build two.
+- Effort 6 needs an output modal for background jobs. This effort needs NO modal
+  at all, because clicking opens a new tab. Nothing is shared between them, and
+  nothing here blocks Effort 6.
 
-## Open questions, settle before planning
+## Settled decisions (from grilling, 2026-09-03)
 
-- Where does the image data come from for each tool, and is it on the call args
-  or the result? This is unverified. Establish it before any ticket is written.
-- Which metadata fields matter for `read_image`, and in what order?
-- Does the enlarged preview need zoom and pan, or is a plain larger view enough?
-- Should the collapsed row show a thumbnail, or only the expanded card?
+- BOTH cards embed from the T2 route, by file path. REVISED 2026-09-03, after
+  the attachment path proved closed to plugins: `previewUrl` is only
+  `URL.createObjectURL(file)` for composer picks
+  (`dsh-client-ui-conversation/lib/client.js`), `dsh-client-ui-attachment`
+  exports no React components on purpose, and `ImageAttachmentRef.attachmentId`
+  is documented "never a filesystem path or bearer URL". A plugin therefore
+  cannot turn a stored attachment into an image source. Both tools carry a path
+  in their arguments, so one route serves both.
+- COST, accepted: if the file moved or was deleted since the call, the route
+  404s where the attachment would still hold the bytes. The card MUST show a
+  broken-image state, not an empty box. Screenshots under `/tmp/dsh` are the
+  realistic case.
+- `see` needs a host route. It returns only text, and its image exists solely as
+  a path on the call. REJECTED: reusing the child's own `read_image` attachment.
+  `see` returns no child session id and no attachment ref, and it disposes the
+  child run immediately in a `finally` block, so nothing survives to reference.
+- The route allows ANY path, deliberately. It validates that the target really
+  is an image, and does nothing else. RESIDUAL RISK, accepted by the owner: the
+  route is a separate surface from the tool gate, so any local process that can
+  reach the dsh web server can read any image on the machine.
+- The image shows in the EXPANDED body only. Collapsed rows stay one line, so a
+  transcript full of image calls stays compact.
+- `read_image` row reads filename, dimensions, size. Its body reads filename,
+  mimetype, full path. Filename therefore appears twice, because the summary row
+  stays visible while expanded. Accepted.
+- `see` row reads the QUESTION, not the image path. Its body is ordered
+  description, then image, then path.
+- The description renders through `MarkdownText`, reusing the existing
+  `.tool-render-subagent-prompt` typography, and carries a see-more clamp. The
+  clamp exists so a long answer cannot bury the image below the fold.
+- Card height is bounded and the card interior is ONE scrolling area. No nested
+  scrollers. The whole image need not be visible at once.
+- Image sizing: capped to the card width, natural aspect, NEVER upscaled past
+  natural size, and centred when it is narrower than the card.
+- NO modal. Clicking the image opens its route URL in a NEW BROWSER TAB, which
+  is why the route must serve a real `http` URL. This replaced a fitted preview
+  with a 1:1 toggle, and it removes the only reason this effort needed a modal.
+  The shipped `ImageLightbox` in `dsh-client-ui-attachment` could not have been
+  reused in any case: it is not exported from either entry point.
+
+OPEN, a detail rather than a decision: the see-more clamp height. Proposed 8rem,
+about six lines. Change it if it reads wrong.
+
+## Verified API facts (do not re-research)
+
+- `read_image` returns TWO content blocks: a text block holding
+  `<path>...</path>` and `"<mediaType> image, <width>x<height> px, <bytes>
+  bytes"`, plus the image block itself
+  (`dsh-tool-fs/lib/index.js:854-856,918-935`). The attachment ref carries
+  `mediaType`, `width`, `height`, `bytes`, and an optional `name`.
+- `see` takes `{ image, question }` and returns the child's prose only. It
+  already declares
+  `presentCall: { card: "generic", title: "Look at an image", kind: "read", rawInput: args.image }`
+  (`plugins/see.ts:141-152,222-227`), so the path ALREADY reaches the client. The
+  card needs the bytes, nothing more, and `see.ts` needs no change.
+- `MarkdownText` comes from `@deepseek-ai/dsh-client-ui-primitives`, already in
+  use at `plugins/tool-render/src/client.tsx:156`.
+- `.tool-render-subagent-prompt` is the existing capped, scrollable markdown
+  block: `max-height: 16rem; overflow-y: auto` plus full typography for
+  headings, paragraphs, lists, `pre` and inline code
+  (`plugins/tool-render/src/client.module.css:475-512`).
+- Routes register through `ctx.inject(["webServer"], ...)`, the pattern
+  `plugins/log-viewer/src/index.ts:75-77` already uses.
 
 ## Tickets
 
@@ -910,6 +993,52 @@ Three changes, in `plugins/tool-render/`.
 - Clicking an errored call expands and collapses it, and it starts collapsed.
 - The collapsed row reads as tool name plus error message, not arguments.
 
-### T2 — see and read_image cards
+### T2 — host: an image route
 
-Not started. Scope is unsettled. Grill the owner, then ticket it.
+Not started. Ships nothing visible on its own, which the owner accepted when
+choosing to split by layer.
+
+A host route in `plugins/tool-render` that takes a local path and streams the
+image bytes, registered through `ctx.inject(["webServer"], ...)`. It serves BOTH
+`read_image` and `see`, and it accepts any path. It must return a real `http`
+URL that a browser tab can open directly. It must confirm the target is a real image rather than serving arbitrary
+bytes, and it must fail cleanly on a missing or unreadable file so the card can
+show a broken-image state instead of hanging.
+
+**Acceptance criteria**
+
+- The route returns the bytes and a correct content type for a real image.
+- It refuses a path that is not an image, and it does not leak file contents in
+  the refusal.
+- A missing or unreadable file produces a clean error, not a hang.
+
+### T3 — client: the read_image and see cards
+
+Not started. HARD dependency on T2: both halves embed from the route.
+
+Both cards shadow their tool key on `tool.call.toolview` at priority -100, the
+way every other row in this bundle does.
+
+`read_image`: row reads filename, dimensions, size. Body embeds the image from
+the T2 route, then filename, mimetype and full path.
+
+`see`: row reads the question. Body renders the description through
+`MarkdownText` with the see-more clamp, then the image from the T2 route, then
+the path.
+
+Shared: bounded card height with one interior scroll area, image capped to card
+width at natural aspect, never upscaled, centred when narrower. Clicking the
+image opens its route URL in a new browser tab. A path the route cannot serve
+renders as a broken-image state, never as an empty box.
+
+**Acceptance criteria**
+
+- A `read_image` call shows the image, and the row reads filename, dimensions
+  and size.
+- A `see` call shows the question on the row, and the description above the
+  image in the body.
+- A long description is clamped, and see-more reveals the rest in place.
+- A tall image scrolls within the bounded card, and never stretches.
+- An image narrower than the card is centred, not upscaled.
+- Clicking the image opens it in a new tab at its route URL.
+- A moved or deleted file renders as a broken-image state, not an empty box.
