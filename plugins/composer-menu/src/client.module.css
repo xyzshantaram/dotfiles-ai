@@ -50,8 +50,18 @@
 .composer-menu-item[data-disabled] {
   color: var(--dsw-alias-label-tertiary);
 }
-/* A fixed leading slot, present whether or not the row is selected, so labels
-   line up in a column instead of shifting when the check mark appears. */
+/* A fixed leading icon column, present whether or not a row has an icon, so
+   labels line up in a column instead of shifting between rows. */
+.composer-menu-icon {
+  width: 16px;
+  flex: none;
+  place-items: center;
+  display: grid;
+  color: var(--dsw-alias-label-secondary);
+}
+/* A fixed trailing slot for the selection check, present whether or not the
+   row is selected, so labels line up in a column instead of shifting when
+   the check mark appears. */
 .composer-menu-mark {
   width: 14px;
   flex: none;
