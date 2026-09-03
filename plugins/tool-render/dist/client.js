@@ -8909,7 +8909,7 @@ function toolRenderRow(options) {
       /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-sep", "aria-hidden": true }),
       summary
     ),
-    open === true ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-body" }, options.body, options.inspect !== void 0 ? /* @__PURE__ */ import_react.default.createElement("button", { type: "button", className: "tool-render-inspect", onClick: options.inspect }, /* @__PURE__ */ import_react.default.createElement(IconInspectOutline122, null), " Inspect") : null) : null
+    open === true ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-body" }, options.body !== null && options.body !== void 0 ? options.body : options.state === "error" && options.errorText !== null && options.errorText !== void 0 && options.errorText !== "" ? /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output", "tool-render-error": true }, options.errorText) : null, options.inspect !== void 0 ? /* @__PURE__ */ import_react.default.createElement("button", { type: "button", className: "tool-render-inspect", onClick: options.inspect }, /* @__PURE__ */ import_react.default.createElement(IconInspectOutline122, null), " Inspect") : null) : null
   );
 }
 function ReadRow(props) {
@@ -8950,6 +8950,7 @@ function ReadRow(props) {
     },
     body,
     errorSummary,
+    errorText,
     inspect: props.inspect
   });
 }
@@ -9004,6 +9005,7 @@ function BashRow(props) {
     },
     body,
     errorSummary,
+    errorText,
     inspect: props.inspect
   });
 }
@@ -9359,6 +9361,7 @@ function makeEditRow(toolTitle) {
       },
       body,
       errorSummary,
+      errorText,
       inspect: props.inspect
     });
   };
@@ -9605,6 +9608,7 @@ function WriteRow(props) {
     },
     body,
     errorSummary,
+    errorText,
     inspect: props.inspect
   });
 }
@@ -9665,7 +9669,7 @@ function TodoRow(props) {
     }
     summary = firstActive !== null ? head + " \xB7 " + firstActive : head;
   } else {
-    summary = "Todo list";
+    summary = "To-do list";
   }
   var body = null;
   if (todos !== null && output !== null && output !== "") {
@@ -9673,7 +9677,7 @@ function TodoRow(props) {
   }
   return toolRenderRow({
     icon: /* @__PURE__ */ import_react.default.createElement(IconChecklistOutline142, { size: 14 }),
-    title: "Todo list",
+    title: "To-do list",
     summary,
     state,
     expandable: body !== null,
@@ -9683,6 +9687,7 @@ function TodoRow(props) {
     },
     body,
     errorSummary,
+    errorText,
     inspect: props.inspect
   });
 }
@@ -9821,6 +9826,7 @@ function AskRow(props) {
     },
     body,
     errorSummary,
+    errorText,
     inspect: props.inspect
   });
 }
@@ -9861,6 +9867,7 @@ function SubagentRow(props) {
     },
     body,
     errorSummary,
+    errorText,
     inspect: props.inspect
   });
 }
