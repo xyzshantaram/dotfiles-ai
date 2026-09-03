@@ -123,7 +123,7 @@ function makePanel() {
         {!collapsed ? (
           <>
             {todos === null || todos.length === 0 ? (
-              <div className="durable-todos-empty">No todos</div>
+              <div className="durable-todos-empty">No work items</div>
             ) : (
               <div className="durable-todos-plan">
                 {todos.map(function (item, index) {

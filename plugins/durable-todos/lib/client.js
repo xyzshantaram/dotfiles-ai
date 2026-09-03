@@ -129,7 +129,7 @@ function makePanel() {
         onClick: onRemind
       },
       "Remind"
-    ) : null), inProgressItem ? /* @__PURE__ */ react.createElement("div", { className: "durable-todos-running-line" }, "Current: " + inProgressItem.content) : null, !collapsed ? /* @__PURE__ */ react.createElement(react.Fragment, null, todos === null || todos.length === 0 ? /* @__PURE__ */ react.createElement("div", { className: "durable-todos-empty" }, "No todos") : /* @__PURE__ */ react.createElement("div", { className: "durable-todos-plan" }, todos.map(function(item, index) {
+    ) : null), inProgressItem ? /* @__PURE__ */ react.createElement("div", { className: "durable-todos-running-line" }, "Current: " + inProgressItem.content) : null, !collapsed ? /* @__PURE__ */ react.createElement(react.Fragment, null, todos === null || todos.length === 0 ? /* @__PURE__ */ react.createElement("div", { className: "durable-todos-empty" }, "No work items") : /* @__PURE__ */ react.createElement("div", { className: "durable-todos-plan" }, todos.map(function(item, index) {
       var attrs = item.status === "completed" ? { "data-done": true } : item.status === "in_progress" ? { "data-active": true } : { "data-pending": true };
       return /* @__PURE__ */ react.createElement("div", { key: index, className: "durable-todos-plan-item", ...attrs }, /* @__PURE__ */ react.createElement("span", { className: "durable-todos-checkbox", "aria-hidden": true }), /* @__PURE__ */ react.createElement("span", { className: "durable-todos-plan-content" }, item.content));
     }))) : null);
