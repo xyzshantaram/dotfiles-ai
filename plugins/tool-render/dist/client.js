@@ -1619,6 +1619,10 @@ function injectStyle(pluginName, styleId, cssText) {
   tag.textContent = cssText;
   document.head.appendChild(tag);
 }
+var PERMISSION_OUTLINE_CSS = `:root {
+  --dsh-outline-escalated: #ff8c00;
+  --dsh-outline-guard: #00b7ff;
+}`;
 function mergeCss(...parts) {
   return parts.flat().filter(Boolean).join("\n");
 }
@@ -1944,7 +1948,7 @@ var client_default = `.tool-render-row {
   padding: 0.3125rem 0.5rem;
 }
 .tool-render-card[data-escalated] {
-  outline: 3px solid #ff8c00;
+  outline: 3px solid var(--dsh-outline-escalated);
 }
 /* A call waiting on a bash-guard approval is outlined in electric blue, so it
    reads differently from a sandbox_permissions escalation. This rule follows
@@ -1952,7 +1956,7 @@ var client_default = `.tool-render-row {
    only while the approval is open: the client never receives a decided
    approval's reason, so an answered call goes back to looking ordinary. */
 .tool-render-card[data-guard-approval] {
-  outline: 3px solid #00b7ff;
+  outline: 3px solid var(--dsh-outline-guard);
 }
 /* An errored call is outlined the way an escalated one is, in red and a little
    thinner. The outline follows the card's rounded corners. It replaces the old
@@ -8605,6 +8609,7 @@ var HLJS_THEME_CSS = [
   ".hljs-deletion{color:#ffdcd7;background-color:#67060c}"
 ].join("");
 injectStyle(PLUGIN_NAME, STYLE_TAG_ID, mergeCss(client_default, HLJS_THEME_CSS));
+injectStyle(PLUGIN_NAME, "dsh-permission-outline", PERMISSION_OUTLINE_CSS);
 var HLJS_SCOPE_SELECTOR = ".tool-render-card pre code";
 function hljsPassEligible(el) {
   if (el.dataset.highlighted) return false;

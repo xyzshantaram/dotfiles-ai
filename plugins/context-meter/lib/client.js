@@ -40,7 +40,29 @@ __export(client_exports, {
   name: () => name
 });
 module.exports = __toCommonJS(client_exports);
-var react = __toESM(require("react"), 1);
+var react2 = __toESM(require("react"), 1);
+
+// plugins/shared/client-react.ts
+var react = __toESM(require("react"));
+function useDismissable(open, rootRef, onClose) {
+  react.useEffect(() => {
+    if (!open || typeof document === "undefined") return;
+    const onPointerDown = (event) => {
+      const root = rootRef.current;
+      if (root !== null && event.target instanceof Node && root.contains(event.target)) return;
+      onClose();
+    };
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open, onClose]);
+}
 
 // plugins/shared/client-util.ts
 function injectStyle(pluginName, styleId, cssText) {
@@ -90,12 +112,12 @@ var TRUE_ROWS = [
   }
 ];
 function row(key, label, value, sub) {
-  return react.createElement(
+  return react2.createElement(
     "div",
     { key, className: sub ? "ctx-meter-row ctx-meter-sub" : "ctx-meter-row" },
     [
-      react.createElement("dt", { key: "dt" }, label),
-      react.createElement("dd", { key: "dd" }, value)
+      react2.createElement("dt", { key: "dt" }, label),
+      react2.createElement("dd", { key: "dd" }, value)
     ]
   );
 }
@@ -105,7 +127,7 @@ function apply(ctx) {
   ctx.slots.inject("conversation.input.right", function* () {
     yield ctx.slots.register(
       { name: "conversation.input.right", id: "true-context-meter", order: 50 },
-      (props) => react.createElement(Meter, { useProjection: props.useProjection })
+      (props) => react2.createElement(Meter, { useProjection: props.useProjection })
     );
   });
   injectStyle(PLUGIN_NAME, "context-meter", client_default);
@@ -162,30 +184,15 @@ function apply(ctx) {
     const breakdown = useProjection("contextBreakdown");
     const pressure = useProjection("contextPressure");
     const usage = useProjection("tokenUsage");
-    const [open, setOpen] = react.useState(false);
-    const [hovering, setHovering] = react.useState(false);
-    const rootRef = react.useRef(null);
-    react.useEffect(() => {
+    const [open, setOpen] = react2.useState(false);
+    const [hovering, setHovering] = react2.useState(false);
+    const rootRef = react2.useRef(null);
+    react2.useEffect(() => {
       ensureShippedHidden();
       placeAfterModelSelect(rootRef.current);
     });
-    react.useEffect(() => {
-      if (!open || typeof document === "undefined") return;
-      const onPointerDown = (event) => {
-        const root = rootRef.current;
-        if (root !== null && event.target instanceof Node && root.contains(event.target)) return;
-        setOpen(false);
-      };
-      const onKeyDown = (event) => {
-        if (event.key === "Escape") setOpen(false);
-      };
-      document.addEventListener("pointerdown", onPointerDown);
-      document.addEventListener("keydown", onKeyDown);
-      return () => {
-        document.removeEventListener("pointerdown", onPointerDown);
-        document.removeEventListener("keydown", onKeyDown);
-      };
-    }, [open]);
+    const close = react2.useCallback(() => setOpen(false), []);
+    useDismissable(open, rootRef, close);
     const contextWindow = pressure === void 0 ? void 0 : pressure.contextWindow;
     if (breakdown === void 0 || contextWindow === void 0) return null;
     const trueTotal = breakdown.systemTokens + breakdown.toolsTokens + breakdown.messageTokens;
@@ -197,7 +204,7 @@ function apply(ctx) {
       color: part.color,
       width: trueTotal === 0 ? 0 : percent * breakdown[part.key] / trueTotal
     })).filter((part) => part.width > 0);
-    const trigger = react.createElement(
+    const trigger = react2.createElement(
       "button",
       {
         type: "button",
@@ -206,18 +213,18 @@ function apply(ctx) {
         "aria-expanded": open,
         onClick: () => setOpen(!open)
       },
-      react.createElement(
+      react2.createElement(
         "svg",
         { width: 18, height: 18, viewBox: "0 0 18 18", "aria-hidden": true },
         [
-          react.createElement("circle", {
+          react2.createElement("circle", {
             key: "track",
             className: "ctx-meter-track",
             cx: 9,
             cy: 9,
             r: RADIUS
           }),
-          react.createElement("circle", {
+          react2.createElement("circle", {
             key: "fill",
             className: "ctx-meter-fill",
             cx: 9,
@@ -229,50 +236,50 @@ function apply(ctx) {
         ]
       )
     );
-    const trueHalf = react.createElement("div", { className: "ctx-meter-half" }, [
-      react.createElement("div", { key: "head", className: "ctx-meter-head" }, [
-        react.createElement(
+    const trueHalf = react2.createElement("div", { className: "ctx-meter-half" }, [
+      react2.createElement("div", { key: "head", className: "ctx-meter-head" }, [
+        react2.createElement(
           "span",
           { key: "t", className: "ctx-meter-title" },
           "Prompt, as measured"
         ),
-        react.createElement(
+        react2.createElement(
           "span",
           { key: "f", className: "ctx-meter-figures" },
           formatTokens(trueTotal) + " / " + formatTokens(contextWindow) + "  " + percent + "%"
         )
       ]),
-      react.createElement(
+      react2.createElement(
         "div",
         { key: "bar", className: "ctx-meter-bar" },
         segments.map(
-          (part) => react.createElement("span", {
+          (part) => react2.createElement("span", {
             key: part.key,
             className: "ctx-meter-segment " + part.color,
             style: { width: part.width + "%" }
           })
         )
       ),
-      react.createElement(
+      react2.createElement(
         "dl",
         { key: "rows", className: "ctx-meter-rows" },
         TRUE_ROWS.map(
-          (part) => react.createElement("div", { key: part.key, className: "ctx-meter-row" }, [
-            react.createElement("dt", { key: "dt" }, [
-              react.createElement("span", {
+          (part) => react2.createElement("div", { key: part.key, className: "ctx-meter-row" }, [
+            react2.createElement("dt", { key: "dt" }, [
+              react2.createElement("span", {
                 key: "s",
                 className: "ctx-meter-swatch " + part.color
               }),
               part.label
             ]),
-            react.createElement("dd", { key: "dd" }, formatTokens(breakdown[part.key]))
+            react2.createElement("dd", { key: "dd" }, formatTokens(breakdown[part.key]))
           ])
         )
       )
     ]);
     let providerBody;
     if (usage === void 0) {
-      providerBody = react.createElement(
+      providerBody = react2.createElement(
         "div",
         { className: "ctx-meter-note" },
         "No usage reported yet."
@@ -280,15 +287,15 @@ function apply(ctx) {
     } else {
       const billed = usage.uncachedInputTokens + usage.cacheReadTokens + usage.cacheWriteTokens;
       providerBody = [
-        react.createElement("dl", { key: "last", className: "ctx-meter-rows" }, [
+        react2.createElement("dl", { key: "last", className: "ctx-meter-rows" }, [
           row("claim", "Prompt it says it read", formatTokens(pressure.pressureTokens))
         ]),
-        react.createElement(
+        react2.createElement(
           "div",
           { key: "g", className: "ctx-meter-group" },
           "Session totals, every call summed"
         ),
-        react.createElement("dl", { key: "totals", className: "ctx-meter-rows" }, [
+        react2.createElement("dl", { key: "totals", className: "ctx-meter-rows" }, [
           row("in", "Prompt, billed", formatTokens(billed)),
           row("cr", "of which cache read", formatTokens(usage.cacheReadTokens), true),
           row("cw", "of which cache write", formatTokens(usage.cacheWriteTokens), true),
@@ -296,16 +303,16 @@ function apply(ctx) {
         ])
       ];
     }
-    const providerHalf = react.createElement("div", { className: "ctx-meter-half" }, [
-      react.createElement("div", { key: "head", className: "ctx-meter-head" }, [
-        react.createElement(
+    const providerHalf = react2.createElement("div", { className: "ctx-meter-half" }, [
+      react2.createElement("div", { key: "head", className: "ctx-meter-head" }, [
+        react2.createElement(
           "span",
           { key: "t", className: "ctx-meter-title" },
           "Provider claims, last call"
         )
       ]),
-      react.createElement("div", { key: "body" }, providerBody),
-      react.createElement(
+      react2.createElement("div", { key: "body" }, providerBody),
+      react2.createElement(
         "div",
         { key: "note", className: "ctx-meter-note" },
         "Reported by the provider, not measured here. Some providers report these as running totals, which makes them larger than the prompt above."
@@ -314,16 +321,16 @@ function apply(ctx) {
     const children = [trigger];
     if (open)
       children.push(
-        react.createElement("div", { key: "panel", className: "ctx-meter-panel" }, [
+        react2.createElement("div", { key: "panel", className: "ctx-meter-panel" }, [
           trueHalf,
           providerHalf
         ])
       );
     else if (hovering)
       children.push(
-        react.createElement("div", { key: "tip", className: "ctx-meter-tip" }, reading)
+        react2.createElement("div", { key: "tip", className: "ctx-meter-tip" }, reading)
       );
-    return react.createElement(
+    return react2.createElement(
       "span",
       {
         ref: rootRef,
