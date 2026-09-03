@@ -3,7 +3,7 @@ import { injectStyle } from "../../shared/client-util";
 import localCss from "./client.module.css";
 
 const PLUGIN_NAME = "context-meter";
-const RADIUS = 5.5;
+const RADIUS = 7;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 const OWNER = "@deepseek-ai/dsh-client-ui-conversation/";
@@ -66,47 +66,66 @@ function apply(ctx: any) {
 
   injectStyle(PLUGIN_NAME, "context-meter", localCss);
 
-  const hidden = shippedClass("ContextMeter.module.css", "_root");
-  if (hidden === null) {
-    console.error(
-      "true context meter: could not read the shipped meter stylesheet, so the shipped ring stays visible. " +
-        'Expected a style tag with data-plugin-css="' +
-        OWNER +
-        'ContextMeter.module.css".',
-    );
-  } else {
-    injectStyle(PLUGIN_NAME, "context-meter-hide", "." + hidden + " { display: none !important; }");
-  }
-
-  // Our slot renders before the model select, but the meter belongs after it.
-  // A stylesheet cannot express this reliably, so set flex order on the exact
-  // nodes. We do not know whether the slot wraps our element, and a wrapper
-  // with `display: contents` is not a flex item at all, so apply the order to
-  // every element from our root up to the row's direct child. Exactly one of
-  // them is the real flex item, and the order is inert on the others.
-  const trailing = shippedClass("InputBar.module.css", "_trailing");
+  // Both shipped class names are read from the stylesheets that package injects,
+  // because their hashes change per DSH build. As a tracked plugin, apply() runs
+  // at boot and can run BEFORE those stylesheets exist. Resolving them once here
+  // left the shipped ring visible and our meter unmoved, so resolve them lazily
+  // on render and keep retrying until they appear.
+  let hideDone = false;
+  let trailingClass: string | null = null;
+  let attempts = 0;
   let warned = false;
 
-  /** Place our seat after the model select and before the send button. */
+  /** Hide the shipped meter as soon as its stylesheet exists. */
+  function ensureShippedHidden() {
+    if (hideDone) return;
+    const hidden = shippedClass("ContextMeter.module.css", "_root");
+    if (hidden === null) return;
+    injectStyle(PLUGIN_NAME, "context-meter-hide", "." + hidden + " { display: none !important; }");
+    hideDone = true;
+  }
+
+  /** The composer tool row class, resolved on the first render that finds it. */
+  function trailingOf() {
+    if (trailingClass === null) trailingClass = shippedClass("InputBar.module.css", "_trailing");
+    return trailingClass;
+  }
+
+  /**
+   * Report a lookup that never resolved. Boot renders legitimately miss, so
+   * stay quiet until enough of them have failed to mean a real breakage.
+   */
+  function warnUnresolved(what: string) {
+    attempts += 1;
+    if (attempts < 20 || warned) return;
+    warned = true;
+    console.error("true context meter: " + what);
+  }
+
+  /**
+   * Place our seat after the model select and before the send button.
+   *
+   * Our slot renders before the model select, but the meter belongs after it. A
+   * stylesheet cannot express this reliably. We do not know whether the slot
+   * wraps our element, and a wrapper with `display: contents` is not a flex item
+   * at all, so order on it is inert. Apply the order to every element from our
+   * root up to the row's direct child: exactly one of them is the real flex
+   * item, and the order does nothing on the others.
+   */
   function placeAfterModelSelect(el: any) {
     if (el === null || typeof document === "undefined") return;
+    const trailing = trailingOf();
     if (trailing === null) {
-      if (!warned) {
-        warned = true;
-        console.error(
-          "true context meter: could not read the composer tool row class, so the meter stays left of the model select.",
-        );
-      }
+      warnUnresolved(
+        "could not read the composer tool row class, so the meter stays left of the model select.",
+      );
       return;
     }
     const rowEl = el.closest("." + trailing);
     if (rowEl === null) {
-      if (!warned) {
-        warned = true;
-        console.error(
-          "true context meter: the meter is not inside the composer tool row, so its position is unchanged.",
-        );
-      }
+      warnUnresolved(
+        "the meter is not inside the composer tool row, so its position is unchanged.",
+      );
       return;
     }
     const chain: any[] = [];
@@ -130,9 +149,12 @@ function apply(ctx: any) {
     const [hovering, setHovering] = react.useState(false);
     const rootRef = react.useRef(null);
 
-    // No dependency list: the composer row re-renders around us, so reassert
-    // the order after every render rather than only on mount.
+    // No dependency list: the composer row re-renders around us, so reassert the
+    // order after every render rather than only on mount. Both shipped-class
+    // lookups also retry here, because at boot they can run before the shipped
+    // stylesheets exist.
     react.useEffect(() => {
+      ensureShippedHidden();
       placeAfterModelSelect(rootRef.current);
     });
 
@@ -180,23 +202,23 @@ function apply(ctx: any) {
       },
       react.createElement(
         "svg",
-        { width: 14, height: 14, viewBox: "0 0 14 14", "aria-hidden": true },
+        { width: 18, height: 18, viewBox: "0 0 18 18", "aria-hidden": true },
         [
           react.createElement("circle", {
             key: "track",
             className: "ctx-meter-track",
-            cx: 7,
-            cy: 7,
+            cx: 9,
+            cy: 9,
             r: RADIUS,
           }),
           react.createElement("circle", {
             key: "fill",
             className: "ctx-meter-fill",
-            cx: 7,
-            cy: 7,
+            cx: 9,
+            cy: 9,
             r: RADIUS,
             strokeDasharray: dash + " " + CIRCUMFERENCE,
-            transform: "rotate(-90 7 7)",
+            transform: "rotate(-90 9 9)",
           }),
         ],
       ),

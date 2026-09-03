@@ -3,8 +3,8 @@
   position: relative;
 }
 .ctx-meter-trigger {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   color: var(--dsw-alias-label-secondary);
   cursor: pointer;
   background: 0 0;
@@ -20,13 +20,13 @@
 }
 .ctx-meter-track {
   fill: none;
-  stroke: var(--dsw-alias-border-l3);
-  stroke-width: 2px;
+  stroke: var(--dsw-alias-border-l2);
+  stroke-width: 2.5px;
 }
 .ctx-meter-fill {
   fill: none;
-  stroke: var(--dsw-alias-label-tertiary);
-  stroke-width: 2px;
+  stroke: var(--dsw-alias-label-primary);
+  stroke-width: 2.5px;
   stroke-linecap: round;
 }
 .ctx-meter-tip {

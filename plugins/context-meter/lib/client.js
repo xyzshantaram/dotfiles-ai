@@ -57,11 +57,11 @@ function injectStyle(pluginName, styleId, cssText) {
 }
 
 // css-text:/home/sid/repos/dotfiles-ai/plugins/context-meter/src/client.module.css
-var client_default = ".ctx-meter-root {\n  display: inline-flex;\n  position: relative;\n}\n.ctx-meter-trigger {\n  width: 28px;\n  height: 28px;\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  background: 0 0;\n  border: none;\n  border-radius: 999px;\n  flex: none;\n  place-items: center;\n  display: grid;\n  padding: 0;\n}\n.ctx-meter-trigger:hover {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.ctx-meter-track {\n  fill: none;\n  stroke: var(--dsw-alias-border-l3);\n  stroke-width: 2px;\n}\n.ctx-meter-fill {\n  fill: none;\n  stroke: var(--dsw-alias-label-tertiary);\n  stroke-width: 2px;\n  stroke-linecap: round;\n}\n.ctx-meter-tip {\n  z-index: 100;\n  pointer-events: none;\n  white-space: nowrap;\n  border: 1px solid var(--dsw-alias-border-inverted);\n  background: var(--dsw-specific-menu);\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-secondary);\n  border-radius: 8px;\n  padding: 4px 8px;\n  font-size: 12px;\n  line-height: 18px;\n  font-variant-numeric: tabular-nums;\n  position: absolute;\n  bottom: calc(100% + 8px);\n  right: 0;\n}\n.ctx-meter-panel {\n  z-index: 100;\n  box-sizing: border-box;\n  border: 1px solid var(--dsw-alias-border-inverted);\n  background: var(--dsw-specific-menu);\n  width: 296px;\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-secondary);\n  cursor: default;\n  border-radius: 12px;\n  padding: 12px;\n  font-size: 12px;\n  line-height: 20px;\n  position: absolute;\n  bottom: calc(100% + 8px);\n  right: 0;\n}\n.ctx-meter-title {\n  color: var(--dsw-alias-label-primary);\n  font-weight: 500;\n}\n.ctx-meter-half + .ctx-meter-half {\n  margin-top: 12px;\n  padding-top: 10px;\n  border-top: 1px solid var(--dsw-alias-border-l3);\n}\n.ctx-meter-head {\n  align-items: baseline;\n  gap: 6px;\n  display: flex;\n}\n.ctx-meter-figures {\n  font-variant-numeric: tabular-nums;\n  color: var(--dsw-alias-label-primary);\n  margin-left: auto;\n  font-weight: 500;\n}\n.ctx-meter-bar {\n  background: var(--dsw-alias-interactive-bg-hover);\n  border-radius: 999px;\n  gap: 1px;\n  height: 4px;\n  margin: 8px 0 6px;\n  display: flex;\n  overflow: hidden;\n}\n.ctx-meter-segment {\n  background: var(--meter-tint, var(--dsw-alias-label-tertiary));\n  border-radius: 1px;\n  flex: none;\n  min-width: 2px;\n  height: 100%;\n}\n.ctx-meter-swatch {\n  background: var(--meter-tint);\n  vertical-align: baseline;\n  border-radius: 2px;\n  width: 8px;\n  height: 8px;\n  margin-right: 6px;\n  display: inline-block;\n}\n.ctx-meter-color-system {\n  --meter-tint: var(--dsw-static-neutral-bluish-400);\n}\n.ctx-meter-color-tools {\n  --meter-tint: #a78bfa;\n}\n.ctx-meter-color-messages {\n  --meter-tint: var(--dsw-static-blue-450);\n}\n.ctx-meter-rows {\n  margin: 4px 0 0;\n}\n.ctx-meter-row {\n  justify-content: space-between;\n  align-items: center;\n  gap: 12px;\n  padding: 2px 0;\n  display: flex;\n}\n.ctx-meter-row dt {\n  color: var(--dsw-alias-label-secondary);\n}\n.ctx-meter-row dd {\n  font-variant-numeric: tabular-nums;\n  color: var(--dsw-alias-label-primary);\n  margin: 0;\n}\n.ctx-meter-sub dt {\n  padding-left: 14px;\n  color: var(--dsw-alias-label-tertiary);\n}\n.ctx-meter-group {\n  color: var(--dsw-alias-label-tertiary);\n  margin-top: 8px;\n}\n.ctx-meter-note {\n  color: var(--dsw-alias-label-tertiary);\n  margin-top: 6px;\n}\n";
+var client_default = ".ctx-meter-root {\n  display: inline-flex;\n  position: relative;\n}\n.ctx-meter-trigger {\n  width: 30px;\n  height: 30px;\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  background: 0 0;\n  border: none;\n  border-radius: 999px;\n  flex: none;\n  place-items: center;\n  display: grid;\n  padding: 0;\n}\n.ctx-meter-trigger:hover {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.ctx-meter-track {\n  fill: none;\n  stroke: var(--dsw-alias-border-l2);\n  stroke-width: 2.5px;\n}\n.ctx-meter-fill {\n  fill: none;\n  stroke: var(--dsw-alias-label-primary);\n  stroke-width: 2.5px;\n  stroke-linecap: round;\n}\n.ctx-meter-tip {\n  z-index: 100;\n  pointer-events: none;\n  white-space: nowrap;\n  border: 1px solid var(--dsw-alias-border-inverted);\n  background: var(--dsw-specific-menu);\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-secondary);\n  border-radius: 8px;\n  padding: 4px 8px;\n  font-size: 12px;\n  line-height: 18px;\n  font-variant-numeric: tabular-nums;\n  position: absolute;\n  bottom: calc(100% + 8px);\n  right: 0;\n}\n.ctx-meter-panel {\n  z-index: 100;\n  box-sizing: border-box;\n  border: 1px solid var(--dsw-alias-border-inverted);\n  background: var(--dsw-specific-menu);\n  width: 296px;\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-secondary);\n  cursor: default;\n  border-radius: 12px;\n  padding: 12px;\n  font-size: 12px;\n  line-height: 20px;\n  position: absolute;\n  bottom: calc(100% + 8px);\n  right: 0;\n}\n.ctx-meter-title {\n  color: var(--dsw-alias-label-primary);\n  font-weight: 500;\n}\n.ctx-meter-half + .ctx-meter-half {\n  margin-top: 12px;\n  padding-top: 10px;\n  border-top: 1px solid var(--dsw-alias-border-l3);\n}\n.ctx-meter-head {\n  align-items: baseline;\n  gap: 6px;\n  display: flex;\n}\n.ctx-meter-figures {\n  font-variant-numeric: tabular-nums;\n  color: var(--dsw-alias-label-primary);\n  margin-left: auto;\n  font-weight: 500;\n}\n.ctx-meter-bar {\n  background: var(--dsw-alias-interactive-bg-hover);\n  border-radius: 999px;\n  gap: 1px;\n  height: 4px;\n  margin: 8px 0 6px;\n  display: flex;\n  overflow: hidden;\n}\n.ctx-meter-segment {\n  background: var(--meter-tint, var(--dsw-alias-label-tertiary));\n  border-radius: 1px;\n  flex: none;\n  min-width: 2px;\n  height: 100%;\n}\n.ctx-meter-swatch {\n  background: var(--meter-tint);\n  vertical-align: baseline;\n  border-radius: 2px;\n  width: 8px;\n  height: 8px;\n  margin-right: 6px;\n  display: inline-block;\n}\n.ctx-meter-color-system {\n  --meter-tint: var(--dsw-static-neutral-bluish-400);\n}\n.ctx-meter-color-tools {\n  --meter-tint: #a78bfa;\n}\n.ctx-meter-color-messages {\n  --meter-tint: var(--dsw-static-blue-450);\n}\n.ctx-meter-rows {\n  margin: 4px 0 0;\n}\n.ctx-meter-row {\n  justify-content: space-between;\n  align-items: center;\n  gap: 12px;\n  padding: 2px 0;\n  display: flex;\n}\n.ctx-meter-row dt {\n  color: var(--dsw-alias-label-secondary);\n}\n.ctx-meter-row dd {\n  font-variant-numeric: tabular-nums;\n  color: var(--dsw-alias-label-primary);\n  margin: 0;\n}\n.ctx-meter-sub dt {\n  padding-left: 14px;\n  color: var(--dsw-alias-label-tertiary);\n}\n.ctx-meter-group {\n  color: var(--dsw-alias-label-tertiary);\n  margin-top: 8px;\n}\n.ctx-meter-note {\n  color: var(--dsw-alias-label-tertiary);\n  margin-top: 6px;\n}\n";
 
 // plugins/context-meter/src/client.tsx
 var PLUGIN_NAME = "context-meter";
-var RADIUS = 5.5;
+var RADIUS = 7;
 var CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 var OWNER = "@deepseek-ai/dsh-client-ui-conversation/";
 function shippedClass(moduleName, suffix) {
@@ -109,35 +109,41 @@ function apply(ctx) {
     );
   });
   injectStyle(PLUGIN_NAME, "context-meter", client_default);
-  const hidden = shippedClass("ContextMeter.module.css", "_root");
-  if (hidden === null) {
-    console.error(
-      'true context meter: could not read the shipped meter stylesheet, so the shipped ring stays visible. Expected a style tag with data-plugin-css="' + OWNER + 'ContextMeter.module.css".'
-    );
-  } else {
-    injectStyle(PLUGIN_NAME, "context-meter-hide", "." + hidden + " { display: none !important; }");
-  }
-  const trailing = shippedClass("InputBar.module.css", "_trailing");
+  let hideDone = false;
+  let trailingClass = null;
+  let attempts = 0;
   let warned = false;
+  function ensureShippedHidden() {
+    if (hideDone) return;
+    const hidden = shippedClass("ContextMeter.module.css", "_root");
+    if (hidden === null) return;
+    injectStyle(PLUGIN_NAME, "context-meter-hide", "." + hidden + " { display: none !important; }");
+    hideDone = true;
+  }
+  function trailingOf() {
+    if (trailingClass === null) trailingClass = shippedClass("InputBar.module.css", "_trailing");
+    return trailingClass;
+  }
+  function warnUnresolved(what) {
+    attempts += 1;
+    if (attempts < 20 || warned) return;
+    warned = true;
+    console.error("true context meter: " + what);
+  }
   function placeAfterModelSelect(el) {
     if (el === null || typeof document === "undefined") return;
+    const trailing = trailingOf();
     if (trailing === null) {
-      if (!warned) {
-        warned = true;
-        console.error(
-          "true context meter: could not read the composer tool row class, so the meter stays left of the model select."
-        );
-      }
+      warnUnresolved(
+        "could not read the composer tool row class, so the meter stays left of the model select."
+      );
       return;
     }
     const rowEl = el.closest("." + trailing);
     if (rowEl === null) {
-      if (!warned) {
-        warned = true;
-        console.error(
-          "true context meter: the meter is not inside the composer tool row, so its position is unchanged."
-        );
-      }
+      warnUnresolved(
+        "the meter is not inside the composer tool row, so its position is unchanged."
+      );
       return;
     }
     const chain = [];
@@ -160,6 +166,7 @@ function apply(ctx) {
     const [hovering, setHovering] = react.useState(false);
     const rootRef = react.useRef(null);
     react.useEffect(() => {
+      ensureShippedHidden();
       placeAfterModelSelect(rootRef.current);
     });
     react.useEffect(() => {
@@ -201,23 +208,23 @@ function apply(ctx) {
       },
       react.createElement(
         "svg",
-        { width: 14, height: 14, viewBox: "0 0 14 14", "aria-hidden": true },
+        { width: 18, height: 18, viewBox: "0 0 18 18", "aria-hidden": true },
         [
           react.createElement("circle", {
             key: "track",
             className: "ctx-meter-track",
-            cx: 7,
-            cy: 7,
+            cx: 9,
+            cy: 9,
             r: RADIUS
           }),
           react.createElement("circle", {
             key: "fill",
             className: "ctx-meter-fill",
-            cx: 7,
-            cy: 7,
+            cx: 9,
+            cy: 9,
             r: RADIUS,
             strokeDasharray: dash + " " + CIRCUMFERENCE,
-            transform: "rotate(-90 7 7)"
+            transform: "rotate(-90 9 9)"
           })
         ]
       )
