@@ -16,10 +16,7 @@ function bootPlugin(seedState: string | undefined) {
   if (seedState !== undefined) {
     // The store loads once at apply time, so the file stands in for the state
     // the same store would have written while starting a login.
-    writeFileSync(
-      join(home, "mcp-oauth.json"),
-      JSON.stringify({ example: { state: seedState } }),
-    );
+    writeFileSync(join(home, "mcp-oauth.json"), JSON.stringify({ example: { state: seedState } }));
   }
   process.env.DSH_HOME = home;
 
@@ -40,7 +37,12 @@ function bootPlugin(seedState: string | undefined) {
 
   return async function hit(query: string): Promise<string> {
     let out = "";
-    const res = { writeHead: () => {}, end: (b: string) => { out = b; } };
+    const res = {
+      writeHead: () => {},
+      end: (b: string) => {
+        out = b;
+      },
+    };
     const req = {
       method: "GET",
       url: `/mcp-servers/callback/example${query}`,

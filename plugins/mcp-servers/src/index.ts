@@ -24,8 +24,10 @@ export const name = "mcp-servers";
 export const inject = ["tools", "webServer"];
 
 function page(title: string, body: string): string {
-  return `<!doctype html><html><head><title>${title}</title></head>` +
-    `<body><h1>${title}</h1><p>${body}</p><p><a href="/">Back</a></p></body></html>`;
+  return (
+    `<!doctype html><html><head><title>${title}</title></head>` +
+    `<body><h1>${title}</h1><p>${body}</p><p><a href="/">Back</a></p></body></html>`
+  );
 }
 
 export function apply(ctx: Context): void {
@@ -110,7 +112,13 @@ export function apply(ctx: Context): void {
         return;
       }
 
-      if (req.method === "POST" && parts[1] === "api" && parts[2] === "servers" && parts[3] !== undefined && parts[4] === "authorize") {
+      if (
+        req.method === "POST" &&
+        parts[1] === "api" &&
+        parts[2] === "servers" &&
+        parts[3] !== undefined &&
+        parts[4] === "authorize"
+      ) {
         const name = decodeURIComponent(parts[3]);
         try {
           const authorizeUrl = await registry.authorize(name);

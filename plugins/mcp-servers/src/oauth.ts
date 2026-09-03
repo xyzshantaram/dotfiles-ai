@@ -65,7 +65,8 @@ export function createProvider(opts: ProviderOpts) {
 
     codeVerifier(): string {
       const verifier = store.getCodeVerifier(server);
-      if (verifier === undefined) throw new Error(`mcp-servers: no code verifier stored for ${server}`);
+      if (verifier === undefined)
+        throw new Error(`mcp-servers: no code verifier stored for ${server}`);
       return verifier;
     },
 

@@ -50,10 +50,7 @@ interface CallToolResult {
   isError?: boolean;
 }
 
-export function createRegistry(
-  ctx: { tools: ToolsHost; logger: Logger },
-  opts: RegistryOptions,
-) {
+export function createRegistry(ctx: { tools: ToolsHost; logger: Logger }, opts: RegistryOptions) {
   // Per server: the live status, the client and http transport to keep
   // alive, and the tool disposers to unwind.
   const live = new Map<
@@ -126,7 +123,9 @@ export function createRegistry(
             capturedUrl = url;
           },
         });
-        transport = new StreamableHTTPClientTransport(new URL(server.url), { authProvider: provider });
+        transport = new StreamableHTTPClientTransport(new URL(server.url), {
+          authProvider: provider,
+        });
         entry.transport = transport;
         entry.capturedAuthUrl = () => capturedUrl;
       }
