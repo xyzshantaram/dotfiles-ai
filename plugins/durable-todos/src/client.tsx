@@ -19,6 +19,8 @@ interface DockProps {
     removeImage: unknown;
     pruneImages: unknown;
   };
+  useInput(selector: (input: { draft: string }) => string): string;
+
   sessionId: string;
   t(key: string): string;
 }
@@ -27,12 +29,21 @@ function isUnfinished(item: TodoItem): boolean {
   return item.status === "pending" || item.status === "in_progress";
 }
 
-/** Reminder text for the unfinished items, in order. */
+/** Reminder text for the unfinished items, as a markdown checkbox list. */
 function reminderText(items: TodoItem[]): string {
   var lines = items.filter(isUnfinished).map(function (item) {
-    return "- " + item.content;
+    return "- [ ] " + item.content;
   });
   return "Reminder — unfinished todos:\n" + lines.join("\n");
+}
+
+/** Append text to the existing draft with a blank line between them, or
+ * return it bare when the draft is empty. Trailing whitespace on the
+ * existing draft is dropped first so repeated clicks do not pile up blank
+ * lines. */
+function appendToDraft(existing: string, addition: string): string {
+  var trimmed = existing.replace(/\s+$/, "");
+  return trimmed.length === 0 ? addition : trimmed + "\n\n" + addition;
 }
 
 /** Build the panel once so React keeps its identity across slot re-renders. */
@@ -46,11 +57,14 @@ function makePanel() {
     var carriedOver = value !== null && value !== undefined ? value.carriedOver : false;
     var unfinished = todos === null ? [] : todos.filter(isUnfinished);
     var [collapsed, setCollapsed] = react.useState(true);
+    var draft = props.useInput(function (input) {
+      return input.draft;
+    });
 
+    // Appends, never submits, so Remind works mid-turn and never clobbers a
+    // message the user is already composing.
     var onRemind = function () {
-      var text = reminderText(unfinished);
-      props.inputActions.setDraft(text);
-      props.inputActions.submit();
+      props.inputActions.setDraft(appendToDraft(draft, reminderText(unfinished)));
     };
 
     var inProgressItem =
@@ -107,12 +121,7 @@ function makePanel() {
           </button>
           {carriedOver ? <span className="durable-todos-carried">carried over</span> : null}
           {unfinished.length > 0 ? (
-            <button
-              type="button"
-              className="durable-todos-remind"
-              disabled={running}
-              onClick={onRemind}
-            >
+            <button type="button" className="durable-todos-remind" onClick={onRemind}>
               Remind
             </button>
           ) : null}
