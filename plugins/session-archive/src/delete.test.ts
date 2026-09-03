@@ -13,21 +13,21 @@ import { deleteArchivedSession, makeBatchDeleteHandler } from "./index";
 describe("deleteArchivedSession", () => {
   it("removes the directory for a normal archived id and reports ok", async () => {
     const t = await makeTree();
-    const result = await deleteArchivedSession(t.ctx, "good");
+    const result = await deleteArchivedSession(t.ctx as never, "good");
     expect(result).toEqual({ id: "good", ok: true });
     expect(await exists(t.dir("good"))).toBe(false);
   });
 
   it("refuses a live session and leaves the directory in place", async () => {
     const t = await makeTree();
-    const result = await deleteArchivedSession(t.ctx, "live");
+    const result = await deleteArchivedSession(t.ctx as never, "live");
     expect(result).toEqual({ id: "live", ok: false, error: "session is live" });
     expect(await exists(t.dir("live"))).toBe(true);
   });
 
   it("refuses an id that is not in archivedSessionIds", async () => {
     const t = await makeTree();
-    const result = await deleteArchivedSession(t.ctx, "ghost");
+    const result = await deleteArchivedSession(t.ctx as never, "ghost");
     expect(result).toEqual({
       id: "ghost",
       ok: false,
@@ -37,7 +37,7 @@ describe("deleteArchivedSession", () => {
 
   it("refuses to delete when the located path does not match the id", async () => {
     const t = await makeTree();
-    const result = await deleteArchivedSession(t.ctx, "mismatch");
+    const result = await deleteArchivedSession(t.ctx as never, "mismatch");
     expect(result).toEqual({
       id: "mismatch",
       ok: false,
@@ -50,9 +50,9 @@ describe("deleteArchivedSession", () => {
 describe("makeBatchDeleteHandler", () => {
   it("answers 200 with one result per id in request order", async () => {
     const t = await makeTree();
-    const handler = makeBatchDeleteHandler(t.ctx);
+    const handler = makeBatchDeleteHandler(t.ctx as never);
     const { res, body } = makeRes();
-    await handler(makeReq({ ids: ["good", "live", "ghost", "lost"] }), res);
+    await handler(makeReq({ ids: ["good", "live", "ghost", "lost"] }) as never, res as never);
     expect(res.statusCode).toBe(200);
     const parsed = JSON.parse(body()) as {
       ok: boolean;
@@ -72,10 +72,10 @@ describe("makeBatchDeleteHandler", () => {
 
   it("answers 400 for ids that are not an array of strings", async () => {
     const t = await makeTree();
-    const handler = makeBatchDeleteHandler(t.ctx);
+    const handler = makeBatchDeleteHandler(t.ctx as never);
     for (const ids of ["good", [], ["good", 42]]) {
       const { res, body } = makeRes();
-      await handler(makeReq({ ids }), res);
+      await handler(makeReq({ ids }) as never, res as never);
       expect(res.statusCode).toBe(400);
       const parsed = JSON.parse(body()) as { ok: boolean };
       expect(parsed.ok).toBe(false);
