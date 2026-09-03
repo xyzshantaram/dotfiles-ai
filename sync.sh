@@ -221,12 +221,14 @@ step_install_plugins() {
 	if command -v dsh >/dev/null 2>&1; then
 		# One install helper: print the plugin name, keep pnpm quiet, and
 		# surface only warnings and errors (or the full output on failure).
+		# Collect every spec, then install them in ONE pnpm call. Twenty-five
+		# separate calls each paid a full resolve and link pass. `dsh plugin add`
+		# declares its arguments variadic and forwards them verbatim to a single
+		# `pnpm add`, and its reconcile step then walks every newly installed
+		# dependency, so one batch mounts them all.
+		local -a plugin_specs=()
 		pnpm_ins() {
-			local spec="$1" name
-			name="$(printf '%s' "$spec" | sed -E 's#.*github.com/[^/]+/([^/#]+)/archive.*#\1#; s/#[^/]*$//; s#.*[/:]##')"
-			name="${name%%@*}"
-			echo "  installing ${name:-$spec}"
-			dsh_plugin_add "$spec"
+			plugin_specs+=("$1")
 		}
 		pnpm_ins "github:sunshaobei/dsh-input-history#9b5b7a494a5c"
 		pnpm_ins "github:omdsh-dev/dsh-tool-calculator#05090e946113721c5295518cc20e74f427022c55"
@@ -319,6 +321,21 @@ step_install_plugins() {
 		# roster is $DSH_HOME/mcp-servers.json, written by step_sync_mcp_config.
 		pnpm_ins "$HERE/plugins/mcp-servers"
 		pnpm_ins "$HERE/plugins/llm-pi-ai"
+
+		# pnpm fails the whole batch when any one spec fails, and dsh then mounts
+		# nothing. Retry singly so a bad spec is named and the rest still land.
+		if [ "${#plugin_specs[@]}" -gt 0 ]; then
+			echo "  installing ${#plugin_specs[@]} plugins in one pass"
+			if ! dsh_plugin_add "${plugin_specs[@]}"; then
+				echo "  batch install failed; retrying one at a time to find the bad spec"
+				local spec batch_rc=0
+				for spec in "${plugin_specs[@]}"; do
+					echo "  installing $spec"
+					dsh_plugin_add "$spec" || batch_rc=$?
+				done
+				return "$batch_rc"
+			fi
+		fi
 	else
 		echo "WARNING: dsh not on PATH; skipping third-party plugin installs."
 		echo "         Re-run './sync.sh' from a shell where dsh is installed."
