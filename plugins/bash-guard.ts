@@ -267,16 +267,20 @@ async function loadRulesMulti(ctx: Context, dirs: string[]): Promise<Map<string,
  *   {name}     - the primary matched command basename
  *   {matches}  - a bulleted list of every matched command + subcommand + reason
  *   {reason}   - the primary match's reason
+ *   {count}    - "1 filter" or "N filters"
+ *   {detail}   - a short parenthetical, e.g. "commit is blocked"
  * A config override (denyMessage / askMessage) replaces the default.
+ *
+ * The two defaults differ on purpose. A DENIAL is read by the model, which
+ * needs the full reason to choose a different command, so it keeps the command
+ * and the bulleted rules. An APPROVAL is read by a person on a card that
+ * already shows the command underneath, so it is one scannable line.
  */
 const DEFAULT_DENY_TEMPLATE =
-  "bash-guard: the following command was denied:\n\n" +
+  "bash-guard: {name} denied by {count} ({detail})\n\n" +
   "  {command}\n\n" +
   "Matched rule(s):\n{matches}";
-const DEFAULT_ASK_TEMPLATE =
-  "bash-guard: the following command needs approval:\n\n" +
-  "  {command}\n\n" +
-  "Matched rule(s):\n{matches}";
+const DEFAULT_ASK_TEMPLATE = "bash-guard: {name} blocked by {count} ({detail}) — needs your approval";
 
 interface MatchLine {
   name: string;
@@ -288,7 +292,19 @@ interface MessageContext {
   matches: MatchLine[];
 }
 
-/** Substitute {command}, {name}, {matches}, {reason} in a template. */
+/**
+ * Shorten one rule reason to something that fits a single scannable line.
+ * Prefer the subcommand, which is the concrete thing that was blocked, and fall
+ * back to the reason's first sentence.
+ */
+function shortDetail(match: MatchLine): string {
+  if (match.subcommand) return `${match.subcommand} is blocked`;
+  const first = match.reason.split(/(?<=[.!?])\s/u)[0] ?? match.reason;
+  const trimmed = first.trim().replace(/[.]$/u, "");
+  return trimmed.length > 60 ? `${trimmed.slice(0, 59)}…` : trimmed;
+}
+
+/** Substitute {command}, {name}, {matches}, {reason}, {count}, {detail}. */
 function formatMessage(template: string, ctx: MessageContext): string {
   const matchesText = ctx.matches
     .map((m) => {
@@ -297,12 +313,22 @@ function formatMessage(template: string, ctx: MessageContext): string {
     })
     .join("\n");
   const primary = ctx.matches[0];
-  return template.replace(/(\{command\}|\{matches\}|\{name\}|\{reason\})/g, (token) => {
-    if (token === "{command}") return ctx.command;
-    if (token === "{matches}") return matchesText;
-    if (token === "{name}") return primary?.name ?? "unknown";
-    return primary?.reason ?? "";
-  });
+  // Two details at most. Past that the line stops being scannable, which is the
+  // whole point of the short form.
+  const details = ctx.matches.slice(0, 2).map(shortDetail);
+  if (ctx.matches.length > 2) details.push(`+${ctx.matches.length - 2} more`);
+  return template.replace(
+    /(\{command\}|\{matches\}|\{name\}|\{reason\}|\{count\}|\{detail\})/g,
+    (token) => {
+      if (token === "{command}") return ctx.command;
+      if (token === "{matches}") return matchesText;
+      if (token === "{name}") return primary?.name ?? "unknown";
+      if (token === "{count}")
+        return `${ctx.matches.length} filter${ctx.matches.length === 1 ? "" : "s"}`;
+      if (token === "{detail}") return details.join(", ") || "no detail";
+      return primary?.reason ?? "";
+    },
+  );
 }
 
 /** Build the match lines for a set of hits, deduplicated by (name, subcommand, reason). */
