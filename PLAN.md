@@ -1069,35 +1069,6 @@ about six lines. Change it if it reads wrong.
 
 ## Tickets
 
-### T1 — errored calls: outline the card, and let them collapse
-
-DONE 2026-09-03, pending the owner's visual check.
-
-Three changes, in `plugins/tool-render/`.
-
-1. An errored call was marked by a tinted row background plus a 3px inset left
-   bar, and that bar pushed the row 0.5rem right of every normal row. It is now
-   outlined the way an escalated call is, on the CARD rather than the row, so
-   the outline follows the card's rounded corners:
-   `.tool-render-card[data-error] { outline: 2px solid ... }` beside the
-   existing `[data-escalated]` rule. The card gets `data-error` next to
-   `data-escalated`. The enlarged red status dot is unchanged.
-2. Errored calls are collapsible and start collapsed, like every other call.
-   Previously `interactive` excluded them on purpose and the body rendered
-   unconditionally, so an errored call was always expanded and never clicked.
-   Both overrides are gone.
-3. An errored call reports its tool name and error message on the row instead
-   of its arguments. The tool name is already the row title. The summary now
-   prefers `errorSummary`, and the path-link branch is skipped when an error
-   message exists, so an errored `read` shows the error and not the file path.
-
-**Acceptance criteria**
-
-- An errored call shows a 2px red outline around its card, no red fill, no bar.
-- The red status dot still shows, still enlarged, while collapsed.
-- Clicking an errored call expands and collapses it, and it starts collapsed.
-- The collapsed row reads as tool name plus error message, not arguments.
-
 ### T2 — host: an image route
 
 Not started. Ships nothing visible on its own, which the owner accepted when
@@ -1147,6 +1118,15 @@ renders as a broken-image state, never as an empty box.
 - An image narrower than the card is centred, not upscaled.
 - Clicking the image opens it in a new tab at its route URL.
 - A moved or deleted file renders as a broken-image state, not an empty box.
+
+## Human review queue
+
+- [x] Errored tool calls — 2px red outline, no fill, no bar, enlarged red dot
+      while collapsed, click expands and collapses, collapsed row reads tool
+      name plus error message. Confirmed 2026-09-03.
+- [x] bash-guard approvals — the approval card and the bash call card both
+      outline electric blue, and the bash card returns to normal once the
+      approval is answered, as designed. Confirmed 2026-09-03.
 
 ---
 
