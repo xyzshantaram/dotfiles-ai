@@ -1,5 +1,6 @@
 {
+  "//": "Loosened from deny to ask (2026-09-03). A hard deny made the planning phase unworkable: anything without a named rule died outright, including bare shell variable assignments (`SRC=$(...)` parses as a command named SRC) and scripts that live INSIDE the aidos durable scratch root (scratchAllowed -> pathLikeArgs reads cmd.node.suffix only, so a script's own path is never path-checked -- the deny message advertised the scratch exemption while denying a script in scratch). ask keeps the human in the loop without making the phase a dead end. Genuinely read-only commands should be added to readonly.json so they do not prompt at all.",
   "commands": ["*"],
-  "verdict": "deny",
-  "reason": "Planning phase is read-only: claim a ticket (move it to in_progress) to unlock writes. Scratch writes to /tmp/dsh or the aidos durable scratch are always allowed, in every phase."
+  "verdict": "ask",
+  "reason": "Planning phase is read-only: this command is not on the read-only allow-list, so it needs approval. Claim a ticket (move it to in_progress) to unlock writes. Scratch writes to /tmp/dsh or the aidos durable scratch are always allowed, in every phase."
 }

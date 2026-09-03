@@ -1,0 +1,18 @@
+{
+  "//": "Navigation and shell-state builtins. None of these can touch the filesystem, the network, or a process: they move the shell's own cwd or set its own variables. They live at BASE level, not inside profile-planning/, because loadRulesMulti merges per command name and lookup is `rules.get(name) ?? rules.get(\"*\")` -- a named rule never falls through to the wildcard, so one file fixes planning AND awaiting_verification at once. Without this, `cd /repo && git log` is DENIED in planning even though git log is explicitly allowed by git.json, because mostRestrictive([deny, allow]) is deny and the message then names only cd.",
+  "commands": [
+    "cd",
+    "pushd",
+    "popd",
+    "dirs",
+    ":",
+    "set",
+    "unset",
+    "export",
+    "shift",
+    "true",
+    "false"
+  ],
+  "verdict": "allow",
+  "reason": "Navigation and shell-state builtins cannot mutate anything outside the shell itself."
+}
