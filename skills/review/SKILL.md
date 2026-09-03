@@ -24,6 +24,25 @@ This is a **code-quality and convention review**, not a functional or runtime ch
 - **Claim-evidence separation.** Load the `verification` skill before you write a pass verdict on any diff. State plainly, in the report, what you actually read yourself versus what you inferred or took on trust from the description. Do not blend the two. If a claim in the diff's description, the linked issue, or the commit message has no evidence line you can point to (an `rg`/`grep` result, a `file:line`, a command you ran), strike it from the verdict as unproven instead of assuming it true.
 - **Hedges survive verbatim.** If your own investigation turns up a hedge ("I could not confirm X", "this appears to work but I did not check Y"), that hedge must reach your final report in close to the same words. Never drop it or smooth it into a confident pass during your own summarizing.
 
+## Tests: measured, not assumed
+
+A green suite is not evidence that the tests cover the change. A test that cannot fail is worse than no test, because it buys false confidence. Measure this, do not assume it.
+
+For every test the diff claims covers the fix:
+
+- **Prove it can fail.** Revert the fix in place, run that exact test, and confirm it fails for the stated reason. Then restore. Report the test as *discriminating* only after you have watched it go red.
+- **Mutate the assertion.** Weaken or delete the specific thing the test asserts, then run the suite. If it still passes, the test is worthless as written. Say so, and say what it should assert instead.
+- **Look for the headline fix with no test at all.** Re-add the exact line the fix removed, or remove the exact line it added, and run the suite. If nothing fails, the change has zero coverage. This is the single most common gap, and it is invisible from reading the diff.
+
+Report each test as one of: **discriminating** (watched it fail), **cannot fail** (passes with the fix reverted), or **no coverage** (nothing exercises the changed line).
+
+Two rules on doing this safely:
+
+- Never run `git checkout` or `git restore` on a file that holds uncommitted work. Copy the file aside first, mutate in place, then restore from the copy.
+- Finish with `git status` and confirm the tree is exactly as you found it. State that in the report. A review that leaves the worktree dirty is a defect of its own.
+
+If policy blocks a worktree or checkout-based baseline, say so and use in-place reverts instead. Do not silently skip the check.
+
 ## When intent is unclear
 
 - Check PLAN.md's ticket entry (scope, evaluation criteria) first. The ambiguity is often already resolved there.
