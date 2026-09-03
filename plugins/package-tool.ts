@@ -547,7 +547,16 @@ export function apply(ctx: Context): void {
         if (version) lines.push(`Resolved ${args.packageName} to version ${version}.`);
         lines.push(`Package manager: ${manager}.`);
         lines.push(`Ran: ${command}`);
-        const tail = output.trim().slice(-4000);
+        // Same filter as sync.sh's dsh_plugin_add: on a successful install the
+        // resolved-version and command lines above already say what happened,
+        // so only warn/error lines from the raw output are worth the tokens.
+        // Capped at 500 chars as a safety net against a pathological dump.
+        const tail = output
+          .split("\n")
+          .filter((line) => /warn|error/i.test(line))
+          .join("\n")
+          .trim()
+          .slice(-500);
         if (tail) lines.push(`Output:\n${tail}`);
         return lines.join("\n");
       },
