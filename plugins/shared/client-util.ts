@@ -44,6 +44,21 @@ export function injectStyle(pluginName: string, styleId: string, cssText: string
 }
 
 /**
+ * Shared outline colours for permission states. An escalation raises sandbox
+ * permissions. A guard approval asks about a command rule. The two must stay
+ * visually distinct, so the values live here rather than in each stylesheet.
+ */
+export const PERMISSION_OUTLINE_CSS = `:root {
+  --dsh-outline-escalated: #ff8c00;
+  --dsh-outline-guard: #00b7ff;
+}`;
+
+/**
+ * React hooks live in `client-react.ts`. This module stays framework-free so
+ * its vitest suite can run in plain node, where `react` does not resolve.
+ */
+
+/**
  * Join CSS parts into one stylesheet string.
  *
  * Each part is a string or an array of strings; arrays are flattened and

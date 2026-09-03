@@ -315,7 +315,7 @@
   padding: 0.3125rem 0.5rem;
 }
 .tool-render-card[data-escalated] {
-  outline: 3px solid #ff8c00;
+  outline: 3px solid var(--dsh-outline-escalated);
 }
 /* A call waiting on a bash-guard approval is outlined in electric blue, so it
    reads differently from a sandbox_permissions escalation. This rule follows
@@ -323,7 +323,7 @@
    only while the approval is open: the client never receives a decided
    approval's reason, so an answered call goes back to looking ordinary. */
 .tool-render-card[data-guard-approval] {
-  outline: 3px solid #00b7ff;
+  outline: 3px solid var(--dsh-outline-guard);
 }
 /* An errored call is outlined the way an escalated one is, in red and a little
    thinner. The outline follows the card's rounded corners. It replaces the old

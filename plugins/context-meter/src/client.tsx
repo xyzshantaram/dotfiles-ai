@@ -1,4 +1,5 @@
 import * as react from "react";
+import { useDismissable } from "../../shared/client-react";
 import { injectStyle } from "../../shared/client-util";
 import localCss from "./client.module.css";
 
@@ -158,23 +159,8 @@ function apply(ctx: any) {
       placeAfterModelSelect(rootRef.current);
     });
 
-    react.useEffect(() => {
-      if (!open || typeof document === "undefined") return;
-      const onPointerDown = (event: any) => {
-        const root = rootRef.current;
-        if (root !== null && event.target instanceof Node && root.contains(event.target)) return;
-        setOpen(false);
-      };
-      const onKeyDown = (event: any) => {
-        if (event.key === "Escape") setOpen(false);
-      };
-      document.addEventListener("pointerdown", onPointerDown);
-      document.addEventListener("keydown", onKeyDown);
-      return () => {
-        document.removeEventListener("pointerdown", onPointerDown);
-        document.removeEventListener("keydown", onKeyDown);
-      };
-    }, [open]);
+    const close = react.useCallback(() => setOpen(false), []);
+    useDismissable(open, rootRef, close);
 
     const contextWindow = pressure === undefined ? undefined : pressure.contextWindow;
     if (breakdown === undefined || contextWindow === undefined) return null;

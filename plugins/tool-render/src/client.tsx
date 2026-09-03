@@ -53,7 +53,12 @@
 // Registered lazily (on first use) from an extension map, so the bundle
 // carries only the languages that read calls can actually produce.
 import hljs from "highlight.js/lib/core";
-import { injectStyle, mergeCss, escapeHtml } from "../../shared/client-util";
+import {
+  injectStyle,
+  mergeCss,
+  escapeHtml,
+  PERMISSION_OUTLINE_CSS,
+} from "../../shared/client-util";
 import localCss from "./client.module.css";
 import jsGrammar from "highlight.js/lib/languages/javascript";
 import tsGrammar from "highlight.js/lib/languages/typescript";
@@ -185,6 +190,8 @@ var HLJS_THEME_CSS = [
 ].join("");
 
 injectStyle(PLUGIN_NAME, STYLE_TAG_ID, mergeCss(localCss, HLJS_THEME_CSS));
+/** Shared permission outline tokens. The id matches the other injectors, so only one tag exists. */
+injectStyle(PLUGIN_NAME, "dsh-permission-outline", PERMISSION_OUTLINE_CSS);
 
 // ---- Post-render highlighting pass for raw <pre><code> blocks. ---------
 // The render path already highlights every block it creates and marks the
