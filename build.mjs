@@ -185,6 +185,24 @@ await wrapClientBundle(
   "context-meter",
 );
 
+// composer-menu: the overflow menu at the left edge of the composer tool
+// row. It holds the sandbox picker and offers the composer.overflow.item
+// slot for other plugins.
+await build({
+  entryPoints: [join(here, "plugins/composer-menu/src/index.ts")],
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  external: ["@deepseek-ai/*", "node:*"],
+  outfile: join(here, "plugins/composer-menu/lib/index.js"),
+  logLevel: "info",
+});
+await wrapClientBundle(
+  join(here, "plugins/composer-menu/src/client.tsx"),
+  join(here, "plugins/composer-menu/lib/client.js"),
+  "composer-menu",
+);
+
 // W18: combined subscription panel (OpenCode GO + Claude/meridian) CLIENT
 // plugin package. The host half bundles via esbuild; lz4 stays
 // external (native .node addons esbuild cannot bundle; runtime

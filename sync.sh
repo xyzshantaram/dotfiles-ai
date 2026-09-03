@@ -42,7 +42,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#f7beff5169ea065f133370036494db5814a8aef3}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#4cd0aa1ba13bb6c64254d6df005d11e345d9e0a1}"
 
 # Git-hosted specs whose build scripts pnpm must be allowed to run. pnpm 10+
 # blocks lifecycle scripts (prepare/postinstall) unless the exact resolved
@@ -316,6 +316,9 @@ step_install_plugins() {
 		# The shipped context ring reads a provider figure that only ever grows.
 		# This package replaces it with one measured from the surface.
 		pnpm_ins "$HERE/plugins/context-meter"
+		# The composer overflow menu holds the sandbox picker and offers a slot
+		# for other plugins.
+		pnpm_ins "$HERE/plugins/composer-menu"
 		pnpm_ins "$HERE/plugins/log-viewer"
 		# Owns every MCP server, both transports, and the OAuth login. Its
 		# roster is $DSH_HOME/mcp-servers.json, written by step_sync_mcp_config.
@@ -376,6 +379,7 @@ step_report_extra_plugins() {
 		"aidos"
 		"approval-comment"
 		"context-meter"
+		"composer-menu"
 		"dsh-at-file"
 		"dsh-better-markdown"
 		"dsh-input-history"

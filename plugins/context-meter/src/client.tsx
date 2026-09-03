@@ -1,25 +1,11 @@
 import * as react from "react";
 import { useDismissable } from "../../shared/client-react";
-import { injectStyle } from "../../shared/client-util";
+import { injectStyle, shippedClass } from "../../shared/client-util";
 import localCss from "./client.module.css";
 
 const PLUGIN_NAME = "context-meter";
 const RADIUS = 7;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
-
-const OWNER = "@deepseek-ai/dsh-client-ui-conversation/";
-
-/**
- * Read one hashed class name out of a stylesheet the conversation package
- * injects. The hash changes per DSH build, so never hard-code it.
- */
-function shippedClass(moduleName: string, suffix: string): string | null {
-  if (typeof document === "undefined") return null;
-  const tag = document.querySelector('style[data-plugin-css="' + OWNER + moduleName + '"]');
-  if (tag === null) return null;
-  const found = new RegExp("\\.([A-Za-z0-9_-]+" + suffix + ")\\s*\\{").exec(tag.textContent || "");
-  return found === null ? null : found[1];
-}
 
 /** Compact token count: 12345 becomes "12.3k". */
 function formatTokens(value: any): string {

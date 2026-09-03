@@ -42,6 +42,26 @@ export function injectStyle(pluginName: string, styleId: string, cssText: string
   tag.textContent = cssText;
   document.head.appendChild(tag);
 }
+/**
+ * Read one hashed class name out of a stylesheet the conversation package
+ * injects. The hash changes per DSH build, so never hard-code it.
+ *
+ * The conversation package injects each CSS module as a `style` tag carrying
+ * `data-plugin-css="@deepseek-ai/dsh-client-ui-conversation/<Module>.module.css"`.
+ * This helper regex-matches the first local class whose name ends in the
+ * given module suffix out of that tag's text content.
+ */
+const SHIPPED_CSS_OWNER = "@deepseek-ai/dsh-client-ui-conversation/";
+
+export function shippedClass(moduleName: string, suffix: string): string | null {
+  if (typeof document === "undefined") return null;
+  const tag = document.querySelector(
+    'style[data-plugin-css="' + SHIPPED_CSS_OWNER + moduleName + '"]',
+  );
+  if (tag === null) return null;
+  const found = new RegExp("\\.([A-Za-z0-9_-]+" + suffix + ")\\s*\\{").exec(tag.textContent || "");
+  return found === null ? null : found[1];
+}
 
 /**
  * Shared outline colours for permission states. An escalation raises sandbox
