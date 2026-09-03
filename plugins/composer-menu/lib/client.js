@@ -6077,6 +6077,7 @@ var Root3 = Menu;
 var Anchor2 = MenuAnchor;
 var Portal3 = MenuPortal;
 var Content2 = MenuContent;
+var Item2 = MenuItem;
 var RadioGroup = MenuRadioGroup;
 var RadioItem = MenuRadioItem;
 var ItemIndicator = MenuItemIndicator;
@@ -6213,6 +6214,14 @@ var DropdownMenuContent = /* @__PURE__ */ React34.forwardRef(
     );
   }, "DropdownMenuContent")
 );
+var DropdownMenuItem = /* @__PURE__ */ React34.forwardRef(
+  // blank line to reduce diff noise
+  /* @__PURE__ */ __name22(function DropdownMenuItem2(props, forwardedRef) {
+    const { __scopeDropdownMenu, ...itemProps } = props;
+    const menuScope = useMenuScope(__scopeDropdownMenu);
+    return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(Item2, { ...menuScope, ...itemProps, ref: forwardedRef });
+  }, "DropdownMenuItem")
+);
 var DropdownMenuRadioGroup = /* @__PURE__ */ React34.forwardRef(/* @__PURE__ */ __name22(function DropdownMenuRadioGroup2(props, forwardedRef) {
   const { __scopeDropdownMenu, ...radioGroupProps } = props;
   const menuScope = useMenuScope(__scopeDropdownMenu);
@@ -6276,6 +6285,7 @@ var Root22 = DropdownMenu;
 var Trigger = DropdownMenuTrigger;
 var Portal22 = DropdownMenuPortal;
 var Content22 = DropdownMenuContent;
+var Item22 = DropdownMenuItem;
 var RadioGroup2 = DropdownMenuRadioGroup;
 var RadioItem2 = DropdownMenuRadioItem;
 var ItemIndicator2 = DropdownMenuItemIndicator;
@@ -6344,7 +6354,7 @@ function postJson(url, body) {
 }
 
 // css-text:/home/sid/repos/dotfiles-ai/plugins/composer-menu/src/client.module.css
-var client_default = "/* Composer overflow menu, styled after the context meter panel. */\n.composer-menu-trigger {\n  width: 28px;\n  height: 28px;\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  background: 0 0;\n  border: none;\n  border-radius: 999px;\n  flex: none;\n  place-items: center;\n  display: grid;\n  padding: 0;\n}\n.composer-menu-trigger:hover {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.composer-menu-content {\n  z-index: 100;\n  box-sizing: border-box;\n  min-width: 200px;\n  border: 1px solid var(--dsw-alias-border-inverted);\n  background: var(--dsw-specific-menu);\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-secondary);\n  border-radius: 12px;\n  padding: 4px;\n  font-size: 12px;\n}\n.composer-menu-item {\n  align-items: center;\n  display: flex;\n  cursor: default;\n  outline: none;\n  border-radius: 6px;\n  padding: 6px 8px;\n}\n.composer-menu-item[data-highlighted] {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.composer-menu-item[data-disabled] {\n  color: var(--dsw-alias-label-tertiary);\n}\n.composer-menu-indicator {\n  width: 16px;\n  flex: none;\n  display: inline-flex;\n}\n.composer-menu-separator {\n  height: 1px;\n  background: var(--dsw-alias-border-l3);\n  margin: 4px 0;\n}\n";
+var client_default = '/* Composer overflow menu, styled after the context meter panel. */\n.composer-menu-trigger {\n  width: 28px;\n  height: 28px;\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  background: 0 0;\n  border: none;\n  border-radius: 999px;\n  flex: none;\n  place-items: center;\n  display: grid;\n  padding: 0;\n}\n.composer-menu-trigger:hover,\n.composer-menu-trigger[data-state="open"] {\n  background: var(--dsw-alias-interactive-bg-hover);\n  color: var(--dsw-alias-label-primary);\n}\n.composer-menu-content {\n  z-index: 100;\n  box-sizing: border-box;\n  min-width: 208px;\n  border: 1px solid var(--dsw-alias-border-inverted);\n  background: var(--dsw-specific-menu);\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-primary);\n  border-radius: 12px;\n  padding: 6px;\n  font-size: 13px;\n  line-height: 20px;\n  user-select: none;\n}\n.composer-menu-item {\n  align-items: center;\n  gap: 8px;\n  display: flex;\n  cursor: default;\n  outline: none;\n  border-radius: 8px;\n  padding: 7px 10px;\n  white-space: nowrap;\n  color: var(--dsw-alias-label-primary);\n}\n/* Radix marks the row under the pointer or the keyboard cursor. Both use the\n   same token, so mouse and keyboard read identically. */\n.composer-menu-item[data-highlighted] {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.composer-menu-item[data-disabled] {\n  color: var(--dsw-alias-label-tertiary);\n}\n/* A fixed leading slot, present whether or not the row is selected, so labels\n   line up in a column instead of shifting when the check mark appears. */\n.composer-menu-mark {\n  width: 14px;\n  flex: none;\n  place-items: center;\n  display: grid;\n  color: var(--dsw-alias-label-secondary);\n}\n.composer-menu-indicator {\n  display: inline-flex;\n}\n.composer-menu-label {\n  flex: auto;\n}\n.composer-menu-chevron {\n  flex: none;\n  color: var(--dsw-alias-label-tertiary);\n  padding-left: 8px;\n}\n.composer-menu-separator {\n  height: 1px;\n  background: var(--dsw-alias-border-l3);\n  margin: 6px 4px;\n}\n';
 
 // plugins/composer-menu/src/client.tsx
 var PLUGIN_NAME = "composer-menu";
@@ -6363,29 +6373,43 @@ function apply(ctx) {
       Menu2
     );
   });
-  let hideDone = false;
-  let attempts = 0;
-  let warned = false;
-  function ensureShippedHidden() {
-    if (hideDone) return;
-    const picker = shippedClass("PermissionSelect.module.css", "_root");
-    const add = shippedClass("InputBar.module.css", "_add");
-    if (picker === null || add === null) {
-      attempts += 1;
-      if (attempts >= 20 && !warned) {
-        warned = true;
-        console.error(
-          "composer menu: could not read the shipped sandbox picker and commands classes, so they stay visible next to the menu."
-        );
-      }
-      return;
+  const HIDE_TARGETS = [
+    {
+      id: "composer-menu-hide-picker",
+      module: "PermissionSelect.module.css",
+      // PermissionSelect renders a Fragment, not a wrapper, so there is no
+      // `_root` class. Its only visible part is the trigger button.
+      suffix: "_trigger",
+      what: "the sandbox picker"
+    },
+    {
+      id: "composer-menu-hide-add",
+      module: "InputBar.module.css",
+      suffix: "_add",
+      what: "the commands button"
     }
-    injectStyle(
-      PLUGIN_NAME,
-      "composer-menu-hide",
-      "." + picker + " { display: none !important; }\n." + add + " { display: none !important; }"
-    );
-    hideDone = true;
+  ];
+  const done = /* @__PURE__ */ new Set();
+  const warned = /* @__PURE__ */ new Set();
+  let attempts = 0;
+  function ensureShippedHidden() {
+    if (done.size === HIDE_TARGETS.length) return;
+    attempts += 1;
+    for (const target of HIDE_TARGETS) {
+      if (done.has(target.id)) continue;
+      const cls = shippedClass(target.module, target.suffix);
+      if (cls === null) {
+        if (attempts >= 20 && !warned.has(target.id)) {
+          warned.add(target.id);
+          console.error(
+            "composer menu: could not read the class for " + target.what + ", so it stays visible beside the menu."
+          );
+        }
+        continue;
+      }
+      injectStyle(PLUGIN_NAME, target.id, "." + cls + " { display: none !important; }");
+      done.add(target.id);
+    }
   }
   function choose(sessionId, preset) {
     postJson("/composer-menu/api/permission", { sessionId, preset }).then(
@@ -6401,17 +6425,21 @@ function apply(ctx) {
     const [open, setOpen] = react.useState(false);
     const permissions = props.useProjection("permissions");
     const options2 = permissions === void 0 ? [] : permissions.options.filter((option) => option.value !== "custom");
-    const check = react.createElement(
+    const check = () => react.createElement(
       ItemIndicator2,
       { className: "composer-menu-indicator" },
       "\u2713"
     );
+    const row = (label) => [
+      react.createElement("span", { key: "mark", className: "composer-menu-mark" }, check()),
+      react.createElement("span", { key: "label", className: "composer-menu-label" }, label)
+    ];
     let sandboxBody;
     if (permissions === void 0) {
       sandboxBody = react.createElement(
-        RadioItem2,
+        Item22,
         { className: "composer-menu-item", disabled: true },
-        [check, "Not available"]
+        row("Not available")
       );
     } else {
       sandboxBody = react.createElement(
@@ -6422,10 +6450,11 @@ function apply(ctx) {
             RadioItem2,
             {
               key: option.value,
+              value: option.value,
               className: "composer-menu-item",
               onSelect: () => choose(props.sessionId, option.value)
             },
-            [check, option.label ?? option.value]
+            row(option.label ?? option.value)
           )
         )
       );
@@ -6436,7 +6465,9 @@ function apply(ctx) {
       react.createElement(
         SubTrigger2,
         { className: "composer-menu-item", disabled: permissions === void 0 },
-        "Sandbox"
+        react.createElement("span", { key: "mark", className: "composer-menu-mark" }),
+        react.createElement("span", { key: "label", className: "composer-menu-label" }, "Sandbox"),
+        react.createElement("span", { key: "chev", className: "composer-menu-chevron" }, "\u203A")
       ),
       react.createElement(
         Portal22,

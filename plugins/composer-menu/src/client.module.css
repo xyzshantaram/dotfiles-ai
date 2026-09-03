@@ -12,42 +12,66 @@
   display: grid;
   padding: 0;
 }
-.composer-menu-trigger:hover {
+.composer-menu-trigger:hover,
+.composer-menu-trigger[data-state="open"] {
   background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
 }
 .composer-menu-content {
   z-index: 100;
   box-sizing: border-box;
-  min-width: 200px;
+  min-width: 208px;
   border: 1px solid var(--dsw-alias-border-inverted);
   background: var(--dsw-specific-menu);
   box-shadow: var(--dsw-shadow-lv3);
-  color: var(--dsw-alias-label-secondary);
+  color: var(--dsw-alias-label-primary);
   border-radius: 12px;
-  padding: 4px;
-  font-size: 12px;
+  padding: 6px;
+  font-size: 13px;
+  line-height: 20px;
+  user-select: none;
 }
 .composer-menu-item {
   align-items: center;
+  gap: 8px;
   display: flex;
   cursor: default;
   outline: none;
-  border-radius: 6px;
-  padding: 6px 8px;
+  border-radius: 8px;
+  padding: 7px 10px;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-primary);
 }
+/* Radix marks the row under the pointer or the keyboard cursor. Both use the
+   same token, so mouse and keyboard read identically. */
 .composer-menu-item[data-highlighted] {
   background: var(--dsw-alias-interactive-bg-hover);
 }
 .composer-menu-item[data-disabled] {
   color: var(--dsw-alias-label-tertiary);
 }
-.composer-menu-indicator {
-  width: 16px;
+/* A fixed leading slot, present whether or not the row is selected, so labels
+   line up in a column instead of shifting when the check mark appears. */
+.composer-menu-mark {
+  width: 14px;
   flex: none;
+  place-items: center;
+  display: grid;
+  color: var(--dsw-alias-label-secondary);
+}
+.composer-menu-indicator {
   display: inline-flex;
+}
+.composer-menu-label {
+  flex: auto;
+}
+.composer-menu-chevron {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  padding-left: 8px;
 }
 .composer-menu-separator {
   height: 1px;
   background: var(--dsw-alias-border-l3);
-  margin: 4px 0;
+  margin: 6px 4px;
 }
