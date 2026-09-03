@@ -567,10 +567,13 @@ selection state. No spinner.
   reads `carried over`. Then let the agent write the list again in the new turn
   and confirm the label clears. This is the marking you chose over showing the
   list plainly.
-- [ ] Remind button: click with an empty draft — the checkbox list appears in
+- [x] Remind button: click with an empty draft — the checkbox list appears in
   the composer, nothing submits. Type something first, click Remind — the list
-  is appended after a blank line, the typed text is untouched. Click during a
-  running turn — it still works, the button is never disabled.
+  is appended after a blank line, the typed text is untouched. Confirmed
+  2026-09-03: the owner pasted the appended checklist plus their own added
+  text (`---` and "Worked?") in one sent message.
+- [ ] Remind button: click during a running turn — it still works, the button
+  is never disabled. Not yet confirmed.
 - [ ] `/compact` appears in the slash autocomplete after the restart and runs
   on a long session.
 - [ ] `rg -rln foo /tmp/dsh/file` gets a deny suggesting `rg foo /tmp/dsh/file`;
