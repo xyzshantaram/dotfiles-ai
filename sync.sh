@@ -42,7 +42,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#ff53cac7588184ea017c89ee22866d9e07f5fd52}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#0341cf6ece23d7533778e88c2bd89abf50b8ff3f}"
 
 # Git-hosted specs whose build scripts pnpm must be allowed to run. pnpm 10+
 # blocks lifecycle scripts (prepare/postinstall) unless the exact resolved
@@ -302,12 +302,22 @@ step_install_plugins() {
 		# the retain ceiling crashes range selection, the checkpoint cap ignores
 		# the span so the compiler elides nothing, and the fixed framing cost
 		# then makes the checkpoint larger than what it replaces. The pin also
-		# carries our own fix for compaction consuming its own checkpoints:
-		# absorbing a prior checkpoint whole nested the envelopes and freed
-		# almost nothing, so compaction re-fired every step. Do NOT track
-		# upstream main: it imports @deepseek-ai/dsh-util-values, which needs
-		# dsh 0.1.2. Upgrade = bump the pin.
-		pnpm_ins "@deepseek-ai/dsh-compaction-basic@github:xyzshantaram/dsh-compaction-instant#73c0d5c9addbebd1785e9d7a36426732ab423d3b"
+		# carries our own fixes for compaction consuming its own checkpoints.
+		# Absorbing a prior checkpoint whole nested the envelopes and freed
+		# almost nothing. Automatic pressure then read the token meter's
+		# anchored request total, which also counts the system prompt, the tool
+		# schemas, and cache read and write tokens, so an irreducible floor held
+		# the session above the threshold: compaction re-fired at the next step
+		# and ate the checkpoint it had just written. It now triggers on surface
+		# tokens alone, compactAtTokens 250000 down to compactToTokens 15000,
+		# held as a ratio so a surface that overshot the trigger earns a
+		# proportionately larger checkpoint. The pin also drops errored tool
+		# calls and todo_write bookkeeping from the checkpoint, and reports the
+		# token size of every dropped tool result so the agent can see what its
+		# own calls cost. Do NOT track upstream main: it imports
+		# @deepseek-ai/dsh-util-values, which needs dsh 0.1.2.
+		# Upgrade = bump the pin.
+		pnpm_ins "@deepseek-ai/dsh-compaction-basic@github:xyzshantaram/dsh-compaction-instant#9525c7233d0f92651bd850ff7d49bb2d149d099f"
 
 		pnpm_ins "$HERE/plugins/session-archive"
 		pnpm_ins "$HERE/plugins/subscriptions"
