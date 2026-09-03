@@ -8,7 +8,15 @@
  */
 declare module "react" {
   const React: any;
-  export default React;
+  // `export =` rather than `export default`: every client plugin writes
+  // `import * as react from "react"` and calls `react.useState`,
+  // `react.createElement`, and so on directly on the namespace binding.
+  // With only `export default`, that namespace types as `{ default: any }`
+  // and every hook access fails typecheck (TS2339) even though esbuild
+  // resolves the real react package fine at build time. `export =` makes
+  // the namespace import bind directly to the `any` value instead, which
+  // is what the real react namespace-style usage here actually needs.
+  export = React;
 }
 
 declare module "@deepseek-ai/dsh-client-ui-primitives" {
