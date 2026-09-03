@@ -29,14 +29,10 @@
 * Keep each dispatch small. A small, well-bounded unit means a failed dispatch wastes little time and few tokens. Split large work into several small dispatches.
 * Resolve every planning ambiguity before you dispatch. You may use the grilling skill and direct questions to the user. Subagents cannot ask the user and cannot use grilling. Settle the contract, then dispatch.
 * Full up-front design keeps the code style consistent and makes review simple.
-* When you dispatch a subagent whose brief needs a library, service, or harness API, verify the
-  API shape YOURSELF first (read the `.d.ts`/source, or send `researcher` for it) and paste the
-  exact facts into the brief — types, field names, signatures, return shapes, with citations.
-  The subagent must NOT read library code to discover APIs; reading `node_modules` / installed
-  dsh packages is the single biggest context bloat for a leaf worker. Tell it in the brief:
-  "API facts verified, do not re-research; report the gap if you need a fact not in this brief."
-  A subagent session should cost hundreds of thousands of tokens at most, not millions —
-  if it blows past that, the scope or the API-handoff was too lazy, fix the brief.
+* When you dispatch a subagent whose brief needs a library, service, or harness API: see the
+  `software-engineering` skill's "Narrow dispatch" section for the full rule (verify the API
+  shape yourself first, paste the exact facts into the brief, forbid the subagent from reading
+  library code, keep the session under hundreds of thousands of tokens).
 * When reviewing, assume the persona of a senior reviewer. Be especially wary of
   common AI slop patterns like dead code, unused imports, code which is duplicated
   between files, code which is almost the same but with only a few parameters tweaked,
