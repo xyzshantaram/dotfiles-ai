@@ -281,30 +281,24 @@ concept with our own code, minus its evidence-verification half.
   invites trust it has not earned. The projection carries the flag as
   `carriedOver`, set true by `turn/start` and cleared by the next `todo/write`.
 
-### History and import (from grilling, 2026-09-03)
+### History and import (from grilling, 2026-09-03; redesigned 2026-09-03)
 
-- WHY a steer is mandatory, not a design preference: the agent cannot read a
-  projection, and `todo_write` REPLACES the whole list. An import the agent does
-  not know about would be silently dropped by its very next write.
+- This grilling session originally specified a steer-based design, now
+  superseded. It assumed importing a
+  historical list required the agent's cooperation, because `todo_write`
+  REPLACES the whole list and the agent cannot read a projection on its own.
+  That is still true, but T10 no longer imports into the live list at all: it
+  inserts the historical list as text into the composer, the same append
+  Remind (T7) already does. The owner reviews it, edits it if they want, and
+  sends it (or not) like any other message. No steer, no spinner, no risk of a
+  merge the agent silently drops on its next write.
 - History browsing lives in the EXPANDED panel: two chevron buttons step through
   past lists, with a label showing the timestamp each list was set.
-- An edit-mode toggle. In edit mode you select items, which highlight, then
-  press import.
-- Only `pending` and `in_progress` items may be imported. Completed items are
-  not selectable.
-- Import sends a steer and nothing else. The panel does not change until the
-  agent writes. It shows a spinner meanwhile.
-- The spinner clears ONLY on the next `todo/write`. RISK, accepted by the owner:
-  if the agent ignores the steer or the turn errors, the spinner never clears
-  and the human must reload or re-import.
-- The steer carries the selected items and tells the agent to use its best
-  judgment merging them with the existing list. It does not prescribe statuses
-  or duplicate handling.
+- No edit-mode toggle and no per-item selection. Insert takes the whole shown
+  list, not a subset — the owner edits the composer text directly if they only
+  want part of it.
 - History rides the projection, bounded to the LAST 35 WRITES. Chosen over a
   per-turn bound and over a host route.
-- CONFLICT to expect: `todo_write` rejects more than one `in_progress` item when
-  `allowParallelInProgress` is false. Importing an `in_progress` item into a list
-  that already has one is a conflict the agent's judgment has to resolve.
 
 ## Critical context
 
@@ -460,8 +454,9 @@ host side does not change.
 - Collapsible, and it starts collapsed. It never auto-hides. With no todos it
   still renders, collapsed, showing the compact `No todos` text.
 - Remind and the `carried over` badge stay in the header at all times, collapsed
-  or expanded. Remind still hides with nothing unfinished and stays disabled
-  mid-turn.
+  or expanded. Remind still hides with nothing unfinished. It is never disabled:
+  it appends, it does not submit, so it works mid-turn (changed 2026-09-03, see
+  the note below the acceptance criteria).
 - The collapsed header carries a counts summary: the total, then the non-zero
   status counts, for example `5 todos · 1 in progress · 3 pending · 1 done`.
 - While a turn runs AND an item is in_progress, one extra line under the header
@@ -478,7 +473,8 @@ host side does not change.
 **Acceptance criteria**
 
 - Exactly one todo panel renders, and it collapses and expands.
-- Remind fills the composer with the unfinished items and submits.
+- Remind appends the unfinished items, as a markdown checkbox list, to the
+  composer draft. It never submits and it is never disabled.
 - The `carried over` badge appears after a turn boundary and clears on the next
   write.
 - The panel body is visually indistinguishable from a `todo_write` tool card.
@@ -486,6 +482,15 @@ host side does not change.
 
 **Risk.** The hide rule depends on the shipped `data-testid`. If an upgrade
 renames it, the shipped panel returns. That failure is visible, not silent.
+
+**Changed 2026-09-03.** Remind originally called `setDraft` then `submit`
+immediately, so it needed the agent idle and the button carried
+`disabled={running}`. It now reads the current draft with `useInput`, appends
+the checkbox list after a blank line (or sets it bare on an empty draft), and
+leaves the draft for the owner to edit and send. Nothing submits on click, so
+the disabled state served no purpose and was removed along with its CSS rule.
+The reminder text also switched from plain bullets (`- item`) to GFM task-list
+syntax (`- [ ] item`), the standard markdown form for a to-do list.
 
 ### T8 — an empty panel says "No work items"
 
@@ -519,26 +524,35 @@ unchanged while T10 is unbuilt.
 - The history survives a restart, the way the current list already does.
 - No change to what the panel renders until T10 lands.
 
-### T10 — client: browse history, select items, and import them
+### T10 — client: browse history and insert an old list into the composer
 
 Not started. Depends on T9.
 
-Two chevrons in the expanded panel step through history, with a label showing
-when that list was set. An edit-mode toggle turns items selectable; selected
-items highlight. Completed items are never selectable. An import button steers
-the agent with the selected items, asking it to merge them using its own
-judgment, and the panel shows a spinner until the next `todo/write` arrives.
+**Redesigned 2026-09-03.** The original design steered the agent directly:
+select items, click import, agent merges them, panel shows a spinner until the
+next `todo/write`. That needed the `sessions` service, an edit-mode toggle, a
+per-item selection model, and a wait state with a real failure mode (the agent
+never writes, spinner never clears). None of that is needed once Remind (T7,
+changed above) already knows how to put a checkbox list in the composer
+without submitting.
 
-Steering needs the `sessions` service added to this plugin's `inject`.
+T10 now reuses that exact mechanism. Two chevrons in the expanded panel step
+through the history T9 publishes, with a label showing when that list was set.
+An Insert button renders the list shown — every item, not a selection — as a
+markdown checkbox list and appends it to the composer draft through the same
+`appendToDraft` helper Remind uses. Nothing steers, nothing waits, nothing can
+fail silently: the owner sees the text land in the composer and decides what
+to do with it, same as Remind. No new service inject. No edit mode. No
+selection state. No spinner.
 
 **Acceptance criteria**
 
 - The chevrons walk back and forward through the retained lists, and stop at
   both ends.
 - Each historical view shows the timestamp that list was written.
-- Edit mode allows selecting pending and in-progress items only.
-- Import sends one steer carrying the selected items, and changes nothing else.
-- The spinner shows until the next `todo/write` lands, then clears.
+- Insert appends the shown list, as a markdown checkbox list, to the composer
+  draft — same append behavior as Remind, including the blank-line separator
+  and the empty-draft case. It never submits.
 - Leaving history returns to the live current list.
 
 ## Human review queue (shared, both efforts)
@@ -553,8 +567,10 @@ Steering needs the `sessions` service added to this plugin's `inject`.
   reads `carried over`. Then let the agent write the list again in the new turn
   and confirm the label clears. This is the marking you chose over showing the
   list plainly.
-- [ ] Remind button: click while idle — reminder message appears in the
-  session; click during a running turn — button disabled.
+- [ ] Remind button: click with an empty draft — the checkbox list appears in
+  the composer, nothing submits. Type something first, click Remind — the list
+  is appended after a blank line, the typed text is untouched. Click during a
+  running turn — it still works, the button is never disabled.
 - [ ] `/compact` appears in the slash autocomplete after the restart and runs
   on a long session.
 - [ ] `rg -rln foo /tmp/dsh/file` gets a deny suggesting `rg foo /tmp/dsh/file`;
