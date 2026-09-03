@@ -2027,7 +2027,7 @@ function registerLocale(ctx, ns, en, zh) {
 }
 
 // css-text:/home/sid/repos/dotfiles-ai/plugins/approval-comment/src/client.module.css
-var client_default = ".approval-comment-root {\n  padding: 0.5rem calc(var(--dsh-composer-side-clearance) + 1rem) 0.75rem;\n  flex-direction: column;\n  align-items: center;\n  display: flex;\n}\n.approval-comment-card {\n  width: 100%;\n  max-width: var(--dsh-chat-content-width);\n  outline: 3px solid #ff8c00;\n  background: var(--dsw-specific-input-major);\n  box-shadow: var(--dsw-shadow-lv2);\n  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);\n  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);\n  border-radius: 0.875rem;\n  overflow: hidden;\n}\n.approval-comment-strip {\n  background: var(--dsw-alias-state-warn-tertiary);\n  color: var(--dsw-alias-state-warn-primary);\n  align-items: center;\n  gap: 0.5rem;\n  padding: 0.5rem 0.8125rem;\n  font-size: 0.8125rem;\n  line-height: 1.125rem;\n  display: flex;\n}\n.approval-comment-dot {\n  background: var(--dsw-alias-state-warn-primary);\n  border-radius: 50%;\n  width: 0.5rem;\n  height: 0.5rem;\n}\n.approval-comment-body {\n  box-sizing: border-box;\n  max-height: var(--dsh-composer-text-max-height);\n  flex-direction: column;\n  gap: 0.375rem;\n  padding: 0.625rem 0.8125rem 0;\n  display: flex;\n  overflow-y: auto;\n}\n.approval-comment-headline {\n  color: var(--dsw-alias-label-primary);\n  font-size: 0.9375rem;\n  font-weight: 500;\n  line-height: 1.5rem;\n}\n.approval-comment-command {\n  color: var(--dsw-alias-label-tertiary);\n  font-family: var(--ds-font-family-code);\n  overflow-wrap: anywhere;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n}\n.approval-comment-command code.hljs {\n  background: transparent;\n  padding: 0;\n  font-family: inherit;\n  font-size: inherit;\n  line-height: inherit;\n  overflow-wrap: inherit;\n}\n.approval-comment-command .hljs-comment,\n.approval-comment-command .hljs-quote {\n  color: #8b949e;\n  font-style: italic;\n}\n.approval-comment-command .hljs-keyword,\n.approval-comment-command .hljs-literal,\n.approval-comment-command .hljs-section {\n  color: #ff7b72;\n}\n.approval-comment-command .hljs-string,\n.approval-comment-command .hljs-regexp {\n  color: #a5d6ff;\n}\n.approval-comment-command .hljs-title,\n.approval-comment-command .hljs-title.function_,\n.approval-comment-command .hljs-title.class_ {\n  color: #d2a8ff;\n}\n.approval-comment-command .hljs-number,\n.approval-comment-command .hljs-symbol,\n.approval-comment-command .hljs-bullet {\n  color: #79c0ff;\n}\n.approval-comment-command .hljs-attr,\n.approval-comment-command .hljs-attribute,\n.approval-comment-command .hljs-variable {\n  color: #ffa657;\n}\n.approval-comment-command .hljs-name,\n.approval-comment-command .hljs-tag,\n.approval-comment-command .hljs-built_in,\n.approval-comment-command .hljs-type {\n  color: #7ee787;\n}\n.approval-comment-action-row {\n  justify-content: flex-end;\n  gap: 0.5rem;\n  padding: 0.6875rem 0.8125rem;\n  display: flex;\n}\n.approval-comment-reject:hover:not(:disabled) {\n  background: var(--dsw-alias-interactive-bg-hover-danger);\n  color: var(--dsw-alias-state-error-primary);\n  border-color: #0000;\n}\n.approval-comment-comment-toggle {\n  align-self: flex-start;\n  background: none;\n  border: 0;\n  padding: 0.125rem 0;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  cursor: pointer;\n}\n.approval-comment-comment-toggle:hover:not(:disabled) {\n  color: var(--dsw-alias-label-primary);\n}\n.approval-comment-comment-toggle:disabled {\n  opacity: 0.5;\n  cursor: default;\n}\n.approval-comment-comment-field {\n  flex-direction: column;\n  gap: 0.375rem;\n  display: flex;\n}\n.approval-comment-comment-input {\n  box-sizing: border-box;\n  width: 100%;\n  min-height: 3.5rem;\n  resize: vertical;\n  border: 1px solid var(--dsw-alias-line-secondary);\n  border-radius: 0.5rem;\n  padding: 0.375rem 0.5rem;\n  background: var(--dsw-specific-input-major);\n  color: var(--dsw-alias-label-primary);\n  font-family: inherit;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n}\n.approval-comment-comment-input:focus {\n  outline: 0;\n  border-color: var(--dsw-alias-state-warn-secondary);\n}\n.approval-comment-comment-input:disabled {\n  opacity: 0.5;\n}\n.approval-comment-comment-hint {\n  color: var(--dsw-alias-label-caption);\n  font-size: 0.75rem;\n  line-height: 1rem;\n  margin: 0;\n}\n";
+var client_default = '.approval-comment-root {\n  padding: 0.5rem calc(var(--dsh-composer-side-clearance) + 1rem) 0.75rem;\n  flex-direction: column;\n  align-items: center;\n  display: flex;\n}\n.approval-comment-card {\n  width: 100%;\n  max-width: var(--dsh-chat-content-width);\n  outline: 3px solid #ff8c00;\n  background: var(--dsw-specific-input-major);\n  box-shadow: var(--dsw-shadow-lv2);\n  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);\n  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);\n  border-radius: 0.875rem;\n  overflow: hidden;\n}\n/* A bash-guard approval asks about a command RULE, not about raised sandbox\n   permissions. Electric blue separates the two at a glance, so the outline\n   colour tells you which kind of permission you are about to grant. */\n.approval-comment-card[data-source="bash-guard"] {\n  outline-color: #00b7ff;\n}\n.approval-comment-strip {\n  background: var(--dsw-alias-state-warn-tertiary);\n  color: var(--dsw-alias-state-warn-primary);\n  align-items: center;\n  gap: 0.5rem;\n  padding: 0.5rem 0.8125rem;\n  font-size: 0.8125rem;\n  line-height: 1.125rem;\n  display: flex;\n}\n.approval-comment-dot {\n  background: var(--dsw-alias-state-warn-primary);\n  border-radius: 50%;\n  width: 0.5rem;\n  height: 0.5rem;\n}\n.approval-comment-body {\n  box-sizing: border-box;\n  max-height: var(--dsh-composer-text-max-height);\n  flex-direction: column;\n  gap: 0.375rem;\n  padding: 0.625rem 0.8125rem 0;\n  display: flex;\n  overflow-y: auto;\n}\n.approval-comment-headline {\n  color: var(--dsw-alias-label-primary);\n  font-size: 0.9375rem;\n  font-weight: 500;\n  line-height: 1.5rem;\n}\n.approval-comment-command {\n  color: var(--dsw-alias-label-tertiary);\n  font-family: var(--ds-font-family-code);\n  overflow-wrap: anywhere;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n}\n.approval-comment-command code.hljs {\n  background: transparent;\n  padding: 0;\n  font-family: inherit;\n  font-size: inherit;\n  line-height: inherit;\n  overflow-wrap: inherit;\n}\n.approval-comment-command .hljs-comment,\n.approval-comment-command .hljs-quote {\n  color: #8b949e;\n  font-style: italic;\n}\n.approval-comment-command .hljs-keyword,\n.approval-comment-command .hljs-literal,\n.approval-comment-command .hljs-section {\n  color: #ff7b72;\n}\n.approval-comment-command .hljs-string,\n.approval-comment-command .hljs-regexp {\n  color: #a5d6ff;\n}\n.approval-comment-command .hljs-title,\n.approval-comment-command .hljs-title.function_,\n.approval-comment-command .hljs-title.class_ {\n  color: #d2a8ff;\n}\n.approval-comment-command .hljs-number,\n.approval-comment-command .hljs-symbol,\n.approval-comment-command .hljs-bullet {\n  color: #79c0ff;\n}\n.approval-comment-command .hljs-attr,\n.approval-comment-command .hljs-attribute,\n.approval-comment-command .hljs-variable {\n  color: #ffa657;\n}\n.approval-comment-command .hljs-name,\n.approval-comment-command .hljs-tag,\n.approval-comment-command .hljs-built_in,\n.approval-comment-command .hljs-type {\n  color: #7ee787;\n}\n.approval-comment-action-row {\n  justify-content: flex-end;\n  gap: 0.5rem;\n  padding: 0.6875rem 0.8125rem;\n  display: flex;\n}\n.approval-comment-reject:hover:not(:disabled) {\n  background: var(--dsw-alias-interactive-bg-hover-danger);\n  color: var(--dsw-alias-state-error-primary);\n  border-color: #0000;\n}\n.approval-comment-comment-toggle {\n  align-self: flex-start;\n  background: none;\n  border: 0;\n  padding: 0.125rem 0;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  cursor: pointer;\n}\n.approval-comment-comment-toggle:hover:not(:disabled) {\n  color: var(--dsw-alias-label-primary);\n}\n.approval-comment-comment-toggle:disabled {\n  opacity: 0.5;\n  cursor: default;\n}\n.approval-comment-comment-field {\n  flex-direction: column;\n  gap: 0.375rem;\n  display: flex;\n}\n.approval-comment-comment-input {\n  box-sizing: border-box;\n  width: 100%;\n  min-height: 3.5rem;\n  resize: vertical;\n  border: 1px solid var(--dsw-alias-line-secondary);\n  border-radius: 0.5rem;\n  padding: 0.375rem 0.5rem;\n  background: var(--dsw-specific-input-major);\n  color: var(--dsw-alias-label-primary);\n  font-family: inherit;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n}\n.approval-comment-comment-input:focus {\n  outline: 0;\n  border-color: var(--dsw-alias-state-warn-secondary);\n}\n.approval-comment-comment-input:disabled {\n  opacity: 0.5;\n}\n.approval-comment-comment-hint {\n  color: var(--dsw-alias-label-caption);\n  font-size: 0.75rem;\n  line-height: 1rem;\n  margin: 0;\n}\n';
 
 // plugins/approval-comment/src/client.tsx
 var _primitives = __toESM(require("@deepseek-ai/dsh-client-ui-primitives"), 1);
@@ -2187,74 +2187,84 @@ function makeApprovalCommentCard(steerTo) {
         answer("rejected");
       }
     };
-    return /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-root", "data-approval-key": matched.key }, /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-card" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-strip" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "approval-comment-dot" }), t("approval.waiting")), /* @__PURE__ */ import_react.default.createElement(
+    var guardApproval = typeof matched.payload.reason === "string" && matched.payload.reason.indexOf("bash-guard:") === 0;
+    return /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-root", "data-approval-key": matched.key }, /* @__PURE__ */ import_react.default.createElement(
       "div",
       {
-        className: "approval-comment-body",
-        "data-approval-scroll": "",
-        tabIndex: 0,
-        role: "group",
-        "aria-label": t("approval.detail.aria")
+        className: "approval-comment-card",
+        "data-source": guardApproval ? "bash-guard" : void 0
       },
-      /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-headline" }, matched.payload.reason || t("approval.escalation", { toolName: matched.payload.toolName })),
-      command !== void 0 ? /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-command" }, "$ ", /* @__PURE__ */ import_react.default.createElement(
-        "code",
-        {
-          className: "hljs",
-          dangerouslySetInnerHTML: { __html: highlightCommand(command) }
-        }
-      )) : null,
+      /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-strip" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "approval-comment-dot" }), t("approval.waiting")),
       /* @__PURE__ */ import_react.default.createElement(
-        "button",
+        "div",
         {
-          type: "button",
-          className: "approval-comment-comment-toggle",
+          className: "approval-comment-body",
+          "data-approval-scroll": "",
+          tabIndex: 0,
+          role: "group",
+          "aria-label": t("approval.detail.aria")
+        },
+        /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-headline" }, matched.payload.reason || t("approval.escalation", { toolName: matched.payload.toolName })),
+        command !== void 0 ? /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-command" }, "$ ", /* @__PURE__ */ import_react.default.createElement(
+          "code",
+          {
+            className: "hljs",
+            dangerouslySetInnerHTML: { __html: highlightCommand(command) }
+          }
+        )) : null,
+        /* @__PURE__ */ import_react.default.createElement(
+          "button",
+          {
+            type: "button",
+            className: "approval-comment-comment-toggle",
+            disabled: answered,
+            "aria-expanded": showComment,
+            onClick: function() {
+              setShowComment(!showComment);
+            }
+          },
+          showComment ? t("comment.hide") : t("comment.toggle")
+        ),
+        showComment ? /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-comment-field" }, /* @__PURE__ */ import_react.default.createElement(
+          "textarea",
+          {
+            className: "approval-comment-comment-input",
+            value: draft,
+            disabled: answered,
+            rows: 2,
+            autoFocus: true,
+            "aria-label": t("comment.label"),
+            placeholder: t("comment.placeholder"),
+            onChange: function(event) {
+              setDraft(event.target.value);
+            },
+            onKeyDown: onCommentKeyDown
+          }
+        ), /* @__PURE__ */ import_react.default.createElement("p", { className: "approval-comment-comment-hint" }, t("comment.hint"))) : null
+      ),
+      /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-action-row" }, /* @__PURE__ */ import_react.default.createElement(
+        Button2,
+        {
+          variant: "outline",
+          className: "approval-comment-reject",
           disabled: answered,
-          "aria-expanded": showComment,
           onClick: function() {
-            setShowComment(!showComment);
+            answer("rejected");
           }
         },
-        showComment ? t("comment.hide") : t("comment.toggle")
-      ),
-      showComment ? /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-comment-field" }, /* @__PURE__ */ import_react.default.createElement(
-        "textarea",
+        t("approval.reject")
+      ), /* @__PURE__ */ import_react.default.createElement(
+        Button2,
         {
-          className: "approval-comment-comment-input",
-          value: draft,
+          variant: "primary",
           disabled: answered,
-          rows: 2,
-          autoFocus: true,
-          "aria-label": t("comment.label"),
-          placeholder: t("comment.placeholder"),
-          onChange: function(event) {
-            setDraft(event.target.value);
-          },
-          onKeyDown: onCommentKeyDown
-        }
-      ), /* @__PURE__ */ import_react.default.createElement("p", { className: "approval-comment-comment-hint" }, t("comment.hint"))) : null
-    ), /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-action-row" }, /* @__PURE__ */ import_react.default.createElement(
-      Button2,
-      {
-        variant: "outline",
-        className: "approval-comment-reject",
-        disabled: answered,
-        onClick: function() {
-          answer("rejected");
-        }
-      },
-      t("approval.reject")
-    ), /* @__PURE__ */ import_react.default.createElement(
-      Button2,
-      {
-        variant: "primary",
-        disabled: answered,
-        onClick: function() {
-          answer("allowed-once");
-        }
-      },
-      t("approval.allowOnce")
-    ))));
+          onClick: function() {
+            answer("allowed-once");
+          }
+        },
+        t("approval.allowOnce")
+      ))
+    ));
   };
 }
 var name = PLUGIN_NAME;

@@ -257,9 +257,19 @@ function makeApprovalCommentCard(steerTo) {
       }
     };
 
+    // bash-guard names itself at the head of its reason. That prefix is the
+    // only marker distinguishing a command-rule approval from a raised-sandbox
+    // approval, because both arrive through the same approval frame.
+    var guardApproval =
+      typeof matched.payload.reason === "string" &&
+      matched.payload.reason.indexOf("bash-guard:") === 0;
+
     return (
       <div className="approval-comment-root" data-approval-key={matched.key}>
-        <div className="approval-comment-card">
+        <div
+          className="approval-comment-card"
+          data-source={guardApproval ? "bash-guard" : undefined}
+        >
           <div className="approval-comment-strip">
             <span className="approval-comment-dot" />
             {t("approval.waiting")}

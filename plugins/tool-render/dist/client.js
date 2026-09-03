@@ -1946,6 +1946,14 @@ var client_default = `.tool-render-row {
 .tool-render-card[data-escalated] {
   outline: 3px solid #ff8c00;
 }
+/* A call waiting on a bash-guard approval is outlined in electric blue, so it
+   reads differently from a sandbox_permissions escalation. This rule follows
+   the escalated one, so blue wins when a call is somehow both. The mark lasts
+   only while the approval is open: the client never receives a decided
+   approval's reason, so an answered call goes back to looking ordinary. */
+.tool-render-card[data-guard-approval] {
+  outline: 3px solid #00b7ff;
+}
 /* An errored call is outlined the way an escalated one is, in red and a little
    thinner. The outline follows the card's rounded corners. It replaces the old
    tinted row background and inset left bar. The enlarged red status dot on the
@@ -8885,6 +8893,7 @@ function toolRenderRow(options) {
     {
       className: "tool-render-card",
       "data-escalated": options.escalated || void 0,
+      "data-guard-approval": options.guardApproval || void 0,
       "data-error": options.state === "error" || void 0
     },
     /* @__PURE__ */ import_react.default.createElement(
@@ -8969,6 +8978,19 @@ function BashRow(props) {
   var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
   var summary = description !== void 0 && description !== "" ? firstLine(description) : command !== void 0 ? firstLine(command) : "Bash";
   var escalated = escalatedOf(argsObj);
+  var guardApproval = props.useSession(function(snapshot) {
+    var pending = snapshot !== null && snapshot !== void 0 ? snapshot.pending : void 0;
+    if (!Array.isArray(pending)) return false;
+    for (var p = 0; p < pending.length; p++) {
+      var item = pending[p];
+      if (item === null || item === void 0 || item.kind !== "approval") continue;
+      var payload = item.payload;
+      if (payload === null || payload === void 0) continue;
+      if (payload.callId !== props.callId) continue;
+      return typeof payload.reason === "string" && payload.reason.indexOf("bash-guard:") === 0;
+    }
+    return false;
+  }) === true;
   var body = null;
   if (command !== void 0 || output !== null && output !== "") {
     var inner = [];
@@ -8997,6 +9019,7 @@ function BashRow(props) {
     title: "Bash",
     summary,
     escalated,
+    guardApproval,
     state,
     expandable: body !== null,
     expanded,

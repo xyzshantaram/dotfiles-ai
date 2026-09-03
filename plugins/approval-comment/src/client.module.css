@@ -15,6 +15,12 @@
   border-radius: 0.875rem;
   overflow: hidden;
 }
+/* A bash-guard approval asks about a command RULE, not about raised sandbox
+   permissions. Electric blue separates the two at a glance, so the outline
+   colour tells you which kind of permission you are about to grant. */
+.approval-comment-card[data-source="bash-guard"] {
+  outline-color: #00b7ff;
+}
 .approval-comment-strip {
   background: var(--dsw-alias-state-warn-tertiary);
   color: var(--dsw-alias-state-warn-primary);

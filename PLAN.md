@@ -979,6 +979,18 @@ Make both cards show the image and present their text well.
 
 ## Critical context
 
+- A bash-guard approval outlines the bash card and the approval card in electric
+  blue (`#00b7ff`), against orange for a sandbox escalation. The bash card mark
+  is DELIBERATELY temporary and the owner accepted that. `ConversationSnapshot`
+  carries no approval history, `ToolCallOwnerProps` has no approval field, and
+  `approval/asked` is host-side log-only, so the only reachable signal is
+  `snapshot.pending`. Once the approval is answered the record leaves `pending`
+  and the card looks ordinary again. Making it permanent needs a host mirror
+  projection, the pattern `durable-todos` uses. Do not file this as a bug.
+- bash-guard is identified by its reason text starting with `bash-guard:`. Both
+  approval kinds arrive through the same frame, so there is no structural field
+  to test. Changing `DEFAULT_ASK_TEMPLATE` in `plugins/bash-guard.ts` breaks
+  both outlines.
 - The plugin is `plugins/tool-render`. It shadows shipped per-tool rows by
   registering the same key of `tool.call.toolview` at priority -100. Keyed slots
   sort ascending and the lowest live entry renders. A same key at a different
