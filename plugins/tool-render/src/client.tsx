@@ -610,7 +610,19 @@ function toolRenderRow(options) {
       </div>
       {open === true ? (
         <div className="tool-render-body">
-          {options.body}
+          {/* A failed call whose result carried no text still shows its error.
+              errorTextOf falls back to the error message, and without this the
+              expanded card would be empty for that case. */}
+          {options.body !== null && options.body !== undefined ? (
+            options.body
+          ) : options.state === "error" &&
+            options.errorText !== null &&
+            options.errorText !== undefined &&
+            options.errorText !== "" ? (
+            <pre className="tool-render-output" tool-render-error={true}>
+              {options.errorText}
+            </pre>
+          ) : null}
           {options.inspect !== undefined ? (
             <button type="button" className="tool-render-inspect" onClick={options.inspect}>
               <IconInspectOutline12 />
@@ -669,6 +681,7 @@ function ReadRow(props) {
     },
     body: body,
     errorSummary: errorSummary,
+    errorText: errorText,
     inspect: props.inspect,
   });
 }
@@ -735,6 +748,7 @@ function BashRow(props) {
     },
     body: body,
     errorSummary: errorSummary,
+    errorText: errorText,
     inspect: props.inspect,
   });
 }
@@ -1200,6 +1214,7 @@ function makeEditRow(toolTitle) {
       },
       body: body,
       errorSummary: errorSummary,
+      errorText: errorText,
       inspect: props.inspect,
     });
   };
@@ -1537,6 +1552,7 @@ function WriteRow(props) {
     },
     body: body,
     errorSummary: errorSummary,
+    errorText: errorText,
     inspect: props.inspect,
   });
 }
@@ -1619,7 +1635,7 @@ function TodoRow(props) {
     }
     summary = firstActive !== null ? head + " · " + firstActive : head;
   } else {
-    summary = "Todo list";
+    summary = "To-do list";
   }
   var body = null;
   if (todos !== null && output !== null && output !== "") {
@@ -1627,7 +1643,7 @@ function TodoRow(props) {
   }
   return toolRenderRow({
     icon: <IconChecklistOutline14 size={14} />,
-    title: "Todo list",
+    title: "To-do list",
     summary: summary,
     state: state,
     expandable: body !== null,
@@ -1637,6 +1653,7 @@ function TodoRow(props) {
     },
     body: body,
     errorSummary: errorSummary,
+    errorText: errorText,
     inspect: props.inspect,
   });
 }
@@ -1808,6 +1825,7 @@ function AskRow(props) {
     },
     body: body,
     errorSummary: errorSummary,
+    errorText: errorText,
     inspect: props.inspect,
   });
 }
@@ -1863,6 +1881,7 @@ function SubagentRow(props) {
     },
     body: body,
     errorSummary: errorSummary,
+    errorText: errorText,
     inspect: props.inspect,
   });
 }
