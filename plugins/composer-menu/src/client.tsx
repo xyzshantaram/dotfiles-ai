@@ -33,31 +33,49 @@ function apply(ctx: any) {
   // injects, because their hashes change per DSH build. apply() runs at boot
   // and can run BEFORE those stylesheets exist, so resolve them lazily on
   // render and keep retrying until they appear.
-  let hideDone = false;
+  // Each control is hidden on its own. Coupling them once meant a single wrong
+  // suffix left BOTH shipped controls on screen beside the menu.
+  const HIDE_TARGETS = [
+    {
+      id: "composer-menu-hide-picker",
+      module: "PermissionSelect.module.css",
+      // PermissionSelect renders a Fragment, not a wrapper, so there is no
+      // `_root` class. Its only visible part is the trigger button.
+      suffix: "_trigger",
+      what: "the sandbox picker",
+    },
+    {
+      id: "composer-menu-hide-add",
+      module: "InputBar.module.css",
+      suffix: "_add",
+      what: "the commands button",
+    },
+  ];
+  const done = new Set<string>();
+  const warned = new Set<string>();
   let attempts = 0;
-  let warned = false;
 
-  /** Hide the shipped sandbox picker and commands button once their stylesheets exist. */
+  /** Hide each shipped control as soon as its stylesheet appears. */
   function ensureShippedHidden() {
-    if (hideDone) return;
-    const picker = shippedClass("PermissionSelect.module.css", "_root");
-    const add = shippedClass("InputBar.module.css", "_add");
-    if (picker === null || add === null) {
-      attempts += 1;
-      if (attempts >= 20 && !warned) {
-        warned = true;
-        console.error(
-          "composer menu: could not read the shipped sandbox picker and commands classes, so they stay visible next to the menu.",
-        );
+    if (done.size === HIDE_TARGETS.length) return;
+    attempts += 1;
+    for (const target of HIDE_TARGETS) {
+      if (done.has(target.id)) continue;
+      const cls = shippedClass(target.module, target.suffix);
+      if (cls === null) {
+        if (attempts >= 20 && !warned.has(target.id)) {
+          warned.add(target.id);
+          console.error(
+            "composer menu: could not read the class for " +
+              target.what +
+              ", so it stays visible beside the menu.",
+          );
+        }
+        continue;
       }
-      return;
+      injectStyle(PLUGIN_NAME, target.id, "." + cls + " { display: none !important; }");
+      done.add(target.id);
     }
-    injectStyle(
-      PLUGIN_NAME,
-      "composer-menu-hide",
-      "." + picker + " { display: none !important; }\n." + add + " { display: none !important; }",
-    );
-    hideDone = true;
   }
 
   /** Post one preset choice to the host route. */
@@ -81,18 +99,30 @@ function apply(ctx: any) {
         ? []
         : permissions.options.filter((option: any) => option.value !== "custom");
 
-    const check = react.createElement(
-      DropdownMenu.ItemIndicator,
-      { className: "composer-menu-indicator" },
-      "✓",
-    );
+    /** A fresh check mark per item. One shared element would still render, but
+     * building it per item keeps each row's children independently keyed. */
+    const check = () =>
+      react.createElement(
+        DropdownMenu.ItemIndicator,
+        { className: "composer-menu-indicator" },
+        "✓",
+      );
+
+    /** The leading slot is always present, so labels line up whether or not the
+     * row is the selected one. */
+    const row = (label: string) => [
+      react.createElement("span", { key: "mark", className: "composer-menu-mark" }, check()),
+      react.createElement("span", { key: "label", className: "composer-menu-label" }, label),
+    ];
 
     let sandboxBody;
     if (permissions === undefined) {
+      // A RadioItem outside a RadioGroup has no group state to read, so the
+      // empty case uses a plain disabled Item.
       sandboxBody = react.createElement(
-        DropdownMenu.RadioItem,
+        DropdownMenu.Item,
         { className: "composer-menu-item", disabled: true },
-        [check, "Not available"],
+        row("Not available"),
       );
     } else {
       sandboxBody = react.createElement(
@@ -103,10 +133,11 @@ function apply(ctx: any) {
             DropdownMenu.RadioItem,
             {
               key: option.value,
+              value: option.value,
               className: "composer-menu-item",
               onSelect: () => choose(props.sessionId, option.value),
             },
-            [check, option.label ?? option.value],
+            row(option.label ?? option.value),
           ),
         ),
       );
@@ -118,7 +149,9 @@ function apply(ctx: any) {
       react.createElement(
         DropdownMenu.SubTrigger,
         { className: "composer-menu-item", disabled: permissions === undefined },
-        "Sandbox",
+        react.createElement("span", { key: "mark", className: "composer-menu-mark" }),
+        react.createElement("span", { key: "label", className: "composer-menu-label" }, "Sandbox"),
+        react.createElement("span", { key: "chev", className: "composer-menu-chevron" }, "›"),
       ),
       react.createElement(
         DropdownMenu.Portal,
