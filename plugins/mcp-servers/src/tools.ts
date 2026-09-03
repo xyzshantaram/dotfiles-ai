@@ -55,7 +55,7 @@ export function sanitizeSchema(schema: unknown): unknown {
   }
   const node = schema as Record<string, unknown>;
   const out: Record<string, unknown> = {};
-  const bounds: string[] = [];
+  const bound: { minimum?: string; maximum?: string } = {};
   for (const key of Object.keys(node)) {
     const value = node[key];
     if (
@@ -76,11 +76,15 @@ export function sanitizeSchema(schema: unknown): unknown {
     } else if (KEEP.has(key)) {
       out[key] = value;
     } else if (key === "minimum" || key === "maximum") {
-      const kind = key === "minimum" ? "minimum" : "maximum";
-      bounds.push(`${kind} ${String(value)}`);
+      bound[key] = String(value);
     }
   }
-  // Fold dropped numeric bounds into the description so the model still sees them.
+  // Fold dropped numeric bounds into the description so the model still sees
+  // them. Emit minimum before maximum whatever order the source used, so the
+  // text does not depend on key order in the incoming schema.
+  const bounds: string[] = [];
+  if (bound.minimum !== undefined) bounds.push(`minimum ${bound.minimum}`);
+  if (bound.maximum !== undefined) bounds.push(`maximum ${bound.maximum}`);
   if (bounds.length > 0) {
     const text = `(${bounds.join(", ")})`;
     const base = typeof out.description === "string" ? out.description : "";

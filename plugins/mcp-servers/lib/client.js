@@ -169,21 +169,26 @@ function makePanel() {
         };
         return next;
       });
-      postJson("/mcp-servers/api/servers/" + encodeURIComponent(name2) + "/authorize").then(function(result) {
-        if (result.error) {
-          console.error("[mcp-servers] authorize failed for " + name2 + ": " + result.error);
-          failRow(name2, result.error);
-          return;
+      postJson("/mcp-servers/api/servers/" + encodeURIComponent(name2) + "/authorize").then(
+        function(result) {
+          if (result.error) {
+            console.error("[mcp-servers] authorize failed for " + name2 + ": " + result.error);
+            failRow(name2, result.error);
+            return;
+          }
+          var target = result.data && result.data.authorizeUrl ? result.data.authorizeUrl : "";
+          if (target === "") {
+            console.error("[mcp-servers] no authorize URL returned for " + name2);
+            failRow(
+              name2,
+              "The server did not return an authorization URL. Refresh to see its status."
+            );
+            return;
+          }
+          console.info("[mcp-servers] navigating to authorize URL for " + name2);
+          window.location.href = target;
         }
-        var target = result.data && result.data.authorizeUrl ? result.data.authorizeUrl : "";
-        if (target === "") {
-          console.error("[mcp-servers] no authorize URL returned for " + name2);
-          failRow(name2, "The server did not return an authorization URL. Refresh to see its status.");
-          return;
-        }
-        console.info("[mcp-servers] navigating to authorize URL for " + name2);
-        window.location.href = target;
-      });
+      );
     };
     var body = null;
     if (list === null) {
