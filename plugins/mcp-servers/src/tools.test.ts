@@ -97,6 +97,19 @@ describe("mcp-servers tool helpers", () => {
       expect(count.description).toBe("device count (minimum 0, maximum 100)");
     });
 
+    it("emits minimum before maximum even when the source lists maximum first", () => {
+      // Object key order decided the text before this was fixed, so a schema
+      // written the other way round produced "(maximum 100, minimum 0)".
+      const out = sanitizeSchema({
+        type: "object",
+        properties: {
+          count: { type: "number", maximum: 100, minimum: 0 },
+        },
+      });
+      const count = (out as { properties: { count: Record<string, unknown> } }).properties.count;
+      expect(count.description).toBe("(minimum 0, maximum 100)");
+    });
+
     it("creates a description from bounds when the node has none", () => {
       const out = sanitizeSchema({ type: "number", minimum: 1 }) as Record<string, unknown>;
       expect(out.description).toBe("(minimum 1)");

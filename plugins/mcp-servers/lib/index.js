@@ -7878,7 +7878,9 @@ function parseConfig(text) {
       }
       servers.push({ name: name2, type: "http", url: url2 });
     } else {
-      errors.push(`server "${name2}" has unknown type ${JSON.stringify(type)} (expected "stdio" or "http")`);
+      errors.push(
+        `server "${name2}" has unknown type ${JSON.stringify(type)} (expected "stdio" or "http")`
+      );
     }
   }
   return { servers, error: errors.join("; ") };
@@ -19357,7 +19359,8 @@ function createProvider(opts) {
     },
     codeVerifier() {
       const verifier = store.getCodeVerifier(server);
-      if (verifier === void 0) throw new Error(`mcp-servers: no code verifier stored for ${server}`);
+      if (verifier === void 0)
+        throw new Error(`mcp-servers: no code verifier stored for ${server}`);
       return verifier;
     },
     // One random value per authorization attempt, persisted so the callback
@@ -19389,7 +19392,7 @@ function sanitizeSchema(schema) {
   }
   const node2 = schema;
   const out = {};
-  const bounds = [];
+  const bound = {};
   for (const key of Object.keys(node2)) {
     const value = node2[key];
     if (key === "properties" && typeof value === "object" && value !== null && !Array.isArray(value)) {
@@ -19405,10 +19408,12 @@ function sanitizeSchema(schema) {
     } else if (KEEP.has(key)) {
       out[key] = value;
     } else if (key === "minimum" || key === "maximum") {
-      const kind = key === "minimum" ? "minimum" : "maximum";
-      bounds.push(`${kind} ${String(value)}`);
+      bound[key] = String(value);
     }
   }
+  const bounds = [];
+  if (bound.minimum !== void 0) bounds.push(`minimum ${bound.minimum}`);
+  if (bound.maximum !== void 0) bounds.push(`maximum ${bound.maximum}`);
   if (bounds.length > 0) {
     const text = `(${bounds.join(", ")})`;
     const base = typeof out.description === "string" ? out.description : "";
@@ -19503,7 +19508,9 @@ function createRegistry(ctx, opts) {
             capturedUrl = url2;
           }
         });
-        transport = new StreamableHTTPClientTransport(new URL(server.url), { authProvider: provider });
+        transport = new StreamableHTTPClientTransport(new URL(server.url), {
+          authProvider: provider
+        });
         entry.transport = transport;
         entry.capturedAuthUrl = () => capturedUrl;
       }
