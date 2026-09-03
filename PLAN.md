@@ -281,6 +281,31 @@ concept with our own code, minus its evidence-verification half.
   invites trust it has not earned. The projection carries the flag as
   `carriedOver`, set true by `turn/start` and cleared by the next `todo/write`.
 
+### History and import (from grilling, 2026-09-03)
+
+- WHY a steer is mandatory, not a design preference: the agent cannot read a
+  projection, and `todo_write` REPLACES the whole list. An import the agent does
+  not know about would be silently dropped by its very next write.
+- History browsing lives in the EXPANDED panel: two chevron buttons step through
+  past lists, with a label showing the timestamp each list was set.
+- An edit-mode toggle. In edit mode you select items, which highlight, then
+  press import.
+- Only `pending` and `in_progress` items may be imported. Completed items are
+  not selectable.
+- Import sends a steer and nothing else. The panel does not change until the
+  agent writes. It shows a spinner meanwhile.
+- The spinner clears ONLY on the next `todo/write`. RISK, accepted by the owner:
+  if the agent ignores the steer or the turn errors, the spinner never clears
+  and the human must reload or re-import.
+- The steer carries the selected items and tells the agent to use its best
+  judgment merging them with the existing list. It does not prescribe statuses
+  or duplicate handling.
+- History rides the projection, bounded to the LAST 35 WRITES. Chosen over a
+  per-turn bound and over a host route.
+- CONFLICT to expect: `todo_write` rejects more than one `in_progress` item when
+  `allowParallelInProgress` is false. Importing an `in_progress` item into a list
+  that already has one is a conflict the agent's judgment has to resolve.
+
 ## Critical context
 
 - The host bundle is about 708 KB because zod bundles into it. build.mjs marks
@@ -308,6 +333,19 @@ concept with our own code, minus its evidence-verification half.
   `sessionProjections` (`dsh-tool-todo/lib/types/index.js:98-101`).
   `snapshot(session)` exists and returns `{ asOfSeq, values }`
   (`index.d.ts:199`).
+- The agent CANNOT see the todo list except through its own transcript.
+  `dsh-tool-todo` never touches `systemPrompt`. The only channel is the
+  `todo_write` return value, which echoes the list plus counts back as the tool
+  result (`dsh-tool-todo/lib/index.js:174-183`). Once compaction elides those
+  entries the agent cannot recover the list, and tool results never occupy a
+  checkpoint entry.
+- A client plugin CANNOT read `todo/write` events. The client `Session` keeps
+  `private events`, and only a windowed log slice
+  (`dsh-client-runtime/lib/types/client/sessions/session.d.ts:47-49`). A
+  projection is the only channel to the panel.
+- A client plugin steers by injecting the `sessions` service and calling
+  `sessions.binding(sessionId).session.prompt([{ type: "text", text }], "steer")`,
+  the pattern `plugins/approval-comment/src/client.tsx` already uses.
 - Dependencies: neither `zod` nor `@deepseek-ai/dsh-session-projection` was a
   repo dependency, contrary to the earlier note here. Both were added on
   2026-09-03: `zod` 4.5.4 as a runtime dependency (the host half bundles it,
@@ -465,6 +503,43 @@ empty.
 
 NOTE: the expanded body still reads `No todos` for its empty state. Align the
 two if that reads oddly side by side.
+
+### T9 — host: keep a bounded todo history in the projection
+
+Not started. The mirror projection keeps the last 35 `todo/write` lists in its
+state, each with the timestamp it was written, and publishes them in its view.
+The current list stays exactly as it is today, so the panel keeps working
+unchanged while T10 is unbuilt.
+
+**Acceptance criteria**
+
+- The projection publishes the current list plus up to 35 previous lists, newest
+  first, each carrying its write timestamp.
+- The 36th write evicts the oldest.
+- The history survives a restart, the way the current list already does.
+- No change to what the panel renders until T10 lands.
+
+### T10 — client: browse history, select items, and import them
+
+Not started. Depends on T9.
+
+Two chevrons in the expanded panel step through history, with a label showing
+when that list was set. An edit-mode toggle turns items selectable; selected
+items highlight. Completed items are never selectable. An import button steers
+the agent with the selected items, asking it to merge them using its own
+judgment, and the panel shows a spinner until the next `todo/write` arrives.
+
+Steering needs the `sessions` service added to this plugin's `inject`.
+
+**Acceptance criteria**
+
+- The chevrons walk back and forward through the retained lists, and stop at
+  both ends.
+- Each historical view shows the timestamp that list was written.
+- Edit mode allows selecting pending and in-progress items only.
+- Import sends one steer carrying the selected items, and changes nothing else.
+- The spinner shows until the next `todo/write` lands, then clears.
+- Leaving history returns to the live current list.
 
 ## Human review queue (shared, both efforts)
 
