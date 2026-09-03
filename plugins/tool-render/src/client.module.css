@@ -317,6 +317,14 @@
 .tool-render-card[data-escalated] {
   outline: 3px solid #ff8c00;
 }
+/* A call waiting on a bash-guard approval is outlined in electric blue, so it
+   reads differently from a sandbox_permissions escalation. This rule follows
+   the escalated one, so blue wins when a call is somehow both. The mark lasts
+   only while the approval is open: the client never receives a decided
+   approval's reason, so an answered call goes back to looking ordinary. */
+.tool-render-card[data-guard-approval] {
+  outline: 3px solid #00b7ff;
+}
 /* An errored call is outlined the way an escalated one is, in red and a little
    thinner. The outline follows the card's rounded corners. It replaces the old
    tinted row background and inset left bar. The enlarged red status dot on the

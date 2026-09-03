@@ -582,6 +582,7 @@ function toolRenderRow(options) {
     <div
       className="tool-render-card"
       data-escalated={options.escalated || undefined}
+      data-guard-approval={options.guardApproval || undefined}
       data-error={options.state === "error" || undefined}
     >
       <div
@@ -710,6 +711,25 @@ function BashRow(props) {
         ? firstLine(command)
         : "Bash";
   var escalated = escalatedOf(argsObj);
+  // An OPEN approval raised by bash-guard marks the card in a different colour
+  // from a sandbox escalation. The reason exists only while the approval waits:
+  // once it is answered the record leaves `snapshot.pending`, and the client
+  // never receives a decided approval's reason (approval/asked is host-side
+  // log-only). So the mark disappears when the approval is answered.
+  var guardApproval =
+    props.useSession(function (snapshot) {
+      var pending = snapshot !== null && snapshot !== undefined ? snapshot.pending : undefined;
+      if (!Array.isArray(pending)) return false;
+      for (var p = 0; p < pending.length; p++) {
+        var item = pending[p];
+        if (item === null || item === undefined || item.kind !== "approval") continue;
+        var payload = item.payload;
+        if (payload === null || payload === undefined) continue;
+        if (payload.callId !== props.callId) continue;
+        return typeof payload.reason === "string" && payload.reason.indexOf("bash-guard:") === 0;
+      }
+      return false;
+    }) === true;
   var body = null;
   if (command !== undefined || (output !== null && output !== "")) {
     var inner = [];
@@ -740,6 +760,7 @@ function BashRow(props) {
     title: "Bash",
     summary: summary,
     escalated: escalated,
+    guardApproval: guardApproval,
     state: state,
     expandable: body !== null,
     expanded: expanded,
