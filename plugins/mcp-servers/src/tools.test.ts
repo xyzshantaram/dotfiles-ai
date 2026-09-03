@@ -1,6 +1,6 @@
 // Tests for the pure tool-definition helpers.
 import { describe, expect, it } from "vitest";
-import { buildDefinition, extractText, publicToolName } from "./tools.js";
+import { buildDefinition, extractText, publicToolName, sanitizeSchema } from "./tools.js";
 
 describe("mcp-servers tool helpers", () => {
   it("builds the public tool name", () => {
@@ -35,7 +35,7 @@ describe("mcp-servers tool helpers", () => {
     });
     expect(def.name).toBe("mcp__gitlab__list_issues");
     expect(def.description).toBe("list issues");
-    expect(def.parameters).toBe(inputSchema);
+    expect(def.parameters).toEqual(inputSchema);
     expect(def.output.schema.required).toEqual(["content"]);
     expect(def.output.schema.properties.structuredContent).toEqual({});
   });
@@ -48,7 +48,7 @@ describe("mcp-servers tool helpers", () => {
       execute: async () => ({ content: [], structuredContent: { total: 1 } }),
     });
     expect(def.output.schema.required).toEqual(["content", "structuredContent"]);
-    expect(def.output.schema.properties.structuredContent).toBe(outputSchema);
+    expect(def.output.schema.properties.structuredContent).toEqual(outputSchema);
   });
 
   it("wraps execute and drops structuredContent when no schema is declared", async () => {
@@ -74,5 +74,61 @@ describe("mcp-servers tool helpers", () => {
     const result = await def.execute({ a: 1 });
     expect(result.content).toBe(content);
     expect(result.structuredContent).toEqual({ got: { a: 1 } });
+  });
+  describe("sanitizeSchema", () => {
+    it("removes $schema from the top level", () => {
+      const out = sanitizeSchema({
+        type: "object",
+        $schema: "https://json-schema.org/draft/2020-12/schema",
+      });
+      expect(out).toEqual({ type: "object" });
+    });
+
+    it("folds minimum and maximum of a nested property into its description", () => {
+      const out = sanitizeSchema({
+        type: "object",
+        properties: {
+          count: { type: "number", minimum: 0, maximum: 100, description: "device count" },
+        },
+      });
+      const count = (out as { properties: { count: Record<string, unknown> } }).properties.count;
+      expect(count.minimum).toBeUndefined();
+      expect(count.maximum).toBeUndefined();
+      expect(count.description).toBe("device count (minimum 0, maximum 100)");
+    });
+
+    it("creates a description from bounds when the node has none", () => {
+      const out = sanitizeSchema({ type: "number", minimum: 1 }) as Record<string, unknown>;
+      expect(out.description).toBe("(minimum 1)");
+    });
+
+    it("sanitises nested items and oneOf members", () => {
+      const out = sanitizeSchema({
+        type: "array",
+        items: {
+          type: "object",
+          $schema: "x",
+          properties: { a: { type: "string", format: "uri" } },
+        },
+        oneOf: [
+          { type: "string", pattern: "ab" },
+          { type: "number", default: 1 },
+        ],
+      }) as { items: Record<string, unknown>; oneOf: Record<string, unknown>[] };
+      expect(out.items).toEqual({ type: "object", properties: { a: { type: "string" } } });
+      expect(out.oneOf).toEqual([{ type: "string" }, { type: "number" }]);
+    });
+
+    it("keeps supported keywords untouched", () => {
+      const schema = {
+        type: "object",
+        title: "T",
+        description: "d",
+        properties: { id: { type: "string", enum: ["a"], const: "a" } },
+        required: ["id"],
+        additionalProperties: false,
+      };
+      expect(sanitizeSchema(schema)).toEqual(schema);
+    });
   });
 });
