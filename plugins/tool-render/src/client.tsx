@@ -461,7 +461,15 @@ function toolNameHue(name) {
   for (var i = 0; i < name.length; i++) {
     h = (h * 31 + name.charCodeAt(i)) | 0;
   }
-  return Math.abs(h) % 360;
+  h = Math.abs(h);
+  // A raw hash % 360 clumps similar short strings into a narrow hue range
+  // (several of these labels landed within 10 degrees of each other).
+  // Multiplying by the golden ratio conjugate and taking the fractional
+  // part declumps the result across the wheel, the standard trick for
+  // spreading hash-derived hues without a stable per-item index.
+  var golden = 0.6180339887498949;
+  var frac = (h * golden) % 1;
+  return Math.floor(frac * 360);
 }
 
 /** The badge: this row's own icon, then its raw tool name, both left-aligned.
@@ -476,18 +484,29 @@ function toolNameHue(name) {
 function toolNameBadge(toolName, icon, state) {
   if (toolName === undefined || toolName === null || toolName === "") return null;
   var isError = state === "error";
+  // "Run bash" hashes into a green that reads poorly. bash-guard already
+  // owns electric blue as its own identity color elsewhere in this bundle
+  // (--dsh-outline-guard), so bash's badge uses that fixed color instead of
+  // its hash, rather than leaving the hash algorithm to accidentally land
+  // other tools on the same hard-to-parse hue too.
+  var isBash = toolName === "Run bash";
   var hue = toolNameHue(toolName);
   // 28% mix read as invisible against a dark theme for several hues -- a
   // stronger mix plus a visible border means the badge's own shape always
   // reads, even when the fill color itself has low contrast.
-  // Error uses a darkened error color, not the raw primary: the raw color
-  // reads too bright for white text to sit on comfortably.
+  // Error uses a slightly darkened error color, not the raw primary: fully
+  // raw read too bright for white text, but too much black mix reads dull
+  // instead of like an error.
   var background = isError
-    ? "color-mix(in srgb, var(--dsw-alias-state-error-primary) 65%, black)"
-    : "color-mix(in srgb, hsl(" + hue + " 65% 45%) 55%, var(--dsw-alias-bg-tertiary))";
+    ? "color-mix(in srgb, var(--dsw-alias-state-error-primary) 85%, black)"
+    : isBash
+      ? "color-mix(in srgb, var(--dsh-outline-guard) 55%, var(--dsw-alias-bg-tertiary))"
+      : "color-mix(in srgb, hsl(" + hue + " 65% 45%) 55%, var(--dsw-alias-bg-tertiary))";
   var border = isError
     ? "var(--dsw-alias-state-error-primary)"
-    : "hsl(" + hue + " 55% 60%)";
+    : isBash
+      ? "var(--dsh-outline-guard)"
+      : "hsl(" + hue + " 55% 60%)";
   var color = isError ? "#fff" : undefined;
   return (
     <span
