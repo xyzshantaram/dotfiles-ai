@@ -1731,6 +1731,43 @@ function splitSystemReminders(text) {
   if (lastEnd < text.length) segments.push({ reminder: false, text: text.slice(lastEnd) });
   return segments;
 }
+function extractHunk(readText, removeFrom, removeTo, replacementText, startLine) {
+  if (typeof readText !== "string" || readText === "") return null;
+  var rows = [];
+  var lines = readText.split("\n");
+  for (var i = 0; i < lines.length; i++) {
+    var m = HASH_ROW_RE.exec(lines[i]);
+    if (m !== null) rows.push({ hash: m[1], content: lines[i].slice(4) });
+  }
+  if (rows.length === 0) return null;
+  var from = -1;
+  for (var k = 0; k < rows.length; k++) {
+    if (rows[k].hash === removeFrom) {
+      from = k;
+      break;
+    }
+  }
+  if (from === -1) return null;
+  var to = from;
+  if (typeof removeTo === "string" && removeTo !== "") {
+    to = -1;
+    for (var j = from; j < rows.length; j++) {
+      if (rows[j].hash === removeTo) {
+        to = j;
+        break;
+      }
+    }
+    if (to === -1) return null;
+  }
+  var before = [];
+  for (var n = from; n <= to; n++) before.push(rows[n].content);
+  var base = typeof startLine === "number" && startLine >= 1 ? startLine : readStartLine(null, readText);
+  return {
+    before: before.join("\n"),
+    after: typeof replacementText === "string" ? replacementText : "",
+    oldStart: base + from
+  };
+}
 
 // plugins/shared/client-util.ts
 function injectStyle(pluginName, styleId, cssText) {
@@ -9236,43 +9273,6 @@ function readsOf(snapshot, path, beforeTime, cwd) {
 function latestReadText(snapshot, path, beforeTime, cwd) {
   var reads = readsOf(snapshot, path, beforeTime, cwd);
   return reads.length === 0 ? null : reads[0].text;
-}
-function extractHunk(readText, removeFrom, removeTo, replacementText, startLine) {
-  if (typeof readText !== "string" || readText === "") return null;
-  var rows = [];
-  var lines = readText.split("\n");
-  for (var i = 0; i < lines.length; i++) {
-    var m = HASH_ROW_RE.exec(lines[i]);
-    if (m !== null) rows.push({ hash: m[1], content: lines[i].slice(4) });
-  }
-  if (rows.length === 0) return null;
-  var from = -1;
-  for (var k = 0; k < rows.length; k++) {
-    if (rows[k].hash === removeFrom) {
-      from = k;
-      break;
-    }
-  }
-  if (from === -1) return null;
-  var to = from;
-  if (typeof removeTo === "string" && removeTo !== "") {
-    to = -1;
-    for (var j = from; j < rows.length; j++) {
-      if (rows[j].hash === removeTo) {
-        to = j;
-        break;
-      }
-    }
-    if (to === -1) return null;
-  }
-  var before = [];
-  for (var n = from; n <= to; n++) before.push(rows[n].content);
-  var base = typeof startLine === "number" && startLine >= 1 ? startLine : readStartLine(null, readText);
-  return {
-    before: before.join("\n"),
-    after: typeof replacementText === "string" ? replacementText : "",
-    oldStart: base + from
-  };
 }
 function splitLines(text) {
   return typeof text === "string" && text !== "" ? text.split("\n") : [];
