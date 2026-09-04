@@ -1877,6 +1877,11 @@ var client_default = `.tool-render-row {
   color: var(--dsw-alias-label-secondary);
   flex: none;
   margin-right: 0.25rem;
+  transform: rotate(-90deg);
+  transition: transform 0.12s;
+}
+.tool-render-chevron-open {
+  transform: rotate(0deg);
 }
 .tool-render-title {
   color: var(--dsw-alias-label-secondary);
@@ -1887,16 +1892,18 @@ var client_default = `.tool-render-row {
 /* The always-on raw tool-name badge: the row's own icon plus the registered
    tool name, on a hashed-hue background. */
 .tool-render-name-badge {
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
   gap: 0.25rem;
   width: 6.75rem;
+  height: 1.5rem;
   flex: none;
   overflow: hidden;
   border: 1px solid;
   border-radius: 0.375rem;
-  padding: 0.1875rem 0.375rem;
+  padding: 0.0625rem 0.375rem;
   margin-right: 0.375rem;
   color: var(--dsw-alias-label-primary);
 }
@@ -2426,6 +2433,78 @@ var client_default = `.tool-render-row {
   color: var(--dsw-alias-label-primary);
   padding: 0.125rem 0;
   white-space: pre-wrap;
+}
+
+/* read_image and see image bodies. One bounded container per card, with one
+   interior scroll area. Picture cards hold mixed content, so this rule is
+   shaped like .tool-render-markdown-body but stands alone instead of
+   overloading it. */
+.tool-render-image-body {
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 0.375rem;
+  margin: 0.25rem 0 0.125rem 0.25rem;
+  max-height: 25rem;
+  overflow-y: auto;
+  padding: 0.5rem 0.625rem;
+}
+.tool-render-image-body > .tool-render-markdown-body {
+  margin: 0 0 0.375rem;
+}
+/* The picture shrinks to the card width, keeps its aspect ratio, and never
+   grows past its natural pixel size. width and height stay auto, so the
+   browser only ever scales down. The link centers the picture when it is
+   narrower than the card. */
+.tool-render-image-link {
+  display: block;
+  text-align: center;
+}
+.tool-render-image {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  border-radius: 0.25rem;
+}
+/* Metadata lines under the picture: name, type, full path. */
+.tool-render-image-meta {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+  overflow-wrap: anywhere;
+  margin-top: 0.375rem;
+}
+/* A path the route cannot serve. The message sits where the picture would
+   sit, so a broken load is always visible. */
+.tool-render-image-broken {
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+  overflow-wrap: anywhere;
+  padding: 0.5rem 0;
+  text-align: center;
+}
+/* The see row description clamp. The cap applies only while collapsed, so
+   this rule rides beside .tool-render-markdown-body and comes after it in
+   this file to win the max-height and overflow contest. */
+.tool-render-see-desc {
+  max-height: 8rem;
+  overflow: hidden;
+}
+.tool-render-see-toggle {
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  margin: 0 0 0.375rem;
+  padding: 0;
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+}
+.tool-render-see-toggle:hover {
+  color: var(--dsw-alias-label-primary);
+  text-decoration: underline;
 }
 `;
 
@@ -15422,7 +15501,12 @@ function toolRenderRow(options) {
           }
         } : void 0
       },
-      open ? /* @__PURE__ */ import_react.default.createElement(IconChevronDownOutline142, { className: "tool-render-chevron" }) : null,
+      interactive ? /* @__PURE__ */ import_react.default.createElement(
+        IconChevronDownOutline142,
+        {
+          className: open ? "tool-render-chevron tool-render-chevron-open" : "tool-render-chevron"
+        }
+      ) : null,
       leading,
       leading === null ? /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-title" }, options.title) : null,
       options.badge !== void 0 && options.badge !== null && options.badge !== "" ? /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-badge" }, options.badge) : null,
@@ -16648,6 +16732,153 @@ function SkillRow(props) {
     inspect: props.inspect
   });
 }
+function imageRouteUrl(filePath) {
+  return "/tool-render/image?path=" + encodeURIComponent(filePath);
+}
+function basenameOf(path) {
+  var parts = String(path).split("/");
+  return parts[parts.length - 1];
+}
+function formatBytes(bytes) {
+  if (typeof bytes !== "number" || !isFinite(bytes) || bytes < 0) return "";
+  var units = ["B", "KB", "MB", "GB", "TB"];
+  var value = bytes;
+  var unit = 0;
+  while (value >= 1e3 && unit < units.length - 1) {
+    value /= 1e3;
+    unit++;
+  }
+  var text = unit === 0 ? String(value) : value >= 10 ? value.toFixed(0) : value.toFixed(1);
+  return text + " " + units[unit];
+}
+function EmbedImage(props) {
+  var brokenState = useState(false);
+  var broken = brokenState[0];
+  var setBroken = brokenState[1];
+  var src = imageRouteUrl(props.filePath);
+  if (broken) {
+    return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-image-broken" }, "Image unavailable: " + props.filePath);
+  }
+  return /* @__PURE__ */ import_react.default.createElement("a", { className: "tool-render-image-link", href: src, target: "_blank", rel: "noreferrer" }, /* @__PURE__ */ import_react.default.createElement(
+    "img",
+    {
+      className: "tool-render-image",
+      src,
+      alt: props.alt,
+      onError: function() {
+        setBroken(true);
+      }
+    }
+  ));
+}
+var IMAGE_PATH_RE = /<path>([\s\S]*?)<\/path>/;
+var IMAGE_CONTENT_RE = /(\S+) image, (\d+)x(\d+) px, (\d+) bytes/;
+function parseReadImageResult(text) {
+  if (typeof text !== "string") return null;
+  var pathMatch = IMAGE_PATH_RE.exec(text);
+  var contentMatch = IMAGE_CONTENT_RE.exec(text);
+  if (pathMatch === null || contentMatch === null) return null;
+  return {
+    path: pathMatch[1],
+    mediaType: contentMatch[1],
+    width: Number(contentMatch[2]),
+    height: Number(contentMatch[3]),
+    bytes: Number(contentMatch[4])
+  };
+}
+function ReadImageRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var block = props.block;
+  var done = doneOf(block);
+  var args = parseArgs(argsRawOf(block));
+  var path = args !== null ? pickString(args, ["file_path"]) : void 0;
+  var output = done ? resultTextOf(block) : null;
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var meta = done && state !== "error" ? parseReadImageResult(output) : null;
+  var summary = meta !== null ? basenameOf(meta.path) + " \xB7 " + meta.width + "x" + meta.height + " \xB7 " + formatBytes(meta.bytes) : path !== void 0 ? relativizeToCwd(path, props.cwd) : "Read image";
+  var body = null;
+  if (meta !== null) {
+    body = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-image-body" }, /* @__PURE__ */ import_react.default.createElement(EmbedImage, { filePath: meta.path, alt: basenameOf(meta.path) }), /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-image-meta" }, /* @__PURE__ */ import_react.default.createElement("div", null, basenameOf(meta.path)), /* @__PURE__ */ import_react.default.createElement("div", null, meta.mediaType), /* @__PURE__ */ import_react.default.createElement("div", null, meta.path)));
+  }
+  return toolRenderRow({
+    toolName: "Read image",
+    icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
+    title: "Read image",
+    summary,
+    path,
+    onOpenFile: props.openFile,
+    state,
+    expandable: body !== null,
+    expanded,
+    onToggle: function() {
+      setExpanded(!expanded);
+    },
+    body,
+    errorSummary,
+    errorText,
+    inspect: props.inspect
+  });
+}
+function SeeRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var showMoreState = useState(false);
+  var showMore = showMoreState[0];
+  var setShowMore = showMoreState[1];
+  var block = props.block;
+  var done = doneOf(block);
+  var args = parseArgs(argsRawOf(block));
+  var question = args !== null ? pickString(args, ["question"]) : void 0;
+  var imagePath = args !== null ? pickString(args, ["image"]) : void 0;
+  var output = done ? resultTextOf(block) : null;
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var description = done && state !== "error" ? output : null;
+  var summary = question !== void 0 ? firstLine(question) : "See";
+  var needsClamp = description !== null && description.length > 400;
+  var body = null;
+  if (done && state !== "error" && (description !== null || imagePath !== void 0)) {
+    body = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-image-body" }, description !== null && description !== "" ? /* @__PURE__ */ import_react.default.createElement(
+      "div",
+      {
+        className: needsClamp && showMore !== true ? "tool-render-markdown-body tool-render-see-desc" : "tool-render-markdown-body"
+      },
+      /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: description })
+    ) : null, needsClamp ? /* @__PURE__ */ import_react.default.createElement(
+      "button",
+      {
+        type: "button",
+        className: "tool-render-see-toggle",
+        onClick: function() {
+          setShowMore(!showMore);
+        }
+      },
+      showMore ? "Show less" : "Show more"
+    ) : null, imagePath !== void 0 ? /* @__PURE__ */ import_react.default.createElement(EmbedImage, { filePath: imagePath, alt: basenameOf(imagePath) }) : null, imagePath !== void 0 ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-image-meta" }, imagePath) : null);
+  }
+  return toolRenderRow({
+    toolName: "See image",
+    icon: /* @__PURE__ */ import_react.default.createElement(IconQuestionOutline142, { size: 14 }),
+    title: "See",
+    summary,
+    state,
+    expandable: body !== null,
+    expanded,
+    onToggle: function() {
+      setExpanded(!expanded);
+    },
+    body,
+    errorSummary,
+    errorText,
+    inspect: props.inspect
+  });
+}
 var inject = ["slots"];
 var name = PLUGIN_NAME;
 function apply(ctx) {
@@ -16755,6 +16986,22 @@ function apply(ctx) {
         priority: -100
       },
       JobOutputRow
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "read_image",
+        priority: -100
+      },
+      ReadImageRow
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "see",
+        priority: -100
+      },
+      SeeRow
     );
   });
   ctx.slots.inject("conversation.chat.node", function* () {
