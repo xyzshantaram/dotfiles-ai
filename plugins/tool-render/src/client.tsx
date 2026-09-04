@@ -1787,6 +1787,52 @@ function sendMessageArgs(args) {
   return args;
 }
 
+// ---- job output row: a `job_output` call from `@deepseek-ai/dsh-tool-jobs`.
+// Args are { job_id, wait?, timeout_ms? }. The canonical output text always
+// ends with "[status: ...]" on its own trailing line
+// (dsh-tool-jobs/lib/index.js:262-268), so that line becomes the row's
+// summary and the rest renders as terminal-style output, matching BashRow. ----
+const JOB_STATUS_RE = /\[status: ([a-z]+)\]\s*$/;
+
+function JobOutputRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var block = props.block;
+  var done = doneOf(block);
+  var args = parseArgs(argsRawOf(block));
+  var jobId = args !== null ? pickString(args, ["job_id"]) : undefined;
+  var output = done ? resultTextOf(block) : null;
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary =
+    state === "error" && errorText !== null && errorText !== ""
+      ? firstLineOfError(errorText)
+      : undefined;
+  var statusMatch = output !== null ? JOB_STATUS_RE.exec(output) : null;
+  var summary = statusMatch !== null ? "status: " + statusMatch[1] : "Job output";
+  var body =
+    state !== "error" && output !== null && output !== "" ? (
+      <pre className="tool-render-output">{stripAnsi(output)}</pre>
+    ) : null;
+  return toolRenderRow({
+    icon: <IconApiOutline14 />,
+    title: "Job output",
+    badge: jobId,
+    summary: summary,
+    state: state,
+    expandable: body !== null,
+    expanded: expanded,
+    onToggle: function () {
+      setExpanded(!expanded);
+    },
+    body: body,
+    errorSummary: errorSummary,
+    errorText: errorText,
+    inspect: props.inspect,
+  });
+}
+
 // ---- package row: an `add`/`remove`/`update`/`add_task` call from
 // plugins/package-tool.ts. Args are { ecosystem, action, packageName?, cwd?,
 // dev?, taskName?, taskCommand?, manager? }. The canonical output is a plain
@@ -2209,6 +2255,14 @@ function apply(ctx) {
         priority: -100,
       },
       PackageRow,
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "job_output",
+        priority: -100,
+      },
+      JobOutputRow,
     );
   });
   ctx.slots.inject("conversation.chat.node", function* () {

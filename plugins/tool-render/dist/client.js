@@ -10025,6 +10025,39 @@ function sendMessageArgs(args) {
   if (typeof args.message !== "string" || args.message === "") return null;
   return args;
 }
+var JOB_STATUS_RE = /\[status: ([a-z]+)\]\s*$/;
+function JobOutputRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var block = props.block;
+  var done = doneOf(block);
+  var args = parseArgs(argsRawOf(block));
+  var jobId = args !== null ? pickString(args, ["job_id"]) : void 0;
+  var output = done ? resultTextOf(block) : null;
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var statusMatch = output !== null ? JOB_STATUS_RE.exec(output) : null;
+  var summary = statusMatch !== null ? "status: " + statusMatch[1] : "Job output";
+  var body = state !== "error" && output !== null && output !== "" ? /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output" }, stripAnsi(output)) : null;
+  return toolRenderRow({
+    icon: /* @__PURE__ */ import_react.default.createElement(IconApiOutline142, null),
+    title: "Job output",
+    badge: jobId,
+    summary,
+    state,
+    expandable: body !== null,
+    expanded,
+    onToggle: function() {
+      setExpanded(!expanded);
+    },
+    body,
+    errorSummary,
+    errorText,
+    inspect: props.inspect
+  });
+}
 function packageActionTitle(action) {
   if (action === "add") return "Add package";
   if (action === "remove") return "Remove package";
@@ -10325,6 +10358,14 @@ function apply(ctx) {
         priority: -100
       },
       PackageRow
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "job_output",
+        priority: -100
+      },
+      JobOutputRow
     );
   });
   ctx.slots.inject("conversation.chat.node", function* () {
