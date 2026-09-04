@@ -1246,7 +1246,7 @@ the top level of `plugins/`, of which only `bash-guard` and `sync` are covered.
 - What is the bar for done, given `strict: true` will surface errors across
   every file at once?
 
-### T11 — manifest-guard: the escape hatch nobody can reach
+### T11 — manifest-guard: document the supported script route
 
 **Status:** open. Found 2026-09-05 while scaffolding `plugins/tooltips`.
 
@@ -1254,50 +1254,58 @@ the top level of `plugins/`, of which only `bash-guard` and `sync` are covered.
 `plugins/tooltips/package.json`. `manifest-guard` denied it. The subagent then
 wrote the same file with a shell heredoc, and reported the bypass honestly.
 
-**Two faults. The second is the interesting one.**
+**The shell path is SUPPORTED, not a hole.** DECIDED with the user 2026-09-05.
+The guard prepends listeners on the `fs/write-intent` and `fs/edit-intent`
+waterfalls (`plugins/manifest-guard.ts:109-126`), so it covers the builtin write
+and edit tools at the filesystem seam. A shell write never enters those
+waterfalls. That is wanted. An agent that writes a small script to update a
+manifest produces a repeatable, reviewable change, which beats hand-editing.
+Do NOT try to close the shell plane. This ticket is documentation, not
+enforcement.
 
-1. **A scope boundary, not a hole.** The guard prepends listeners on the
-   `fs/write-intent` and `fs/edit-intent` waterfalls
-   (`plugins/manifest-guard.ts:109-126`), so it covers the builtin write and
-   edit tools at the filesystem seam. A shell write never enters those
-   waterfalls, so `bash` with a heredoc, `tee`, `sed -i`, or `cp` walks past it.
-   Closing this on the shell plane is not practical, because a heredoc body
-   cannot be matched by a bash-guard rule with any confidence.
+**The boundary that must be written down.** A scripted manifest edit is for
+structural or non-dependency changes that the package tool cannot make, such as
+scaffolding a new plugin manifest. It is NOT a route around version policy. An
+agent must not use a script to pin, downgrade, or hand-pick a dependency version
+unless the user asks for that in plain words. Version changes still go through
+the package tool, which always resolves the latest version.
 
-2. **The deny message offers a way out the reader does not have.**
-   `plugins/manifest-guard.ts:81-84` says: "Direct edits to package.json are
-   denied. Use the package tool for dependency changes. Ask the user to run the
-   change when the tool cannot." A subagent cannot ask the user. The `package`
-   tool adds and removes dependencies and cannot scaffold a new workspace
-   package. So a subagent that must create a plugin manifest has two options:
-   abandon the task, or bypass the guard. It chose bypass, which was the
-   rational choice and the wrong outcome.
+**Check before writing the docs:** the package tool already has an `add_task`
+action for registering a scripts entry, so tasks should still prefer the tool.
+The script route is for what the tool genuinely cannot do.
 
-**The false positive underneath.** Creating a NEW manifest is not a dependency
-change at all. The guard matches on basename alone
-(`plugins/manifest-guard.ts:86-89`), so it cannot tell the two apart.
+**The real defect: the deny message names an exit the reader cannot take.**
+`plugins/manifest-guard.ts:81-84` says: "Direct edits to package.json are
+denied. Use the package tool for dependency changes. Ask the user to run the
+change when the tool cannot." A subagent cannot ask the user, and the package
+tool cannot scaffold a new package. So a subagent hit by this guard has two
+moves: abandon the task, or route around it. On 2026-09-05 one routed around it
+with a heredoc and reported that honestly. That was the right call, and the
+message should have said so instead of leaving it to be worked out.
 
-**Options, unranked.**
+**The work.**
 
-- Allow creation when no file exists at the path, and keep denying edits to an
-  existing manifest. Narrow, and it fixes the scaffolding case exactly.
-- Allow `plugins/*/package.json` only, since new plugins are the sole
-  scaffolding case this repository has.
-- Keep the deny and change the message, so a subagent is told to stop and report
-  rather than to find another way. Cheapest, and it removes the incentive.
-- Do nothing, and accept that the guard is advisory.
-
-**Open questions for the user:**
-
-- Should a subagent ever create a manifest, or should the orchestrator do it?
-- Is the guard meant to stop mistakes, or to stop a determined agent? That
-  answer decides whether the shell-plane gap matters at all.
+1. Rewrite `DENY_MESSAGE` at `plugins/manifest-guard.ts:81-84`. It must name the
+   supported script route, and state its limit: dependency versions still go
+   through the package tool, and a version workaround needs the user to ask.
+2. Amend the rule at `home/AGENTS.md:56-57`. It currently reads as an absolute:
+   "NEVER EVER install dependencies manually by editing
+   Cargo.toml/package.json/other package manager configuration files. ALWAYS use
+   the relevant command". As written it forbids the supported case. Keep the
+   dependency prohibition and carve out scripted structural edits.
+3. Consider the same note in the `customize-setup` skill. That is what an agent
+   reads before adding a plugin, which is exactly when it needs to scaffold a
+   manifest.
 
 **Acceptance criteria:**
 
-- Scaffolding a new plugin needs no bypass.
-- Editing dependencies in an existing manifest is still denied.
+- An agent can tell, without guessing, that scripting a structural manifest
+  change is allowed.
 - The deny message names an action the actor reading it can actually take.
+- The message and `home/AGENTS.md` both state that dependency versions stay with
+  the package tool unless the user says otherwise.
+- Editing dependencies in an existing manifest through the fs tools is still
+  denied.
 
 ### T12 — finish the tooltip rollout
 
@@ -1325,6 +1333,84 @@ there is only ever one copy of the string and nothing can drift.
   the page does not reliably receive hover events while the popup is open.
   Opting in there removes the native tooltip that already works and puts nothing
   in its place. Three of these were added and reverted before the commit.
+
+### T13 — tool-render: a resume_search card
+
+**Status:** open. Asked for 2026-09-05. A simple bullet list is enough.
+
+**Now.** `resume_search` has no card, so it falls through to the generic text
+card and shows the model-facing text blob. `plugins/tool-render/src/client.tsx`
+does not mention `resume_search` at all.
+
+**The blocker, and it is the same one T8 hit.** The client cannot read a tool's
+canonical value. `plugins/resume.ts:219-249` declares an `output.schema` and a
+`render`, but NO `presentationMeta`, so nothing structured reaches the browser.
+Adding the card alone would force the client to re-parse rendered text, which is
+the wrong seam.
+
+**T13a, host, first.** Add `presentationMeta` to the `resume_search` tool in
+`plugins/resume.ts`. The canonical value is already clean JSON and small, so
+projecting it as is, or close to it, is enough:
+
+```
+{ hits: [{ source, seq, role, text }], total, page, hasMore }
+```
+
+A page holds at most 15 hits and each `text` is already a one-line teaser, so
+the projection stays bounded. It arrives on the client snapshot as the completed
+block's `meta` field, exactly as `bash-guard`'s does. See `06cee1c` for the
+working example and `guardRewriteOf` for the defensive read pattern.
+
+**T13b, client.** Register a `resume_search` row in
+`plugins/tool-render/src/client.tsx`. Summary line: the header the host already
+builds, for example `12 matches, page 1 of 2`. Body: one bullet per hit, each
+showing `source`, `seq`, `role`, and the teaser `text`. Reuse the existing row
+scaffolding rather than inventing a new card shape.
+
+**Acceptance criteria:**
+
+- A `resume_search` call renders as a bullet list, not a text blob.
+- A zero-hit search still renders a readable row.
+- The card survives a page reload, because the projection is durable.
+
+### T14 — resume_search: exclude what is still in context
+
+**Status:** open. Asked for 2026-09-05. DECIDED with the user: keep searching the
+current session's pre-compaction history, and drop only the part the agent can
+already see. Do NOT exclude the current session outright.
+
+**Why this is not obvious.** Searching the current session is the whole point of
+the tool. `plugins/resume.ts:17-19` says so:
+
+> There is no separate compaction layer. The harness log is append-only and
+> survives compaction. A grep of the events array already reaches past a
+> compaction, because every token the compaction step elided stays present
+
+So the current session must stay searchable. What is wasteful is returning hits
+the agent is already reading in its own context window. Those cost tokens and
+add noise, and they are the reason this was raised.
+
+**The signal to filter on.** A `compaction/summary` event carries
+`shadowedSeqs` (`plugins/resume.ts:89-90` reads its length today). That array is
+the authoritative set of seqs the compaction removed from the model surface.
+
+**Preferred rule.** For the CURRENT session only, keep a hit when its `seq`
+appears in the union of `shadowedSeqs` across every `compaction/summary` event.
+Drop it otherwise. Other sessions are unaffected and keep every hit.
+
+Note the consequence, and confirm it is wanted: in a session that has never
+compacted, the union is empty, so the current session contributes no hits at
+all. That is correct under the stated goal, because nothing has left the context
+window yet.
+
+**Acceptance criteria:**
+
+- A search in a compacted session still finds pre-compaction content.
+- A search does not return content the agent can already see.
+- Hits from other sessions are unchanged.
+- The tool description at `plugins/resume.ts:198` is updated. It currently
+  promises "searches only the current session's own event log (past compactions
+  included)", which will no longer be the whole truth.
 
 ## Session handoff — 2026-09-05
 
