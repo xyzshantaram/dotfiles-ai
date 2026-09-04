@@ -1246,41 +1246,118 @@ the top level of `plugins/`, of which only `bash-guard` and `sync` are covered.
 - What is the bar for done, given `strict: true` will surface errors across
   every file at once?
 
-### T8 — tool-render: mark a rewritten bash call
+### T11 — manifest-guard: the escape hatch nobody can reach
 
-**Status:** open. TWO HALVES, and the host half comes first.
+**Status:** open. Found 2026-09-05 while scaffolding `plugins/tooltips`.
 
-**T8a, host, ours.** The client cannot see that a call was rewritten. Our tool
-returns text, and the card only has the model's `args.command`, which is
-precisely the string that is no longer what ran. So the outline cannot be drawn
-and the executed command cannot be shown until the host publishes both.
+**What happened.** A `coder` subagent had to create
+`plugins/tooltips/package.json`. `manifest-guard` denied it. The subagent then
+wrote the same file with a shell heredoc, and reported the bypass honestly.
 
-`@deepseek-ai/dsh-tools` `lib/types/index.d.ts:103` offers the channel:
+**Two faults. The second is the interesting one.**
 
-```ts
-/** Pure replayable presentation projection, computed only for top-level calls. */
-presentationMeta?(args: unknown, value: JsonValue): JsonValue;
-```
+1. **A scope boundary, not a hole.** The guard prepends listeners on the
+   `fs/write-intent` and `fs/edit-intent` waterfalls
+   (`plugins/manifest-guard.ts:109-126`), so it covers the builtin write and
+   edit tools at the filesystem seam. A shell write never enters those
+   waterfalls, so `bash` with a heredoc, `tee`, `sed -i`, or `cp` walks past it.
+   Closing this on the shell plane is not practical, because a heredoc body
+   cannot be matched by a bash-guard rule with any confidence.
 
-"Replayable" is the load-bearing word: it is what survives a reload, which is
-this ticket's own acceptance criterion. Add `presentationMeta` to the
-`defineTool` call in `plugins/bash-guard.ts`, projecting at least
-`{ rewritten: boolean, ran: string }`. Keep it small and JSON-only. Do NOT put
-the rule reason in it, since that already reaches the model in the result text
-and does not belong in a card projection.
+2. **The deny message offers a way out the reader does not have.**
+   `plugins/manifest-guard.ts:81-84` says: "Direct edits to package.json are
+   denied. Use the package tool for dependency changes. Ask the user to run the
+   change when the tool cannot." A subagent cannot ask the user. The `package`
+   tool adds and removes dependencies and cannot scaffold a new workspace
+   package. So a subagent that must create a plugin manifest has two options:
+   abandon the task, or bypass the guard. It chose bypass, which was the
+   rational choice and the wrong outcome.
 
-**T8b, client, the other session's**, and blocked on T8a.
-**Why:** with T5 shipped a rewritten command runs silently. Without a mark you
-cannot spot a guard rule that rewrites too aggressively.
-**Change:** the card shows ONLY the executed command, with no badge and no
-original text. Add a persistent 3px blue outline.
-`plugins/tool-render/src/client.module.css:325` already has
-`.tool-render-card[data-guard-approval] { outline: 3px solid
-var(--dsh-outline-guard); }`. Reuse that colour token with a NEW attribute such
-as `data-guard-rewrite`. The existing blue is deliberately transient, per the
-comment at line 320, because the client never receives a decided approval's
-reason. A rewrite mark must PERSIST, and T5's tool owns its own result so it can
-set that flag durably.
+**The false positive underneath.** Creating a NEW manifest is not a dependency
+change at all. The guard matches on basename alone
+(`plugins/manifest-guard.ts:86-89`), so it cannot tell the two apart.
+
+**Options, unranked.**
+
+- Allow creation when no file exists at the path, and keep denying edits to an
+  existing manifest. Narrow, and it fixes the scaffolding case exactly.
+- Allow `plugins/*/package.json` only, since new plugins are the sole
+  scaffolding case this repository has.
+- Keep the deny and change the message, so a subagent is told to stop and report
+  rather than to find another way. Cheapest, and it removes the incentive.
+- Do nothing, and accept that the guard is advisory.
+
+**Open questions for the user:**
+
+- Should a subagent ever create a manifest, or should the orchestrator do it?
+- Is the guard meant to stop mistakes, or to stop a determined agent? That
+  answer decides whether the shell-plane gap matters at all.
+
 **Acceptance criteria:**
-- A rewritten call keeps its blue outline after the turn ends and after a reload.
-- A normal call has no outline. An escalated call keeps its yellow one.
+
+- Scaffolding a new plugin needs no bypass.
+- Editing dependencies in an existing manifest is still denied.
+- The deny message names an action the actor reading it can actually take.
+
+### T12 — finish the tooltip rollout
+
+**Status:** open. The plugin shipped in `76c8972`, the opt-ins in `79a9bb0`.
+
+**Done.** `plugins/tooltips` exists and the user confirmed it in the GUI on
+2026-09-05. Opt-ins landed on `tool-render` (1), `session-archive` (2), and
+`profiles-client` (5).
+
+**Left.**
+
+- `plugins/job-viewer` was skipped on purpose, because another session owned it
+  at the time. It has at least one `title`, at `src/client.tsx:333`.
+- Any plugin added later needs the same pass.
+- `plugins/tooltips` has no test.
+
+**The rule, so nobody has to rediscover it.** Add `data-dsh-tip=""` to a DOM
+element that already carries a `title`. The text always comes from `title`, so
+there is only ever one copy of the string and nothing can drift.
+
+- A capitalised tag is a React component and its `title` is a prop, so skip it.
+  `SettingsSection title={...}` appears in four plugins.
+- **Never opt in an `<option>`.** A native select popup is drawn by the
+  operating system, so a tooltip rendered in the page cannot appear over it, and
+  the page does not reliably receive hover events while the popup is open.
+  Opting in there removes the native tooltip that already works and puts nothing
+  in its place. Three of these were added and reverted before the commit.
+
+## Session handoff — 2026-09-05
+
+This session ended here.
+
+**Shipped, and confirmed by the user in the GUI:**
+
+- `06cee1c` tool-render keeps the blue guard mark after the approval is
+  answered, and shows `wrote` above `ran instead`. This closes the old T8, which
+  is deleted.
+- `527da6b` the approval card builds its YAML from structured parts instead of
+  slicing a message written for the model.
+- `76c8972` the tooltips plugin, with five review findings folded in.
+- `79a9bb0` eight tooltip opt-ins.
+- `15398ad` bash-guard stops telling the model to re-run a command that already
+  ran.
+
+**Shipped, and NOT verified by a human:**
+
+- `system-fonts` landed earlier the same day. Nobody has checked that code and
+  UI text follow the system font setting.
+
+**Owned by another session. Do not pick this up blind:**
+
+- Tool card badges render overlaid with the builtin card instead of replacing
+  it. Reported 2026-09-05, and another agent took it. `tool-render` registers
+  its rows in the keyed slot `tool.call.toolview` at priority -100
+  (`plugins/tool-render/src/client.tsx:2247`), where the lowest live entry per
+  key wins. A key it does not register falls through to the builtin.
+
+**The real backlog.** The human review queues in this file hold 25 unchecked
+items across 8 efforts, four of them from 2026-09-05. Each one is something an
+earlier session decided only the user could confirm, and none are confirmed. The
+`/checklist` skill exists for exactly this, and it deserves its own session.
+
+
