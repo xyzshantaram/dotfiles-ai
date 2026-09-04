@@ -59,7 +59,7 @@
 .durable-todos-carried {
   flex: none;
   font-size: 0.75rem;
-  line-height: 1.125rem;
+  line-height: 1.25rem;
   color: var(--dsw-alias-label-caption);
 }
 .durable-todos-remind {
@@ -67,7 +67,7 @@
   flex: none;
   white-space: nowrap;
   font-size: 0.75rem;
-  line-height: 1.125rem;
+  line-height: 1.25rem;
   font-weight: 600;
   padding: 0.125rem 0.5rem;
   border: 1px solid var(--dsw-alias-border-l2);
