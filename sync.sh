@@ -42,7 +42,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#383d5e78cbb399b00c90f555d870b0650382acfa}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#a521c8777f563bb0672401fec25a3d92048d3114}"
 
 # Git-hosted specs whose build scripts pnpm must be allowed to run. pnpm 10+
 # blocks lifecycle scripts (prepare/postinstall) unless the exact resolved
@@ -523,6 +523,89 @@ step_sync_aidos_skills() {
 	rm -rf "$tmp"
 }
 
+# Disable one tool row (by id) in an agent preset file, in place. Idempotent:
+# a row that already carries `disabled: true` is left untouched, and a row
+# without a `disabled:` key gets one inserted after its `name:` line.
+preset_disable_tool() {
+	local file="$1" tool="$2"
+	python3 - "$file" "$tool" <<'PY'
+import re, sys
+path, tool = sys.argv[1], sys.argv[2]
+lines = open(path).readlines()
+out = []
+i = 0
+found = False
+changed = False
+while i < len(lines):
+    line = lines[i]
+    m = re.match(r'^(\s*)-\s+id:\s*' + re.escape(tool) + r'\s*$', line)
+    if not m:
+        out.append(line)
+        i += 1
+        continue
+    found = True
+    row_indent = m.group(1)
+    # The row runs to the next item at the same indent (or EOF).
+    row = [line]
+    j = i + 1
+    while j < len(lines):
+        ln = lines[j]
+        if ln.strip():
+            ind = len(ln) - len(ln.lstrip(' '))
+            if ind <= len(row_indent):
+                break
+        row.append(ln)
+        j += 1
+    dis_idx = next((k for k, ln in enumerate(row) if re.match(r'^\s*disabled:', ln)), None)
+    if dis_idx is not None:
+        new = re.match(r'^(\s*)disabled:', row[dis_idx]).group(1) + 'disabled: true\n'
+        if row[dis_idx] != new:
+            row[dis_idx] = new
+            changed = True
+    else:
+        name_idx = next((k for k, ln in enumerate(row) if re.match(r'^\s*name:', ln)), None)
+        at = (name_idx + 1) if name_idx is not None else len(row)
+        row.insert(at, row_indent + '  disabled: true\n')
+        changed = True
+    out.extend(row)
+    i = j
+if not found:
+    print(f'  WARNING: no {tool} row in {path}; nothing to disable')
+    sys.exit(0)
+if changed:
+    open(path, 'w').writelines(out)
+    print(f'  disabled {tool} in {path}')
+else:
+    print(f'  {tool} already disabled in {path}')
+PY
+}
+
+# Exit 0 when one tool row (by id) is present but NOT disabled. Exit 1 when
+# the row is absent or carries `disabled: true`. Used only by the tripwire.
+preset_tool_enabled() {
+	python3 - "$1" "$2" <<'PY'
+import re, sys
+path, tool = sys.argv[1], sys.argv[2]
+lines = open(path).readlines()
+for i, line in enumerate(lines):
+    m = re.match(r'^(\s*)-\s+id:\s*' + re.escape(tool) + r'\s*$', line)
+    if not m:
+        continue
+    row_indent = len(m.group(1))
+    for ln in lines[i + 1:]:
+        if not ln.strip():
+            continue
+        ind = len(ln) - len(ln.lstrip(' '))
+        if ind <= row_indent:
+            break
+        dm = re.match(r'^\s*disabled:\s*(.+?)\s*$', ln)
+        if dm:
+            sys.exit(0 if dm.group(1) != 'true' else 1)
+    sys.exit(0)  # row present with no disabled key: enabled
+sys.exit(1)  # row absent: nothing enabled
+PY
+}
+
 step_register_aidos_preset() {
 	mkdir -p "$DSH_HOME/.agent-presets/aidos"
 	# Source is the installed aidos package's preset. It carries the full
@@ -553,6 +636,10 @@ step_register_aidos_preset() {
 			echo "- name: ./aidos-loader.js" >> "$DSH_HOME/.agent-presets/aidos/agent.cordis.yml"
 		fi
 	fi
+	# bash-guard registers its own `bash` tool, so the preset's builtin
+	# tool-bash row must not also claim that name. Disable it here, right
+	# after the copy, alongside the aidos-tools.js rewrite above.
+	preset_disable_tool "$DSH_HOME/.agent-presets/aidos/agent.cordis.yml" "tool-bash"
 	cat > "$DSH_HOME/.agent-presets/aidos/aidos-loader.js" <<EOF
 // Installed by sync.sh. Re-exports the aidos-tools plugin bundle from the
 // aidos package installed via \`dsh plugin add\`.
@@ -794,6 +881,71 @@ print(f'  pinned {edits} tool-subagent row(s) to {provider}/{model}; {skipped} u
 PY
 }
 
+step_disable_preset_builtin_tools() {
+	# bash-guard now registers the `bash` tool itself, so the builtin
+	# tool-bash row must be disabled in every agent preset that carries it:
+	# two registrars for one tool name would register it twice. tool-goal is
+	# disabled too, because the owner no longer wants it. Done by editing the
+	# shipped standard preset in place, using the same file derivation as
+	# step_patch_standard_preset_tool_subagent. Idempotent: rerunning sync
+	# converges instead of adding a second key. A dsh reinstall that
+	# re-extracts the preset would silently revert this; the verification
+	# step below is the tripwire, and rerunning sync restores the patch.
+	local dsh_bin dsh_pkg preset_yaml
+	dsh_bin="$(command -v dsh 2>/dev/null || true)"
+	if [ -z "$dsh_bin" ]; then
+		echo "  WARNING: dsh not on PATH; skipping standard preset tool disable."
+		return 0
+	fi
+	dsh_pkg="$(dirname "$(dirname "$(realpath "$dsh_bin")")")"
+	preset_yaml="$dsh_pkg/config/agent-presets/standard/agent.cordis.yml"
+	if [ ! -f "$preset_yaml" ]; then
+		echo "  WARNING: standard preset not found at $preset_yaml; skipping."
+		return 0
+	fi
+	preset_disable_tool "$preset_yaml" "tool-bash"
+	preset_disable_tool "$preset_yaml" "tool-goal"
+}
+
+step_verify_preset_tool_disabled() {
+	# Tripwire for the disable steps above. A dsh reinstall re-extracts the
+	# standard preset and silently reverts an in-place patch; this step turns
+	# that revert into a loud failure instead of a silent double registration
+	# of the `bash` tool. Exits non-zero when tool-bash is still enabled in
+	# either preset, or tool-goal in the standard preset.
+	local bad=0
+	local aidos_yaml="$DSH_HOME/.agent-presets/aidos/agent.cordis.yml"
+	local dsh_bin dsh_pkg std_yaml
+	if [ -f "$aidos_yaml" ]; then
+		if preset_tool_enabled "$aidos_yaml" "tool-bash"; then
+			echo "  ERROR: tool-bash is still enabled in $aidos_yaml" >&2
+			bad=1
+		fi
+	else
+		echo "  WARNING: $aidos_yaml not found; skipping aidos check."
+	fi
+	dsh_bin="$(command -v dsh 2>/dev/null || true)"
+	if [ -n "$dsh_bin" ]; then
+		dsh_pkg="$(dirname "$(dirname "$(realpath "$dsh_bin")")")"
+		std_yaml="$dsh_pkg/config/agent-presets/standard/agent.cordis.yml"
+		if [ -f "$std_yaml" ]; then
+			if preset_tool_enabled "$std_yaml" "tool-bash"; then
+				echo "  ERROR: tool-bash is still enabled in $std_yaml" >&2
+				bad=1
+			fi
+			if preset_tool_enabled "$std_yaml" "tool-goal"; then
+				echo "  ERROR: tool-goal is still enabled in $std_yaml" >&2
+				bad=1
+			fi
+		else
+			echo "  WARNING: standard preset not found at $std_yaml; skipping."
+		fi
+	else
+		echo "  WARNING: dsh not on PATH; skipping standard preset check."
+	fi
+	return "$bad"
+}
+
 step_set_defaults() {
 	# Regenerate $DSH_HOME/settings.yaml from the known-good repo template
 	# ($HERE/home/settings.yaml). The local file is stateless: it holds no
@@ -851,7 +1003,9 @@ STEPS=(
 	"Install the aidos plugin from git|step_install_aidos"
 	"Sync aidos skills from pinned commit|step_sync_aidos_skills"
 	"Pin subagents onto the subagent chain (patch standard preset)|step_patch_standard_preset_tool_subagent"
+	"Disable builtin tool rows in the standard preset|step_disable_preset_builtin_tools"
 	"Register the aidos agent preset|step_register_aidos_preset"
+	"Verify builtin tool rows are disabled|step_verify_preset_tool_disabled"
 	"Regenerate settings.yaml from the repo template|step_set_defaults"
 )
 
