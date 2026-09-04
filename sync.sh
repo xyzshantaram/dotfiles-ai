@@ -881,6 +881,94 @@ print(f'  pinned {edits} tool-subagent row(s) to {provider}/{model}; {skipped} u
 PY
 }
 
+step_patch_standard_preset_tool_presentation() {
+	# Turn on Code Mode (dsh-agent-tool-presentation, mode: both) for the
+	# shipped `standard` preset, the same way the shipped `code` preset
+	# already does. `both` keeps every native tool schema visible AND adds
+	# one extra tool, `run_code`, so the model may batch several tool calls
+	# into one program instead of one call per step. It is additive, not a
+	# swap: nothing about existing tool calls changes.
+	#
+	# The host codeRuntime service (`dsh-code-runtime-worker-thread`) is
+	# already mounted for every `dsh web` boot by
+	# dsh-web-app/cordis.patch.yml, so no runtime row is added here or
+	# anywhere in this repo: "the runtime stays host-plane"
+	# (dsh-agent-tool-presentation/README.md). This step only adds the
+	# preset-plane row that turns presentation on for the standard preset.
+	#
+	# Idempotent: a second run finds the row already present and exits 0
+	# unchanged. A dsh reinstall that re-extracts the preset would silently
+	# revert this; rerun sync to restore, same caveat as the sibling
+	# standard-preset patch steps above.
+	local dsh_bin dsh_pkg preset_yaml
+	dsh_bin="$(command -v dsh 2>/dev/null || true)"
+	if [ -z "$dsh_bin" ]; then
+		echo "  WARNING: dsh not on PATH; skipping standard preset presentation patch."
+		return 0
+	fi
+	dsh_pkg="$(dirname "$(dirname "$(realpath "$dsh_bin")")")"
+	preset_yaml="$dsh_pkg/config/agent-presets/standard/agent.cordis.yml"
+	if [ ! -f "$preset_yaml" ]; then
+		echo "  WARNING: standard preset not found at $preset_yaml; skipping."
+		return 0
+	fi
+	if rg -q '^\s*-\s+id:\s*tool-presentation\s*$' "$preset_yaml"; then
+		echo "  tool-presentation already present in $preset_yaml; no change"
+		return 0
+	fi
+	# One-time backup before the first append, so a bad patch can be undone
+	# without relying on a dsh reinstall. -n never overwrites an existing
+	# backup from an earlier sync run.
+	cp -n "$preset_yaml" "$preset_yaml.sync.bak"
+	# No full-document YAML parse here: the shipped standard preset carries a
+	# pre-existing `!!js process.platform !== 'win32'` custom tag elsewhere in
+	# the file, which yaml.safe_load cannot construct and rejects outright.
+	# preset_disable_tool/preset_tool_enabled above hit the same constraint
+	# and solve it with a targeted regex scan instead of a full parse; this
+	# step follows that same convention rather than reintroducing a parser
+	# that cannot read this file.
+	python3 - "$preset_yaml" <<'PY'
+import re, sys
+path = sys.argv[1]
+with open(path) as f:
+    original = f.read()
+block = (
+    "\n# ── presentation ────────────────────────────────────────────────────────────\n"
+    "\n"
+    "# Code Mode for this preset. mode: both keeps every native tool schema\n"
+    "# visible and adds run_code as one extra tool. The row waits for the\n"
+    "# host's codeRuntime rather than assuming it: a deployment that composes\n"
+    "# no TypeScript runtime fails this preset at mount, naming this id,\n"
+    "# instead of at the first request.\n"
+    "- id: tool-presentation\n"
+    "  name: '@deepseek-ai/dsh-agent-tool-presentation'\n"
+    "  config:\n"
+    "    mode: both\n"
+)
+patched = original.rstrip("\n") + "\n" + block
+# Shape check: the exact appended row, anchored at end of file, top-level
+# indent (column 0), with the right name and mode -- a targeted match, not
+# a full-document parse.
+row_pattern = (
+    r"\n- id: tool-presentation\n"
+    r"  name: '@deepseek-ai/dsh-agent-tool-presentation'\n"
+    r"  config:\n"
+    r"    mode: both\n\Z"
+)
+if not re.search(row_pattern, patched):
+    print("  ERROR: patched preset failed shape validation; not writing", file=sys.stderr)
+    sys.exit(1)
+with open(path, "w") as f:
+    f.write(patched)
+print("  appended tool-presentation (mode: both) to " + path)
+PY
+	if [ $? -ne 0 ]; then
+		echo "  ERROR: presentation patch failed validation; restoring backup" >&2
+		cp "$preset_yaml.sync.bak" "$preset_yaml"
+		return 1
+	fi
+}
+
 step_disable_preset_builtin_tools() {
 	# bash-guard now registers the `bash` tool itself, so the builtin
 	# tool-bash row must be disabled in every agent preset that carries it:
@@ -1003,6 +1091,7 @@ STEPS=(
 	"Install the aidos plugin from git|step_install_aidos"
 	"Sync aidos skills from pinned commit|step_sync_aidos_skills"
 	"Pin subagents onto the subagent chain (patch standard preset)|step_patch_standard_preset_tool_subagent"
+	"Turn on Code Mode for the standard preset (mode: both)|step_patch_standard_preset_tool_presentation"
 	"Disable builtin tool rows in the standard preset|step_disable_preset_builtin_tools"
 	"Register the aidos agent preset|step_register_aidos_preset"
 	"Verify builtin tool rows are disabled|step_verify_preset_tool_disabled"
