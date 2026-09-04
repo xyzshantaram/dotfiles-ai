@@ -2455,15 +2455,14 @@ var client_default = `.tool-render-row {
    browser only ever scales down. The link centers the picture when it is
    narrower than the card. */
 .tool-render-image-link {
-  display: block;
-  text-align: center;
+  display: flex;
+  justify-content: center;
 }
 .tool-render-image {
-  display: block;
-  margin: 0 auto;
   max-width: 100%;
   width: auto;
   height: auto;
+  border: 1px solid var(--dsw-alias-border-l3);
   border-radius: 0.25rem;
 }
 /* Metadata lines under the picture: name, type, full path. */
