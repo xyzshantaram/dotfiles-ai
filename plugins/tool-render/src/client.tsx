@@ -158,9 +158,9 @@ var EXTENSION_LANGUAGE = {
 
 // ---- Platform modules: resolved by the shell loader seed at runtime. ----
 import react from "react";
+import { parse as parseYaml } from "yaml";
 import * as primitives from "@deepseek-ai/dsh-client-ui-primitives";
 var useState = react.useState;
-var StateDot = primitives.StateDot;
 var IconBrowseOutline16 = primitives.IconBrowseOutline16;
 var IconEditOutline16 = primitives.IconEditOutline16;
 var IconApiOutline14 = primitives.IconApiOutline14;
@@ -435,6 +435,53 @@ function highlightCode(text, language) {
   return escapeHtml(text);
 }
 
+/**
+ * Whether an approval's reason is a bash-guard structured payload. bash-guard
+ * now sends this as YAML (approval-comment's parseGuardReason applies the
+ * same test to the same field): it is ours only when the reason parses as
+ * YAML and the result is a plain object with a string `summary`. A literal
+ * `reason.indexOf("bash-guard:") === 0` check no longer works -- the raw
+ * string starts with the YAML key `summary:`, not the text "bash-guard:".
+ */
+function isBashGuardReason(reason) {
+  if (typeof reason !== "string") return false;
+  var result;
+  try {
+    result = parseYaml(reason);
+  } catch (error) {
+    return false;
+  }
+  if (result === null || typeof result !== "object" || Array.isArray(result)) return false;
+  return typeof result.summary === "string";
+}
+
+/** Deterministic hue from a tool name, stable across sessions and reloads. */
+function toolNameHue(name) {
+  var h = 0;
+  for (var i = 0; i < name.length; i++) {
+    h = (h * 31 + name.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h) % 360;
+}
+
+/** The badge: this row's own icon, then its raw tool name, both left-aligned.
+ * Background hue is hashed from the name so the same tool always gets the
+ * same color, and blends with the theme's own tertiary background token so
+ * it stays legible in both light and dark themes rather than a raw pastel
+ * that only works in one. */
+function toolNameBadge(toolName, icon) {
+  if (toolName === undefined || toolName === null || toolName === "") return null;
+  var hue = toolNameHue(toolName);
+  var background =
+    "color-mix(in srgb, hsl(" + hue + " 60% 45%) 28%, var(--dsw-alias-bg-tertiary))";
+  return (
+    <span className="tool-render-name-badge" style={{ background: background }}>
+      <span className="tool-render-name-badge-icon">{icon}</span>
+      <span className="tool-render-name-badge-text">{toolName}</span>
+    </span>
+  );
+}
+
 // ---- Row chrome (shared look, mirrors the shipped ToolRow seating). ----
 function toolRenderRow(options) {
   // Every expandable row toggles, errored ones included. An errored row starts
@@ -442,16 +489,10 @@ function toolRenderRow(options) {
   // row, so the failure reads at a glance without opening the card.
   var interactive = options.expandable === true;
   var open = options.expanded === true && interactive;
-  var leading;
-  if (open) {
-    leading = <IconChevronDownOutline14 className="tool-render-chevron" />;
-  } else if (options.state === "error") {
-    leading = <StateDot state="error" />;
-  } else if (options.state === "stopped") {
-    leading = <StateDot state="warning" />;
-  } else {
-    leading = options.icon;
-  }
+  // The leading area is the chevron when open, then the tool-name badge.
+  // The old state dots are gone: a stopped card carries an outline instead,
+  // and the badge replaces the bare icon as the row's leading mark.
+  var leading = toolNameBadge(options.toolName, options.icon);
   var summary;
   // An errored call reports its error on the row instead of its arguments, so
   // the path link is skipped whenever there is an error message to show.
@@ -500,6 +541,7 @@ function toolRenderRow(options) {
       data-escalated={options.escalated || undefined}
       data-guard-approval={options.guardApproval || undefined}
       data-error={options.state === "error" || undefined}
+      data-stopped={options.state === "stopped" || undefined}
     >
       <div
         className="tool-render-row"
@@ -520,7 +562,10 @@ function toolRenderRow(options) {
             : undefined
         }
       >
-        <span className="tool-render-leading">{leading}</span>
+        <span className="tool-render-leading">
+          {open ? <IconChevronDownOutline14 className="tool-render-chevron" /> : null}
+          {leading}
+        </span>
         <span className="tool-render-title">{options.title}</span>
         {options.badge !== undefined && options.badge !== null && options.badge !== "" ? (
           <span className="tool-render-badge">{options.badge}</span>
@@ -587,6 +632,7 @@ function ReadRow(props) {
     }
   }
   return toolRenderRow({
+    toolName: "read",
     icon: <IconBrowseOutline16 size={14} />,
     title: "Read",
     summary: summary,
@@ -645,7 +691,7 @@ function BashRow(props) {
         var payload = item.payload;
         if (payload === null || payload === undefined) continue;
         if (payload.callId !== props.callId) continue;
-        return typeof payload.reason === "string" && payload.reason.indexOf("bash-guard:") === 0;
+        return isBashGuardReason(payload.reason);
       }
       return false;
     }) === true;
@@ -692,6 +738,7 @@ function BashRow(props) {
     body = <div className="tool-render-io">{inner}</div>;
   }
   return toolRenderRow({
+    toolName: "bash",
     icon: <IconApiOutline14 size={14} />,
     title: "Bash",
     summary: summary,
@@ -1062,6 +1109,7 @@ function makeEditRow(toolTitle) {
     var block = props.block;
     if (block === null || typeof block !== "object") {
       return toolRenderRow({
+        toolName: callNameOf(block) || undefined,
         icon: <IconEditOutline16 size={14} />,
         title: toolTitle,
         summary: toolTitle,
@@ -1115,6 +1163,10 @@ function makeEditRow(toolTitle) {
       );
     }
     return toolRenderRow({
+      // One component serves the `edit`, `undo_edit`, and `undo_last_edit`
+      // registrations. The block carries the real call name, so the badge
+      // shows the exact raw name of the call being rendered.
+      toolName: callNameOf(block) || undefined,
       icon: <IconEditOutline16 size={14} />,
       title: toolTitle,
       summary: summary,
@@ -1453,6 +1505,7 @@ function WriteRow(props) {
     );
   }
   return toolRenderRow({
+    toolName: "write",
     icon: <IconEditOutline16 size={14} />,
     title: "Write",
     summary: summary,
@@ -1557,6 +1610,7 @@ function TodoRow(props) {
     body = planBody(todos);
   }
   return toolRenderRow({
+    toolName: "todo_write",
     icon: <IconChecklistOutline14 size={14} />,
     title: "To-do list",
     summary: summary,
@@ -1729,6 +1783,7 @@ function AskRow(props) {
     body = askBody(questions, answers);
   }
   return toolRenderRow({
+    toolName: "ask_user_question",
     icon: <IconQuestionOutline14 size={14} />,
     title: "Ask user",
     summary: summary,
@@ -1785,6 +1840,7 @@ function SubagentRow(props) {
     );
   }
   return toolRenderRow({
+    toolName: "subagent",
     icon: <IconAgentPresetOutline16 size={14} />,
     title: title,
     summary: summary,
@@ -1841,6 +1897,7 @@ function JobOutputRow(props) {
       <pre className="tool-render-output">{stripAnsi(output)}</pre>
     ) : null;
   return toolRenderRow({
+    toolName: "job_output",
     icon: <IconApiOutline14 />,
     title: "Job output",
     badge: jobId,
@@ -1896,6 +1953,7 @@ function PackageRow(props) {
       <pre className="tool-render-output">{stripAnsi(output)}</pre>
     ) : null;
   return toolRenderRow({
+    toolName: "package",
     icon: <IconApiOutline14 />,
     title: title,
     badge: ecosystem,
@@ -1933,6 +1991,7 @@ function SendMessageRow(props) {
       </div>
     ) : null;
   return toolRenderRow({
+    toolName: "send_message",
     icon: <IconAgentPresetOutline16 size={14} />,
     title: "Message subagent",
     badge: args !== null ? args.subagent_id : undefined,
@@ -2164,6 +2223,7 @@ function SkillRow(props) {
   var args = parseArgs(argsRawOf(block));
   var skillName = args !== null ? pickString(args, ["name"]) : undefined;
   return toolRenderRow({
+    toolName: "skill",
     icon: <IconChecklistOutline14 />,
     title: "Skill",
     summary: skillName !== undefined ? skillName : "Skill",
