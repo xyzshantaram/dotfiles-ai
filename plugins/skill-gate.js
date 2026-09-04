@@ -149,7 +149,15 @@ function apply(ctx, config) {
         `[skill-gate] pre-step enforcement failed: ${err instanceof Error ? err.message : String(err)}`
       );
     }
-    return next();
+    const proceed = async () => {
+      const decision = await next();
+      try {
+        claimSlashInvokedSkills(payload.agent, decision);
+      } catch {
+      }
+      return decision;
+    };
+    return proceed();
   });
   ctx.on("system-prompt/assemble", (assembly, context, next) => {
     const agent = context.agent;
@@ -275,12 +283,27 @@ function apply(ctx, config) {
     if (!skillName) return;
     const isError = result?.isError === true;
     if (isError) return;
+    activateSkill(agent, skillName);
+  }
+  function activateSkill(agent, skillName) {
     if (!gatesCache) gatesCache = discoverGates(skillDirs, ctx);
     const gated = gatesCache.get(skillName);
     if (!gated || gated.length === 0) return;
     const active = activeById.get(agent.id) ?? /* @__PURE__ */ new Set();
     for (const tool of gated) active.add(tool);
     activeById.set(agent.id, active);
+  }
+  function claimSlashInvokedSkills(agent, decision) {
+    if (!agent) return;
+    const messages = decision.messages;
+    if (!Array.isArray(messages)) return;
+    for (const message of messages) {
+      const source = message?.source;
+      if (source === void 0 || source === null) continue;
+      if (source.kind !== "skill-invocation") continue;
+      if (typeof source.name !== "string" || source.name === "") continue;
+      activateSkill(agent, source.name);
+    }
   }
   function parseKnownTools(message) {
     const match = message.match(/known global tools: (.*)$/);

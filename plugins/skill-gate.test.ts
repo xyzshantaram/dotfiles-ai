@@ -133,3 +133,58 @@ describe("skill-gate alwaysDeny", () => {
     expect((Config({}) as { alwaysDeny: string[] }).alwaysDeny).toEqual([]);
   });
 });
+
+describe("skill-gate slash-command invocation", () => {
+  /** One pre-step decision carrying a slash-invoked skill body, shaped the
+   * way dsh-tool-skill stamps it. */
+  function slashDecision(skillName: string) {
+    return {
+      kind: "enter",
+      messages: [
+        {
+          content: [{ type: "text", text: "<skill_content ...>" }],
+          source: { kind: "skill-invocation", name: skillName, form: "instructions" },
+        },
+      ],
+    };
+  }
+
+  it("unmasks a gated tool when the skill arrives by slash command, not the skill tool", async () => {
+    const dir = writeGatedSkill(tmpRoot, "slashskill", ["foo"]);
+    const ctx = fakeCtx();
+    apply(ctx as never, { skillDirs: [dir] });
+    // gatesCache is module-level, so an earlier test's discovery would
+    // otherwise mask this test's own skill dir. skills/change is the
+    // plugin's own cache-invalidation seam.
+    ctx.handlers.get("skills/change")![0]!();
+    const { agent, restrictCalls } = fakeAgent("slash-agent");
+    const preStep = ctx.handlers.get("agent/pre-step")![0]!;
+
+    // First step: no skill loaded yet, so the gated tool is denied.
+    await preStep({ agent }, () => undefined);
+    expect(restrictCalls.at(-1)).toContain("foo");
+
+    // This step's decision carries the slash-invoked skill body.
+    await preStep({ agent }, () => slashDecision("slashskill"));
+
+    // The following step must no longer deny it.
+    await preStep({ agent }, () => undefined);
+    expect(restrictCalls.at(-1) ?? []).not.toContain("foo");
+  });
+
+  it("ignores a decision message that is not a skill invocation", async () => {
+    const dir = writeGatedSkill(tmpRoot, "slashskill2", ["foo"]);
+    const ctx = fakeCtx();
+    apply(ctx as never, { skillDirs: [dir] });
+    ctx.handlers.get("skills/change")![0]!();
+    const { agent, restrictCalls } = fakeAgent("slash-agent-2");
+    const preStep = ctx.handlers.get("agent/pre-step")![0]!;
+
+    await preStep({ agent }, () => ({
+      kind: "enter",
+      messages: [{ content: [], source: { kind: "user" } }],
+    }));
+    await preStep({ agent }, () => undefined);
+    expect(restrictCalls.at(-1)).toContain("foo");
+  });
+});

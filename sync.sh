@@ -42,7 +42,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#87d8199ce095c53f3576109854a123bdaf11dce1}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#fc435af68e384963a8575abd1ddac08e54daaa49}"
 
 # Git-hosted specs whose build scripts pnpm must be allowed to run. pnpm 10+
 # blocks lifecycle scripts (prepare/postinstall) unless the exact resolved
@@ -591,14 +591,16 @@ while i < len(lines):
         changed = True
     out.extend(row)
     i = j
+import os
+short = os.path.relpath(path, os.path.expanduser('~'))
 if not found:
-    print(f'  WARNING: no {tool} row in {path}; nothing to disable')
+    print(f'  WARNING: no {tool} row in ~/{short}; nothing to disable')
     sys.exit(0)
 if changed:
     open(path, 'w').writelines(out)
-    print(f'  disabled {tool} in {path}')
+    print(f'  disabled {tool} in ~/{short}')
 else:
-    print(f'  {tool} already disabled in {path}')
+    print(f'  {tool} already disabled in ~/{short}')
 PY
 }
 
