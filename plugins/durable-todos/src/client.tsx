@@ -1,9 +1,12 @@
 // Durable todos panel. Shows the session todo projection in the input dock.
 // The card stays visible so the Remind button stays reachable.
 import * as react from "react";
+import * as primitives from "@deepseek-ai/dsh-client-ui-primitives";
 import type { DurableTodosView, TodoItem } from "./projection.js";
 import { injectStyle, PLAN_ROW_CSS } from "../../shared/client-util";
 import localCss from "./client.module.css";
+
+var IconChevronDownOutline14 = primitives.IconChevronDownOutline14;
 
 var PLUGIN_NAME = "durable-todos";
 var STYLE_TAG_ID = "durable-todos-style";
@@ -126,9 +129,12 @@ function makePanel() {
               setCollapsed(!collapsed);
             }}
           >
-            <span className="durable-todos-chevron" aria-hidden={true}>
-              {collapsed ? "▶" : "▼"}
-            </span>
+            <IconChevronDownOutline14
+              className={
+                collapsed ? "durable-todos-chevron" : "durable-todos-chevron durable-todos-chevron-open"
+              }
+              aria-hidden={true}
+            />
             <span className="durable-todos-title">To-do list</span>
             <span className="durable-todos-summary">{buildSummary()}</span>
           </button>
