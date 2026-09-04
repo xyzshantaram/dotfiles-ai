@@ -4895,10 +4895,7 @@ var WIDER_MODES = {
   "workspace-write": ["danger-full-access"],
   "danger-full-access": []
 };
-var ESCALATION_TARGETS = [
-  "workspace-write",
-  "danger-full-access"
-];
+var ESCALATION_TARGETS = ["workspace-write", "danger-full-access"];
 var Config = z.object({
   guardsDir: z.string().default("$DSH_HOME/plugins/guards"),
   // Left unset by default (not defaulted to ""): evaluate() falls back to
@@ -5485,6 +5482,7 @@ function apply(ctx, config) {
         }
         const standing = sandboxPolicy !== void 0 && agent !== void 0 ? sandboxPolicy.resolve({ session: agent.session }) : void 0;
         let policy = standing;
+        let escalateTo;
         if (args.sandbox_permissions !== void 0) {
           if (escalationModes.length === 0) {
             throw new Error(
@@ -5507,17 +5505,7 @@ function apply(ctx, config) {
               `sandbox_permissions "${requested}" is not strictly wider than the effective mode "${standing.mode}"; a non-widening request never prompts`
             );
           }
-          const verdict = await approval.request({
-            agent,
-            toolName: "bash",
-            callId: exec.callId,
-            reason: `bash-guard: escalate this bash command from "${standing.mode}" to "${requested}". Justification: ${args.justification}`,
-            signal: exec.signal
-          });
-          if (verdict !== "allowed-once") {
-            throw new Error(`sandbox escalation ${verdict}; the command did not run`);
-          }
-          policy = { ...standing, mode: requested };
+          escalateTo = requested;
         }
         const safePaths = ["/tmp/dsh"];
         let workspaceRoot;
@@ -5574,6 +5562,26 @@ ${outcome.reason}` : "")
           toRun = outcome.command;
         } else {
           toRun = outcome.command;
+        }
+        if (escalateTo !== void 0) {
+          if (standing === void 0 || agent === void 0 || approval === void 0) {
+            throw new Error(
+              "sandbox escalation is unavailable here: it needs a confining executor, a calling agent, and a mounted approval service"
+            );
+          }
+          const verdict = await approval.request({
+            agent,
+            toolName: "bash",
+            callId: exec.callId,
+            reason: `bash-guard: escalate this bash command from "${standing.mode}" to "${escalateTo}". Justification: ${args.justification}
+
+  ${toRun}`,
+            signal: exec.signal
+          });
+          if (verdict !== "allowed-once") {
+            throw new Error(`sandbox escalation ${verdict}; the command did not run`);
+          }
+          policy = { ...standing, mode: escalateTo };
         }
         const headerCwd = agent?.session.header.cwd;
         const workdir = args.workdir === void 0 ? headerCwd : headerCwd !== void 0 && !isAbsolute2(args.workdir) ? resolve(headerCwd, args.workdir) : args.workdir;
