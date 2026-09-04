@@ -480,8 +480,10 @@ function toolNameBadge(toolName, icon, state) {
   // 28% mix read as invisible against a dark theme for several hues -- a
   // stronger mix plus a visible border means the badge's own shape always
   // reads, even when the fill color itself has low contrast.
+  // Error uses a darkened error color, not the raw primary: the raw color
+  // reads too bright for white text to sit on comfortably.
   var background = isError
-    ? "var(--dsw-alias-state-error-primary)"
+    ? "color-mix(in srgb, var(--dsw-alias-state-error-primary) 65%, black)"
     : "color-mix(in srgb, hsl(" + hue + " 65% 45%) 55%, var(--dsw-alias-bg-tertiary))";
   var border = isError
     ? "var(--dsw-alias-state-error-primary)"
