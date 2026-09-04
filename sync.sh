@@ -153,8 +153,6 @@ step_write_web_patch() {
       name: '@deepseek-ai/dsh-compaction-basic'
     - id: tool-recall
       name: '@deepseek-ai/dsh-compaction-basic/tool'
-    - id: command-recall
-      name: '@deepseek-ai/dsh-compaction-basic/command'
     - id: ui-better-mobile
       name: dsh-plugin-better-mobile-ui
     # Vendored llm-pi-ai fork mounts as its own row; the builtin is disabled below.
