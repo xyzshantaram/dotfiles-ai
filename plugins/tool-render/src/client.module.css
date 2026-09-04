@@ -30,6 +30,7 @@
   width: 5.5rem;
   flex: none;
   overflow: hidden;
+  border: 1px solid;
   border-radius: 0.375rem;
   padding: 0.0625rem 0.375rem;
   margin-right: 0.375rem;

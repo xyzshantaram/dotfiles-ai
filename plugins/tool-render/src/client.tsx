@@ -476,12 +476,22 @@ function toolNameHue(name) {
 function toolNameBadge(toolName, icon, state) {
   if (toolName === undefined || toolName === null || toolName === "") return null;
   var isError = state === "error";
+  var hue = toolNameHue(toolName);
+  // 28% mix read as invisible against a dark theme for several hues -- a
+  // stronger mix plus a visible border means the badge's own shape always
+  // reads, even when the fill color itself has low contrast.
   var background = isError
     ? "var(--dsw-alias-state-error-primary)"
-    : "color-mix(in srgb, hsl(" + toolNameHue(toolName) + " 60% 45%) 28%, var(--dsw-alias-bg-tertiary))";
+    : "color-mix(in srgb, hsl(" + hue + " 65% 45%) 55%, var(--dsw-alias-bg-tertiary))";
+  var border = isError
+    ? "var(--dsw-alias-state-error-primary)"
+    : "hsl(" + hue + " 55% 60%)";
   var color = isError ? "#fff" : undefined;
   return (
-    <span className="tool-render-name-badge" style={{ background: background, color: color }}>
+    <span
+      className="tool-render-name-badge"
+      style={{ background: background, borderColor: border, color: color }}
+    >
       <span className="tool-render-name-badge-icon">{icon}</span>
       <span className="tool-render-name-badge-text">{toolName}</span>
     </span>
@@ -570,7 +580,7 @@ function toolRenderRow(options) {
       >
         {open ? <IconChevronDownOutline14 className="tool-render-chevron" /> : null}
         {leading}
-        <span className="tool-render-title">{options.title}</span>
+        {leading === null ? <span className="tool-render-title">{options.title}</span> : null}
         {options.badge !== undefined && options.badge !== null && options.badge !== "" ? (
           <span className="tool-render-badge">{options.badge}</span>
         ) : null}

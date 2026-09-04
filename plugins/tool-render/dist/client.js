@@ -1894,6 +1894,7 @@ var client_default = `.tool-render-row {
   width: 5.5rem;
   flex: none;
   overflow: hidden;
+  border: 1px solid;
   border-radius: 0.375rem;
   padding: 0.0625rem 0.375rem;
   margin-right: 0.375rem;
@@ -15337,9 +15338,19 @@ function toolNameHue(name2) {
 function toolNameBadge(toolName, icon, state) {
   if (toolName === void 0 || toolName === null || toolName === "") return null;
   var isError = state === "error";
-  var background = isError ? "var(--dsw-alias-state-error-primary)" : "color-mix(in srgb, hsl(" + toolNameHue(toolName) + " 60% 45%) 28%, var(--dsw-alias-bg-tertiary))";
+  var hue = toolNameHue(toolName);
+  var background = isError ? "var(--dsw-alias-state-error-primary)" : "color-mix(in srgb, hsl(" + hue + " 65% 45%) 55%, var(--dsw-alias-bg-tertiary))";
+  var border = isError ? "var(--dsw-alias-state-error-primary)" : "hsl(" + hue + " 55% 60%)";
   var color = isError ? "#fff" : void 0;
-  return /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-name-badge", style: { background, color } }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-name-badge-icon" }, icon), /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-name-badge-text" }, toolName));
+  return /* @__PURE__ */ import_react.default.createElement(
+    "span",
+    {
+      className: "tool-render-name-badge",
+      style: { background, borderColor: border, color }
+    },
+    /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-name-badge-icon" }, icon),
+    /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-name-badge-text" }, toolName)
+  );
 }
 function toolRenderRow(options) {
   var interactive = options.expandable === true;
@@ -15408,7 +15419,7 @@ function toolRenderRow(options) {
       },
       open ? /* @__PURE__ */ import_react.default.createElement(IconChevronDownOutline142, { className: "tool-render-chevron" }) : null,
       leading,
-      /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-title" }, options.title),
+      leading === null ? /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-title" }, options.title) : null,
       options.badge !== void 0 && options.badge !== null && options.badge !== "" ? /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-badge" }, options.badge) : null,
       /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-sep", "aria-hidden": true }),
       summary
