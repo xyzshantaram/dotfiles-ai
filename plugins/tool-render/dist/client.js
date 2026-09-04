@@ -1874,14 +1874,14 @@ var client_default = `.tool-render-row {
   cursor: pointer;
 }
 .tool-render-leading {
-  width: 1rem;
-  height: 1rem;
   color: var(--dsw-alias-label-tertiary);
   flex: none;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
+  gap: 0.25rem;
   margin-right: 0.375rem;
   display: inline-flex;
+  overflow: visible;
 }
 .tool-render-chevron {
   color: var(--dsw-alias-label-secondary);
