@@ -73,6 +73,25 @@ async function guard(command: string, rules: Record<string, unknown>): Promise<G
   }
 }
 
+/**
+ * Same as `guard`, but writes several rule files so one command can match more
+ * than one rule. Rules are keyed by command name, so each needs its own file.
+ */
+async function guardRules(
+  command: string,
+  rules: Record<string, unknown>[],
+): Promise<GuardOutcome> {
+  const dir = await mkdtemp(join(tmpdir(), "bash-guard-rewrite-"));
+  try {
+    for (let i = 0; i < rules.length; i++) {
+      await writeFile(join(dir, `rule-${i}.json`), JSON.stringify(rules[i]));
+    }
+    return await evaluate()(fakeCtx(), [dir], command, [], undefined, {});
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
 const TRANSLATE_RULE = {
   commands: ["grep"],
   verdict: "ask",
@@ -218,5 +237,32 @@ describe("bash-guard evaluate GuardOutcome contract", () => {
     const outcome = await guard("echo 'unclosed", {});
     expect(outcome).toMatchObject({ action: "deny" });
     expect(outcome).toHaveProperty("reason");
+  });
+
+  // The readOnly gate is most-restrictive-wins across every rule that
+  // contributed a rewrite. One command can match several rules, so a single
+  // permissive rule must not carry the whole pipeline.
+  it("readOnly is all-or-nothing: one non-readOnly contributor forces an ask", async () => {
+    const outcome = await guardRules("rg --stats foo | jq .", [
+      { ...DROP_RULE, readOnly: true },
+      { ...ADD_RULE, readOnly: false },
+    ]);
+    expect(outcome.action).toBe("ask");
+    expect(outcome).toMatchObject({ rewritten: true });
+    const ran = (outcome as { command: string }).command;
+    expect(ran).not.toContain("--stats");
+    expect(ran).toContain("--tab");
+  });
+
+  it("readOnly is all-or-nothing: every contributor readOnly auto-runs", async () => {
+    const outcome = await guardRules("rg --stats foo | jq .", [
+      { ...DROP_RULE, readOnly: true },
+      { ...ADD_RULE, readOnly: true },
+    ]);
+    expect(outcome.action).toBe("run");
+    expect(outcome).toMatchObject({ rewritten: true });
+    const ran = (outcome as { command: string }).command;
+    expect(ran).not.toContain("--stats");
+    expect(ran).toContain("--tab");
   });
 });

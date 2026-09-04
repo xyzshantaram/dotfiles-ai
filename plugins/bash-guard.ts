@@ -581,9 +581,15 @@ function rewritingHits(hits: { rule: GuardEntry }[]): { rule: GuardEntry }[] {
   return hits.filter((h) => h.rule.rewrites !== undefined);
 }
 
-/** A rewrite or translation auto-runs only when every contributing rule is readOnly. */
+/**
+ * A rewrite or translation auto-runs only when every contributing rule is
+ * readOnly. Fail closed on an empty list: `[].every(...)` is true in
+ * JavaScript, so without the length check a caller that passed no hits would
+ * get an auto-run. Both current callers filter to a non-empty set, but this is
+ * the guard, so the default must never be "run".
+ */
 function isReadOnly(hits: { rule: GuardEntry }[]): boolean {
-  return hits.every((h) => h.rule.readOnly === true);
+  return hits.length > 0 && hits.every((h) => h.rule.readOnly === true);
 }
 
 /** Put the matched rule's reason ahead of the rewrite notes. */

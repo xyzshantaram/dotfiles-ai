@@ -5177,7 +5177,7 @@ function rewritingHits(hits) {
   return hits.filter((h) => h.rule.rewrites !== void 0);
 }
 function isReadOnly(hits) {
-  return hits.every((h) => h.rule.readOnly === true);
+  return hits.length > 0 && hits.every((h) => h.rule.readOnly === true);
 }
 function withRuleReason(hits, notes) {
   const reason = hits[0]?.rule.reason;
