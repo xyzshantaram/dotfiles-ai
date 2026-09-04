@@ -1891,12 +1891,12 @@ var client_default = `.tool-render-row {
   align-items: center;
   justify-content: flex-start;
   gap: 0.25rem;
-  width: 5.5rem;
+  width: 6.75rem;
   flex: none;
   overflow: hidden;
   border: 1px solid;
   border-radius: 0.375rem;
-  padding: 0.0625rem 0.375rem;
+  padding: 0.1875rem 0.375rem;
   margin-right: 0.375rem;
   color: var(--dsw-alias-label-primary);
 }
@@ -15451,7 +15451,7 @@ function ReadRow(props) {
     }
   }
   return toolRenderRow({
-    toolName: "read",
+    toolName: "Read file",
     icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
     title: "Read",
     summary,
@@ -15539,7 +15539,7 @@ function BashRow(props) {
     body = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-io" }, inner);
   }
   return toolRenderRow({
-    toolName: "bash",
+    toolName: "Run bash",
     icon: /* @__PURE__ */ import_react.default.createElement(IconApiOutline142, { size: 14 }),
     title: "Bash",
     summary,
@@ -15804,6 +15804,12 @@ function resolveEffectiveCwd(props) {
   if (typeof props.cwd === "string" && props.cwd !== "") return props.cwd;
   return void 0;
 }
+function editBadgeLabel(rawName, toolTitle) {
+  if (rawName === "edit") return "Edit file";
+  if (rawName === "undo_edit") return "Undo edit";
+  if (rawName === "undo_last_edit") return "Undo last edit";
+  return toolTitle;
+}
 function makeEditRow(toolTitle) {
   return function EditToolRow(props) {
     var expandedState = useState(false);
@@ -15812,7 +15818,7 @@ function makeEditRow(toolTitle) {
     var block = props.block;
     if (block === null || typeof block !== "object") {
       return toolRenderRow({
-        toolName: callNameOf(block) || void 0,
+        toolName: editBadgeLabel(callNameOf(block), toolTitle),
         icon: /* @__PURE__ */ import_react.default.createElement(IconEditOutline162, { size: 14 }),
         title: toolTitle,
         summary: toolTitle,
@@ -15861,8 +15867,8 @@ function makeEditRow(toolTitle) {
     return toolRenderRow({
       // One component serves the `edit`, `undo_edit`, and `undo_last_edit`
       // registrations. The block carries the real call name, so the badge
-      // shows the exact raw name of the call being rendered.
-      toolName: callNameOf(block) || void 0,
+      // shows the right human-readable label for the exact call being rendered.
+      toolName: editBadgeLabel(callNameOf(block), toolTitle),
       icon: /* @__PURE__ */ import_react.default.createElement(IconEditOutline162, { size: 14 }),
       title: toolTitle,
       summary,
@@ -16110,7 +16116,7 @@ function WriteRow(props) {
     body = /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output", "tool-render-error": state === "error" || void 0 }, output);
   }
   return toolRenderRow({
-    toolName: "write",
+    toolName: "Write file",
     icon: /* @__PURE__ */ import_react.default.createElement(IconEditOutline162, { size: 14 }),
     title: "Write",
     summary,
@@ -16193,7 +16199,7 @@ function TodoRow(props) {
     body = planBody(todos);
   }
   return toolRenderRow({
-    toolName: "todo_write",
+    toolName: "Update todos",
     icon: /* @__PURE__ */ import_react.default.createElement(IconChecklistOutline142, { size: 14 }),
     title: "To-do list",
     summary,
@@ -16333,7 +16339,7 @@ function AskRow(props) {
     body = askBody(questions, answers);
   }
   return toolRenderRow({
-    toolName: "ask_user_question",
+    toolName: "Ask user",
     icon: /* @__PURE__ */ import_react.default.createElement(IconQuestionOutline142, { size: 14 }),
     title: "Ask user",
     summary,
@@ -16375,7 +16381,7 @@ function SubagentRow(props) {
     body = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: prompt }));
   }
   return toolRenderRow({
-    toolName: "subagent",
+    toolName: "Run subagent",
     icon: /* @__PURE__ */ import_react.default.createElement(IconAgentPresetOutline162, { size: 14 }),
     title,
     summary,
@@ -16414,7 +16420,7 @@ function JobOutputRow(props) {
   var summary = statusMatch !== null ? "status: " + statusMatch[1] : "Job output";
   var body = state !== "error" && output !== null && output !== "" ? /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output" }, stripAnsi(output)) : null;
   return toolRenderRow({
-    toolName: "job_output",
+    toolName: "Job output",
     icon: /* @__PURE__ */ import_react.default.createElement(IconApiOutline142, null),
     title: "Job output",
     badge: jobId,
@@ -16456,7 +16462,7 @@ function PackageRow(props) {
   var summary = target !== void 0 && target !== "" ? target : title;
   var body = state !== "error" && output !== null && output !== "" ? /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output" }, stripAnsi(output)) : null;
   return toolRenderRow({
-    toolName: "package",
+    toolName: "Manage package",
     icon: /* @__PURE__ */ import_react.default.createElement(IconApiOutline142, null),
     title,
     badge: ecosystem,
@@ -16485,7 +16491,7 @@ function SendMessageRow(props) {
   var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
   var body = state !== "error" && args !== null ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: args.message })) : null;
   return toolRenderRow({
-    toolName: "send_message",
+    toolName: "Message subagent",
     icon: /* @__PURE__ */ import_react.default.createElement(IconAgentPresetOutline162, { size: 14 }),
     title: "Message subagent",
     badge: args !== null ? args.subagent_id : void 0,
@@ -16620,7 +16626,7 @@ function SkillRow(props) {
   var args = parseArgs(argsRawOf(block));
   var skillName = args !== null ? pickString(args, ["name"]) : void 0;
   return toolRenderRow({
-    toolName: "skill",
+    toolName: "Load skill",
     icon: /* @__PURE__ */ import_react.default.createElement(IconChecklistOutline142, null),
     title: "Skill",
     summary: skillName !== void 0 ? skillName : "Skill",
