@@ -2361,7 +2361,7 @@ Wrote scripts.${taskName} to ${cwd}/package.json`;
         if (version) lines.push(`Resolved ${args.packageName} to version ${version}.`);
         lines.push(`Package manager: ${manager}.`);
         lines.push(`Ran: ${command}`);
-        const tail = output.trim().slice(-4e3);
+        const tail = output.split("\n").filter((line) => /warn|error/i.test(line)).join("\n").trim().slice(-500);
         if (tail) lines.push(`Output:
 ${tail}`);
         return lines.join("\n");
