@@ -1,0 +1,222 @@
+/**
+ * Contract tests for the rewrite-based `evaluate` outcome.
+ *
+ * The guard will stop denying rewritten commands and start running them. These
+ * tests pin that contract before the implementation exists, so every case here
+ * is EXPECTED TO FAIL against current main. Do not weaken a test to make it
+ * pass.
+ *
+ * Contract summary (GuardOutcome):
+ * - `evaluate` never returns null. A plain allow is
+ *   { action: "run", command: <model's command>, rewritten: false }.
+ * - `command` is always the string that should execute.
+ * - `rewritten` is true only when `command` differs from the model's input.
+ * - `reason` is present whenever a matched rule had a non-allow verdict.
+ * - `action: "ask"` also carries `original`, the model's unmodified command.
+ * - New rule fields under test: per-rule `readOnly`, and RewriteRule `add`,
+ *   which inserts a flag only when absent and is idempotent.
+ */
+
+import { describe, expect, it } from "vitest";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import * as bashGuard from "./bash-guard";
+
+type GuardOutcome =
+  | { action: "run"; command: string; rewritten: boolean; reason?: string }
+  | { action: "ask"; command: string; original: string; rewritten: boolean; reason?: string }
+  | { action: "deny"; reason: string };
+
+/** The function under test. Not exported yet, so this throws until it lands. */
+function evaluate(): (
+  ctx: unknown,
+  dirs: string[],
+  command: string,
+  safePaths: string[],
+  workspaceRoot: string | undefined,
+  templates: { deny?: string; ask?: string },
+) => Promise<GuardOutcome> {
+  const fn = (bashGuard as Record<string, unknown>).evaluate;
+  if (typeof fn !== "function") {
+    throw new Error("bash-guard does not export evaluate() yet");
+  }
+  return fn as never;
+}
+
+/** Same fake ctx the existing bash-guard.test.ts mounts the plugin with. */
+function fakeCtx() {
+  const noop = () => {};
+  return {
+    logger: { debug: noop, info: noop, warn: noop, error: noop },
+    on() {
+      return () => {};
+    },
+    get() {
+      return undefined;
+    },
+  };
+}
+
+/**
+ * Write the given rule objects as JSON files into a fresh temp directory, run
+ * one command through evaluate against that directory, and return the outcome.
+ * safePaths is empty, so the scratch escape can never mask a rule verdict.
+ */
+async function guard(command: string, rules: Record<string, unknown>): Promise<GuardOutcome> {
+  const dir = await mkdtemp(join(tmpdir(), "bash-guard-rewrite-"));
+  try {
+    await writeFile(join(dir, "rules.json"), JSON.stringify(rules));
+    return await evaluate()(fakeCtx(), [dir], command, [], undefined, {});
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+const TRANSLATE_RULE = {
+  commands: ["grep"],
+  verdict: "ask",
+  reason: "grep is translated to rg",
+  translate: "grep",
+};
+
+const DROP_RULE = {
+  commands: ["rg"],
+  verdict: "ask",
+  reason: "rg drops --stats",
+  rewrites: [{ drop: ["--stats"], because: "--stats is noise" }],
+};
+
+const ADD_RULE = {
+  commands: ["jq"],
+  verdict: "ask",
+  reason: "jq runs with --tab",
+  rewrites: [{ add: [{ flag: "--tab" }] }],
+};
+
+describe("bash-guard evaluate GuardOutcome contract", () => {
+  it("clause 1: a clean translate on a readOnly rule returns run with the translated command and rewritten true", async () => {
+    const outcome = await guard("grep -rn foo src/", { ...TRANSLATE_RULE, readOnly: true });
+    expect(outcome.action).toBe("run");
+    expect(outcome).toMatchObject({
+      action: "run",
+      command: "rg -n foo src/",
+      rewritten: true,
+    });
+  });
+
+  it("clause 2: a clean translate without readOnly returns ask with the translated command, the original, and rewritten true", async () => {
+    const outcome = await guard("grep -rn foo src/", TRANSLATE_RULE);
+    expect(outcome.action).toBe("ask");
+    expect(outcome).toMatchObject({
+      action: "ask",
+      command: "rg -n foo src/",
+      original: "grep -rn foo src/",
+      rewritten: true,
+    });
+  });
+
+  it("clause 3: a drop rewrite auto-runs under readOnly", async () => {
+    const outcome = await guard("rg --stats foo .", { ...DROP_RULE, readOnly: true });
+    expect(outcome).toMatchObject({
+      action: "run",
+      command: "rg foo .",
+      rewritten: true,
+    });
+  });
+
+  it("clause 3: a drop rewrite asks when the rule is not readOnly", async () => {
+    const outcome = await guard("rg --stats foo .", DROP_RULE);
+    expect(outcome).toMatchObject({
+      action: "ask",
+      command: "rg foo .",
+      original: "rg --stats foo .",
+      rewritten: true,
+    });
+  });
+
+  it("clause 4: an add rewrite inserts a missing flag and auto-runs under readOnly", async () => {
+    const outcome = await guard("jq .", { ...ADD_RULE, readOnly: true });
+    expect(outcome).toMatchObject({
+      action: "run",
+      command: "jq --tab .",
+      rewritten: true,
+    });
+  });
+
+  it("clause 4: an add rewrite asks when the rule is not readOnly", async () => {
+    const outcome = await guard("jq .", ADD_RULE);
+    expect(outcome).toMatchObject({
+      action: "ask",
+      command: "jq --tab .",
+      original: "jq .",
+      rewritten: true,
+    });
+  });
+
+  it("clause 4: an add rewrite is idempotent when the flag is already present, so rewritten is false and the command is unchanged", async () => {
+    const outcome = await guard("jq --tab .", { ...ADD_RULE, readOnly: true });
+    expect(outcome).toMatchObject({
+      action: "run",
+      command: "jq --tab .",
+      rewritten: false,
+    });
+  });
+
+  it("clause 4: an idempotent add on a non-readOnly rule asks with the unmodified original", async () => {
+    const outcome = await guard("jq --tab .", ADD_RULE);
+    expect(outcome).toMatchObject({
+      action: "ask",
+      command: "jq --tab .",
+      original: "jq --tab .",
+      rewritten: false,
+    });
+  });
+
+  it("clause 4: an add rewrite can insert a flag together with its value", async () => {
+    const rule = {
+      commands: ["jq"],
+      verdict: "ask",
+      reason: "jq runs with a bounded output",
+      rewrites: [{ add: [{ flag: "--indent", value: "2" }] }],
+    };
+    const outcome = await guard("jq .", { ...rule, readOnly: true });
+    expect(outcome).toMatchObject({
+      action: "run",
+      command: "jq --indent 2 .",
+      rewritten: true,
+    });
+  });
+
+  it("clause 5: a translator blocker denies even when the rule is readOnly", async () => {
+    const outcome = await guard("grep --color=always foo .", { ...TRANSLATE_RULE, readOnly: true });
+    expect(outcome).toMatchObject({ action: "deny" });
+    expect(outcome).toHaveProperty("reason");
+  });
+
+  it("clause 6: a verdict deny rule returns deny with its reason", async () => {
+    const rule = { commands: ["git"], verdict: "deny", reason: "git writes are blocked" };
+    const outcome = await guard("git push --force", rule);
+    expect(outcome).toMatchObject({ action: "deny" });
+    expect(outcome).toHaveProperty("reason");
+    expect((outcome as { reason: string }).reason).toContain("git writes are blocked");
+  });
+
+  it("clause 7: a run outcome from a matched readOnly rule carries the rule reason", async () => {
+    const outcome = await guard("grep -rn foo src/", { ...TRANSLATE_RULE, readOnly: true });
+    expect(outcome).toHaveProperty("reason");
+    expect((outcome as { reason?: string }).reason).toContain("grep is translated to rg");
+  });
+
+  it("clause 7: a plain allow carries no reason", async () => {
+    const outcome = await guard("rg -n foo src/", {});
+    expect(outcome).toEqual({ action: "run", command: "rg -n foo src/", rewritten: false });
+    expect(outcome).not.toHaveProperty("reason");
+  });
+
+  it("clause 8: an unparseable command denies, because the guard is fail-closed", async () => {
+    const outcome = await guard("echo 'unclosed", {});
+    expect(outcome).toMatchObject({ action: "deny" });
+    expect(outcome).toHaveProperty("reason");
+  });
+});
