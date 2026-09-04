@@ -51,21 +51,26 @@ function makeFakeJobs() {
   return jobs;
 }
 
+/** Widen a bare { id, status } fixture into a full JobSnapshotLike. */
+function snap(id: string, status: JobSnapshotLike["status"]): JobSnapshotLike {
+  return { id, kind: "agent", label: id, status, startedAt: 0 };
+}
+
 describe("reconcile", () => {
   it("starts a new running job", () => {
-    const { toStart, toStop } = reconcile([{ id: "a", status: "running" }], new Set());
+    const { toStart, toStop } = reconcile([snap("a", "running")], new Set());
     expect(toStart).toEqual(["a"]);
     expect(toStop).toEqual([]);
   });
 
   it("starts a stopping job too", () => {
-    const { toStart } = reconcile([{ id: "a", status: "stopping" }], new Set());
+    const { toStart } = reconcile([snap("a", "stopping")], new Set());
     expect(toStart).toEqual(["a"]);
   });
 
   it("stops a polled job that turned terminal", () => {
     const { toStart, toStop } = reconcile(
-      [{ id: "a", status: "completed" }],
+      [snap("a", "completed")],
       new Set(["a"]),
     );
     expect(toStart).toEqual([]);
@@ -80,7 +85,7 @@ describe("reconcile", () => {
 
   it("leaves a still-running polled job alone", () => {
     const { toStart, toStop } = reconcile(
-      [{ id: "a", status: "running" }],
+      [snap("a", "running")],
       new Set(["a"]),
     );
     expect(toStart).toEqual([]);
@@ -103,9 +108,9 @@ describe("mountPoller", () => {
   });
 
   it("reads output into the store, stops at terminal, and sweeps", () => {
-    jobs.setSnapshot("j1", { id: "j1", status: "running" });
-    jobs.queueRead("j1", { text: "hello ", snapshot: { id: "j1", status: "running" } });
-    jobs.queueRead("j1", { text: "world", snapshot: { id: "j1", status: "running" } });
+    jobs.setSnapshot("j1", snap("j1", "running"));
+    jobs.queueRead("j1", { text: "hello ", snapshot: snap("j1", "running") });
+    jobs.queueRead("j1", { text: "world", snapshot: snap("j1", "running") });
     const teardown = mountPoller(jobs, store, {
       pollIntervalMs: 100,
       setInterval,
@@ -114,6 +119,8 @@ describe("mountPoller", () => {
 
     jobs.fire(undefined);
     expect(store.get("j1")?.text).toBe("hello ");
+    // The poller caches the snapshot from each read.
+    expect(store.get("j1")?.snapshot).toEqual(snap("j1", "running"));
     expect(jobs.readCalls).toEqual([{ id: "j1", caller: undefined }]);
 
     vi.advanceTimersByTime(100);
@@ -121,9 +128,11 @@ describe("mountPoller", () => {
     const readsAfterTwo = jobs.readCalls.length;
 
     // The job completes on the next read.
-    jobs.queueRead("j1", { text: "!", snapshot: { id: "j1", status: "completed" } });
+    jobs.queueRead("j1", { text: "!", snapshot: snap("j1", "completed") });
     vi.advanceTimersByTime(100);
     expect(store.get("j1")?.text).toBe("hello world!");
+    // The latest read wins, so the cached snapshot shows completed.
+    expect(store.get("j1")?.snapshot).toEqual(snap("j1", "completed"));
     const readsAfterTerminal = jobs.readCalls.length;
 
     // The timer stopped. Time passing produces no further reads.
@@ -140,9 +149,9 @@ describe("mountPoller", () => {
   });
 
   it("teardown stops all timers", () => {
-    jobs.setSnapshot("j1", { id: "j1", status: "running" });
-    jobs.queueRead("j1", { text: "a", snapshot: { id: "j1", status: "running" } });
-    jobs.queueRead("j1", { text: "b", snapshot: { id: "j1", status: "running" } });
+    jobs.setSnapshot("j1", snap("j1", "running"));
+    jobs.queueRead("j1", { text: "a", snapshot: snap("j1", "running") });
+    jobs.queueRead("j1", { text: "b", snapshot: snap("j1", "running") });
     const teardown = mountPoller(jobs, store, {
       pollIntervalMs: 100,
       setInterval,
@@ -157,8 +166,8 @@ describe("mountPoller", () => {
   });
 
   it("swallows a read error from a job removed mid-flight", () => {
-    jobs.setSnapshot("j1", { id: "j1", status: "running" });
-    jobs.queueRead("j1", { text: "a", snapshot: { id: "j1", status: "running" } });
+    jobs.setSnapshot("j1", snap("j1", "running"));
+    jobs.queueRead("j1", { text: "a", snapshot: snap("j1", "running") });
     const teardown = mountPoller(jobs, store, {
       pollIntervalMs: 100,
       setInterval,
