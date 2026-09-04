@@ -268,6 +268,23 @@ describe("bash-guard tool wiring", () => {
     expect(value.ran).toBe("rg foo /tmp");
   });
 
+  it("tells the model what RAN, and never to run it again", async () => {
+    const mounted = mountTool("allowed-once");
+    const value = await mounted.execute("rg -rln foo /tmp");
+    // The guard already ran the replacement. The deny wording belongs to the
+    // deny path only: on this path it is false, and it makes the model run
+    // the same command a second time.
+    expect(value.text).not.toContain("Run this instead");
+    expect(value.text).not.toContain("that command is not run directly");
+    expect(value.text).toContain("bash-guard: ran this instead");
+    // The caller adds the `bash-guard:` prefix, so the note must not carry
+    // its own and double it.
+    expect(value.text).not.toContain("bash-guard: bash-guard:");
+    // The teaching note survives, so the model still learns to write the
+    // preferred form itself next time.
+    expect(value.text).toContain("Why:");
+  });
+
   it("on an approved ask executes the REPLACEMENT command, not the original", async () => {
     const mounted = mountTool("allowed-once");
     // A mutating find is the case that still asks despite a readOnly rule:

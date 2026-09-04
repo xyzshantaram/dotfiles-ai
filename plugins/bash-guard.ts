@@ -608,13 +608,14 @@ function translatableRef(
  * carries `original`, the model's unmodified command.
  */
 export type GuardOutcome =
-  | { action: "run"; command: string; rewritten: boolean; reason?: string }
+  | { action: "run"; command: string; rewritten: boolean; reason?: string; ranNote?: string }
   | {
       action: "ask";
       command: string;
       original: string;
       rewritten: boolean;
       reason?: string;
+      ranNote?: string;
       notes?: string[];
       mutatingWhy?: string[];
     }
@@ -642,6 +643,25 @@ function suggestionMessage(suggested: string, notes: string[], mutatingWhy: stri
 }
 
 /**
+ * Build the note appended AFTER the replacement has already run.
+ *
+ * `suggestionMessage` tells the model to run the replacement itself, which is
+ * right for a deny. On the run path, and after an approved ask, the guard has
+ * ALREADY run the replacement, so that wording is false and invites the model
+ * to run the command a second time. This message reports what ran and keeps
+ * the teaching note. It carries no `bash-guard:` prefix, because the caller
+ * adds one.
+ */
+function ranMessage(suggested: string, notes: string[]): string {
+  let text = `ran this instead:\n\n  ${suggested}\n`;
+  if (notes.length > 0) {
+    text += `\nWhy: ${notes[0]}\n`;
+    for (const note of notes.slice(1)) text += `     ${note}\n`;
+  }
+  return text;
+}
+
+/**
  * Outcome for a rewrite or a clean translation. A readOnly rule auto-runs the
  * replacement. Any other rule asks with the replacement attached.
  *
@@ -661,9 +681,10 @@ function rewriteOutcome(
   readOnly: boolean,
 ): GuardOutcome {
   const reason = suggestionMessage(suggested, notes, mutatingWhy);
+  const ranNote = ranMessage(suggested, notes);
   const rewritten = suggested !== original;
   if (readOnly && mutatingWhy.length === 0) {
-    return { action: "run", command: suggested, rewritten, reason };
+    return { action: "run", command: suggested, rewritten, reason, ranNote };
   }
   return {
     action: "ask",
@@ -671,6 +692,7 @@ function rewriteOutcome(
     original,
     rewritten,
     reason,
+    ranNote,
     notes,
     mutatingWhy,
   };
@@ -1417,7 +1439,7 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
           });
           ctx.logger.info(`bash-guard: started background job ${jobId}: ${toRun}`);
           let text = `Started background job ${jobId}. Read its output with job_output.`;
-          if (outcome.reason !== undefined) text += `\n\nbash-guard: ${outcome.reason}`;
+          if (outcome.ranNote !== undefined) text += `\n\nbash-guard: ${outcome.ranNote}`;
           return { text, ran: toRun, rewritten: outcome.rewritten };
         }
 
@@ -1429,7 +1451,7 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
           }),
         );
         let text = renderShellResult(result);
-        if (outcome.reason !== undefined) text += `\n\nbash-guard: ${outcome.reason}`;
+        if (outcome.ranNote !== undefined) text += `\n\nbash-guard: ${outcome.ranNote}`;
         return { text, ran: toRun, rewritten: outcome.rewritten };
       },
       presentCall: (args) => ({
