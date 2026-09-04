@@ -5180,6 +5180,11 @@ function rewriteOutcome(suggested, original, notes, mutatingWhy, readOnly) {
 function flagPresent(ref, flag) {
   return ref.node.suffix.some((w) => w.text === flag || w.text.startsWith(flag + "="));
 }
+function offsetsAddressCommand(command, ref) {
+  const name2 = ref.node.name;
+  if (command.slice(name2.pos, name2.end) !== name2.text) return false;
+  return ref.node.suffix.every((w) => command.slice(w.pos, w.end) === w.text);
+}
 function rewritingHits(hits) {
   return hits.filter((h) => h.rule.rewrites !== void 0);
 }
@@ -5233,6 +5238,12 @@ async function evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates)
     let addMatched = false;
     for (const hit of hits) {
       if (!hit.rule.rewrites) continue;
+      if (!offsetsAddressCommand(command, hit.ref)) {
+        ctx.logger.debug(
+          `bash-guard: skipping rewrite for ${hit.name}; its offsets do not address the command (nested substitution)`
+        );
+        continue;
+      }
       for (const rw of hit.rule.rewrites) {
         for (let i = 0; i < hit.ref.node.suffix.length; i++) {
           const word = hit.ref.node.suffix[i];
