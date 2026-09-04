@@ -10103,7 +10103,7 @@ function contextText(content) {
       parts.push(block.text);
     }
   }
-  return parts.join("");
+  return parts.join("\n\n");
 }
 function pluginSourceKey(source) {
   if (source === null || typeof source !== "object") return void 0;
