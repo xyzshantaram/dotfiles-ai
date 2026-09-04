@@ -28,6 +28,19 @@
   font-size: 0.875rem;
   line-height: 1.5rem;
 }
+/* The producer/source badge on a context-injection or send_message row.
+   A small pill, not the sentence-in-body treatment it replaces. */
+.tool-render-badge {
+  flex: none;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-interactive-bg-hover);
+  border-radius: 999px;
+  margin-left: 0.375rem;
+  padding: 0.0625rem 0.375rem;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+}
 .tool-render-sep {
   background: var(--dsw-alias-label-caption);
   border-radius: 0.0625rem;
@@ -429,8 +442,11 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* subagent row: capped, scrollable rendered prompt. */
-.tool-render-subagent-prompt {
+/* Shared capped, scrollable markdown body. Used by every row whose body is
+   rendered text: subagent prompt, context injection, send_message delivery.
+   One block, so a future row family member gets the same rules for free
+   instead of a fourth copy. */
+.tool-render-markdown-body {
   border: 1px solid var(--dsw-alias-border-l1);
   border-radius: 0.375rem;
   margin: 0.25rem 0 0.125rem 0.25rem;
@@ -438,32 +454,32 @@
   overflow-y: auto;
   padding: 0.5rem 0.625rem;
 }
-.tool-render-subagent-prompt :where(h1, h2, h3, h4, h5, h6) {
+.tool-render-markdown-body :where(h1, h2, h3, h4, h5, h6) {
   font-size: 0.875rem;
   line-height: 1.25rem;
   margin: 0.5rem 0 0.25rem;
 }
-.tool-render-subagent-prompt :where(h1, h2, h3, h4, h5, h6):first-child {
+.tool-render-markdown-body :where(h1, h2, h3, h4, h5, h6):first-child {
   margin-top: 0;
 }
-.tool-render-subagent-prompt :where(p, ul, ol, pre, blockquote, table) {
+.tool-render-markdown-body :where(p, ul, ol, pre, blockquote, table) {
   font-size: 0.8125rem;
   line-height: 1.25rem;
   margin: 0.25rem 0;
 }
-.tool-render-subagent-prompt :where(ul, ol) {
+.tool-render-markdown-body :where(ul, ol) {
   padding-left: 1.125rem;
 }
-.tool-render-subagent-prompt :where(pre) {
+.tool-render-markdown-body :where(pre) {
   background: var(--dsw-alias-bg-base);
   border-radius: 0.25rem;
   overflow-x: auto;
   padding: 0.375rem 0.5rem;
 }
-.tool-render-subagent-prompt :where(code) {
+.tool-render-markdown-body :where(code) {
   font-family: var(--ds-font-family-code);
 }
-.tool-render-subagent-prompt :where(code):not(:where(pre code)) {
+.tool-render-markdown-body :where(code):not(:where(pre code)) {
   background: var(--dsw-alias-bg-base);
   border-radius: 0.1875rem;
   padding: 0 0.1875rem;
