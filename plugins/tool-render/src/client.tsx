@@ -2017,6 +2017,12 @@ function apply(ctx) {
       {
         name: "conversation.chat.node",
         key: "context",
+        // The shipped ContextInjectionRow registers "context" at priority 0
+        // (bundle B5). Unlike tool.call.toolview, this slot THROWS on a
+        // same-key registration at the same priority instead of silently
+        // colliding -- it took the whole plugin down on load. Lowest
+        // priority renders, so this must be a lower number to shadow it.
+        priority: -100,
       },
       ContextRow,
     );
