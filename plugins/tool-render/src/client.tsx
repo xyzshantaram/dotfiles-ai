@@ -425,6 +425,13 @@ function deIndent(text) {
 // A served row is `HASH│content` with HASH in [A-Za-z0-9]{3}
 // (hashline/alphabet.js: HASH_LEN = 3; ALPH base62; HASH_SEP = "│").
 var HASH_ROW_RE = /^([A-Za-z0-9]{3})│/;
+// ---- builtin read envelope detection. ----
+// The builtin `read` wraps content as `<path>..</path>`, `<type>file</type>`,
+// `<content>`, numbered `N: text` lines, a blank line, one footer, and
+// `</content>` (@deepseek-ai/dsh-tool-fs README).
+function isBuiltinReadEnvelope(lines) {
+  return lines.length > 0 && /^<path>/.test(lines[0]) && lines.indexOf("<content>") !== -1;
+}
 // ---- Read line metadata and numbering. ----
 // dsh-better-edit's read records the requested start as the `offset` arg
 // (1-indexed) on the block and appends a `[Showing lines X-Y of Z]` hint
@@ -445,6 +452,10 @@ function readStartLine(args, output) {
     var m = /\[Showing lines (\d+)-(\d+) of \d+/.exec(String(output));
     if (m !== null) return parseInt(m[1], 10);
   }
+  // The builtin read appends `(Showing lines X-Y of Z. ...)` or
+  // `(Output capped. Showing lines X-Y. ...)` for partial reads.
+  var b = /\(Showing lines (\d+)-\d+/.exec(String(output));
+  if (b !== null) return parseInt(b[1], 10);
   return 1;
 }
 
@@ -455,6 +466,9 @@ function readStartLine(args, output) {
 function numberedReadRows(output, startLine) {
   var lines = String(output).split("\n");
   var hashline = lines.length > 0 && HASH_ROW_RE.test(lines[0]);
+  // The builtin read wraps content in <path>/<type>/<content> envelope lines
+  // and prefixes each content line with `N: `. Keep the tool's own numbers.
+  var builtin = !hashline && isBuiltinReadEnvelope(lines);
   var rows = [];
   var next = startLine;
   for (var i = 0; i < lines.length; i++) {
@@ -463,6 +477,21 @@ function numberedReadRows(output, startLine) {
       next++;
     } else if (hashline) {
       rows.push({ number: null, text: lines[i] });
+    } else if (builtin) {
+      if (
+        i === 0 ||
+        /^<type>/.test(lines[i]) ||
+        lines[i] === "<content>" ||
+        lines[i] === "</content>"
+      ) {
+        continue;
+      }
+      var bm = /^(\d+): ?/.exec(lines[i]);
+      if (bm !== null) {
+        rows.push({ number: parseInt(bm[1], 10), text: lines[i].slice(bm[0].length) });
+      } else {
+        rows.push({ number: null, text: lines[i] });
+      }
     } else {
       rows.push({ number: next, text: lines[i] });
       next++;
@@ -489,6 +518,24 @@ function numberedReadRows(output, startLine) {
 // number, or 1 when the read carried no range.
 function cleanReadTextForDiff(text) {
   var lines = String(text).split("\n");
+  // The builtin read wraps its content in an envelope and prefixes each line
+  // with `N: `. Strip both, and drop the blank separator and the footer, so
+  // the diff compares file content against file content.
+  var builtin = isBuiltinReadEnvelope(lines);
+  if (builtin) {
+    var bkept = [];
+    var inContent = false;
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i] === "<content>") {
+        inContent = true;
+        continue;
+      }
+      if (!inContent || lines[i] === "</content>") continue;
+      var bm = /^(\d+): ?/.exec(lines[i]);
+      if (bm !== null) bkept.push(lines[i].slice(bm[0].length));
+    }
+    return { content: bkept.join("\n"), start: readStartLine(null, text) };
+  }
   if (lines.length === 0 || !HASH_ROW_RE.test(lines[0])) {
     return { content: text, start: readStartLine(null, text) };
   }
