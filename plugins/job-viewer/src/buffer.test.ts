@@ -104,6 +104,40 @@ describe("JobBufferStore", () => {
     expect(entry?.snapshot?.status).toBe("running");
   });
 
+  it("setOwner creates an entry when none exists", () => {
+    const store = new JobBufferStore({ maxBytes: 100, retentionMs: 1000 });
+    store.setOwner("j1", { id: "agent-1" });
+    expect(store.get("j1")).toEqual({ text: "", truncated: false, owner: { id: "agent-1" } });
+  });
+
+  it("setOwner twice keeps the latest owner", () => {
+    const store = new JobBufferStore({ maxBytes: 100, retentionMs: 1000 });
+    const first = { id: "agent-1" };
+    const second = { id: "agent-2" };
+    store.setOwner("j1", first);
+    store.setOwner("j1", second);
+    expect(store.getOwner("j1")).toBe(second);
+  });
+
+  it("setOwner leaves text, truncated, finishedAt, and snapshot alone", () => {
+    const store = new JobBufferStore({ maxBytes: 100, retentionMs: 1000 });
+    store.append("j1", "hello");
+    store.markFinished("j1", 100);
+    store.setSnapshot("j1", { id: "j1", kind: "agent", label: "run", status: "running", startedAt: 5 });
+    store.setOwner("j1", { id: "agent-1" });
+    const entry = store.get("j1");
+    expect(entry?.text).toBe("hello");
+    expect(entry?.truncated).toBe(false);
+    expect(entry?.finishedAt).toBe(100);
+    expect(entry?.snapshot?.status).toBe("running");
+    expect(entry?.owner).toEqual({ id: "agent-1" });
+  });
+
+  it("getOwner returns undefined for a job with no entry", () => {
+    const store = new JobBufferStore({ maxBytes: 100, retentionMs: 1000 });
+    expect(store.getOwner("nope")).toBeUndefined();
+  });
+
   it("get never mutates or consumes the entry", () => {
     const store = new JobBufferStore({ maxBytes: 100, retentionMs: 1000 });
     store.append("j1", "abc");

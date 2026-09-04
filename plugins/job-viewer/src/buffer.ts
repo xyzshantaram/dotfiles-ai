@@ -27,6 +27,8 @@ export interface BufferEntry {
   truncated: boolean;
   finishedAt?: number;
   snapshot?: JobSnapshotLike;
+  /** Owner Agent instance, cached for callers that cannot hold one. */
+  owner?: unknown;
 }
 
 /**
@@ -90,6 +92,21 @@ export class JobBufferStore {
       this.entries.set(jobId, entry);
     }
     entry.snapshot = snapshot;
+  }
+
+  /** Cache the owner for a kill request. The latest owner wins. */
+  setOwner(jobId: string, owner: unknown): void {
+    let entry = this.entries.get(jobId);
+    if (!entry) {
+      entry = { text: "", truncated: false };
+      this.entries.set(jobId, entry);
+    }
+    entry.owner = owner;
+  }
+
+  /** Read the cached owner without changing the entry. */
+  getOwner(jobId: string): unknown {
+    return this.entries.get(jobId)?.owner;
   }
 
   /** Read the entry without changing it. */
