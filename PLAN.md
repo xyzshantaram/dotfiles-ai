@@ -699,16 +699,18 @@ Make both cards show the image and present their text well.
 
 - A bash-guard approval outlines the bash card and the approval card in electric
   blue (`#00b7ff`), against orange for a sandbox escalation. The bash card mark
-  is DELIBERATELY temporary and the owner accepted that. `ConversationSnapshot`
-  carries no approval history, `ToolCallOwnerProps` has no approval field, and
-  `approval/asked` is host-side log-only, so the only reachable signal is
-  `snapshot.pending`. Once the approval is answered the record leaves `pending`
-  and the card looks ordinary again. Making it permanent needs a host mirror
-  projection, the pattern `durable-todos` uses. Do not file this as a bug.
-- bash-guard is identified by its reason text starting with `bash-guard:`. Both
-  approval kinds arrive through the same frame, so there is no structural field
-  to test. Changing `DEFAULT_ASK_TEMPLATE` in `plugins/bash-guard.ts` breaks
-  both outlines.
+  was DELIBERATELY temporary at first: `ConversationSnapshot` carries no approval
+  history, `ToolCallOwnerProps` has no approval field, and `approval/asked` is
+  host-side log-only, so `snapshot.pending` was the only reachable signal, and
+  the mark vanished once the approval was answered. The owner has since asked
+  for it to persist — that is T4 below, and it needs the host mirror projection
+  the `durable-todos` plugin already demonstrates.
+- bash-guard is NO LONGER identified by reason text starting with `bash-guard:`.
+  It now sends its reason as YAML (`stringify(prompt)`), so the raw string starts
+  with the `summary:` key. Both the approval card and the bash row identify it by
+  parsing that YAML and checking for a string `summary` field
+  (`approval-comment`'s `parseGuardReason`, `tool-render`'s `isBashGuardReason`).
+  Changing that payload shape breaks both outlines.
 - The plugin is `plugins/tool-render`. It shadows shipped per-tool rows by
   registering the same key of `tool.call.toolview` at priority -100. Keyed slots
   sort ascending and the lowest live entry renders. A same key at a different
@@ -790,45 +792,41 @@ about six lines. Change it if it reads wrong.
 
 ## Tickets
 
-### T3 — client: the read_image and see cards
+### T4 — the bash card's blue mark must survive the approval
 
-Not started. HARD dependency on T2: both halves embed from the route.
+Not started. T3 (the image cards) shipped; see git log.
 
-Both cards shadow their tool key on `tool.call.toolview` at priority -100, the
-way every other row in this bundle does.
+Today the bash row outlines blue only while its approval sits in
+`snapshot.pending`. Answer the approval and the mark vanishes, because
+`pending` is the only signal the client can currently reach. The owner wants
+the mark to persist for the life of the call, so a transcript still shows
+which commands ran under a bash-guard rule.
 
-`read_image`: row reads filename, dimensions, size. Body embeds the image from
-the T2 route, then filename, mimetype and full path.
+The fix is a host mirror projection, the pattern `plugins/durable-todos`
+already demonstrates end to end: `plugins/durable-todos/src/projection.ts`
+defines a `ProjectionDefinition` (key, `stateVersion`, zod `schema`, `init`,
+`apply`, `view`) and declaration-merges its key into `SessionProjectionMap`;
+`src/index.ts` registers it with `scope.sessionProjections.register(...)`;
+the client reads it with `props.useProjection(key)`.
 
-`see`: row reads the question. Body renders the description through
-`MarkdownText` with the see-more clamp, then the image from the T2 route, then
-the path.
-
-Shared: bounded card height with one interior scroll area, image capped to card
-width at natural aspect, never upscaled, centred when narrower. Clicking the
-image opens its route URL in a new browser tab. A path the route cannot serve
-renders as a broken-image state, never as an empty box.
+Here that means: a host half records, per `callId`, that bash-guard raised
+the approval, and `BashRow` reads that projection instead of depending on
+`snapshot.pending` alone.
 
 **Acceptance criteria**
 
-- A `read_image` call shows the image, and the row reads filename, dimensions
-  and size.
-- A `see` call shows the question on the row, and the description above the
-  image in the body.
-- A long description is clamped, and see-more reveals the rest in place.
-- A tall image scrolls within the bounded card, and never stretches.
-- An image narrower than the card is centred, not upscaled.
-- Clicking the image opens it in a new tab at its route URL.
-- A moved or deleted file renders as a broken-image state, not an empty box.
+- A bash call approved through a bash-guard rule keeps its blue outline after
+  the approval is answered, and after a page reload.
+- A sandbox escalation still outlines orange, not blue.
+- A bash call that never raised an approval has no outline at all.
 
 ## Human review queue
 
 - [x] Errored tool calls — 2px red outline, no fill, no bar, enlarged red dot
       while collapsed, click expands and collapses, collapsed row reads tool
       name plus error message. Confirmed 2026-09-03.
-- [x] bash-guard approvals — the approval card and the bash call card both
-      outline electric blue, and the bash card returns to normal once the
-      approval is answered, as designed. Confirmed 2026-09-03.
+- [ ] After T4: confirm the blue mark is still on the bash card after
+      answering the approval, and after reloading the page.
 
 ---
 
