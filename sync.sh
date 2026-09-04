@@ -545,6 +545,19 @@ step_sync_aidos_skills() {
 	rm -rf "$tmp"
 }
 
+# Shorten an absolute path for a log line. The dsh install lives under a long
+# fnm node-version path, so echoing it verbatim buries the actual message.
+short_path() {
+	case "$1" in
+	# Everything inside the dsh install collapses to <dsh>/. That root is a
+	# deep fnm node-version path, and printing it in full buries the actual
+	# message in every one of these lines.
+	*/node_modules/@deepseek-ai/dsh/*) printf '<dsh>/%s\n' "${1#*/node_modules/@deepseek-ai/dsh/}" ;;
+	"$HOME"/*) printf '~%s\n' "${1#"$HOME"}" ;;
+	*) printf '%s\n' "$1" ;;
+	esac
+}
+
 # Disable one tool row (by id) in an agent preset file, in place. Idempotent:
 # a row that already carries `disabled: true` is left untouched, and a row
 # without a `disabled:` key gets one inserted after its `name:` line.
@@ -592,15 +605,19 @@ while i < len(lines):
     out.extend(row)
     i = j
 import os
-short = os.path.relpath(path, os.path.expanduser('~'))
+marker = '/node_modules/@deepseek-ai/dsh/'
+if marker in path:
+    short = '<dsh>/' + path.split(marker, 1)[1]
+else:
+    short = '~/' + os.path.relpath(path, os.path.expanduser('~'))
 if not found:
-    print(f'  WARNING: no {tool} row in ~/{short}; nothing to disable')
+    print(f'  WARNING: no {tool} row in {short}; nothing to disable')
     sys.exit(0)
 if changed:
     open(path, 'w').writelines(out)
-    print(f'  disabled {tool} in ~/{short}')
+    print(f'  disabled {tool} in {short}')
 else:
-    print(f'  {tool} already disabled in ~/{short}')
+    print(f'  {tool} already disabled in {short}')
 PY
 }
 
@@ -718,7 +735,7 @@ step_patch_standard_preset_tool_subagent() {
 	dsh_pkg="$(dirname "$(dirname "$(realpath "$dsh_bin")")")"
 	preset_yaml="$dsh_pkg/config/agent-presets/standard/agent.cordis.yml"
 	if [ ! -f "$preset_yaml" ]; then
-		echo "  WARNING: standard preset not found at $preset_yaml; skipping."
+		echo "  WARNING: standard preset not found at $(short_path "$preset_yaml"); skipping."
 		return 0
 	fi
 
@@ -933,11 +950,11 @@ step_patch_standard_preset_tool_presentation() {
 	dsh_pkg="$(dirname "$(dirname "$(realpath "$dsh_bin")")")"
 	preset_yaml="$dsh_pkg/config/agent-presets/standard/agent.cordis.yml"
 	if [ ! -f "$preset_yaml" ]; then
-		echo "  WARNING: standard preset not found at $preset_yaml; skipping."
+		echo "  WARNING: standard preset not found at $(short_path "$preset_yaml"); skipping."
 		return 0
 	fi
 	if rg -q '^\s*-\s+id:\s*tool-presentation\s*$' "$preset_yaml"; then
-		echo "  tool-presentation already present in $preset_yaml; no change"
+		echo "  tool-presentation already present in $(short_path "$preset_yaml"); no change"
 		return 0
 	fi
 	# One-time backup before the first append, so a bad patch can be undone
@@ -984,7 +1001,8 @@ if not re.search(row_pattern, patched):
     sys.exit(1)
 with open(path, "w") as f:
     f.write(patched)
-print("  appended tool-presentation (mode: both) to " + path)
+import os
+print("  appended tool-presentation (mode: both) to ~/" + os.path.relpath(path, os.path.expanduser("~")))
 PY
 	if [ $? -ne 0 ]; then
 		echo "  ERROR: presentation patch failed validation; restoring backup" >&2
@@ -1012,7 +1030,7 @@ step_disable_preset_builtin_tools() {
 	dsh_pkg="$(dirname "$(dirname "$(realpath "$dsh_bin")")")"
 	preset_yaml="$dsh_pkg/config/agent-presets/standard/agent.cordis.yml"
 	if [ ! -f "$preset_yaml" ]; then
-		echo "  WARNING: standard preset not found at $preset_yaml; skipping."
+		echo "  WARNING: standard preset not found at $(short_path "$preset_yaml"); skipping."
 		return 0
 	fi
 	preset_disable_tool "$preset_yaml" "tool-bash"
@@ -1045,13 +1063,13 @@ step_disable_replaced_jobs_rows() {
 	if [ -f "$preset_yaml" ]; then
 		preset_disable_tool "$preset_yaml" "tool-jobs"
 	else
-		echo "  WARNING: standard preset not found at $preset_yaml; skipping tool-jobs disable."
+		echo "  WARNING: standard preset not found at $(short_path "$preset_yaml"); skipping tool-jobs disable."
 	fi
 	webapp_patch="$dsh_pkg/node_modules/@deepseek-ai/dsh-web-app/cordis.patch.yml"
 	if [ -f "$webapp_patch" ]; then
 		preset_disable_tool "$webapp_patch" "ui-jobs"
 	else
-		echo "  WARNING: dsh-web-app patch not found at $webapp_patch; skipping ui-jobs disable."
+		echo "  WARNING: dsh-web-app patch not found at $(short_path "$webapp_patch"); skipping ui-jobs disable."
 	fi
 }
 
@@ -1066,7 +1084,7 @@ step_verify_preset_tool_disabled() {
 	local dsh_bin dsh_pkg std_yaml
 	if [ -f "$aidos_yaml" ]; then
 		if preset_tool_enabled "$aidos_yaml" "tool-bash"; then
-			echo "  ERROR: tool-bash is still enabled in $aidos_yaml" >&2
+			echo "  ERROR: tool-bash is still enabled in $(short_path "$aidos_yaml")" >&2
 			bad=1
 		fi
 	else
@@ -1078,28 +1096,28 @@ step_verify_preset_tool_disabled() {
 		std_yaml="$dsh_pkg/config/agent-presets/standard/agent.cordis.yml"
 		if [ -f "$std_yaml" ]; then
 			if preset_tool_enabled "$std_yaml" "tool-bash"; then
-				echo "  ERROR: tool-bash is still enabled in $std_yaml" >&2
+				echo "  ERROR: tool-bash is still enabled in $(short_path "$std_yaml")" >&2
 				bad=1
 			fi
 			if preset_tool_enabled "$std_yaml" "tool-goal"; then
-				echo "  ERROR: tool-goal is still enabled in $std_yaml" >&2
+				echo "  ERROR: tool-goal is still enabled in $(short_path "$std_yaml")" >&2
 				bad=1
 			fi
 			if preset_tool_enabled "$std_yaml" "tool-jobs"; then
-				echo "  ERROR: tool-jobs is still enabled in $std_yaml (job-viewer replaces it)" >&2
+				echo "  ERROR: tool-jobs is still enabled in $(short_path "$std_yaml") (job-viewer replaces it)" >&2
 				bad=1
 			fi
 		else
-			echo "  WARNING: standard preset not found at $std_yaml; skipping."
+			echo "  WARNING: standard preset not found at $(short_path "$std_yaml"); skipping."
 		fi
 		local webapp_patch="$dsh_pkg/node_modules/@deepseek-ai/dsh-web-app/cordis.patch.yml"
 		if [ -f "$webapp_patch" ]; then
 			if preset_tool_enabled "$webapp_patch" "ui-jobs"; then
-				echo "  ERROR: ui-jobs is still enabled in $webapp_patch (job-viewer replaces it)" >&2
+				echo "  ERROR: ui-jobs is still enabled in $(short_path "$webapp_patch") (job-viewer replaces it)" >&2
 				bad=1
 			fi
 		else
-			echo "  WARNING: dsh-web-app patch not found at $webapp_patch; skipping."
+			echo "  WARNING: dsh-web-app patch not found at $(short_path "$webapp_patch"); skipping."
 		fi
 	else
 		echo "  WARNING: dsh not on PATH; skipping standard preset check."
