@@ -1095,10 +1095,12 @@ about six lines. Change it if it reads wrong.
   card needs the bytes, nothing more, and `see.ts` needs no change.
 - `MarkdownText` comes from `@deepseek-ai/dsh-client-ui-primitives`, already in
   use at `plugins/tool-render/src/client.tsx:156`.
-- `.tool-render-subagent-prompt` is the existing capped, scrollable markdown
-  block: `max-height: 16rem; overflow-y: auto` plus full typography for
-  headings, paragraphs, lists, `pre` and inline code
-  (`plugins/tool-render/src/client.module.css:475-512`).
+- `.tool-render-markdown-body` (renamed from `.tool-render-subagent-prompt` in
+  T11, 2026-09-04) is the existing capped, scrollable markdown block:
+  `max-height: 16rem; overflow-y: auto` plus full typography for headings,
+  paragraphs, lists, `pre` and inline code. It now backs three rows (subagent,
+  context injection, `send_message`), not one -- reuse it, do not add a fourth
+  copy.
 - Routes register through `ctx.inject(["webServer"], ...)`, the pattern
   `plugins/log-viewer/src/index.ts:75-77` already uses.
 
