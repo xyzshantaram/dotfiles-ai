@@ -484,3 +484,42 @@
   border-radius: 0.1875rem;
   padding: 0 0.1875rem;
 }
+/* A <system-reminder> block, framed instead of hidden: every character of
+   its text still renders, just under a chip instead of literal tags. */
+.tool-render-reminder {
+  border-left: 2px solid var(--dsw-alias-border-l2);
+  margin: 0.5rem 0;
+  padding-left: 0.5rem;
+}
+.tool-render-reminder-chip {
+  display: inline-block;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-interactive-bg-hover);
+  border-radius: 999px;
+  margin-bottom: 0.25rem;
+  padding: 0.0625rem 0.375rem;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+}
+/* Skill frontmatter table (name, resource-resolution hint). Only what the
+   loaded skill's canonical output actually carries -- description and
+   whenToUse are catalog-only fields, stripped before a skill loads. */
+.tool-render-skill-table {
+  border-collapse: collapse;
+  margin-bottom: 0.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+}
+.tool-render-skill-table th {
+  color: var(--dsw-alias-label-tertiary);
+  text-align: left;
+  font-weight: 400;
+  padding: 0.125rem 0.5rem 0.125rem 0;
+  vertical-align: top;
+  white-space: nowrap;
+}
+.tool-render-skill-table td {
+  color: var(--dsw-alias-label-primary);
+  padding: 0.125rem 0;
+  white-space: pre-wrap;
+}

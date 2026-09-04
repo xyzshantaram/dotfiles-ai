@@ -58,7 +58,9 @@ import {
   deIndent,
   HASH_ROW_RE,
   numberedReadRows,
+  parseSkillContent,
   readStartLine,
+  splitSystemReminders,
 } from "./text";
 import {
   injectStyle,
@@ -1887,15 +1889,102 @@ function contextText(content) {
   return parts.join("");
 }
 
-function ContextRow(props) {
+// A plugin-authored injection names itself in source: { kind: "plugin",
+// plugin: "<name>", ... } (confirmed against aidos's own board-update
+// notices, node_modules/aidos/src/host/aidos-core.ts:1932). Other producers
+// (recall, coordinator relays, workspace instructions) have no plugin name
+// and always get the generic card below.
+function pluginSourceKey(source) {
+  if (source === null || typeof source !== "object") return undefined;
+  if (source.kind !== "plugin") return undefined;
+  if (typeof source.plugin !== "string" || source.plugin === "") return undefined;
+  return source.plugin;
+}
+
+// A <system-reminder> block keeps every character of its own text (the
+// shipped renderer's own doc comment: hiding it would misreport what the
+// model read), but framed with a chip instead of literal tags, so the
+// wrapper reads as a designed affordance rather than raw markup. Plain
+// segments between reminders render as ordinary markdown.
+function markdownWithReminders(text) {
+  var segments = splitSystemReminders(text);
+  if (segments.length === 0) return null;
+  return segments.map(function (segment, index) {
+    if (!segment.reminder) {
+      return <MarkdownText key={index} text={segment.text} />;
+    }
+    return (
+      <div key={index} className="tool-render-reminder">
+        <span className="tool-render-reminder-chip">System reminder</span>
+        <MarkdownText text={segment.text} />
+      </div>
+    );
+  });
+}
+
+// Shared by both the tool-call path (a model-invoked `skill` call) and the
+// context-injection path (a user-invoked skill, whose <skill_content> block
+// "appears in this conversation" per dsh-tool-skill's own guidance text).
+// The loaded skill's canonical output (name, provider, resourceBase,
+// content) does not carry description/whenToUse -- those are catalog-only
+// fields, stripped before a skill loads -- so the table shows only what
+// this format actually carries: the name and the resource-resolution hint.
+function SkillContentCard(props) {
   var expandedState = useState(false);
   var expanded = expandedState[0];
   var setExpanded = expandedState[1];
-  var node = props.node;
-  var data = node !== null && node !== undefined && typeof node === "object" ? node.data : null;
-  var content = data !== null && data !== undefined ? data.content : undefined;
-  var provenance = data !== null && data !== undefined ? data.provenance : undefined;
-  var text = contextText(content);
+  var body = (
+    <div className="tool-render-markdown-body">
+      <table className="tool-render-skill-table">
+        <tbody>
+          <tr>
+            <th>Name</th>
+            <td>{props.name}</td>
+          </tr>
+          <tr>
+            <th>Resources</th>
+            <td>{props.resourceHint}</td>
+          </tr>
+        </tbody>
+      </table>
+      {markdownWithReminders(props.instructions)}
+    </div>
+  );
+  return toolRenderRow({
+    icon: <IconChecklistOutline14 />,
+    title: "Skill",
+    badge: props.name,
+    summary: props.name,
+    expandable: true,
+    expanded: expanded,
+    onToggle: function () {
+      setExpanded(!expanded);
+    },
+    body: body,
+  });
+}
+
+// The generic card: one markdown-rendered treatment for every injection this
+// bundle does not specifically know, replacing the shipped six-form renderer.
+// A user-invoked skill's <skill_content> block is a context injection with
+// no plugin source, so it is recognized here rather than through the
+// plugin-shadow path.
+function GenericContextCard(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var provenance = props.provenance;
+  var text = contextText(props.content);
+  var skill = parseSkillContent(text);
+  if (skill !== null) {
+    return (
+      <SkillContentCard
+        name={skill.name}
+        resourceHint={skill.resourceHint}
+        instructions={skill.instructions}
+      />
+    );
+  }
   var recall = provenance !== null && provenance !== undefined && provenance.role === "recall";
   var title = recall ? "Recalled context" : "Context";
   var badge =
@@ -1907,9 +1996,7 @@ function ContextRow(props) {
       : undefined;
   var body =
     text !== "" ? (
-      <div className="tool-render-markdown-body">
-        <MarkdownText text={text} />
-      </div>
+      <div className="tool-render-markdown-body">{markdownWithReminders(text)}</div>
     ) : null;
   return toolRenderRow({
     icon: <IconBrowseOutline16 size={14} />,
@@ -1922,6 +2009,81 @@ function ContextRow(props) {
       setExpanded(!expanded);
     },
     body: body,
+  });
+}
+
+// ContextRow is a thin router, not a renderer. A plugin-named injection is
+// offered to context.injection.view first, keyed by its plugin name, so any
+// plugin can register its own full card (icon, title, body, everything) for
+// its own injections there -- for example aidos's board-update notices.
+// Nothing here needs to know that plugin's name or shape; unclaimed keys and
+// every injection with no plugin name fall through to GenericContextCard.
+function ContextRow(props) {
+  var node = props.node;
+  var data = node !== null && node !== undefined && typeof node === "object" ? node.data : null;
+  var content = data !== null && data !== undefined ? data.content : undefined;
+  var source = data !== null && data !== undefined ? data.source : undefined;
+  var provenance = data !== null && data !== undefined ? data.provenance : undefined;
+  var form = data !== null && data !== undefined ? data.form : undefined;
+  var fallback = (
+    <GenericContextCard content={content} source={source} provenance={provenance} form={form} />
+  );
+  var sourceKey = pluginSourceKey(source);
+  if (sourceKey === undefined || typeof props.renderSlot !== "function") return fallback;
+  return props.renderSlot(
+    "context.injection.view",
+    { content: content, source: source, provenance: provenance, form: form, node: node },
+    { entryKey: sourceKey, fallback: fallback },
+  );
+}
+
+// ---- skill row: a model-invoked `skill` tool call. Its canonical output
+// renders to exactly one <skill_content> text block (dsh-skill's
+// renderSkillContent), so this parses the same format GenericContextCard
+// recognizes for a user-invoked skill, and shares SkillContentCard with it.
+// A result that does not parse (a future format change, or an error) falls
+// back to the plain error card, same as every other row. ----
+function SkillRow(props) {
+  // useState first and unconditionally: this component can return the
+  // SkillContentCard branch on one render and the toolRenderRow branch on
+  // another (state settles from "running" to "done" between them), and React
+  // requires the same hooks in the same order every render.
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var block = props.block;
+  var done = doneOf(block);
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary =
+    state === "error" && errorText !== null && errorText !== ""
+      ? firstLineOfError(errorText)
+      : undefined;
+  var skill = state !== "error" && done ? parseSkillContent(resultTextOf(block)) : null;
+  if (skill !== null) {
+    return (
+      <SkillContentCard
+        name={skill.name}
+        resourceHint={skill.resourceHint}
+        instructions={skill.instructions}
+      />
+    );
+  }
+  var args = parseArgs(argsRawOf(block));
+  var skillName = args !== null ? pickString(args, ["name"]) : undefined;
+  return toolRenderRow({
+    icon: <IconChecklistOutline14 />,
+    title: "Skill",
+    summary: skillName !== undefined ? skillName : "Skill",
+    state: state,
+    expandable: false,
+    expanded: expanded,
+    onToggle: function () {
+      setExpanded(!expanded);
+    },
+    errorSummary: errorSummary,
+    errorText: errorText,
+    inspect: props.inspect,
   });
 }
 
@@ -2011,6 +2173,14 @@ function apply(ctx) {
       },
       SendMessageRow,
     );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "skill",
+        priority: -100,
+      },
+      SkillRow,
+    );
   });
   ctx.slots.inject("conversation.chat.node", function* () {
     yield ctx.slots.register(
@@ -2023,6 +2193,9 @@ function apply(ctx) {
         // colliding -- it took the whole plugin down on load. Lowest
         // priority renders, so this must be a lower number to shadow it.
         priority: -100,
+        // Lets a plugin-named injection be shadowed by its own producer,
+        // keyed by source.plugin. See ContextRow / context.injection.view.
+        children: { "context.injection.view": { kind: "keyed", scope: "session" } },
       },
       ContextRow,
     );

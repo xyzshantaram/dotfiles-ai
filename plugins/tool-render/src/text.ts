@@ -151,3 +151,52 @@ export function cleanReadTextForDiff(text) {
   }
   return { content: kept.join("\n"), start: readStartLine(null, text) };
 }
+
+// ---- <skill_content> parsing (dsh-skill's renderSkillContent format). ----
+// Exact template (dsh-skill/lib/index.js:57-70): OPEN tag with a name
+// attribute, <skill_resources>...</skill_resources>, a blank line,
+// <skill_instructions>...</skill_instructions>, CLOSE tag, each on its own
+// line. name is HTML-attribute-escaped (&, ", <) by the producer.
+var SKILL_CONTENT_RE =
+  /^<skill_content name="([^"]*)">\n<skill_resources>\n([\s\S]*?)\n<\/skill_resources>\n\n<skill_instructions>\n([\s\S]*?)\n<\/skill_instructions>\n<\/skill_content>$/;
+
+function unescapeAttr(value) {
+  return value.replaceAll("&lt;", "<").replaceAll("&quot;", '"').replaceAll("&amp;", "&");
+}
+
+/** Parse one <skill_content> block. Returns null when text is not that exact shape. */
+export function parseSkillContent(text) {
+  if (typeof text !== "string") return null;
+  var m = SKILL_CONTENT_RE.exec(text.trim());
+  if (m === null) return null;
+  return { name: unescapeAttr(m[1]), resourceHint: m[2], instructions: m[3] };
+}
+
+// ---- <system-reminder> framing (dsh-agent-instructions/lib/index.js:110-263). ----
+// Exact join: [OPEN, body, CLOSE].join("\n"), so OPEN and CLOSE each sit on
+// their own line around the body. The body escapes a literal closing tag as
+// "<\/system-reminder>" (backslash before the slash), so that escaped form
+// never matches this regex and safely renders as inert text within a
+// reminder's own body.
+var SYSTEM_REMINDER_RE = /<system-reminder>\n([\s\S]*?)\n<\/system-reminder>/g;
+
+/**
+ * Split text into plain and system-reminder segments, in order.
+ * Each segment is { reminder: boolean, text: string }. Preserves every
+ * character of the input across the returned segments; nothing is dropped,
+ * only re-grouped so a renderer can frame reminder text differently.
+ */
+export function splitSystemReminders(text) {
+  if (typeof text !== "string" || text === "") return [];
+  var segments = [];
+  var lastEnd = 0;
+  var re = new RegExp(SYSTEM_REMINDER_RE.source, "g");
+  var m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > lastEnd) segments.push({ reminder: false, text: text.slice(lastEnd, m.index) });
+    segments.push({ reminder: true, text: m[1] });
+    lastEnd = m.index + m[0].length;
+  }
+  if (lastEnd < text.length) segments.push({ reminder: false, text: text.slice(lastEnd) });
+  return segments;
+}
