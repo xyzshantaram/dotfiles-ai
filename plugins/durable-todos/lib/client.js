@@ -137,7 +137,7 @@ function reminderText(items) {
   var lines = items.filter(isUnfinished).map(function(item) {
     return "- [ ] " + item.content;
   });
-  return "Reminder \u2014 unfinished todos:\n" + lines.join("\n");
+  return "Reminder \u2014 unfinished todos:\n" + lines.join("\n") + "\n\nRewrite the whole list before continuing: drop anything already done or no longer wanted, and add what the user has asked for since.";
 }
 function appendToDraft(existing, addition) {
   var trimmed = existing.replace(/\s+$/, "");

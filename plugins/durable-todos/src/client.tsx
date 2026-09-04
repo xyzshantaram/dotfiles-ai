@@ -29,12 +29,25 @@ function isUnfinished(item: TodoItem): boolean {
   return item.status === "pending" || item.status === "in_progress";
 }
 
-/** Reminder text for the unfinished items, as a markdown checkbox list. */
+/**
+ * Reminder text for the unfinished items, as a markdown checkbox list.
+ *
+ * The trailing nudge exists because the reminder is a snapshot of a list the
+ * agent may have stopped maintaining. Without it the agent tends to re-read
+ * these lines as still-open work and repeat something already shipped, or
+ * carry an item the user cancelled. Rewriting the whole list is the only
+ * supported update, so the nudge asks for exactly that.
+ */
 function reminderText(items: TodoItem[]): string {
   var lines = items.filter(isUnfinished).map(function (item) {
     return "- [ ] " + item.content;
   });
-  return "Reminder — unfinished todos:\n" + lines.join("\n");
+  return (
+    "Reminder — unfinished todos:\n" +
+    lines.join("\n") +
+    "\n\nRewrite the whole list before continuing: drop anything already done or" +
+    " no longer wanted, and add what the user has asked for since."
+  );
 }
 
 /** Append text to the existing draft with a blank line between them, or
