@@ -1454,124 +1454,162 @@ guidance overrides, and `skills/customize-setup/SKILL.md` plus its
   nothing outside `experiments/`.
 - `pnpm test` passes.
 
-### T5 — bash tool, stage 1: bash-guard owns execution and runs its own rewrites
+### T5 — our own bash tool: guard, rewrite, run
 
-**Status:** open. Blocked on T2 and T3, so the edit switch lands first.
-**Why:** bash-guard already computes the exact replacement command and then
-refuses to run it, because a pre-execute listener cannot rewrite frozen
-arguments. Measured cost: 1,408 bash calls denied purely to apply a rewrite the
-guard had in hand.
-**Change:** register our own bash tool from `plugins/bash-guard.ts` and hide the
-builtin one, the way `plugins/skill-gate.ts` hides tools with
-`tools.restrict({ deny })`. The new tool runs the guard verdict itself, applies
-a translator result when the translator reports no blocker, and executes. Deny
-stays deny. A translator that reports a blocker still denies.
-**Scope limit:** stage 1 is rewrite-and-run only. The background-jobs viewer and
-tmux are later tickets and must not land in this one.
+**Status:** contract settled by grilling on 2026-09-04. Ready to dispatch.
+**Why:** bash-guard computes the exact replacement command and then refuses to
+run it, because `PreToolDecision` is only `allow | deny | ask` and dsh-tools
+deep-freezes `exec.arguments`. Measured cost: 1,408 bash calls denied purely to
+apply a rewrite the guard already held. bash is 49.3% of all tool calls, so a
+regression here is felt everywhere.
 
-**Settled 2026-09-04. Do NOT spawn processes, and do NOT replace the jobs
-runtime.** `dsh-tool-bash` does not own execution. Its `lib/types/index.d.ts`
-exports only `{ name, inject, Config, apply }`, and its published `src/` is
-empty, so its executor is not reachable and wrapping it is not an option. Its
-own README line 5 states it is "the model-facing `bash` tool registered over the
-`ctx.shell` executor seam", and that a background handle "is registered with the
-generic `ctx.jobs` runtime and controlled through `job_output`, `job_list`, and
-`job_kill`".
-
-So our tool becomes a SECOND CONSUMER of the same two seams. We inherit
-sandboxing, workdir resolution, timeouts, job ids, cross-session isolation,
-completion notices, and disposal. We add only the guard and the rewrite.
-
-**Verified API facts (do not re-research).** From
-`@deepseek-ai/dsh-shell/lib/types/index.d.ts` and `types.d.ts`:
-- `ctx.shell` is an abstract service with `get sandboxMode(): SandboxMode |
-  undefined`, `resolve(request: ShellExecRequest): ShellExecSpec`,
-  `run(spec: ShellExecSpec): Promise<ShellRunResult>`, and
-  `start(spec: ShellExecSpec): ShellProcess`.
-- `ShellProcess` carries `status: 'running' | 'completed' | 'killed'` and
-  `readOutput(): ShellProcessRead`. `readOutput` is incremental: consecutive
+**Verified API facts (do not re-research).** `dsh-tool-bash` does not own
+execution. Its `lib/types/index.d.ts` exports only `{ name, inject, Config,
+apply }` and its published `src/` is empty. Its README line 5 calls it "the
+model-facing `bash` tool registered over the `ctx.shell` executor seam", and
+line 37 describes the background path. From `@deepseek-ai/dsh-shell/lib/types/`:
+- `ctx.shell` is abstract with `get sandboxMode(): SandboxMode | undefined`,
+  `resolve(request: ShellExecRequest): ShellExecSpec`,
+  `run(spec): Promise<ShellRunResult>`, and `start(spec): ShellProcess`.
+- `ShellProcess` has `status: 'running' | 'completed' | 'killed'` and
+  `readOutput(): ShellProcessRead`. `readOutput` is incremental, so consecutive
   reads never repeat content.
-- Call `resolve()` before executing. Per `dsh-tool-bash` README line 27, the
-  workdir default comes from the calling agent's `session.header.cwd` via
-  `exec.agent` BEFORE `resolve()`, because many sessions share one executor.
-- Advertise `sandbox_permissions` only when `ctx.shell.sandboxMode` reports a
-  confining default, matching the builtin.
-- Background path per README line 37: preflight `ctx.jobs.start()`, register the
-  calling agent as owner, then adapt the `ShellProcess` into the job runtime's
-  cancel, done, and incremental-output hooks.
+- Workdir default comes from the calling agent's `session.header.cwd` via
+  `exec.agent`, applied BEFORE `resolve()`, because many sessions share one
+  executor.
+- Register with `ctx.tools.register(defineTool({...}))`, the seam
+  `plugins/package-tool.ts:360` and `plugins/see.ts` already use.
+- Current `RewriteRule` (`plugins/bash-guard.ts:126`) is
+  `{ drop: string[], value?: boolean, because?: string }`. Only `guards/rg.json`
+  uses it today.
 
-**Card treatment, decided by the user.** Show only the command that actually
-ran. No badge, no strikethrough, no original text. Mark the call with a 3px blue
-outline. `plugins/tool-render/src/client.module.css:325` already has
+**Change.**
+
+1. Preset rows, driven from `sync.sh`:
+   - Disable `tool-bash` in BOTH presets. Aidos is
+     `~/.dsh/.agent-presets/aidos/agent.cordis.yml:13`. Standard is
+     `$dsh_pkg/config/agent-presets/standard/agent.cordis.yml:44`, patched in
+     place the way `step_patch_standard_preset_tool_subagent` already does. The
+     row carries a `disabled:` key, so no preset fork is needed.
+   - Disable `tool-goal` in the standard preset (line 97). Aidos has no such row.
+   - Leave `tool-jobs` enabled in both.
+   - Add a sync step that FAILS LOUDLY if `tool-bash` is enabled again. sync.sh
+     already warns that a dsh reinstall re-extracts the standard preset and
+     silently reverts its patch.
+2. Register our own `bash` tool from `plugins/bash-guard.ts` over `ctx.shell`.
+   Advertise `sandbox_permissions` and `justification` only when
+   `ctx.shell.sandboxMode` reports confinement.
+3. Background parity in this ticket, not later: `ctx.jobs.start()` preflight,
+   register the calling agent as owner, adapt the `ShellProcess` into the job
+   runtime's cancel, done, and incremental-output hooks. `job_list`,
+   `job_output`, and `job_kill` must keep working unchanged.
+4. REMOVE the `tools/pre-execute` listener. The guard runs inside the tool, one
+   code path. Rule resolution is otherwise unchanged, including the aidos phase
+   profile via `ctx.get("aidos").bashContext(agent)`, `safePaths`, and
+   `workspaceRoot`.
+5. New per-rule flag `readOnly: true` in the guard rule JSON.
+6. New `rewrites[].add`: insert a flag, and optionally its value, ONLY when it is
+   absent. Idempotent by construction. The motivating rule is
+   `npm install --cache /tmp/dsh/npm-cache`, which the friction scan tied to 118
+   unmarked permission failures where the model escalated only 54% of the time.
+
+   SHAPE, settled 2026-09-04 and already pinned by
+   `plugins/bash-guard-rewrite.test.ts`. `RewriteRule` becomes:
+
+   ```ts
+   interface RewriteRule {
+     drop?: string[];                              // unchanged
+     add?: { flag: string; value?: string }[];     // new
+     value?: boolean;                              // unchanged, only meaningful with drop
+     because?: string;                             // unchanged, stays at rule level
+   }
+   ```
+
+   `add` is a list, symmetric with `drop`. Keep `because` at the RewriteRule
+   level rather than per entry, so there is one place to explain a rewrite.
+   Insertion goes immediately after the command word: `jq .` with
+   `add: [{ flag: "--indent", value: "2" }]` becomes `jq --indent 2 .`. The test
+   asserts that position, so it is contract, not incidental.
+7. Behaviour:
+   - AUTO-RUN a clean translate, a flag drop, or an `add` when the resolved rule
+     is marked `readOnly`.
+   - OTHERWISE ASK. The approval prompt shows the model's original command AND
+     the substitution. Approval runs the REWRITTEN command.
+   - Deny stays deny. A translator that reports a blocker stays deny.
+   - FORWARD THE JUDGMENT: for any non-allow verdict, append the rule's `reason`
+     to the tool result the model sees. This teaches the model to write `rg` next
+     time, so the rewrite rate falls on its own.
+
+**Subsumes Effort 1 T5** (`warn` verdict plus additive rewrites). Delete that
+ticket when this lands. Forwarding the reason on every non-allow verdict covers
+the `warn` half, and item 6 covers `rewrites[].add`.
+
+**Also reword `guards/grep.json`.** Its `reason` already claims "grep is normally
+translated to rg automatically", which only becomes true when this ships. Check
+sibling rules for the same phrasing.
+
+**Decision-layer API the tests target.** `evaluate` today is
+`(ctx, dirs, command, safePaths, workspaceRoot, templates) => Promise<PreToolDecision | null>`
+where `null` means allow (`plugins/bash-guard.ts:516`). It must return richer
+information, because a rewrite is no longer a deny. New return type:
+
+```ts
+type GuardOutcome =
+  | { action: "run";  command: string; rewritten: boolean; reason?: string }
+  | { action: "ask";  command: string; original: string; rewritten: boolean; reason?: string }
+  | { action: "deny"; reason: string };
+```
+
+`evaluate` never returns null. A plain allow is
+`{ action: "run", command: <the model's command>, rewritten: false }`. `command`
+is always what should execute. `reason` is present whenever a rule matched with
+a non-allow verdict, and the tool appends it to the model-visible result.
+
+**Dispatch order. The preset switch goes LAST.** Disabling `tool-bash` before
+the replacement exists means any `./sync.sh` run removes bash for every session,
+and the other session works in this repo too.
+
+1. Tests, written against this contract by a coder that has NOT seen the
+   implementation. They fail until unit 2 lands, which is the point. Follow the
+   existing harness in `plugins/bash-guard.test.ts`.
+2. The `bash` tool, foreground only, over `ctx.shell`, with guard integration,
+   `readOnly` gating, the ask path, and reason forwarding.
+3. Background parity over `ctx.jobs`, continuing unit 2's child session.
+4. `sync.sh` preset disabling plus the verification step, run once the rest is
+   proven. NOTE: `sync.sh` line 45 carries an uncommitted aidos pin bump from
+   the other session. Do not touch that line.
+
+**Acceptance criteria:**
+- `pnpm test` passes, including decision-layer unit tests for verdict
+  resolution, `readOnly` gating, the ask payload carrying both commands, and the
+  forwarded reason text.
+- Fakes for `ctx.shell` (`resolve`, `run`, `start`, `readOutput`) and `ctx.jobs`
+  exercise the foreground and background paths.
+- Live checklist, run by hand before this is called done:
+  - `grep -oE foo .` runs as the rg equivalent and returns real output.
+  - A non-read-only rewrite prompts, and the prompt shows both commands.
+  - A denied command from `guards/*.json` still returns a denial.
+  - `run_in_background: true` starts a job, and `job_list`, `job_output`, and
+    `job_kill` all control it.
+  - The model-visible result carries the rule reason on a rewritten call.
+
+### T8 — tool-render: mark a rewritten bash call
+
+**Status:** open. Owned by the other session, since it holds `tool-render`.
+**Why:** with T5 shipped a rewritten command runs silently. Without a mark you
+cannot spot a guard rule that rewrites too aggressively.
+**Change:** the card shows ONLY the executed command, with no badge and no
+original text. Add a persistent 3px blue outline.
+`plugins/tool-render/src/client.module.css:325` already has
 `.tool-render-card[data-guard-approval] { outline: 3px solid
-var(--dsh-outline-guard); }`. Reuse that colour token with a NEW attribute, for
-example `data-guard-rewrite`. The existing blue is deliberately transient
-(comment at line 320: it lasts only while an approval is open). A rewrite mark
-must persist, because our tool owns the result and can set the flag durably.
-
+var(--dsh-outline-guard); }`. Reuse that colour token with a NEW attribute such
+as `data-guard-rewrite`. The existing blue is deliberately transient, per the
+comment at line 320, because the client never receives a decided approval's
+reason. A rewrite mark must PERSIST, and T5's tool owns its own result so it can
+set that flag durably.
 **Acceptance criteria:**
-- `pnpm test` passes, including new cases in `plugins/bash-guard.test.ts` for a
-  translated command that runs and a blocked translation that still denies.
-- Live: `grep -oE foo .` runs as the rg equivalent and returns real output.
-- Live: a denied command (per `guards/*.json`) still returns a denial.
-- Live: `run_in_background: true` still works, and `job_list`, `job_output`, and
-  `job_kill` still control the job. This proves we consumed `ctx.jobs` rather
-  than replacing it.
-- Live: a rewritten call shows a persistent blue outline, and the card shows
-  only the executed command.
-
-### T7 — tmux-backed shell executor
-
-**Status:** BLOCKED on a direct contradiction with Effort 6. Do not start.
-
-**Conflict found 2026-09-04.** Effort 6 ("job viewer") records a settled
-decision from grilling on 2026-09-03 that says, verbatim: "No tmux. It
-re-parents the command onto the tmux server, outside the argv that `ctx.sandbox`
-wraps, and the workspace-write policy is doing real work. The
-attach-from-a-laptop-terminal case is dropped on purpose. The modal replaces it
-and also works from a phone, which tmux never would have."
-
-That objection is technical, not a preference. A tmux executor would run the
-real command as a child of the tmux server, so the sandbox wrapper never sees
-its argv and the workspace-write policy stops applying. This ticket cannot
-proceed until the user either overturns that decision knowing the sandbox cost,
-or drops tmux again.
-
-Effort 6 also already plans the jobs viewer: a host plugin becomes the sole
-consumer of job output, polls each running job, buffers deltas, and replaces
-`job_output`, `job_list`, and `job_kill` so `job_output` stops being one-shot.
-Check that effort's state before planning any jobs work here. Effort 6 further
-notes that an interactive command the agent must drive should use the shipped
-`dsh-tool-bash-persistent` over the PTY seam, as a separate one-row change.
-
-**If tmux is overturned**, the design below still holds, because `ctx.shell` is
-an abstract executor with `resolve`, `run`, and `start`, so tmux would be a
-different `ctx.shell` implementation rather than a change to the bash tool. T5
-bakes in no process assumption either way, so T5 is safe to build now.
-**Prior art, from `/home/sid/.config/opencode/tools/shell-command-long-running.ts`
-(315 lines, read 2026-09-04):** one detached tmux session per job named
-`oc-<id>`, started with `tmux new-session -d -s <name> -c <cwd>` running
-`bash --noprofile --norc -c`. The command is wrapped as
-`set -o pipefail; { cmd; } 2>&1 | tee <outfile>; echo $? > <exitfile>` so the
-exit code survives the pipe. State lives only in two files per job under
-`/tmp/opencode/bash` plus the tmux server itself, so jobs outlive a harness
-restart. Completion is detected by polling `tmux list-panes -F
-"#{pane_dead}"` every 500 ms. `remain-on-exit` keeps scrollback. Garbage
-collection kills finished sessions older than 15 minutes, caps finished at 20,
-and refuses new spawns at 50.
-**Take and improve.** Take the tmux-session-per-job model, the `tee` plus
-exit-code-file wrapper, `remain-on-exit`, and the GC policy. Do NOT take these
-three:
-- Polling `pane_dead` every 500 ms. dsh's `ShellProcess.status` already models
-  `running`/`completed`/`killed`.
-- Re-reading the whole log file on every read. `ShellProcess.readOutput()` is
-  contractually incremental, so hold a byte offset per job instead.
-- The unbounded `tee` file and the fixed 5-second wait before detaching.
-**Acceptance criteria:**
-- The tmux executor satisfies the same `ctx.shell` contract, and the bash tool
-  from T5 works against it with no change to the tool.
-- A backgrounded command survives a dsh restart and is still readable.
-- Two consecutive `job_output` reads never return the same bytes twice.
+- A rewritten call keeps its blue outline after the turn ends and after a reload.
+- A normal call has no outline. An escalated call keeps its yellow one.
 
 ### T6 — tool-render: extract and test the read parsers
 
