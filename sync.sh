@@ -42,7 +42,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#795d83a3816b91dd158dd6feb606f8528f02614c}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#87d8199ce095c53f3576109854a123bdaf11dce1}"
 
 # Git-hosted specs whose build scripts pnpm must be allowed to run. pnpm 10+
 # blocks lifecycle scripts (prepare/postinstall) unless the exact resolved
@@ -314,10 +314,18 @@ step_install_plugins() {
 		# overrides both tokens from html:root, which outranks :root without
 		# needing !important.
 		pnpm_ins "$HERE/plugins/system-fonts"
+		# Styled tooltips. An element opts in with data-dsh-tip and keeps its
+		# own title attribute, which stays the fallback: if this package fails
+		# or never loads, the browser shows the native tooltip.
+		pnpm_ins "$HERE/plugins/tooltips"
 		# The composer overflow menu holds the sandbox picker and offers a slot
 		# for other plugins.
 		pnpm_ins "$HERE/plugins/composer-menu"
 		pnpm_ins "$HERE/plugins/log-viewer"
+		# Background job output buffer, replacement job_list/job_output/job_kill
+		# tools, HTTP routes, completion delivery, and the replacement dropdown.
+		# tool-jobs and dsh-client-ui-jobs are disabled below, once this mounts.
+		pnpm_ins "$HERE/plugins/job-viewer"
 		# Owns every MCP server, both transports, and the OAuth login. Its
 		# roster is $DSH_HOME/mcp-servers.json, written by step_sync_mcp_config.
 		pnpm_ins "$HERE/plugins/mcp-servers"
@@ -387,7 +395,9 @@ step_report_extra_plugins() {
 		"session-archive"
 		"subscriptions"
 		"system-fonts"
+		"tooltips"
 		"log-viewer"
+		"job-viewer"
 		"mcp-servers"
 		"tool-render"
 
