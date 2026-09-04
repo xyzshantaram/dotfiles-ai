@@ -15432,7 +15432,7 @@ function toolNameBadge(toolName, icon, state) {
       style: { background, borderColor: border, color }
     },
     /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-name-badge-icon" }, icon),
-    /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-name-badge-text" }, toolName)
+    /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-name-badge-text", title: toolName, "data-dsh-tip": "" }, toolName)
   );
 }
 function toolRenderRow(options) {
