@@ -8786,6 +8786,9 @@ function deIndent(text) {
   return out.join("\n");
 }
 var HASH_ROW_RE = /^([A-Za-z0-9]{3})│/;
+function isBuiltinReadEnvelope(lines) {
+  return lines.length > 0 && /^<path>/.test(lines[0]) && lines.indexOf("<content>") !== -1;
+}
 function readStartLine(args, output) {
   if (args !== null && typeof args === "object" && typeof args.offset === "number" && Number.isInteger(args.offset) && args.offset >= 1) {
     return args.offset;
@@ -8795,11 +8798,14 @@ function readStartLine(args, output) {
     var m = /\[Showing lines (\d+)-(\d+) of \d+/.exec(String(output));
     if (m !== null) return parseInt(m[1], 10);
   }
+  var b = /\(Showing lines (\d+)-\d+/.exec(String(output));
+  if (b !== null) return parseInt(b[1], 10);
   return 1;
 }
 function numberedReadRows(output, startLine) {
   var lines = String(output).split("\n");
   var hashline = lines.length > 0 && HASH_ROW_RE.test(lines[0]);
+  var builtin = !hashline && isBuiltinReadEnvelope(lines);
   var rows = [];
   var next = startLine;
   for (var i = 0; i < lines.length; i++) {
@@ -8808,6 +8814,16 @@ function numberedReadRows(output, startLine) {
       next++;
     } else if (hashline) {
       rows.push({ number: null, text: lines[i] });
+    } else if (builtin) {
+      if (i === 0 || /^<type>/.test(lines[i]) || lines[i] === "<content>" || lines[i] === "</content>") {
+        continue;
+      }
+      var bm = /^(\d+): ?/.exec(lines[i]);
+      if (bm !== null) {
+        rows.push({ number: parseInt(bm[1], 10), text: lines[i].slice(bm[0].length) });
+      } else {
+        rows.push({ number: null, text: lines[i] });
+      }
     } else {
       rows.push({ number: next, text: lines[i] });
       next++;
@@ -8826,6 +8842,21 @@ function numberedReadRows(output, startLine) {
 }
 function cleanReadTextForDiff(text) {
   var lines = String(text).split("\n");
+  var builtin = isBuiltinReadEnvelope(lines);
+  if (builtin) {
+    var bkept = [];
+    var inContent = false;
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i] === "<content>") {
+        inContent = true;
+        continue;
+      }
+      if (!inContent || lines[i] === "</content>") continue;
+      var bm = /^(\d+): ?/.exec(lines[i]);
+      if (bm !== null) bkept.push(lines[i].slice(bm[0].length));
+    }
+    return { content: bkept.join("\n"), start: readStartLine(null, text) };
+  }
   if (lines.length === 0 || !HASH_ROW_RE.test(lines[0])) {
     return { content: text, start: readStartLine(null, text) };
   }
