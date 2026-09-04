@@ -38,6 +38,7 @@ import {
   escapeHtml,
   registerLocale,
   PERMISSION_OUTLINE_CSS,
+  HLJS_THEME_CSS,
 } from "../../shared/client-util";
 import localCss from "./client.module.css";
 import * as _primitives from "@deepseek-ai/dsh-client-ui-primitives";
@@ -59,6 +60,8 @@ var STYLE_TAG_ID = "approval-comment/ApprovalComment.module.css";
 injectStyle(PLUGIN_NAME, STYLE_TAG_ID, mergeCss(localCss));
 /** Shared permission outline tokens. The id matches the other injectors, so only one tag exists. */
 injectStyle(PLUGIN_NAME, "dsh-permission-outline", PERMISSION_OUTLINE_CSS);
+/** Shared highlight.js token colors. The id matches tool-render's injector, so only one tag exists. */
+injectStyle(PLUGIN_NAME, "dsh-hljs-theme", HLJS_THEME_CSS);
 
 /** English dictionary for this card. Approval strings match the shipped text. */
 var EN = {

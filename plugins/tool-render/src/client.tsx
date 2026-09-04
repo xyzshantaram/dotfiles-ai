@@ -59,6 +59,7 @@ import {
   escapeHtml,
   PERMISSION_OUTLINE_CSS,
   PLAN_ROW_CSS,
+  HLJS_THEME_CSS,
 } from "../../shared/client-util";
 import localCss from "./client.module.css";
 import jsGrammar from "highlight.js/lib/languages/javascript";
@@ -166,31 +167,20 @@ var PLUGIN_NAME = "tool-render";
 
 // ---- One stylesheet for this bundle (house pattern: data-plugin-css guard). ----
 var STYLE_TAG_ID = "tool-render/client.module.css";
-// ---- highlight.js github-dark theme, embedded as text. ----------------
-// The loader table cannot resolve a sidecar CSS file, so the theme ships
-// inside the bundle like the plugin CSS below. The token colors replace
-// the hand-rolled palette this bundle used to carry.
-var HLJS_THEME_CSS = [
+// ---- highlight.js github-dark box treatment, embedded as text. ------
+// The loader table cannot resolve a sidecar CSS file, so this ships inside
+// the bundle like the plugin CSS below. Token colors are shared with
+// approval-comment via HLJS_THEME_CSS (imported below); this is only the box
+// treatment tool-render wants for its own dark code-block look.
+var HLJS_BOX_CSS = [
   "pre code.hljs{display:block;overflow-x:auto;padding:1em}",
   "code.hljs{padding:0.1875rem 0.3125rem}",
   ".hljs{color:#c9d1d9;background:#0d1117}",
-  ".hljs-doctag,.hljs-keyword,.hljs-meta .hljs-keyword,.hljs-template-tag,.hljs-template-variable,.hljs-type,.hljs-variable.language_{color:#ff7b72}",
-  ".hljs-title,.hljs-title.class_,.hljs-title.class_.inherited__,.hljs-title.function_{color:#d2a8ff}",
-  ".hljs-attr,.hljs-attribute,.hljs-literal,.hljs-meta,.hljs-number,.hljs-operator,.hljs-variable,.hljs-selector-attr,.hljs-selector-class,.hljs-selector-id{color:#79c0ff}",
-  ".hljs-regexp,.hljs-string,.hljs-meta .hljs-string{color:#a5d6ff}",
-  ".hljs-built_in,.hljs-symbol{color:#ffa657}",
-  ".hljs-comment,.hljs-code,.hljs-formula{color:#8b949e}",
-  ".hljs-name,.hljs-quote,.hljs-selector-tag,.hljs-selector-pseudo{color:#7ee787}",
-  ".hljs-subst{color:#c9d1d9}",
-  ".hljs-section{color:#1f6feb;font-weight:bold}",
-  ".hljs-bullet{color:#f2cc60}",
-  ".hljs-emphasis{color:#c9d1d9;font-style:italic}",
-  ".hljs-strong{color:#c9d1d9;font-weight:bold}",
-  ".hljs-addition{color:#aff5b4;background-color:#033a16}",
-  ".hljs-deletion{color:#ffdcd7;background-color:#67060c}",
 ].join("");
 
-injectStyle(PLUGIN_NAME, STYLE_TAG_ID, mergeCss(localCss, HLJS_THEME_CSS));
+injectStyle(PLUGIN_NAME, STYLE_TAG_ID, mergeCss(localCss, HLJS_BOX_CSS));
+/** Shared highlight.js token colors. The id matches approval-comment's injector, so only one tag exists. */
+injectStyle(PLUGIN_NAME, "dsh-hljs-theme", HLJS_THEME_CSS);
 /** Shared permission outline tokens. The id matches the other injectors, so only one tag exists. */
 injectStyle(PLUGIN_NAME, "dsh-permission-outline", PERMISSION_OUTLINE_CSS);
 /** Shared plan-row CSS. The id matches durable-todos's injector, so only one tag exists. */
