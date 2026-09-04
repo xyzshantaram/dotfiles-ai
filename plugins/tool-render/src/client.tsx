@@ -510,6 +510,9 @@ function toolRenderRow(options) {
       >
         <span className="tool-render-leading">{leading}</span>
         <span className="tool-render-title">{options.title}</span>
+        {options.badge !== undefined && options.badge !== null && options.badge !== "" ? (
+          <span className="tool-render-badge">{options.badge}</span>
+        ) : null}
         <span className="tool-render-sep" aria-hidden={true} />
         {summary}
       </div>
@@ -1789,7 +1792,7 @@ function SubagentRow(props) {
   var body = null;
   if (state !== "error" && prompt !== null) {
     body = (
-      <div className="tool-render-subagent-prompt">
+      <div className="tool-render-markdown-body">
         <MarkdownText text={prompt} />
       </div>
     );
@@ -1808,6 +1811,117 @@ function SubagentRow(props) {
     errorSummary: errorSummary,
     errorText: errorText,
     inspect: props.inspect,
+  });
+}
+
+// ---- send_message row: badge names the target subagent, body is the
+// delivered message rendered as markdown. Args are { subagent_id, message }
+// (dsh-tool-subagent-control). A failed delivery falls back to the plain
+// error card, same as every other row. ----
+function sendMessageArgs(args) {
+  if (args === null || typeof args !== "object") return null;
+  if (typeof args.subagent_id !== "string" || args.subagent_id === "") return null;
+  if (typeof args.message !== "string" || args.message === "") return null;
+  return args;
+}
+
+function SendMessageRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var block = props.block;
+  var done = doneOf(block);
+  var args = sendMessageArgs(parseArgs(argsRawOf(block)));
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary =
+    state === "error" && errorText !== null && errorText !== ""
+      ? firstLineOfError(errorText)
+      : undefined;
+  var body =
+    state !== "error" && args !== null ? (
+      <div className="tool-render-markdown-body">
+        <MarkdownText text={args.message} />
+      </div>
+    ) : null;
+  return toolRenderRow({
+    icon: <IconAgentPresetOutline16 size={14} />,
+    title: "Send message",
+    badge: args !== null ? args.subagent_id : undefined,
+    summary: args !== null ? firstLine(args.message) : "Send message",
+    state: state,
+    expandable: body !== null,
+    expanded: expanded,
+    onToggle: function () {
+      setExpanded(!expanded);
+    },
+    body: body,
+    errorSummary: errorSummary,
+    errorText: errorText,
+    inspect: props.inspect,
+  });
+}
+
+// ---- context injection row: replaces the shipped ContextInjectionRow on
+// conversation.chat.node (key "context"). One treatment for every injection
+// form: render the text as markdown, name the producer as a badge, instead
+// of the shipped per-form body variants and the source-as-prose line. `node`
+// comes from ChatNodeSeat; `node.data` is { content, source, provenance,
+// form } (dsh-client-ui-conversation). `content` is ContentBlock[]; only
+// type:"text" blocks carry model-facing text, so this drops the rest rather
+// than JSON-dumping them, which is the simplification this ticket asks for.
+function contextText(content) {
+  if (!Array.isArray(content)) return "";
+  var parts = [];
+  for (var i = 0; i < content.length; i++) {
+    var block = content[i];
+    if (
+      block !== null &&
+      typeof block === "object" &&
+      block.type === "text" &&
+      typeof block.text === "string"
+    ) {
+      parts.push(block.text);
+    }
+  }
+  return parts.join("");
+}
+
+function ContextRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var node = props.node;
+  var data = node !== null && node !== undefined && typeof node === "object" ? node.data : null;
+  var content = data !== null && data !== undefined ? data.content : undefined;
+  var provenance = data !== null && data !== undefined ? data.provenance : undefined;
+  var text = contextText(content);
+  var recall = provenance !== null && provenance !== undefined && provenance.role === "recall";
+  var title = recall ? "Recalled context" : "Context";
+  var badge =
+    provenance !== null &&
+    provenance !== undefined &&
+    typeof provenance.label === "string" &&
+    provenance.label !== ""
+      ? provenance.label
+      : undefined;
+  var body =
+    text !== "" ? (
+      <div className="tool-render-markdown-body">
+        <MarkdownText text={text} />
+      </div>
+    ) : null;
+  return toolRenderRow({
+    icon: <IconBrowseOutline16 size={14} />,
+    title: title,
+    badge: badge,
+    summary: text !== "" ? firstLine(text) : title,
+    expandable: body !== null,
+    expanded: expanded,
+    onToggle: function () {
+      setExpanded(!expanded);
+    },
+    body: body,
   });
 }
 
@@ -1888,6 +2002,23 @@ function apply(ctx) {
         priority: -100,
       },
       SubagentRow,
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "send_message",
+        priority: -100,
+      },
+      SendMessageRow,
+    );
+  });
+  ctx.slots.inject("conversation.chat.node", function* () {
+    yield ctx.slots.register(
+      {
+        name: "conversation.chat.node",
+        key: "context",
+      },
+      ContextRow,
     );
   });
 }

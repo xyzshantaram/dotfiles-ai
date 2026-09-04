@@ -1830,6 +1830,19 @@ var client_default = `.tool-render-row {
   font-size: 0.875rem;
   line-height: 1.5rem;
 }
+/* The producer/source badge on a context-injection or send_message row.
+   A small pill, not the sentence-in-body treatment it replaces. */
+.tool-render-badge {
+  flex: none;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-interactive-bg-hover);
+  border-radius: 999px;
+  margin-left: 0.375rem;
+  padding: 0.0625rem 0.375rem;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+}
 .tool-render-sep {
   background: var(--dsw-alias-label-caption);
   border-radius: 0.0625rem;
@@ -2231,8 +2244,11 @@ var client_default = `.tool-render-row {
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* subagent row: capped, scrollable rendered prompt. */
-.tool-render-subagent-prompt {
+/* Shared capped, scrollable markdown body. Used by every row whose body is
+   rendered text: subagent prompt, context injection, send_message delivery.
+   One block, so a future row family member gets the same rules for free
+   instead of a fourth copy. */
+.tool-render-markdown-body {
   border: 1px solid var(--dsw-alias-border-l1);
   border-radius: 0.375rem;
   margin: 0.25rem 0 0.125rem 0.25rem;
@@ -2240,32 +2256,32 @@ var client_default = `.tool-render-row {
   overflow-y: auto;
   padding: 0.5rem 0.625rem;
 }
-.tool-render-subagent-prompt :where(h1, h2, h3, h4, h5, h6) {
+.tool-render-markdown-body :where(h1, h2, h3, h4, h5, h6) {
   font-size: 0.875rem;
   line-height: 1.25rem;
   margin: 0.5rem 0 0.25rem;
 }
-.tool-render-subagent-prompt :where(h1, h2, h3, h4, h5, h6):first-child {
+.tool-render-markdown-body :where(h1, h2, h3, h4, h5, h6):first-child {
   margin-top: 0;
 }
-.tool-render-subagent-prompt :where(p, ul, ol, pre, blockquote, table) {
+.tool-render-markdown-body :where(p, ul, ol, pre, blockquote, table) {
   font-size: 0.8125rem;
   line-height: 1.25rem;
   margin: 0.25rem 0;
 }
-.tool-render-subagent-prompt :where(ul, ol) {
+.tool-render-markdown-body :where(ul, ol) {
   padding-left: 1.125rem;
 }
-.tool-render-subagent-prompt :where(pre) {
+.tool-render-markdown-body :where(pre) {
   background: var(--dsw-alias-bg-base);
   border-radius: 0.25rem;
   overflow-x: auto;
   padding: 0.375rem 0.5rem;
 }
-.tool-render-subagent-prompt :where(code) {
+.tool-render-markdown-body :where(code) {
   font-family: var(--ds-font-family-code);
 }
-.tool-render-subagent-prompt :where(code):not(:where(pre code)) {
+.tool-render-markdown-body :where(code):not(:where(pre code)) {
   background: var(--dsw-alias-bg-base);
   border-radius: 0.1875rem;
   padding: 0 0.1875rem;
@@ -8959,6 +8975,7 @@ function toolRenderRow(options) {
       },
       /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-leading" }, leading),
       /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-title" }, options.title),
+      options.badge !== void 0 && options.badge !== null && options.badge !== "" ? /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-badge" }, options.badge) : null,
       /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-sep", "aria-hidden": true }),
       summary
     ),
@@ -9920,7 +9937,7 @@ function SubagentRow(props) {
   var summary = description !== void 0 ? firstLine(relativizeToCwd(description, props.cwd)) : title;
   var body = null;
   if (state !== "error" && prompt !== null) {
-    body = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-subagent-prompt" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: prompt }));
+    body = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: prompt }));
   }
   return toolRenderRow({
     icon: /* @__PURE__ */ import_react.default.createElement(IconAgentPresetOutline162, { size: 14 }),
@@ -9936,6 +9953,77 @@ function SubagentRow(props) {
     errorSummary,
     errorText,
     inspect: props.inspect
+  });
+}
+function sendMessageArgs(args) {
+  if (args === null || typeof args !== "object") return null;
+  if (typeof args.subagent_id !== "string" || args.subagent_id === "") return null;
+  if (typeof args.message !== "string" || args.message === "") return null;
+  return args;
+}
+function SendMessageRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var block = props.block;
+  var done = doneOf(block);
+  var args = sendMessageArgs(parseArgs(argsRawOf(block)));
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var body = state !== "error" && args !== null ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: args.message })) : null;
+  return toolRenderRow({
+    icon: /* @__PURE__ */ import_react.default.createElement(IconAgentPresetOutline162, { size: 14 }),
+    title: "Send message",
+    badge: args !== null ? args.subagent_id : void 0,
+    summary: args !== null ? firstLine(args.message) : "Send message",
+    state,
+    expandable: body !== null,
+    expanded,
+    onToggle: function() {
+      setExpanded(!expanded);
+    },
+    body,
+    errorSummary,
+    errorText,
+    inspect: props.inspect
+  });
+}
+function contextText(content) {
+  if (!Array.isArray(content)) return "";
+  var parts = [];
+  for (var i = 0; i < content.length; i++) {
+    var block = content[i];
+    if (block !== null && typeof block === "object" && block.type === "text" && typeof block.text === "string") {
+      parts.push(block.text);
+    }
+  }
+  return parts.join("");
+}
+function ContextRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var node = props.node;
+  var data = node !== null && node !== void 0 && typeof node === "object" ? node.data : null;
+  var content = data !== null && data !== void 0 ? data.content : void 0;
+  var provenance = data !== null && data !== void 0 ? data.provenance : void 0;
+  var text = contextText(content);
+  var recall = provenance !== null && provenance !== void 0 && provenance.role === "recall";
+  var title = recall ? "Recalled context" : "Context";
+  var badge = provenance !== null && provenance !== void 0 && typeof provenance.label === "string" && provenance.label !== "" ? provenance.label : void 0;
+  var body = text !== "" ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text })) : null;
+  return toolRenderRow({
+    icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
+    title,
+    badge,
+    summary: text !== "" ? firstLine(text) : title,
+    expandable: body !== null,
+    expanded,
+    onToggle: function() {
+      setExpanded(!expanded);
+    },
+    body
   });
 }
 var inject = ["slots"];
@@ -10013,6 +10101,23 @@ function apply(ctx) {
         priority: -100
       },
       SubagentRow
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "send_message",
+        priority: -100
+      },
+      SendMessageRow
+    );
+  });
+  ctx.slots.inject("conversation.chat.node", function* () {
+    yield ctx.slots.register(
+      {
+        name: "conversation.chat.node",
+        key: "context"
+      },
+      ContextRow
     );
   });
 }
