@@ -208,6 +208,50 @@ fire after the rejection resolved, so it reached an idle agent and started a new
 turn, and the user's comment was wrapped in a generated instruction. The steer
 now goes first and carries the comment verbatim.
 
+### T11 — context-injection and send_message cards: markdown, shared styling, source badge
+
+**Status:** open
+**Why:** an injected context block and a `send_message` delivery both render as
+plain unstyled text in the transcript. Markdown in the body shows as raw source.
+The cards do not match the subagent dispatch cards next to them, and the source
+of the injection reads as inline prose instead of a label.
+**Change:** find the component that renders an injected context entry and the
+one that renders a `send_message` delivery. Then:
+
+- Render the body through the same markdown renderer the transcript already
+  uses. Do not add a second markdown dependency.
+- Reuse the card component and the styles the subagent dispatch cards use, so
+  the three read as one family. Do not copy the styles into a new block.
+- Show the injection source as a chip or badge in the card header, not as a
+  sentence in the body.
+- Give a `send_message` delivery the same card, with its own badge text.
+- Add a timestamp and a copy control, matching whatever affordances the
+  dispatch cards already carry.
+
+**Evaluation criteria:**
+
+1. An injection whose body holds a heading, a list, inline code, and a link
+   renders formatted. No raw `#` or backticks remain on screen.
+2. The rendered injection card and a rendered subagent dispatch card share the
+   same wrapper component. Show this from the source, not from a screenshot.
+3. The source shows as a badge element in the header. A grep for the old inline
+   source text in the body template returns nothing.
+4. A `send_message` delivery renders through the same card path. The change must
+   not be a second copy of the same JSX with different strings.
+5. The copy control puts the original text on the clipboard, not rendered HTML.
+   Check by pasting a body that holds markdown and confirming the markers
+   survive.
+6. Rebuild the affected Web artifacts and reload the existing GUI URL. A new
+   server does not prove the change.
+
+**Human review queue additions when this closes:**
+
+- [ ] Injection card: trigger one, check the markdown, the badge, the timestamp,
+      and the copy control.
+- [ ] `send_message` card: same check.
+- [ ] A long injected body: confirm it does not swamp the transcript.
+- [ ] Both themes: check contrast on the badge and the card border.
+
 ## User preferences and special rules
 
 - Never commit without explicit approval.
@@ -1510,20 +1554,91 @@ builtin one, the way `plugins/skill-gate.ts` hides tools with
 `tools.restrict({ deny })`. The new tool runs the guard verdict itself, applies
 a translator result when the translator reports no blocker, and executes. Deny
 stays deny. A translator that reports a blocker still denies.
-**Scope limit:** stage 1 is rewrite-and-run only. The background-jobs viewer,
-tmux, and permanently highlighted guard commands are later tickets and must not
-land in this one.
-**Open questions to settle before dispatch:**
-- Replace `dsh-tool-bash` outright, or wrap it and keep it as the executor?
-- What happens to `dsh-tool-jobs` and the existing `job_*` tools?
-- Does the rewritten command show in the tool card as the model's text, the
-  substituted text, or both?
+**Scope limit:** stage 1 is rewrite-and-run only. The background-jobs viewer and
+tmux are later tickets and must not land in this one.
+
+**Settled 2026-09-04. Do NOT spawn processes, and do NOT replace the jobs
+runtime.** `dsh-tool-bash` does not own execution. Its `lib/types/index.d.ts`
+exports only `{ name, inject, Config, apply }`, and its published `src/` is
+empty, so its executor is not reachable and wrapping it is not an option. Its
+own README line 5 states it is "the model-facing `bash` tool registered over the
+`ctx.shell` executor seam", and that a background handle "is registered with the
+generic `ctx.jobs` runtime and controlled through `job_output`, `job_list`, and
+`job_kill`".
+
+So our tool becomes a SECOND CONSUMER of the same two seams. We inherit
+sandboxing, workdir resolution, timeouts, job ids, cross-session isolation,
+completion notices, and disposal. We add only the guard and the rewrite.
+
+**Verified API facts (do not re-research).** From
+`@deepseek-ai/dsh-shell/lib/types/index.d.ts` and `types.d.ts`:
+- `ctx.shell` is an abstract service with `get sandboxMode(): SandboxMode |
+  undefined`, `resolve(request: ShellExecRequest): ShellExecSpec`,
+  `run(spec: ShellExecSpec): Promise<ShellRunResult>`, and
+  `start(spec: ShellExecSpec): ShellProcess`.
+- `ShellProcess` carries `status: 'running' | 'completed' | 'killed'` and
+  `readOutput(): ShellProcessRead`. `readOutput` is incremental: consecutive
+  reads never repeat content.
+- Call `resolve()` before executing. Per `dsh-tool-bash` README line 27, the
+  workdir default comes from the calling agent's `session.header.cwd` via
+  `exec.agent` BEFORE `resolve()`, because many sessions share one executor.
+- Advertise `sandbox_permissions` only when `ctx.shell.sandboxMode` reports a
+  confining default, matching the builtin.
+- Background path per README line 37: preflight `ctx.jobs.start()`, register the
+  calling agent as owner, then adapt the `ShellProcess` into the job runtime's
+  cancel, done, and incremental-output hooks.
+
+**Card treatment, decided by the user.** Show only the command that actually
+ran. No badge, no strikethrough, no original text. Mark the call with a 3px blue
+outline. `plugins/tool-render/src/client.module.css:325` already has
+`.tool-render-card[data-guard-approval] { outline: 3px solid
+var(--dsh-outline-guard); }`. Reuse that colour token with a NEW attribute, for
+example `data-guard-rewrite`. The existing blue is deliberately transient
+(comment at line 320: it lasts only while an approval is open). A rewrite mark
+must persist, because our tool owns the result and can set the flag durably.
+
 **Acceptance criteria:**
 - `pnpm test` passes, including new cases in `plugins/bash-guard.test.ts` for a
   translated command that runs and a blocked translation that still denies.
-- Live: `grep -oE foo .` runs as the rg equivalent and returns output rather
-  than an error, and the result names the substitution.
+- Live: `grep -oE foo .` runs as the rg equivalent and returns real output.
 - Live: a denied command (per `guards/*.json`) still returns a denial.
+- Live: `run_in_background: true` still works, and `job_list`, `job_output`, and
+  `job_kill` still control the job. This proves we consumed `ctx.jobs` rather
+  than replacing it.
+- Live: a rewritten call shows a persistent blue outline, and the card shows
+  only the executed command.
+
+### T7 — tmux-backed shell executor
+
+**Status:** open. Blocked on T5.
+**Why:** the user wants a background-jobs viewer and tmux panes. Because
+`ctx.shell` is an abstract executor with `resolve`, `run`, and `start`, tmux is a
+DIFFERENT `ctx.shell` implementation, not a change to the bash tool. T5 must not
+bake in any process assumption, so this ticket stays clean.
+**Prior art, from `/home/sid/.config/opencode/tools/shell-command-long-running.ts`
+(315 lines, read 2026-09-04):** one detached tmux session per job named
+`oc-<id>`, started with `tmux new-session -d -s <name> -c <cwd>` running
+`bash --noprofile --norc -c`. The command is wrapped as
+`set -o pipefail; { cmd; } 2>&1 | tee <outfile>; echo $? > <exitfile>` so the
+exit code survives the pipe. State lives only in two files per job under
+`/tmp/opencode/bash` plus the tmux server itself, so jobs outlive a harness
+restart. Completion is detected by polling `tmux list-panes -F
+"#{pane_dead}"` every 500 ms. `remain-on-exit` keeps scrollback. Garbage
+collection kills finished sessions older than 15 minutes, caps finished at 20,
+and refuses new spawns at 50.
+**Take and improve.** Take the tmux-session-per-job model, the `tee` plus
+exit-code-file wrapper, `remain-on-exit`, and the GC policy. Do NOT take these
+three:
+- Polling `pane_dead` every 500 ms. dsh's `ShellProcess.status` already models
+  `running`/`completed`/`killed`.
+- Re-reading the whole log file on every read. `ShellProcess.readOutput()` is
+  contractually incremental, so hold a byte offset per job instead.
+- The unbounded `tee` file and the fixed 5-second wait before detaching.
+**Acceptance criteria:**
+- The tmux executor satisfies the same `ctx.shell` contract, and the bash tool
+  from T5 works against it with no change to the tool.
+- A backgrounded command survives a dsh restart and is still readable.
+- Two consecutive `job_output` reads never return the same bytes twice.
 
 ### T6 — tool-render: extract and test the read parsers
 
