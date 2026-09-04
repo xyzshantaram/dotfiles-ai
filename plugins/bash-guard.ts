@@ -632,9 +632,15 @@ function suggestionMessage(suggested: string, notes: string[], mutatingWhy: stri
 
 /**
  * Outcome for a rewrite or a clean translation. A readOnly rule auto-runs the
- * replacement; any other rule asks with the replacement attached. The reason is
- * the full suggestion message, so the pre-execute listener can map this back
- * onto the same deny it produced under the old contract.
+ * replacement. Any other rule asks with the replacement attached.
+ *
+ * `readOnly` sits on the RULE, but a single rule covers every invocation of its
+ * command, and not every invocation is read-only. `find` is the case that
+ * matters: `guards/find.json` is marked readOnly because finding files reads,
+ * yet `find . -delete` and `find . -exec rm {} +` mutate. The translator
+ * already detects those and reports them in `mutatingWhy`. So a non-empty
+ * `mutatingWhy` overrides the rule and forces an ask, whatever the flag says.
+ * Without this, marking find readOnly would silently auto-run a delete.
  */
 function rewriteOutcome(
   suggested: string,
@@ -645,7 +651,9 @@ function rewriteOutcome(
 ): GuardOutcome {
   const reason = suggestionMessage(suggested, notes, mutatingWhy);
   const rewritten = suggested !== original;
-  if (readOnly) return { action: "run", command: suggested, rewritten, reason };
+  if (readOnly && mutatingWhy.length === 0) {
+    return { action: "run", command: suggested, rewritten, reason };
+  }
   return { action: "ask", command: suggested, original, rewritten, reason };
 }
 
@@ -1149,8 +1157,20 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
           : {}),
       },
       output: {
-        schema: { type: "string" },
-        render: (_args, value) => [{ type: "text", text: value }],
+        schema: {
+          type: "object",
+          properties: {
+            text: { type: "string", required: true },
+            ran: { type: "string", required: true },
+            rewritten: { type: "boolean", required: true },
+          },
+          additionalProperties: false,
+        },
+        render: (_args, value) => [{ type: "text", text: value.text }],
+        presentationMeta: (_args, value) => ({
+          ran: value.ran,
+          rewritten: value.rewritten,
+        }),
       },
       async execute(args, exec) {
         const agent = exec.agent;
@@ -1353,7 +1373,7 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
           ctx.logger.info(`bash-guard: started background job ${jobId}: ${toRun}`);
           let text = `Started background job ${jobId}. Read its output with job_output.`;
           if (outcome.reason !== undefined) text += `\n\nbash-guard: ${outcome.reason}`;
-          return text;
+          return { text, ran: toRun, rewritten: outcome.rewritten };
         }
 
         const result = await ctx.shell.run(
@@ -1365,7 +1385,7 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
         );
         let text = renderShellResult(result);
         if (outcome.reason !== undefined) text += `\n\nbash-guard: ${outcome.reason}`;
-        return text;
+        return { text, ran: toRun, rewritten: outcome.rewritten };
       },
       presentCall: (args) => ({
         card: "terminal",

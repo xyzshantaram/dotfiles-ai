@@ -44,26 +44,29 @@ async function run(command: string): Promise<GuardOutcome> {
 }
 
 describe("bash-guard rule layer", () => {
-  it("suggests the rg command for a piped recursive grep and keeps the original", async () => {
+  it("runs the rg command for a piped recursive grep", async () => {
+    // guards/grep.json is readOnly and a grep carries no mutating predicate, so
+    // the translation auto-runs instead of asking. A `run` outcome carries no
+    // `original`: the card recovers what the model wrote from its own args, and
+    // presentationMeta publishes what actually ran.
     const command = 'grep -rln "agentPresets" /some/path/ | head -20';
     const outcome = await run(command);
-    expect(outcome.action).toBe("ask");
+    expect(outcome.action).toBe("run");
     expect((outcome as { command: string }).command).toContain("rg");
     expect((outcome as { command: string }).command).toContain("head -20");
-    // The whole point: the model's command survives untouched in `original`.
-    expect((outcome as { original: string }).original).toBe(command);
+    expect((outcome as { rewritten: boolean }).rewritten).toBe(true);
   });
 
   it("suggests rg for a plain recursive grep", async () => {
     const outcome = await run("grep -rn foo src/");
-    expect(outcome.action).toBe("ask");
+    expect(outcome.action).toBe("run");
     expect((outcome as { command: string }).command).toBe("rg -n foo src/");
     expect((outcome as { reason: string }).reason).toContain("Run this instead");
   });
 
   it("suggests fd for a find by name", async () => {
     const outcome = await run("find . -name '*.ts'");
-    expect(outcome.action).toBe("ask");
+    expect(outcome.action).toBe("run");
     expect((outcome as { command: string }).command).toBe("fd --search-path . -g '*.ts'");
   });
 
@@ -112,7 +115,7 @@ describe("bash-guard rule layer", () => {
     // letter would leave a cluster rg reads differently, so the whole word
     // must go.
     const outcome = await run("rg -rln foo /tmp");
-    expect(outcome.action).toBe("ask");
+    expect(outcome.action).toBe("run");
     expect((outcome as { command: string }).command).toBe("rg foo /tmp");
     expect((outcome as { reason: string }).reason).toContain("--replace");
     expect((outcome as { rewritten: boolean }).rewritten).toBe(true);
@@ -222,12 +225,15 @@ describe("bash-guard tool wiring", () => {
     apply(ctx as never, { guardsDir: GUARDS_DIR });
     if (tool === undefined) throw new Error("apply() did not register the bash tool");
     return {
-      execute(command: string) {
+      async execute(command: string) {
         const agent = { session: { header: {} } };
-        return tool!.execute(
+        // The tool's canonical value is an object, not a string: `text` is what
+        // render() shows the model, and `ran` plus `rewritten` are what
+        // presentationMeta publishes to the card.
+        return (await tool!.execute(
           { command, description: "test command" },
           { agent, callId: "call-1", signal: undefined },
-        );
+        )) as unknown as { text: string; ran: string; rewritten: boolean };
       },
       ran,
       approvalRequests,
@@ -243,26 +249,48 @@ describe("bash-guard tool wiring", () => {
 
   it("executes an allowed command and returns its output", async () => {
     const mounted = mountTool("allowed-once");
-    const text = await mounted.execute("rg -n foo src/");
+    const value = await mounted.execute("rg -n foo src/");
     expect(mounted.ran).toEqual(["rg -n foo src/"]);
-    expect(text).toContain("ran: rg -n foo src/");
+    expect(value.text).toContain("ran: rg -n foo src/");
+    // Nothing was rewritten, so the card must not mark this call.
+    expect(value.rewritten).toBe(false);
+    expect(value.ran).toBe("rg -n foo src/");
+  });
+
+  it("auto-runs a readOnly rewrite without asking", async () => {
+    const mounted = mountTool("allowed-once");
+    const value = await mounted.execute("rg -rln foo /tmp");
+    // guards/rg.json is readOnly, so the drop applies and the call never
+    // prompts. The shell must still see the rewritten form.
+    expect(mounted.ran).toEqual(["rg foo /tmp"]);
+    expect(mounted.approvalRequests).toEqual([]);
+    expect(value.rewritten).toBe(true);
+    expect(value.ran).toBe("rg foo /tmp");
   });
 
   it("on an approved ask executes the REPLACEMENT command, not the original", async () => {
     const mounted = mountTool("allowed-once");
-    const text = await mounted.execute("rg -rln foo /tmp");
-    // The rule drops -rln, so the shell must see the rewritten form.
-    expect(mounted.ran).toEqual(["rg foo /tmp"]);
+    // A mutating find is the case that still asks despite a readOnly rule:
+    // mutatingWhy overrides the flag. It also rewrites, so this exercises the
+    // approve-then-run-the-replacement path that rg no longer can.
+    const original = "find . -name '*.log' -exec rm {} \\;";
+    const value = await mounted.execute(original);
     expect(mounted.approvalRequests).toHaveLength(1);
     // The prompt shows both commands, so the person knows what changed.
-    expect(mounted.approvalRequests[0]!.reason).toContain("rg -rln foo /tmp");
-    expect(mounted.approvalRequests[0]!.reason).toContain("rg foo /tmp");
-    expect(text).toContain("ran: rg foo /tmp");
+    expect(mounted.approvalRequests[0]!.reason).toContain(original);
+    expect(mounted.approvalRequests[0]!.reason).toContain("-x rm");
+    // The shell saw the replacement, never the original.
+    expect(mounted.ran).toHaveLength(1);
+    expect(mounted.ran[0]).toContain("-x rm");
+    expect(mounted.ran[0]).not.toBe(original);
+    expect(value.rewritten).toBe(true);
   });
 
   it("does not execute when the ask is rejected", async () => {
     const mounted = mountTool("rejected");
-    await expect(mounted.execute("rg -rln foo /tmp")).rejects.toThrow(/rejected/);
+    await expect(mounted.execute("find . -name '*.log' -exec rm {} \\;")).rejects.toThrow(
+      /rejected/,
+    );
     expect(mounted.ran).toEqual([]);
   });
 });

@@ -1743,6 +1743,47 @@ Add `readOnly: true` to `guards/rg.json` and `guards/find.json`, re-run
 no prompt. Keep this a separate, deliberate change so any regression is
 attributable to it.
 
+### T10 — tool-render: three more cards
+
+**Status:** open. Owned by whoever holds `tool-render`. Three independent cards,
+so they can land separately.
+
+Counts below come from a scan of 500 session logs and 54,684 tool calls. The
+rendered tools already cover 83% of calls, so these are chosen for how much
+SCREEN they take, not how often they fire.
+
+**`skill` — render the body as markdown, and show its size.**
+352 calls, 8,946 chars average, and 353 of them exceed 2k. Today the whole body
+lands in a generic card as raw text. The owner wants it readable and NOT
+collapsed, because seeing what enters the model is the point.
+- Render the markdown.
+- Show the size in KB on the row.
+- MEASURE THE RESULT STRING, not the file on disk. The client cannot `stat`
+  anything, and the two differ because the loader wraps the body.
+  `output.length` is simpler and more honest, since it is exactly what reached
+  the model.
+- Motivation, measured 2026-09-04: 36 skills, 216 KB of bodies, 6 KB mean, and
+  `cordis-plugin-development` alone is 23.7 KB, near 6,800 tokens in one call.
+  Loading `software-engineering`, `plan`, and `verification` in one session cost
+  33.4 KB. A KB badge makes that visible as it happens.
+
+**`list_agents` — a real card.**
+537 calls, 391 chars average. Small output, so this is a readability win rather
+than a noise win. Rows of id, label, and status beat a JSON dump.
+
+**`job_output` — a real card.**
+128 calls, 746 chars average. Effort 6 covers the jobs MODAL and making
+`job_output` re-readable, but not the tool-call card itself. Read Effort 6
+first: if its buffer work lands, this card should read the same projection
+rather than parse the text a second time.
+
+**Acceptance criteria:**
+- Each card renders its own shape, and an unknown tool still falls back to the
+  generic JSON card.
+- `pnpm test` and `node build.mjs` pass.
+- Checked by eye in the GUI, because a passing build proves nothing about
+  rendering.
+
 ### T9 — TypeScript and tests across the whole repo
 
 **Status:** UNSCOPED. Requested 2026-09-04. Grill the owner before planning it.

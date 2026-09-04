@@ -1,6 +1,7 @@
 {
   "commands": ["rg"],
   "verdict": "allow",
+  "readOnly": true,
   "rewrites": [
     {
       "drop": ["-r"],

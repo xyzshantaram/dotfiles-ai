@@ -5174,7 +5174,9 @@ Why: ${notes[0]}
 function rewriteOutcome(suggested, original, notes, mutatingWhy, readOnly) {
   const reason = suggestionMessage(suggested, notes, mutatingWhy);
   const rewritten = suggested !== original;
-  if (readOnly) return { action: "run", command: suggested, rewritten, reason };
+  if (readOnly && mutatingWhy.length === 0) {
+    return { action: "run", command: suggested, rewritten, reason };
+  }
   return { action: "ask", command: suggested, original, rewritten, reason };
 }
 function flagPresent(ref, flag) {
@@ -5509,8 +5511,20 @@ function apply(ctx, config) {
         } : {}
       },
       output: {
-        schema: { type: "string" },
-        render: (_args, value) => [{ type: "text", text: value }]
+        schema: {
+          type: "object",
+          properties: {
+            text: { type: "string", required: true },
+            ran: { type: "string", required: true },
+            rewritten: { type: "boolean", required: true }
+          },
+          additionalProperties: false
+        },
+        render: (_args, value) => [{ type: "text", text: value.text }],
+        presentationMeta: (_args, value) => ({
+          ran: value.ran,
+          rewritten: value.rewritten
+        })
       },
       async execute(args, exec) {
         const agent = exec.agent;
@@ -5660,7 +5674,7 @@ ${outcome.reason}` : "")
           if (outcome.reason !== void 0) text2 += `
 
 bash-guard: ${outcome.reason}`;
-          return text2;
+          return { text: text2, ran: toRun, rewritten: outcome.rewritten };
         }
         const result = await ctx.shell.run(
           ctx.shell.resolve({
@@ -5673,7 +5687,7 @@ bash-guard: ${outcome.reason}`;
         if (outcome.reason !== void 0) text += `
 
 bash-guard: ${outcome.reason}`;
-        return text;
+        return { text, ran: toRun, rewritten: outcome.rewritten };
       },
       presentCall: (args) => ({
         card: "terminal",

@@ -1,6 +1,7 @@
 {
   "commands": ["find"],
   "verdict": "deny",
-  "reason": "find is normally translated to fd automatically. This call could not be translated, so it is denied. That happens when the command sits inside a wrapper such as sh -c, when an argument is an unquoted glob, or when an argument depends on a shell expansion. Write the fd command yourself.",
+  "readOnly": true,
+  "reason": "find is translated to fd and the fd form is what runs. Write fd yourself to avoid the substitution. When the translator cannot map a call it is denied instead, which happens when the command sits inside a wrapper such as sh -c, when an argument is an unquoted glob, or when an argument depends on a shell expansion.",
   "translate": "find"
 }
