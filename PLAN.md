@@ -938,24 +938,52 @@ Paths are relative to the dsh install at
   `SessionProjectionMap`.
 - The subprocess layer keeps a bounded tail in memory and spills past
   64 MiB per stream (`dsh-subprocess-local/lib/types/index.d.ts:88-90`).
+- `dsh-tool-jobs` is the ONLY installed plugin that calls
+  `ctx.jobs.attachController()`. `JobRegistry.start()` refuses every new
+  background job for every owner, not just this viewer's, when no attached
+  controller serves that owner — confirmed by grepping the whole installed
+  harness tree for `attachController`. `plugins/job-viewer/src/index.ts`
+  already attaches its own controller (T1 follow-up, committed), so this
+  stays true once `tool-jobs` is disabled (T5).
+- `dsh-tool-jobs` ALSO delivers unreported completions to the owning agent —
+  a behavior with no ticket until T3 below added it. Exact mechanism, read
+  from `dsh-tool-jobs/lib/index.js:169-192` (do not re-read; verified once):
+  `ctx.jobs.onJobDone((snapshot, owner) => {...})`; skips when
+  `snapshot.reported` or `owner === undefined`; builds one `UserMessage` via
+  `createUserMessage` (`@deepseek-ai/dsh-llm`) with
+  `source: { kind: "plugin", plugin: "<name>", form: "notice", summary }`
+  where `summary = boundContextSummary(text)` (`@deepseek-ai/dsh-llm`,
+  `(summary: string) => string`); delivers via `owner.followup(message)`
+  when `owner.status === "idle"` and a per-owner consecutive-wake budget
+  (`WeakMap<Agent, number>`, default cap 3) is not exhausted, otherwise via
+  `owner.inject(message)`; the wake budget resets on
+  `ctx.on("agent/inbox/claimed", ({ agent, message }) => { if
+  (message.source.kind === "user") spentWakes.delete(agent) })`
+  (`dsh-agent/lib/types/runtime-types.d.ts:194-198`, confirmed payload
+  `{ agent, message, turn }`). `Agent.status: 'idle' | 'running'`,
+  `.followup(message: UserMessage): void`, `.inject(message: UserMessage):
+  void` (`dsh-agent/lib/types/runtime-types.d.ts:65-135`).
+- The original tools' exact schemas and helpers, for T2 to mirror
+  (`dsh-tool-jobs/lib/index.js:28-159`): `PUBLIC_TASK_SCHEMA` (id, kind,
+  label, status enum, detail?, startedAt, finishedAt?), `publicJob(snapshot)`
+  strips owner/notification fields, `statusLine(snapshot)` renders
+  `[status: X]` or `[status: X, detail]`. `job_list` takes no parameters and
+  returns `PUBLIC_TASK_SCHEMA[]`. `job_output` takes `job_id` (required),
+  `wait?` (boolean), `timeout_ms?` (number), returns
+  `{ text, job: PUBLIC_TASK_SCHEMA }`. `job_kill` takes `job_id` (required),
+  `reason?` (string), returns
+  `{ outcome: "cancellation-requested" | "already-finished", job:
+  PUBLIC_TASK_SCHEMA }`.
 
 ## Tickets
 
-### T1 — host: the output buffer and its poller
-
-A per-job append buffer with a byte cap and a retention window for finished
-jobs. A poller reads every running job on a timer and appends the delta.
-
-**Acceptance criteria**
-
-- Vitest covers: deltas accumulate in order, the cap drops the oldest bytes,
-  and a finished job keeps its output for the retention window.
-- The poller stops for a job once it reaches a terminal status.
-
 ### T2 — host: replacement tools and the output route
 
-Replacement `job_list`, `job_output` and `job_kill` reading from the buffer,
-plus an HTTP route serving one job's buffer to the browser.
+Replacement `job_list`, `job_output` and `job_kill` reading from the buffer
+(never `ctx.jobs.read()` directly — see the constraint above), plus an HTTP
+route serving one job's buffer to the browser. Mirror the original tools'
+exact parameter/output shapes (see Verified API facts) so the agent's
+experience is unchanged.
 
 **Acceptance criteria**
 
@@ -965,7 +993,22 @@ plus an HTTP route serving one job's buffer to the browser.
   still returns the full output with no gap. This is the regression that
   matters, so it gets its own test.
 
-### T3 — client: the replacement dropdown and the modal
+### T3 — host: completion delivery (wakeup)
+
+Replicate `dsh-tool-jobs`'s unreported-completion delivery in job-viewer (see
+Verified API facts for the exact mechanism), so an agent still learns a
+background job finished without polling once T5 disables `tool-jobs`.
+
+**Acceptance criteria**
+
+- A job finishing while its owning agent is idle triggers `followup`, up to
+  the configured wake budget; beyond the budget, or while the agent is busy,
+  it triggers `inject` instead.
+- The wake budget resets after the agent claims a real user message.
+- An already-`reported` job (e.g. the agent already called `job_output` on it
+  after settlement) produces no duplicate notice.
+
+### T4 — client: the replacement dropdown and the modal
 
 Own entry at `conversation.session.header.actions`, rows clickable, click opens
 `Modal` showing that job's buffer.
@@ -976,7 +1019,7 @@ Own entry at `conversation.session.header.actions`, rows clickable, click opens
 - Rows render dot, kind, label, status and duration as before.
 - The modal fetches and displays output, and refreshes while the job runs.
 
-### T4 — wire-up and deploy
+### T5 — wire-up and deploy
 
 Disable the `tool-jobs` row and the `dsh-client-ui-jobs` row. Add the build
 entries and the sync.sh install.
@@ -985,6 +1028,9 @@ entries and the sync.sh install.
 
 - `./sync.sh` exits 0 and the journal shows no duplicate tool registration for
   `job_output`, `job_list` or `job_kill`.
+- Starting a NEW background job (bash or subagent) still works after
+  `tool-jobs` is disabled — the attachController regression this whole
+  effort could otherwise cause.
 
 ## Human review queue
 
@@ -995,6 +1041,10 @@ entries and the sync.sh install.
 - [ ] Confirm the header shows one jobs button and the rows still read the way
       they did before.
 - [ ] Open the modal from the phone over dsh-remote and confirm it loads.
+- [ ] After the full effort deploys, start a new background bash command and
+      confirm it still starts (the attachController regression check).
+- [ ] Let a background job finish while idle and confirm you get woken up
+      with a notice, without having to ask about it.
 
 
 # Effort 7 — tool-render: error styling and image tool cards
