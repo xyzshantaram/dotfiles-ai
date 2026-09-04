@@ -51,6 +51,7 @@
   font-size: 0.9375rem;
   font-weight: 500;
   line-height: 1.5rem;
+  white-space: pre-wrap;
 }
 .approval-comment-command {
   color: var(--dsw-alias-label-tertiary);
