@@ -15,7 +15,7 @@ import z from "@deepseek-ai/schemastery";
 import { JobBufferStore } from "./buffer";
 import { mountCompletionDelivery, type JobDoneSnapshotLike } from "./completion";
 import { mountPoller } from "./poller";
-import { makeOutputHandler } from "./route";
+import { makeKillHandler, makeOutputHandler } from "./route";
 import { buildJobTools, type JobsServiceLike, type ToolsServiceLike } from "./tools";
 
 export const name = "job-viewer";
@@ -96,6 +96,11 @@ export function apply(ctx: Context, config: unknown): void {
         kind: "exact",
         path: "/job-viewer/output",
         handler: makeOutputHandler(store),
+      });
+      server.register({
+        kind: "exact",
+        path: "/job-viewer/kill",
+        handler: makeKillHandler(jobs, store),
       });
     });
   } catch {

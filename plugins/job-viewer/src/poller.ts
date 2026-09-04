@@ -74,6 +74,7 @@ export function mountPoller(
         const result = jobs.read(id, poll.caller);
         store.append(id, result.text);
         store.setSnapshot(id, result.snapshot);
+        store.setOwner(id, poll.caller);
       } catch {
         // The job may be gone already. That race is expected.
       }
@@ -89,6 +90,7 @@ export function mountPoller(
       const result = jobs.read(id, caller);
       store.append(id, result.text);
       store.setSnapshot(id, result.snapshot);
+      store.setOwner(id, caller);
       if (TERMINAL.has(result.snapshot.status)) {
         store.markFinished(id);
         return;
@@ -101,6 +103,7 @@ export function mountPoller(
         const result = jobs.read(id, caller);
         store.append(id, result.text);
         store.setSnapshot(id, result.snapshot);
+        store.setOwner(id, caller);
         if (TERMINAL.has(result.snapshot.status)) stopPoll(id, false);
       } catch {
         // The job may be gone already. That race is expected.
