@@ -67,41 +67,8 @@
   line-height: inherit;
   overflow-wrap: inherit;
 }
-.approval-comment-command .hljs-comment,
-.approval-comment-command .hljs-quote {
-  color: #8b949e;
-  font-style: italic;
-}
-.approval-comment-command .hljs-keyword,
-.approval-comment-command .hljs-literal,
-.approval-comment-command .hljs-section {
-  color: #ff7b72;
-}
-.approval-comment-command .hljs-string,
-.approval-comment-command .hljs-regexp {
-  color: #a5d6ff;
-}
-.approval-comment-command .hljs-title,
-.approval-comment-command .hljs-title.function_,
-.approval-comment-command .hljs-title.class_ {
-  color: #d2a8ff;
-}
-.approval-comment-command .hljs-number,
-.approval-comment-command .hljs-symbol,
-.approval-comment-command .hljs-bullet {
-  color: #79c0ff;
-}
-.approval-comment-command .hljs-attr,
-.approval-comment-command .hljs-attribute,
-.approval-comment-command .hljs-variable {
-  color: #ffa657;
-}
-.approval-comment-command .hljs-name,
-.approval-comment-command .hljs-tag,
-.approval-comment-command .hljs-built_in,
-.approval-comment-command .hljs-type {
-  color: #7ee787;
-}
+/* Token colors are shared HLJS_THEME_CSS from shared/client-util.ts,
+   injected via the dsh-hljs-theme style tag (same one tool-render uses). */
 .approval-comment-action-row {
   justify-content: flex-end;
   gap: 0.5rem;
