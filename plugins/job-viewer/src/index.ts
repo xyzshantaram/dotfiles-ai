@@ -29,17 +29,25 @@ export function apply(ctx: Context, config: unknown): void {
     retentionMs: cfg.retentionMs,
   });
   // `jobs` arrives through inject but the base Context type does not name it.
-  const jobs = (ctx as unknown as { jobs: unknown }).jobs;
+  const jobs = (ctx as unknown as { jobs: { attachController(name: string): () => void } }).jobs;
   const teardownPoller = mountPoller(jobs as any, store, {
     pollIntervalMs: cfg.pollIntervalMs,
     setInterval,
     clearInterval,
   });
   const sweepTimer = setInterval(() => store.sweep(), cfg.sweepIntervalMs);
+  // dsh-tool-jobs is the only other plugin that calls attachController(); its
+  // row is disabled once job-viewer replaces it (Effort 6 T5). Without SOME
+  // attached controller, JobRegistry.start() refuses every new background
+  // job for every owner, not just this viewer's own jobs -- so job-viewer
+  // must attach its own controller regardless of whether tool-jobs is
+  // mounted alongside it.
+  const detachController = jobs.attachController("job-viewer");
   ctx.effect(
     () => () => {
       teardownPoller();
       clearInterval(sweepTimer);
+      detachController();
     },
     "job-viewer teardown",
   );
