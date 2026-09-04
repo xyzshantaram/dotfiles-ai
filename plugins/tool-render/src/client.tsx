@@ -1787,6 +1787,61 @@ function sendMessageArgs(args) {
   return args;
 }
 
+// ---- package row: an `add`/`remove`/`update`/`add_task` call from
+// plugins/package-tool.ts. Args are { ecosystem, action, packageName?, cwd?,
+// dev?, taskName?, taskCommand?, manager? }. The canonical output is a plain
+// string (already formatted: resolved version, package manager, the command
+// run, then warn/error lines), so it renders as terminal-style text like a
+// bash row's output, not as markdown. ----
+function packageActionTitle(action) {
+  if (action === "add") return "Add package";
+  if (action === "remove") return "Remove package";
+  if (action === "update") return "Update package";
+  if (action === "add_task") return "Add task";
+  return "Package";
+}
+
+function PackageRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var block = props.block;
+  var done = doneOf(block);
+  var args = parseArgs(argsRawOf(block));
+  var action = args !== null ? pickString(args, ["action"]) : undefined;
+  var ecosystem = args !== null ? pickString(args, ["ecosystem"]) : undefined;
+  var target = args !== null ? pickString(args, ["packageName", "taskName"]) : undefined;
+  var output = done ? resultTextOf(block) : null;
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary =
+    state === "error" && errorText !== null && errorText !== ""
+      ? firstLineOfError(errorText)
+      : undefined;
+  var title = packageActionTitle(action);
+  var summary = target !== undefined && target !== "" ? target : title;
+  var body =
+    state !== "error" && output !== null && output !== "" ? (
+      <pre className="tool-render-output">{stripAnsi(output)}</pre>
+    ) : null;
+  return toolRenderRow({
+    icon: <IconApiOutline14 />,
+    title: title,
+    badge: ecosystem,
+    summary: summary,
+    state: state,
+    expandable: body !== null,
+    expanded: expanded,
+    onToggle: function () {
+      setExpanded(!expanded);
+    },
+    body: body,
+    errorSummary: errorSummary,
+    errorText: errorText,
+    inspect: props.inspect,
+  });
+}
+
 function SendMessageRow(props) {
   var expandedState = useState(false);
   var expanded = expandedState[0];
@@ -2140,6 +2195,14 @@ function apply(ctx) {
         priority: -100,
       },
       SkillRow,
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "package",
+        priority: -100,
+      },
+      PackageRow,
     );
   });
   ctx.slots.inject("conversation.chat.node", function* () {
