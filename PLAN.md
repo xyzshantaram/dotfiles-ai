@@ -9,25 +9,6 @@ attachment-drop plugin, and one dsh-better-edit fix.
 
 ## Tickets
 
-### T5 — bash-guard: add a `warn` verdict and additive rewrites
-
-**Status:** open
-**Why:** `experiments/tool-call-friction/README.md` measured 118 sandbox
-failures that carry no `[sandbox: ...]` marker, plus 248 calls that escalated to
-the mode the session already held. Guard rules cannot help yet. `GuardEntry` in
-`plugins/bash-guard.ts` matches on command and subcommand name only, `reason`
-reaches the model only on `deny`, and `rewrites` can only drop a flag.
-**Change:** `plugins/bash-guard.ts` — add a `warn` verdict that runs the command
-and still surfaces `reason` to the model, and add `rewrites[].add` that inserts
-a flag only when it is absent.
-**Acceptance criteria:**
-- `pnpm exec tsc --noEmit` reports no new errors and `node build.mjs` rebuilds
-  `plugins/bash-guard.js`.
-- New cases in `plugins/bash-guard.test.ts`: a `warn` rule allows the command
-  and returns the reason text; an additive rewrite inserts the flag when absent
-  and does not duplicate it when already present.
-- `pnpm test` passes.
-
 ### T6 — guard rules for podman and the npm/pnpm cache
 
 **Status:** open. Blocked on T5.
@@ -157,73 +138,6 @@ fire after the rejection resolved, so it reached an idle agent and started a new
 turn, and the user's comment was wrapped in a generated instruction. The steer
 now goes first and carries the comment verbatim.
 
-### T11 — context-injection and send_message cards: markdown, shared styling, source badge
-
-**Status:** open
-**Why:** an injected context block and a `send_message` delivery both render as
-plain unstyled text in the transcript. Markdown in the body shows as raw source.
-The cards do not match the subagent dispatch cards next to them, and the source
-of the injection reads as inline prose instead of a label.
-**Verified component facts (do not re-research):**
-
-- **Subagent dispatch card (the wrapper to reuse):** `plugins/tool-render/src/client.tsx`.
-  `SubagentRow` (registered `key: "subagent"` on the `tool.call.toolview` slot)
-  builds on `toolRenderRow()`, the shared `.tool-render-card`/`.tool-render-row`
-  chrome every row in this file uses. It already renders its body through
-  `MarkdownText`.
-- **Injected context entry:** not in this repo. Shipped as `ContextInjectionRow`
-  / `ContextMessageNodeView` in `@deepseek-ai/dsh-client-ui-conversation`.
-  Registered on `conversation.chat.node`, keyed by `node.kind`, confirmed at the
-  slot's dispatch site: `renderSlot("conversation.chat.node", routedOwner,
-  { entryKey: routedNode.kind, fallback: <JsonBlock/> })`. Register our own
-  entry at `key: "context"` to replace it. `node.data` carries
-  `{ content, source, provenance, form }`.
-- **`send_message` delivery:** not a dedicated component either. `send_message`
-  is a plain host tool (`@deepseek-ai/dsh-tool-subagent-control`) with no
-  `tool.call.toolview` entry in this repo, so it falls through to the shipped
-  `GenericToolCard` fallback in `@deepseek-ai/dsh-client-ui-tool` -- the same
-  fallback `subagent` would hit if tool-render had not registered it. Register
-  `key: "send_message"` on `tool.call.toolview`, same mechanism as `subagent`.
-- **Dropped: timestamp and copy control.** The ticket's "matching whatever
-  affordances the dispatch cards already carry" assumed affordances that do not
-  exist -- checked every plugin source file for `clipboard`, `copy`,
-  `timestamp`: zero matches anywhere in this repo. `toolRenderRow` has neither
-  today, subagent card included. Owner's call: drop the requirement entirely
-  rather than design it fresh.
-
-**Change:**
-
-- Register `conversation.chat.node` at `key: "context"` and `tool.call.toolview`
-  at `key: "send_message"` in `plugins/tool-render/src/client.tsx`, replacing
-  the two shipped fallbacks above.
-- Render each body through `MarkdownText`, the renderer `SubagentRow` already
-  uses. Do not add a second markdown dependency.
-- Both new rows go through `toolRenderRow()`, the same wrapper `SubagentRow`
-  uses. Do not copy the styles into a new block.
-- Show the injection source as a chip or badge in the card header, not as a
-  sentence in the body.
-- Give a `send_message` delivery the same card, with its own badge text.
-
-**Evaluation criteria:**
-
-1. An injection whose body holds a heading, a list, inline code, and a link
-   renders formatted. No raw `#` or backticks remain on screen.
-2. The rendered injection card and a rendered subagent dispatch card share the
-   same wrapper component. Show this from the source, not from a screenshot.
-3. The source shows as a badge element in the header. A grep for the old inline
-   source text in the body template returns nothing.
-4. A `send_message` delivery renders through the same card path. The change must
-   not be a second copy of the same JSX with different strings.
-5. Rebuild the affected Web artifacts and reload the existing GUI URL. A new
-   server does not prove the change.
-
-**Human review queue additions when this closes:**
-
-- [ ] Injection card: trigger one, check the markdown and the badge.
-- [ ] `send_message` card: same check.
-- [ ] A long injected body: confirm it does not swamp the transcript.
-- [ ] Both themes: check contrast on the badge and the card border.
-
 ## User preferences and special rules
 
 - Never commit without explicit approval.
@@ -328,7 +242,7 @@ concept with our own code, minus its evidence-verification half.
   `./projection.js` with `import type`, so esbuild erases it and zod stays out
   of the 7 KB browser bundle. Verified by grepping the emitted client bundle.
 
-## Verified API facts (do not re-research)
+### Verified API facts (do not re-research)
 
 - Projection contract, re-verified 2026-09-03 against the installed packages.
   The earlier note here was WRONG: there is no `stateSchema` and no
@@ -406,139 +320,8 @@ concept with our own code, minus its evidence-verification half.
   unavailable in the browser bundle (upstream inlines its own react require via
   the module loader's `require('react')`).
 
+
 ## Tickets
-
-### T5 — host: take over the todo tool and the `todos` projection
-
-**SUPERSEDED 2026-09-03.** Dropped with the reversal above. The host keeps its
-existing `durable-todos/todos` mirror projection and does not take over
-`todo_write`. Kept here because the acceptance criteria still describe the
-behaviour the mirror must preserve.
-
-Disable the `tool-todo` row. Our host plugin registers `todo_write` with the
-same parameter schema and description as `@deepseek-ai/dsh-tool-todo` (195
-lines, worth copying faithfully because the model's behaviour depends on the
-wording), plus TWO projections. First, `todos` under that exact key, holding
-`TodoItem[] | null` and never clearing on `turn/start`, so the built-in panel
-reads it. Second, `durable-todos/carried`, a boolean set true by `turn/start`
-and cleared by the next `todo/write`, which carries the flag the `todos` type
-has no room for. Replace the old `durable-todos/todos` projection with this
-pair.
-
-The built-in `TodoDock` then renders durable todos with no client work, so the
-styling, the chevron, the progress line and the collapse all come for free.
-
-**Acceptance criteria**
-
-- `todo_write` accepts the same arguments as before and still rejects a call
-  that marks several items in progress when `allowParallelInProgress` is false.
-- After an interrupt and a new message, the built-in panel still lists the
-  items.
-- No duplicate registration of the `todos` projection key at boot.
-
-### T6 — client: displace the built-in dock entry and keep Remind
-
-**SUPERSEDED 2026-09-03.** Replaced by T7 below. The import this ticket depends
-on does not exist.
-
-Register at `conversation.input.dock` with id `todo` and order 0, the same id
-the built-in uses, to displace it. Render the imported `TodoDock` from
-`@deepseek-ai/dsh-client-ui-conversation`, passing the standard props through
-untouched, and add two things of our own around it: the Remind button, and the
-`carried over` badge driven by `useProjection("durable-todos/carried")`.
-Delete the hand-rolled list markup and most of `client.module.css`.
-
-RISK, unverified: this assumes a second registration at the same slot id
-replaces the built-in rather than rendering both. The shipped types do not say.
-Test it on the first restart. If both render, move Remind to
-`conversation.input.left` or `.right` instead, which is what the dock's own
-catalog doc says clickable elements are for, and drop the wrapper.
-
-**Acceptance criteria**
-
-- Exactly one todo panel renders, and it collapses.
-- Remind still fills the composer with the unfinished items and submits.
-- The `carried over` badge appears after a turn boundary and clears on the next
-  write, which keeps the existing review-queue check valid.
-
-### T7 — client: style the hand-rolled panel and hide the shipped one
-
-The panel stays ours. Restyle it and make it collapsible. Registration does not
-change: list slot `conversation.input.dock`, id `durable-todos`, order 10. The
-host side does not change.
-
-- Collapsible, and it starts collapsed. It never auto-hides. With no todos it
-  still renders, collapsed, showing the compact `No todos` text.
-- Remind and the `carried over` badge stay in the header at all times, collapsed
-  or expanded. Remind still hides with nothing unfinished. It is never disabled:
-  it appends, it does not submit, so it works mid-turn (changed 2026-09-03, see
-  the note below the acceptance criteria).
-- The collapsed header carries a counts summary: the total, then the non-zero
-  status counts, for example `5 todos · 1 in progress · 3 pending · 1 done`.
-- While a turn runs AND an item is in_progress, one extra line under the header
-  shows that item's content, truncated to one line. It never shows when idle.
-- Body markup mirrors `tool-render`, so the two read the same: a CSS-drawn
-  checkbox plus content, with the status on a `data-done` / `data-active` /
-  `data-pending` attribute. No text glyphs. No strikethrough on completed items,
-  which use `--dsw-alias-label-tertiary` instead.
-- The card mirrors the composer width: `width: 100%` with
-  `max-width: var(--dsh-composer-card-max-width)`. No media queries, because the
-  shipped panel uses none.
-- One CSS rule hides the shipped panel: `[data-testid="todo-panel"]`.
-
-**Acceptance criteria**
-
-- Exactly one todo panel renders, and it collapses and expands.
-- Remind appends the unfinished items, as a markdown checkbox list, to the
-  composer draft. It never submits and it is never disabled.
-- The `carried over` badge appears after a turn boundary and clears on the next
-  write.
-- The panel body is visually indistinguishable from a `todo_write` tool card.
-- The active-item line appears only while a turn is running.
-
-**Risk.** The hide rule depends on the shipped `data-testid`. If an upgrade
-renames it, the shipped panel returns. That failure is visible, not silent.
-
-**Changed 2026-09-03.** Remind originally called `setDraft` then `submit`
-immediately, so it needed the agent idle and the button carried
-`disabled={running}`. It now reads the current draft with `useInput`, appends
-the checkbox list after a blank line (or sets it bare on an empty draft), and
-leaves the draft for the owner to edit and send. Nothing submits on click, so
-the disabled state served no purpose and was removed along with its CSS rule.
-The reminder text also switched from plain bullets (`- item`) to GFM task-list
-syntax (`- [ ] item`), the standard markdown form for a to-do list.
-
-### T8 — an empty panel says "No work items"
-
-DONE 2026-09-03, pending the owner's visual check.
-
-The collapsed header rendered its counts summary only when the list had items,
-so an empty panel read as a bare `To-do` title with nothing beside it. The
-summary is now always rendered, and it reads `No work items` when the list is
-empty.
-
-**Acceptance criteria**
-
-- With no todos, the collapsed header reads `To-do` then `No work items`.
-- With todos, the counts summary is unchanged.
-
-NOTE: the expanded body still reads `No todos` for its empty state. Align the
-two if that reads oddly side by side.
-
-### T9 — host: keep a bounded todo history in the projection
-
-Not started. The mirror projection keeps the last 35 `todo/write` lists in its
-state, each with the timestamp it was written, and publishes them in its view.
-The current list stays exactly as it is today, so the panel keeps working
-unchanged while T10 is unbuilt.
-
-**Acceptance criteria**
-
-- The projection publishes the current list plus up to 35 previous lists, newest
-  first, each carrying its write timestamp.
-- The 36th write evicts the oldest.
-- The history survives a restart, the way the current list already does.
-- No change to what the panel renders until T10 lands.
 
 ### T10 — client: browse history and insert an old list into the composer
 
@@ -654,7 +437,9 @@ chance to authenticate for the first time.
   none can perform a browser login, and all of them write the file sync.sh
   regenerates.
 
-## Verified API facts (do not re-research)
+## Critical context
+
+### Verified API facts (do not re-research)
 
 @modelcontextprotocol/sdk 1.30.0 ships with the dsh install.
 
@@ -783,13 +568,6 @@ the same pattern as dsh-better-edit and dsh-remote.
   patch, which inserts rows the web patch already inserts, and boot dies on a
   duplicate loader entry id.
 
-## Verified API facts (do not re-research)
-
-The fork clone is `/home/sid/repos/dsh-compaction-instant`, branch
-`fix/retention-and-shrink-gate`, based on `f6f300f`. `pnpm test` runs
-`node --test`. Peer deps install with plain `pnpm install`. The suite was 99
-passing at the base commit and is 103 passing on the branch.
-
 ## Critical context
 
 - Measured from the journal, every failure has a constant delta of about 164
@@ -833,6 +611,14 @@ passing at the base commit and is 103 passing on the branch.
   original conversation. A session log that shows a compaction checkpoint with
   `surfaceOp: "append"` was almost certainly rewritten by that script and is not
   evidence of a compaction bug. Two hours were lost to that confusion once.
+
+### Verified API facts (do not re-research)
+
+The fork clone is `/home/sid/repos/dsh-compaction-instant`, branch
+`fix/retention-and-shrink-gate`, based on `f6f300f`. `pnpm test` runs
+`node --test`. Peer deps install with plain `pnpm install`. The suite was 99
+passing at the base commit and is 103 passing on the branch.
+
 
 ## Tickets
 
@@ -894,7 +680,9 @@ watched from any device, including a phone over dsh-remote.
 - The client half replaces the shipped dropdown rather than adding a second
   button next to it.
 
-## Verified API facts (do not re-research)
+## Critical context
+
+### Verified API facts (do not re-research)
 
 Paths are relative to the dsh install at
 `.../lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/`.
@@ -1086,6 +874,30 @@ Make both cards show the image and present their text well.
   at all, because clicking opens a new tab. Nothing is shared between them, and
   nothing here blocks Effort 6.
 
+### Verified API facts (do not re-research)
+
+- `read_image` returns TWO content blocks: a text block holding
+  `<path>...</path>` and `"<mediaType> image, <width>x<height> px, <bytes>
+  bytes"`, plus the image block itself
+  (`dsh-tool-fs/lib/index.js:854-856,918-935`). The attachment ref carries
+  `mediaType`, `width`, `height`, `bytes`, and an optional `name`.
+- `see` takes `{ image, question }` and returns the child's prose only. It
+  already declares
+  `presentCall: { card: "generic", title: "Look at an image", kind: "read", rawInput: args.image }`
+  (`plugins/see.ts:141-152,222-227`), so the path ALREADY reaches the client. The
+  card needs the bytes, nothing more, and `see.ts` needs no change.
+- `MarkdownText` comes from `@deepseek-ai/dsh-client-ui-primitives`, already in
+  use at `plugins/tool-render/src/client.tsx:156`.
+- `.tool-render-markdown-body` (renamed from `.tool-render-subagent-prompt` in
+  T11, 2026-09-04) is the existing capped, scrollable markdown block:
+  `max-height: 16rem; overflow-y: auto` plus full typography for headings,
+  paragraphs, lists, `pre` and inline code. It now backs three rows (subagent,
+  context injection, `send_message`), not one -- reuse it, do not add a fourth
+  copy.
+- Routes register through `ctx.inject(["webServer"], ...)`, the pattern
+  `plugins/log-viewer/src/index.ts:75-77` already uses.
+
+
 ## Settled decisions (from grilling, 2026-09-03)
 
 - BOTH cards embed from the T2 route, by file path. REVISED 2026-09-03, after
@@ -1131,49 +943,7 @@ Make both cards show the image and present their text well.
 OPEN, a detail rather than a decision: the see-more clamp height. Proposed 8rem,
 about six lines. Change it if it reads wrong.
 
-## Verified API facts (do not re-research)
-
-- `read_image` returns TWO content blocks: a text block holding
-  `<path>...</path>` and `"<mediaType> image, <width>x<height> px, <bytes>
-  bytes"`, plus the image block itself
-  (`dsh-tool-fs/lib/index.js:854-856,918-935`). The attachment ref carries
-  `mediaType`, `width`, `height`, `bytes`, and an optional `name`.
-- `see` takes `{ image, question }` and returns the child's prose only. It
-  already declares
-  `presentCall: { card: "generic", title: "Look at an image", kind: "read", rawInput: args.image }`
-  (`plugins/see.ts:141-152,222-227`), so the path ALREADY reaches the client. The
-  card needs the bytes, nothing more, and `see.ts` needs no change.
-- `MarkdownText` comes from `@deepseek-ai/dsh-client-ui-primitives`, already in
-  use at `plugins/tool-render/src/client.tsx:156`.
-- `.tool-render-markdown-body` (renamed from `.tool-render-subagent-prompt` in
-  T11, 2026-09-04) is the existing capped, scrollable markdown block:
-  `max-height: 16rem; overflow-y: auto` plus full typography for headings,
-  paragraphs, lists, `pre` and inline code. It now backs three rows (subagent,
-  context injection, `send_message`), not one -- reuse it, do not add a fourth
-  copy.
-- Routes register through `ctx.inject(["webServer"], ...)`, the pattern
-  `plugins/log-viewer/src/index.ts:75-77` already uses.
-
 ## Tickets
-
-### T2 — host: an image route
-
-Not started. Ships nothing visible on its own, which the owner accepted when
-choosing to split by layer.
-
-A host route in `plugins/tool-render` that takes a local path and streams the
-image bytes, registered through `ctx.inject(["webServer"], ...)`. It serves BOTH
-`read_image` and `see`, and it accepts any path. It must return a real `http`
-URL that a browser tab can open directly. It must confirm the target is a real image rather than serving arbitrary
-bytes, and it must fail cleanly on a missing or unreadable file so the card can
-show a broken-image state instead of hanging.
-
-**Acceptance criteria**
-
-- The route returns the bytes and a correct content type for a real image.
-- It refuses a path that is not an image, and it does not leak file contents in
-  the refusal.
-- A missing or unreadable file produces a clean error, not a hang.
 
 ### T3 — client: the read_image and see cards
 
@@ -1217,14 +987,10 @@ renders as a broken-image state, never as an empty box.
 
 ---
 
-# Effort 8 — context meter: a heuristic ring with provider meta on hover
+# Retired — context meter (Effort 8). Live notes only.
 
-## Vision
-
-The composer's context ring reports a number that only ever grows, so it cannot
-be used to decide when to compact. Replace it with a ring driven by what DSH is
-about to send, and move the provider's own claims into the hover panel where
-they can be read as provider claims rather than as truth.
+Shipped. The meter is a tracked plugin at `plugins/context-meter`, wired into
+`build.mjs` and `sync.sh`, and confirmed working after a sync and restart.
 
 ## Critical context
 
@@ -1247,20 +1013,7 @@ they can be read as provider claims rather than as truth.
   is sending the model the full transcript. Compare a Meridian invoice against
   these numbers to tell them apart.
 
-## Settled decisions (from grilling, 2026-09-03)
-
-- Ring numerator is the heuristic prompt size, so it stays provider agnostic.
-- Ring denominator is the route's context window.
-- The hover panel has two titled halves, the true prompt size first and the
-  provider's claims second, each with its own total.
-- The shipped meter is hidden with injected CSS. The owner accepted that this
-  couples us to shipped markup.
-- If hiding fails, still render ours and log a warning. Two rings is the
-  acceptable failure, a missing fix is not.
-- Build it as a dynamic Cordis client package first, iterate on it live, then
-  port the same code to a tracked plugin.
-
-## Verified API facts (do not re-research)
+### Verified API facts (do not re-research)
 
 - `useProjection("contextBreakdown")` returns
   `{ systemTokens, toolsTokens, messageTokens }`. `messageTokens` rides the
@@ -1301,10 +1054,19 @@ they can be read as provider claims rather than as truth.
   logging did not reach the browser console at all, so its silence proves
   nothing. Put a diagnostic in the rendered UI instead.
 
-## Tickets
 
-None open. The meter is a tracked plugin at `plugins/context-meter`, wired into
-`build.mjs` and `sync.sh`, and confirmed working after a sync and restart.
+## Settled decisions (from grilling, 2026-09-03)
+
+- Ring numerator is the heuristic prompt size, so it stays provider agnostic.
+- Ring denominator is the route's context window.
+- The hover panel has two titled halves, the true prompt size first and the
+  provider's claims second, each with its own total.
+- The shipped meter is hidden with injected CSS. The owner accepted that this
+  couples us to shipped markup.
+- If hiding fails, still render ours and log a warning. Two rings is the
+  acceptable failure, a missing fix is not.
+- Build it as a dynamic Cordis client package first, iterate on it live, then
+  port the same code to a tracked plugin.
 
 ## Human review queue
 
@@ -1319,7 +1081,7 @@ None open. The meter is a tracked plugin at `plugins/context-meter`, wired into
 
 ---
 
-# Effort 9 — resume and recall rework
+# Retired — resume and recall rework (Effort 9). Live notes only.
 
 All three tickets shipped: skill-gate's `alwaysDeny`, `resume_search`/
 `resume_read` replacing `/resume`, the `skills/resume` skill, and the
@@ -1435,7 +1197,22 @@ the first, gate the second. Then grow bash-guard from a veto-only pre-execute
 listener into the bash tool itself, which is the only way it can run the rewrite
 it already computes.
 
-## Verified API facts (do not re-research)
+## Critical context
+
+- Effort 1 ticket T10 (dsh-better-edit advertises sandbox escalation and drops
+  it) is moot once T2 lands. Drop it rather than fixing the fork.
+- `plugins/manifest-guard.ts` and `plugins/package-tool.ts` name dsh-better-edit
+  only in comments. Both hook `fs/write-intent`, which the builtin edit
+  dispatches too. Comments only, no code change.
+- Keep `experiments/tool-call-friction/` as the record of why the fork existed.
+  The served-mirror fix worked: `E_RANGE_UNVERIFIED` and `drifted_after_edit`
+  both reached 0 over 1,593 mutating calls. Retiring hashline is a cost verdict,
+  not a verdict on that fix.
+- Remaining hashline failure after the fix was `E_BATCH_ABORT`, 183 cases, 89% of
+  them `E_STALE_ANCHOR`, and 197 of them on `edits[0]`. Mean batch size was 1.36,
+  so the batch API was almost never used.
+
+### Verified API facts (do not re-research)
 
 Builtin fs tools, from `@deepseek-ai/dsh-tool-fs/README.md` in the installed dsh
 (`.../node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-tool-fs/`):
@@ -1464,20 +1241,6 @@ deep-freezes `exec.arguments`, and `PreToolDecision` is only
 `allow | deny | ask`. A pre-execute listener cannot rewrite a command. An
 earlier version assigned to `exec.arguments.command` and was a silent no-op.
 
-## Critical context
-
-- Effort 1 ticket T10 (dsh-better-edit advertises sandbox escalation and drops
-  it) is moot once T2 lands. Drop it rather than fixing the fork.
-- `plugins/manifest-guard.ts` and `plugins/package-tool.ts` name dsh-better-edit
-  only in comments. Both hook `fs/write-intent`, which the builtin edit
-  dispatches too. Comments only, no code change.
-- Keep `experiments/tool-call-friction/` as the record of why the fork existed.
-  The served-mirror fix worked: `E_RANGE_UNVERIFIED` and `drifted_after_edit`
-  both reached 0 over 1,593 mutating calls. Retiring hashline is a cost verdict,
-  not a verdict on that fix.
-- Remaining hashline failure after the fix was `E_BATCH_ABORT`, 183 cases, 89% of
-  them `E_STALE_ANCHOR`, and 197 of them on `edits[0]`. Mean batch size was 1.36,
-  so the batch API was almost never used.
 
 ## Tickets
 
@@ -1494,154 +1257,6 @@ guidance overrides, and `skills/customize-setup/SKILL.md` plus its
   nothing outside `experiments/`.
 - `pnpm test` passes.
 
-### T5 — our own bash tool: guard, rewrite, run
-
-**Status:** contract settled by grilling on 2026-09-04. Ready to dispatch.
-**Why:** bash-guard computes the exact replacement command and then refuses to
-run it, because `PreToolDecision` is only `allow | deny | ask` and dsh-tools
-deep-freezes `exec.arguments`. Measured cost: 1,408 bash calls denied purely to
-apply a rewrite the guard already held. bash is 49.3% of all tool calls, so a
-regression here is felt everywhere.
-
-**Verified API facts (do not re-research).** `dsh-tool-bash` does not own
-execution. Its `lib/types/index.d.ts` exports only `{ name, inject, Config,
-apply }` and its published `src/` is empty. Its README line 5 calls it "the
-model-facing `bash` tool registered over the `ctx.shell` executor seam", and
-line 37 describes the background path. From `@deepseek-ai/dsh-shell/lib/types/`:
-- `ctx.shell` is abstract with `get sandboxMode(): SandboxMode | undefined`,
-  `resolve(request: ShellExecRequest): ShellExecSpec`,
-  `run(spec): Promise<ShellRunResult>`, and `start(spec): ShellProcess`.
-- `ShellProcess` has `status: 'running' | 'completed' | 'killed'` and
-  `readOutput(): ShellProcessRead`. `readOutput` is incremental, so consecutive
-  reads never repeat content.
-- Workdir default comes from the calling agent's `session.header.cwd` via
-  `exec.agent`, applied BEFORE `resolve()`, because many sessions share one
-  executor.
-- Register with `ctx.tools.register(defineTool({...}))`, the seam
-  `plugins/package-tool.ts:360` and `plugins/see.ts` already use.
-- Current `RewriteRule` (`plugins/bash-guard.ts:126`) is
-  `{ drop: string[], value?: boolean, because?: string }`. Only `guards/rg.json`
-  uses it today.
-
-**Change.**
-
-1. Preset rows, driven from `sync.sh`:
-   - Disable `tool-bash` in BOTH presets. Aidos is
-     `~/.dsh/.agent-presets/aidos/agent.cordis.yml:13`. Standard is
-     `$dsh_pkg/config/agent-presets/standard/agent.cordis.yml:44`, patched in
-     place the way `step_patch_standard_preset_tool_subagent` already does. The
-     row carries a `disabled:` key, so no preset fork is needed.
-   - Disable `tool-goal` in the standard preset (line 97). Aidos has no such row.
-   - Leave `tool-jobs` enabled in both.
-   - Add a sync step that FAILS LOUDLY if `tool-bash` is enabled again. sync.sh
-     already warns that a dsh reinstall re-extracts the standard preset and
-     silently reverts its patch.
-2. Register our own `bash` tool from `plugins/bash-guard.ts` over `ctx.shell`.
-   Advertise `sandbox_permissions` and `justification` only when
-   `ctx.shell.sandboxMode` reports confinement.
-3. Background parity in this ticket, not later: `ctx.jobs.start()` preflight,
-   register the calling agent as owner, adapt the `ShellProcess` into the job
-   runtime's cancel, done, and incremental-output hooks. `job_list`,
-   `job_output`, and `job_kill` must keep working unchanged.
-4. REMOVE the `tools/pre-execute` listener. The guard runs inside the tool, one
-   code path. Rule resolution is otherwise unchanged, including the aidos phase
-   profile via `ctx.get("aidos").bashContext(agent)`, `safePaths`, and
-   `workspaceRoot`.
-5. New per-rule flag `readOnly: true` in the guard rule JSON.
-6. New `rewrites[].add`: insert a flag, and optionally its value, ONLY when it is
-   absent. Idempotent by construction. The motivating rule is
-   `npm install --cache /tmp/dsh/npm-cache`, which the friction scan tied to 118
-   unmarked permission failures where the model escalated only 54% of the time.
-
-   SHAPE, settled 2026-09-04 and already pinned by
-   `plugins/bash-guard-rewrite.test.ts`. `RewriteRule` becomes:
-
-   ```ts
-   interface RewriteRule {
-     drop?: string[];                              // unchanged
-     add?: { flag: string; value?: string }[];     // new
-     value?: boolean;                              // unchanged, only meaningful with drop
-     because?: string;                             // unchanged, stays at rule level
-   }
-   ```
-
-   `add` is a list, symmetric with `drop`. Keep `because` at the RewriteRule
-   level rather than per entry, so there is one place to explain a rewrite.
-   Insertion goes immediately after the command word: `jq .` with
-   `add: [{ flag: "--indent", value: "2" }]` becomes `jq --indent 2 .`. The test
-   asserts that position, so it is contract, not incidental.
-7. Behaviour:
-   - AUTO-RUN a clean translate, a flag drop, or an `add` when the resolved rule
-     is marked `readOnly`.
-   - OTHERWISE ASK. The approval prompt shows the model's original command AND
-     the substitution. Approval runs the REWRITTEN command.
-   - Deny stays deny. A translator that reports a blocker stays deny.
-   - FORWARD THE JUDGMENT: for any non-allow verdict, append the rule's `reason`
-     to the tool result the model sees. This teaches the model to write `rg` next
-     time, so the rewrite rate falls on its own.
-
-**Subsumes Effort 1 T5** (`warn` verdict plus additive rewrites). Delete that
-ticket when this lands. Forwarding the reason on every non-allow verdict covers
-the `warn` half, and item 6 covers `rewrites[].add`.
-
-**Also reword `guards/grep.json`.** Its `reason` already claims "grep is normally
-translated to rg automatically", which only becomes true when this ships. Check
-sibling rules for the same phrasing.
-
-**Decision-layer API the tests target.** `evaluate` today is
-`(ctx, dirs, command, safePaths, workspaceRoot, templates) => Promise<PreToolDecision | null>`
-where `null` means allow (`plugins/bash-guard.ts:516`). It must return richer
-information, because a rewrite is no longer a deny. New return type:
-
-```ts
-type GuardOutcome =
-  | { action: "run";  command: string; rewritten: boolean; reason?: string }
-  | { action: "ask";  command: string; original: string; rewritten: boolean; reason?: string }
-  | { action: "deny"; reason: string };
-```
-
-`evaluate` never returns null. A plain allow is
-`{ action: "run", command: <the model's command>, rewritten: false }`. `command`
-is always what should execute. `reason` is present whenever a rule matched with
-a non-allow verdict, and the tool appends it to the model-visible result.
-
-**Dispatch order. The preset switch goes LAST.** Disabling `tool-bash` before
-the replacement exists means any `./sync.sh` run removes bash for every session,
-and the other session works in this repo too.
-
-1. DONE, commit b38edea. Tests written against this contract by a coder that had
-   not seen the implementation. All 14 fail today, which is the point.
-2a. Reshape the decision layer only: export `evaluate` returning `GuardOutcome`,
-   add `readOnly`, add `rewrites[].add`. No tool registration and no execution.
-   The existing `tools/pre-execute` listener maps `GuardOutcome` back onto
-   `PreToolDecision`, so RUNTIME BEHAVIOUR DOES NOT CHANGE: a rewrite still
-   becomes a deny carrying the replacement. Milestone: the 14 tests pass.
-2b. Register the `bash` tool over `ctx.shell`, foreground only. Remove the
-   `tools/pre-execute` listener in this unit, not before.
-3. Background parity over `ctx.jobs`, continuing unit 2b's child session.
-4. `sync.sh` preset disabling plus the verification step.
-
-**DEPLOY ALL FOUR TOGETHER. Do not run `./sync.sh` between them.** The hazard
-runs both ways:
-- Disable `tool-bash` before our tool exists and every session loses bash.
-- Register our `bash` while builtin `tool-bash` is still enabled and two
-  plugins claim the same global tool name. That collision is UNVERIFIED. sync.sh
-  already records that a duplicate loader entry id kills boot, so assume a name
-  clash is at least as bad until someone proves otherwise.
-
-Units 2a, 2b, and 3 only change repository code, which does not reach a running
-session until a build plus `./sync.sh` plus a restart. So landing them is safe.
-The single coordinated deploy happens after unit 4.
-
-NOTE: `sync.sh` line 45 carries an uncommitted aidos pin bump from the other
-session. Unit 4 must not touch that line.
-
-**Acceptance criteria:**
-- `pnpm test` passes, including decision-layer unit tests for verdict
-  resolution, `readOnly` gating, the ask payload carrying both commands, and the
-  forwarded reason text.
-- Fakes for `ctx.shell` (`resolve`, `run`, `start`, `readOutput`) and `ctx.jobs`
-  exercise the foreground and background paths.
 ### Post-restart checklist
 
 Run in order. Stop at the first failure and roll back.
@@ -1824,62 +1439,3 @@ set that flag durably.
 **Acceptance criteria:**
 - A rewritten call keeps its blue outline after the turn ends and after a reload.
 - A normal call has no outline. An escalated call keeps its yellow one.
-
-### T6 — tool-render: extract and test the read parsers
-
-**Status:** stage 1 (extraction) DONE 2026-09-04, uncommitted. Stage 2 (tests)
-not started. Do stage 2 before T5 so the bash tool lands on a tested renderer.
-Stage 1 result: `plugins/tool-render/src/text.ts` now holds all six helpers, and
-each one was checked byte-for-byte against `git show HEAD:...client.tsx` before
-review. One unused import of `isBuiltinReadEnvelope` slipped into `client.tsx`
-and was removed by hand. `tsc --noEmit`, `node build.mjs`, `pnpm test` (124),
-and prettier all pass.
-**Why:** `plugins/tool-render/` has no test file. During T3 a duplicated
-`var lines = String(text).split("\n");` survived both `pnpm exec tsc --noEmit`
-and `node build.mjs`, because `var` redeclaration is legal JavaScript. It was
-caught by reading the diff. The three read parsers are pure string functions and
-are the easiest thing in this repo to cover.
-**Blocker to solve first:** `plugins/tool-render/src/client.tsx` exports only
-`{ apply, inject, name }` (line ~2038). `isBuiltinReadEnvelope`, `readStartLine`,
-`numberedReadRows`, and `cleanReadTextForDiff` are module-scoped, so vitest
-cannot import them today.
-**Change, stage 1 (extraction):** move those four functions plus `HASH_ROW_RE`
-AND `deIndent` into a new Cordis-free, React-free
-`plugins/tool-render/src/text.ts` that exports them, and import them back into
-`client.tsx`. `deIndent` has to come along because `numberedReadRows` calls it.
-The module is named `text.ts`, not `read-parse.ts`, because `deIndent` is a
-general text helper that the diff renderer also uses at roughly lines 1155,
-1463, 1532, and 1557 of `client.tsx`. This mirrors dsh's own convention:
-`dsh-tool-fs` keeps line windowing and output formatting in `src/read-render.ts`,
-described in its README as "Cordis-free, independently unit-tested". esbuild
-bundles the extra module with no config change.
-**Change, stage 2 (tests):** add `plugins/tool-render/text.test.ts` in the style
-of `plugins/bash-guard.test.ts`. Dispatch this to a SECOND, FRESH coder that has
-not seen the extraction, so it writes tests against the format contract rather
-than against the implementation it just moved.
-**Cases to cover, both formats:**
-- Builtin envelope: content lines keep the tool's own numbers, the `<path>`,
-  `<type>`, `<content>`, and `</content>` lines never become rows, and the blank
-  line and footer come back as `number: null`.
-- Builtin partial read: `readStartLine` returns the start from
-  `(Showing lines 5-9 of 40. ...)` and from
-  `(Output capped. Showing lines 5-9. ...)`.
-- Builtin `cleanReadTextForDiff`: the returned content has no envelope, no
-  `N: ` prefixes, no blank separator, and no footer.
-- Hashline envelope: a `HASH│content` read still parses, still strips the
-  4-character anchor prefix, and still treats hint lines as `number: null`.
-  This is the regression guard for historical session replay.
-- A read whose file content itself contains a line like `(Showing lines 1-2 of
-  3)`. Document the result rather than asserting a fix. `readStartLine` scans
-  the whole output, so a false match is possible in both formats today.
-**Do not:** add a React render test, a DOM harness, or a snapshot test. The card
-components are out of scope. This ticket covers pure string parsing only.
-**Acceptance criteria:**
-- `pnpm test` passes and the new file appears in the vitest run.
-- `pnpm exec tsc --noEmit` and `node build.mjs` both still pass.
-- `rg -n 'HASH_ROW_RE' plugins/tool-render/src/client.tsx` returns nothing, and
-  `rg -c 'HASH_ROW_RE' plugins/tool-render/src/text.ts` is non-zero, proving the
-  move happened rather than a copy.
-- Reverting only the builtin branch of `numberedReadRows` makes at least one new
-  test fail. Confirm this by hand once, so the suite is not tautological.
-
