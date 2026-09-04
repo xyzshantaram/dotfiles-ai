@@ -10025,6 +10025,47 @@ function sendMessageArgs(args) {
   if (typeof args.message !== "string" || args.message === "") return null;
   return args;
 }
+function packageActionTitle(action) {
+  if (action === "add") return "Add package";
+  if (action === "remove") return "Remove package";
+  if (action === "update") return "Update package";
+  if (action === "add_task") return "Add task";
+  return "Package";
+}
+function PackageRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var block = props.block;
+  var done = doneOf(block);
+  var args = parseArgs(argsRawOf(block));
+  var action = args !== null ? pickString(args, ["action"]) : void 0;
+  var ecosystem = args !== null ? pickString(args, ["ecosystem"]) : void 0;
+  var target = args !== null ? pickString(args, ["packageName", "taskName"]) : void 0;
+  var output = done ? resultTextOf(block) : null;
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var title = packageActionTitle(action);
+  var summary = target !== void 0 && target !== "" ? target : title;
+  var body = state !== "error" && output !== null && output !== "" ? /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output" }, stripAnsi(output)) : null;
+  return toolRenderRow({
+    icon: /* @__PURE__ */ import_react.default.createElement(IconApiOutline142, null),
+    title,
+    badge: ecosystem,
+    summary,
+    state,
+    expandable: body !== null,
+    expanded,
+    onToggle: function() {
+      setExpanded(!expanded);
+    },
+    body,
+    errorSummary,
+    errorText,
+    inspect: props.inspect
+  });
+}
 function SendMessageRow(props) {
   var expandedState = useState(false);
   var expanded = expandedState[0];
@@ -10276,6 +10317,14 @@ function apply(ctx) {
         priority: -100
       },
       SkillRow
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "package",
+        priority: -100
+      },
+      PackageRow
     );
   });
   ctx.slots.inject("conversation.chat.node", function* () {
