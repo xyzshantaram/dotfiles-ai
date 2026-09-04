@@ -656,169 +656,12 @@ green, and the pin in sync.sh moves to the new commit.
 
 # Effort 6 — job viewer: clickable job rows and an output modal
 
-## Vision
-
-The session header lists background jobs but the rows do nothing. Reading a
-job means asking the agent to call `job_output`. This effort makes each row
-clickable and shows that job's output in a modal, so a long command can be
-watched from any device, including a phone over dsh-remote.
-
-## Settled decisions (from grilling, 2026-09-03)
-
-- No tmux. It re-parents the command onto the tmux server, outside the argv
-  that `ctx.sandbox` wraps, and the workspace-write policy is doing real work.
-  The attach-from-a-laptop-terminal case is dropped on purpose. The modal
-  replaces it and also works from a phone, which tmux never would have.
-- For an interactive command the agent must drive, use the shipped
-  `dsh-tool-bash-persistent` over the PTY seam. That is a separate one-row
-  change, not part of this effort.
-- A host plugin becomes the SOLE consumer of job output. It polls each running
-  job and buffers the deltas.
-- The plugin replaces the three model tools so they read from that buffer.
-  Side effect worth keeping: `job_output` stops being one-shot and the agent
-  can re-read a job.
-- The client half replaces the shipped dropdown rather than adding a second
-  button next to it.
-
-## Critical context
-
-### Verified API facts (do not re-research)
-
-Paths are relative to the dsh install at
-`.../lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/`.
-
-- Service name `jobs`, type `JobRegistry` (`dsh-jobs/lib/types/index.d.ts:8`).
-  Methods `start`, `list`, `get`, `read`, `kill`, `wait`, `onJobDone`,
-  `onJobsChanged`, `attachController` (`index.d.ts:47-118`).
-- `JobSnapshot`: `id` (`<kind>-N`), `kind`, `label`, `status`
-  (`running | stopping | completed | killed | failed`), `detail?`, `startedAt`,
-  `finishedAt?`, `reported`, `ownerSession?`, `outputLimitBytes?`
-  (`dsh-jobs/lib/types/types.d.ts:46-81`).
-- THE CONSTRAINT: `JobRead` is `{ text, snapshot }` and `text` is the consuming
-  delta since the previous read, with ONE cursor, not one per caller
-  (`types.d.ts:121-130`). Whoever reads first takes it. This is the whole
-  reason the plugin must own consumption.
-- The client cannot read output today. The wire frame is `session/jobs` with
-  `jobs: JobView[]` (`dsh-host-apiproxy/lib/types/api/events.d.ts:124-127`),
-  mirrored last-wins into `jobsBySession`
-  (`dsh-client-runtime/lib/types/client/sessions/service.d.ts:82`), read with
-  `useSessions((s) => s.jobsBySession[sessionId])`. `JobView` carries `id`,
-  `kind`, `label`, `status`, `detail?`, `startedAt`, `finishedAt` and NO output
-  field. "The live records never cross the wire"
-  (`dsh-host-apiproxy/lib/types/api/jobs.d.ts:3-5`).
-- The dropdown is `JobListAction`
-  (`dsh-client-ui-jobs/lib/types/client/JobListAction.d.ts:12`), registered at
-  `conversation.session.header.actions`, entry id `job-list`, order 20
-  (`dsh-client-ui-jobs/lib/client.js:266-272`). Rows are `<li>` with no
-  `onClick` (`client.js:264-286`). The slot is `kind: list`, `scope: session`
-  (`dsh-client-ui-conversation/lib/types/client/contract/slots.d.ts:86-90`).
-- `Modal` comes from `@deepseek-ai/dsh-client-ui-primitives`, which the web
-  boot injects as a static module into every dynamic client package. Props:
-  `{ open, onClose, title, closeLabel, description, children, footer,
-  className, contentClassName, headless }`. It portals to `document.body` with
-  a mask, `role="dialog"` and Escape handling.
-- The model-facing tools live in `dsh-tool-jobs`, mounted as row `tool-jobs` in
-  `config/agent-presets/standard/agent.cordis.yml:73-74`.
-- The host route pattern already used in this bundle is
-  `ctx.inject(["webServer"], ...)`, see `plugins/log-viewer/src/index.ts:75`.
-- `JobKindMap` is merge-extensible by declaration merging
-  (`dsh-jobs/lib/types/types.d.ts:19-24`), the same shape as
-  `SessionProjectionMap`.
-- The subprocess layer keeps a bounded tail in memory and spills past
-  64 MiB per stream (`dsh-subprocess-local/lib/types/index.d.ts:88-90`).
-- `dsh-tool-jobs` is the ONLY installed plugin that calls
-  `ctx.jobs.attachController()`. `JobRegistry.start()` refuses every new
-  background job for every owner, not just this viewer's, when no attached
-  controller serves that owner — confirmed by grepping the whole installed
-  harness tree for `attachController`. `plugins/job-viewer/src/index.ts`
-  already attaches its own controller (T1 follow-up, committed), so this
-  stays true once `tool-jobs` is disabled (T5).
-- `dsh-tool-jobs` ALSO delivers unreported completions to the owning agent —
-  a behavior with no ticket until T3 below added it. Exact mechanism, read
-  from `dsh-tool-jobs/lib/index.js:169-192` (do not re-read; verified once):
-  `ctx.jobs.onJobDone((snapshot, owner) => {...})`; skips when
-  `snapshot.reported` or `owner === undefined`; builds one `UserMessage` via
-  `createUserMessage` (`@deepseek-ai/dsh-llm`) with
-  `source: { kind: "plugin", plugin: "<name>", form: "notice", summary }`
-  where `summary = boundContextSummary(text)` (`@deepseek-ai/dsh-llm`,
-  `(summary: string) => string`); delivers via `owner.followup(message)`
-  when `owner.status === "idle"` and a per-owner consecutive-wake budget
-  (`WeakMap<Agent, number>`, default cap 3) is not exhausted, otherwise via
-  `owner.inject(message)`; the wake budget resets on
-  `ctx.on("agent/inbox/claimed", ({ agent, message }) => { if
-  (message.source.kind === "user") spentWakes.delete(agent) })`
-  (`dsh-agent/lib/types/runtime-types.d.ts:194-198`, confirmed payload
-  `{ agent, message, turn }`). `Agent.status: 'idle' | 'running'`,
-  `.followup(message: UserMessage): void`, `.inject(message: UserMessage):
-  void` (`dsh-agent/lib/types/runtime-types.d.ts:65-135`).
-- The original tools' exact schemas and helpers, for T2 to mirror
-  (`dsh-tool-jobs/lib/index.js:28-159`): `PUBLIC_TASK_SCHEMA` (id, kind,
-  label, status enum, detail?, startedAt, finishedAt?), `publicJob(snapshot)`
-  strips owner/notification fields, `statusLine(snapshot)` renders
-  `[status: X]` or `[status: X, detail]`. `job_list` takes no parameters and
-  returns `PUBLIC_TASK_SCHEMA[]`. `job_output` takes `job_id` (required),
-  `wait?` (boolean), `timeout_ms?` (number), returns
-  `{ text, job: PUBLIC_TASK_SCHEMA }`. `job_kill` takes `job_id` (required),
-  `reason?` (string), returns
-  `{ outcome: "cancellation-requested" | "already-finished", job:
-  PUBLIC_TASK_SCHEMA }`.
-
-## Tickets
-
-### T2 — host: replacement tools and the output route
-
-Replacement `job_list`, `job_output` and `job_kill` reading from the buffer
-(never `ctx.jobs.read()` directly — see the constraint above), plus an HTTP
-route serving one job's buffer to the browser. Mirror the original tools'
-exact parameter/output shapes (see Verified API facts) so the agent's
-experience is unchanged.
-
-**Acceptance criteria**
-
-- The three tools return what the agent expects, including a job that finishes
-  between two reads.
-- With the modal open and polling, an agent `job_output` call on the same job
-  still returns the full output with no gap. This is the regression that
-  matters, so it gets its own test.
-
-### T3 — host: completion delivery (wakeup)
-
-Replicate `dsh-tool-jobs`'s unreported-completion delivery in job-viewer (see
-Verified API facts for the exact mechanism), so an agent still learns a
-background job finished without polling once T5 disables `tool-jobs`.
-
-**Acceptance criteria**
-
-- A job finishing while its owning agent is idle triggers `followup`, up to
-  the configured wake budget; beyond the budget, or while the agent is busy,
-  it triggers `inject` instead.
-- The wake budget resets after the agent claims a real user message.
-- An already-`reported` job (e.g. the agent already called `job_output` on it
-  after settlement) produces no duplicate notice.
-
-### T4 — client: the replacement dropdown and the modal
-
-Own entry at `conversation.session.header.actions`, rows clickable, click opens
-`Modal` showing that job's buffer.
-
-**Acceptance criteria**
-
-- The header shows one jobs button, not two.
-- Rows render dot, kind, label, status and duration as before.
-- The modal fetches and displays output, and refreshes while the job runs.
-
-### T5 — wire-up and deploy
-
-Disable the `tool-jobs` row and the `dsh-client-ui-jobs` row. Add the build
-entries and the sync.sh install.
-
-**Acceptance criteria**
-
-- `./sync.sh` exits 0 and the journal shows no duplicate tool registration for
-  `job_output`, `job_list` or `job_kill`.
-- Starting a NEW background job (bash or subagent) still works after
-  `tool-jobs` is disabled — the attachController regression this whole
-  effort could otherwise cause.
+All five tickets shipped: the output buffer and poller (T1), replacement
+`job_list`/`job_output`/`job_kill` tools plus the `/job-viewer/output` and
+`/job-viewer/kill` routes (T2), completion delivery/wakeup (T3), the
+replacement dropdown and modal with a kill button (T4), and wire-up —
+`tool-jobs`/`ui-jobs` disabled, job-viewer installed (T5). See git log
+(`plugins/job-viewer/`, `sync.sh`, `build.mjs`) for the full history.
 
 ## Human review queue
 
@@ -833,6 +676,8 @@ entries and the sync.sh install.
       confirm it still starts (the attachController regression check).
 - [ ] Let a background job finish while idle and confirm you get woken up
       with a notice, without having to ask about it.
+- [ ] Try the modal's stop-job button on a real running job: confirm the
+      two-step confirm, and that the job actually stops.
 
 
 # Effort 7 — tool-render: error styling and image tool cards
