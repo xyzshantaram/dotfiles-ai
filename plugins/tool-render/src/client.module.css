@@ -1,7 +1,7 @@
 .tool-render-row {
   align-items: center;
   min-width: 0;
-  height: 1.75rem;
+  height: 2rem;
   display: flex;
   position: relative;
   overflow: hidden;

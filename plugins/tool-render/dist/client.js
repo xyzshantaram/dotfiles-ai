@@ -1865,7 +1865,7 @@ function escapeHtml(s) {
 var client_default = `.tool-render-row {
   align-items: center;
   min-width: 0;
-  height: 1.75rem;
+  height: 2rem;
   display: flex;
   position: relative;
   overflow: hidden;
@@ -15334,14 +15334,18 @@ function toolNameHue(name2) {
   for (var i = 0; i < name2.length; i++) {
     h = h * 31 + name2.charCodeAt(i) | 0;
   }
-  return Math.abs(h) % 360;
+  h = Math.abs(h);
+  var golden = 0.6180339887498949;
+  var frac2 = h * golden % 1;
+  return Math.floor(frac2 * 360);
 }
 function toolNameBadge(toolName, icon, state) {
   if (toolName === void 0 || toolName === null || toolName === "") return null;
   var isError = state === "error";
+  var isBash = toolName === "Run bash";
   var hue = toolNameHue(toolName);
-  var background = isError ? "color-mix(in srgb, var(--dsw-alias-state-error-primary) 65%, black)" : "color-mix(in srgb, hsl(" + hue + " 65% 45%) 55%, var(--dsw-alias-bg-tertiary))";
-  var border = isError ? "var(--dsw-alias-state-error-primary)" : "hsl(" + hue + " 55% 60%)";
+  var background = isError ? "color-mix(in srgb, var(--dsw-alias-state-error-primary) 85%, black)" : isBash ? "color-mix(in srgb, var(--dsh-outline-guard) 55%, var(--dsw-alias-bg-tertiary))" : "color-mix(in srgb, hsl(" + hue + " 65% 45%) 55%, var(--dsw-alias-bg-tertiary))";
+  var border = isError ? "var(--dsw-alias-state-error-primary)" : isBash ? "var(--dsh-outline-guard)" : "hsl(" + hue + " 55% 60%)";
   var color = isError ? "#fff" : void 0;
   return /* @__PURE__ */ import_react.default.createElement(
     "span",
