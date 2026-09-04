@@ -24,12 +24,21 @@
 }
 
 .jv-chevron {
-  font-size: 0.6875rem;
-  line-height: 1;
+  flex: none;
+  color: var(--dsw-alias-label-caption);
+  transform: rotate(-90deg);
+  transition: transform 0.12s;
+}
+
+.jv-chevron-open {
+  transform: rotate(0deg);
 }
 
 .jv-menu {
-  background: var(--dsw-alias-bg-primary);
+  /* The popover needs the MENU token, not the generic page background: the
+     generic one is translucent in this theme, so the conversation showed
+     through the dropdown. This is the token the shipped jobs dropdown used. */
+  background: var(--dsw-specific-menu);
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 0.5rem;
   box-shadow: 0 0.25rem 1rem rgb(0 0 0 / 20%);
