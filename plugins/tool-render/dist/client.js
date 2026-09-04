@@ -1952,6 +1952,14 @@ var client_default = `.tool-render-row {
   flex-direction: column;
   display: flex;
 }
+.tool-render-cmd-label {
+  font-family: var(--ds-font-family-code);
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  color: var(--dsw-alias-label-tertiary);
+  opacity: 0.75;
+  margin: 0.375rem 0 0 0.25rem;
+}
 .tool-render-command {
   font-family: var(--ds-font-family-code);
   white-space: pre-wrap;
@@ -2196,9 +2204,10 @@ var client_default = `.tool-render-row {
 }
 /* A call waiting on a bash-guard approval is outlined in electric blue, so it
    reads differently from a sandbox_permissions escalation. This rule follows
-   the escalated one, so blue wins when a call is somehow both. The mark lasts
-   only while the approval is open: the client never receives a decided
-   approval's reason, so an answered call goes back to looking ordinary. */
+   the escalated one, so blue wins when a call is somehow both. A rewritten
+   command keeps the outline permanently, because the rewrite is recorded in
+   the durable result metadata. A pending approval that caused no rewrite
+   loses the mark once it is answered. */
 .tool-render-card[data-guard-approval] {
   outline: 3px solid var(--dsh-outline-guard);
 }
@@ -8919,6 +8928,14 @@ function rowStateOf(block) {
   if (block.error && block.error.code === "interrupted") return "stopped";
   return block.isError === true ? "error" : "ok";
 }
+function guardRewriteOf(block) {
+  if (!doneOf(block)) return null;
+  var meta = block.meta;
+  if (meta === null || typeof meta !== "object" || Array.isArray(meta)) return null;
+  if (meta.rewritten !== true) return null;
+  if (typeof meta.ran !== "string" || meta.ran.length === 0) return null;
+  return { ran: meta.ran };
+}
 function resultTextOf(block) {
   if (!doneOf(block)) return null;
   var parts = [];
@@ -9153,21 +9170,38 @@ function BashRow(props) {
     }
     return false;
   }) === true;
+  var guardRewrite = guardRewriteOf(block);
+  if (guardRewrite !== null) guardApproval = true;
   var body = null;
   if (command !== void 0 || output !== null && output !== "") {
     var inner = [];
     if (command !== void 0) {
-      var commandHtml = highlightCode(command, "bash");
-      inner.push(
-        /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-command" }, "$ ", /* @__PURE__ */ import_react.default.createElement(
-          "code",
-          {
-            className: "hljs",
-            "data-highlighted": "yes",
-            dangerouslySetInnerHTML: { __html: commandHtml }
-          }
-        ))
-      );
+      var commandBlock = function(label, text) {
+        var commandHtml = highlightCode(text, "bash");
+        var parts = [];
+        if (label !== null) {
+          parts.push(/* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-cmd-label" }, label));
+        }
+        parts.push(
+          /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-command" }, label === null ? "$ " : null, /* @__PURE__ */ import_react.default.createElement(
+            "code",
+            {
+              className: "hljs",
+              "data-highlighted": "yes",
+              dangerouslySetInnerHTML: { __html: commandHtml }
+            }
+          ))
+        );
+        return parts;
+      };
+      if (guardRewrite !== null && guardRewrite.ran !== command) {
+        inner.push.apply(
+          inner,
+          commandBlock("wrote", command).concat(commandBlock("ran instead", guardRewrite.ran))
+        );
+      } else {
+        inner.push.apply(inner, commandBlock(null, command));
+      }
     }
     if (output !== null && output !== "") {
       inner.push(
