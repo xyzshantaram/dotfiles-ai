@@ -654,6 +654,28 @@ function flagPresent(ref: CommandRef, flag: string): boolean {
   return ref.node.suffix.some((w) => w.text === flag || w.text.startsWith(flag + "="));
 }
 
+/**
+ * True when this ref's recorded offsets really index into `command`.
+ *
+ * The rewrite pass edits `command` by absolute byte offset. That holds for a
+ * top-level command and for a wrapper such as `sh -c "rg -r foo"`, whose inner
+ * words still sit at real offsets. It does NOT hold inside a command
+ * substitution: for `for s in $(rg -o 'p' -r '$1' f.ts)` the walker reports
+ * positions from an inner parse, so `name.text` is "rg" while
+ * `command.slice(name.pos, name.end)` is "fo". Editing at those offsets
+ * shreds bytes nobody wrote — the old behaviour turned `echo "A"` into `eo`.
+ *
+ * A ref that fails this check is skipped rather than denied. Its rule's base
+ * verdict still applies, so the command runs exactly as it would with no
+ * rewrite rule at all. Denying instead would regress every `allow` rule that
+ * only carries a flag rewrite.
+ */
+function offsetsAddressCommand(command: string, ref: CommandRef): boolean {
+  const name = ref.node.name;
+  if (command.slice(name.pos, name.end) !== name.text) return false;
+  return ref.node.suffix.every((w) => command.slice(w.pos, w.end) === w.text);
+}
+
 /** The hits whose rules carry rewrites, in match order. */
 function rewritingHits(hits: { rule: GuardEntry }[]): { rule: GuardEntry }[] {
   return hits.filter((h) => h.rule.rewrites !== undefined);
@@ -752,6 +774,14 @@ export async function evaluate(
     let addMatched = false;
     for (const hit of hits) {
       if (!hit.rule.rewrites) continue;
+      // Editing by offset is only safe when the offsets address this string.
+      // A ref inside a command substitution reports inner-parse positions.
+      if (!offsetsAddressCommand(command, hit.ref)) {
+        ctx.logger.debug(
+          `bash-guard: skipping rewrite for ${hit.name}; its offsets do not address the command (nested substitution)`,
+        );
+        continue;
+      }
       for (const rw of hit.rule.rewrites) {
         for (let i = 0; i < hit.ref.node.suffix.length; i++) {
           const word = hit.ref.node.suffix[i];

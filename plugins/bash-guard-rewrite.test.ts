@@ -254,6 +254,27 @@ describe("bash-guard evaluate GuardOutcome contract", () => {
     expect(ran).toContain("--tab");
   });
 
+  // Regression. unbash-walker reports inner-parse offsets for a ref inside a
+  // command substitution, so editing by absolute offset shredded unrelated
+  // bytes: `cd /x && echo "A"; for s in $(rg --stats foo)` came back as
+  // `cd /x && eo; ...`. Harmless while a rewrite only ever became a deny
+  // message, and dangerous once readOnly makes it run. The ref is skipped, so
+  // the rule's base verdict still applies and the command is untouched.
+  it("a rewrite inside a command substitution never edits the command", async () => {
+    const command = `for s in $(rg --stats foo); do echo $s; done`;
+    const outcome = await guard(command, { ...DROP_RULE, readOnly: true });
+    expect((outcome as { command: string }).command).toBe(command);
+    expect(outcome).toMatchObject({ rewritten: false });
+  });
+
+  it("a nested rewrite does not corrupt an unrelated earlier command", async () => {
+    const command = `cd /x && echo "A"; for s in $(rg --stats foo); do echo $s; done`;
+    const outcome = await guard(command, { ...DROP_RULE, readOnly: true });
+    const ran = (outcome as { command: string }).command;
+    expect(ran).toBe(command);
+    expect(ran).toContain('echo "A"');
+  });
+
   it("readOnly is all-or-nothing: every contributor readOnly auto-runs", async () => {
     const outcome = await guardRules("rg --stats foo | jq .", [
       { ...DROP_RULE, readOnly: true },
