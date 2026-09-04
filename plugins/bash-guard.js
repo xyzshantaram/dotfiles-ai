@@ -12537,11 +12537,26 @@ Why: ${notes[0]}
   }
   return reason;
 }
+function ranMessage(suggested, notes) {
+  let text = `ran this instead:
+
+  ${suggested}
+`;
+  if (notes.length > 0) {
+    text += `
+Why: ${notes[0]}
+`;
+    for (const note of notes.slice(1)) text += `     ${note}
+`;
+  }
+  return text;
+}
 function rewriteOutcome(suggested, original, notes, mutatingWhy, readOnly) {
   const reason = suggestionMessage(suggested, notes, mutatingWhy);
+  const ranNote = ranMessage(suggested, notes);
   const rewritten = suggested !== original;
   if (readOnly && mutatingWhy.length === 0) {
-    return { action: "run", command: suggested, rewritten, reason };
+    return { action: "run", command: suggested, rewritten, reason, ranNote };
   }
   return {
     action: "ask",
@@ -12549,6 +12564,7 @@ function rewriteOutcome(suggested, original, notes, mutatingWhy, readOnly) {
     original,
     rewritten,
     reason,
+    ranNote,
     notes,
     mutatingWhy
   };
@@ -13061,9 +13077,9 @@ ${outcome.reason}` : "")
           });
           ctx.logger.info(`bash-guard: started background job ${jobId}: ${toRun}`);
           let text2 = `Started background job ${jobId}. Read its output with job_output.`;
-          if (outcome.reason !== void 0) text2 += `
+          if (outcome.ranNote !== void 0) text2 += `
 
-bash-guard: ${outcome.reason}`;
+bash-guard: ${outcome.ranNote}`;
           return { text: text2, ran: toRun, rewritten: outcome.rewritten };
         }
         const result = await ctx.shell.run(
@@ -13074,9 +13090,9 @@ bash-guard: ${outcome.reason}`;
           })
         );
         let text = renderShellResult(result);
-        if (outcome.reason !== void 0) text += `
+        if (outcome.ranNote !== void 0) text += `
 
-bash-guard: ${outcome.reason}`;
+bash-guard: ${outcome.ranNote}`;
         return { text, ran: toRun, rewritten: outcome.rewritten };
       },
       presentCall: (args) => ({
