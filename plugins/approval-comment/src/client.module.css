@@ -86,24 +86,82 @@
   font-size: 0.75rem;
   line-height: 1.125rem;
 }
+/* Shared box for command text. Both the clamped `wrote` block and the
+   scrolling `runs` block carry this class, so the border, padding, background,
+   and code font survive when the scroll cap is absent. The font declarations
+   belong here, not on the scroll rule: the clamped block does not carry that
+   rule, and it needs the same line height for the three-line clamp to measure
+   the way it looks. */
+.approval-comment-code {
+  margin: 0;
+  border: 1px solid var(--dsw-alias-line-secondary);
+  border-radius: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  background: var(--dsw-specific-input-major);
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--ds-font-family-code);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+}
 /* Command text scrolls inside its own box instead of pushing the card wide
    or tall. Width is capped by the card body, height by the cap below. */
 .approval-comment-code-scroll {
   box-sizing: border-box;
   max-width: 100%;
   max-height: 9rem;
-  margin: 0;
-  padding: 0.375rem 0.5rem;
-  border: 1px solid var(--dsw-alias-line-secondary);
-  border-radius: 0.5rem;
-  background: var(--dsw-specific-input-major);
-  color: var(--dsw-alias-label-tertiary);
-  font-family: var(--ds-font-family-code);
-  font-size: 0.8125rem;
-  line-height: 1.25rem;
   overflow: auto;
 }
-.approval-comment-code-scroll code.hljs {
+/* Command text wraps instead of scrolling sideways. */
+.approval-comment-code-wrap {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* Collapsed `wrote` block: clamp to about three lines. `max-height: none`
+   stops the scroll cap from fighting the clamp. */
+.approval-comment-code-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  max-height: none;
+}
+.approval-comment-show-more {
+  align-self: flex-start;
+  background: none;
+  border: 0;
+  padding: 0.125rem 0;
+  color: var(--dsw-alias-label-caption);
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.approval-comment-warn {
+  color: var(--dsw-alias-label-primary);
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+  font-weight: 500;
+}
+.approval-comment-warn-list {
+  margin: 0;
+  padding-left: 1rem;
+}
+.approval-comment-warn-item {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+}
+.approval-comment-why > summary {
+  color: var(--dsw-alias-label-caption);
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+  cursor: pointer;
+}
+/* Applies to both command blocks. Scoped to the shared box class, because the
+   clamped `wrote` block does not carry the scroll class and would otherwise
+   keep the highlight.js theme background and padding. */
+.approval-comment-code code.hljs {
   background: transparent;
   padding: 0;
   font-family: inherit;

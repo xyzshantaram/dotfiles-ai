@@ -229,6 +229,13 @@ function makeApprovalCommentCard(steerTo) {
     var draftState = react.useState("");
     var draft = draftState[0];
     var setDraft = draftState[1];
+    var wroteExpandedState = react.useState(false);
+    var wroteExpanded = wroteExpandedState[0];
+    var setWroteExpanded = wroteExpandedState[1];
+    var wroteOverflowsState = react.useState(false);
+    var wroteOverflows = wroteOverflowsState[0];
+    var setWroteOverflows = wroteOverflowsState[1];
+    var wroteRef = react.useRef(null);
 
     react.useEffect(
       function () {
@@ -308,6 +315,31 @@ function makeApprovalCommentCard(steerTo) {
     // command twice.
     var guardReason = parseGuardReason(matched.payload.reason);
 
+    // The mutation keys are optional. An older host omits them, so treat any
+    // non-`true` `mutating` as absent and keep only the string entries of
+    // `changes`.
+    var mutating = guardReason !== null && guardReason.mutating === true;
+    var changes =
+      guardReason !== null && Array.isArray(guardReason.changes)
+        ? guardReason.changes.filter(function (entry) {
+            return typeof entry === "string";
+          })
+        : [];
+    var wroteText =
+      guardReason !== null && typeof guardReason.wrote === "string" ? guardReason.wrote : null;
+
+    // Measure the clamped `wrote` block while the clamp is applied. Run
+    // before paint so the overflow flag never flashes an unclamped block.
+    react.useLayoutEffect(
+      function () {
+        if (wroteExpanded) return;
+        var element = wroteRef.current;
+        if (element === null) return;
+        setWroteOverflows(element.scrollHeight > element.clientHeight + 1);
+      },
+      [wroteText, wroteExpanded],
+    );
+
     return (
       <div className="approval-comment-root" data-approval-key={matched.key}>
         <div className="approval-comment-card" data-source={guardReason ? "bash-guard" : undefined}>
@@ -327,27 +359,55 @@ function makeApprovalCommentCard(steerTo) {
                 <div className="approval-comment-headline approval-comment-headline-one-line">
                   {guardReason.summary}
                 </div>
-                {typeof guardReason.wrote === "string" ? (
+                {mutating ? <div className="approval-comment-warn">changes files</div> : null}
+                {mutating && changes.length > 0 ? (
+                  <ul className="approval-comment-warn-list">
+                    {changes.map(function (entry, index) {
+                      return (
+                        <li key={index} className="approval-comment-warn-item">
+                          {entry}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : null}
+                {wroteText !== null ? (
                   <div className="approval-comment-block">
                     <div className="approval-comment-block-label">wrote</div>
                     <pre
-                      className="approval-comment-code approval-comment-code-scroll"
+                      ref={wroteRef}
+                      className={
+                        "approval-comment-code approval-comment-code-wrap" +
+                        (wroteExpanded ? "" : " approval-comment-code-clamp")
+                      }
                       tabIndex={0}
                     >
                       <code
                         className="hljs"
                         dangerouslySetInnerHTML={{
-                          __html: highlightCommand(guardReason.wrote),
+                          __html: highlightCommand(wroteText),
                         }}
                       />
                     </pre>
+                    {wroteOverflows ? (
+                      <button
+                        type="button"
+                        className="approval-comment-show-more"
+                        aria-expanded={wroteExpanded}
+                        onClick={function () {
+                          setWroteExpanded(!wroteExpanded);
+                        }}
+                      >
+                        {wroteExpanded ? "show less" : "show more"}
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
                 {typeof guardReason.runs === "string" ? (
                   <div className="approval-comment-block">
                     <div className="approval-comment-block-label">runs instead</div>
                     <pre
-                      className="approval-comment-code approval-comment-code-scroll"
+                      className="approval-comment-code approval-comment-code-wrap approval-comment-code-scroll"
                       tabIndex={0}
                     >
                       <code
@@ -360,7 +420,10 @@ function makeApprovalCommentCard(steerTo) {
                   </div>
                 ) : null}
                 {typeof guardReason.why === "string" ? (
-                  <p className="approval-comment-prose">{guardReason.why}</p>
+                  <details className="approval-comment-why">
+                    <summary className="approval-comment-why-toggle">why</summary>
+                    <p className="approval-comment-prose">{guardReason.why}</p>
+                  </details>
                 ) : null}
                 {typeof guardReason.justification === "string" ? (
                   <p className="approval-comment-prose">{guardReason.justification}</p>
