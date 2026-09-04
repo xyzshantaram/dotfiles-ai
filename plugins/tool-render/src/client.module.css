@@ -594,11 +594,15 @@
   display: flex;
   justify-content: center;
 }
+/* A 2px border in a LABEL token, not a border token: the border tokens are
+   tuned to sit quietly against panel backgrounds, which is exactly wrong
+   here, where the job is to mark where the picture's own edge is against
+   arbitrary image content. */
 .tool-render-image {
   max-width: 100%;
   width: auto;
   height: auto;
-  border: 1px solid var(--dsw-alias-border-l3);
+  border: 2px solid var(--dsw-alias-label-tertiary);
   border-radius: 0.25rem;
 }
 /* Metadata lines under the picture: name, type, full path. */
