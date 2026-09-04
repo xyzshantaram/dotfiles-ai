@@ -1017,6 +1017,42 @@ step_disable_preset_builtin_tools() {
 	preset_disable_tool "$preset_yaml" "tool-goal"
 }
 
+step_disable_replaced_jobs_rows() {
+	# Effort 6: job-viewer replaces both dsh-tool-jobs (the model-facing
+	# job_list/job_output/job_kill tools, id tool-jobs, in the standard
+	# preset) and dsh-client-ui-jobs (the session-header dropdown, id
+	# ui-jobs). Leaving either enabled would double-register a tool or show
+	# two jobs buttons.
+	#
+	# tool-jobs lives in the same standard preset file as tool-bash/tool-goal
+	# above, disabled the same way. ui-jobs is different: it lives in a
+	# DIFFERENT shipped package's own composition file, dsh-web-app's own
+	# cordis.patch.yml, not anything sync.sh writes. preset_disable_tool is
+	# file-path-generic despite its name, so the same helper edits it in
+	# place too. A dsh reinstall that re-extracts either file would silently
+	# revert this; the verify step below is the tripwire, and rerunning sync
+	# restores the patch.
+	local dsh_bin dsh_pkg preset_yaml webapp_patch
+	dsh_bin="$(command -v dsh 2>/dev/null || true)"
+	if [ -z "$dsh_bin" ]; then
+		echo "  WARNING: dsh not on PATH; skipping job-viewer replacement disables."
+		return 0
+	fi
+	dsh_pkg="$(dirname "$(dirname "$(realpath "$dsh_bin")")")"
+	preset_yaml="$dsh_pkg/config/agent-presets/standard/agent.cordis.yml"
+	if [ -f "$preset_yaml" ]; then
+		preset_disable_tool "$preset_yaml" "tool-jobs"
+	else
+		echo "  WARNING: standard preset not found at $preset_yaml; skipping tool-jobs disable."
+	fi
+	webapp_patch="$dsh_pkg/node_modules/@deepseek-ai/dsh-web-app/cordis.patch.yml"
+	if [ -f "$webapp_patch" ]; then
+		preset_disable_tool "$webapp_patch" "ui-jobs"
+	else
+		echo "  WARNING: dsh-web-app patch not found at $webapp_patch; skipping ui-jobs disable."
+	fi
+}
+
 step_verify_preset_tool_disabled() {
 	# Tripwire for the disable steps above. A dsh reinstall re-extracts the
 	# standard preset and silently reverts an in-place patch; this step turns
@@ -1047,8 +1083,21 @@ step_verify_preset_tool_disabled() {
 				echo "  ERROR: tool-goal is still enabled in $std_yaml" >&2
 				bad=1
 			fi
+			if preset_tool_enabled "$std_yaml" "tool-jobs"; then
+				echo "  ERROR: tool-jobs is still enabled in $std_yaml (job-viewer replaces it)" >&2
+				bad=1
+			fi
 		else
 			echo "  WARNING: standard preset not found at $std_yaml; skipping."
+		fi
+		local webapp_patch="$dsh_pkg/node_modules/@deepseek-ai/dsh-web-app/cordis.patch.yml"
+		if [ -f "$webapp_patch" ]; then
+			if preset_tool_enabled "$webapp_patch" "ui-jobs"; then
+				echo "  ERROR: ui-jobs is still enabled in $webapp_patch (job-viewer replaces it)" >&2
+				bad=1
+			fi
+		else
+			echo "  WARNING: dsh-web-app patch not found at $webapp_patch; skipping."
 		fi
 	else
 		echo "  WARNING: dsh not on PATH; skipping standard preset check."
@@ -1115,6 +1164,7 @@ STEPS=(
 	"Pin subagents onto the subagent chain (patch standard preset)|step_patch_standard_preset_tool_subagent"
 	"Turn on Code Mode for the standard preset (mode: both)|step_patch_standard_preset_tool_presentation"
 	"Disable builtin tool rows in the standard preset|step_disable_preset_builtin_tools"
+	"Disable tool-jobs and ui-jobs (job-viewer replaces both)|step_disable_replaced_jobs_rows"
 	"Register the aidos agent preset|step_register_aidos_preset"
 	"Verify builtin tool rows are disabled|step_verify_preset_tool_disabled"
 	"Regenerate settings.yaml from the repo template|step_set_defaults"
