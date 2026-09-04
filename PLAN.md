@@ -235,14 +235,12 @@ of the injection reads as inline prose instead of a label.
   `GenericToolCard` fallback in `@deepseek-ai/dsh-client-ui-tool` -- the same
   fallback `subagent` would hit if tool-render had not registered it. Register
   `key: "send_message"` on `tool.call.toolview`, same mechanism as `subagent`.
-- **No existing timestamp or copy control anywhere in this repo.** Checked
-  every plugin source file for `clipboard`, `copy`, `timestamp`: zero matches.
-  `toolRenderRow` has neither today, subagent card included. "Matching whatever
+- **Dropped: timestamp and copy control.** The ticket's "matching whatever
   affordances the dispatch cards already carry" assumed affordances that do not
-  exist. Decision: design both fresh and add them to `toolRenderRow()` itself,
-  so every row gains them at once (subagent included) rather than adding them
-  only to the two new cards. This is also the only way it stays one shared
-  component instead of three copies of the same header markup.
+  exist -- checked every plugin source file for `clipboard`, `copy`,
+  `timestamp`: zero matches anywhere in this repo. `toolRenderRow` has neither
+  today, subagent card included. Owner's call: drop the requirement entirely
+  rather than design it fresh.
 
 **Change:**
 
@@ -256,8 +254,6 @@ of the injection reads as inline prose instead of a label.
 - Show the injection source as a chip or badge in the card header, not as a
   sentence in the body.
 - Give a `send_message` delivery the same card, with its own badge text.
-- Add a timestamp and a copy control to `toolRenderRow()` itself, so all three
-  cards (injection, `send_message`, subagent) carry them.
 
 **Evaluation criteria:**
 
@@ -269,16 +265,12 @@ of the injection reads as inline prose instead of a label.
    source text in the body template returns nothing.
 4. A `send_message` delivery renders through the same card path. The change must
    not be a second copy of the same JSX with different strings.
-5. The copy control puts the original text on the clipboard, not rendered HTML.
-   Check by pasting a body that holds markdown and confirming the markers
-   survive.
-6. Rebuild the affected Web artifacts and reload the existing GUI URL. A new
+5. Rebuild the affected Web artifacts and reload the existing GUI URL. A new
    server does not prove the change.
 
 **Human review queue additions when this closes:**
 
-- [ ] Injection card: trigger one, check the markdown, the badge, the timestamp,
-      and the copy control.
+- [ ] Injection card: trigger one, check the markdown and the badge.
 - [ ] `send_message` card: same check.
 - [ ] A long injected body: confirm it does not swamp the transcript.
 - [ ] Both themes: check contrast on the badge and the card border.
