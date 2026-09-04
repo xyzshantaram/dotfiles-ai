@@ -599,7 +599,11 @@ function toolRenderRow(options) {
             : undefined
         }
       >
-        {open ? <IconChevronDownOutline14 className="tool-render-chevron" /> : null}
+        {interactive ? (
+          <IconChevronDownOutline14
+            className={open ? "tool-render-chevron tool-render-chevron-open" : "tool-render-chevron"}
+          />
+        ) : null}
         {leading}
         {leading === null ? <span className="tool-render-title">{options.title}</span> : null}
         {options.badge !== undefined && options.badge !== null && options.badge !== "" ? (
@@ -2286,6 +2290,235 @@ function SkillRow(props) {
   });
 }
 
+// ---- read_image and see rows: embedded pictures. ----
+// Both cards load their picture through this package's own host route,
+// GET /tool-render/image?path=<file>. The route returns raw image bytes on
+// success. On a bad path it returns a JSON error body at 400 or 404. The
+// <img> element never reads that JSON. The browser fires onError on a
+// non-image response, so that event alone drives the broken-image state.
+
+function imageRouteUrl(filePath) {
+  return "/tool-render/image?path=" + encodeURIComponent(filePath);
+}
+
+function basenameOf(path) {
+  var parts = String(path).split("/");
+  return parts[parts.length - 1];
+}
+
+// Bytes -> compact text such as "245 KB". Decimal units, so 1 KB is 1000 B.
+// This matches how file managers label image sizes. Values below 10 keep one
+// decimal, larger values round to a whole number.
+function formatBytes(bytes) {
+  if (typeof bytes !== "number" || !isFinite(bytes) || bytes < 0) return "";
+  var units = ["B", "KB", "MB", "GB", "TB"];
+  var value = bytes;
+  var unit = 0;
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000;
+    unit++;
+  }
+  var text = unit === 0 ? String(value) : value >= 10 ? value.toFixed(0) : value.toFixed(1);
+  return text + " " + units[unit];
+}
+
+// One embedded picture. Clicking it opens the route in a new tab, which is
+// the same bytes at full resolution. A failed load swaps the picture for a
+// visible message in the same spot, so a bad path never renders as an empty
+// box. The anchor carries rel="noreferrer" so the tab leaks no referrer.
+function EmbedImage(props) {
+  var brokenState = useState(false);
+  var broken = brokenState[0];
+  var setBroken = brokenState[1];
+  var src = imageRouteUrl(props.filePath);
+  if (broken) {
+    return <div className="tool-render-image-broken">{"Image unavailable: " + props.filePath}</div>;
+  }
+  return (
+    <a className="tool-render-image-link" href={src} target="_blank" rel="noreferrer">
+      <img
+        className="tool-render-image"
+        src={src}
+        alt={props.alt}
+        onError={function () {
+          setBroken(true);
+        }}
+      />
+    </a>
+  );
+}
+
+// The settled read_image result carries two content blocks. The first is a
+// text envelope with <path>, <type>, and <content> lines. resultTextOf also
+// appends a JSON dump of the second, non-text block. Only the envelope
+// matters: these regexes lift the five fields out of it and skip the rest.
+var IMAGE_PATH_RE = /<path>([\s\S]*?)<\/path>/;
+var IMAGE_CONTENT_RE = /(\S+) image, (\d+)x(\d+) px, (\d+) bytes/;
+
+function parseReadImageResult(text) {
+  if (typeof text !== "string") return null;
+  var pathMatch = IMAGE_PATH_RE.exec(text);
+  var contentMatch = IMAGE_CONTENT_RE.exec(text);
+  if (pathMatch === null || contentMatch === null) return null;
+  return {
+    path: pathMatch[1],
+    mediaType: contentMatch[1],
+    width: Number(contentMatch[2]),
+    height: Number(contentMatch[3]),
+    bytes: Number(contentMatch[4]),
+  };
+}
+
+// ---- read_image row: picture first, then its metadata. ----
+// Args are { file_path }. The collapsed row shows name, dimensions, and
+// size once the call settles, and falls back to the bare path while it
+// runs. The expanded body embeds the picture.
+function ReadImageRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var block = props.block;
+  var done = doneOf(block);
+  var args = parseArgs(argsRawOf(block));
+  var path = args !== null ? pickString(args, ["file_path"]) : undefined;
+  var output = done ? resultTextOf(block) : null;
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary =
+    state === "error" && errorText !== null && errorText !== ""
+      ? firstLineOfError(errorText)
+      : undefined;
+  var meta = done && state !== "error" ? parseReadImageResult(output) : null;
+  var summary =
+    meta !== null
+      ? basenameOf(meta.path) +
+        " · " +
+        meta.width +
+        "x" +
+        meta.height +
+        " · " +
+        formatBytes(meta.bytes)
+      : path !== undefined
+        ? relativizeToCwd(path, props.cwd)
+        : "Read image";
+  var body = null;
+  if (meta !== null) {
+    body = (
+      <div className="tool-render-image-body">
+        <EmbedImage filePath={meta.path} alt={basenameOf(meta.path)} />
+        <div className="tool-render-image-meta">
+          <div>{basenameOf(meta.path)}</div>
+          <div>{meta.mediaType}</div>
+          <div>{meta.path}</div>
+        </div>
+      </div>
+    );
+  }
+  return toolRenderRow({
+    toolName: "Read image",
+    icon: <IconBrowseOutline16 size={14} />,
+    title: "Read image",
+    summary: summary,
+    path: path,
+    onOpenFile: props.openFile,
+    state: state,
+    expandable: body !== null,
+    expanded: expanded,
+    onToggle: function () {
+      setExpanded(!expanded);
+    },
+    body: body,
+    errorSummary: errorSummary,
+    errorText: errorText,
+    inspect: props.inspect,
+  });
+}
+
+// ---- see row: the child model's description, then the picture. ----
+// Args are { image, question }. The settled result is one text block, so
+// resultTextOf returns the description verbatim with no envelope. The
+// collapsed row shows the question, not the path.
+function SeeRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  // The description clamp is separate per-row state, nested inside the row's
+  // own expand state. The row must be open before the clamp exists.
+  var showMoreState = useState(false);
+  var showMore = showMoreState[0];
+  var setShowMore = showMoreState[1];
+  var block = props.block;
+  var done = doneOf(block);
+  var args = parseArgs(argsRawOf(block));
+  var question = args !== null ? pickString(args, ["question"]) : undefined;
+  var imagePath = args !== null ? pickString(args, ["image"]) : undefined;
+  var output = done ? resultTextOf(block) : null;
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary =
+    state === "error" && errorText !== null && errorText !== ""
+      ? firstLineOfError(errorText)
+      : undefined;
+  var description = done && state !== "error" ? output : null;
+  var summary = question !== undefined ? firstLine(question) : "See";
+  // The toggle shows only when the description plausibly overflows the 8rem
+  // clamp. Measuring the true rendered height needs a ref-based effect. A
+  // raw length threshold is the accepted proxy: at 8rem and the 1.25rem body
+  // line height, roughly 400 characters fill the cap.
+  var needsClamp = description !== null && description.length > 400;
+  var body = null;
+  if (done && state !== "error" && (description !== null || imagePath !== undefined)) {
+    body = (
+      <div className="tool-render-image-body">
+        {description !== null && description !== "" ? (
+          <div
+            className={
+              needsClamp && showMore !== true
+                ? "tool-render-markdown-body tool-render-see-desc"
+                : "tool-render-markdown-body"
+            }
+          >
+            <MarkdownText text={description} />
+          </div>
+        ) : null}
+        {needsClamp ? (
+          <button
+            type="button"
+            className="tool-render-see-toggle"
+            onClick={function () {
+              setShowMore(!showMore);
+            }}
+          >
+            {showMore ? "Show less" : "Show more"}
+          </button>
+        ) : null}
+        {imagePath !== undefined ? (
+          <EmbedImage filePath={imagePath} alt={basenameOf(imagePath)} />
+        ) : null}
+        {imagePath !== undefined ? (
+          <div className="tool-render-image-meta">{imagePath}</div>
+        ) : null}
+      </div>
+    );
+  }
+  return toolRenderRow({
+    toolName: "See image",
+    icon: <IconQuestionOutline14 size={14} />,
+    title: "See",
+    summary: summary,
+    state: state,
+    expandable: body !== null,
+    expanded: expanded,
+    onToggle: function () {
+      setExpanded(!expanded);
+    },
+    body: body,
+    errorSummary: errorSummary,
+    errorText: errorText,
+    inspect: props.inspect,
+  });
+}
+
 // ---- Cordis plugin face. ----
 var inject = ["slots"];
 var name = PLUGIN_NAME;
@@ -2395,6 +2628,22 @@ function apply(ctx) {
         priority: -100,
       },
       JobOutputRow,
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "read_image",
+        priority: -100,
+      },
+      ReadImageRow,
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "see",
+        priority: -100,
+      },
+      SeeRow,
     );
   });
   ctx.slots.inject("conversation.chat.node", function* () {
