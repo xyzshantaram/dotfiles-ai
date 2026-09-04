@@ -58,6 +58,7 @@ import {
   mergeCss,
   escapeHtml,
   PERMISSION_OUTLINE_CSS,
+  PLAN_ROW_CSS,
 } from "../../shared/client-util";
 import localCss from "./client.module.css";
 import jsGrammar from "highlight.js/lib/languages/javascript";
@@ -192,6 +193,8 @@ var HLJS_THEME_CSS = [
 injectStyle(PLUGIN_NAME, STYLE_TAG_ID, mergeCss(localCss, HLJS_THEME_CSS));
 /** Shared permission outline tokens. The id matches the other injectors, so only one tag exists. */
 injectStyle(PLUGIN_NAME, "dsh-permission-outline", PERMISSION_OUTLINE_CSS);
+/** Shared plan-row CSS. The id matches durable-todos's injector, so only one tag exists. */
+injectStyle(PLUGIN_NAME, "dsh-plan-row", PLAN_ROW_CSS);
 
 // ---- Post-render highlighting pass for raw <pre><code> blocks. ---------
 // The render path already highlights every block it creates and marks the
@@ -1626,9 +1629,9 @@ function planBody(todos) {
           ? { "data-active": true }
           : { "data-pending": true };
     children.push(
-      <div className="tool-render-plan-item" {...attrs}>
-        <span className="tool-render-checkbox" aria-hidden={true} />
-        <span className="tool-render-plan-content">{todo.content}</span>
+      <div className="dsh-plan-item" {...attrs}>
+        <span className="dsh-plan-checkbox" aria-hidden={true} />
+        <span className="dsh-plan-content">{todo.content}</span>
       </div>,
     );
   }

@@ -2,7 +2,7 @@
 // The card stays visible so the Remind button stays reachable.
 import * as react from "react";
 import type { DurableTodosView, TodoItem } from "./projection.js";
-import { injectStyle } from "../../shared/client-util";
+import { injectStyle, PLAN_ROW_CSS } from "../../shared/client-util";
 import localCss from "./client.module.css";
 
 var PLUGIN_NAME = "durable-todos";
@@ -143,9 +143,9 @@ function makePanel() {
                         ? { "data-active": true }
                         : { "data-pending": true };
                   return (
-                    <div key={index} className="durable-todos-plan-item" {...attrs}>
-                      <span className="durable-todos-checkbox" aria-hidden={true} />
-                      <span className="durable-todos-plan-content">{item.content}</span>
+                    <div key={index} className="dsh-plan-item" {...attrs}>
+                      <span className="dsh-plan-checkbox" aria-hidden={true} />
+                      <span className="dsh-plan-content">{item.content}</span>
                     </div>
                   );
                 })}
@@ -167,6 +167,7 @@ var inject = ["slots"];
 function apply(ctx) {
   ctx.effect(function () {
     injectStyle(PLUGIN_NAME, STYLE_TAG_ID, localCss);
+    injectStyle(PLUGIN_NAME, "dsh-plan-row", PLAN_ROW_CSS);
   }, "durable-todos: styles");
 
   var Panel = makePanel();

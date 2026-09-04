@@ -1623,6 +1623,58 @@ var PERMISSION_OUTLINE_CSS = `:root {
   --dsh-outline-escalated: #ff8c00;
   --dsh-outline-guard: #00b7ff;
 }`;
+var PLAN_ROW_CSS = `
+.dsh-plan-item {
+  align-items: baseline;
+  display: flex;
+  gap: 0.375rem;
+  padding: 0.125rem 0 0.125rem 0.25rem;
+}
+.dsh-plan-checkbox {
+  align-self: center;
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: 0.1875rem;
+  flex: none;
+  height: 0.875rem;
+  position: relative;
+  width: 0.875rem;
+}
+.dsh-plan-item[data-done] .dsh-plan-checkbox {
+  border-color: var(--dsw-alias-state-success-primary);
+}
+.dsh-plan-item[data-done] .dsh-plan-checkbox::after {
+  color: var(--dsw-alias-state-success-primary);
+  content: "\u2713";
+  display: block;
+  font-size: 0.6875rem;
+  line-height: 0.8125rem;
+  text-align: center;
+}
+.dsh-plan-item[data-active] .dsh-plan-checkbox::after {
+  background: var(--dsw-alias-label-tertiary);
+  content: "";
+  height: 0.09375rem;
+  left: 0.1875rem;
+  position: absolute;
+  right: 0.1875rem;
+  top: 50%;
+}
+.dsh-plan-content {
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  overflow-wrap: anywhere;
+}
+.dsh-plan-item[data-done] .dsh-plan-content {
+  color: var(--dsw-alias-label-tertiary);
+}
+.dsh-plan-item[data-active] .dsh-plan-content {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+}
+.dsh-plan-item[data-pending] .dsh-plan-content {
+  color: var(--dsw-alias-label-secondary);
+}
+`;
 function mergeCss(...parts) {
   return parts.flat().filter(Boolean).join("\n");
 }
@@ -1991,58 +2043,8 @@ var client_default = `.tool-render-row {
   flex-direction: column;
   display: flex;
 }
-.tool-render-plan-item {
-  align-items: baseline;
-  display: flex;
-  gap: 0.375rem;
-  padding: 0.125rem 0 0.125rem 0.25rem;
-}
-/* Status checkbox: empty for pending, dash bar for in progress, green
-   check for done. Drawn in CSS so the glyphs never depend on fonts. */
-.tool-render-checkbox {
-  align-self: center;
-  border: 1px solid var(--dsw-alias-border-l3);
-  border-radius: 0.1875rem;
-  flex: none;
-  height: 0.875rem;
-  position: relative;
-  width: 0.875rem;
-}
-.tool-render-plan-item[data-done] .tool-render-checkbox {
-  border-color: var(--dsw-alias-state-success-primary);
-}
-.tool-render-plan-item[data-done] .tool-render-checkbox::after {
-  color: var(--dsw-alias-state-success-primary);
-  content: "\u2713";
-  display: block;
-  font-size: 0.6875rem;
-  line-height: 0.8125rem;
-  text-align: center;
-}
-.tool-render-plan-item[data-active] .tool-render-checkbox::after {
-  background: var(--dsw-alias-label-tertiary);
-  content: "";
-  height: 0.09375rem;
-  left: 0.1875rem;
-  position: absolute;
-  right: 0.1875rem;
-  top: 50%;
-}
-.tool-render-plan-content {
-  font-size: 0.8125rem;
-  line-height: 1.25rem;
-  overflow-wrap: anywhere;
-}
-.tool-render-plan-item[data-done] .tool-render-plan-content {
-  color: var(--dsw-alias-label-tertiary);
-}
-.tool-render-plan-item[data-active] .tool-render-plan-content {
-  color: var(--dsw-alias-label-primary);
-  font-weight: 500;
-}
-.tool-render-plan-item[data-pending] .tool-render-plan-content {
-  color: var(--dsw-alias-label-secondary);
-}
+/* Plan row (item, checkbox, content) is shared PLAN_ROW_CSS from
+   shared/client-util.ts, injected via the dsh-plan-row style tag. */
 
 /* ask_user_question questions, options, and answers. */
 .tool-render-ask {
@@ -8610,6 +8612,7 @@ var HLJS_THEME_CSS = [
 ].join("");
 injectStyle(PLUGIN_NAME, STYLE_TAG_ID, mergeCss(client_default, HLJS_THEME_CSS));
 injectStyle(PLUGIN_NAME, "dsh-permission-outline", PERMISSION_OUTLINE_CSS);
+injectStyle(PLUGIN_NAME, "dsh-plan-row", PLAN_ROW_CSS);
 var HLJS_SCOPE_SELECTOR = ".tool-render-card pre code";
 function hljsPassEligible(el) {
   if (el.dataset.highlighted) return false;
@@ -9667,7 +9670,7 @@ function planBody(todos) {
     var todo = todos[i];
     var attrs = todo.status === "completed" ? { "data-done": true } : todo.status === "in_progress" ? { "data-active": true } : { "data-pending": true };
     children.push(
-      /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-plan-item", ...attrs }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-checkbox", "aria-hidden": true }), /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-plan-content" }, todo.content))
+      /* @__PURE__ */ import_react.default.createElement("div", { className: "dsh-plan-item", ...attrs }, /* @__PURE__ */ import_react.default.createElement("span", { className: "dsh-plan-checkbox", "aria-hidden": true }), /* @__PURE__ */ import_react.default.createElement("span", { className: "dsh-plan-content" }, todo.content))
     );
   }
   return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-plan" }, children);

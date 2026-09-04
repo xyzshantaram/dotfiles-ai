@@ -358,58 +358,8 @@
   flex-direction: column;
   display: flex;
 }
-.tool-render-plan-item {
-  align-items: baseline;
-  display: flex;
-  gap: 0.375rem;
-  padding: 0.125rem 0 0.125rem 0.25rem;
-}
-/* Status checkbox: empty for pending, dash bar for in progress, green
-   check for done. Drawn in CSS so the glyphs never depend on fonts. */
-.tool-render-checkbox {
-  align-self: center;
-  border: 1px solid var(--dsw-alias-border-l3);
-  border-radius: 0.1875rem;
-  flex: none;
-  height: 0.875rem;
-  position: relative;
-  width: 0.875rem;
-}
-.tool-render-plan-item[data-done] .tool-render-checkbox {
-  border-color: var(--dsw-alias-state-success-primary);
-}
-.tool-render-plan-item[data-done] .tool-render-checkbox::after {
-  color: var(--dsw-alias-state-success-primary);
-  content: "✓";
-  display: block;
-  font-size: 0.6875rem;
-  line-height: 0.8125rem;
-  text-align: center;
-}
-.tool-render-plan-item[data-active] .tool-render-checkbox::after {
-  background: var(--dsw-alias-label-tertiary);
-  content: "";
-  height: 0.09375rem;
-  left: 0.1875rem;
-  position: absolute;
-  right: 0.1875rem;
-  top: 50%;
-}
-.tool-render-plan-content {
-  font-size: 0.8125rem;
-  line-height: 1.25rem;
-  overflow-wrap: anywhere;
-}
-.tool-render-plan-item[data-done] .tool-render-plan-content {
-  color: var(--dsw-alias-label-tertiary);
-}
-.tool-render-plan-item[data-active] .tool-render-plan-content {
-  color: var(--dsw-alias-label-primary);
-  font-weight: 500;
-}
-.tool-render-plan-item[data-pending] .tool-render-plan-content {
-  color: var(--dsw-alias-label-secondary);
-}
+/* Plan row (item, checkbox, content) is shared PLAN_ROW_CSS from
+   shared/client-util.ts, injected via the dsh-plan-row style tag. */
 
 /* ask_user_question questions, options, and answers. */
 .tool-render-ask {
