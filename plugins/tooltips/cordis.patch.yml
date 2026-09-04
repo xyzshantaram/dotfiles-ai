@@ -1,0 +1,5 @@
+# Tooltips (client plugin).
+# The behaviour lives in the ./client bundle.
+- insert:
+    - id: tooltips
+      name: tooltips
