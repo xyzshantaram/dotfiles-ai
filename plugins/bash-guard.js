@@ -4926,6 +4926,9 @@ async function loadRules(ctx, dir) {
       if (entry.verdict !== "deny" && entry.verdict !== "ask" && entry.verdict !== "allow") {
         throw new Error(`bad verdict: ${String(entry.verdict)}`);
       }
+      if (entry.readOnly !== void 0 && typeof entry.readOnly !== "boolean") {
+        throw new Error(`bad readOnly: ${String(entry.readOnly)}`);
+      }
       const clean = entry.commands.filter((c) => typeof c === "string" && c.length > 0);
       let subcommands;
       if (entry.subcommands !== void 0) {
@@ -4945,13 +4948,32 @@ async function loadRules(ctx, dir) {
         rewrites = [];
         for (const r of entry.rewrites) {
           if (typeof r !== "object" || r === null) throw new Error("bad rewrite");
-          if (!Array.isArray(r.drop) || r.drop.length === 0) throw new Error("bad rewrite drop");
-          for (const d of r.drop) {
-            if (typeof d !== "string" || d.length === 0) throw new Error("bad rewrite drop entry");
+          if (r.drop === void 0 && r.add === void 0)
+            throw new Error("bad rewrite: needs drop or add");
+          const cleanRewrite = {};
+          if (r.drop !== void 0) {
+            if (!Array.isArray(r.drop) || r.drop.length === 0) throw new Error("bad rewrite drop");
+            for (const d of r.drop) {
+              if (typeof d !== "string" || d.length === 0)
+                throw new Error("bad rewrite drop entry");
+            }
+            cleanRewrite.drop = r.drop.filter((d) => typeof d === "string" && d.length > 0);
           }
-          const cleanRewrite = {
-            drop: r.drop.filter((d) => typeof d === "string" && d.length > 0)
-          };
+          if (r.add !== void 0) {
+            if (!Array.isArray(r.add) || r.add.length === 0) throw new Error("bad rewrite add");
+            cleanRewrite.add = [];
+            for (const a of r.add) {
+              if (typeof a !== "object" || a === null || typeof a.flag !== "string" || a.flag.length === 0) {
+                throw new Error("bad rewrite add entry");
+              }
+              if (a.value !== void 0 && typeof a.value !== "string") {
+                throw new Error("bad rewrite add value");
+              }
+              cleanRewrite.add.push(
+                a.value === void 0 ? { flag: a.flag } : { flag: a.flag, value: a.value }
+              );
+            }
+          }
           if (r.value !== void 0) {
             if (typeof r.value !== "boolean") throw new Error("bad rewrite value");
             cleanRewrite.value = r.value;
@@ -4982,6 +5004,7 @@ async function loadRules(ctx, dir) {
         };
         if (rewrites) built.rewrites = rewrites;
         if (translate) built.translate = translate;
+        if (entry.readOnly !== void 0) built.readOnly = entry.readOnly;
         rules.set(cmd, built);
       }
       ctx.logger.debug(`bash-guard: loaded ${clean.length} command(s) from rule file ${name2}`);
@@ -5120,7 +5143,7 @@ function translatableRef(ref, command) {
   }
   return { ok: true };
 }
-function suggestionDeny(suggested, notes, mutatingWhy) {
+function suggestionMessage(suggested, notes, mutatingWhy) {
   let reason = `bash-guard: that command is not run directly. Run this instead:
 
   ${suggested}
@@ -5139,7 +5162,26 @@ Why: ${notes[0]}
     for (const note of notes.slice(1)) reason += `     ${note}
 `;
   }
-  return { kind: "deny", reason };
+  return reason;
+}
+function rewriteOutcome(suggested, original, notes, mutatingWhy, readOnly) {
+  const reason = suggestionMessage(suggested, notes, mutatingWhy);
+  const rewritten = suggested !== original;
+  if (readOnly) return { action: "run", command: suggested, rewritten, reason };
+  return { action: "ask", command: suggested, original, rewritten, reason };
+}
+function flagPresent(ref, flag) {
+  return ref.node.suffix.some((w) => w.text === flag || w.text.startsWith(flag + "="));
+}
+function rewritingHits(hits) {
+  return hits.filter((h) => h.rule.rewrites !== void 0);
+}
+function isReadOnly(hits) {
+  return hits.every((h) => h.rule.readOnly === true);
+}
+function withRuleReason(hits, notes) {
+  const reason = hits[0]?.rule.reason;
+  return reason === void 0 ? notes : [reason, ...notes];
 }
 async function evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates) {
   const notes = [];
@@ -5150,7 +5192,7 @@ async function evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates)
     const errorMsg = error instanceof Error ? error.message : String(error);
     ctx.logger.warn(`bash-guard: parse error in command; denying: ${command} (error: ${errorMsg})`);
     return {
-      kind: "deny",
+      action: "deny",
       reason: `bash-guard: could not parse the command; refusing to run it unparsed. ${errorMsg}`
     };
   }
@@ -5158,7 +5200,7 @@ async function evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates)
     const messages = script.errors.map((e) => e.message).join("; ");
     ctx.logger.warn(`bash-guard: script parse errors; denying: ${command} (errors: ${messages})`);
     return {
-      kind: "deny",
+      action: "deny",
       reason: `bash-guard: parse errors in command; refusing to run it unparsed. ${messages}`
     };
   }
@@ -5168,7 +5210,7 @@ async function evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates)
   ctx.logger.debug(`bash-guard: extracted ${all.length} command(s) from: ${command}`);
   if (safePaths.length > 0 && scratchAllowed(all, safePaths, workspaceRoot)) {
     ctx.logger.info(`bash-guard: scratch write allowed: ${command}`);
-    return null;
+    return { action: "run", command, rewritten: false };
   }
   const rules = await loadRulesMulti(ctx, dirs);
   const hits = all.map((ref) => {
@@ -5180,50 +5222,72 @@ async function evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates)
     (h) => h !== void 0
   );
   if (!hits.some((h) => h.rule.translate) && hits.some((h) => h.rule.rewrites)) {
-    const ranges = [];
+    const edits = [];
+    let addMatched = false;
     for (const hit of hits) {
       if (!hit.rule.rewrites) continue;
       for (const rw of hit.rule.rewrites) {
         for (let i = 0; i < hit.ref.node.suffix.length; i++) {
           const word = hit.ref.node.suffix[i];
-          for (const flag of rw.drop) {
+          for (const flag of rw.drop ?? []) {
             if (word.text === flag) {
-              ranges.push([word.pos, word.end, rw.because]);
+              edits.push({ start: word.pos, end: word.end, text: "", because: rw.because });
               if (rw.value && i + 1 < hit.ref.node.suffix.length) {
                 const next = hit.ref.node.suffix[i + 1];
                 if (!next.text.startsWith("-")) {
-                  ranges.push([next.pos, next.end, void 0]);
+                  edits.push({ start: next.pos, end: next.end, text: "" });
                 }
               }
             } else if (word.text.startsWith(flag + "=")) {
-              ranges.push([word.pos, word.end, rw.because]);
+              edits.push({ start: word.pos, end: word.end, text: "", because: rw.because });
             } else if (rw.value && flag.length === 2 && word.text.length > 2 && word.text.startsWith(flag)) {
-              ranges.push([word.pos, word.end, rw.because]);
+              edits.push({ start: word.pos, end: word.end, text: "", because: rw.because });
             }
+          }
+        }
+        if (rw.add !== void 0) {
+          addMatched = true;
+          for (const a of rw.add) {
+            if (flagPresent(hit.ref, a.flag)) continue;
+            let text = ` ${a.flag}`;
+            if (a.value !== void 0) text += ` ${shellQuote(a.value)}`;
+            const at = hit.ref.node.name.end;
+            if (edits.some((e) => e.start === at && e.text === text)) continue;
+            edits.push({ start: at, end: at, text, because: rw.because });
           }
         }
       }
     }
-    if (ranges.length > 0) {
-      ranges.sort((a, b) => a[0] - b[0]);
+    if (edits.length > 0) {
+      edits.sort((a, b) => a.start - b.start || a.end - b.end);
       let rewritten = "";
       let lastEnd = 0;
       const logBecauses = [];
-      for (const [start, end, because] of ranges) {
-        if (start < lastEnd) continue;
-        let from = start;
-        if (from > lastEnd && command[from - 1] === " ") from -= 1;
-        rewritten += command.slice(lastEnd, from);
-        lastEnd = end;
-        if (because && logBecauses.indexOf(because) === -1) {
-          logBecauses.push(because);
+      for (const e of edits) {
+        if (e.start < lastEnd) continue;
+        let from = e.start;
+        if (e.text === "" && from > lastEnd && command[from - 1] === " ") from -= 1;
+        rewritten += command.slice(lastEnd, from) + e.text;
+        lastEnd = e.end;
+        if (e.because && !logBecauses.includes(e.because)) {
+          logBecauses.push(e.because);
         }
       }
       rewritten += command.slice(lastEnd);
       ctx.logger.debug(
         `bash-guard: rewrite (${logBecauses.join("; ")}) ${command} -> ${rewritten}`
       );
-      return suggestionDeny(rewritten, logBecauses, []);
+      return rewriteOutcome(
+        rewritten,
+        command,
+        withRuleReason(rewritingHits(hits), logBecauses),
+        [],
+        isReadOnly(rewritingHits(hits))
+      );
+    }
+    if (addMatched) {
+      const rwHits = rewritingHits(hits);
+      return rewriteOutcome(command, command, withRuleReason(rwHits, []), [], isReadOnly(rwHits));
     }
   }
   if (hits.some((h) => h.rule.translate)) {
@@ -5247,7 +5311,7 @@ async function evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates)
         const text = command.slice(node.pos, node.end);
         ctx.logger.warn(`bash-guard: translation blocked for ${hit.name}: ${outcome.why}`);
         return {
-          kind: "deny",
+          action: "deny",
           reason: `bash-guard: could not translate \`${text}\`. ${outcome.why} Run the rg or fd equivalent yourself.`
         };
       }
@@ -5255,7 +5319,7 @@ async function evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates)
       const end = node.suffix.length > 0 ? node.suffix[node.suffix.length - 1].end : node.name.end;
       if (node.redirects.some((r) => r.pos >= start && r.pos < end)) {
         return {
-          kind: "deny",
+          action: "deny",
           reason: `bash-guard: could not translate \`${command.slice(start, end)}\`. A redirect sits between the arguments. Run the rg or fd equivalent yourself.`
         };
       }
@@ -5285,16 +5349,23 @@ async function evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates)
       }
       translated += command.slice(lastEnd);
       ctx.logger.info(`bash-guard: suggesting \`${translated}\` instead of \`${command}\``);
-      return suggestionDeny(translated, notes, whys);
+      const translateHits = hits.filter((h) => h.rule.translate !== void 0);
+      return rewriteOutcome(
+        translated,
+        command,
+        withRuleReason(translateHits, notes),
+        whys,
+        isReadOnly(translateHits)
+      );
     }
   }
   if (all.length === 0) {
     ctx.logger.debug(`bash-guard: no actual commands found in: ${command}`);
-    return null;
+    return { action: "run", command, rewritten: false };
   }
   if (hits.length === 0) {
     ctx.logger.debug(`bash-guard: no rules matched for: ${command}`);
-    return null;
+    return { action: "run", command, rewritten: false };
   }
   const verdicts = hits.map((h) => h.verdict);
   const overall = mostRestrictive(verdicts);
@@ -5307,7 +5378,7 @@ async function evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates)
       });
       const ruleNames = [...new Set(denying.map((h) => h.name))].join(", ");
       ctx.logger.warn(`bash-guard: command denied by rules [${ruleNames}]: ${command}`);
-      return { kind: "deny", reason };
+      return { action: "deny", reason };
     }
     case "ask": {
       const asking = hits.filter((h) => h.verdict === "ask");
@@ -5317,13 +5388,13 @@ async function evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates)
       });
       const ruleNames = [...new Set(asking.map((h) => h.name))].join(", ");
       ctx.logger.warn(`bash-guard: command asks for approval by rules [${ruleNames}]: ${command}`);
-      return { kind: "ask", reason };
+      return { action: "ask", command, original: command, rewritten: false, reason };
     }
     case "allow":
     case "none":
     default:
       ctx.logger.debug(`bash-guard: command allowed: ${command}`);
-      return null;
+      return { action: "run", command, rewritten: false };
   }
 }
 function apply(ctx, config) {
@@ -5351,13 +5422,17 @@ function apply(ctx, config) {
     }
     const dirs = profile === "none" ? [baseDir] : [baseDir, join2(baseDir, `profile-${profile}`)];
     const templates = { deny: config.denyMessage, ask: config.askMessage };
-    const decision = await evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates);
-    return decision === null ? next() : decision;
+    const outcome = await evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates);
+    if (outcome.action === "deny") return { kind: "deny", reason: outcome.reason };
+    if (outcome.rewritten) return { kind: "deny", reason: outcome.reason };
+    if (outcome.action === "ask") return { kind: "ask", reason: outcome.reason };
+    return next();
   });
 }
 export {
   Config,
   apply,
+  evaluate,
   inject,
   name
 };
