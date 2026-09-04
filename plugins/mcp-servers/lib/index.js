@@ -19407,6 +19407,9 @@ function sanitizeSchema(schema) {
       out[key] = value.map((member) => sanitizeSchema(member));
     } else if (key === "additionalProperties") {
       out[key] = typeof value === "boolean" ? value : true;
+    } else if (key === "type" && Array.isArray(value)) {
+      const first = value.find((entry) => typeof entry === "string" && entry !== "null");
+      if (typeof first === "string") out[key] = first;
     } else if (KEEP.has(key)) {
       out[key] = value;
     } else if (key === "minimum" || key === "maximum") {

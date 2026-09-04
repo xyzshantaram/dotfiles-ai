@@ -1,5 +1,6 @@
 // Tests for the pure tool-definition helpers.
 import { describe, expect, it } from "vitest";
+import { assertSupportedJsonSchema } from "@deepseek-ai/dsh-tools";
 import { buildDefinition, extractText, publicToolName, sanitizeSchema } from "./tools.js";
 
 describe("mcp-servers tool helpers", () => {
@@ -165,6 +166,106 @@ describe("mcp-servers tool helpers", () => {
         additionalProperties: false,
       }) as Record<string, unknown>;
       expect(out.additionalProperties).toBe(false);
+    });
+
+    it("reduces a type array to its first non-null type", () => {
+      // Real failure, the third in this family: easyeda's structuredContent
+      // used ["string", "null"] for a nullable field, and DSH rejected the
+      // whole tool with "type must be a single type string (type arrays are
+      // not supported)".
+      const out = sanitizeSchema({
+        type: "object",
+        properties: {
+          color: { type: ["string", "null"] },
+          lineWidth: { type: ["number", "null"] },
+        },
+      }) as { properties: Record<string, Record<string, unknown>> };
+      expect(out.properties.color.type).toBe("string");
+      expect(out.properties.lineWidth.type).toBe("number");
+    });
+
+    it("drops a type array that names only null", () => {
+      const out = sanitizeSchema({ type: ["null"] }) as Record<string, unknown>;
+      expect("type" in out).toBe(false);
+    });
+  });
+
+  // This suite is the checker, not another hand-written expectation. Three
+  // separate easyeda outages came from one root cause: a keyword this
+  // sanitiser passed through that DSH's registration validator refuses. Each
+  // time the fix matched only the symptom that happened to surface. These
+  // tests run sanitizeSchema's OUTPUT through assertSupportedJsonSchema --
+  // the real validator that produced every one of those errors -- so an
+  // unsupported construct fails here instead of at tool registration.
+  describe("sanitizeSchema output passes DSH's own schema validator", () => {
+    const check = (schema: unknown) => {
+      const sanitized = sanitizeSchema(schema);
+      expect(() => assertSupportedJsonSchema(sanitized)).not.toThrow();
+      return sanitized;
+    };
+
+    it("accepts the incident-1 schema: $schema, format, minimum, maximum", () => {
+      check({
+        $schema: "https://json-schema.org/draft/2020-12/schema",
+        type: "object",
+        properties: {
+          count: { type: "number", minimum: 0, maximum: 100 },
+          url: { type: "string", format: "uri" },
+        },
+      });
+    });
+
+    it("accepts the incident-2 schema: a schema-typed additionalProperties", () => {
+      check({
+        type: "object",
+        properties: {
+          feature_flags: { type: "object", additionalProperties: { type: "string" } },
+          feature_maturity: { type: "object", additionalProperties: { type: "string" } },
+        },
+      });
+    });
+
+    it("accepts the incident-3 schema: nullable type arrays inside array items", () => {
+      check({
+        type: "object",
+        properties: {
+          wires: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                color: { type: ["string", "null"] },
+                lineWidth: { type: ["number", "null"] },
+              },
+            },
+          },
+        },
+      });
+    });
+
+    it("accepts one schema carrying every construct all three incidents used", () => {
+      check({
+        $schema: "https://json-schema.org/draft/2020-12/schema",
+        $id: "https://example.invalid/x",
+        title: "Everything",
+        type: "object",
+        additionalProperties: { type: "string" },
+        properties: {
+          nested: {
+            type: ["object", "null"],
+            additionalProperties: { type: "number" },
+            properties: {
+              deep: {
+                type: "array",
+                items: { type: ["string", "null"], pattern: "^a", default: "a" },
+              },
+            },
+          },
+          bounded: { type: "integer", minimum: 1, maximum: 9, exclusiveMinimum: 0 },
+          choice: { oneOf: [{ type: "string", format: "date" }, { type: ["number", "null"] }] },
+        },
+        required: ["nested"],
+      });
     });
   });
 });

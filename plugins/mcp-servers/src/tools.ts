@@ -83,6 +83,15 @@ export function sanitizeSchema(schema: unknown): unknown {
       // almost always means "extra properties are allowed", just of some
       // shape this subset cannot express, so true keeps that meaning.
       out[key] = typeof value === "boolean" ? value : true;
+    } else if (key === "type" && Array.isArray(value)) {
+      // A type ARRAY (["string", "null"]) is JSON Schema's way of saying
+      // "nullable string". DSH's validator takes a single type string only
+      // ("type must be a single type string (type arrays are not
+      // supported)"), and a passed-through array rejected the whole tool.
+      // Keep the first non-null entry, which carries the real shape, and
+      // drop the nullability this subset cannot express.
+      const first = value.find((entry) => typeof entry === "string" && entry !== "null");
+      if (typeof first === "string") out[key] = first;
     } else if (KEEP.has(key)) {
       out[key] = value;
     } else if (key === "minimum" || key === "maximum") {
