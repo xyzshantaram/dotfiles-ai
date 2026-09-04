@@ -1,3 +1,5 @@
+import { createRequire as __dshCreateRequire } from "node:module";
+const require = __dshCreateRequire(import.meta.url);
 var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -12541,7 +12543,15 @@ function rewriteOutcome(suggested, original, notes, mutatingWhy, readOnly) {
   if (readOnly && mutatingWhy.length === 0) {
     return { action: "run", command: suggested, rewritten, reason };
   }
-  return { action: "ask", command: suggested, original, rewritten, reason };
+  return {
+    action: "ask",
+    command: suggested,
+    original,
+    rewritten,
+    reason,
+    notes,
+    mutatingWhy
+  };
 }
 function flagPresent(ref, flag) {
   return ref.node.suffix.some((w) => w.text === flag || w.text.startsWith(flag + "="));
@@ -12949,15 +12959,31 @@ function apply(ctx, config) {
               "bash-guard: this command needs approval but no approval service is mounted, so it did not run.\n\n" + (outcome.reason ?? "")
             );
           }
-          const reasonLines = (outcome.reason ?? "").split("\n");
-          const summary = reasonLines[0]?.trim() || "bash-guard: this command needs your approval.";
-          const why = reasonLines.slice(1).join("\n").trim();
-          const prompt = {
-            summary,
-            ...outcome.command !== outcome.original ? { wrote: outcome.original } : {},
-            runs: outcome.command,
-            ...why !== "" ? { why } : {}
-          };
+          const notes = outcome.notes ?? [];
+          const mutating = outcome.mutatingWhy ?? [];
+          const isRewrite = outcome.command !== outcome.original;
+          let prompt;
+          if (notes.length === 0 && mutating.length === 0) {
+            const reasonLines = (outcome.reason ?? "").split("\n");
+            const summary = reasonLines[0]?.trim() || "bash-guard: this command needs your approval.";
+            const why = reasonLines.slice(1).join("\n").trim();
+            prompt = {
+              summary,
+              ...isRewrite ? { wrote: outcome.original } : {},
+              runs: outcome.command,
+              ...why !== "" ? { why } : {}
+            };
+          } else {
+            const summary = mutating.length > 0 ? isRewrite ? "bash-guard: this command changes files, and it runs in a different form." : "bash-guard: this command changes files." : isRewrite ? "bash-guard: this command runs in a different form." : "bash-guard: this command needs your approval.";
+            prompt = {
+              summary,
+              ...isRewrite ? { wrote: outcome.original } : {},
+              runs: outcome.command,
+              ...mutating.length > 0 ? { mutating: true } : {},
+              ...mutating.length > 0 ? { changes: mutating } : {},
+              ...notes.length > 0 ? { why: notes.join("\n") } : {}
+            };
+          }
           const verdict = await approval.request({
             agent,
             toolName: "bash",

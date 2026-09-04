@@ -609,14 +609,24 @@ function translatableRef(
  */
 export type GuardOutcome =
   | { action: "run"; command: string; rewritten: boolean; reason?: string }
-  | { action: "ask"; command: string; original: string; rewritten: boolean; reason?: string }
+  | {
+      action: "ask";
+      command: string;
+      original: string;
+      rewritten: boolean;
+      reason?: string;
+      notes?: string[];
+      mutatingWhy?: string[];
+    }
   | { action: "deny"; reason: string };
 
 /**
  * Build the message that hands the model an exact replacement command.
  *
  * The harness deep-freezes exec.arguments, so the replacement travels in the
- * message instead. The model runs it verbatim on its next turn.
+ * message instead. The model runs it verbatim on its next turn. The output is
+ * written for the model, so the approval card no longer slices this text; it
+ * receives the structured parts instead.
  */
 function suggestionMessage(suggested: string, notes: string[], mutatingWhy: string[]): string {
   let reason = `bash-guard: that command is not run directly. Run this instead:\n\n  ${suggested}\n`;
@@ -655,7 +665,15 @@ function rewriteOutcome(
   if (readOnly && mutatingWhy.length === 0) {
     return { action: "run", command: suggested, rewritten, reason };
   }
-  return { action: "ask", command: suggested, original, rewritten, reason };
+  return {
+    action: "ask",
+    command: suggested,
+    original,
+    rewritten,
+    reason,
+    notes,
+    mutatingWhy,
+  };
 }
 
 /** True when a rewrite `add` flag is already present in the command's words. */
@@ -1258,15 +1276,41 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
                 (outcome.reason ?? ""),
             );
           }
-          const reasonLines = (outcome.reason ?? "").split("\n");
-          const summary = reasonLines[0]?.trim() || "bash-guard: this command needs your approval.";
-          const why = reasonLines.slice(1).join("\n").trim();
-          const prompt: Record<string, string> = {
-            summary,
-            ...(outcome.command !== outcome.original ? { wrote: outcome.original } : {}),
-            runs: outcome.command,
-            ...(why !== "" ? { why } : {}),
-          };
+          const notes = outcome.notes ?? [];
+          const mutating = outcome.mutatingWhy ?? [];
+          const isRewrite = outcome.command !== outcome.original;
+          let prompt: Record<string, string | boolean | string[]>;
+          if (notes.length === 0 && mutating.length === 0) {
+            // Plain rule ask: its template is already a single line and may be
+            // overridden by config, so slice the text as before.
+            const reasonLines = (outcome.reason ?? "").split("\n");
+            const summary =
+              reasonLines[0]?.trim() || "bash-guard: this command needs your approval.";
+            const why = reasonLines.slice(1).join("\n").trim();
+            prompt = {
+              summary,
+              ...(isRewrite ? { wrote: outcome.original } : {}),
+              runs: outcome.command,
+              ...(why !== "" ? { why } : {}),
+            };
+          } else {
+            const summary =
+              mutating.length > 0
+                ? isRewrite
+                  ? "bash-guard: this command changes files, and it runs in a different form."
+                  : "bash-guard: this command changes files."
+                : isRewrite
+                  ? "bash-guard: this command runs in a different form."
+                  : "bash-guard: this command needs your approval.";
+            prompt = {
+              summary,
+              ...(isRewrite ? { wrote: outcome.original } : {}),
+              runs: outcome.command,
+              ...(mutating.length > 0 ? { mutating: true } : {}),
+              ...(mutating.length > 0 ? { changes: mutating } : {}),
+              ...(notes.length > 0 ? { why: notes.join("\n") } : {}),
+            };
+          }
           const verdict = await approval.request({
             agent,
             toolName: "bash",
