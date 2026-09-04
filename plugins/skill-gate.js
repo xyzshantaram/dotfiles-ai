@@ -23,7 +23,13 @@ var Config = z.object({
    * define, run, or delete plugins, and cannot read a session's own
    * plugin registry.
    */
-  subagentDeny: z.array(z.string()).default(DEFAULT_SUBAGENT_DENY)
+  subagentDeny: z.array(z.string()).default(DEFAULT_SUBAGENT_DENY),
+  /**
+   * Global tool names NO agent may call, at any delegation depth, whether
+   * or not a skill that gates them is loaded. `alwaysDeny` wins over a
+   * skill unlock. Defaults to empty; configured values land separately.
+   */
+  alwaysDeny: z.array(z.string()).default([])
 });
 function readFrontmatter(text) {
   const lines = text.split("\n");
@@ -131,6 +137,7 @@ function apply(ctx, config) {
   const cfg = config ?? {};
   const skillDirs = cfg.skillDirs ?? [];
   const subagentDeny = cfg.subagentDeny ?? DEFAULT_SUBAGENT_DENY;
+  const alwaysDeny = cfg.alwaysDeny ?? [];
   ctx.on("skills/change", () => {
     gatesCache = void 0;
   });
@@ -148,7 +155,7 @@ function apply(ctx, config) {
     const agent = context.agent;
     if (!agent) return next();
     const patterns = gatedPatterns();
-    const lockdown = isSubagent(agent) ? subagentDeny : [];
+    const lockdown = [...alwaysDeny, ...isSubagent(agent) ? subagentDeny : []];
     if (patterns.length === 0 && lockdown.length === 0) return next();
     const active = activeById.get(agent.id) ?? /* @__PURE__ */ new Set();
     const deny = expandDeny(agent, patterns, active);
@@ -221,7 +228,7 @@ function apply(ctx, config) {
   function enforce(agent) {
     if (!agent || !agent.ctx || !agent.ctx.tools) return;
     const patterns = gatedPatterns();
-    const lockdown = isSubagent(agent) ? subagentDeny : [];
+    const lockdown = [...alwaysDeny, ...isSubagent(agent) ? subagentDeny : []];
     if (patterns.length === 0 && lockdown.length === 0) return;
     const active = activeById.get(agent.id) ?? /* @__PURE__ */ new Set();
     const deny = expandDeny(agent, patterns, active);

@@ -85,6 +85,12 @@ export const Config = z.object({
    * plugin registry.
    */
   subagentDeny: z.array(z.string()).default(DEFAULT_SUBAGENT_DENY),
+  /**
+   * Global tool names NO agent may call, at any delegation depth, whether
+   * or not a skill that gates them is loaded. `alwaysDeny` wins over a
+   * skill unlock. Defaults to empty; configured values land separately.
+   */
+  alwaysDeny: z.array(z.string()).default([]),
 });
 
 /** Read the frontmatter between the first two `---` lines. */
@@ -235,9 +241,14 @@ function isSubagent(agent: Agent): boolean {
 let gatesCache: Map<string, string[]> | undefined;
 
 export function apply(ctx: Context, config: unknown): void {
-  const cfg = (config ?? {}) as { skillDirs?: string[]; subagentDeny?: string[] };
+  const cfg = (config ?? {}) as {
+    skillDirs?: string[];
+    subagentDeny?: string[];
+    alwaysDeny?: string[];
+  };
   const skillDirs = cfg.skillDirs ?? [];
   const subagentDeny = cfg.subagentDeny ?? DEFAULT_SUBAGENT_DENY;
+  const alwaysDeny = cfg.alwaysDeny ?? [];
 
   ctx.on("skills/change" as keyof Events, () => {
     gatesCache = undefined;
@@ -267,7 +278,7 @@ export function apply(ctx: Context, config: unknown): void {
     const agent = context.agent;
     if (!agent) return next();
     const patterns = gatedPatterns();
-    const lockdown = isSubagent(agent) ? subagentDeny : [];
+    const lockdown = [...alwaysDeny, ...(isSubagent(agent) ? subagentDeny : [])];
     if (patterns.length === 0 && lockdown.length === 0) return next();
     const active = activeById.get(agent.id) ?? new Set<string>();
     const deny = expandDeny(agent, patterns, active);
@@ -366,7 +377,7 @@ export function apply(ctx: Context, config: unknown): void {
   function enforce(agent: Agent | undefined): void {
     if (!agent || !agent.ctx || !agent.ctx.tools) return;
     const patterns = gatedPatterns();
-    const lockdown = isSubagent(agent) ? subagentDeny : [];
+    const lockdown = [...alwaysDeny, ...(isSubagent(agent) ? subagentDeny : [])];
     if (patterns.length === 0 && lockdown.length === 0) return;
     const active = activeById.get(agent.id) ?? new Set<string>();
     const deny = expandDeny(agent, patterns, active);
