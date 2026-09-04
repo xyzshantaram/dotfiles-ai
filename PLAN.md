@@ -1271,113 +1271,19 @@ None open. The meter is a tracked plugin at `plugins/context-meter`, wired into
 
 # Effort 9 — resume and recall rework
 
-## Vision
+All three tickets shipped: skill-gate's `alwaysDeny`, `resume_search`/
+`resume_read` replacing `/resume`, the `skills/resume` skill, and the
+`/recall` slash command's mount row dropped from `sync.sh`. See git log for
+the four commits.
 
-`/resume` is a built-in command and recall is a default plugin. Neither lets the
-agent search its own history on demand. Rebuild `/resume` as a skill, give the
-agent keyword search and history lookup as real tools, and demote the default
-recall plugin once those tools cover its job.
+## Human review queue
 
-## Critical context
-
-- Settled via grilling, 2026-09-04: no slash command at all. `/resume` becomes
-  a pure skill; the agent gets real tools directly, with no command layer in
-  front of them.
-- Escalation beyond the current session is agent-driven, not automatic: a
-  `workspaces` parameter is how the agent explicitly widens scope, not
-  something a tool decides on its own.
-- `search` and `recall` come from `dsh-compaction-instant`, not shipped DSH.
-  Confirmed ordinary global tools: `defineTool({name:"search"...})` /
-  `defineTool({name:"recall"...})` at `dsh-compaction-instant/src/tool.js:98,131`.
-  They must become PERMANENTLY hidden once the resume tools ship, not just
-  hidden-until-a-skill-unlocks-them — skill-gate's per-skill unlock model
-  cannot express "never visible" — loading a skill that names them would
-  re-expose them. Needs a new unconditional-deny config field in
-  `plugins/skill-gate.ts`, mirroring the exact pattern its existing
-  `subagentDeny` already uses (`skill-gate.ts:68-74, 366-396`), just applied
-  to every agent instead of only subagents behind `isSubagent()`.
-- skill-gate's own timing was investigated and cleared, not a blocker: the
-  "gated tools take ~5 tool calls to show up" observation is explained by the
-  agent loop batching every tool call from one model response before the next
-  prompt assembly (`dsh-agent-loop/lib/index.js:117-144, 683-686`) — zero
-  step-level delay in the gate itself. No fix needed there.
-- `plugins/resume.ts` already exists (233 lines): a `/resume` command via
-  `dsh-commands`, scanning `session.events` then `sessionPersistence.list()`
-  for cross-session hits. Its scan logic (`makeMatcher`, `eventText`,
-  `eventRole`, `search`) is reusable; the command registration and the
-  single-blob 40-line text output are what get replaced.
-
-## Tickets
-
-### T1 — skill-gate: an unconditional deny, not just per-skill gating
-
-Not started.
-
-Add a config field to `plugins/skill-gate.ts` (e.g. `alwaysDeny: string[]`),
-applied to every agent's deny computation in both `enforce()` and the
-`system-prompt/assemble` filter, independent of any skill's loaded state —
-mirroring exactly how `subagentDeny` is already computed and merged in,
-minus the `isSubagent()` gate. Once T2 ships, configure `search` and
-`recall` into it.
-
-**Acceptance criteria**
-
-- With `alwaysDeny: ["search", "recall"]` set, neither tool appears in a
-  fresh agent's first prompt.
-- Loading a skill whose `tools-gated` names one of those tools does not
-  unhide it — `alwaysDeny` wins over a skill unlock.
-- Every existing skill-gate behavior (subagent lockdown, prefix patterns,
-  per-skill unlock for everything else) is unchanged.
-
-### T2 — replace `/resume` with `resume_search` and `resume_read` tools
-
-Not started. Ships alongside T1 (search/recall's replacement is not
-complete until both land, but neither blocks starting the other).
-
-Remove the `dsh-commands` `/resume` registration entirely. Register two
-global tools:
-
-- `resume_search(query, workspaces?: string[], page?: number)` — reuses the
-  current scan logic. No `workspaces` (or an empty list) searches only the
-  current session's own event log. A non-empty `workspaces` list escalates
-  to `sessionPersistence`-listed sessions in those workspaces. Returns one
-  fixed page (~15-20) of short hits plus a total count and a `hasMore` flag,
-  not one 40-line text blob.
-- `resume_read(sessionId, seq)` — expands one hit to its full original
-  content. This is `recall`'s replacement, reachable for the current
-  session's own log and for any session `sessionPersistence.load` can open.
-
-**Acceptance criteria**
-
-- A query with no `workspaces` only returns hits from the current session's
-  own seq space.
-- A query with `workspaces` set reaches other sessions in that workspace,
-  matching `resume.ts`'s existing `sessionPersistence.list()` behavior.
-- `resume_search` never returns more than the configured page size in one
-  call; a second call with the next page returns a different slice, not a
-  repeat.
-- `resume_read` resolves a seq from a session other than the current one.
-
-### T3 — the resume skill
-
-Blocked on T2 (the tools it gates must exist first).
-
-Write `skills/resume/SKILL.md`, `tools-gated: [resume_search, resume_read]`.
-`whenToUse` names natural continuation phrasing ("we were working on X the
-other day", "resume where we left off", "pick up from"), not a literal
-`/resume` command syntax. The body teaches the escalation policy: search the
-current session first with no `workspaces`, only add `workspaces` when that
-comes up short, and call `resume_read` to expand a hit before acting on it
-rather than acting on the one-line summary alone.
-
-**Acceptance criteria**
-
-- Loading the skill unlocks exactly `resume_search` and `resume_read`;
-  `search`/`recall` stay hidden per T1.
-- A fresh session, given a natural-language prompt matching `whenToUse`'s
-  phrasing (no literal `/resume` typed), loads the skill on its own,
-  searches, and successfully expands a real hit from that session's own
-  history.
+- [ ] Restart `dsh web`, then in a FRESH session send a natural-language
+      prompt matching the resume skill's `whenToUse` phrasing (no literal
+      `/resume`), and confirm it loads the skill on its own, searches, and
+      expands a real hit from that session's own history.
+- [ ] Confirm `search`, `recall`, and `/recall` are all gone from a fresh
+      session — not just hidden-until-a-skill-unlocks-them.
 
 ---
 
