@@ -266,7 +266,30 @@ export function apply(ctx: Context, config: unknown): void {
         `[skill-gate] pre-step enforcement failed: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
-    return next();
+    // A skill loads through TWO paths, not one. The `skill` TOOL path is
+    // caught by the tools/post-execute listener below. The user-explicit
+    // slash-command path never calls that tool at all: dsh-tool-skill's own
+    // pre-step listener appends the rendered skill body as extra decision
+    // messages, each stamped `source.kind === "skill-invocation"` carrying
+    // the skill name (@deepseek-ai/dsh-skill declares that MessageSource
+    // kind for exactly this). Without this branch a slash-invoked skill
+    // showed its instructions to the model while its gated tools stayed
+    // masked, so the model read about tools it could not call.
+    //
+    // next() runs first so the decision already carries dsh-tool-skill's
+    // injections. The unmask lands on the FOLLOWING step, because
+    // assemble() runs before this waterfall -- the same one-step delay the
+    // tool path already has.
+    const proceed = async () => {
+      const decision = await next();
+      try {
+        claimSlashInvokedSkills(payload.agent, decision);
+      } catch {
+        // Observe only: a malformed decision must not break stepping.
+      }
+      return decision;
+    };
+    return proceed();
   });
   // Prompt filter: strip gated schemas from the system prompt's tool list
   // during assembly, so the model never receives them on ANY step — not just
@@ -432,13 +455,39 @@ export function apply(ctx: Context, config: unknown): void {
     // Only treat a successful load as activation.
     const isError = (result as { isError?: boolean })?.isError === true;
     if (isError) return;
+    // The next pre-step reconciles the mask; no restrict() call here.
+    activateSkill(agent, skillName);
+  }
+
+  /** Add one skill's gated tools to an agent's active set. Shared by both
+   * load paths. */
+  function activateSkill(agent: Agent, skillName: string): void {
     if (!gatesCache) gatesCache = discoverGates(skillDirs, ctx);
     const gated = gatesCache.get(skillName);
     if (!gated || gated.length === 0) return;
     const active = activeById.get(agent.id) ?? new Set<string>();
     for (const tool of gated) active.add(tool);
     activeById.set(agent.id, active);
-    // The next pre-step reconciles the mask; no restrict() call here.
+  }
+
+  /**
+   * Unmask every skill the user invoked by slash command on this step.
+   * dsh-tool-skill stamps each injected body with
+   * `source: { kind: "skill-invocation", name, form: "instructions" }`, so
+   * the skill name is read from that metadata rather than by re-parsing the
+   * rendered `<skill_content>` text.
+   */
+  function claimSlashInvokedSkills(agent: Agent | undefined, decision: unknown): void {
+    if (!agent) return;
+    const messages = (decision as { messages?: unknown }).messages;
+    if (!Array.isArray(messages)) return;
+    for (const message of messages) {
+      const source = (message as { source?: { kind?: unknown; name?: unknown } } | null)?.source;
+      if (source === undefined || source === null) continue;
+      if (source.kind !== "skill-invocation") continue;
+      if (typeof source.name !== "string" || source.name === "") continue;
+      activateSkill(agent, source.name);
+    }
   }
 
   /**
