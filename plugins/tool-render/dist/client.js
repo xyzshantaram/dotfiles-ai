@@ -10079,9 +10079,9 @@ function SendMessageRow(props) {
   var body = state !== "error" && args !== null ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: args.message })) : null;
   return toolRenderRow({
     icon: /* @__PURE__ */ import_react.default.createElement(IconAgentPresetOutline162, { size: 14 }),
-    title: "Send message",
+    title: "Message subagent",
     badge: args !== null ? args.subagent_id : void 0,
-    summary: args !== null ? firstLine(args.message) : "Send message",
+    summary: args !== null ? firstLine(args.message) : "Message subagent",
     state,
     expandable: body !== null,
     expanded,

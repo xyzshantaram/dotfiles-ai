@@ -1863,9 +1863,9 @@ function SendMessageRow(props) {
     ) : null;
   return toolRenderRow({
     icon: <IconAgentPresetOutline16 size={14} />,
-    title: "Send message",
+    title: "Message subagent",
     badge: args !== null ? args.subagent_id : undefined,
-    summary: args !== null ? firstLine(args.message) : "Send message",
+    summary: args !== null ? firstLine(args.message) : "Message subagent",
     state: state,
     expandable: body !== null,
     expanded: expanded,
