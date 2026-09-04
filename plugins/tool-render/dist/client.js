@@ -1873,18 +1873,10 @@ var client_default = `.tool-render-row {
 .tool-render-row[data-expandable] {
   cursor: pointer;
 }
-.tool-render-leading {
-  color: var(--dsw-alias-label-tertiary);
-  flex: none;
-  justify-content: flex-start;
-  align-items: center;
-  gap: 0.25rem;
-  margin-right: 0.375rem;
-  display: inline-flex;
-  overflow: visible;
-}
 .tool-render-chevron {
   color: var(--dsw-alias-label-secondary);
+  flex: none;
+  margin-right: 0.25rem;
 }
 .tool-render-title {
   color: var(--dsw-alias-label-secondary);
@@ -1904,6 +1896,7 @@ var client_default = `.tool-render-row {
   overflow: hidden;
   border-radius: 0.375rem;
   padding: 0.0625rem 0.375rem;
+  margin-right: 0.375rem;
   color: var(--dsw-alias-label-primary);
 }
 .tool-render-name-badge-icon {
@@ -15340,16 +15333,17 @@ function toolNameHue(name2) {
   }
   return Math.abs(h) % 360;
 }
-function toolNameBadge(toolName, icon) {
+function toolNameBadge(toolName, icon, state) {
   if (toolName === void 0 || toolName === null || toolName === "") return null;
-  var hue = toolNameHue(toolName);
-  var background = "color-mix(in srgb, hsl(" + hue + " 60% 45%) 28%, var(--dsw-alias-bg-tertiary))";
-  return /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-name-badge", style: { background } }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-name-badge-icon" }, icon), /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-name-badge-text" }, toolName));
+  var isError = state === "error";
+  var background = isError ? "var(--dsw-alias-state-error-primary)" : "color-mix(in srgb, hsl(" + toolNameHue(toolName) + " 60% 45%) 28%, var(--dsw-alias-bg-tertiary))";
+  var color = isError ? "#fff" : void 0;
+  return /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-name-badge", style: { background, color } }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-name-badge-icon" }, icon), /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-name-badge-text" }, toolName));
 }
 function toolRenderRow(options) {
   var interactive = options.expandable === true;
   var open = options.expanded === true && interactive;
-  var leading = toolNameBadge(options.toolName, options.icon);
+  var leading = toolNameBadge(options.toolName, options.icon, options.state);
   var summary;
   var showsError = options.state === "error" && options.errorSummary !== void 0;
   if (!showsError && options.path !== void 0 && options.path !== null && options.onOpenFile !== void 0) {
@@ -15411,7 +15405,8 @@ function toolRenderRow(options) {
           }
         } : void 0
       },
-      /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-leading" }, open ? /* @__PURE__ */ import_react.default.createElement(IconChevronDownOutline142, { className: "tool-render-chevron" }) : null, leading),
+      open ? /* @__PURE__ */ import_react.default.createElement(IconChevronDownOutline142, { className: "tool-render-chevron" }) : null,
+      leading,
       /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-title" }, options.title),
       options.badge !== void 0 && options.badge !== null && options.badge !== "" ? /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-badge" }, options.badge) : null,
       /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-sep", "aria-hidden": true }),

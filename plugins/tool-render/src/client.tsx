@@ -468,14 +468,20 @@ function toolNameHue(name) {
  * Background hue is hashed from the name so the same tool always gets the
  * same color, and blends with the theme's own tertiary background token so
  * it stays legible in both light and dark themes rather than a raw pastel
- * that only works in one. */
-function toolNameBadge(toolName, icon) {
+ * that only works in one. On error the badge switches to a flat white-on-red
+ * treatment instead, computed here rather than through CSS: the background
+ * is an inline style, which a class rule cannot override without
+ * `!important`, so the error case is simplest to decide in the same place
+ * the normal background is computed. */
+function toolNameBadge(toolName, icon, state) {
   if (toolName === undefined || toolName === null || toolName === "") return null;
-  var hue = toolNameHue(toolName);
-  var background =
-    "color-mix(in srgb, hsl(" + hue + " 60% 45%) 28%, var(--dsw-alias-bg-tertiary))";
+  var isError = state === "error";
+  var background = isError
+    ? "var(--dsw-alias-state-error-primary)"
+    : "color-mix(in srgb, hsl(" + toolNameHue(toolName) + " 60% 45%) 28%, var(--dsw-alias-bg-tertiary))";
+  var color = isError ? "#fff" : undefined;
   return (
-    <span className="tool-render-name-badge" style={{ background: background }}>
+    <span className="tool-render-name-badge" style={{ background: background, color: color }}>
       <span className="tool-render-name-badge-icon">{icon}</span>
       <span className="tool-render-name-badge-text">{toolName}</span>
     </span>
@@ -492,7 +498,7 @@ function toolRenderRow(options) {
   // The leading area is the chevron when open, then the tool-name badge.
   // The old state dots are gone: a stopped card carries an outline instead,
   // and the badge replaces the bare icon as the row's leading mark.
-  var leading = toolNameBadge(options.toolName, options.icon);
+  var leading = toolNameBadge(options.toolName, options.icon, options.state);
   var summary;
   // An errored call reports its error on the row instead of its arguments, so
   // the path link is skipped whenever there is an error message to show.
@@ -562,10 +568,8 @@ function toolRenderRow(options) {
             : undefined
         }
       >
-        <span className="tool-render-leading">
-          {open ? <IconChevronDownOutline14 className="tool-render-chevron" /> : null}
-          {leading}
-        </span>
+        {open ? <IconChevronDownOutline14 className="tool-render-chevron" /> : null}
+        {leading}
         <span className="tool-render-title">{options.title}</span>
         {options.badge !== undefined && options.badge !== null && options.badge !== "" ? (
           <span className="tool-render-badge">{options.badge}</span>
