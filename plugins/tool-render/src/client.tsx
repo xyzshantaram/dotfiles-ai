@@ -169,6 +169,7 @@ var IconInspectOutline12 = primitives.IconInspectOutline12;
 var IconChecklistOutline14 = primitives.IconChecklistOutline14;
 var IconQuestionOutline14 = primitives.IconQuestionOutline14;
 var IconAgentPresetOutline16 = primitives.IconAgentPresetOutline16;
+var IconStopFill16 = primitives.IconStopFill16;
 var MarkdownText = primitives.MarkdownText;
 
 /** Stable plugin identity, also the loader entry id in cordis.patch.yml. */
@@ -2060,6 +2061,39 @@ function SendMessageRow(props) {
   });
 }
 
+// ---- interrupt_agent row: dsh-tool-subagent-control's sibling to
+// send_message. Args are { agent_id }. The result is only { accepted:
+// boolean }, and the tool never returns anything else on success, so the
+// row has nothing worth expanding -- it stays a plain, non-expandable row
+// like the shipped generic card it replaces, with a stop icon standing in
+// for the action.
+function InterruptAgentRow(props) {
+  var block = props.block;
+  var done = doneOf(block);
+  var args = parseArgs(argsRawOf(block));
+  var agentId = args !== null ? pickString(args, ["agent_id"]) : undefined;
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary =
+    state === "error" && errorText !== null && errorText !== ""
+      ? firstLineOfError(errorText)
+      : undefined;
+  return toolRenderRow({
+    toolName: "Interrupt agent",
+    icon: <IconStopFill16 size={14} />,
+    title: "Interrupt agent",
+    summary: agentId !== undefined ? agentId : "Interrupt agent",
+    state: state,
+    expandable: false,
+    expanded: false,
+    onToggle: function () {},
+    body: null,
+    errorSummary: errorSummary,
+    errorText: errorText,
+    inspect: props.inspect,
+  });
+}
+
 // ---- context injection row: replaces the shipped ContextInjectionRow on
 // conversation.chat.node (key "context"). One treatment for every injection
 // form: render the text as markdown, name the producer as a badge, instead
@@ -2606,6 +2640,14 @@ function apply(ctx) {
         priority: -100,
       },
       SendMessageRow,
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "interrupt_agent",
+        priority: -100,
+      },
+      InterruptAgentRow,
     );
     yield ctx.slots.register(
       {

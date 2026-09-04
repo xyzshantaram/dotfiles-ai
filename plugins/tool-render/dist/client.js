@@ -15208,6 +15208,7 @@ var IconInspectOutline122 = primitives.IconInspectOutline12;
 var IconChecklistOutline142 = primitives.IconChecklistOutline14;
 var IconQuestionOutline142 = primitives.IconQuestionOutline14;
 var IconAgentPresetOutline162 = primitives.IconAgentPresetOutline16;
+var IconStopFill162 = primitives.IconStopFill16;
 var MarkdownText2 = primitives.MarkdownText;
 var PLUGIN_NAME = "tool-render";
 var STYLE_TAG_ID = "tool-render/client.module.css";
@@ -16596,6 +16597,30 @@ function SendMessageRow(props) {
     inspect: props.inspect
   });
 }
+function InterruptAgentRow(props) {
+  var block = props.block;
+  var done = doneOf(block);
+  var args = parseArgs(argsRawOf(block));
+  var agentId = args !== null ? pickString(args, ["agent_id"]) : void 0;
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  return toolRenderRow({
+    toolName: "Interrupt agent",
+    icon: /* @__PURE__ */ import_react.default.createElement(IconStopFill162, { size: 14 }),
+    title: "Interrupt agent",
+    summary: agentId !== void 0 ? agentId : "Interrupt agent",
+    state,
+    expandable: false,
+    expanded: false,
+    onToggle: function() {
+    },
+    body: null,
+    errorSummary,
+    errorText,
+    inspect: props.inspect
+  });
+}
 function contextText(content) {
   if (!Array.isArray(content)) return "";
   var parts = [];
@@ -16961,6 +16986,14 @@ function apply(ctx) {
         priority: -100
       },
       SendMessageRow
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "interrupt_agent",
+        priority: -100
+      },
+      InterruptAgentRow
     );
     yield ctx.slots.register(
       {

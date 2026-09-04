@@ -30,6 +30,7 @@ declare module "@deepseek-ai/dsh-client-ui-primitives" {
   export const IconChecklistOutline14: any;
   export const IconQuestionOutline14: any;
   export const IconAgentPresetOutline16: any;
+  export const IconStopFill16: any;
   export const MarkdownText: any;
 }
 
