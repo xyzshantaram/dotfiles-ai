@@ -124,6 +124,13 @@ step_write_web_patch() {
       name: $HERE/plugins/package-tool.js
     - id: skill-gate
       name: $HERE/plugins/skill-gate.js
+      config:
+        # search/recall (dsh-compaction-basic, the dsh-compaction-instant
+        # fork below) are superseded by resume_search/resume_read
+        # (plugins/resume.ts). alwaysDeny hides them from every agent
+        # unconditionally, unlike a skill's per-skill unlock: no skill may
+        # re-expose them once loaded (Effort 9, PLAN.md).
+        alwaysDeny: [search, recall]
     - id: see
       name: $HERE/plugins/see.js
     - id: tmp-dsh-shared
