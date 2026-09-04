@@ -33,10 +33,10 @@ fi
 # Git-hosted specs whose build scripts pnpm must be allowed to run. pnpm 10+
 # blocks lifecycle scripts (prepare/postinstall) unless the exact resolved
 # tarball URL is listed under allowBuilds in the profile's pnpm-workspace.yaml.
-# Both entries build on install: aidos runs a postinstall, dsh-better-edit
-# compiles lib/ via prepare and ships no lib in the repo. step_allow_builds
-# reconstructs the codeload URL from each spec, so bumping a pin here is all
-# an upgrade needs.
+# The single entry builds on install: aidos runs a postinstall.
+# step_allow_builds reconstructs the codeload URL from the spec, so bumping
+# a pin here is all an upgrade needs.
+
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -47,13 +47,12 @@ AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#383d5e78cbb399
 # Git-hosted specs whose build scripts pnpm must be allowed to run. pnpm 10+
 # blocks lifecycle scripts (prepare/postinstall) unless the exact resolved
 # tarball URL is listed under allowBuilds in the profile's pnpm-workspace.yaml.
-# Both entries build on install: aidos runs a postinstall, dsh-better-edit
-# compiles lib/ via prepare and ships no lib in the repo. step_allow_builds
-# reconstructs the codeload URL from each spec, so bumping a pin here is all
-# an upgrade needs.
+# The single entry builds on install: aidos runs a postinstall.
+# step_allow_builds reconstructs the codeload URL from the spec, so bumping
+# a pin here is all an upgrade needs.
+
 BUILD_SPECS=(
 	"$AIDOS_PLUGIN_SPEC"
-	"github:xyzshantaram/dsh-better-edit#873b9fd53e71a8bbe587297944dbf4542ce7d64a"
 )
 
 step_install_deps() {
@@ -91,11 +90,6 @@ step_sync_skills() {
 step_sync_agents_md() {
   echo "  syncing AGENTS.md -> $DSH_HOME/AGENTS.md"
 	cp "$HERE/home/AGENTS.md" "$DSH_HOME/AGENTS.md"
-}
-
-step_sync_better_edit_guidance() {
-	mkdir -p "$DSH_HOME/plugins/dsh-better-edit"
-	cp -r "$HERE/home/plugins/dsh-better-edit/." "$DSH_HOME/plugins/dsh-better-edit/"
 }
 
 step_sync_guard_rules() {
@@ -265,13 +259,6 @@ step_install_plugins() {
 		# The MCP manager plugins on npm and GitHub are all visual editors for
 		# cordis.patch.yml that delegate to dsh-mcp-client, so none of them can
 		# run a browser login. Our own plugins/mcp-servers replaced them.
-		# Hash-anchored read/edit/undo tools. Pinned to OUR fork
-		# (github.com/xyzshantaram/dsh-better-edit, branch
-		# fix/served-mirror-rebase) while we measure two fixes upstream does
-		# not have yet: the served-mirror re-base after an edit, and numeric
-		# string coercion for read offset/limit. See
-		# experiments/tool-call-friction/README.md. Upgrade = bump the pin.
-		pnpm_ins "github:xyzshantaram/dsh-better-edit#873b9fd53e71a8bbe587297944dbf4542ce7d64a"
 		# Deterministic instant compaction, installed UNDER THE BASIC NAME on
 		# purpose. The package declares its own dsh.bundle patch, so a direct
 		# install under its real name inserts compaction rows the web patch
@@ -397,7 +384,6 @@ step_report_extra_plugins() {
 	local base=(
 		"@deepseek-ai/dsh-client-ui-attachment"
 		"@deepseek-ai/dsh-client-web-react"
-		"dsh-better-edit"
 	)
 	local installed extra=0 name
 	installed="$(dsh plugin --profile web list --depth 0 --json 2>"$ERR_OUT" | python3 -c '
@@ -848,37 +834,6 @@ M18PY
   fi
 }
 
-step_ignore_better_edit_dir() {
-	# The hashline editor drops a .dsh_better_edit/ state directory into
-	# whatever repo a session edits files in. It is a tool artifact that
-	# belongs in no repository, so ignore it once per machine rather than per
-	# repo. Honor an existing core.excludesFile; otherwise use git's XDG
-	# default path, which git reads with no extra configuration when
-	# core.excludesFile is unset.
-	git_ignore=""
-	if command -v git >/dev/null 2>&1; then
-		git_ignore="$(git config --get core.excludesFile || true)"
-	fi
-	if [ -n "$git_ignore" ]; then
-		git_ignore="${git_ignore/#\~/$HOME}"
-	else
-		git_ignore="${XDG_CONFIG_HOME:-$HOME/.config}/git/ignore"
-	fi
-	mkdir -p "$(dirname "$git_ignore")"
-	touch "$git_ignore"
-	if grep -qxF '.dsh_better_edit/' "$git_ignore"; then
-		echo "    already ignored in $git_ignore"
-	else
-		cat >> "$git_ignore" <<'EOF'
-
-# dsh-better-edit (hashline) scratch/state directory. A tool artifact that
-# appears in whatever repo a session edits files in. Never belongs in a repo.
-.dsh_better_edit/
-EOF
-		echo "    added .dsh_better_edit/ to $git_ignore"
-	fi
-}
-
 # ── step table ────────────────────────────────────────────────────────────────
 # Each entry: "Human title|function_name". Numbers derive from the array, so
 # adding, removing, or reordering steps needs NO manual renumbering.
@@ -887,7 +842,6 @@ STEPS=(
 	"Build the personal plugins|step_build_plugins"
 	"Sync skills -> $DSH_HOME/skills|step_sync_skills"
 	"Sync AGENTS.md -> $DSH_HOME/AGENTS.md|step_sync_agents_md"
-	"Sync dsh-better-edit guidance overrides|step_sync_better_edit_guidance"
 	"Sync bash-guard rule drop-ins -> $DSH_HOME/plugins/guards|step_sync_guard_rules"
 	"Sync the MCP server roster|step_sync_mcp_config"
 	"Write the web-profile patch (host-plane rows)|step_write_web_patch"
@@ -899,7 +853,6 @@ STEPS=(
 	"Pin subagents onto the subagent chain (patch standard preset)|step_patch_standard_preset_tool_subagent"
 	"Register the aidos agent preset|step_register_aidos_preset"
 	"Regenerate settings.yaml from the repo template|step_set_defaults"
-	"Ensure .dsh_better_edit/ is ignored by git machine-wide|step_ignore_better_edit_dir"
 )
 
 main() {

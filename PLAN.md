@@ -1365,3 +1365,210 @@ through to the full gallery.
 - [ ] Screenshot gallery — the owner picks which shots reach the main README,
       because that is a taste call and not a checkable one.
 
+# Effort 6 — retire hashline edit, gate the MCP roster, grow bash-guard into our bash tool
+
+## Vision
+
+Three costs that every session pays on every step. Measured over 121 session
+files since the 2026-08-31 fork deploy: the hashline editor fails 19.2% of edit
+calls where the builtin str_replace editor fails 1.8%, and the blinkit and
+nostrbook MCP servers put 33 of 64 tools in front of every model step. Retire
+the first, gate the second. Then grow bash-guard from a veto-only pre-execute
+listener into the bash tool itself, which is the only way it can run the rewrite
+it already computes.
+
+## Verified API facts (do not re-research)
+
+Builtin fs tools, from `@deepseek-ai/dsh-tool-fs/README.md` in the installed dsh
+(`.../node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-tool-fs/`):
+
+- `read` args: `file_path`, `offset?` (1-based), `limit?` (default and cap 2000).
+- `read` result: `<path>..</path>`, `<type>file</type>`, `<content>`, lines as
+  `<lineNumber>: <text>`, a blank line, one footer, `</content>`. The footers are
+  `(End of file - total <total> lines)`,
+  `(Showing lines <s>-<e> of <total>. Use offset=<n> to continue.)`, and
+  `(Output capped. Showing lines <s>-<e>. Use offset=<n> to continue.)`.
+  A truncated line ends `... (line truncated to <max> chars)`.
+- `edit` args: `file_path`, non-empty `old_string`, `new_string`, `replace_all?`.
+  A unique match is required unless `replace_all` is true.
+- `edit` result: `The file <displayPath> has been updated successfully.` or
+  `The file <displayPath> has been updated. All occurrences were successfully replaced.`
+- `write` args: `file_path`, `content`. The result envelope ends `Created file`
+  or `Updated file`.
+- Guarded-mutation errors: `FS_STALE_VERSION` appends `— re-read the file, then
+  retry`, `FS_NOT_OBSERVED` appends `— read the file, then retry`.
+- `read` derives a replayable read card `{ path, offset, lines, totalLines,
+  lang? }`. `write` and `edit` derive diff-card metadata. Only the derived card
+  metadata is persisted to `tool/result`.
+
+bash-guard rewrite blocker, from `plugins/bash-guard.ts:41-49`: dsh-tools
+deep-freezes `exec.arguments`, and `PreToolDecision` is only
+`allow | deny | ask`. A pre-execute listener cannot rewrite a command. An
+earlier version assigned to `exec.arguments.command` and was a silent no-op.
+
+## Critical context
+
+- Effort 1 ticket T10 (dsh-better-edit advertises sandbox escalation and drops
+  it) is moot once T2 lands. Drop it rather than fixing the fork.
+- `plugins/manifest-guard.ts` and `plugins/package-tool.ts` name dsh-better-edit
+  only in comments. Both hook `fs/write-intent`, which the builtin edit
+  dispatches too. Comments only, no code change.
+- Keep `experiments/tool-call-friction/` as the record of why the fork existed.
+  The served-mirror fix worked: `E_RANGE_UNVERIFIED` and `drifted_after_edit`
+  both reached 0 over 1,593 mutating calls. Retiring hashline is a cost verdict,
+  not a verdict on that fix.
+- Remaining hashline failure after the fix was `E_BATCH_ABORT`, 183 cases, 89% of
+  them `E_STALE_ANCHOR`, and 197 of them on `edits[0]`. Mean batch size was 1.36,
+  so the batch API was almost never used.
+
+## Tickets
+
+### T1 — gate blinkit, zepto, and nostrbook behind skills
+
+**Status:** open. Skill files written, not yet synced or verified.
+**Why:** the two servers contribute 33 of 64 tools to every step of every
+session, including sessions that never touch groceries or Nostr.
+**Change:** `skills/ecommerce/SKILL.md` gained `mcp__blinkit__*` and
+`mcp__zepto__*` in `tools-gated`. New `skills/nostr/SKILL.md` gates
+`mcp__nostrbook__*`. Both still need `./sync.sh` and a live check.
+**Acceptance criteria:**
+- After `./sync.sh` and a dsh restart, a fresh session's tool list contains no
+  `mcp__blinkit__*`, `mcp__zepto__*`, or `mcp__nostrbook__*` entry.
+- Loading the `nostr` skill makes the seven nostrbook tools appear in the same
+  session, and `mcp__nostrbook__read_nip` returns NIP-01.
+- Loading the `ecommerce` skill makes the blinkit tools appear.
+- The `nostr` skill's description fires on a NIP or event-kind mention, so the
+  standing AGENTS.md rule to never state a NIP from memory stays followable.
+
+### T2 — retire dsh-better-edit, restore the builtin editor
+
+**Status:** open. Blocked on T1 landing so the two changes stay separable.
+**Why:** 19.2% edit-call failure against the builtin's 1.8%. By model:
+claude-opus-5 6.2%, glm-5.3-flash 20.2%, z-ai/glm-5.3-flash 25.0%.
+**Change:** remove `dsh-better-edit` from the web profile `dependencies` and
+`dsh.profile.bundles`. In `sync.sh` remove the `BUILD_SPECS` entry (line ~56),
+the `pnpm_ins` call and its comment block (lines ~265-274), the `base` array
+entry (line ~400), `step_sync_better_edit_guidance`, `step_ignore_better_edit_dir`,
+and their two `STEPS` rows. Delete `home/plugins/dsh-better-edit/`.
+**Acceptance criteria:**
+- `./sync.sh` completes with no step failure.
+- After a dsh restart, a fresh session's system prompt carries the builtin read
+  and edit guidance (`old_string` / `new_string`), and no `HASH` anchor text.
+- A `read` returns `<lineNumber>: <text>` rows, and an `edit` with `old_string`
+  succeeds on a real file in this repo.
+- `.dsh_better_edit/` no longer appears in any repo the session edits.
+
+### T3 — tool-render: add builtin read parity, keep hashline
+
+**Status:** code done 2026-09-04, unverified in the GUI. Needs a restart.
+**Design change from the original ticket:** do NOT delete the hashline paths.
+tool-render runs in the browser, so its code costs no model tokens. Deleting the
+hashline branches would buy nothing and would break rendering for every existing
+session log. This ticket is additive.
+**Why:** `numberedReadRows` had a plain branch that numbers lines itself, while
+the builtin `read` already prefixes each line with `<lineNumber>: ` and wraps
+the whole result in a `<path>`/`<type>`/`<content>` envelope. The plain branch
+numbered the envelope lines and double-numbered the content.
+**Change made:** added `isBuiltinReadEnvelope(lines)` next to `HASH_ROW_RE`, and
+a builtin branch to `readStartLine` (parses the `(Showing lines X-Y` footers),
+`numberedReadRows` (drops the envelope, keeps the tool's own numbers), and
+`cleanReadTextForDiff` (strips the envelope and the `N: ` prefixes so the write
+diff compares content against content). `collectEditRequests` already handled
+the builtin `file_path`/`old_string`/`new_string` shape as its first branch and
+was not touched.
+**Known gap:** `plugins/tool-render/` has no test file. These three parsing
+functions have zero automated coverage. See T6.
+**Acceptance criteria:**
+- `node build.mjs` and `pnpm exec tsc --noEmit` both pass. Done, both exit 0.
+- `rg -c HASH_ROW_RE plugins/tool-render/src/client.tsx` still reports 7, so the
+  hashline paths survive for historical replay. Done.
+- In the live GUI after a restart: a builtin `read` card shows each line once
+  with the tool's own line numbers, an `edit` card shows a real diff, and a
+  failed edit shows the error line first.
+
+### T4 — clear stale dsh-better-edit references from comments and docs
+
+**Status:** open. Blocked on T2.
+**Change:** update the comment blocks in `plugins/manifest-guard.ts` (~line 23)
+and `plugins/package-tool.ts` (~lines 25, 5), the `README.md` line about
+guidance overrides, and `skills/customize-setup/SKILL.md` plus its
+`template.md` (both line ~55). Leave `experiments/tool-call-friction/` alone.
+**Acceptance criteria:**
+- `rg -n 'better-edit' --glob '!experiments' --glob '!node_modules' .` returns
+  nothing outside `experiments/`.
+- `pnpm test` passes.
+
+### T5 — bash tool, stage 1: bash-guard owns execution and runs its own rewrites
+
+**Status:** open. Blocked on T2 and T3, so the edit switch lands first.
+**Why:** bash-guard already computes the exact replacement command and then
+refuses to run it, because a pre-execute listener cannot rewrite frozen
+arguments. Measured cost: 1,408 bash calls denied purely to apply a rewrite the
+guard had in hand.
+**Change:** register our own bash tool from `plugins/bash-guard.ts` and hide the
+builtin one, the way `plugins/skill-gate.ts` hides tools with
+`tools.restrict({ deny })`. The new tool runs the guard verdict itself, applies
+a translator result when the translator reports no blocker, and executes. Deny
+stays deny. A translator that reports a blocker still denies.
+**Scope limit:** stage 1 is rewrite-and-run only. The background-jobs viewer,
+tmux, and permanently highlighted guard commands are later tickets and must not
+land in this one.
+**Open questions to settle before dispatch:**
+- Replace `dsh-tool-bash` outright, or wrap it and keep it as the executor?
+- What happens to `dsh-tool-jobs` and the existing `job_*` tools?
+- Does the rewritten command show in the tool card as the model's text, the
+  substituted text, or both?
+**Acceptance criteria:**
+- `pnpm test` passes, including new cases in `plugins/bash-guard.test.ts` for a
+  translated command that runs and a blocked translation that still denies.
+- Live: `grep -oE foo .` runs as the rg equivalent and returns output rather
+  than an error, and the result names the substitution.
+- Live: a denied command (per `guards/*.json`) still returns a denial.
+
+### T6 — tool-render: extract and test the read parsers
+
+**Status:** open. Not blocked, but do it before T5 so the bash tool lands on a
+tested renderer.
+**Why:** `plugins/tool-render/` has no test file. During T3 a duplicated
+`var lines = String(text).split("\n");` survived both `pnpm exec tsc --noEmit`
+and `node build.mjs`, because `var` redeclaration is legal JavaScript. It was
+caught by reading the diff. The three read parsers are pure string functions and
+are the easiest thing in this repo to cover.
+**Blocker to solve first:** `plugins/tool-render/src/client.tsx` exports only
+`{ apply, inject, name }` (line ~2038). `isBuiltinReadEnvelope`, `readStartLine`,
+`numberedReadRows`, and `cleanReadTextForDiff` are module-scoped, so vitest
+cannot import them today.
+**Change:** move those four functions plus `HASH_ROW_RE` into a new Cordis-free,
+React-free `plugins/tool-render/src/read-parse.ts` that exports them, and import
+them from `client.tsx`. This mirrors dsh's own convention: `dsh-tool-fs` keeps
+line windowing and output formatting in `src/read-render.ts`, described in its
+README as "Cordis-free, independently unit-tested". esbuild bundles the extra
+module with no config change. Then add
+`plugins/tool-render/read-parse.test.ts` in the style of
+`plugins/bash-guard.test.ts`.
+**Cases to cover, both formats:**
+- Builtin envelope: content lines keep the tool's own numbers, the `<path>`,
+  `<type>`, `<content>`, and `</content>` lines never become rows, and the blank
+  line and footer come back as `number: null`.
+- Builtin partial read: `readStartLine` returns the start from
+  `(Showing lines 5-9 of 40. ...)` and from
+  `(Output capped. Showing lines 5-9. ...)`.
+- Builtin `cleanReadTextForDiff`: the returned content has no envelope, no
+  `N: ` prefixes, no blank separator, and no footer.
+- Hashline envelope: a `HASH│content` read still parses, still strips the
+  4-character anchor prefix, and still treats hint lines as `number: null`.
+  This is the regression guard for historical session replay.
+- A read whose file content itself contains a line like `(Showing lines 1-2 of
+  3)`. Document the result rather than asserting a fix. `readStartLine` scans
+  the whole output, so a false match is possible in both formats today.
+**Do not:** add a React render test, a DOM harness, or a snapshot test. The card
+components are out of scope. This ticket covers pure string parsing only.
+**Acceptance criteria:**
+- `pnpm test` passes and the new file appears in the vitest run.
+- `pnpm exec tsc --noEmit` and `node build.mjs` both still pass.
+- `rg -n 'HASH_ROW_RE' plugins/tool-render/src/client.tsx` returns nothing, and
+  `rg -c 'HASH_ROW_RE' plugins/tool-render/src/read-parse.ts` is non-zero,
+  proving the move happened rather than a copy.
+- Reverting only the builtin branch of `numberedReadRows` makes at least one new
+  test fail. Confirm this by hand once, so the suite is not tautological.
+
