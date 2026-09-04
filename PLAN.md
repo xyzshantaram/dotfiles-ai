@@ -133,57 +133,6 @@ storing the returned host path in the evidence payload.
 - The aidos README names the plugin as required for evidence image attachment.
 
 
-### T10 — dsh-better-edit: `edit` advertises sandbox escalation and silently drops it
-
-**Status:** open
-**Why:** hit live 2026-09-01 trying to edit a file outside the session workspace. The
-`edit` tool answered `[sandbox: file access denied under workspace-write mode]` plus the
-hint to retry with `sandbox_permissions`; retrying with
-`sandbox_permissions: danger-full-access` and a justification produced the IDENTICAL
-denial, with no approval prompt. That is an infinite loop by construction: the tool tells
-the model to escalate and then ignores the escalation.
-**Root cause (read in the installed fork build, `lib/`):**
-- `tool-edit.js:84` calls
-  `sandbox.resolvePolicy("edit", { path: resolvedPath, edits: req.edits }, exec)` —
-  a FRESHLY BUILT object carrying only `path` and `edits`. The call's
-  `sandbox_permissions` / `justification` are dropped on the floor.
-- `sandbox.js` `resolvePolicy` opens with
-  `if (args.sandbox_permissions === undefined || args.justification === undefined) return standingPolicy`,
-  so `approveEscalation` is never reached, `ctx.approval` is never asked, and the standing
-  `workspace-write` policy is stamped on the mutation.
-- `mapError` then reports the denial with `policy.mode` — hence the message naming
-  `workspace-write` even on the escalated retry, which is the tell.
-- `tool-edit.js:58` DOES spread `sandbox.schemaFields()` into the parameters, so both
-  fields are advertised to the model. They are inert.
-- `tool-undo.js:54` passes `canonical` instead, and `contract.js` `normalizeRequest`
-  explicitly re-attaches `sandbox_permissions`/`justification` after narrowing — so
-  `undo_last_edit` escalates correctly. Only `edit` is broken; the working sibling is
-  three lines away.
-- `contract.js` `prepareEditArguments` has the same narrowing defect
-  (`return { path: valid.path, edits: args.edits }`) and is a second way to lose the
-  fields; check its callers while fixing.
-**Change:** in our fork (`github:xyzshantaram/dsh-better-edit`, currently pinned at
-`873b9fd53e71a8bbe587297944dbf4542ce7d64a`), pass the escalation fields through — the
-minimal fix is to hand `resolvePolicy` the canonical request with the resolved path
-(`{ ...req, path: resolvedPath }`) rather than a rebuilt pair. Then bump the pin in
-`sync.sh` (`BUILD_SPECS` and the `pnpm_ins` line both carry it).
-**Acceptance criteria:**
-- A unit test asserts `resolvePolicy` receives `sandbox_permissions` and `justification`
-  for an `edit` call that carries them — the regression is a dropped field, so the test
-  must assert on the ARGUMENT, not only on the outcome.
-- An `edit` outside the sandbox root with `sandbox_permissions` + `justification` reaches
-  the approval path; approving it performs the write, and rejecting it fails the call with
-  the rejection, never with the original denial marker.
-- The unescalated denial message is unchanged for a call that carries no escalation.
-- `undo_last_edit` behaviour is unchanged (it is already correct).
-- The pin is bumped in `sync.sh` and `./sync.sh` installs the fixed build.
-
-**Note:** this bug also silently punishes the model for doing the right thing — the harness
-instructions say a denial should be retried once with `sandbox_permissions`, so the model
-burns a call, gets the same denial, and has no way to tell a policy refusal from a dropped
-argument. Worth checking whether upstream `@deepseek-ai/dsh-tool-fs` has the same shape.
-
-
 ### Known cause — rejecting an approval cancels the turn
 
 NOT a defect in our `approval-comment` plugin. Recorded 2026-09-03 after a live
