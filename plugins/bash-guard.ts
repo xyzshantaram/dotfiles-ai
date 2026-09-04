@@ -115,7 +115,7 @@ import { TRANSLATORS, shellQuote } from "./bash-guard-translate";
 
 export const name = "bash-guard";
 
-export const inject = ["shell", "jobs"];
+export const inject = ["shell", "jobs", "tools"];
 
 /** The sandbox mode vocabulary. dsh-shell does not re-export it, so this
  * plugin carries the three string literals locally. */

@@ -4889,7 +4889,7 @@ var TRANSLATORS = {
 
 // plugins/bash-guard.ts
 var name = "bash-guard";
-var inject = ["shell", "jobs"];
+var inject = ["shell", "jobs", "tools"];
 var WIDER_MODES = {
   "read-only": ["workspace-write", "danger-full-access"],
   "workspace-write": ["danger-full-access"],
