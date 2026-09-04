@@ -2128,6 +2128,7 @@ function SkillContentCard(props) {
     </div>
   );
   return toolRenderRow({
+    toolName: "Skill",
     icon: <IconChecklistOutline14 />,
     title: "Skill",
     badge: props.name,
@@ -2176,6 +2177,7 @@ function GenericContextCard(props) {
       <div className="tool-render-markdown-body">{markdownWithReminders(text)}</div>
     ) : null;
   return toolRenderRow({
+    toolName: title,
     icon: <IconBrowseOutline16 size={14} />,
     title: title,
     badge: badge,
