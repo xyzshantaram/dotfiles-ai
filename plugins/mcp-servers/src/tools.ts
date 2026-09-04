@@ -73,6 +73,16 @@ export function sanitizeSchema(schema: unknown): unknown {
       out[key] = sanitizeSchema(value);
     } else if (key === "oneOf" && Array.isArray(value)) {
       out[key] = value.map((member) => sanitizeSchema(member));
+    } else if (key === "additionalProperties") {
+      // The accepted subset requires a plain boolean here (DSH's own
+      // validator error: "additionalProperties must be a boolean"). A
+      // schema-typed value (constraining the SHAPE of extra properties, e.g.
+      // {type: "string"}) is unsupported and was passed through verbatim
+      // before this fix, rejecting the whole tool. Coerce to permissive
+      // (true) instead of dropping the field: a schema-typed constraint here
+      // almost always means "extra properties are allowed", just of some
+      // shape this subset cannot express, so true keeps that meaning.
+      out[key] = typeof value === "boolean" ? value : true;
     } else if (KEEP.has(key)) {
       out[key] = value;
     } else if (key === "minimum" || key === "maximum") {

@@ -143,5 +143,28 @@ describe("mcp-servers tool helpers", () => {
       };
       expect(sanitizeSchema(schema)).toEqual(schema);
     });
+
+    it("coerces a schema-typed additionalProperties to true", () => {
+      // Real failure: easyeda's structuredContent named a schema, not a
+      // boolean, for additionalProperties on a nested property, and DSH
+      // rejected the whole tool with "additionalProperties must be a
+      // boolean". A schema-typed value means extra properties of some shape
+      // are allowed, so true is the closest expressible meaning.
+      const out = sanitizeSchema({
+        type: "object",
+        properties: {
+          feature_flags: { type: "object", additionalProperties: { type: "string" } },
+        },
+      }) as { properties: { feature_flags: Record<string, unknown> } };
+      expect(out.properties.feature_flags.additionalProperties).toBe(true);
+    });
+
+    it("keeps a boolean additionalProperties as given", () => {
+      const out = sanitizeSchema({
+        type: "object",
+        additionalProperties: false,
+      }) as Record<string, unknown>;
+      expect(out.additionalProperties).toBe(false);
+    });
   });
 });
