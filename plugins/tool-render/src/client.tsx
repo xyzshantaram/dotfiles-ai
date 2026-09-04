@@ -514,7 +514,9 @@ function toolNameBadge(toolName, icon, state) {
       style={{ background: background, borderColor: border, color: color }}
     >
       <span className="tool-render-name-badge-icon">{icon}</span>
-      <span className="tool-render-name-badge-text">{toolName}</span>
+      <span className="tool-render-name-badge-text" title={toolName} data-dsh-tip="">
+        {toolName}
+      </span>
     </span>
   );
 }
