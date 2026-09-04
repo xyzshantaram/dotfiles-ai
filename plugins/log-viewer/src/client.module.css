@@ -8,7 +8,7 @@
 
 .lv-body {
   box-sizing: border-box;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--ds-font-family-code);
   font-size: 0.8125rem;
   line-height: 1.5;
   white-space: pre;

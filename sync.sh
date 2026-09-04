@@ -42,7 +42,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#a521c8777f563bb0672401fec25a3d92048d3114}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#795d83a3816b91dd158dd6feb606f8528f02614c}"
 
 # Git-hosted specs whose build scripts pnpm must be allowed to run. pnpm 10+
 # blocks lifecycle scripts (prepare/postinstall) unless the exact resolved
@@ -310,6 +310,12 @@ step_install_plugins() {
 		# The shipped context ring reads a provider figure that only ever grows.
 		# This package replaces it with one measured from the surface.
 		pnpm_ins "$HERE/plugins/context-meter"
+		# dsh hardcodes its font tokens on :root and the monospace stack ends
+		# at a named font with no `monospace` generic, so the browser never
+		# reaches the font the system is configured with. This package
+		# overrides both tokens from html:root, which outranks :root without
+		# needing !important.
+		pnpm_ins "$HERE/plugins/system-fonts"
 		# The composer overflow menu holds the sandbox picker and offers a slot
 		# for other plugins.
 		pnpm_ins "$HERE/plugins/composer-menu"
@@ -382,6 +388,7 @@ step_report_extra_plugins() {
 		"profiles-client"
 		"session-archive"
 		"subscriptions"
+		"system-fonts"
 		"log-viewer"
 		"mcp-servers"
 		"tool-render"
