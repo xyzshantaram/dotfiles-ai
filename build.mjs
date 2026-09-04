@@ -26,7 +26,6 @@ const isCheckMode = process.argv.includes("--check");
 
 const entries = [
   ["plugins/log-exporter.ts", "plugins/log-exporter.js"],
-  ["plugins/bash-guard.ts", "plugins/bash-guard.js"],
   ["plugins/see.ts", "plugins/see.js"],
   ["plugins/manifest-guard.ts", "plugins/manifest-guard.js"],
   ["plugins/package-tool.ts", "plugins/package-tool.js"],
@@ -49,6 +48,30 @@ for (const [entry, outfile] of entries) {
     logLevel: "info",
   });
 }
+
+// bash-guard: same bare-specifier require shim problem as mcp-servers below.
+// The bundled `yaml` package's composer guards a feature check with
+// `require("process")` (a bare specifier, not `node:process`), which the
+// `node:*` external pattern does not match. esbuild inlines its __require
+// shim for that call, and the shim throws in ESM output because no `require`
+// binding exists. Restoring a real `require` through createRequire satisfies
+// the shim, which checks `typeof require !== "undefined"` before it throws.
+// Without this the whole plugin tree fails to load and dsh does not boot.
+await build({
+  entryPoints: [join(here, "plugins/bash-guard.ts")],
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  external: ["@deepseek-ai/*", "node:*"],
+  banner: {
+    js: [
+      'import { createRequire as __dshCreateRequire } from "node:module";',
+      "const require = __dshCreateRequire(import.meta.url);",
+    ].join("\n"),
+  },
+  outfile: join(here, "plugins/bash-guard.js"),
+  logLevel: "info",
+});
 
 // CLIENT plugin halves bundle to a temp file, then get wrapped in the
 // module-loader facade and written to their final path. The esbuild
@@ -203,6 +226,25 @@ await wrapClientBundle(
   "system-fonts",
 );
 
+// tooltips: styled tooltips for elements that opt in with `data-dsh-tip`. The
+// text stays in the element's own `title`, so the native tooltip is the
+// fallback when this plugin does not load. It needs no host logic, so the host
+// half stays a stub.
+await build({
+  entryPoints: [join(here, "plugins/tooltips/src/index.ts")],
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  external: ["@deepseek-ai/*", "node:*"],
+  outfile: join(here, "plugins/tooltips/lib/index.js"),
+  logLevel: "info",
+});
+await wrapClientBundle(
+  join(here, "plugins/tooltips/src/client.tsx"),
+  join(here, "plugins/tooltips/lib/client.js"),
+  "tooltips",
+);
+
 // composer-menu: the overflow menu at the left edge of the composer tool
 // row. It holds the sandbox picker and offers the composer.overflow.item
 // slot for other plugins.
@@ -274,6 +316,25 @@ await wrapClientBundle(
   join(here, "plugins/log-viewer/src/client.tsx"),
   join(here, "plugins/log-viewer/lib/client.js"),
   "log-viewer",
+);
+
+// job-viewer: background job output buffer, replacement job_list/job_output/
+// job_kill tools, the /job-viewer/output and /job-viewer/kill routes, and
+// completion delivery (host). The client half is the replacement dropdown
+// and output modal. Same esbuild/wrapClientBundle split as log-viewer.
+await build({
+  entryPoints: [join(here, "plugins/job-viewer/src/index.ts")],
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  external: ["@deepseek-ai/*", "node:*"],
+  outfile: join(here, "plugins/job-viewer/lib/index.js"),
+  logLevel: "info",
+});
+await wrapClientBundle(
+  join(here, "plugins/job-viewer/src/client.tsx"),
+  join(here, "plugins/job-viewer/lib/client.js"),
+  "job-viewer",
 );
 // W8/W13 family: H2+H3 tool-render CLIENT plugin package. The client half
 // bundles as factory-form CJS (highlight.js inlined; the browser loader
