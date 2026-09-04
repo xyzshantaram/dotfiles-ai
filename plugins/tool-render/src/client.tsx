@@ -62,6 +62,7 @@ import {
   readStartLine,
   splitSystemReminders,
 } from "./text";
+import { countMessageRows, prettyRows } from "./pretty";
 import {
   injectStyle,
   mergeCss,
@@ -161,6 +162,7 @@ import react from "react";
 import { parse as parseYaml } from "yaml";
 import * as primitives from "@deepseek-ai/dsh-client-ui-primitives";
 var useState = react.useState;
+var useEffect = react.useEffect;
 var IconBrowseOutline16 = primitives.IconBrowseOutline16;
 var IconEditOutline16 = primitives.IconEditOutline16;
 var IconApiOutline14 = primitives.IconApiOutline14;
@@ -174,6 +176,9 @@ var MarkdownText = primitives.MarkdownText;
 
 /** Stable plugin identity, also the loader entry id in cordis.patch.yml. */
 var PLUGIN_NAME = "tool-render";
+
+/** The projection key the host half registers for compaction prettyView payloads. */
+var COMPACTION_VIEWS_KEY = "tool-render/compaction-views";
 
 // ---- One stylesheet for this bundle (house pattern: data-plugin-css guard). ----
 var STYLE_TAG_ID = "tool-render/client.module.css";
@@ -2555,6 +2560,187 @@ function SeeRow(props) {
   });
 }
 
+// ---- compaction checkpoint row: structured view of a compaction marker. --
+// The compaction fork stores a prettyView payload on each `compaction/summary`
+// event, and the host-side projection in projection.ts folds those payloads
+// into a map keyed by the event's own seq. The node carries `summaryEventSeq`,
+// so the row looks the payload up there. A hit draws the structured card:
+// one line per compacted message, count-badged tool strips, elision notes,
+// and a stats footer. A miss (an old checkpoint, or the fork not installed)
+// falls back to the fenced summary text through MarkdownText, so the row
+// still reads well either way.
+function useCompactionViews(useSession) {
+  var face = null;
+  var viewsState = useState(null);
+  var views = viewsState[0];
+  var setViews = viewsState[1];
+  // The seat hands the row useSession but not useProjection, so the
+  // projection is read through the session's own face. A session without
+  // projections (an older seat) just leaves face null and the row falls
+  // back. useSession is a hook: it is called unconditionally, before any
+  // branch.
+  var session = typeof useSession === "function" ? useSession() : undefined;
+  if (
+    session !== null &&
+    session !== undefined &&
+    session.projections !== undefined &&
+    session.projections !== null &&
+    typeof session.projections.faceOf === "function"
+  ) {
+    try {
+      face = session.projections.faceOf(COMPACTION_VIEWS_KEY);
+    } catch (error) {
+      face = null;
+    }
+  }
+  // faceOf is identity-stable per key, so the effect re-subscribes only when
+  // the face itself appears or disappears.
+  useEffect(
+    function () {
+      if (face === null) return undefined;
+      var update = function () {
+        setViews(face.getSnapshot());
+      };
+      update();
+      return face.subscribe(update);
+    },
+    [face],
+  );
+  return views;
+}
+
+function compactionSummaryText(rows, span) {
+  return (
+    "Compacted " +
+    countMessageRows(rows) +
+    " messages · seqs " +
+    span.minSeq +
+    "–" +
+    span.maxSeq
+  );
+}
+
+function compactionBody(view, rows) {
+  var children = [];
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    if (row.kind === "message") {
+      children.push(
+        <div key={i} className="tool-render-compaction-line">
+          <span className="tool-render-compaction-role">{row.role}</span>
+          <span className="tool-render-compaction-text" title={row.text} data-dsh-tip="">
+            {row.text}
+          </span>
+        </div>,
+      );
+    } else if (row.kind === "toolStrip") {
+      children.push(
+        <div key={i} className="tool-render-compaction-strip">
+          <span className="tool-render-compaction-text">
+            {row.count + " " + row.tool + " calls"}
+          </span>
+          <span className="tool-render-badge">{String(row.count)}</span>
+          <span className="tool-render-badge">{"seq " + row.seq}</span>
+        </div>,
+      );
+    } else if (row.kind === "elided") {
+      children.push(
+        <div key={i} className="tool-render-compaction-note">
+          {row.note}
+        </div>,
+      );
+    } else if (row.kind === "media") {
+      children.push(
+        <div key={i} className="tool-render-compaction-line">
+          <span className="tool-render-compaction-text">{row.label}</span>
+        </div>,
+      );
+    }
+  }
+  var stats = view.stats;
+  children.push(
+    <div key="stats" className="tool-render-compaction-stats">
+      {"dropped ~" +
+        stats.droppedResultTokens +
+        " tokens of tool results, " +
+        stats.erroredCalls +
+        " errored calls hidden, " +
+        stats.hiddenCalls +
+        " hidden calls"}
+    </div>,
+  );
+  // The tail's content lives on the live surface above the marker, so only
+  // its size is named here, never rendered.
+  if (view.tail !== null && view.tail !== undefined) {
+    children.push(
+      <div key="tail" className="tool-render-compaction-stats">
+        {"verbatim tail: " +
+          view.tail.count +
+          " nodes / ~" +
+          view.tail.tokens +
+          " tokens from seq " +
+          view.tail.fromSeq}
+      </div>,
+    );
+  }
+  return <div className="tool-render-compaction">{children}</div>;
+}
+
+function CompactionRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var node = props.node;
+  var data = node !== null && node !== undefined && typeof node === "object" ? node.data : null;
+  var summary = data !== null && data !== undefined && typeof data.summary === "string"
+    ? data.summary
+    : "";
+  var summaryEventSeq =
+    data !== null && data !== undefined && typeof data.summaryEventSeq === "number"
+      ? data.summaryEventSeq
+      : undefined;
+  var views = useCompactionViews(props.useSession);
+  var view =
+    views !== null && views !== undefined && summaryEventSeq !== undefined
+      ? views[String(summaryEventSeq)]
+      : null;
+  var rows = view !== null && view !== undefined ? prettyRows(view) : null;
+  if (rows === null || rows.length === 0) {
+    // Fallback: the fenced summary text, rendered as markdown.
+    var fallbackBody =
+      summary !== "" ? (
+        <div className="tool-render-markdown-body">
+          <MarkdownText text={summary} />
+        </div>
+      ) : null;
+    return toolRenderRow({
+      toolName: "Compaction",
+      icon: <IconBrowseOutline16 size={14} />,
+      title: "Compaction",
+      summary: summary !== "" ? firstLine(summary) : "Compaction",
+      expandable: fallbackBody !== null,
+      expanded: expanded,
+      onToggle: function () {
+        setExpanded(!expanded);
+      },
+      body: fallbackBody,
+    });
+  }
+  var pretty = view;
+  return toolRenderRow({
+    toolName: "Compaction",
+    icon: <IconBrowseOutline16 size={14} />,
+    title: "Compaction",
+    summary: compactionSummaryText(rows, pretty.span),
+    expandable: true,
+    expanded: expanded,
+    onToggle: function () {
+      setExpanded(!expanded);
+    },
+    body: compactionBody(pretty, rows),
+  });
+}
+
 // ---- Cordis plugin face. ----
 var inject = ["slots"];
 var name = PLUGIN_NAME;
@@ -2706,6 +2892,25 @@ function apply(ctx) {
         children: { "context.injection.view": { kind: "keyed", scope: "session" } },
       },
       ContextRow,
+    );
+    // The shipped compaction rows register "compaction" and
+    // "manual-compaction" at priority 0. Same-key at a lower priority
+    // shadows instead of throwing, same as the context row above.
+    yield ctx.slots.register(
+      {
+        name: "conversation.chat.node",
+        key: "compaction",
+        priority: -100,
+      },
+      CompactionRow,
+    );
+    yield ctx.slots.register(
+      {
+        name: "conversation.chat.node",
+        key: "manual-compaction",
+        priority: -100,
+      },
+      CompactionRow,
     );
   });
 }

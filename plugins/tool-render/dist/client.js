@@ -1769,6 +1769,59 @@ function extractHunk(readText, removeFrom, removeTo, replacementText, startLine)
   };
 }
 
+// plugins/tool-render/src/pretty.ts
+function isPrettyView(value) {
+  if (value === null || typeof value !== "object") return false;
+  if (value.version !== 1) return false;
+  var span = value.span;
+  if (span === null || typeof span !== "object") return false;
+  if (typeof span.minSeq !== "number" || typeof span.maxSeq !== "number") return false;
+  if (!Array.isArray(value.items)) return false;
+  var stats = value.stats;
+  if (stats === null || typeof stats !== "object") return false;
+  if (typeof stats.droppedResultTokens !== "number") return false;
+  if (typeof stats.erroredCalls !== "number") return false;
+  if (typeof stats.hiddenCalls !== "number") return false;
+  if (value.tail !== null && value.tail !== void 0) {
+    var tail = value.tail;
+    if (typeof tail !== "object") return false;
+    if (typeof tail.count !== "number" || typeof tail.tokens !== "number") return false;
+    if (typeof tail.fromSeq !== "number") return false;
+  }
+  return true;
+}
+function prettyRows(view) {
+  if (!isPrettyView(view)) return [];
+  var out = [];
+  var items = Array.isArray(view.items) ? view.items : [];
+  for (var i = 0; i < items.length; i++) {
+    var item = items[i];
+    if (item === null || typeof item !== "object") continue;
+    if (item.type === "message") {
+      if (typeof item.text !== "string") continue;
+      var role = item.role === "user" || item.role === "assistant" || item.role === "system" ? item.role : "system";
+      out.push({ kind: "message", seq: item.seq, role, text: item.text });
+    } else if (item.type === "toolStrip") {
+      if (typeof item.tool !== "string" || typeof item.count !== "number") continue;
+      out.push({ kind: "toolStrip", seq: item.seq, tool: item.tool, count: item.count });
+    } else if (item.type === "elided") {
+      if (typeof item.note !== "string") continue;
+      out.push({ kind: "elided", seq: item.seq, note: item.note });
+    } else if (item.type === "media") {
+      if (typeof item.label !== "string") continue;
+      out.push({ kind: "media", seq: item.seq, label: item.label });
+    }
+  }
+  return out;
+}
+function countMessageRows(rows) {
+  var count = 0;
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].kind === "message") count++;
+  }
+  return count;
+}
+
 // plugins/shared/client-util.ts
 function injectStyle(pluginName, styleId, cssText) {
   if (typeof document === "undefined") return;
@@ -2508,6 +2561,68 @@ var client_default = `.tool-render-row {
 .tool-render-see-toggle:hover {
   color: var(--dsw-alias-label-primary);
   text-decoration: underline;
+}
+
+/* Compaction checkpoint card. One line per compacted message, count-badged
+   tool strips, elision notes, and a stats footer. Message lines clamp to a
+   single line with an ellipsis: the full text lives on the surface the
+   marker replaced, so the card only summarizes. */
+.tool-render-compaction {
+  flex-direction: column;
+  display: flex;
+  padding-bottom: 0.25rem;
+}
+.tool-render-compaction-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.375rem;
+  min-width: 0;
+  padding: 0.0625rem 0 0.0625rem 0.25rem;
+}
+.tool-render-compaction-role {
+  flex: none;
+  color: var(--dsw-alias-label-caption);
+  font-size: 0.6875rem;
+  line-height: 1.125rem;
+  text-transform: uppercase;
+}
+.tool-render-compaction-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+}
+.tool-render-compaction-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  padding: 0.0625rem 0 0.0625rem 0.25rem;
+}
+.tool-render-compaction-strip .tool-render-compaction-text {
+  flex: 0 1 auto;
+}
+.tool-render-compaction-note {
+  color: var(--dsw-alias-label-caption);
+  font-style: italic;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0.0625rem 0 0.0625rem 0.25rem;
+}
+.tool-render-compaction-stats {
+  color: var(--dsw-alias-label-caption);
+  font-size: 0.6875rem;
+  line-height: 1.125rem;
+  border-top: 1px solid var(--dsw-alias-border-l1);
+  margin-top: 0.25rem;
+  padding: 0.25rem 0 0 0.25rem;
 }
 `;
 
@@ -15204,6 +15319,7 @@ var EXTENSION_LANGUAGE = {
   patch: "diff"
 };
 var useState = import_react.default.useState;
+var useEffect = import_react.default.useEffect;
 var IconBrowseOutline162 = primitives.IconBrowseOutline16;
 var IconEditOutline162 = primitives.IconEditOutline16;
 var IconApiOutline142 = primitives.IconApiOutline14;
@@ -15215,6 +15331,7 @@ var IconAgentPresetOutline162 = primitives.IconAgentPresetOutline16;
 var IconStopFill162 = primitives.IconStopFill16;
 var MarkdownText2 = primitives.MarkdownText;
 var PLUGIN_NAME = "tool-render";
+var COMPACTION_VIEWS_KEY = "tool-render/compaction-views";
 var STYLE_TAG_ID = "tool-render/client.module.css";
 var HLJS_BOX_CSS = [
   "pre code.hljs{display:block;overflow-x:auto;padding:1em}",
@@ -16907,6 +17024,108 @@ function SeeRow(props) {
     inspect: props.inspect
   });
 }
+function useCompactionViews(useSession) {
+  var face = null;
+  var viewsState = useState(null);
+  var views = viewsState[0];
+  var setViews = viewsState[1];
+  var session = typeof useSession === "function" ? useSession() : void 0;
+  if (session !== null && session !== void 0 && session.projections !== void 0 && session.projections !== null && typeof session.projections.faceOf === "function") {
+    try {
+      face = session.projections.faceOf(COMPACTION_VIEWS_KEY);
+    } catch (error) {
+      face = null;
+    }
+  }
+  useEffect(
+    function() {
+      if (face === null) return void 0;
+      var update = function() {
+        setViews(face.getSnapshot());
+      };
+      update();
+      return face.subscribe(update);
+    },
+    [face]
+  );
+  return views;
+}
+function compactionSummaryText(rows, span) {
+  return "Compacted " + countMessageRows(rows) + " messages \xB7 seqs " + span.minSeq + "\u2013" + span.maxSeq;
+}
+function compactionBody(view, rows) {
+  var children = [];
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    if (row.kind === "message") {
+      children.push(
+        /* @__PURE__ */ import_react.default.createElement("div", { key: i, className: "tool-render-compaction-line" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-compaction-role" }, row.role), /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-compaction-text", title: row.text, "data-dsh-tip": "" }, row.text))
+      );
+    } else if (row.kind === "toolStrip") {
+      children.push(
+        /* @__PURE__ */ import_react.default.createElement("div", { key: i, className: "tool-render-compaction-strip" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-compaction-text" }, row.count + " " + row.tool + " calls"), /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-badge" }, String(row.count)), /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-badge" }, "seq " + row.seq))
+      );
+    } else if (row.kind === "elided") {
+      children.push(
+        /* @__PURE__ */ import_react.default.createElement("div", { key: i, className: "tool-render-compaction-note" }, row.note)
+      );
+    } else if (row.kind === "media") {
+      children.push(
+        /* @__PURE__ */ import_react.default.createElement("div", { key: i, className: "tool-render-compaction-line" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-compaction-text" }, row.label))
+      );
+    }
+  }
+  var stats = view.stats;
+  children.push(
+    /* @__PURE__ */ import_react.default.createElement("div", { key: "stats", className: "tool-render-compaction-stats" }, "dropped ~" + stats.droppedResultTokens + " tokens of tool results, " + stats.erroredCalls + " errored calls hidden, " + stats.hiddenCalls + " hidden calls")
+  );
+  if (view.tail !== null && view.tail !== void 0) {
+    children.push(
+      /* @__PURE__ */ import_react.default.createElement("div", { key: "tail", className: "tool-render-compaction-stats" }, "verbatim tail: " + view.tail.count + " nodes / ~" + view.tail.tokens + " tokens from seq " + view.tail.fromSeq)
+    );
+  }
+  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-compaction" }, children);
+}
+function CompactionRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var node = props.node;
+  var data = node !== null && node !== void 0 && typeof node === "object" ? node.data : null;
+  var summary = data !== null && data !== void 0 && typeof data.summary === "string" ? data.summary : "";
+  var summaryEventSeq = data !== null && data !== void 0 && typeof data.summaryEventSeq === "number" ? data.summaryEventSeq : void 0;
+  var views = useCompactionViews(props.useSession);
+  var view = views !== null && views !== void 0 && summaryEventSeq !== void 0 ? views[String(summaryEventSeq)] : null;
+  var rows = view !== null && view !== void 0 ? prettyRows(view) : null;
+  if (rows === null || rows.length === 0) {
+    var fallbackBody = summary !== "" ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: summary })) : null;
+    return toolRenderRow({
+      toolName: "Compaction",
+      icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
+      title: "Compaction",
+      summary: summary !== "" ? firstLine(summary) : "Compaction",
+      expandable: fallbackBody !== null,
+      expanded,
+      onToggle: function() {
+        setExpanded(!expanded);
+      },
+      body: fallbackBody
+    });
+  }
+  var pretty = view;
+  return toolRenderRow({
+    toolName: "Compaction",
+    icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
+    title: "Compaction",
+    summary: compactionSummaryText(rows, pretty.span),
+    expandable: true,
+    expanded,
+    onToggle: function() {
+      setExpanded(!expanded);
+    },
+    body: compactionBody(pretty, rows)
+  });
+}
 var inject = ["slots"];
 var name = PLUGIN_NAME;
 function apply(ctx) {
@@ -17056,6 +17275,22 @@ function apply(ctx) {
         children: { "context.injection.view": { kind: "keyed", scope: "session" } }
       },
       ContextRow
+    );
+    yield ctx.slots.register(
+      {
+        name: "conversation.chat.node",
+        key: "compaction",
+        priority: -100
+      },
+      CompactionRow
+    );
+    yield ctx.slots.register(
+      {
+        name: "conversation.chat.node",
+        key: "manual-compaction",
+        priority: -100
+      },
+      CompactionRow
     );
   });
 }
