@@ -47,8 +47,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: center;
-  font-size: 0.6875rem;
-  line-height: 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  font-weight: 500;
 }
 /* The producer/source badge on a context-injection or send_message row.
    A small pill, not the sentence-in-body treatment it replaces. This is the

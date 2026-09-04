@@ -1911,8 +1911,9 @@ var client_default = `.tool-render-row {
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: center;
-  font-size: 0.6875rem;
-  line-height: 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  font-weight: 500;
 }
 /* The producer/source badge on a context-injection or send_message row.
    A small pill, not the sentence-in-body treatment it replaces. This is the
@@ -15339,7 +15340,7 @@ function toolNameBadge(toolName, icon, state) {
   if (toolName === void 0 || toolName === null || toolName === "") return null;
   var isError = state === "error";
   var hue = toolNameHue(toolName);
-  var background = isError ? "var(--dsw-alias-state-error-primary)" : "color-mix(in srgb, hsl(" + hue + " 65% 45%) 55%, var(--dsw-alias-bg-tertiary))";
+  var background = isError ? "color-mix(in srgb, var(--dsw-alias-state-error-primary) 65%, black)" : "color-mix(in srgb, hsl(" + hue + " 65% 45%) 55%, var(--dsw-alias-bg-tertiary))";
   var border = isError ? "var(--dsw-alias-state-error-primary)" : "hsl(" + hue + " 55% 60%)";
   var color = isError ? "#fff" : void 0;
   return /* @__PURE__ */ import_react.default.createElement(
