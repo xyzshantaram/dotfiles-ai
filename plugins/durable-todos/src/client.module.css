@@ -37,12 +37,13 @@
 .durable-todos-chevron {
   flex: none;
   font-size: 0.75rem;
-  line-height: 1.125rem;
+  line-height: 1.25rem;
 }
 .durable-todos-title {
   flex: none;
   font-size: 0.8125rem;
   line-height: 1.25rem;
+  font-weight: 600;
   color: var(--dsw-alias-label-primary);
 }
 .durable-todos-summary {
