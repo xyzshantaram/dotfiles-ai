@@ -1686,13 +1686,62 @@ session. Unit 4 must not touch that line.
   forwarded reason text.
 - Fakes for `ctx.shell` (`resolve`, `run`, `start`, `readOutput`) and `ctx.jobs`
   exercise the foreground and background paths.
-- Live checklist, run by hand before this is called done:
-  - `grep -oE foo .` runs as the rg equivalent and returns real output.
-  - A non-read-only rewrite prompts, and the prompt shows both commands.
-  - A denied command from `guards/*.json` still returns a denial.
-  - `run_in_background: true` starts a job, and `job_list`, `job_output`, and
-    `job_kill` all control it.
-  - The model-visible result carries the rule reason on a rewritten call.
+### Post-restart checklist
+
+Run in order. Stop at the first failure and roll back.
+
+**Before restarting**
+1. `pnpm test` is green and `node build.mjs` has run since the last source edit.
+   The web patch points straight at `plugins/bash-guard.js`, so the built
+   artifact IS the deployed plugin. There is no separate install step, and a
+   restart alone deploys it.
+2. `./sync.sh` completes. Its last step, `step_verify_preset_tool_disabled`,
+   must pass. If it fails, `tool-bash` is still enabled somewhere and starting
+   dsh would put two plugins on the name `bash`.
+3. Keep a rollback ready:
+   `cp /tmp/dsh/rollback/bash-guard.js plugins/bash-guard.js`. That artifact
+   carries the old pre-execute listener and registers no tool, so it boots
+   safely against an enabled `tool-bash`.
+
+**If dsh does not boot**
+Restore the rollback artifact and restart. If it still fails, delete the
+four-line `- id: bash-guard` block from
+`$DSH_HOME/profiles/web/cordis.patch.yml`. That drops the plugin entirely and
+needs no build.
+
+**After the restart**
+4. The session starts at all. This is the real test of the name collision.
+5. `bash` appears in the tool list exactly once. `create_goal`, `get_goal`, and
+   `update_goal` are gone.
+6. Foreground works: `echo hello` returns `hello`.
+7. Exit codes survive: a command that exits non-zero reports `[exit code: N]`.
+8. Deny still denies: a command matching a `deny` rule returns a denial and
+   does not run.
+9. Rewrite path: `grep -rn foo .` returns an ASK whose prompt shows BOTH the
+   command written and the `rg` replacement. Approving runs the REPLACEMENT.
+   Confirm the output is rg-shaped, not grep-shaped.
+10. The model-visible result carries the rule's reason on that rewritten call.
+11. Nested substitution is not corrupted. Run
+    `cd /tmp && echo A; for s in $(rg --stats foo . 2>/dev/null); do echo $s; done`
+    and confirm any suggested command is byte-identical, never `eo`.
+12. Background: `run_in_background: true` returns a job id, `job_list` shows it,
+    `job_output` returns only new bytes on each read, and `job_kill` stops it.
+13. Sandbox escalation: a write outside the workspace denies, and the same call
+    with `sandbox_permissions` plus a justification prompts ONCE and succeeds on
+    approval. The prompt must name the command that will run.
+14. Escalation is not wasted: a command a guard rule denies must NOT prompt for
+    escalation first.
+
+**What must NOT happen yet**
+No rule carries `readOnly`, so NOTHING auto-runs. Every rewrite still arrives as
+an ask or a deny. A rewritten command running with no prompt means a rule gained
+`readOnly` by accident, and that is a bug.
+
+**Only after all of the above passes**
+Add `readOnly: true` to `guards/rg.json` and `guards/find.json`, re-run
+`./sync.sh`, and confirm `grep -rn foo .` now runs straight through as rg with
+no prompt. Keep this a separate, deliberate change so any regression is
+attributable to it.
 
 ### T9 — TypeScript and tests across the whole repo
 
@@ -1742,7 +1791,28 @@ the top level of `plugins/`, of which only `bash-guard` and `sync` are covered.
 
 ### T8 — tool-render: mark a rewritten bash call
 
-**Status:** open. Owned by the other session, since it holds `tool-render`.
+**Status:** open. TWO HALVES, and the host half comes first.
+
+**T8a, host, ours.** The client cannot see that a call was rewritten. Our tool
+returns text, and the card only has the model's `args.command`, which is
+precisely the string that is no longer what ran. So the outline cannot be drawn
+and the executed command cannot be shown until the host publishes both.
+
+`@deepseek-ai/dsh-tools` `lib/types/index.d.ts:103` offers the channel:
+
+```ts
+/** Pure replayable presentation projection, computed only for top-level calls. */
+presentationMeta?(args: unknown, value: JsonValue): JsonValue;
+```
+
+"Replayable" is the load-bearing word: it is what survives a reload, which is
+this ticket's own acceptance criterion. Add `presentationMeta` to the
+`defineTool` call in `plugins/bash-guard.ts`, projecting at least
+`{ rewritten: boolean, ran: string }`. Keep it small and JSON-only. Do NOT put
+the rule reason in it, since that already reaches the model in the result text
+and does not belong in a card projection.
+
+**T8b, client, the other session's**, and blocked on T8a.
 **Why:** with T5 shipped a rewritten command runs silently. Without a mark you
 cannot spot a guard rule that rewrites too aggressively.
 **Change:** the card shows ONLY the executed command, with no badge and no
