@@ -1,11 +1,14 @@
 // Host half of the H2+H3 tool-render client plugin.
 //
 // The cards live in the browser. This half owns one small route that serves
-// image bytes by local file path. A later ticket will point the read_image
-// and see cards at this route.
+// image bytes by local file path, and the compaction prettyView projection
+// the compaction card reads on the client. A later ticket will point the
+// read_image and see cards at this route.
 import { createReadStream } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { extname } from "node:path";
+import type { Session } from "@deepseek-ai/dsh-session";
+import { compactionViewsProjection } from "./projection.js";
 
 /**
  * The only extensions this route serves. The map is copied from the
@@ -19,8 +22,8 @@ const IMAGE_EXTENSIONS: Record<string, string> = {
   ".gif": "image/gif",
 };
 
-// Minimal structural view of the DSH web server service, so this file does
-// not depend on the cordis Context type exposing it.
+// Minimal structural views of the DSH services, so this file does not
+// depend on the cordis Context type exposing them.
 interface WebServerHost {
   register(route: {
     kind: "prefix";
@@ -29,8 +32,20 @@ interface WebServerHost {
   }): () => void;
 }
 
+interface SessionProjectionsHost {
+  register(definition: unknown): () => void;
+  snapshot(session: Session): unknown;
+}
+
+interface ScopeContext {
+  sessionProjections: SessionProjectionsHost;
+  effect(dispose: () => () => void): void;
+  on(event: string, fn: (payload: never) => void): void;
+}
+
 interface HostContext {
   webServer: WebServerHost;
+  inject(services: string[], fn: (scope: ScopeContext) => void): void;
 }
 
 /** Stable Cordis plugin name. */
@@ -38,7 +53,7 @@ const name = "tool-render";
 const inject = ["webServer"];
 
 function apply(ctx: HostContext): () => void {
-  return ctx.webServer.register({
+  const disposeRoute = ctx.webServer.register({
     kind: "prefix",
     path: "/tool-render/image",
     async handler(req, res) {
@@ -77,6 +92,27 @@ function apply(ctx: HostContext): () => void {
       });
     },
   });
+
+  // The compaction prettyView projection. Registering and warming ride the
+  // injected scope, so a service remount cannot leave a second copy behind.
+  // A warm failure must never break session startup, so the call is guarded.
+  ctx.inject(["sessionProjections"], (scope) => {
+    const dispose = scope.sessionProjections.register(compactionViewsProjection);
+    scope.effect(() => dispose);
+    const warm = (session: Session): void => {
+      try {
+        scope.sessionProjections.snapshot(session);
+      } catch {
+        // ignored on purpose
+      }
+    };
+    scope.on("session/created", warm);
+    scope.on("agent/session-start", (payload: { agent: { session: Session } }) =>
+      warm(payload.agent.session),
+    );
+  });
+
+  return disposeRoute;
 }
 
 export { apply, inject, name };

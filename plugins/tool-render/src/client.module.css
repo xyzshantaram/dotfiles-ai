@@ -645,3 +645,65 @@
   color: var(--dsw-alias-label-primary);
   text-decoration: underline;
 }
+
+/* Compaction checkpoint card. One line per compacted message, count-badged
+   tool strips, elision notes, and a stats footer. Message lines clamp to a
+   single line with an ellipsis: the full text lives on the surface the
+   marker replaced, so the card only summarizes. */
+.tool-render-compaction {
+  flex-direction: column;
+  display: flex;
+  padding-bottom: 0.25rem;
+}
+.tool-render-compaction-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.375rem;
+  min-width: 0;
+  padding: 0.0625rem 0 0.0625rem 0.25rem;
+}
+.tool-render-compaction-role {
+  flex: none;
+  color: var(--dsw-alias-label-caption);
+  font-size: 0.6875rem;
+  line-height: 1.125rem;
+  text-transform: uppercase;
+}
+.tool-render-compaction-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+}
+.tool-render-compaction-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  padding: 0.0625rem 0 0.0625rem 0.25rem;
+}
+.tool-render-compaction-strip .tool-render-compaction-text {
+  flex: 0 1 auto;
+}
+.tool-render-compaction-note {
+  color: var(--dsw-alias-label-caption);
+  font-style: italic;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0.0625rem 0 0.0625rem 0.25rem;
+}
+.tool-render-compaction-stats {
+  color: var(--dsw-alias-label-caption);
+  font-size: 0.6875rem;
+  line-height: 1.125rem;
+  border-top: 1px solid var(--dsw-alias-border-l1);
+  margin-top: 0.25rem;
+  padding: 0.25rem 0 0 0.25rem;
+}

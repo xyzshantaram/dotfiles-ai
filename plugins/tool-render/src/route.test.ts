@@ -60,6 +60,11 @@ function boot(): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
         return () => {};
       },
     },
+    // The projection half registers through ctx.inject; the route tests
+    // never invoke the callback, so a capturing no-op is enough here.
+    inject(_services: string[], fn: (scope: never) => void) {
+      void fn;
+    },
   };
   apply(ctx as never);
   if (handler === undefined) throw new Error("no route was registered");
