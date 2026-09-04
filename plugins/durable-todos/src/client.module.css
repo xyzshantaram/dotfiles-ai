@@ -36,8 +36,13 @@
 }
 .durable-todos-chevron {
   flex: none;
-  font-size: 0.75rem;
-  line-height: 1.25rem;
+  color: var(--dsw-alias-label-secondary);
+  border-radius: 0.375rem;
+  transform: rotate(-90deg);
+  transition: transform 0.12s;
+}
+.durable-todos-chevron-open {
+  transform: rotate(0deg);
 }
 .durable-todos-title {
   flex: none;
