@@ -919,7 +919,7 @@
               },
               name
             );
-          })), currentEffortList.length > 0 && currentModel !== void 0 && currentModel !== null ? /* @__PURE__ */ react.createElement("div", { className: "pf-panel-model-row" }, /* @__PURE__ */ react.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ react.createElement("span", { className: "pf-panel-ref", title: "Current model" }, currentCat !== null ? currentCat.label : currentModel.provider + "/" + currentModel.model), /* @__PURE__ */ react.createElement(
+          })), currentEffortList.length > 0 && currentModel !== void 0 && currentModel !== null ? /* @__PURE__ */ react.createElement("div", { className: "pf-panel-model-row" }, /* @__PURE__ */ react.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ react.createElement("span", { className: "pf-panel-ref", title: "Current model", "data-dsh-tip": "" }, currentCat !== null ? currentCat.label : currentModel.provider + "/" + currentModel.model), /* @__PURE__ */ react.createElement(
             "select",
             {
               className: "pf-panel-effort",
@@ -987,6 +987,7 @@
                   type: "button",
                   className: "pf-panel-del",
                   title: "Detach",
+                  "data-dsh-tip": "",
                   onClick: function() {
                     detachEntryField(name, chainKey);
                   }
@@ -1007,6 +1008,7 @@
                 type: "button",
                 className: "pf-panel-del",
                 title: "Remove chain",
+                "data-dsh-tip": "",
                 onClick: function() {
                   removeChain(chainName);
                 }
@@ -1065,6 +1067,7 @@
                   type: "button",
                   className: "pf-panel-del",
                   title: "Remove step",
+                  "data-dsh-tip": "",
                   onClick: function() {
                     removeChainRung(chainName, index);
                   }
@@ -1120,6 +1123,7 @@
                   type: "button",
                   className: "pf-panel-del",
                   title: "Remove rung",
+                  "data-dsh-tip": "",
                   onClick: function() {
                     removeChainRung(chainName, index);
                   }

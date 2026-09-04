@@ -265,6 +265,7 @@ function makePanel() {
           className: "sarch-batch-delete",
           disabled: selected.size === 0 || batchBusy || busy !== null,
           title: "Delete selected archived sessions",
+          "data-dsh-tip": "",
           onClick: deleteSelected
         },
         batchBusy ? "Deleting " + selected.size + "\u2026" : "Delete selected (" + selected.size + ")"
@@ -281,6 +282,7 @@ function makePanel() {
             className: "sarch-btn",
             disabled: busy === session.id || batchBusy,
             title: "Delete archived session",
+            "data-dsh-tip": "",
             "aria-label": "Delete archived session",
             onClick: /* @__PURE__ */ (function(id) {
               return function() {

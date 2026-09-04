@@ -1088,7 +1088,7 @@ window.__ModuleLoader__.load({
             {currentEffortList.length > 0 && currentModel !== void 0 && currentModel !== null ? (
               <div className="pf-panel-model-row">
                 <div className="pf-panel-row">
-                  <span className="pf-panel-ref" title="Current model">
+                  <span className="pf-panel-ref" title="Current model" data-dsh-tip="">
                     {currentCat !== null
                       ? currentCat.label
                       : currentModel.provider + "/" + currentModel.model}
@@ -1180,6 +1180,7 @@ window.__ModuleLoader__.load({
                             type="button"
                             className="pf-panel-del"
                             title="Detach"
+                            data-dsh-tip=""
                             onClick={function () {
                               detachEntryField(name, chainKey);
                             }}
@@ -1223,6 +1224,7 @@ window.__ModuleLoader__.load({
                           type="button"
                           className="pf-panel-del"
                           title="Remove chain"
+                          data-dsh-tip=""
                           onClick={function () {
                             removeChain(chainName);
                           }}
@@ -1303,6 +1305,7 @@ window.__ModuleLoader__.load({
                                   type="button"
                                   className="pf-panel-del"
                                   title="Remove step"
+                                  data-dsh-tip=""
                                   onClick={function () {
                                     removeChainRung(chainName, index);
                                   }}
@@ -1370,6 +1373,7 @@ window.__ModuleLoader__.load({
                                     type="button"
                                     className="pf-panel-del"
                                     title="Remove rung"
+                                    data-dsh-tip=""
                                     onClick={function () {
                                       removeChainRung(chainName, index);
                                     }}

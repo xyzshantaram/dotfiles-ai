@@ -468,6 +468,7 @@ function toolRenderRow(options) {
         role="link"
         tabIndex={0}
         title={options.path}
+        data-dsh-tip=""
         onClick={function (event) {
           event.stopPropagation();
           options.onOpenFile(options.path);
