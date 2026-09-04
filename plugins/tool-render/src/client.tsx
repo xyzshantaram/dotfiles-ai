@@ -1901,7 +1901,13 @@ function contextText(content) {
       parts.push(block.text);
     }
   }
-  return parts.join("");
+  // A blank-line join, not "": a subagent-report delivery is exactly two text
+  // blocks, "Background subagent X reported:" then the report itself
+  // (dsh-subagent/lib/index.js:951, content: [{type:"text", text: "...
+  // reported:"}, ...content]). Joining with "" glued them into one line with
+  // no space, and a following markdown heading needs a blank line to parse
+  // as a heading at all, not just to look right.
+  return parts.join("\n\n");
 }
 
 // A plugin-authored injection names itself in source: { kind: "plugin",
