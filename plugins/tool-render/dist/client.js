@@ -1865,7 +1865,7 @@ function escapeHtml(s) {
 var client_default = `.tool-render-row {
   align-items: center;
   min-width: 0;
-  height: 1.5rem;
+  height: 1.75rem;
   display: flex;
   position: relative;
   overflow: hidden;
@@ -1911,8 +1911,8 @@ var client_default = `.tool-render-row {
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: center;
-  font-size: 0.8125rem;
-  line-height: 1.25rem;
+  font-size: 0.75rem;
+  line-height: 1.125rem;
   font-weight: 500;
 }
 /* The producer/source badge on a context-injection or send_message row.
@@ -16542,6 +16542,7 @@ function SkillContentCard(props) {
   var setExpanded = expandedState[1];
   var body = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement("table", { className: "tool-render-skill-table" }, /* @__PURE__ */ import_react.default.createElement("tbody", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", null, "Name"), /* @__PURE__ */ import_react.default.createElement("td", null, props.name)), /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", null, "Resources"), /* @__PURE__ */ import_react.default.createElement("td", null, props.resourceHint)))), markdownWithReminders(props.instructions));
   return toolRenderRow({
+    toolName: "Skill",
     icon: /* @__PURE__ */ import_react.default.createElement(IconChecklistOutline142, null),
     title: "Skill",
     badge: props.name,
@@ -16576,6 +16577,7 @@ function GenericContextCard(props) {
   var badge = provenance !== null && provenance !== void 0 && typeof provenance.label === "string" && provenance.label !== "" ? provenance.label : void 0;
   var body = text !== "" ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, markdownWithReminders(text)) : null;
   return toolRenderRow({
+    toolName: title,
     icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
     title,
     badge,

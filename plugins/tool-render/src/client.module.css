@@ -1,7 +1,7 @@
 .tool-render-row {
   align-items: center;
   min-width: 0;
-  height: 1.5rem;
+  height: 1.75rem;
   display: flex;
   position: relative;
   overflow: hidden;
@@ -47,8 +47,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: center;
-  font-size: 0.8125rem;
-  line-height: 1.25rem;
+  font-size: 0.75rem;
+  line-height: 1.125rem;
   font-weight: 500;
 }
 /* The producer/source badge on a context-injection or send_message row.
