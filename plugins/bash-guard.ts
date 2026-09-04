@@ -97,6 +97,7 @@
  *     config: {}                # rules come from the drop-in files
  */
 import { readdir, readFile } from "node:fs/promises";
+import { stringify } from "yaml";
 import { join, resolve, sep, isAbsolute } from "node:path";
 import {
   parse,
@@ -1257,23 +1258,20 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
                 (outcome.reason ?? ""),
             );
           }
-          const replaced = outcome.command !== outcome.original;
-          const prompt = [
-            "bash-guard: this command needs your approval.",
-            "",
-            "The model wrote:",
-            `  ${outcome.original}`,
-            "",
-            replaced ? "What would actually run instead:" : "What would run if you approve:",
-            `  ${outcome.command}`,
-            "",
-            `Why: ${outcome.reason ?? "a rule asks for approval"}`,
-          ].join("\n");
+          const reasonLines = (outcome.reason ?? "").split("\n");
+          const summary = reasonLines[0]?.trim() || "bash-guard: this command needs your approval.";
+          const why = reasonLines.slice(1).join("\n").trim();
+          const prompt: Record<string, string> = {
+            summary,
+            ...(outcome.command !== outcome.original ? { wrote: outcome.original } : {}),
+            runs: outcome.command,
+            ...(why !== "" ? { why } : {}),
+          };
           const verdict = await approval.request({
             agent,
             toolName: "bash",
             callId: exec.callId,
-            reason: prompt,
+            reason: stringify(prompt),
             signal: exec.signal,
           });
           if (verdict !== "allowed-once") {
@@ -1298,13 +1296,16 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
               "sandbox escalation is unavailable here: it needs a confining executor, a calling agent, and a mounted approval service",
             );
           }
+          const prompt: Record<string, string> = {
+            summary: `bash-guard: escalate from "${standing.mode}" to "${escalateTo}"`,
+            justification: args.justification,
+            runs: toRun,
+          };
           const verdict = await approval.request({
             agent,
             toolName: "bash",
             callId: exec.callId,
-            reason:
-              `bash-guard: escalate this bash command from "${standing.mode}" to "${escalateTo}". ` +
-              `Justification: ${args.justification}\n\n  ${toRun}`,
+            reason: stringify(prompt),
             signal: exec.signal,
           });
           if (verdict !== "allowed-once") {

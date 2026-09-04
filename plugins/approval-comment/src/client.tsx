@@ -28,7 +28,12 @@
  * the grammar itself. One language keeps the bundle small. */
 import hljs from "highlight.js/lib/core";
 import bashGrammar from "highlight.js/lib/languages/bash";
+import yamlGrammar from "highlight.js/lib/languages/yaml";
 hljs.registerLanguage("bash", bashGrammar);
+hljs.registerLanguage("yaml", yamlGrammar);
+
+/** The reason payload from bash-guard is YAML. */
+import { parse } from "yaml";
 
 /** The browser module table resolves these platform modules. */
 import react from "react";
@@ -139,6 +144,35 @@ function highlightCommand(command) {
     /* fall back to escaped text */
     return escapeHtml(command);
   }
+}
+
+/** Highlight one YAML text. Returns HTML, never throws. */
+function highlightYaml(text) {
+  try {
+    return hljs.highlight(text, { language: "yaml" }).value;
+  } catch (error) {
+    /* fall back to escaped text */
+    return escapeHtml(text);
+  }
+}
+
+/**
+ * Decide whether a reason is a bash-guard structured payload. It is ours only
+ * when the reason parses as YAML AND the result is a plain object with a
+ * string `summary`. Anything else -- plain prose, a parse failure, another
+ * source -- is not ours and the caller renders the raw reason.
+ */
+function parseGuardReason(reason) {
+  if (typeof reason !== "string") return null;
+  var result;
+  try {
+    result = parse(reason);
+  } catch (error) {
+    return null;
+  }
+  if (result === null || typeof result !== "object" || Array.isArray(result)) return null;
+  if (typeof result.summary !== "string") return null;
+  return result;
 }
 
 /**
@@ -268,19 +302,15 @@ function makeApprovalCommentCard(steerTo) {
       }
     };
 
-    // bash-guard names itself at the head of its reason. That prefix is the
-    // only marker distinguishing a command-rule approval from a raised-sandbox
-    // approval, because both arrive through the same approval frame.
-    var guardApproval =
-      typeof matched.payload.reason === "string" &&
-      matched.payload.reason.indexOf("bash-guard:") === 0;
+    // bash-guard names itself at the head of its reason. When the reason is
+    // its YAML payload, `runs` replaces the `$ <command>` block from
+    // args.command, so that block is suppressed to avoid showing the
+    // command twice.
+    var guardReason = parseGuardReason(matched.payload.reason);
 
     return (
       <div className="approval-comment-root" data-approval-key={matched.key}>
-        <div
-          className="approval-comment-card"
-          data-source={guardApproval ? "bash-guard" : undefined}
-        >
+        <div className="approval-comment-card" data-source={guardReason ? "bash-guard" : undefined}>
           <div className="approval-comment-strip">
             <span className="approval-comment-dot" />
             {t("approval.waiting")}
@@ -292,19 +322,67 @@ function makeApprovalCommentCard(steerTo) {
             role="group"
             aria-label={t("approval.detail.aria")}
           >
-            <div className="approval-comment-headline">
-              {matched.payload.reason ||
-                t("approval.escalation", { toolName: matched.payload.toolName })}
-            </div>
-            {command !== undefined ? (
-              <div className="approval-comment-command">
-                {"$ "}
-                <code
-                  className="hljs"
-                  dangerouslySetInnerHTML={{ __html: highlightCommand(command) }}
-                />
-              </div>
-            ) : null}
+            {guardReason ? (
+              <>
+                <div className="approval-comment-headline approval-comment-headline-one-line">
+                  {guardReason.summary}
+                </div>
+                {typeof guardReason.wrote === "string" ? (
+                  <div className="approval-comment-block">
+                    <div className="approval-comment-block-label">wrote</div>
+                    <pre
+                      className="approval-comment-code approval-comment-code-scroll"
+                      tabIndex={0}
+                    >
+                      <code
+                        className="hljs"
+                        dangerouslySetInnerHTML={{
+                          __html: highlightCommand(guardReason.wrote),
+                        }}
+                      />
+                    </pre>
+                  </div>
+                ) : null}
+                {typeof guardReason.runs === "string" ? (
+                  <div className="approval-comment-block">
+                    <div className="approval-comment-block-label">runs instead</div>
+                    <pre
+                      className="approval-comment-code approval-comment-code-scroll"
+                      tabIndex={0}
+                    >
+                      <code
+                        className="hljs"
+                        dangerouslySetInnerHTML={{
+                          __html: highlightCommand(guardReason.runs),
+                        }}
+                      />
+                    </pre>
+                  </div>
+                ) : null}
+                {typeof guardReason.why === "string" ? (
+                  <p className="approval-comment-prose">{guardReason.why}</p>
+                ) : null}
+                {typeof guardReason.justification === "string" ? (
+                  <p className="approval-comment-prose">{guardReason.justification}</p>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <div className="approval-comment-headline approval-comment-headline-raw">
+                  {matched.payload.reason ||
+                    t("approval.escalation", { toolName: matched.payload.toolName })}
+                </div>
+                {command !== undefined ? (
+                  <div className="approval-comment-command">
+                    {"$ "}
+                    <code
+                      className="hljs"
+                      dangerouslySetInnerHTML={{ __html: highlightCommand(command) }}
+                    />
+                  </div>
+                ) : null}
+              </>
+            )}
             <button
               type="button"
               className="approval-comment-comment-toggle"
