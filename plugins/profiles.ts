@@ -184,12 +184,29 @@ const ERROR_TTL_MS: Record<ErrorClass, number> = {
   auth: 600_000,
   "no-credits": 600_000,
   "model-unavailable": 600_000,
-  "rate-limit": 30_000,
+  // Rate limits do not use this base directly. See rateLimitTtlMs below:
+  // a fixed window shorter than the same-provider retry loop expires before
+  // the next request, so the chain walks back into the limited model and
+  // pays the full retry cost again. The window therefore doubles per
+  // consecutive strike instead.
+  "rate-limit": 60_000,
 };
+/** Ceiling for the doubling rate-limit window. */
+const RATE_LIMIT_MAX_TTL_MS = 900_000;
 const downCache = new Map<string, number>();
+/** Consecutive rate-limit strikes per level key; drives the doubling window. */
+const rateLimitStrikes = new Map<string, number>();
 
 function errorKey(level: Level, cls: ErrorClass): string {
   return `${level.provider}:${level.model}:${cls}`;
+}
+
+/** Effective down-window for one cache entry. Rate limits double per strike,
+ * capped; every other class uses its fixed table value. */
+function effectiveTtlMs(key: string, cls: ErrorClass): number {
+  if (cls !== "rate-limit") return ERROR_TTL_MS[cls];
+  const strikes = rateLimitStrikes.get(key) ?? 1;
+  return Math.min(ERROR_TTL_MS[cls] * 2 ** (strikes - 1), RATE_LIMIT_MAX_TTL_MS);
 }
 
 /**
@@ -256,17 +273,23 @@ function normalizeErrorClass(code: string | undefined, message: string): ErrorCl
 function markDown(level: Level, code: string | undefined, message: string): void {
   const cls = normalizeErrorClass(code, message);
   if (!cls) return;
-  downCache.set(errorKey(level, cls), Date.now());
+  const key = errorKey(level, cls);
+  downCache.set(key, Date.now());
+  if (cls === "rate-limit") {
+    rateLimitStrikes.set(key, (rateLimitStrikes.get(key) ?? 0) + 1);
+  }
 }
 
 /** True when ANY class key of the level is inside its class window. */
 function isCachedDown(level: Level): boolean {
   const now = Date.now();
   for (const cls of ERROR_CLASSES) {
-    const at = downCache.get(errorKey(level, cls));
+    const key = errorKey(level, cls);
+    const at = downCache.get(key);
     if (at === undefined) continue;
-    if (now - at < ERROR_TTL_MS[cls]) return true;
-    downCache.delete(errorKey(level, cls));
+    if (now - at < effectiveTtlMs(key, cls)) return true;
+    downCache.delete(key);
+    rateLimitStrikes.delete(key);
   }
   return false;
 }
@@ -276,7 +299,10 @@ function liveDownKeys(): string[] {
   const now = Date.now();
   for (const [key, at] of downCache) {
     const cls = key.slice(key.lastIndexOf(":") + 1) as ErrorClass;
-    if (now - at >= ERROR_TTL_MS[cls]) downCache.delete(key);
+    if (now - at >= effectiveTtlMs(key, cls)) {
+      downCache.delete(key);
+      rateLimitStrikes.delete(key);
+    }
   }
   return [...downCache.keys()];
 }
