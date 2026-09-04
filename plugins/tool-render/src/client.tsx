@@ -159,7 +159,7 @@ var EXTENSION_LANGUAGE = {
 
 // ---- Platform modules: resolved by the shell loader seed at runtime. ----
 import react from "react";
-import { parse as parseYaml } from "yaml";
+import { isBashGuardReason } from "./guard";
 import * as primitives from "@deepseek-ai/dsh-client-ui-primitives";
 var useState = react.useState;
 var useEffect = react.useEffect;
@@ -179,6 +179,8 @@ var PLUGIN_NAME = "tool-render";
 
 /** The projection key the host half registers for compaction prettyView payloads. */
 var COMPACTION_VIEWS_KEY = "tool-render/compaction-views";
+/** The projection key the host half registers for durable bash-guard approval callIds. */
+var GUARDED_APPROVALS_KEY = "tool-render/guarded-approvals";
 
 // ---- One stylesheet for this bundle (house pattern: data-plugin-css guard). ----
 var STYLE_TAG_ID = "tool-render/client.module.css";
@@ -441,25 +443,8 @@ function highlightCode(text, language) {
   return escapeHtml(text);
 }
 
-/**
- * Whether an approval's reason is a bash-guard structured payload. bash-guard
- * now sends this as YAML (approval-comment's parseGuardReason applies the
- * same test to the same field): it is ours only when the reason parses as
- * YAML and the result is a plain object with a string `summary`. A literal
- * `reason.indexOf("bash-guard:") === 0` check no longer works -- the raw
- * string starts with the YAML key `summary:`, not the text "bash-guard:".
- */
-function isBashGuardReason(reason) {
-  if (typeof reason !== "string") return false;
-  var result;
-  try {
-    result = parseYaml(reason);
-  } catch (error) {
-    return false;
-  }
-  if (result === null || typeof result !== "object" || Array.isArray(result)) return false;
-  return typeof result.summary === "string";
-}
+// isBashGuardReason now lives in ./guard, shared with the host-side
+// guarded-approvals projection.
 
 /** Deterministic hue from a tool name, stable across sessions and reloads. */
 function toolNameHue(name) {
@@ -723,11 +708,13 @@ function BashRow(props) {
         ? firstLine(command)
         : "Bash";
   var escalated = escalatedOf(argsObj);
-  // An OPEN approval raised by bash-guard marks the card in a different colour
-  // from a sandbox escalation. An open approval marks the card live. A
-  // rewritten command keeps the mark permanently, because `meta.rewritten` is
-  // durable on the completed block. A pending approval which caused no rewrite
-  // still loses the mark once it is answered.
+  // An approval raised by bash-guard marks the card in a different colour
+  // from a sandbox escalation. Three sources, ORed together: an OPEN
+  // approval in the live snapshot; the durable guarded-approvals
+  // projection, which folds the session log's `approval/asked` events and
+  // so survives both the decision and a page reload; and a rewritten
+  // command, whose `meta.rewritten` is durable on the completed block.
+  var durableGuardApproval = useGuardedApprovals(props.useSession);
   var guardApproval =
     props.useSession(function (snapshot) {
       var pending = snapshot !== null && snapshot !== undefined ? snapshot.pending : undefined;
@@ -742,6 +729,13 @@ function BashRow(props) {
       }
       return false;
     }) === true;
+  if (
+    durableGuardApproval !== null &&
+    durableGuardApproval !== undefined &&
+    durableGuardApproval[props.callId] === true
+  ) {
+    guardApproval = true;
+  }
   var guardRewrite = guardRewriteOf(block);
   if (guardRewrite !== null) guardApproval = true;
   var body = null;
@@ -2607,6 +2601,49 @@ function useCompactionViews(useSession) {
     [face],
   );
   return views;
+}
+
+// ---- guarded approvals: durable set of bash-guard approval callIds. -----
+// Same shape as useCompactionViews with a different key: the host-side
+// projection in guarded-approvals.ts folds `approval/asked` events into a
+// record keyed by callId, so the BashRow outline survives the approval
+// decision and a page reload. A session without projections (an older
+// seat) leaves the record null and the row falls back to the live
+// snapshot.pending check. Deliberately not a rewrite of
+// useCompactionViews, so the compaction code stays untouched.
+function useGuardedApprovals(useSession) {
+  var face = null;
+  var recordState = useState(null);
+  var record = recordState[0];
+  var setRecord = recordState[1];
+  var session = typeof useSession === "function" ? useSession() : undefined;
+  if (
+    session !== null &&
+    session !== undefined &&
+    session.projections !== undefined &&
+    session.projections !== null &&
+    typeof session.projections.faceOf === "function"
+  ) {
+    try {
+      face = session.projections.faceOf(GUARDED_APPROVALS_KEY);
+    } catch (error) {
+      face = null;
+    }
+  }
+  // faceOf is identity-stable per key, so the effect re-subscribes only when
+  // the face itself appears or disappears.
+  useEffect(
+    function () {
+      if (face === null) return undefined;
+      var update = function () {
+        setRecord(face.getSnapshot());
+      };
+      update();
+      return face.subscribe(update);
+    },
+    [face],
+  );
+  return record;
 }
 
 function compactionSummaryText(rows, span) {

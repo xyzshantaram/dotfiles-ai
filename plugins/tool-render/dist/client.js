@@ -15251,6 +15251,20 @@ function parse(src, reviver, options) {
   return doc.toJS(Object.assign({ reviver: _reviver }, options));
 }
 
+// plugins/tool-render/src/guard.ts
+function isBashGuardReason(reason) {
+  if (typeof reason !== "string") return false;
+  var result;
+  try {
+    result = parse(reason);
+  } catch (error) {
+    return false;
+  }
+  if (result === null || typeof result !== "object" || Array.isArray(result)) return false;
+  const record = result;
+  return typeof record.summary === "string";
+}
+
 // plugins/tool-render/src/client.tsx
 var primitives = __toESM(require("@deepseek-ai/dsh-client-ui-primitives"), 1);
 var languageModules = {
@@ -15332,6 +15346,7 @@ var IconStopFill162 = primitives.IconStopFill16;
 var MarkdownText2 = primitives.MarkdownText;
 var PLUGIN_NAME = "tool-render";
 var COMPACTION_VIEWS_KEY = "tool-render/compaction-views";
+var GUARDED_APPROVALS_KEY = "tool-render/guarded-approvals";
 var STYLE_TAG_ID = "tool-render/client.module.css";
 var HLJS_BOX_CSS = [
   "pre code.hljs{display:block;overflow-x:auto;padding:1em}",
@@ -15518,17 +15533,6 @@ function highlightCode(text, language) {
   }
   return escapeHtml(text);
 }
-function isBashGuardReason(reason) {
-  if (typeof reason !== "string") return false;
-  var result;
-  try {
-    result = parse(reason);
-  } catch (error) {
-    return false;
-  }
-  if (result === null || typeof result !== "object" || Array.isArray(result)) return false;
-  return typeof result.summary === "string";
-}
 function toolNameHue(name2) {
   var h = 0;
   for (var i = 0; i < name2.length; i++) {
@@ -15695,6 +15699,7 @@ function BashRow(props) {
   var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
   var summary = description !== void 0 && description !== "" ? firstLine(description) : command !== void 0 ? firstLine(command) : "Bash";
   var escalated = escalatedOf(argsObj);
+  var durableGuardApproval = useGuardedApprovals(props.useSession);
   var guardApproval = props.useSession(function(snapshot) {
     var pending = snapshot !== null && snapshot !== void 0 ? snapshot.pending : void 0;
     if (!Array.isArray(pending)) return false;
@@ -15708,6 +15713,9 @@ function BashRow(props) {
     }
     return false;
   }) === true;
+  if (durableGuardApproval !== null && durableGuardApproval !== void 0 && durableGuardApproval[props.callId] === true) {
+    guardApproval = true;
+  }
   var guardRewrite = guardRewriteOf(block);
   if (guardRewrite !== null) guardApproval = true;
   var body = null;
@@ -17049,6 +17057,32 @@ function useCompactionViews(useSession) {
     [face]
   );
   return views;
+}
+function useGuardedApprovals(useSession) {
+  var face = null;
+  var recordState = useState(null);
+  var record = recordState[0];
+  var setRecord = recordState[1];
+  var session = typeof useSession === "function" ? useSession() : void 0;
+  if (session !== null && session !== void 0 && session.projections !== void 0 && session.projections !== null && typeof session.projections.faceOf === "function") {
+    try {
+      face = session.projections.faceOf(GUARDED_APPROVALS_KEY);
+    } catch (error) {
+      face = null;
+    }
+  }
+  useEffect(
+    function() {
+      if (face === null) return void 0;
+      var update = function() {
+        setRecord(face.getSnapshot());
+      };
+      update();
+      return face.subscribe(update);
+    },
+    [face]
+  );
+  return record;
 }
 function compactionSummaryText(rows, span) {
   return "Compacted " + countMessageRows(rows) + " messages \xB7 seqs " + span.minSeq + "\u2013" + span.maxSeq;

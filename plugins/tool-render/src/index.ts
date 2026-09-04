@@ -9,6 +9,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { extname } from "node:path";
 import type { Session } from "@deepseek-ai/dsh-session";
 import { compactionViewsProjection } from "./projection.js";
+import { guardedApprovalsProjection } from "./guarded-approvals.js";
 
 /**
  * The only extensions this route serves. The map is copied from the
@@ -93,12 +94,17 @@ function apply(ctx: HostContext): () => void {
     },
   });
 
-  // The compaction prettyView projection. Registering and warming ride the
-  // injected scope, so a service remount cannot leave a second copy behind.
-  // A warm failure must never break session startup, so the call is guarded.
+  // The compaction prettyView projection and the durable guarded-approval
+  // projection. Registering and warming ride the injected scope, so a
+  // service remount cannot leave a second copy behind. A warm failure must
+  // never break session startup, so the call is guarded.
   ctx.inject(["sessionProjections"], (scope) => {
     const dispose = scope.sessionProjections.register(compactionViewsProjection);
-    scope.effect(() => dispose);
+    const disposeGuarded = scope.sessionProjections.register(guardedApprovalsProjection);
+    scope.effect(() => () => {
+      dispose();
+      disposeGuarded();
+    });
     const warm = (session: Session): void => {
       try {
         scope.sessionProjections.snapshot(session);
