@@ -2231,7 +2231,7 @@ var client_default = `.tool-render-row {
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 0.75rem;
   background: var(--dsw-alias-bg-layer-1);
-  padding: 0.3125rem 0.5rem;
+  padding: 0.15625rem 0.5rem;
 }
 .tool-render-card[data-escalated] {
   outline: 3px solid var(--dsh-outline-escalated);
