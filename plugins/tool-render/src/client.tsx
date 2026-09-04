@@ -646,7 +646,7 @@ function ReadRow(props) {
     }
   }
   return toolRenderRow({
-    toolName: "read",
+    toolName: "Read file",
     icon: <IconBrowseOutline16 size={14} />,
     title: "Read",
     summary: summary,
@@ -752,7 +752,7 @@ function BashRow(props) {
     body = <div className="tool-render-io">{inner}</div>;
   }
   return toolRenderRow({
-    toolName: "bash",
+    toolName: "Run bash",
     icon: <IconApiOutline14 size={14} />,
     title: "Bash",
     summary: summary,
@@ -1115,6 +1115,16 @@ function resolveEffectiveCwd(props) {
   return undefined;
 }
 
+/** Human-readable badge label for the edit family, keyed by the block's real
+ * raw call name. Falls back to the row's own title for an unrecognized or
+ * missing name. */
+function editBadgeLabel(rawName, toolTitle) {
+  if (rawName === "edit") return "Edit file";
+  if (rawName === "undo_edit") return "Undo edit";
+  if (rawName === "undo_last_edit") return "Undo last edit";
+  return toolTitle;
+}
+
 function makeEditRow(toolTitle) {
   return function EditToolRow(props) {
     var expandedState = useState(false);
@@ -1123,7 +1133,7 @@ function makeEditRow(toolTitle) {
     var block = props.block;
     if (block === null || typeof block !== "object") {
       return toolRenderRow({
-        toolName: callNameOf(block) || undefined,
+        toolName: editBadgeLabel(callNameOf(block), toolTitle),
         icon: <IconEditOutline16 size={14} />,
         title: toolTitle,
         summary: toolTitle,
@@ -1179,8 +1189,8 @@ function makeEditRow(toolTitle) {
     return toolRenderRow({
       // One component serves the `edit`, `undo_edit`, and `undo_last_edit`
       // registrations. The block carries the real call name, so the badge
-      // shows the exact raw name of the call being rendered.
-      toolName: callNameOf(block) || undefined,
+      // shows the right human-readable label for the exact call being rendered.
+      toolName: editBadgeLabel(callNameOf(block), toolTitle),
       icon: <IconEditOutline16 size={14} />,
       title: toolTitle,
       summary: summary,
@@ -1519,7 +1529,7 @@ function WriteRow(props) {
     );
   }
   return toolRenderRow({
-    toolName: "write",
+    toolName: "Write file",
     icon: <IconEditOutline16 size={14} />,
     title: "Write",
     summary: summary,
@@ -1624,7 +1634,7 @@ function TodoRow(props) {
     body = planBody(todos);
   }
   return toolRenderRow({
-    toolName: "todo_write",
+    toolName: "Update todos",
     icon: <IconChecklistOutline14 size={14} />,
     title: "To-do list",
     summary: summary,
@@ -1797,7 +1807,7 @@ function AskRow(props) {
     body = askBody(questions, answers);
   }
   return toolRenderRow({
-    toolName: "ask_user_question",
+    toolName: "Ask user",
     icon: <IconQuestionOutline14 size={14} />,
     title: "Ask user",
     summary: summary,
@@ -1854,7 +1864,7 @@ function SubagentRow(props) {
     );
   }
   return toolRenderRow({
-    toolName: "subagent",
+    toolName: "Run subagent",
     icon: <IconAgentPresetOutline16 size={14} />,
     title: title,
     summary: summary,
@@ -1911,7 +1921,7 @@ function JobOutputRow(props) {
       <pre className="tool-render-output">{stripAnsi(output)}</pre>
     ) : null;
   return toolRenderRow({
-    toolName: "job_output",
+    toolName: "Job output",
     icon: <IconApiOutline14 />,
     title: "Job output",
     badge: jobId,
@@ -1967,7 +1977,7 @@ function PackageRow(props) {
       <pre className="tool-render-output">{stripAnsi(output)}</pre>
     ) : null;
   return toolRenderRow({
-    toolName: "package",
+    toolName: "Manage package",
     icon: <IconApiOutline14 />,
     title: title,
     badge: ecosystem,
@@ -2005,7 +2015,7 @@ function SendMessageRow(props) {
       </div>
     ) : null;
   return toolRenderRow({
-    toolName: "send_message",
+    toolName: "Message subagent",
     icon: <IconAgentPresetOutline16 size={14} />,
     title: "Message subagent",
     badge: args !== null ? args.subagent_id : undefined,
@@ -2237,7 +2247,7 @@ function SkillRow(props) {
   var args = parseArgs(argsRawOf(block));
   var skillName = args !== null ? pickString(args, ["name"]) : undefined;
   return toolRenderRow({
-    toolName: "skill",
+    toolName: "Load skill",
     icon: <IconChecklistOutline14 />,
     title: "Skill",
     summary: skillName !== undefined ? skillName : "Skill",
