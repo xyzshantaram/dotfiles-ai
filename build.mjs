@@ -185,6 +185,24 @@ await wrapClientBundle(
   "context-meter",
 );
 
+// system-fonts: overrides the hardcoded dsh font tokens so code and UI text
+// defer to the system font settings. It needs no host logic, so the host half
+// stays a stub.
+await build({
+  entryPoints: [join(here, "plugins/system-fonts/src/index.ts")],
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  external: ["@deepseek-ai/*", "node:*"],
+  outfile: join(here, "plugins/system-fonts/lib/index.js"),
+  logLevel: "info",
+});
+await wrapClientBundle(
+  join(here, "plugins/system-fonts/src/client.tsx"),
+  join(here, "plugins/system-fonts/lib/client.js"),
+  "system-fonts",
+);
+
 // composer-menu: the overflow menu at the left edge of the composer tool
 // row. It holds the sandbox picker and offers the composer.overflow.item
 // slot for other plugins.
