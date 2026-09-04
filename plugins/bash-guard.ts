@@ -97,7 +97,6 @@ import {
 import type { CommandRef } from "@cad0p/unbash-walker";
 import type { Context } from "@deepseek-ai/cordis";
 import z from "@deepseek-ai/schemastery";
-import type { PreToolDecision } from "@deepseek-ai/dsh-tools";
 import { TRANSLATORS, shellQuote } from "./bash-guard-translate";
 
 export const name = "bash-guard";
@@ -125,7 +124,9 @@ type BashGuardConfig = {
 type Verdict = "deny" | "ask" | "allow" | "none";
 interface RewriteRule {
   /** Flags to remove when present. Matches exact token, or `flag=value` long form. */
-  drop: string[];
+  drop?: string[];
+  /** Flags to insert after the command word, each only when it is absent. */
+  add?: { flag: string; value?: string }[];
   /** If true, also drop the next token after a standalone flag (its value). Only when that next token does NOT start with "-". */
   value?: boolean;
   /** Shown in the log when the rewrite fires. */
@@ -136,6 +137,8 @@ interface GuardEntry {
   commands: string[];
   verdict: "deny" | "ask" | "allow";
   reason?: string;
+  /** Rewrites and clean translations auto-run instead of asking. A translator blocker still denies. */
+  readOnly?: boolean;
   /** Optional per-subcommand refinement; unnamed subcommands inherit verdict. */
   subcommands?: Record<string, "deny" | "ask" | "allow">;
   /** Optional flag-rewriting pass applied to matching commands before verdicting. */
@@ -176,6 +179,9 @@ async function loadRules(ctx: Context, dir: string): Promise<Map<string, GuardEn
       if (entry.verdict !== "deny" && entry.verdict !== "ask" && entry.verdict !== "allow") {
         throw new Error(`bad verdict: ${String(entry.verdict)}`);
       }
+      if (entry.readOnly !== undefined && typeof entry.readOnly !== "boolean") {
+        throw new Error(`bad readOnly: ${String(entry.readOnly)}`);
+      }
       const clean = entry.commands.filter((c) => typeof c === "string" && c.length > 0);
       let subcommands: Record<string, "deny" | "ask" | "allow"> | undefined;
       if (entry.subcommands !== undefined) {
@@ -195,13 +201,37 @@ async function loadRules(ctx: Context, dir: string): Promise<Map<string, GuardEn
         rewrites = [];
         for (const r of entry.rewrites) {
           if (typeof r !== "object" || r === null) throw new Error("bad rewrite");
-          if (!Array.isArray(r.drop) || r.drop.length === 0) throw new Error("bad rewrite drop");
-          for (const d of r.drop) {
-            if (typeof d !== "string" || d.length === 0) throw new Error("bad rewrite drop entry");
+          if (r.drop === undefined && r.add === undefined)
+            throw new Error("bad rewrite: needs drop or add");
+          const cleanRewrite: RewriteRule = {};
+          if (r.drop !== undefined) {
+            if (!Array.isArray(r.drop) || r.drop.length === 0) throw new Error("bad rewrite drop");
+            for (const d of r.drop) {
+              if (typeof d !== "string" || d.length === 0)
+                throw new Error("bad rewrite drop entry");
+            }
+            cleanRewrite.drop = r.drop.filter((d) => typeof d === "string" && d.length > 0);
           }
-          const cleanRewrite: RewriteRule = {
-            drop: r.drop.filter((d) => typeof d === "string" && d.length > 0),
-          };
+          if (r.add !== undefined) {
+            if (!Array.isArray(r.add) || r.add.length === 0) throw new Error("bad rewrite add");
+            cleanRewrite.add = [];
+            for (const a of r.add) {
+              if (
+                typeof a !== "object" ||
+                a === null ||
+                typeof a.flag !== "string" ||
+                a.flag.length === 0
+              ) {
+                throw new Error("bad rewrite add entry");
+              }
+              if (a.value !== undefined && typeof a.value !== "string") {
+                throw new Error("bad rewrite add value");
+              }
+              cleanRewrite.add.push(
+                a.value === undefined ? { flag: a.flag } : { flag: a.flag, value: a.value },
+              );
+            }
+          }
           if (r.value !== undefined) {
             if (typeof r.value !== "boolean") throw new Error("bad rewrite value");
             cleanRewrite.value = r.value;
@@ -232,6 +262,7 @@ async function loadRules(ctx: Context, dir: string): Promise<Map<string, GuardEn
         };
         if (rewrites) built.rewrites = rewrites;
         if (translate) built.translate = translate;
+        if (entry.readOnly !== undefined) built.readOnly = entry.readOnly;
         rules.set(cmd, built);
       }
 
@@ -280,7 +311,8 @@ const DEFAULT_DENY_TEMPLATE =
   "bash-guard: {name} denied by {count} ({detail})\n\n" +
   "  {command}\n\n" +
   "Matched rule(s):\n{matches}";
-const DEFAULT_ASK_TEMPLATE = "bash-guard: {name} blocked by {count} ({detail}) — needs your approval";
+const DEFAULT_ASK_TEMPLATE =
+  "bash-guard: {name} blocked by {count} ({detail}) — needs your approval";
 
 interface MatchLine {
   name: string;
@@ -488,16 +520,26 @@ function translatableRef(
   return { ok: true };
 }
 /**
- * Build the deny that hands the model an exact replacement command.
+ * The decision the guard reaches for one command.
  *
- * The guard cannot rewrite the model's input, so the replacement travels in the
- * deny message instead. The model runs it verbatim on its next turn.
+ * `command` is always the string that should execute: the model's own command
+ * for a plain allow, the rewritten or translated form otherwise. `rewritten`
+ * is true only when `command` differs from the model's input. `reason` is
+ * present whenever a matched rule had a non-allow verdict. An `ask` also
+ * carries `original`, the model's unmodified command.
  */
-function suggestionDeny(
-  suggested: string,
-  notes: string[],
-  mutatingWhy: string[],
-): PreToolDecision {
+export type GuardOutcome =
+  | { action: "run"; command: string; rewritten: boolean; reason?: string }
+  | { action: "ask"; command: string; original: string; rewritten: boolean; reason?: string }
+  | { action: "deny"; reason: string };
+
+/**
+ * Build the message that hands the model an exact replacement command.
+ *
+ * The harness deep-freezes exec.arguments, so the replacement travels in the
+ * message instead. The model runs it verbatim on its next turn.
+ */
+function suggestionMessage(suggested: string, notes: string[], mutatingWhy: string[]): string {
   let reason = `bash-guard: that command is not run directly. Run this instead:\n\n  ${suggested}\n`;
   if (mutatingWhy.length > 0) {
     reason += `\nThis command changes files. Ask the user before you run it.\n`;
@@ -507,20 +549,62 @@ function suggestionDeny(
     reason += `\nWhy: ${notes[0]}\n`;
     for (const note of notes.slice(1)) reason += `     ${note}\n`;
   }
-  return { kind: "deny", reason };
+  return reason;
 }
 
-/** Evaluate a command for the pre-execute hook. null means allow, so the caller
- * calls next(). Nothing is ever written back to the model's arguments: a rewrite
- * or a translation becomes a deny that carries the replacement command. */
-async function evaluate(
+/**
+ * Outcome for a rewrite or a clean translation. A readOnly rule auto-runs the
+ * replacement; any other rule asks with the replacement attached. The reason is
+ * the full suggestion message, so the pre-execute listener can map this back
+ * onto the same deny it produced under the old contract.
+ */
+function rewriteOutcome(
+  suggested: string,
+  original: string,
+  notes: string[],
+  mutatingWhy: string[],
+  readOnly: boolean,
+): GuardOutcome {
+  const reason = suggestionMessage(suggested, notes, mutatingWhy);
+  const rewritten = suggested !== original;
+  if (readOnly) return { action: "run", command: suggested, rewritten, reason };
+  return { action: "ask", command: suggested, original, rewritten, reason };
+}
+
+/** True when a rewrite `add` flag is already present in the command's words. */
+function flagPresent(ref: CommandRef, flag: string): boolean {
+  return ref.node.suffix.some((w) => w.text === flag || w.text.startsWith(flag + "="));
+}
+
+/** The hits whose rules carry rewrites, in match order. */
+function rewritingHits(hits: { rule: GuardEntry }[]): { rule: GuardEntry }[] {
+  return hits.filter((h) => h.rule.rewrites !== undefined);
+}
+
+/** A rewrite or translation auto-runs only when every contributing rule is readOnly. */
+function isReadOnly(hits: { rule: GuardEntry }[]): boolean {
+  return hits.every((h) => h.rule.readOnly === true);
+}
+
+/** Put the matched rule's reason ahead of the rewrite notes. */
+function withRuleReason(hits: { rule: GuardEntry }[], notes: string[]): string[] {
+  const reason = hits[0]?.rule.reason;
+  return reason === undefined ? notes : [reason, ...notes];
+}
+
+/** Evaluate a command and return the outcome. The function never returns a
+ * null or an undefined result: a plain allow is a `run` outcome that carries
+ * the model's own command with `rewritten: false`. Nothing is ever written
+ * back to the model's arguments: a rewrite or a translation becomes an outcome
+ * whose `command` carries the replacement. */
+export async function evaluate(
   ctx: Context,
   dirs: string[],
   command: string,
   safePaths: string[],
   workspaceRoot: string | undefined,
   templates: { deny?: string; ask?: string },
-): Promise<PreToolDecision | null> {
+): Promise<GuardOutcome> {
   // Caveats collected by the translation pass. They ride the deny message.
   const notes: string[] = [];
   // Parse (fail-closed)
@@ -531,7 +615,7 @@ async function evaluate(
     const errorMsg = error instanceof Error ? error.message : String(error);
     ctx.logger.warn(`bash-guard: parse error in command; denying: ${command} (error: ${errorMsg})`);
     return {
-      kind: "deny",
+      action: "deny",
       reason: `bash-guard: could not parse the command; refusing to run it unparsed. ${errorMsg}`,
     };
   }
@@ -539,7 +623,7 @@ async function evaluate(
     const messages = script.errors.map((e) => e.message).join("; ");
     ctx.logger.warn(`bash-guard: script parse errors; denying: ${command} (errors: ${messages})`);
     return {
-      kind: "deny",
+      action: "deny",
       reason: `bash-guard: parse errors in command; refusing to run it unparsed. ${messages}`,
     };
   }
@@ -556,7 +640,7 @@ async function evaluate(
   // scratch at any time.
   if (safePaths.length > 0 && scratchAllowed(all, safePaths, workspaceRoot)) {
     ctx.logger.info(`bash-guard: scratch write allowed: ${command}`);
-    return null;
+    return { action: "run", command, rewritten: false };
   }
   const rules = await loadRulesMulti(ctx, dirs);
   const hits = all
@@ -574,30 +658,33 @@ async function evaluate(
   // Rewrite pass. A translate rule owns the whole command, so it wins: only
   // run the flag-level rewrite when no translator claimed this command.
   if (!hits.some((h) => h.rule.translate) && hits.some((h) => h.rule.rewrites)) {
-    // Collect ranges from EVERY hit that carries rewrites, then rebuild the
+    // Collect edits from EVERY hit that carries rewrites, then rebuild the
     // string once. Positions are absolute offsets into the original command,
     // so wrapper-internal refs (e.g. sh -c "rg -r foo") apply too: their
-    // suffix words still sit at real offsets inside `command`.
-    const ranges: [number, number, string | undefined][] = [];
+    // suffix words still sit at real offsets inside `command`. A drop is an
+    // empty replacement over a byte range. An add inserts after the command
+    // word and only when its flag is absent, so it is idempotent.
+    const edits: { start: number; end: number; text: string; because?: string }[] = [];
+    let addMatched = false;
     for (const hit of hits) {
       if (!hit.rule.rewrites) continue;
       for (const rw of hit.rule.rewrites) {
         for (let i = 0; i < hit.ref.node.suffix.length; i++) {
           const word = hit.ref.node.suffix[i];
-          for (const flag of rw.drop) {
+          for (const flag of rw.drop ?? []) {
             if (word.text === flag) {
               // Standalone flag: drop it, and its next token when that token
               // holds the flag's value.
-              ranges.push([word.pos, word.end, rw.because]);
+              edits.push({ start: word.pos, end: word.end, text: "", because: rw.because });
               if (rw.value && i + 1 < hit.ref.node.suffix.length) {
                 const next = hit.ref.node.suffix[i + 1];
                 if (!next.text.startsWith("-")) {
-                  ranges.push([next.pos, next.end, undefined]);
+                  edits.push({ start: next.pos, end: next.end, text: "" });
                 }
               }
             } else if (word.text.startsWith(flag + "=")) {
               // Long flag with an inline value: --replace=FOO drops whole.
-              ranges.push([word.pos, word.end, rw.because]);
+              edits.push({ start: word.pos, end: word.end, text: "", because: rw.because });
             } else if (
               rw.value &&
               flag.length === 2 &&
@@ -613,36 +700,66 @@ async function evaluate(
               // cluster would eat unrelated flags. Multi-flag
               // clusters that end in a value flag, like -xr foo, hit the
               // standalone branch above: the -x survives, -r and foo go.
-              ranges.push([word.pos, word.end, rw.because]);
+              edits.push({ start: word.pos, end: word.end, text: "", because: rw.because });
             }
+          }
+        }
+        if (rw.add !== undefined) {
+          addMatched = true;
+          for (const a of rw.add) {
+            if (flagPresent(hit.ref, a.flag)) continue;
+            // The leading space separates the flag from the command word, so
+            // `jq .` becomes `jq --indent 2 .`.
+            let text = ` ${a.flag}`;
+            if (a.value !== undefined) text += ` ${shellQuote(a.value)}`;
+            const at = hit.ref.node.name.end;
+            // extractAllCommandsFromAST and expandWrapperCommands can hand back
+            // the same ref twice, so an identical insert at the same offset is
+            // a duplicate, not a second flag.
+            if (edits.some((e) => e.start === at && e.text === text)) continue;
+            edits.push({ start: at, end: at, text, because: rw.because });
           }
         }
       }
     }
-    if (ranges.length > 0) {
-      ranges.sort((a, b) => a[0] - b[0]);
+    if (edits.length > 0) {
+      edits.sort((a, b) => a.start - b.start || a.end - b.end);
       let rewritten = "";
       let lastEnd = 0;
       const logBecauses: string[] = [];
-      for (const [start, end, because] of ranges) {
-        if (start < lastEnd) continue;
-        // Swallow the space that separated the dropped flag from the word
-        // before it. Without this the suggestion carries a doubled space, and
-        // the model copies it verbatim. Only the gap between words is touched,
-        // so a quoted argument holding two spaces is left alone.
-        let from = start;
-        if (from > lastEnd && command[from - 1] === " ") from -= 1;
-        rewritten += command.slice(lastEnd, from);
-        lastEnd = end;
-        if (because && logBecauses.indexOf(because) === -1) {
-          logBecauses.push(because);
+      for (const e of edits) {
+        if (e.start < lastEnd) continue;
+        // Swallow the space that separated a dropped flag from the word before
+        // it. Without this the suggestion carries a doubled space, and the
+        // model copies it verbatim. Only the gap between words is touched, so
+        // a quoted argument holding two spaces is left alone. Insertions keep
+        // their own leading space.
+        let from = e.start;
+        if (e.text === "" && from > lastEnd && command[from - 1] === " ") from -= 1;
+        rewritten += command.slice(lastEnd, from) + e.text;
+        lastEnd = e.end;
+        if (e.because && !logBecauses.includes(e.because)) {
+          logBecauses.push(e.because);
         }
       }
       rewritten += command.slice(lastEnd);
       ctx.logger.debug(
         `bash-guard: rewrite (${logBecauses.join("; ")}) ${command} -> ${rewritten}`,
       );
-      return suggestionDeny(rewritten, logBecauses, []);
+      return rewriteOutcome(
+        rewritten,
+        command,
+        withRuleReason(rewritingHits(hits), logBecauses),
+        [],
+        isReadOnly(rewritingHits(hits)),
+      );
+    }
+    // An add whose flag was already present changed nothing, but the rule did
+    // match, so the verdict still rides this outcome instead of falling
+    // through to the base rule verdict.
+    if (addMatched) {
+      const rwHits = rewritingHits(hits);
+      return rewriteOutcome(command, command, withRuleReason(rwHits, []), [], isReadOnly(rwHits));
     }
   }
 
@@ -682,7 +799,7 @@ async function evaluate(
         const text = command.slice(node.pos, node.end);
         ctx.logger.warn(`bash-guard: translation blocked for ${hit.name}: ${outcome.why}`);
         return {
-          kind: "deny",
+          action: "deny",
           reason: `bash-guard: could not translate \`${text}\`. ${outcome.why} Run the rg or fd equivalent yourself.`,
         };
       }
@@ -693,7 +810,7 @@ async function evaluate(
       // surface, so deny instead.
       if (node.redirects.some((r) => r.pos >= start && r.pos < end)) {
         return {
-          kind: "deny",
+          action: "deny",
           reason: `bash-guard: could not translate \`${command.slice(start, end)}\`. A redirect sits between the arguments. Run the rg or fd equivalent yourself.`,
         };
       }
@@ -725,21 +842,29 @@ async function evaluate(
       }
       translated += command.slice(lastEnd);
       ctx.logger.info(`bash-guard: suggesting \`${translated}\` instead of \`${command}\``);
-      // An ask is impossible here. Approving one would run the ORIGINAL command,
-      // not the translation, because the guard cannot replace the input. So a
-      // mutating predicate becomes a deny that tells the model to check first.
-      return suggestionDeny(translated, notes, whys);
+      // A translator blocker already returned above, so this is a clean
+      // translation. The readOnly gate decides run versus ask; the listener
+      // maps the ask back onto a deny, because it cannot rewrite the frozen
+      // arguments and an approval would run the ORIGINAL command.
+      const translateHits = hits.filter((h) => h.rule.translate !== undefined);
+      return rewriteOutcome(
+        translated,
+        command,
+        withRuleReason(translateHits, notes),
+        whys,
+        isReadOnly(translateHits),
+      );
     }
   }
 
   if (all.length === 0) {
     ctx.logger.debug(`bash-guard: no actual commands found in: ${command}`);
-    return null;
+    return { action: "run", command, rewritten: false };
   }
 
   if (hits.length === 0) {
     ctx.logger.debug(`bash-guard: no rules matched for: ${command}`);
-    return null;
+    return { action: "run", command, rewritten: false };
   }
 
   const verdicts = hits.map((h) => h.verdict);
@@ -753,7 +878,7 @@ async function evaluate(
       });
       const ruleNames = [...new Set(denying.map((h) => h.name))].join(", ");
       ctx.logger.warn(`bash-guard: command denied by rules [${ruleNames}]: ${command}`);
-      return { kind: "deny", reason };
+      return { action: "deny", reason };
     }
     case "ask": {
       const asking = hits.filter((h) => h.verdict === "ask");
@@ -763,13 +888,13 @@ async function evaluate(
       });
       const ruleNames = [...new Set(asking.map((h) => h.name))].join(", ");
       ctx.logger.warn(`bash-guard: command asks for approval by rules [${ruleNames}]: ${command}`);
-      return { kind: "ask", reason };
+      return { action: "ask", command, original: command, rewritten: false, reason };
     }
     case "allow":
     case "none":
     default:
       ctx.logger.debug(`bash-guard: command allowed: ${command}`);
-      return null;
+      return { action: "run", command, rewritten: false };
   }
 }
 
@@ -810,7 +935,13 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
     const dirs = profile === "none" ? [baseDir] : [baseDir, join(baseDir, `profile-${profile}`)];
 
     const templates = { deny: config.denyMessage, ask: config.askMessage };
-    const decision = await evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates);
-    return decision === null ? next() : decision;
+    const outcome = await evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates);
+    if (outcome.action === "deny") return { kind: "deny", reason: outcome.reason };
+    // The listener cannot rewrite frozen arguments, so any outcome that
+    // carries a replacement command stays a deny whose message carries that
+    // command: an approval would run the ORIGINAL command instead.
+    if (outcome.rewritten) return { kind: "deny", reason: outcome.reason };
+    if (outcome.action === "ask") return { kind: "ask", reason: outcome.reason };
+    return next();
   });
 }

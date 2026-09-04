@@ -1569,15 +1569,32 @@ a non-allow verdict, and the tool appends it to the model-visible result.
 the replacement exists means any `./sync.sh` run removes bash for every session,
 and the other session works in this repo too.
 
-1. Tests, written against this contract by a coder that has NOT seen the
-   implementation. They fail until unit 2 lands, which is the point. Follow the
-   existing harness in `plugins/bash-guard.test.ts`.
-2. The `bash` tool, foreground only, over `ctx.shell`, with guard integration,
-   `readOnly` gating, the ask path, and reason forwarding.
-3. Background parity over `ctx.jobs`, continuing unit 2's child session.
-4. `sync.sh` preset disabling plus the verification step, run once the rest is
-   proven. NOTE: `sync.sh` line 45 carries an uncommitted aidos pin bump from
-   the other session. Do not touch that line.
+1. DONE, commit b38edea. Tests written against this contract by a coder that had
+   not seen the implementation. All 14 fail today, which is the point.
+2a. Reshape the decision layer only: export `evaluate` returning `GuardOutcome`,
+   add `readOnly`, add `rewrites[].add`. No tool registration and no execution.
+   The existing `tools/pre-execute` listener maps `GuardOutcome` back onto
+   `PreToolDecision`, so RUNTIME BEHAVIOUR DOES NOT CHANGE: a rewrite still
+   becomes a deny carrying the replacement. Milestone: the 14 tests pass.
+2b. Register the `bash` tool over `ctx.shell`, foreground only. Remove the
+   `tools/pre-execute` listener in this unit, not before.
+3. Background parity over `ctx.jobs`, continuing unit 2b's child session.
+4. `sync.sh` preset disabling plus the verification step.
+
+**DEPLOY ALL FOUR TOGETHER. Do not run `./sync.sh` between them.** The hazard
+runs both ways:
+- Disable `tool-bash` before our tool exists and every session loses bash.
+- Register our `bash` while builtin `tool-bash` is still enabled and two
+  plugins claim the same global tool name. That collision is UNVERIFIED. sync.sh
+  already records that a duplicate loader entry id kills boot, so assume a name
+  clash is at least as bad until someone proves otherwise.
+
+Units 2a, 2b, and 3 only change repository code, which does not reach a running
+session until a build plus `./sync.sh` plus a restart. So landing them is safe.
+The single coordinated deploy happens after unit 4.
+
+NOTE: `sync.sh` line 45 carries an uncommitted aidos pin bump from the other
+session. Unit 4 must not touch that line.
 
 **Acceptance criteria:**
 - `pnpm test` passes, including decision-layer unit tests for verdict
