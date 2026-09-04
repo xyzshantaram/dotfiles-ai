@@ -314,6 +314,15 @@ function rowStateOf(block) {
   return block.isError === true ? "error" : "ok";
 }
 
+function guardRewriteOf(block) {
+  if (!doneOf(block)) return null;
+  var meta = block.meta;
+  if (meta === null || typeof meta !== "object" || Array.isArray(meta)) return null;
+  if (meta.rewritten !== true) return null;
+  if (typeof meta.ran !== "string" || meta.ran.length === 0) return null;
+  return { ran: meta.ran };
+}
+
 function resultTextOf(block) {
   if (!doneOf(block)) return null;
   var parts = [];
@@ -621,10 +630,10 @@ function BashRow(props) {
         : "Bash";
   var escalated = escalatedOf(argsObj);
   // An OPEN approval raised by bash-guard marks the card in a different colour
-  // from a sandbox escalation. The reason exists only while the approval waits:
-  // once it is answered the record leaves `snapshot.pending`, and the client
-  // never receives a decided approval's reason (approval/asked is host-side
-  // log-only). So the mark disappears when the approval is answered.
+  // from a sandbox escalation. An open approval marks the card live. A
+  // rewritten command keeps the mark permanently, because `meta.rewritten` is
+  // durable on the completed block. A pending approval which caused no rewrite
+  // still loses the mark once it is answered.
   var guardApproval =
     props.useSession(function (snapshot) {
       var pending = snapshot !== null && snapshot !== undefined ? snapshot.pending : undefined;
@@ -639,21 +648,38 @@ function BashRow(props) {
       }
       return false;
     }) === true;
+  var guardRewrite = guardRewriteOf(block);
+  if (guardRewrite !== null) guardApproval = true;
   var body = null;
   if (command !== undefined || (output !== null && output !== "")) {
     var inner = [];
     if (command !== undefined) {
-      var commandHtml = highlightCode(command, "bash");
-      inner.push(
-        <div className="tool-render-command">
-          {"$ "}
-          <code
-            className="hljs"
-            data-highlighted="yes"
-            dangerouslySetInnerHTML={{ __html: commandHtml }}
-          />
-        </div>,
-      );
+      var commandBlock = function (label, text) {
+        var commandHtml = highlightCode(text, "bash");
+        var parts = [];
+        if (label !== null) {
+          parts.push(<div className="tool-render-cmd-label">{label}</div>);
+        }
+        parts.push(
+          <div className="tool-render-command">
+            {label === null ? "$ " : null}
+            <code
+              className="hljs"
+              data-highlighted="yes"
+              dangerouslySetInnerHTML={{ __html: commandHtml }}
+            />
+          </div>,
+        );
+        return parts;
+      };
+      if (guardRewrite !== null && guardRewrite.ran !== command) {
+        inner.push.apply(
+          inner,
+          commandBlock("wrote", command).concat(commandBlock("ran instead", guardRewrite.ran)),
+        );
+      } else {
+        inner.push.apply(inner, commandBlock(null, command));
+      }
     }
     if (output !== null && output !== "") {
       inner.push(
@@ -785,8 +811,6 @@ function latestReadText(snapshot, path, beforeTime, cwd) {
   var reads = readsOf(snapshot, path, beforeTime, cwd);
   return reads.length === 0 ? null : reads[0].text;
 }
-
-
 
 // ---- Line diff (LCS over lines) for the write row body. ----
 // Returns one op per line: "same", "del", or "add". A line matches only

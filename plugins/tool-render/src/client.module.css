@@ -88,6 +88,14 @@
   flex-direction: column;
   display: flex;
 }
+.tool-render-cmd-label {
+  font-family: var(--ds-font-family-code);
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  color: var(--dsw-alias-label-tertiary);
+  opacity: 0.75;
+  margin: 0.375rem 0 0 0.25rem;
+}
 .tool-render-command {
   font-family: var(--ds-font-family-code);
   white-space: pre-wrap;
@@ -332,9 +340,10 @@
 }
 /* A call waiting on a bash-guard approval is outlined in electric blue, so it
    reads differently from a sandbox_permissions escalation. This rule follows
-   the escalated one, so blue wins when a call is somehow both. The mark lasts
-   only while the approval is open: the client never receives a decided
-   approval's reason, so an answered call goes back to looking ordinary. */
+   the escalated one, so blue wins when a call is somehow both. A rewritten
+   command keeps the outline permanently, because the rewrite is recorded in
+   the durable result metadata. A pending approval that caused no rewrite
+   loses the mark once it is answered. */
 .tool-render-card[data-guard-approval] {
   outline: 3px solid var(--dsh-outline-guard);
 }
