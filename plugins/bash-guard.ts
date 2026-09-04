@@ -125,10 +125,7 @@ export const WIDER_MODES: Record<SandboxMode, readonly SandboxMode[]> = {
 
 /** Every mode a confined call may escalate to (mirrors dsh-sandbox
  * ESCALATION_TARGETS; read-only is the floor, nothing escalates to it). */
-export const ESCALATION_TARGETS: readonly SandboxMode[] = [
-  "workspace-write",
-  "danger-full-access",
-];
+export const ESCALATION_TARGETS: readonly SandboxMode[] = ["workspace-write", "danger-full-access"];
 
 /** Structural view of the approval seam (ctx.approval), typed locally so this
  * plugin needs no dependency on the approval package. Only "allowed-once"
@@ -1063,15 +1060,19 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
           throw new Error("command is required");
         }
 
-        // Standing sandbox policy for this call, and the optional one-shot
-        // escalation, resolved BEFORE anything executes. A confining
-        // executor always needs the policy service; apply() already threw
-        // without it.
+        // Standing sandbox policy for this call. A confining executor always
+        // needs the policy service; apply() already threw without it.
         const standing =
           sandboxPolicy !== undefined && agent !== undefined
             ? sandboxPolicy.resolve({ session: agent.session })
             : undefined;
         let policy = standing;
+        // Validate an escalation request now, so a malformed one fails before
+        // any prompt. The approval itself waits until the guard has decided
+        // the command will run at all. Asking first would let a rule deny a
+        // command AFTER the user had already granted it wider access, which
+        // spends an approval on nothing.
+        let escalateTo: SandboxMode | undefined;
         if (args.sandbox_permissions !== undefined) {
           if (escalationModes.length === 0) {
             throw new Error(
@@ -1094,19 +1095,7 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
               `sandbox_permissions "${requested}" is not strictly wider than the effective mode "${standing.mode}"; a non-widening request never prompts`,
             );
           }
-          const verdict = await approval.request({
-            agent,
-            toolName: "bash",
-            callId: exec.callId,
-            reason:
-              `bash-guard: escalate this bash command from "${standing.mode}" to "${requested}". ` +
-              `Justification: ${args.justification}`,
-            signal: exec.signal,
-          });
-          if (verdict !== "allowed-once") {
-            throw new Error(`sandbox escalation ${verdict}; the command did not run`);
-          }
-          policy = { ...standing, mode: requested };
+          escalateTo = requested;
         }
 
         // Guard evaluation, exactly as the tools/pre-execute listener did it.
@@ -1177,6 +1166,32 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
           toRun = outcome.command;
         } else {
           toRun = outcome.command;
+        }
+
+        // The guard has now decided this command runs, so an escalation
+        // approval is no longer wasted on a command a rule would deny. The
+        // arguments were already validated above, before any prompt. The
+        // re-check keeps TypeScript honest and fails closed if that ever
+        // stops being true.
+        if (escalateTo !== undefined) {
+          if (standing === undefined || agent === undefined || approval === undefined) {
+            throw new Error(
+              "sandbox escalation is unavailable here: it needs a confining executor, a calling agent, and a mounted approval service",
+            );
+          }
+          const verdict = await approval.request({
+            agent,
+            toolName: "bash",
+            callId: exec.callId,
+            reason:
+              `bash-guard: escalate this bash command from "${standing.mode}" to "${escalateTo}". ` +
+              `Justification: ${args.justification}\n\n  ${toRun}`,
+            signal: exec.signal,
+          });
+          if (verdict !== "allowed-once") {
+            throw new Error(`sandbox escalation ${verdict}; the command did not run`);
+          }
+          policy = { ...standing, mode: escalateTo };
         }
 
         // Workdir: the calling agent's session cwd is the default, and a
