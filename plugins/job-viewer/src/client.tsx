@@ -364,7 +364,10 @@ function makeJobViewerAction() {
           }}
         >
           {triggerLabel}
-          <span className="jv-chevron">{menuOpen ? "▲" : "▼"}</span>
+          <ui.IconChevronDownOutline14
+            className={menuOpen ? "jv-chevron jv-chevron-open" : "jv-chevron"}
+            aria-hidden={true}
+          />
         </button>
         {menuOpen ? <ul className="jv-menu">{rows}</ul> : null}
         {modal}
