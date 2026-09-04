@@ -1706,6 +1706,31 @@ function cleanReadTextForDiff(text) {
   }
   return { content: kept.join("\n"), start: readStartLine(null, text) };
 }
+var SKILL_CONTENT_RE = /^<skill_content name="([^"]*)">\n<skill_resources>\n([\s\S]*?)\n<\/skill_resources>\n\n<skill_instructions>\n([\s\S]*?)\n<\/skill_instructions>\n<\/skill_content>$/;
+function unescapeAttr(value) {
+  return value.replaceAll("&lt;", "<").replaceAll("&quot;", '"').replaceAll("&amp;", "&");
+}
+function parseSkillContent(text) {
+  if (typeof text !== "string") return null;
+  var m = SKILL_CONTENT_RE.exec(text.trim());
+  if (m === null) return null;
+  return { name: unescapeAttr(m[1]), resourceHint: m[2], instructions: m[3] };
+}
+var SYSTEM_REMINDER_RE = /<system-reminder>\n([\s\S]*?)\n<\/system-reminder>/g;
+function splitSystemReminders(text) {
+  if (typeof text !== "string" || text === "") return [];
+  var segments = [];
+  var lastEnd = 0;
+  var re = new RegExp(SYSTEM_REMINDER_RE.source, "g");
+  var m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > lastEnd) segments.push({ reminder: false, text: text.slice(lastEnd, m.index) });
+    segments.push({ reminder: true, text: m[1] });
+    lastEnd = m.index + m[0].length;
+  }
+  if (lastEnd < text.length) segments.push({ reminder: false, text: text.slice(lastEnd) });
+  return segments;
+}
 
 // plugins/shared/client-util.ts
 function injectStyle(pluginName, styleId, cssText) {
@@ -2285,6 +2310,45 @@ var client_default = `.tool-render-row {
   background: var(--dsw-alias-bg-base);
   border-radius: 0.1875rem;
   padding: 0 0.1875rem;
+}
+/* A <system-reminder> block, framed instead of hidden: every character of
+   its text still renders, just under a chip instead of literal tags. */
+.tool-render-reminder {
+  border-left: 2px solid var(--dsw-alias-border-l2);
+  margin: 0.5rem 0;
+  padding-left: 0.5rem;
+}
+.tool-render-reminder-chip {
+  display: inline-block;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-interactive-bg-hover);
+  border-radius: 999px;
+  margin-bottom: 0.25rem;
+  padding: 0.0625rem 0.375rem;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+}
+/* Skill frontmatter table (name, resource-resolution hint). Only what the
+   loaded skill's canonical output actually carries -- description and
+   whenToUse are catalog-only fields, stripped before a skill loads. */
+.tool-render-skill-table {
+  border-collapse: collapse;
+  margin-bottom: 0.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+}
+.tool-render-skill-table th {
+  color: var(--dsw-alias-label-tertiary);
+  text-align: left;
+  font-weight: 400;
+  padding: 0.125rem 0.5rem 0.125rem 0;
+  vertical-align: top;
+  white-space: nowrap;
+}
+.tool-render-skill-table td {
+  color: var(--dsw-alias-label-primary);
+  padding: 0.125rem 0;
+  white-space: pre-wrap;
 }
 `;
 
@@ -10000,19 +10064,61 @@ function contextText(content) {
   }
   return parts.join("");
 }
-function ContextRow(props) {
+function pluginSourceKey(source) {
+  if (source === null || typeof source !== "object") return void 0;
+  if (source.kind !== "plugin") return void 0;
+  if (typeof source.plugin !== "string" || source.plugin === "") return void 0;
+  return source.plugin;
+}
+function markdownWithReminders(text) {
+  var segments = splitSystemReminders(text);
+  if (segments.length === 0) return null;
+  return segments.map(function(segment, index) {
+    if (!segment.reminder) {
+      return /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { key: index, text: segment.text });
+    }
+    return /* @__PURE__ */ import_react.default.createElement("div", { key: index, className: "tool-render-reminder" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-reminder-chip" }, "System reminder"), /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: segment.text }));
+  });
+}
+function SkillContentCard(props) {
   var expandedState = useState(false);
   var expanded = expandedState[0];
   var setExpanded = expandedState[1];
-  var node = props.node;
-  var data = node !== null && node !== void 0 && typeof node === "object" ? node.data : null;
-  var content = data !== null && data !== void 0 ? data.content : void 0;
-  var provenance = data !== null && data !== void 0 ? data.provenance : void 0;
-  var text = contextText(content);
+  var body = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement("table", { className: "tool-render-skill-table" }, /* @__PURE__ */ import_react.default.createElement("tbody", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", null, "Name"), /* @__PURE__ */ import_react.default.createElement("td", null, props.name)), /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", null, "Resources"), /* @__PURE__ */ import_react.default.createElement("td", null, props.resourceHint)))), markdownWithReminders(props.instructions));
+  return toolRenderRow({
+    icon: /* @__PURE__ */ import_react.default.createElement(IconChecklistOutline142, null),
+    title: "Skill",
+    badge: props.name,
+    summary: props.name,
+    expandable: true,
+    expanded,
+    onToggle: function() {
+      setExpanded(!expanded);
+    },
+    body
+  });
+}
+function GenericContextCard(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var provenance = props.provenance;
+  var text = contextText(props.content);
+  var skill = parseSkillContent(text);
+  if (skill !== null) {
+    return /* @__PURE__ */ import_react.default.createElement(
+      SkillContentCard,
+      {
+        name: skill.name,
+        resourceHint: skill.resourceHint,
+        instructions: skill.instructions
+      }
+    );
+  }
   var recall = provenance !== null && provenance !== void 0 && provenance.role === "recall";
   var title = recall ? "Recalled context" : "Context";
   var badge = provenance !== null && provenance !== void 0 && typeof provenance.label === "string" && provenance.label !== "" ? provenance.label : void 0;
-  var body = text !== "" ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text })) : null;
+  var body = text !== "" ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, markdownWithReminders(text)) : null;
   return toolRenderRow({
     icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
     title,
@@ -10024,6 +10130,59 @@ function ContextRow(props) {
       setExpanded(!expanded);
     },
     body
+  });
+}
+function ContextRow(props) {
+  var node = props.node;
+  var data = node !== null && node !== void 0 && typeof node === "object" ? node.data : null;
+  var content = data !== null && data !== void 0 ? data.content : void 0;
+  var source = data !== null && data !== void 0 ? data.source : void 0;
+  var provenance = data !== null && data !== void 0 ? data.provenance : void 0;
+  var form = data !== null && data !== void 0 ? data.form : void 0;
+  var fallback = /* @__PURE__ */ import_react.default.createElement(GenericContextCard, { content, source, provenance, form });
+  var sourceKey = pluginSourceKey(source);
+  if (sourceKey === void 0 || typeof props.renderSlot !== "function") return fallback;
+  return props.renderSlot(
+    "context.injection.view",
+    { content, source, provenance, form, node },
+    { entryKey: sourceKey, fallback }
+  );
+}
+function SkillRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var block = props.block;
+  var done = doneOf(block);
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var skill = state !== "error" && done ? parseSkillContent(resultTextOf(block)) : null;
+  if (skill !== null) {
+    return /* @__PURE__ */ import_react.default.createElement(
+      SkillContentCard,
+      {
+        name: skill.name,
+        resourceHint: skill.resourceHint,
+        instructions: skill.instructions
+      }
+    );
+  }
+  var args = parseArgs(argsRawOf(block));
+  var skillName = args !== null ? pickString(args, ["name"]) : void 0;
+  return toolRenderRow({
+    icon: /* @__PURE__ */ import_react.default.createElement(IconChecklistOutline142, null),
+    title: "Skill",
+    summary: skillName !== void 0 ? skillName : "Skill",
+    state,
+    expandable: false,
+    expanded,
+    onToggle: function() {
+      setExpanded(!expanded);
+    },
+    errorSummary,
+    errorText,
+    inspect: props.inspect
   });
 }
 var inject = ["slots"];
@@ -10110,6 +10269,14 @@ function apply(ctx) {
       },
       SendMessageRow
     );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "skill",
+        priority: -100
+      },
+      SkillRow
+    );
   });
   ctx.slots.inject("conversation.chat.node", function* () {
     yield ctx.slots.register(
@@ -10121,7 +10288,10 @@ function apply(ctx) {
         // same-key registration at the same priority instead of silently
         // colliding -- it took the whole plugin down on load. Lowest
         // priority renders, so this must be a lower number to shadow it.
-        priority: -100
+        priority: -100,
+        // Lets a plugin-named injection be shadowed by its own producer,
+        // keyed by source.plugin. See ContextRow / context.injection.view.
+        children: { "context.injection.view": { kind: "keyed", scope: "session" } }
       },
       ContextRow
     );
