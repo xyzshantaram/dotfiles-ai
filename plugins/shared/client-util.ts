@@ -74,6 +74,68 @@ export const PERMISSION_OUTLINE_CSS = `:root {
 }`;
 
 /**
+ * A todo/plan row: a CSS-drawn checkbox (empty for pending, a dash bar for
+ * in progress, a green check for done) plus its content. Shared verbatim
+ * between durable-todos and tool-render's todo_write card, which must read as
+ * the same component. Consumers apply these bare class names directly in
+ * their own markup — there is no plugin-specific prefix here on purpose, so
+ * a stray leftover local rule from before this was shared cannot silently
+ * shadow it.
+ */
+export const PLAN_ROW_CSS = `
+.dsh-plan-item {
+  align-items: baseline;
+  display: flex;
+  gap: 0.375rem;
+  padding: 0.125rem 0 0.125rem 0.25rem;
+}
+.dsh-plan-checkbox {
+  align-self: center;
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: 0.1875rem;
+  flex: none;
+  height: 0.875rem;
+  position: relative;
+  width: 0.875rem;
+}
+.dsh-plan-item[data-done] .dsh-plan-checkbox {
+  border-color: var(--dsw-alias-state-success-primary);
+}
+.dsh-plan-item[data-done] .dsh-plan-checkbox::after {
+  color: var(--dsw-alias-state-success-primary);
+  content: "✓";
+  display: block;
+  font-size: 0.6875rem;
+  line-height: 0.8125rem;
+  text-align: center;
+}
+.dsh-plan-item[data-active] .dsh-plan-checkbox::after {
+  background: var(--dsw-alias-label-tertiary);
+  content: "";
+  height: 0.09375rem;
+  left: 0.1875rem;
+  position: absolute;
+  right: 0.1875rem;
+  top: 50%;
+}
+.dsh-plan-content {
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  overflow-wrap: anywhere;
+}
+.dsh-plan-item[data-done] .dsh-plan-content {
+  color: var(--dsw-alias-label-tertiary);
+}
+.dsh-plan-item[data-active] .dsh-plan-content {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+}
+.dsh-plan-item[data-pending] .dsh-plan-content {
+  color: var(--dsw-alias-label-secondary);
+}
+`;
+
+/**
  * React hooks live in `client-react.ts`. This module stays framework-free so
  * its vitest suite can run in plain node, where `react` does not resolve.
  */
