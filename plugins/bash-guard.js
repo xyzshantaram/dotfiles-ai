@@ -4517,6 +4517,7 @@ function flagSpan(arg, i, args, flagArgs) {
 }
 
 // plugins/bash-guard.ts
+import { defineTool } from "@deepseek-ai/dsh-tools";
 import z from "@deepseek-ai/schemastery";
 
 // plugins/bash-guard-translate.ts
@@ -4888,7 +4889,16 @@ var TRANSLATORS = {
 
 // plugins/bash-guard.ts
 var name = "bash-guard";
-var inject = [];
+var inject = ["shell"];
+var WIDER_MODES = {
+  "read-only": ["workspace-write", "danger-full-access"],
+  "workspace-write": ["danger-full-access"],
+  "danger-full-access": []
+};
+var ESCALATION_TARGETS = [
+  "workspace-write",
+  "danger-full-access"
+];
 var Config = z.object({
   guardsDir: z.string().default("$DSH_HOME/plugins/guards"),
   // Left unset by default (not defaulted to ""): evaluate() falls back to
@@ -5397,40 +5407,207 @@ async function evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates)
       return { action: "run", command, rewritten: false };
   }
 }
+function renderShellResult(result) {
+  let body = result.stdout.text;
+  const stderr = result.stderr.text;
+  if (stderr.length > 0) {
+    if (body.length > 0 && !body.endsWith("\n")) body += "\n";
+    body += `[stderr]
+${stderr}`;
+  }
+  if (body.length === 0) body = "(no output)";
+  const markers = [];
+  if (result.sandbox?.denied) {
+    markers.push(`[sandbox: file access denied under ${result.sandbox.mode} mode]`);
+  }
+  if (result.timedOut) markers.push(`[timed out after ${result.timeoutMs}ms]`);
+  if (result.signal !== null) markers.push(`[killed by signal: ${result.signal}]`);
+  else if (result.exitCode !== 0) markers.push(`[exit code: ${result.exitCode}]`);
+  if (markers.length === 0) return body;
+  if (!body.endsWith("\n")) body += "\n";
+  return body + markers.join("\n");
+}
 function apply(ctx, config) {
   const baseDir = resolveHome(config.guardsDir ?? "$DSH_HOME/plugins/guards");
-  ctx.on("tools/pre-execute", async (exec, next) => {
-    if (exec.name !== "bash") return next();
-    const command = exec.arguments?.command;
-    if (typeof command !== "string" || command.trim().length === 0) return next();
-    ctx.logger.debug(`bash-guard: evaluating command: ${command}`);
-    const agent = exec.agent;
-    let profile = "none";
-    const safePaths = ["/tmp/dsh"];
-    let workspaceRoot;
-    const aidos = ctx.get("aidos");
-    if (aidos && agent) {
-      try {
-        const bc = aidos.bashContext(agent);
-        profile = bc.profile;
-        workspaceRoot = bc.workspaceRoot;
-        if (bc.scratchDir) safePaths.push(bc.scratchDir);
-        ctx.logger.debug(`bash-guard: resolved aidos profile: ${profile}`);
-      } catch (error) {
-        ctx.logger.debug(`bash-guard: aidos context not available; using default profile`);
-      }
-    }
-    const dirs = profile === "none" ? [baseDir] : [baseDir, join2(baseDir, `profile-${profile}`)];
-    const templates = { deny: config.denyMessage, ask: config.askMessage };
-    const outcome = await evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates);
-    if (outcome.action === "deny") return { kind: "deny", reason: outcome.reason };
-    if (outcome.rewritten) return { kind: "deny", reason: outcome.reason };
-    if (outcome.action === "ask") return { kind: "ask", reason: outcome.reason };
-    return next();
-  });
+  const sandboxMode = ctx.shell.sandboxMode;
+  const escalationModes = sandboxMode === void 0 ? [] : ESCALATION_TARGETS;
+  const sandboxPolicy = ctx.get("sandboxPolicy");
+  if (sandboxMode !== void 0 && sandboxPolicy === void 0) {
+    throw new Error(
+      "bash-guard: the mounted shell executor confines but ctx.sandboxPolicy is missing"
+    );
+  }
+  const approval = ctx.get("approval");
+  ctx.tools.register(
+    defineTool({
+      name: "bash",
+      description: "Run a bash command and return its output. Every command passes the bash-guard rule layer first: a rule may replace the command with a preferred form (which runs directly), ask you to wait for user approval, or deny it. " + (escalationModes.length > 0 ? "When the sandbox denies a file operation, retry the exact same command once with sandbox_permissions plus a one-sentence justification. A rejected escalation is final for that command." : ""),
+      parameters: {
+        command: {
+          type: "string",
+          required: true,
+          description: "The bash command to execute."
+        },
+        description: {
+          type: "string",
+          required: true,
+          description: 'Clear, concise description of what this command does in active voice, 5-10 words (shown in the UI). Examples: "ls" \u2192 "List files in current directory"; "git status" \u2192 "Show working tree status".'
+        },
+        timeoutMs: {
+          type: "number",
+          description: "Timeout in milliseconds. The executor applies its configured default and cap, and kills the command on expiry."
+        },
+        workdir: {
+          type: "string",
+          description: "Working directory for this command. Defaults to the session workspace; a relative path is resolved against it."
+        },
+        ...escalationModes.length > 0 ? {
+          sandbox_permissions: {
+            type: "string",
+            enum: [...escalationModes],
+            description: "The wider sandbox mode this command needs. Only valid as a one-shot retry of a command the sandbox just denied; requires justification and user approval."
+          },
+          justification: {
+            type: "string",
+            description: "Required with sandbox_permissions: one sentence for the user explaining why this exact command needs the wider access."
+          }
+        } : {}
+      },
+      output: {
+        schema: { type: "string" },
+        render: (_args, value) => [{ type: "text", text: value }]
+      },
+      async execute(args, exec) {
+        const agent = exec.agent;
+        const command = args.command;
+        if (typeof command !== "string" || command.trim().length === 0) {
+          throw new Error("command is required");
+        }
+        const standing = sandboxPolicy !== void 0 && agent !== void 0 ? sandboxPolicy.resolve({ session: agent.session }) : void 0;
+        let policy = standing;
+        if (args.sandbox_permissions !== void 0) {
+          if (escalationModes.length === 0) {
+            throw new Error(
+              "sandbox_permissions is not available in this composition (the executor does not confine)"
+            );
+          }
+          if (typeof args.justification !== "string" || args.justification.trim().length === 0) {
+            throw new Error(
+              "justification is required with sandbox_permissions: one sentence for the user explaining why this exact command needs the wider access"
+            );
+          }
+          if (standing === void 0 || agent === void 0 || approval === void 0) {
+            throw new Error(
+              "sandbox escalation is unavailable here: it needs a confining executor, a calling agent, and a mounted approval service"
+            );
+          }
+          const requested = args.sandbox_permissions;
+          if (!WIDER_MODES[standing.mode].includes(requested)) {
+            throw new Error(
+              `sandbox_permissions "${requested}" is not strictly wider than the effective mode "${standing.mode}"; a non-widening request never prompts`
+            );
+          }
+          const verdict = await approval.request({
+            agent,
+            toolName: "bash",
+            callId: exec.callId,
+            reason: `bash-guard: escalate this bash command from "${standing.mode}" to "${requested}". Justification: ${args.justification}`,
+            signal: exec.signal
+          });
+          if (verdict !== "allowed-once") {
+            throw new Error(`sandbox escalation ${verdict}; the command did not run`);
+          }
+          policy = { ...standing, mode: requested };
+        }
+        const safePaths = ["/tmp/dsh"];
+        let workspaceRoot;
+        const aidos = ctx.get("aidos");
+        let profile = "none";
+        if (aidos && agent) {
+          try {
+            const bc = aidos.bashContext(agent);
+            profile = bc.profile;
+            workspaceRoot = bc.workspaceRoot;
+            if (bc.scratchDir) safePaths.push(bc.scratchDir);
+            ctx.logger.debug(`bash-guard: resolved aidos profile: ${profile}`);
+          } catch {
+            ctx.logger.debug(`bash-guard: aidos context not available; using default profile`);
+          }
+        }
+        const dirs = profile === "none" ? [baseDir] : [baseDir, join2(baseDir, `profile-${profile}`)];
+        const templates = { deny: config.denyMessage, ask: config.askMessage };
+        const outcome = await evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates);
+        if (outcome.action === "deny") throw new Error(outcome.reason);
+        let toRun;
+        if (outcome.action === "ask") {
+          if (approval === void 0 || agent === void 0) {
+            throw new Error(
+              "bash-guard: this command needs approval but no approval service is mounted, so it did not run.\n\n" + (outcome.reason ?? "")
+            );
+          }
+          const replaced = outcome.command !== outcome.original;
+          const prompt = [
+            "bash-guard: this command needs your approval.",
+            "",
+            "The model wrote:",
+            `  ${outcome.original}`,
+            "",
+            replaced ? "What would actually run instead:" : "What would run if you approve:",
+            `  ${outcome.command}`,
+            "",
+            `Why: ${outcome.reason ?? "a rule asks for approval"}`
+          ].join("\n");
+          const verdict = await approval.request({
+            agent,
+            toolName: "bash",
+            callId: exec.callId,
+            reason: prompt,
+            signal: exec.signal
+          });
+          if (verdict !== "allowed-once") {
+            throw new Error(
+              `bash-guard: the user rejected this command (${verdict}), so it did not run.` + (outcome.reason !== void 0 ? `
+
+${outcome.reason}` : "")
+            );
+          }
+          toRun = outcome.command;
+        } else {
+          toRun = outcome.command;
+        }
+        const headerCwd = agent?.session.header.cwd;
+        const workdir = args.workdir === void 0 ? headerCwd : headerCwd !== void 0 && !isAbsolute2(args.workdir) ? resolve(headerCwd, args.workdir) : args.workdir;
+        const result = await ctx.shell.run(
+          ctx.shell.resolve({
+            command: toRun,
+            ...workdir !== void 0 ? { workdir } : {},
+            ...args.timeoutMs !== void 0 ? { timeoutMs: args.timeoutMs } : {},
+            ...exec.signal ? { signal: exec.signal } : {},
+            // The policy object is the harness's own resolved
+            // SandboxExecutionPolicy; the cast only restores the branded
+            // SessionId this file cannot name without the dsh-session types.
+            ...policy !== void 0 ? { sandboxPolicy: policy } : {}
+          })
+        );
+        let text = renderShellResult(result);
+        if (outcome.reason !== void 0) text += `
+
+bash-guard: ${outcome.reason}`;
+        return text;
+      },
+      presentCall: (args) => ({
+        card: "terminal",
+        title: args.command,
+        description: args.description,
+        ...args.workdir !== void 0 ? { cwd: args.workdir } : {}
+      })
+    })
+  );
 }
 export {
   Config,
+  ESCALATION_TARGETS,
+  WIDER_MODES,
   apply,
   evaluate,
   inject,

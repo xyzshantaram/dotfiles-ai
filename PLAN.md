@@ -1610,6 +1610,52 @@ session. Unit 4 must not touch that line.
     `job_kill` all control it.
   - The model-visible result carries the rule reason on a rewritten call.
 
+### T9 — TypeScript and tests across the whole repo
+
+**Status:** UNSCOPED. Requested 2026-09-04. Grill the owner before planning it.
+Do not dispatch anything from this ticket as written.
+
+**Why it is unscoped:** "add typescript" is ambiguous here, because every source
+file already is TypeScript. The likely readings are different projects with very
+different costs, and the owner has not said which one:
+- Turn on strict mode. `tsconfig.json:3` currently sets `"strict": false`.
+- Remove the escape hatches. For example `plugins/bash-guard.ts` reaches aidos
+  through `(ctx as unknown as { get(name: string): unknown })`, and the client
+  bundles use plain `var` with no annotations at all.
+- Type the seams we consume from dsh packages rather than casting at each call.
+
+**Measured state, 2026-09-04.** Directory plugins, sources against test files:
+
+| Plugin | sources | tests |
+| --- | ---: | ---: |
+| llm-pi-ai | 10 | **0** |
+| mcp-servers | 12 | 5 |
+| shared | 7 | 1 |
+| tool-render | 5 | 2 |
+| durable-todos | 4 | 1 |
+| log-viewer | 4 | 1 |
+| session-archive | 3 | 1 |
+| approval-comment | 2 | **0** |
+| composer-menu | 2 | **0** |
+| context-meter | 2 | **0** |
+| profiles-client | 2 | **0** |
+| subscriptions | 2 | **0** |
+
+Six of twelve directory plugins have no test at all. `llm-pi-ai` is the largest
+untested surface at 10 source files. There are also 18 single-file plugins at
+the top level of `plugins/`, of which only `bash-guard` and `sync` are covered.
+
+**Questions to settle before this becomes real work:**
+- Does "typescript" mean strict mode, removing casts, or both?
+- Is the client half in scope? Those bundles are deliberately plain `var` style
+  with no annotations, so strict mode there is a rewrite, not a flag flip.
+- Is the goal coverage everywhere, or coverage on the parts that break? The
+  three bash-guard files caught real defects. A test on a two-file client plugin
+  may not pay for itself.
+- Does this run as one sweep or as a rule that new code must carry tests?
+- What is the bar for done, given `strict: true` will surface errors across
+  every file at once?
+
 ### T8 — tool-render: mark a rewritten bash call
 
 **Status:** open. Owned by the other session, since it holds `tool-render`.
