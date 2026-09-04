@@ -7,12 +7,9 @@
  * Every other consumer reads from the store instead.
  */
 
-import type { JobBufferStore } from "./buffer";
+import type { JobBufferStore, JobSnapshotLike } from "./buffer";
 
-export interface JobSnapshotLike {
-  id: string;
-  status: "running" | "stopping" | "completed" | "killed" | "failed";
-}
+export type { JobSnapshotLike } from "./buffer";
 
 export interface JobsServiceLike {
   list(caller?: unknown): JobSnapshotLike[];
@@ -76,6 +73,7 @@ export function mountPoller(
       try {
         const result = jobs.read(id, poll.caller);
         store.append(id, result.text);
+        store.setSnapshot(id, result.snapshot);
       } catch {
         // The job may be gone already. That race is expected.
       }
@@ -90,6 +88,7 @@ export function mountPoller(
     try {
       const result = jobs.read(id, caller);
       store.append(id, result.text);
+      store.setSnapshot(id, result.snapshot);
       if (TERMINAL.has(result.snapshot.status)) {
         store.markFinished(id);
         return;
@@ -101,6 +100,7 @@ export function mountPoller(
       try {
         const result = jobs.read(id, caller);
         store.append(id, result.text);
+        store.setSnapshot(id, result.snapshot);
         if (TERMINAL.has(result.snapshot.status)) stopPoll(id, false);
       } catch {
         // The job may be gone already. That race is expected.

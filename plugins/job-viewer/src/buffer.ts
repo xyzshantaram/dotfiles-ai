@@ -11,10 +11,22 @@ export interface JobBufferConfig {
   retentionMs: number;
 }
 
+/** Mirror of the real JobSnapshot from @deepseek-ai/dsh-jobs. */
+export interface JobSnapshotLike {
+  id: string;
+  kind: string;
+  label: string;
+  status: "running" | "stopping" | "completed" | "killed" | "failed";
+  detail?: string;
+  startedAt: number;
+  finishedAt?: number;
+}
+
 export interface BufferEntry {
   text: string;
   truncated: boolean;
   finishedAt?: number;
+  snapshot?: JobSnapshotLike;
 }
 
 /**
@@ -68,6 +80,16 @@ export class JobBufferStore {
     if (entry.finishedAt === undefined) {
       entry.finishedAt = atMs ?? this.now();
     }
+  }
+
+  /** Cache the latest snapshot. The caller always has the freshest one. */
+  setSnapshot(jobId: string, snapshot: JobSnapshotLike): void {
+    let entry = this.entries.get(jobId);
+    if (!entry) {
+      entry = { text: "", truncated: false };
+      this.entries.set(jobId, entry);
+    }
+    entry.snapshot = snapshot;
   }
 
   /** Read the entry without changing it. */
