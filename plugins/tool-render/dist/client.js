@@ -1606,6 +1606,107 @@ module.exports = __toCommonJS(client_exports);
 var import_core = __toESM(require_core(), 1);
 var core_default = import_core.default;
 
+// plugins/tool-render/src/text.ts
+function deIndent(text) {
+  if (typeof text !== "string" || text === "") return text;
+  var expanded = text.replace(/\t/g, "    ");
+  var lines = expanded.split("\n");
+  var min = -1;
+  for (var i = 0; i < lines.length; i++) {
+    if (lines[i].trim() === "") continue;
+    var count = 0;
+    while (count < lines[i].length && lines[i].charAt(count) === " ") count++;
+    if (min === -1 || count < min) min = count;
+  }
+  if (min <= 0) return expanded;
+  var out = [];
+  for (var i = 0; i < lines.length; i++) {
+    out.push(lines[i].trim() === "" ? "" : lines[i].slice(min));
+  }
+  return out.join("\n");
+}
+var HASH_ROW_RE = /^([A-Za-z0-9]{3})│/;
+function isBuiltinReadEnvelope(lines) {
+  return lines.length > 0 && /^<path>/.test(lines[0]) && lines.indexOf("<content>") !== -1;
+}
+function readStartLine(args, output) {
+  if (args !== null && typeof args === "object" && typeof args.offset === "number" && Number.isInteger(args.offset) && args.offset >= 1) {
+    return args.offset;
+  }
+  var lines = String(output).split("\n");
+  if (lines.length > 0 && HASH_ROW_RE.test(lines[0])) {
+    var m = /\[Showing lines (\d+)-(\d+) of \d+/.exec(String(output));
+    if (m !== null) return parseInt(m[1], 10);
+  }
+  var b = /\(Showing lines (\d+)-\d+/.exec(String(output));
+  if (b !== null) return parseInt(b[1], 10);
+  return 1;
+}
+function numberedReadRows(output, startLine) {
+  var lines = String(output).split("\n");
+  var hashline = lines.length > 0 && HASH_ROW_RE.test(lines[0]);
+  var builtin = !hashline && isBuiltinReadEnvelope(lines);
+  var rows = [];
+  var next = startLine;
+  for (var i = 0; i < lines.length; i++) {
+    if (hashline && HASH_ROW_RE.test(lines[i])) {
+      rows.push({ number: next, text: lines[i].slice(4) });
+      next++;
+    } else if (hashline) {
+      rows.push({ number: null, text: lines[i] });
+    } else if (builtin) {
+      if (i === 0 || /^<type>/.test(lines[i]) || lines[i] === "<content>" || lines[i] === "</content>") {
+        continue;
+      }
+      var bm = /^(\d+): ?/.exec(lines[i]);
+      if (bm !== null) {
+        rows.push({ number: parseInt(bm[1], 10), text: lines[i].slice(bm[0].length) });
+      } else {
+        rows.push({ number: null, text: lines[i] });
+      }
+    } else {
+      rows.push({ number: next, text: lines[i] });
+      next++;
+    }
+  }
+  var content = [];
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].number !== null) content.push(rows[i].text);
+  }
+  var leveled = deIndent(content.join("\n")).split("\n");
+  var at = 0;
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].number !== null) rows[i].text = leveled[at++];
+  }
+  return rows;
+}
+function cleanReadTextForDiff(text) {
+  var lines = String(text).split("\n");
+  var builtin = isBuiltinReadEnvelope(lines);
+  if (builtin) {
+    var bkept = [];
+    var inContent = false;
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i] === "<content>") {
+        inContent = true;
+        continue;
+      }
+      if (!inContent || lines[i] === "</content>") continue;
+      var bm = /^(\d+): ?/.exec(lines[i]);
+      if (bm !== null) bkept.push(lines[i].slice(bm[0].length));
+    }
+    return { content: bkept.join("\n"), start: readStartLine(null, text) };
+  }
+  if (lines.length === 0 || !HASH_ROW_RE.test(lines[0])) {
+    return { content: text, start: readStartLine(null, text) };
+  }
+  var kept = [];
+  for (var i = 0; i < lines.length; i++) {
+    if (HASH_ROW_RE.test(lines[i])) kept.push(lines[i].slice(4));
+  }
+  return { content: kept.join("\n"), start: readStartLine(null, text) };
+}
+
 // plugins/shared/client-util.ts
 function injectStyle(pluginName, styleId, cssText) {
   if (typeof document === "undefined") return;
@@ -8766,105 +8867,6 @@ function pickString(value, keys) {
 var ANSI_RE = /\x1B(?:\[[0-9;?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1B\\)|\([A-Z0-9]|\)[A-Z0-9])|[\r\u0008]/g;
 function stripAnsi(text) {
   return String(text).replace(ANSI_RE, "");
-}
-function deIndent(text) {
-  if (typeof text !== "string" || text === "") return text;
-  var expanded = text.replace(/\t/g, "    ");
-  var lines = expanded.split("\n");
-  var min = -1;
-  for (var i = 0; i < lines.length; i++) {
-    if (lines[i].trim() === "") continue;
-    var count = 0;
-    while (count < lines[i].length && lines[i].charAt(count) === " ") count++;
-    if (min === -1 || count < min) min = count;
-  }
-  if (min <= 0) return expanded;
-  var out = [];
-  for (var i = 0; i < lines.length; i++) {
-    out.push(lines[i].trim() === "" ? "" : lines[i].slice(min));
-  }
-  return out.join("\n");
-}
-var HASH_ROW_RE = /^([A-Za-z0-9]{3})│/;
-function isBuiltinReadEnvelope(lines) {
-  return lines.length > 0 && /^<path>/.test(lines[0]) && lines.indexOf("<content>") !== -1;
-}
-function readStartLine(args, output) {
-  if (args !== null && typeof args === "object" && typeof args.offset === "number" && Number.isInteger(args.offset) && args.offset >= 1) {
-    return args.offset;
-  }
-  var lines = String(output).split("\n");
-  if (lines.length > 0 && HASH_ROW_RE.test(lines[0])) {
-    var m = /\[Showing lines (\d+)-(\d+) of \d+/.exec(String(output));
-    if (m !== null) return parseInt(m[1], 10);
-  }
-  var b = /\(Showing lines (\d+)-\d+/.exec(String(output));
-  if (b !== null) return parseInt(b[1], 10);
-  return 1;
-}
-function numberedReadRows(output, startLine) {
-  var lines = String(output).split("\n");
-  var hashline = lines.length > 0 && HASH_ROW_RE.test(lines[0]);
-  var builtin = !hashline && isBuiltinReadEnvelope(lines);
-  var rows = [];
-  var next = startLine;
-  for (var i = 0; i < lines.length; i++) {
-    if (hashline && HASH_ROW_RE.test(lines[i])) {
-      rows.push({ number: next, text: lines[i].slice(4) });
-      next++;
-    } else if (hashline) {
-      rows.push({ number: null, text: lines[i] });
-    } else if (builtin) {
-      if (i === 0 || /^<type>/.test(lines[i]) || lines[i] === "<content>" || lines[i] === "</content>") {
-        continue;
-      }
-      var bm = /^(\d+): ?/.exec(lines[i]);
-      if (bm !== null) {
-        rows.push({ number: parseInt(bm[1], 10), text: lines[i].slice(bm[0].length) });
-      } else {
-        rows.push({ number: null, text: lines[i] });
-      }
-    } else {
-      rows.push({ number: next, text: lines[i] });
-      next++;
-    }
-  }
-  var content = [];
-  for (var i = 0; i < rows.length; i++) {
-    if (rows[i].number !== null) content.push(rows[i].text);
-  }
-  var leveled = deIndent(content.join("\n")).split("\n");
-  var at = 0;
-  for (var i = 0; i < rows.length; i++) {
-    if (rows[i].number !== null) rows[i].text = leveled[at++];
-  }
-  return rows;
-}
-function cleanReadTextForDiff(text) {
-  var lines = String(text).split("\n");
-  var builtin = isBuiltinReadEnvelope(lines);
-  if (builtin) {
-    var bkept = [];
-    var inContent = false;
-    for (var i = 0; i < lines.length; i++) {
-      if (lines[i] === "<content>") {
-        inContent = true;
-        continue;
-      }
-      if (!inContent || lines[i] === "</content>") continue;
-      var bm = /^(\d+): ?/.exec(lines[i]);
-      if (bm !== null) bkept.push(lines[i].slice(bm[0].length));
-    }
-    return { content: bkept.join("\n"), start: readStartLine(null, text) };
-  }
-  if (lines.length === 0 || !HASH_ROW_RE.test(lines[0])) {
-    return { content: text, start: readStartLine(null, text) };
-  }
-  var kept = [];
-  for (var i = 0; i < lines.length; i++) {
-    if (HASH_ROW_RE.test(lines[i])) kept.push(lines[i].slice(4));
-  }
-  return { content: kept.join("\n"), start: readStartLine(null, text) };
 }
 function extOf(path) {
   var m = /\.([A-Za-z0-9_+-]+)$/.exec(String(path || ""));
