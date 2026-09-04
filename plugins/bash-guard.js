@@ -4889,7 +4889,7 @@ var TRANSLATORS = {
 
 // plugins/bash-guard.ts
 var name = "bash-guard";
-var inject = ["shell"];
+var inject = ["shell", "jobs"];
 var WIDER_MODES = {
   "read-only": ["workspace-write", "danger-full-access"],
   "workspace-write": ["danger-full-access"],
@@ -5424,6 +5424,29 @@ ${stderr}`;
   if (!body.endsWith("\n")) body += "\n";
   return body + markers.join("\n");
 }
+function renderProcessDetail(proc) {
+  const markers = [];
+  if (proc.sandbox?.denied) {
+    markers.push(`[sandbox: file access denied under ${proc.sandbox.mode} mode]`);
+  }
+  if (proc.signal !== null) {
+    markers.push(`[killed by signal: ${proc.signal}]`);
+    return { status: "killed", detail: markers.join("\n") };
+  }
+  if (proc.exitCode !== 0) markers.push(`[exit code: ${proc.exitCode}]`);
+  return { status: "completed", detail: markers.length > 0 ? markers.join("\n") : void 0 };
+}
+function renderProcessDelta(read) {
+  if (!read.lossy) return read.delta;
+  let text = "[output truncated; unread bytes are gone]";
+  if (read.stdoutSpillPath !== void 0) text += `
+[full stdout: ${read.stdoutSpillPath}]`;
+  if (read.stderrSpillPath !== void 0) text += `
+[full stderr: ${read.stderrSpillPath}]`;
+  if (read.delta.length > 0) text += `
+${read.delta}`;
+  return text;
+}
 function apply(ctx, config) {
   const baseDir = resolveHome(config.guardsDir ?? "$DSH_HOME/plugins/guards");
   const sandboxMode = ctx.shell.sandboxMode;
@@ -5453,6 +5476,10 @@ function apply(ctx, config) {
         timeoutMs: {
           type: "number",
           description: "Timeout in milliseconds. The executor applies its configured default and cap, and kills the command on expiry."
+        },
+        run_in_background: {
+          type: "boolean",
+          description: "Set true to run the command in the background. The call returns a job id immediately instead of waiting. Read the output with job_output, list jobs with job_list, and stop the job with job_kill. The bash-guard rules still gate the command before it starts."
         },
         workdir: {
           type: "string",
@@ -5585,16 +5612,50 @@ ${outcome.reason}` : "")
         }
         const headerCwd = agent?.session.header.cwd;
         const workdir = args.workdir === void 0 ? headerCwd : headerCwd !== void 0 && !isAbsolute2(args.workdir) ? resolve(headerCwd, args.workdir) : args.workdir;
+        const request = {
+          command: toRun,
+          ...workdir !== void 0 ? { workdir } : {},
+          ...policy !== void 0 ? { sandboxPolicy: policy } : {}
+        };
+        if (args.run_in_background === true) {
+          const jobs = ctx.get("jobs");
+          if (jobs === void 0) {
+            throw new Error(
+              "run_in_background is not available in this composition (no job runtime is mounted)"
+            );
+          }
+          const jobId = jobs.start({
+            kind: "bash",
+            label: toRun,
+            ...agent !== void 0 ? { owner: agent } : {},
+            run() {
+              const proc = ctx.shell.start(
+                ctx.shell.resolve(request)
+              );
+              return {
+                // ShellProcess.kill() is synchronous, idempotent, and
+                // settles proc.done, which is exactly the hook contract.
+                cancel: (reason) => {
+                  proc.kill();
+                  if (reason !== void 0) ctx.logger.info(`bash-guard: job killed: ${reason}`);
+                },
+                done: proc.done.then(() => renderProcessDetail(proc)),
+                readOutput: () => renderProcessDelta(proc.readOutput())
+              };
+            }
+          });
+          ctx.logger.info(`bash-guard: started background job ${jobId}: ${toRun}`);
+          let text2 = `Started background job ${jobId}. Read its output with job_output.`;
+          if (outcome.reason !== void 0) text2 += `
+
+bash-guard: ${outcome.reason}`;
+          return text2;
+        }
         const result = await ctx.shell.run(
           ctx.shell.resolve({
-            command: toRun,
-            ...workdir !== void 0 ? { workdir } : {},
+            ...request,
             ...args.timeoutMs !== void 0 ? { timeoutMs: args.timeoutMs } : {},
-            ...exec.signal ? { signal: exec.signal } : {},
-            // The policy object is the harness's own resolved
-            // SandboxExecutionPolicy; the cast only restores the branded
-            // SessionId this file cannot name without the dsh-session types.
-            ...policy !== void 0 ? { sandboxPolicy: policy } : {}
+            ...exec.signal ? { signal: exec.signal } : {}
           })
         );
         let text = renderShellResult(result);

@@ -52,9 +52,15 @@
  * executes, the same fail-closed sequence the builtin bash tool uses. Without
  * a confining executor those two arguments do not exist in the schema.
  *
- * This unit is FOREGROUND ONLY: no `run_in_background`, no `ctx.shell.start`.
- * Deploying it before the later unit that disables the builtin bash tool
- * leaves two plugins claiming the name `bash`.
+ * Background: when the call sets `run_in_background`, the tool runs the SAME
+ * guard flow first (deny still throws, an approved ask still runs the
+ * replacement, escalation still applies), then preflights `ctx.jobs.start()`
+ * with the calling agent as owner BEFORE spawning, and starts the process with
+ * `ctx.shell.start()` instead of `run()`. The returned `ShellProcess` is
+ * adapted into the job runtime's cancel / done / incremental-output hooks. The
+ * job runtime owns ids, cross-session isolation, completion notices, waiting,
+ * and disposal cleanup; this plugin only maps bash exit and sandbox facts into
+ * the job outcome detail.
  *
  * Files are re-read on every call (they are tiny; no watcher needed).
  * A file that does not parse is logged and skipped (fail-safe: its commands
@@ -75,7 +81,8 @@
  *
  * Seams:
  *   - tool registration: defineTool from @deepseek-ai/dsh-tools
- *   - execution: ctx.shell.resolve + ctx.shell.run (foreground only)
+ *   - execution: ctx.shell.resolve + ctx.shell.run (foreground)
+ *     or ctx.shell.start (background, adapted into ctx.jobs)
  *   - approval: ctx.approval.request -> ApprovalOutcome
  *   - escalation: strictly-wider table mirrored from dsh-sandbox WIDER_MODES
  *   - AST parse + command extraction + wrapper expansion + basename:
@@ -108,7 +115,7 @@ import { TRANSLATORS, shellQuote } from "./bash-guard-translate";
 
 export const name = "bash-guard";
 
-export const inject = ["shell"];
+export const inject = ["shell", "jobs"];
 
 /** The sandbox mode vocabulary. dsh-shell does not re-export it, so this
  * plugin carries the three string literals locally. */
@@ -150,6 +157,28 @@ interface SandboxPolicyServiceLike {
     workspaceRoot: string;
     sessionId?: string;
   };
+}
+
+/** Structural view of the background-job registry (ctx.jobs). Only the slice
+ * this plugin needs: start() with a bash-kind spec. The runtime preflights
+ * access and owner cleanup before invoking run(), and a throwing run() leaves
+ * nothing registered, which is the preflight-before-spawn ordering this
+ * plugin depends on. */
+interface JobsServiceLike {
+  start(spec: {
+    kind: "bash";
+    label: string;
+    owner?: unknown;
+    run(): {
+      cancel(reason?: string): void;
+      done: Promise<{
+        status: "completed" | "killed" | "failed";
+        detail?: string;
+        output?: string;
+      }>;
+      readOutput?(): string;
+    };
+  }): string;
 }
 
 export const Config = z.object({
@@ -982,6 +1011,41 @@ function renderShellResult(result: {
   return body + markers.join("\n");
 }
 
+/** Render the terminal bash facts of a background process into the job
+ * outcome detail, with the same markers the foreground path prints. */
+function renderProcessDetail(proc: {
+  exitCode: number | null;
+  signal: NodeJS.Signals | null;
+  sandbox?: { denied: boolean; mode: SandboxMode };
+}): { status: "completed" | "killed" | "failed"; detail?: string } {
+  const markers: string[] = [];
+  if (proc.sandbox?.denied) {
+    markers.push(`[sandbox: file access denied under ${proc.sandbox.mode} mode]`);
+  }
+  if (proc.signal !== null) {
+    markers.push(`[killed by signal: ${proc.signal}]`);
+    return { status: "killed", detail: markers.join("\n") };
+  }
+  if (proc.exitCode !== 0) markers.push(`[exit code: ${proc.exitCode}]`);
+  return { status: "completed", detail: markers.length > 0 ? markers.join("\n") : undefined };
+}
+
+/** Format one incremental read of a background process into job output text,
+ * adding the truncation and spill notices the producer owes the reader. */
+function renderProcessDelta(read: {
+  delta: string;
+  lossy: boolean;
+  stdoutSpillPath?: string;
+  stderrSpillPath?: string;
+}): string {
+  if (!read.lossy) return read.delta;
+  let text = "[output truncated; unread bytes are gone]";
+  if (read.stdoutSpillPath !== undefined) text += `\n[full stdout: ${read.stdoutSpillPath}]`;
+  if (read.stderrSpillPath !== undefined) text += `\n[full stderr: ${read.stderrSpillPath}]`;
+  if (read.delta.length > 0) text += `\n${read.delta}`;
+  return text;
+}
+
 export function apply(ctx: Context, config: BashGuardConfig): void {
   const baseDir = resolveHome(config.guardsDir ?? "$DSH_HOME/plugins/guards");
 
@@ -1027,6 +1091,11 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
           type: "number",
           description:
             "Timeout in milliseconds. The executor applies its configured default and cap, and kills the command on expiry.",
+        },
+        run_in_background: {
+          type: "boolean",
+          description:
+            "Set true to run the command in the background. The call returns a job id immediately instead of waiting. Read the output with job_output, list jobs with job_list, and stop the job with job_kill. The bash-guard rules still gate the command before it starts.",
         },
         workdir: {
           type: "string",
@@ -1204,18 +1273,64 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
             : headerCwd !== undefined && !isAbsolute(args.workdir)
               ? resolve(headerCwd, args.workdir)
               : args.workdir;
+        // One resolved request serves both paths: the same command, workdir,
+        // and sandbox policy. The foreground-only fields (the timeout and the
+        // tool call's abort signal) are added on the foreground branch only:
+        // dsh-shell applies no timeout to a background start, and a job the
+        // job runtime now owns must not die when the starting tool call
+        // aborts or hits its own deadline.
+        const request = {
+          command: toRun,
+          ...(workdir !== undefined ? { workdir } : {}),
+          ...(policy !== undefined
+            ? { sandboxPolicy: policy as ShellExecRequest["sandboxPolicy"] }
+            : {}),
+        };
+
+        if (args.run_in_background === true) {
+          const jobs = (ctx as unknown as { get(name: string): unknown }).get("jobs") as
+            JobsServiceLike | undefined;
+          if (jobs === undefined) {
+            throw new Error(
+              "run_in_background is not available in this composition (no job runtime is mounted)",
+            );
+          }
+          // jobs.start() preflights access, owner cleanup, and admission
+          // BEFORE invoking run(), and a throwing run() leaves nothing
+          // registered. Starting the process inside run() therefore keeps the
+          // ordering the builtin uses: a failed registration can never leave
+          // an orphan process running.
+          const jobId = jobs.start({
+            kind: "bash",
+            label: toRun,
+            ...(agent !== undefined ? { owner: agent } : {}),
+            run() {
+              const proc = ctx.shell.start(
+                ctx.shell.resolve(request as Parameters<typeof ctx.shell.resolve>[0]),
+              );
+              return {
+                // ShellProcess.kill() is synchronous, idempotent, and
+                // settles proc.done, which is exactly the hook contract.
+                cancel: (reason?: string) => {
+                  proc.kill();
+                  if (reason !== undefined) ctx.logger.info(`bash-guard: job killed: ${reason}`);
+                },
+                done: proc.done.then(() => renderProcessDetail(proc)),
+                readOutput: () => renderProcessDelta(proc.readOutput()),
+              };
+            },
+          });
+          ctx.logger.info(`bash-guard: started background job ${jobId}: ${toRun}`);
+          let text = `Started background job ${jobId}. Read its output with job_output.`;
+          if (outcome.reason !== undefined) text += `\n\nbash-guard: ${outcome.reason}`;
+          return text;
+        }
+
         const result = await ctx.shell.run(
           ctx.shell.resolve({
-            command: toRun,
-            ...(workdir !== undefined ? { workdir } : {}),
+            ...request,
             ...(args.timeoutMs !== undefined ? { timeoutMs: args.timeoutMs } : {}),
             ...(exec.signal ? { signal: exec.signal } : {}),
-            // The policy object is the harness's own resolved
-            // SandboxExecutionPolicy; the cast only restores the branded
-            // SessionId this file cannot name without the dsh-session types.
-            ...(policy !== undefined
-              ? { sandboxPolicy: policy as ShellExecRequest["sandboxPolicy"] }
-              : {}),
           }),
         );
         let text = renderShellResult(result);
