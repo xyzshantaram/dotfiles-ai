@@ -215,18 +215,49 @@ now goes first and carries the comment verbatim.
 plain unstyled text in the transcript. Markdown in the body shows as raw source.
 The cards do not match the subagent dispatch cards next to them, and the source
 of the injection reads as inline prose instead of a label.
-**Change:** find the component that renders an injected context entry and the
-one that renders a `send_message` delivery. Then:
+**Verified component facts (do not re-research):**
 
-- Render the body through the same markdown renderer the transcript already
+- **Subagent dispatch card (the wrapper to reuse):** `plugins/tool-render/src/client.tsx`.
+  `SubagentRow` (registered `key: "subagent"` on the `tool.call.toolview` slot)
+  builds on `toolRenderRow()`, the shared `.tool-render-card`/`.tool-render-row`
+  chrome every row in this file uses. It already renders its body through
+  `MarkdownText`.
+- **Injected context entry:** not in this repo. Shipped as `ContextInjectionRow`
+  / `ContextMessageNodeView` in `@deepseek-ai/dsh-client-ui-conversation`.
+  Registered on `conversation.chat.node`, keyed by `node.kind`, confirmed at the
+  slot's dispatch site: `renderSlot("conversation.chat.node", routedOwner,
+  { entryKey: routedNode.kind, fallback: <JsonBlock/> })`. Register our own
+  entry at `key: "context"` to replace it. `node.data` carries
+  `{ content, source, provenance, form }`.
+- **`send_message` delivery:** not a dedicated component either. `send_message`
+  is a plain host tool (`@deepseek-ai/dsh-tool-subagent-control`) with no
+  `tool.call.toolview` entry in this repo, so it falls through to the shipped
+  `GenericToolCard` fallback in `@deepseek-ai/dsh-client-ui-tool` -- the same
+  fallback `subagent` would hit if tool-render had not registered it. Register
+  `key: "send_message"` on `tool.call.toolview`, same mechanism as `subagent`.
+- **No existing timestamp or copy control anywhere in this repo.** Checked
+  every plugin source file for `clipboard`, `copy`, `timestamp`: zero matches.
+  `toolRenderRow` has neither today, subagent card included. "Matching whatever
+  affordances the dispatch cards already carry" assumed affordances that do not
+  exist. Decision: design both fresh and add them to `toolRenderRow()` itself,
+  so every row gains them at once (subagent included) rather than adding them
+  only to the two new cards. This is also the only way it stays one shared
+  component instead of three copies of the same header markup.
+
+**Change:**
+
+- Register `conversation.chat.node` at `key: "context"` and `tool.call.toolview`
+  at `key: "send_message"` in `plugins/tool-render/src/client.tsx`, replacing
+  the two shipped fallbacks above.
+- Render each body through `MarkdownText`, the renderer `SubagentRow` already
   uses. Do not add a second markdown dependency.
-- Reuse the card component and the styles the subagent dispatch cards use, so
-  the three read as one family. Do not copy the styles into a new block.
+- Both new rows go through `toolRenderRow()`, the same wrapper `SubagentRow`
+  uses. Do not copy the styles into a new block.
 - Show the injection source as a chip or badge in the card header, not as a
   sentence in the body.
 - Give a `send_message` delivery the same card, with its own badge text.
-- Add a timestamp and a copy control, matching whatever affordances the
-  dispatch cards already carry.
+- Add a timestamp and a copy control to `toolRenderRow()` itself, so all three
+  cards (injection, `send_message`, subagent) carry them.
 
 **Evaluation criteria:**
 
@@ -1409,7 +1440,7 @@ through to the full gallery.
 - [ ] Screenshot gallery — the owner picks which shots reach the main README,
       because that is a taste call and not a checkable one.
 
-# Effort 6 — retire hashline edit, gate the MCP roster, grow bash-guard into our bash tool
+# Effort 11 — retire hashline edit, gate the MCP roster, grow bash-guard into our bash tool
 
 ## Vision
 
@@ -1467,72 +1498,10 @@ earlier version assigned to `exec.arguments.command` and was a silent no-op.
 
 ## Tickets
 
-### T1 — gate blinkit, zepto, and nostrbook behind skills
-
-**Status:** open. Skill files written, not yet synced or verified.
-**Why:** the two servers contribute 33 of 64 tools to every step of every
-session, including sessions that never touch groceries or Nostr.
-**Change:** `skills/ecommerce/SKILL.md` gained `mcp__blinkit__*` and
-`mcp__zepto__*` in `tools-gated`. New `skills/nostr/SKILL.md` gates
-`mcp__nostrbook__*`. Both still need `./sync.sh` and a live check.
-**Acceptance criteria:**
-- After `./sync.sh` and a dsh restart, a fresh session's tool list contains no
-  `mcp__blinkit__*`, `mcp__zepto__*`, or `mcp__nostrbook__*` entry.
-- Loading the `nostr` skill makes the seven nostrbook tools appear in the same
-  session, and `mcp__nostrbook__read_nip` returns NIP-01.
-- Loading the `ecommerce` skill makes the blinkit tools appear.
-- The `nostr` skill's description fires on a NIP or event-kind mention, so the
-  standing AGENTS.md rule to never state a NIP from memory stays followable.
-
-### T2 — retire dsh-better-edit, restore the builtin editor
-
-**Status:** open. Blocked on T1 landing so the two changes stay separable.
-**Why:** 19.2% edit-call failure against the builtin's 1.8%. By model:
-claude-opus-5 6.2%, glm-5.3-flash 20.2%, z-ai/glm-5.3-flash 25.0%.
-**Change:** remove `dsh-better-edit` from the web profile `dependencies` and
-`dsh.profile.bundles`. In `sync.sh` remove the `BUILD_SPECS` entry (line ~56),
-the `pnpm_ins` call and its comment block (lines ~265-274), the `base` array
-entry (line ~400), `step_sync_better_edit_guidance`, `step_ignore_better_edit_dir`,
-and their two `STEPS` rows. Delete `home/plugins/dsh-better-edit/`.
-**Acceptance criteria:**
-- `./sync.sh` completes with no step failure.
-- After a dsh restart, a fresh session's system prompt carries the builtin read
-  and edit guidance (`old_string` / `new_string`), and no `HASH` anchor text.
-- A `read` returns `<lineNumber>: <text>` rows, and an `edit` with `old_string`
-  succeeds on a real file in this repo.
-- `.dsh_better_edit/` no longer appears in any repo the session edits.
-
-### T3 — tool-render: add builtin read parity, keep hashline
-
-**Status:** code done 2026-09-04, unverified in the GUI. Needs a restart.
-**Design change from the original ticket:** do NOT delete the hashline paths.
-tool-render runs in the browser, so its code costs no model tokens. Deleting the
-hashline branches would buy nothing and would break rendering for every existing
-session log. This ticket is additive.
-**Why:** `numberedReadRows` had a plain branch that numbers lines itself, while
-the builtin `read` already prefixes each line with `<lineNumber>: ` and wraps
-the whole result in a `<path>`/`<type>`/`<content>` envelope. The plain branch
-numbered the envelope lines and double-numbered the content.
-**Change made:** added `isBuiltinReadEnvelope(lines)` next to `HASH_ROW_RE`, and
-a builtin branch to `readStartLine` (parses the `(Showing lines X-Y` footers),
-`numberedReadRows` (drops the envelope, keeps the tool's own numbers), and
-`cleanReadTextForDiff` (strips the envelope and the `N: ` prefixes so the write
-diff compares content against content). `collectEditRequests` already handled
-the builtin `file_path`/`old_string`/`new_string` shape as its first branch and
-was not touched.
-**Known gap:** `plugins/tool-render/` has no test file. These three parsing
-functions have zero automated coverage. See T6.
-**Acceptance criteria:**
-- `node build.mjs` and `pnpm exec tsc --noEmit` both pass. Done, both exit 0.
-- `rg -c HASH_ROW_RE plugins/tool-render/src/client.tsx` still reports 7, so the
-  hashline paths survive for historical replay. Done.
-- In the live GUI after a restart: a builtin `read` card shows each line once
-  with the tool's own line numbers, an `edit` card shows a real diff, and a
-  failed edit shows the error line first.
-
 ### T4 — clear stale dsh-better-edit references from comments and docs
 
-**Status:** open. Blocked on T2.
+**Status:** open, and now unblocked. The editor retirement it waited on shipped
+in commit 5af0670.
 **Change:** update the comment blocks in `plugins/manifest-guard.ts` (~line 23)
 and `plugins/package-tool.ts` (~lines 25, 5), the `README.md` line about
 guidance overrides, and `skills/customize-setup/SKILL.md` plus its
@@ -1610,11 +1579,32 @@ must persist, because our tool owns the result and can set the flag durably.
 
 ### T7 — tmux-backed shell executor
 
-**Status:** open. Blocked on T5.
-**Why:** the user wants a background-jobs viewer and tmux panes. Because
-`ctx.shell` is an abstract executor with `resolve`, `run`, and `start`, tmux is a
-DIFFERENT `ctx.shell` implementation, not a change to the bash tool. T5 must not
-bake in any process assumption, so this ticket stays clean.
+**Status:** BLOCKED on a direct contradiction with Effort 6. Do not start.
+
+**Conflict found 2026-09-04.** Effort 6 ("job viewer") records a settled
+decision from grilling on 2026-09-03 that says, verbatim: "No tmux. It
+re-parents the command onto the tmux server, outside the argv that `ctx.sandbox`
+wraps, and the workspace-write policy is doing real work. The
+attach-from-a-laptop-terminal case is dropped on purpose. The modal replaces it
+and also works from a phone, which tmux never would have."
+
+That objection is technical, not a preference. A tmux executor would run the
+real command as a child of the tmux server, so the sandbox wrapper never sees
+its argv and the workspace-write policy stops applying. This ticket cannot
+proceed until the user either overturns that decision knowing the sandbox cost,
+or drops tmux again.
+
+Effort 6 also already plans the jobs viewer: a host plugin becomes the sole
+consumer of job output, polls each running job, buffers deltas, and replaces
+`job_output`, `job_list`, and `job_kill` so `job_output` stops being one-shot.
+Check that effort's state before planning any jobs work here. Effort 6 further
+notes that an interactive command the agent must drive should use the shipped
+`dsh-tool-bash-persistent` over the PTY seam, as a separate one-row change.
+
+**If tmux is overturned**, the design below still holds, because `ctx.shell` is
+an abstract executor with `resolve`, `run`, and `start`, so tmux would be a
+different `ctx.shell` implementation rather than a change to the bash tool. T5
+bakes in no process assumption either way, so T5 is safe to build now.
 **Prior art, from `/home/sid/.config/opencode/tools/shell-command-long-running.ts`
 (315 lines, read 2026-09-04):** one detached tmux session per job named
 `oc-<id>`, started with `tmux new-session -d -s <name> -c <cwd>` running
@@ -1642,8 +1632,13 @@ three:
 
 ### T6 — tool-render: extract and test the read parsers
 
-**Status:** open. Not blocked, but do it before T5 so the bash tool lands on a
-tested renderer.
+**Status:** stage 1 (extraction) DONE 2026-09-04, uncommitted. Stage 2 (tests)
+not started. Do stage 2 before T5 so the bash tool lands on a tested renderer.
+Stage 1 result: `plugins/tool-render/src/text.ts` now holds all six helpers, and
+each one was checked byte-for-byte against `git show HEAD:...client.tsx` before
+review. One unused import of `isBuiltinReadEnvelope` slipped into `client.tsx`
+and was removed by hand. `tsc --noEmit`, `node build.mjs`, `pnpm test` (124),
+and prettier all pass.
 **Why:** `plugins/tool-render/` has no test file. During T3 a duplicated
 `var lines = String(text).split("\n");` survived both `pnpm exec tsc --noEmit`
 and `node build.mjs`, because `var` redeclaration is legal JavaScript. It was
@@ -1653,14 +1648,20 @@ are the easiest thing in this repo to cover.
 `{ apply, inject, name }` (line ~2038). `isBuiltinReadEnvelope`, `readStartLine`,
 `numberedReadRows`, and `cleanReadTextForDiff` are module-scoped, so vitest
 cannot import them today.
-**Change:** move those four functions plus `HASH_ROW_RE` into a new Cordis-free,
-React-free `plugins/tool-render/src/read-parse.ts` that exports them, and import
-them from `client.tsx`. This mirrors dsh's own convention: `dsh-tool-fs` keeps
-line windowing and output formatting in `src/read-render.ts`, described in its
-README as "Cordis-free, independently unit-tested". esbuild bundles the extra
-module with no config change. Then add
-`plugins/tool-render/read-parse.test.ts` in the style of
-`plugins/bash-guard.test.ts`.
+**Change, stage 1 (extraction):** move those four functions plus `HASH_ROW_RE`
+AND `deIndent` into a new Cordis-free, React-free
+`plugins/tool-render/src/text.ts` that exports them, and import them back into
+`client.tsx`. `deIndent` has to come along because `numberedReadRows` calls it.
+The module is named `text.ts`, not `read-parse.ts`, because `deIndent` is a
+general text helper that the diff renderer also uses at roughly lines 1155,
+1463, 1532, and 1557 of `client.tsx`. This mirrors dsh's own convention:
+`dsh-tool-fs` keeps line windowing and output formatting in `src/read-render.ts`,
+described in its README as "Cordis-free, independently unit-tested". esbuild
+bundles the extra module with no config change.
+**Change, stage 2 (tests):** add `plugins/tool-render/text.test.ts` in the style
+of `plugins/bash-guard.test.ts`. Dispatch this to a SECOND, FRESH coder that has
+not seen the extraction, so it writes tests against the format contract rather
+than against the implementation it just moved.
 **Cases to cover, both formats:**
 - Builtin envelope: content lines keep the tool's own numbers, the `<path>`,
   `<type>`, `<content>`, and `</content>` lines never become rows, and the blank
@@ -1682,8 +1683,8 @@ components are out of scope. This ticket covers pure string parsing only.
 - `pnpm test` passes and the new file appears in the vitest run.
 - `pnpm exec tsc --noEmit` and `node build.mjs` both still pass.
 - `rg -n 'HASH_ROW_RE' plugins/tool-render/src/client.tsx` returns nothing, and
-  `rg -c 'HASH_ROW_RE' plugins/tool-render/src/read-parse.ts` is non-zero,
-  proving the move happened rather than a copy.
+  `rg -c 'HASH_ROW_RE' plugins/tool-render/src/text.ts` is non-zero, proving the
+  move happened rather than a copy.
 - Reverting only the builtin branch of `numberedReadRows` makes at least one new
   test fail. Confirm this by hand once, so the suite is not tautological.
 
