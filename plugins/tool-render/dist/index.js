@@ -26329,6 +26329,7 @@ var compactionViewsProjection = {
 var import_yaml = __toESM(require_dist(), 1);
 function isBashGuardReason(reason) {
   if (typeof reason !== "string") return false;
+  if (reason.startsWith("bash-guard:")) return true;
   var result;
   try {
     result = (0, import_yaml.parse)(reason);
@@ -26346,7 +26347,10 @@ var GUARDED_APPROVALS_CAP = 200;
 var viewSchema2 = external_exports.record(external_exports.string(), external_exports.literal(true)).nullable();
 var guardedApprovalsProjection = {
   key: GUARDED_APPROVALS_KEY,
-  stateVersion: 1,
+  // Version 2: the reason matcher learned the shipped guard's plain-text
+  // "bash-guard:" format, so the previously folded (empty) state is stale
+  // and the log must be replayed.
+  stateVersion: 2,
   schema: viewSchema2,
   init() {
     return { entries: [] };

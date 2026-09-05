@@ -16,6 +16,16 @@ describe("guardedApprovalsProjection.apply", () => {
     expect(guardedApprovalsProjection.view(state)).toEqual({ "call-1": true });
   });
 
+  it("records a callId from the shipped guard's plain-text reason", () => {
+    // The format every real `approval/asked` event carries: plain text that
+    // opens with "bash-guard:" and names the matched rules. It parses as
+    // YAML, so it must be matched by prefix, not by the summary shape.
+    var reason = 'bash-guard: the following command needs approval:\n\n  git push\n\nMatched rule(s):\n  • git (push): denied.\n';
+    var state = guardedApprovalsProjection.init();
+    state = guardedApprovalsProjection.apply(state, askedEvent(4, { id: "a1", callId: "call-2", reason }) as never);
+    expect(guardedApprovalsProjection.view(state)).toEqual({ "call-2": true });
+  });
+
   it("skips a reason that is not a bash-guard payload", () => {
     var state = guardedApprovalsProjection.init();
     state = guardedApprovalsProjection.apply(state, askedEvent(4, { id: "a1", callId: "call-1", reason: "please approve" }) as never);

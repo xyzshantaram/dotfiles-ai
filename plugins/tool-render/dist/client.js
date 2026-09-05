@@ -1737,6 +1737,29 @@ function looksLikeRawHtml(text) {
   if (head.charAt(0) !== "<") return false;
   return /^<[a-z][a-z0-9-]*(\s|>|\/>)/i.test(head);
 }
+var AGENT_LINE_RE = /^(\S+)\s+\[([^\]]+)\](?:\s+parent=(\S+)\s+depth=(-?\d+))?(?:\s+—\s+([\s\S]*))?$/;
+function parseAgentLines(text) {
+  if (typeof text !== "string" || text === "") return [];
+  var out = [];
+  var lines = text.split("\n");
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].trim();
+    if (line === "" || line === "(no subagents)") continue;
+    var m = AGENT_LINE_RE.exec(line);
+    if (m === null) continue;
+    var mark = m[2];
+    var diagnostic = mark.indexOf("diagnostic:") === 0;
+    out.push({
+      id: m[1],
+      status: diagnostic ? null : mark,
+      reason: diagnostic ? mark.slice("diagnostic:".length).trim() : null,
+      parent: m[3] !== void 0 ? m[3] : null,
+      depth: m[4] !== void 0 ? Number(m[4]) : null,
+      label: m[5] !== void 0 ? m[5] : ""
+    });
+  }
+  return out;
+}
 function extractHunk(readText, removeFrom, removeTo, replacementText, startLine) {
   if (typeof readText !== "string" || readText === "") return null;
   var rows = [];
@@ -2292,6 +2315,12 @@ var client_default = `.tool-render-row {
   background: var(--dsw-alias-bg-layer-1);
   padding: 0.15625rem 0.5rem;
 }
+/* A frameless card (context injections) drops only the border, which read as
+   a stray outline around a one-line row. It keeps the layer background and
+   the row's metrics, so the card still sits on its own surface. */
+.tool-render-card[data-frameless] {
+  border-color: transparent;
+}
 .tool-render-card[data-escalated] {
   outline: 3px solid var(--dsh-outline-escalated);
 }
@@ -2410,6 +2439,56 @@ var client_default = `.tool-render-row {
 }
 .tool-render-ask[tool-render-error] .tool-render-question-prompt {
   color: var(--dsw-alias-label-tertiary);
+}
+
+/* list_agents roster: one line per agent, status first so the column reads
+   down the left edge. A descendants listing indents each line by its own
+   depth through an inline padding, so the tree shape is visible without a
+   parent id on every row. */
+.tool-render-agents {
+  display: flex;
+  flex-direction: column;
+  padding: 0.125rem 0 0.125rem 0.25rem;
+}
+.tool-render-agent {
+  align-items: baseline;
+  display: flex;
+  gap: 0.375rem;
+  min-width: 0;
+  padding: 0.0625rem 0;
+}
+.tool-render-agent-status {
+  flex: none;
+  width: 5rem;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  color: var(--dsw-alias-label-caption);
+}
+.tool-render-agent-status[data-status="running"] {
+  color: var(--dsh-outline-guard);
+}
+.tool-render-agent-status[data-status="diagnostic"] {
+  color: var(--dsw-alias-state-error-primary);
+}
+.tool-render-agent-id {
+  flex: none;
+  font-family: var(--ds-font-family-code);
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  color: var(--dsw-alias-label-tertiary);
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tool-render-agent-label {
+  color: var(--dsw-alias-label-primary);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Shared capped, scrollable markdown body. Used by every row whose body is
@@ -15289,6 +15368,7 @@ function parse(src, reviver, options) {
 // plugins/tool-render/src/guard.ts
 function isBashGuardReason(reason) {
   if (typeof reason !== "string") return false;
+  if (reason.startsWith("bash-guard:")) return true;
   var result;
   try {
     result = parse(reason);
@@ -15584,7 +15664,7 @@ function toolNameBadge(toolName, icon, state) {
   var isBash = toolName === "Run bash";
   var hue = toolNameHue(toolName);
   var background = isError ? "color-mix(in srgb, var(--dsw-alias-state-error-primary) 85%, black)" : isBash ? "color-mix(in srgb, var(--dsh-outline-guard) 55%, var(--dsw-alias-bg-tertiary))" : "color-mix(in srgb, hsl(" + hue + " 65% 45%) 55%, var(--dsw-alias-bg-tertiary))";
-  var border = isError ? "var(--dsw-alias-state-error-primary)" : isBash ? "var(--dsh-outline-guard)" : "hsl(" + hue + " 55% 60%)";
+  var border = isError ? "#fff" : isBash ? "var(--dsh-outline-guard)" : "hsl(" + hue + " 55% 60%)";
   var color = isError ? "#fff" : void 0;
   return /* @__PURE__ */ import_react.default.createElement(
     "span",
@@ -15642,7 +15722,8 @@ function toolRenderRow(options) {
       "data-escalated": options.escalated || void 0,
       "data-guard-approval": options.guardApproval || void 0,
       "data-error": options.state === "error" || void 0,
-      "data-stopped": options.state === "stopped" || void 0
+      "data-stopped": options.state === "stopped" || void 0,
+      "data-frameless": options.frameless || void 0
     },
     /* @__PURE__ */ import_react.default.createElement(
       "div",
@@ -16785,6 +16866,64 @@ function InterruptAgentRow(props) {
     inspect: props.inspect
   });
 }
+function agentsSummaryText(entries) {
+  if (entries.length === 0) return "No subagents";
+  var running = 0;
+  for (var i = 0; i < entries.length; i++) {
+    if (entries[i].status === "running") running++;
+  }
+  var head = entries.length === 1 ? "1 agent" : String(entries.length) + " agents";
+  return running > 0 ? head + " \xB7 " + String(running) + " running" : head;
+}
+function ListAgentsRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var block = props.block;
+  var done = doneOf(block);
+  var output = done ? resultTextOf(block) : null;
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var entries = state === "error" || output === null ? [] : parseAgentLines(output);
+  var body = entries.length > 0 ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-agents" }, entries.map(function(entry, index) {
+    var depth = typeof entry.depth === "number" && entry.depth > 0 ? entry.depth : 0;
+    return /* @__PURE__ */ import_react.default.createElement(
+      "div",
+      {
+        key: String(index),
+        className: "tool-render-agent",
+        style: depth > 0 ? { paddingLeft: String(depth * 0.75) + "rem" } : void 0
+      },
+      /* @__PURE__ */ import_react.default.createElement(
+        "span",
+        {
+          className: "tool-render-agent-status",
+          "data-status": entry.status !== null ? entry.status : "diagnostic"
+        },
+        entry.status !== null ? entry.status : entry.reason
+      ),
+      /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-agent-id", title: entry.id, "data-dsh-tip": "" }, entry.id),
+      /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-agent-label" }, entry.label)
+    );
+  })) : null;
+  return toolRenderRow({
+    toolName: "List agents",
+    icon: /* @__PURE__ */ import_react.default.createElement(IconAgentPresetOutline162, { size: 14 }),
+    title: "List agents",
+    summary: state === "running" ? "List agents" : agentsSummaryText(entries),
+    state,
+    expandable: body !== null,
+    expanded,
+    onToggle: function() {
+      setExpanded(!expanded);
+    },
+    body,
+    errorSummary,
+    errorText,
+    inspect: props.inspect
+  });
+}
 function contextText(content) {
   if (!Array.isArray(content)) return "";
   var parts = [];
@@ -16863,7 +17002,8 @@ function GenericContextCard(props) {
     onToggle: function() {
       setExpanded(!expanded);
     },
-    body
+    body,
+    frameless: true
   });
 }
 function ContextRow(props) {
@@ -17246,10 +17386,9 @@ function CompactionRow(props) {
   var expandedState = useState(false);
   var expanded = expandedState[0];
   var setExpanded = expandedState[1];
-  var node = props.node;
-  var data = node !== null && node !== void 0 && typeof node === "object" ? node.data : null;
-  var summary = data !== null && data !== void 0 && typeof data.summary === "string" ? data.summary : "";
-  var summaryEventSeq = data !== null && data !== void 0 && typeof data.summaryEventSeq === "number" ? data.summaryEventSeq : void 0;
+  var node = props.block;
+  var summary = node !== null && node !== void 0 && typeof node.summary === "string" ? node.summary : "";
+  var summaryEventSeq = node !== null && node !== void 0 && typeof node.summaryEventSeq === "number" ? node.summaryEventSeq : void 0;
   var views = useCompactionViews(props.useSession);
   var view = views !== null && views !== void 0 && summaryEventSeq !== void 0 ? views[String(summaryEventSeq)] : null;
   var rows = view !== null && view !== void 0 ? prettyRows(view) : null;
@@ -17373,6 +17512,14 @@ function apply(ctx) {
         priority: -100
       },
       InterruptAgentRow
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "list_agents",
+        priority: -100
+      },
+      ListAgentsRow
     );
     yield ctx.slots.register(
       {
