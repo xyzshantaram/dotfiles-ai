@@ -113,7 +113,6 @@ function makePanel() {
     var expandable = todos !== null && todos.length > 0;
 
     var countSegments = [
-      { key: "total", label: "TOTAL", value: totalCount, Icon: IconChecklistOutline14, keep: true },
       { key: "doing", label: "DOING", value: inProgressCount, Icon: IconPlayOutline16, keep: inProgressCount > 0 },
       { key: "pending", label: "PENDING", value: pendingCount, Icon: IconQueueOutline14, keep: pendingCount > 0 },
       { key: "done", label: "DONE", value: completedCount, Icon: IconCheckOutline14, keep: completedCount > 0 },
@@ -143,7 +142,18 @@ function makePanel() {
               }
               aria-hidden={true}
             />
-            <span className="durable-todos-name-badge">To-do list</span>
+            <span className="durable-todos-name-badge">
+              <IconChecklistOutline14 size={14} />
+              <span>To-do list</span>
+              {totalCount > 0 ? (
+                <>
+                  <span className="durable-todos-count-sep" aria-hidden={true}>
+                    ·
+                  </span>
+                  <span className="durable-todos-count-value">{totalCount}</span>
+                </>
+              ) : null}
+            </span>
             <span className="durable-todos-counts">
               {countSegments.map(function (segment) {
                 return (
