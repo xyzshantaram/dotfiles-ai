@@ -57,6 +57,7 @@ import {
   cleanReadTextForDiff,
   deIndent,
   extractHunk,
+  compactionCommandError,
   compactionSummaryNode,
   numberedReadRows,
   stripOuterFence,
@@ -2971,11 +2972,15 @@ function CompactionRow(props) {
   // The summary node itself is flat: { kind: "compaction", seq, time,
   // summary, summaryEventSeq, shadowedItemCount, shadowedTokenCount }. It is
   // found by its own kind, so neither key needs a separate row.
-  var node = compactionSummaryNode(
+  var data =
     props.node !== null && props.node !== undefined && typeof props.node === "object"
       ? props.node.data
-      : null,
-  );
+      : null;
+  var node = compactionSummaryNode(data);
+  // A failed manual /compact leaves node null, same as one still running.
+  // The command's own outcome is the only place the failure is recorded.
+  var commandError = compactionCommandError(data);
+  var errorSummary = commandError !== null ? firstLineOfError(commandError) : undefined;
   var summary = node !== null && typeof node.summary === "string" ? node.summary : "";
   var summaryEventSeq =
     node !== null && typeof node.summaryEventSeq === "number" ? node.summaryEventSeq : undefined;
@@ -3010,13 +3015,23 @@ function CompactionRow(props) {
       toolName: "Compaction",
       icon: <IconBrowseOutline16 size={14} />,
       title: "Compaction",
-      summary: counts !== null ? counts : fallbackText !== "" ? firstLine(fallbackText) : "Compaction",
-      expandable: fallbackBody !== null,
+      summary:
+        commandError !== null
+          ? "Compaction"
+          : counts !== null
+            ? counts
+            : fallbackText !== ""
+              ? firstLine(fallbackText)
+              : "Compaction",
+      state: commandError !== null ? "error" : undefined,
+      expandable: fallbackBody !== null || commandError !== null,
       expanded: expanded,
       onToggle: function () {
         setExpanded(!expanded);
       },
       body: fallbackBody,
+      errorSummary: errorSummary,
+      errorText: commandError,
     });
   }
   var pretty = view;
