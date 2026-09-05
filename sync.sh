@@ -1055,6 +1055,57 @@ step_disable_preset_builtin_tools() {
 	preset_disable_tool "$preset_yaml" "tool-goal"
 }
 
+# Relocate the attachment picker button. dsh-paste-to-path mounts its
+# choose-attachments picker on the composer's LEFT edge (slot
+# conversation.input.left, id paste-to-path-picker, order 20). The owner wants
+# it next to the send/steer controls on the RIGHT edge. The picker's behavior
+# (file input, upload, composer insertion) is all closure-internal to the
+# plugin's client bundle, so we do not rebuild it -- this step rewrites the
+# installed bundle's registration in place: the slot moves to
+# conversation.input.right at order -100, which renders it left of the
+# shipped right-edge controls. Idempotent: the rewrite matches the left-slot
+# block only, so a patched file is left untouched. A plugin update restores
+# the original text; rerunning sync reapplies this.
+step_relocate_attach_button() {
+	local picker_js
+	picker_js="$DSH_HOME/profiles/web/node_modules/dsh-paste-to-path/client.js"
+	if [ ! -f "$picker_js" ]; then
+		echo "  WARNING: dsh-paste-to-path not installed; skipping attach-button relocation."
+		return 0
+	fi
+	python3 - "$picker_js" <<'PY'
+import re
+import sys
+
+path = sys.argv[1]
+text = open(path).read()
+block = re.compile(
+    r"ctx\.slots\.inject\('conversation\.input\.left', \(\) =>\s*"
+    r"ctx\.slots\.register\(\s*\{\s*"
+    r"name: 'conversation\.input\.left',\s*"
+    r"id: 'paste-to-path-picker',\s*"
+    r"order: 20,",
+)
+patched, count = block.subn(
+    "ctx.slots.inject('conversation.input.right', () =>\n"
+    "        ctx.slots.register(\n"
+    "          {\n"
+    "            name: 'conversation.input.right',\n"
+    "            id: 'paste-to-path-picker',\n"
+    "            order: -100,",
+    text,
+)
+if count == 0:
+    if "name: 'conversation.input.right'" in text and "paste-to-path-picker" in text:
+        print("  attach button already relocated; no change")
+        sys.exit(0)
+    print("  WARNING: paste-to-path picker registration not found; skipping.")
+    sys.exit(0)
+open(path, "w").write(patched)
+print("  relocated the attach button to the right edge")
+PY
+}
+
 step_disable_replaced_jobs_rows() {
 	# Effort 6: job-viewer replaces both dsh-tool-jobs (the model-facing
 	# job_list/job_output/job_kill tools, id tool-jobs, in the standard
@@ -1203,6 +1254,7 @@ STEPS=(
 	"Turn on Code Mode for the standard preset (mode: both)|step_patch_standard_preset_tool_presentation"
 	"Disable builtin tool rows in the standard preset|step_disable_preset_builtin_tools"
 	"Disable tool-jobs and ui-jobs (job-viewer replaces both)|step_disable_replaced_jobs_rows"
+	"Relocate the attach button to the send/steer edge|step_relocate_attach_button"
 	"Register the aidos agent preset|step_register_aidos_preset"
 	"Verify builtin tool rows are disabled|step_verify_preset_tool_disabled"
 	"Regenerate settings.yaml from the repo template|step_set_defaults"
