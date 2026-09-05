@@ -43,6 +43,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,css}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,css}\"",
     "sync-models": "node sync-models.mjs",
+    "rank-chains": "deno run --no-lock --allow-read --allow-net --allow-env scripts/rank-chains.ts",
     "test": "vitest run",
     "pin-aidos": "bash scripts/pin-aidos.sh"
   }
