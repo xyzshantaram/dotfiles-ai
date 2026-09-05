@@ -16578,7 +16578,7 @@ function TodoRow(props) {
     body = planBody(todos);
   }
   return toolRenderRow({
-    toolName: "Update todos",
+    toolName: "To-do list",
     icon: /* @__PURE__ */ import_react.default.createElement(IconChecklistOutline142, { size: 14 }),
     title: "To-do list",
     summary,
@@ -16760,7 +16760,7 @@ function SubagentRow(props) {
     body = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: prompt }));
   }
   return toolRenderRow({
-    toolName: "Run subagent",
+    toolName: "Dispatch",
     icon: /* @__PURE__ */ import_react.default.createElement(IconAgentPresetOutline162, { size: 14 }),
     title,
     summary,
@@ -16870,11 +16870,11 @@ function SendMessageRow(props) {
   var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
   var body = state !== "error" && args !== null ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: args.message })) : null;
   return toolRenderRow({
-    toolName: "Message subagent",
+    toolName: "Message",
     icon: /* @__PURE__ */ import_react.default.createElement(IconAgentPresetOutline162, { size: 14 }),
-    title: "Message subagent",
+    title: "Message",
     badge: args !== null ? args.subagent_id : void 0,
-    summary: args !== null ? firstLine(args.message) : "Message subagent",
+    summary: args !== null ? firstLine(args.message) : "Message",
     state,
     expandable: body !== null,
     expanded,

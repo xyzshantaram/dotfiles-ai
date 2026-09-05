@@ -1670,7 +1670,7 @@ function TodoRow(props) {
     body = planBody(todos);
   }
   return toolRenderRow({
-    toolName: "Update todos",
+    toolName: "To-do list",
     icon: <IconChecklistOutline14 size={14} />,
     title: "To-do list",
     summary: summary,
@@ -1912,7 +1912,7 @@ function SubagentRow(props) {
     );
   }
   return toolRenderRow({
-    toolName: "Run subagent",
+    toolName: "Dispatch",
     icon: <IconAgentPresetOutline16 size={14} />,
     title: title,
     summary: summary,
@@ -2063,11 +2063,11 @@ function SendMessageRow(props) {
       </div>
     ) : null;
   return toolRenderRow({
-    toolName: "Message subagent",
+    toolName: "Message",
     icon: <IconAgentPresetOutline16 size={14} />,
-    title: "Message subagent",
+    title: "Message",
     badge: args !== null ? args.subagent_id : undefined,
-    summary: args !== null ? firstLine(args.message) : "Message subagent",
+    summary: args !== null ? firstLine(args.message) : "Message",
     state: state,
     expandable: body !== null,
     expanded: expanded,
