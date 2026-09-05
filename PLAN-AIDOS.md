@@ -11,7 +11,11 @@ tool-render cards, the attachment-drop transport, the pending browser-polish
 fixes, the screenshot gallery, a fork-side fix, a full audit of the
 bash-guard client-side surface (H6), and unifying error handling across
 every tool-render row, now grilled and settled into two tickets: an audit
-(C6a) followed by the actual build and a strict-mode retrofit (C6b).
+(C6a) followed by the actual build and a strict-mode retrofit (C6b). Two
+more strands came out of the same session: moving approval actions out of
+the composer and onto the tool call card (H7 then H8, both gated behind
+H6), and a two-badge header for the todo panel with the chevron layout
+shift it exposed (B5, B6).
 
 ## Critical context
 
@@ -209,6 +213,87 @@ every tool-render row, now grilled and settled into two tickets: an audit
     durable blue reliably and which do not, and traces why for each one
   - the report recommends, with reasoning, whether the two
     `isBashGuardReason` copies should become one shared function
+- [ ] **Ticket H7: A pending-approval indicator and modal in the composer.**
+  Asked for 2026-09-05. A small yellow warning circle appears near the
+  composer overflow trigger whenever the session has one or more pending
+  approvals. Clicking it opens a modal that lists every pending approval,
+  and each row carries a jump-to-call action that scrolls the conversation
+  to the tool call that approval belongs to. Ships on its own. It is also
+  the hard prerequisite for H8, because an inline card alone can be scrolled
+  off screen, and because some approvals cannot attach to a card at all
+  (see the next point).
+
+  Facts already verified on 2026-09-05, do not re-derive them:
+
+  - `snapshot.pending` is `readonly PendingInteraction[]`
+    (`dsh-client-runtime/lib/types/client/sessions/conversation.d.ts:385`),
+    and those are live `PendingWait` instances, not copies.
+  - Only two kinds exist, `approval` and `question`
+    (`dsh-client-runtime/lib/types/client/sessions/pending.d.ts:3-12`).
+  - `callId` is OPTIONAL on the `approval/requested` frame
+    (`dsh-host-apiproxy/lib/types/api/events.d.ts:80`). An approval with no
+    `callId` has no card to attach to, so the modal is its only surface.
+  - `plugins/composer-menu` already owns the overflow trigger and the
+    order-tier contract on that row. The indicator must respect it.
+
+  **Evaluate:**
+
+  - the indicator appears when at least one approval is pending, and
+    disappears once every one is answered
+  - the modal lists every pending approval, including one with no `callId`
+  - jump-to-call scrolls to the right tool call for an approval that has a
+    `callId`, and the row for an approval without one says so instead of
+    offering a dead action
+  - the indicator does not disturb the composer row order that
+    context-meter and composer-menu already share
+- [ ] **Ticket H8: Inline approval actions on the tool call card.** Asked
+  for 2026-09-05. Approve and reject move onto the bash tool call card
+  itself, so answering an approval no longer hijacks the composer while the
+  owner is typing. Scrollback then records what was approved and where,
+  instead of a series of identical composer takeovers.
+
+  **Blocked on H6 and H7.** H6 first, because this builds directly on
+  `snapshot.pending` and `isBashGuardReason`, which is exactly the surface
+  H6 audits, and three bugs already came out of it in one session. H7
+  second, because it is the safety net for a card scrolled off screen.
+
+  Facts already verified on 2026-09-05, do not re-derive them:
+
+  - The routing already exists. `plugins/tool-render/src/client.tsx:736`
+    already matches `payload.callId === props.callId` over
+    `snapshot.pending` to decide the blue guard mark.
+  - The answer wire already exists. `respond(result)` is a method ON the
+    pending object (`pending.d.ts:51`), not a composer-only capability, so
+    a card holding that object can answer without the composer.
+  - `plugins/approval-comment` wins the `conversation.composer` slot by
+    registering at priority 0 against the shipped panel's priority 1
+    (see its own header comment, lines 5-8). Suppressing the takeover means
+    changing that entry, not deleting the plugin: reject-with-comment still
+    needs a home.
+  - **Question cards are OUT OF SCOPE and cannot be done here.** The
+    `question/requested` frame carries only `{ sessionId, questions }`
+    (`events.d.ts:88-90`). It has no `callId`, so an `ask_user_question`
+    card cannot be routed to its call without an upstream dsh frame change.
+    The owner dropped this half on 2026-09-05. Do not reopen it as if it
+    were merely unimplemented.
+
+  Open design points for the implementer, not yet settled:
+
+  - Where reject-with-comment lives once the takeover is gone. The comment
+    box is the whole reason `approval-comment` exists.
+  - Whether the takeover is removed outright or kept as a fallback for an
+    approval with no `callId`.
+
+  **Evaluate:**
+
+  - a bash-guard approval renders approve and reject on its own tool call
+    card, and answering from there resolves the same approval
+  - the composer stays editable, and an in-progress draft survives the
+    whole approval
+  - reject-with-comment still works, and the steer still rides the same
+    step boundary it does today
+  - an approval with no `callId` is still answerable, through H7's modal
+  - the answered card still shows what was decided after a page reload
 
 ## Phase 2: tool-render cards and tooltips — `pending`
 
@@ -326,6 +411,68 @@ every tool-render row, now grilled and settled into two tickets: an audit
   **Evaluate:**
 
   - an older list can be opened and inserted into the composer
+- [ ] **Ticket B5: The todo panel header becomes two badges.** Asked for and
+  fully specced with the owner on 2026-09-05. The
+  `plugins/durable-todos` header replaces its title-plus-prose-summary
+  (`client.tsx:138-139`, the `buildSummary()` string at lines 110-119) with
+  two badges side by side.
+
+  The spec, settled:
+
+  - Badge one reads `To-do list`. It matches the tool call card's name badge
+    in size, border, and radius, but NOT its color: it takes one fixed color
+    of its own. It does not call tool-render's `toolNameHue`, so the two
+    plugins gain no shared-code dependency for this.
+  - Badge two is one badge split into four segments, in this order:
+    `TOTAL · 10 | DOING · 1 | PENDING · 2 | DONE · 2`. The pipes are the
+    split points, drawn as dividers. Each label is bold, grey, and muted.
+    Each segment carries an icon before its label.
+  - The icons, all from the shipped primitives and all rendered at
+    `size={14}`: TOTAL `IconChecklistOutline14`, DOING `IconPlayOutline16`,
+    PENDING `IconQueueOutline14`, DONE `IconCheckOutline14`. A 16px icon at
+    `size={14}` is the established pattern here, see tool-render's
+    `IconAgentPresetOutline16 size={14}`.
+  - A segment whose count is zero is hidden. TOTAL is always shown, even at
+    zero, so the header never collapses to nothing.
+  - The `carried over` tag is removed: the `<span>` at `client.tsx:141` and
+    the `.durable-todos-carried` rule at `client.module.css:70`. Remove ONLY
+    those two. The `carriedOver` field stays in `projection.ts`, its zod
+    schema, and its eight tests. It is persisted state and `apply()` reads
+    it at `projection.ts:52`.
+  - The Remind button stays where it is, on the right.
+
+  **Evaluate:**
+
+  - the header shows both badges, and the split badge's four segments read
+    as specced with their icons
+  - a zero count hides its segment, TOTAL survives at zero, and an empty
+    list still renders a readable header
+  - `rg carried plugins/durable-todos/src` still finds the projection and
+    its tests, and finds nothing in `client.tsx` or `client.module.css`
+  - the existing durable-todos tests still pass untouched
+- [ ] **Ticket B6: A disabled chevron replaces the missing one.** Settled
+  with the owner on 2026-09-05. A row that cannot expand currently renders
+  no chevron at all, so its title sits at a different x position than an
+  expandable row's, and a row that gains a body shifts sideways. Render the
+  chevron always, greyed out and non-interactive when there is nothing to
+  expand, so the layout never shifts.
+
+  This lands in two places, and both must change together:
+
+  - `plugins/tool-render/src/client.tsx:604`, the shared row builder's
+    `interactive ? <IconChevronDownOutline14 .../> : null`. This is the
+    shared path, so EVERY non-expandable tool card in the app gains a greyed
+    chevron. That breadth is intended, not a side effect.
+  - `plugins/durable-todos/src/client.tsx:132`, whose chevron is already
+    always rendered but is still live when the list is empty.
+
+  **Evaluate:**
+
+  - a non-expandable tool card shows a greyed chevron, and its title starts
+    at the same x position as an expandable card's
+  - the greyed chevron does not respond to a click and is hidden from
+    assistive technology
+  - the todo panel header holds its layout with an empty list
 
 ## Phase 5: Screenshot gallery — `pending`
 
