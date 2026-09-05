@@ -40,6 +40,7 @@ import {
   mergeCss,
   fetchJson,
   putJson,
+  request,
   registerLocale,
 } from "../../shared/client-util";
 import { entryHead, normalizeEntry, chainNameForRoutes } from "../../profile-routes";
@@ -277,6 +278,9 @@ window.__ModuleLoader__.load({
         var profileConfigState = useState(null);
         var profileConfig = profileConfigState[0];
         var setProfileConfig = profileConfigState[1];
+        var errorDownState = useState([]);
+        var errorDown = errorDownState[0];
+        var setErrorDown = errorDownState[1];
 
         useEffect(
           function () {
@@ -322,6 +326,20 @@ window.__ModuleLoader__.load({
             ) {
               setProfileConfig(result.data.config);
             }
+            var down =
+              result.data !== null &&
+              result.data !== void 0 &&
+              result.data.errorCache !== null &&
+              result.data.errorCache !== void 0 &&
+              Array.isArray(result.data.errorCache.down)
+                ? result.data.errorCache.down
+                : [];
+            setErrorDown(down);
+          });
+        };
+        var resetErrorCache = function () {
+          request("DELETE", "/profiles/error-cache").then(function () {
+            fetchProfiles();
           });
         };
         useEffect(
@@ -405,10 +423,23 @@ window.__ModuleLoader__.load({
           select(selection).then(
             function (accepted) {
               if (accepted) setOpen(false);
+              if (accepted) {
+                request("DELETE", "/profiles/error-cache").then(function () {
+                  fetchProfiles();
+                });
+              }
             },
             function () {},
           );
         };
+
+        /** Efforts of a catalog model (or [] when it advertises none). */
+        function seatEffortsOf(reasoning) {
+          if (reasoning !== void 0 && reasoning !== null && Array.isArray(reasoning.efforts)) {
+            return reasoning.efforts;
+          }
+          return [];
+        }
 
         var onKeyDown = function (event) {
           if (event.key === "Escape" && open) {
@@ -424,12 +455,44 @@ window.__ModuleLoader__.load({
             ? face.head.model + " (" + face.head.provider + ")"
             : null;
         var hasProfile = face.active !== void 0 && face.active !== "";
-        var modelText =
+        var triggerModelText =
           currentPretty !== null
-            ? currentPretty.model + " (" + currentPretty.provider + ")"
-            : headText !== null
-              ? headText
+            ? currentPretty.model
+            : face.head !== void 0 && face.head !== null
+              ? prettyOf(face.head.provider, face.head.model).model
               : t("seat.fallback");
+        var triggerProviderText =
+          currentPretty !== null
+            ? currentPretty.provider
+            : face.head !== void 0 && face.head !== null
+              ? prettyOf(face.head.provider, face.head.model).provider
+              : null;
+        /** Current directory selection's catalog entry and advertised efforts. */
+        var seatCurrentCat = null;
+        if (current !== void 0 && current !== null) {
+          for (var sgi = 0; sgi < state.groups.length; sgi++) {
+            if (state.groups[sgi].id !== current.provider) continue;
+            var sgModels =
+              state.groups[sgi].models !== void 0 && state.groups[sgi].models !== null
+                ? state.groups[sgi].models
+                : [];
+            for (var smi = 0; smi < sgModels.length; smi++) {
+              if (sgModels[smi].id === current.model) {
+                seatCurrentCat = sgModels[smi];
+                break;
+              }
+            }
+            break;
+          }
+        }
+        var seatEffortList = seatCurrentCat !== null ? seatEffortsOf(seatCurrentCat.reasoning) : [];
+        var seatEffortValue =
+          current !== void 0 &&
+          current !== null &&
+          typeof current.reasoningEffort === "string" &&
+          current.reasoningEffort !== ""
+            ? current.reasoningEffort
+            : "";
 
         return (
           <div className="profiles-client-root" ref={rootRef} onKeyDown={onKeyDown}>
@@ -461,7 +524,12 @@ window.__ModuleLoader__.load({
                   />
                 </span>
               ) : null}
-              <span className="profiles-client-model-label">{modelText}</span>
+              <span className="profiles-client-model-label">
+                <span className="profiles-client-model-name">{triggerModelText}</span>
+                {triggerProviderText !== null ? (
+                  <span className="profiles-client-model-provider">{triggerProviderText}</span>
+                ) : null}
+              </span>
               <IconChevronDownOutline14
                 className={
                   open
@@ -473,6 +541,39 @@ window.__ModuleLoader__.load({
             </button>
             {open ? (
               <div className="profiles-client-menu" role="listbox">
+                {seatEffortList.length > 0 && current !== void 0 && current !== null ? (
+                  <div className="profiles-client-effort-row">
+                    <span className="profiles-client-effort-label">
+                      {currentPretty !== null ? currentPretty.model : current.model}
+                    </span>
+                    <select
+                      className="profiles-client-effort"
+                      value={seatEffortValue}
+                      aria-label="Model reasoning effort"
+                      onChange={function (event) {
+                        var effort = event.target.value;
+                        select({
+                          provider: current.provider,
+                          model: current.model,
+                          reasoningEffort: effort === "" ? undefined : effort,
+                        });
+                      }}
+                    >
+                      <option value="">Default</option>
+                      {seatEffortList.map(function (eff) {
+                        return (
+                          <option
+                            key={eff.id}
+                            value={eff.id}
+                            title={eff.description !== void 0 ? eff.description : undefined}
+                          >
+                            {eff.name}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                ) : null}
                 <button
                   type="button"
                   className="profiles-client-option"
@@ -508,6 +609,11 @@ window.__ModuleLoader__.load({
                             putJson("/profiles/switch", { active: row.key }).then(
                               function (result) {
                                 if (!result.error) setOpen(false);
+                                if (!result.error) {
+                                  request("DELETE", "/profiles/error-cache").then(function () {
+                                    fetchProfiles();
+                                  });
+                                }
                               },
                             );
                           }}
@@ -566,32 +672,26 @@ window.__ModuleLoader__.load({
                               current.provider === grp.id &&
                               current.model === row.id;
                             return (
-                              <div
+                              <button
                                 key={grp.id + "/" + row.id}
-                                className="profiles-client-model-row"
+                                type="button"
+                                className="profiles-client-option"
+                                onClick={function () {
+                                  pick({ provider: grp.id, model: row.id });
+                                }}
                               >
-                                <button
-                                  type="button"
-                                  className="profiles-client-option"
-                                  onClick={function () {
-                                    pick({ provider: grp.id, model: row.id });
-                                  }}
-                                >
-                                  <span className="profiles-client-option-copy">
-                                    <span className="profiles-client-option-name profiles-client-option-model">
-                                      {row.name}
-                                    </span>
-                                    <span className="profiles-client-option-detail">
-                                      {grp.label}
-                                    </span>
+                                <span className="profiles-client-option-copy profiles-client-option-copy-model">
+                                  <span className="profiles-client-option-name profiles-client-option-model">
+                                    {row.name}
                                   </span>
-                                  {isActive ? (
-                                    <span className="profiles-client-check" aria-hidden={true}>
-                                      &#x2713;
-                                    </span>
-                                  ) : null}
-                                </button>
-                              </div>
+                                  <span className="profiles-client-option-detail">{grp.label}</span>
+                                </span>
+                                {isActive ? (
+                                  <span className="profiles-client-check" aria-hidden={true}>
+                                    &#x2713;
+                                  </span>
+                                ) : null}
+                              </button>
                             );
                           })}
                         </div>
@@ -599,6 +699,22 @@ window.__ModuleLoader__.load({
                     })
                   )}
                 </div>
+                {errorDown.length > 0 ? (
+                  <div className="profiles-client-error-row">
+                    <span className="profiles-client-error-count">
+                      {errorDown.length + " cached down"}
+                    </span>
+                    <button
+                      type="button"
+                      className="profiles-client-error-reset"
+                      onClick={function () {
+                        resetErrorCache();
+                      }}
+                    >
+                      Reset
+                    </button>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -813,9 +929,23 @@ window.__ModuleLoader__.load({
             if (chain === void 0) return next;
             if (Array.isArray(chain)) {
               // A route-pair step carries its own effort; picking one on a
-              // string step converts it to a pair, and clearing converts it
-              // back to the compact string form.
+              // "provider/model" string step converts it to a pair that keeps
+              // the model, and clearing converts it back to the compact
+              // string form.
               var step = chain[index];
+              if (typeof step === "string") {
+                if (effort === "") return next;
+                if (step.indexOf("chain:") === 0) return next;
+                if (next.chains[step] !== void 0) return next;
+                var slash = step.indexOf("/");
+                if (slash <= 0) return next;
+                chain[index] = {
+                  provider: step.slice(0, slash),
+                  model: step.slice(slash + 1),
+                  reasoningEffort: effort,
+                };
+                return next;
+              }
               if (step !== null && typeof step === "object" && step.provider !== void 0) {
                 if (effort === "") {
                   chain[index] = step.provider + "/" + step.model;
@@ -836,9 +966,10 @@ window.__ModuleLoader__.load({
           });
         };
         /**
-         * Replace a composition step's model. A pair step stays a pair (the
-         * new model drops the old effort, matching the routes-branch rung
-         * editor); a string step stays a string.
+         * Replace a composition step's model. A pair step stays a pair, keeping
+         * the old effort when the new model advertises it and dropping it
+         * otherwise; a string step stays a string. Chain refs pass through
+         * untouched so draft values are never cleared.
          */
         var setChainStepModel = function (chainName, index, value) {
           setDraft(function (prev) {
@@ -849,11 +980,47 @@ window.__ModuleLoader__.load({
               chain[index] = "";
               return next;
             }
+            if (value.indexOf("chain:") === 0) {
+              chain[index] = value;
+              return next;
+            }
             var slash = value.indexOf("/");
-            if (slash <= 0) return next;
+            if (slash <= 0) {
+              chain[index] = value;
+              return next;
+            }
             var step = chain[index];
             if (step !== null && typeof step === "object") {
-              chain[index] = { provider: value.slice(0, slash), model: value.slice(slash + 1) };
+              var newProvider = value.slice(0, slash);
+              var newModel = value.slice(slash + 1);
+              var oldEffort = typeof step.reasoningEffort === "string" ? step.reasoningEffort : "";
+              var keepEffort = false;
+              if (oldEffort !== "") {
+                for (var kci = 0; kci < catalogModels.length; kci++) {
+                  if (
+                    catalogModels[kci].provider === newProvider &&
+                    catalogModels[kci].model === newModel
+                  ) {
+                    var advertised = effortsOf(catalogModels[kci].reasoning);
+                    for (var kei = 0; kei < advertised.length; kei++) {
+                      if (advertised[kei].id === oldEffort) {
+                        keepEffort = true;
+                        break;
+                      }
+                    }
+                    break;
+                  }
+                }
+              }
+              if (keepEffort) {
+                chain[index] = {
+                  provider: newProvider,
+                  model: newModel,
+                  reasoningEffort: oldEffort,
+                };
+              } else {
+                chain[index] = { provider: newProvider, model: newModel };
+              }
             } else {
               chain[index] = value;
             }
@@ -1010,6 +1177,40 @@ window.__ModuleLoader__.load({
 
         var downRungs = (errorCache.down || []).length;
         var chainKeys = Object.keys(config.chains);
+        /** True when a "provider/model" value exists in the live catalog. */
+        function catalogHasRoute(value) {
+          if (typeof value !== "string") return false;
+          var slash = value.indexOf("/");
+          if (slash <= 0) return false;
+          var provider = value.slice(0, slash);
+          var model = value.slice(slash + 1);
+          for (var hi = 0; hi < catalogModels.length; hi++) {
+            if (catalogModels[hi].provider === provider && catalogModels[hi].model === model) {
+              return true;
+            }
+          }
+          return false;
+        }
+        /** True when a composition step value resolves to a chain ref or catalog model. */
+        function stepIsKnown(value) {
+          if (value === "" || value === void 0) return true;
+          if (typeof value !== "string") return true;
+          if (value.indexOf("chain:") === 0) {
+            return chainKeys.indexOf(value.slice("chain:".length)) !== -1;
+          }
+          if (chainKeys.indexOf(value) !== -1) return true;
+          return catalogHasRoute(value);
+        }
+        /** Extra option that carries a stale raw value so the row shows data. */
+        function staleStepOption(value) {
+          if (value === "" || value === void 0 || stepIsKnown(value)) return null;
+          return <option value={value}>{value + " (not in catalog)"}</option>;
+        }
+        /** True when an entry string ref names a live chain. */
+        function entryRefIsKnown(ref) {
+          if (ref === void 0) return true;
+          return chainKeys.indexOf(ref) !== -1;
+        }
         /**
          * One optgroup per catalog provider (skipping empty groups), with an
          * optional leading Chains optgroup for composition-step references.
@@ -1181,6 +1382,9 @@ window.__ModuleLoader__.load({
                                 </option>
                               );
                             })}
+                            {currentRef !== void 0 && !entryRefIsKnown(currentRef) ? (
+                              <option value={currentRef}>{currentRef + " (not in catalog)"}</option>
+                            ) : null}
                             {isInline ? (
                               <option value="__inline__">
                                 {fieldSummary(field, config.chains)}
@@ -1259,12 +1463,29 @@ window.__ModuleLoader__.load({
                               step.provider !== "" &&
                               typeof step.model === "string" &&
                               step.model !== "";
-                            var catModel = null;
+                            var lookupProvider = null;
+                            var lookupModel = null;
                             if (isPair) {
+                              lookupProvider = step.provider;
+                              lookupModel = step.model;
+                            } else if (
+                              typeof step === "string" &&
+                              step !== "" &&
+                              step.indexOf("chain:") !== 0 &&
+                              chainKeys.indexOf(step) === -1
+                            ) {
+                              var sslash = step.indexOf("/");
+                              if (sslash > 0) {
+                                lookupProvider = step.slice(0, sslash);
+                                lookupModel = step.slice(sslash + 1);
+                              }
+                            }
+                            var catModel = null;
+                            if (lookupProvider !== null) {
                               for (var ci = 0; ci < catalogModels.length; ci++) {
                                 if (
-                                  catalogModels[ci].provider === step.provider &&
-                                  catalogModels[ci].model === step.model
+                                  catalogModels[ci].provider === lookupProvider &&
+                                  catalogModels[ci].model === lookupModel
                                 ) {
                                   catModel = catalogModels[ci];
                                   break;
@@ -1287,6 +1508,7 @@ window.__ModuleLoader__.load({
                                 >
                                   <option value="">— select step —</option>
                                   {modelChainOptions(true)}
+                                  {staleStepOption(stepValue)}
                                 </select>
                                 {efforts.length > 0 ? (
                                   <select
@@ -1328,6 +1550,8 @@ window.__ModuleLoader__.load({
                           })
                         : steps.map(function (rung, index) {
                             var rungKey = rung.provider + "/" + rung.model;
+                            var rungSelectValue =
+                              rung.provider !== "" && rung.model !== "" ? rungKey : "";
                             var catModel = null;
                             for (var ci = 0; ci < catalogModels.length; ci++) {
                               if (
@@ -1341,18 +1565,25 @@ window.__ModuleLoader__.load({
                             var efforts = catModel !== null ? effortsOf(catModel.reasoning) : [];
                             var currentEffort =
                               typeof rung.reasoningEffort === "string" ? rung.reasoningEffort : "";
+                            var rungStale =
+                              rungSelectValue !== "" && !catalogHasRoute(rungSelectValue);
                             return (
                               <div className="pf-panel-model-row" key={index}>
                                 <div className="pf-panel-row">
                                   <select
                                     className="pf-panel-select"
-                                    value={rungKey}
+                                    value={rungSelectValue}
                                     onChange={function (event) {
                                       setChainRungModel(chainName, index, event.target.value);
                                     }}
                                   >
                                     <option value="">— select model —</option>
                                     {modelChainOptions(false)}
+                                    {rungStale ? (
+                                      <option value={rungSelectValue}>
+                                        {rungSelectValue + " (not in catalog)"}
+                                      </option>
+                                    ) : null}
                                   </select>
                                   {efforts.length > 0 ? (
                                     <select
@@ -1434,8 +1665,16 @@ window.__ModuleLoader__.load({
               {downRungs > 0 ? (
                 <span>
                   {downRungs + " rung" + (downRungs === 1 ? "" : "s") + " cached down "}
-                  <button type="button" className="dsp-refresh" onClick={fetchConfig}>
-                    Retry now
+                  <button
+                    type="button"
+                    className="dsp-refresh"
+                    onClick={function () {
+                      request("DELETE", "/profiles/error-cache").then(function () {
+                        fetchConfig();
+                      });
+                    }}
+                  >
+                    Reset
                   </button>
                 </span>
               ) : null}
