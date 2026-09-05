@@ -682,6 +682,12 @@ replacement dropdown and modal with a kill button (T4), and wire-up —
 
 # Effort 7 — tool-render: error styling and image tool cards
 
+Shipped besides the tickets below: the structured compaction checkpoint card
+(`a483ba4`, fed by a `tool-render/compaction-views` projection; the card stays
+dormant until the dsh-compaction-instant `prettyview` branch lands), the
+interrupt_agent card (`8a50d9e`), badge tooltips (`ed4570d`), and the
+durable blue bash-guard mark (T4 below).
+
 ## Vision
 
 `read_image` and `see` tool calls render as generic cards today. The image
@@ -794,31 +800,10 @@ about six lines. Change it if it reads wrong.
 
 ### T4 — the bash card's blue mark must survive the approval
 
-Not started. T3 (the image cards) shipped; see git log.
-
-Today the bash row outlines blue only while its approval sits in
-`snapshot.pending`. Answer the approval and the mark vanishes, because
-`pending` is the only signal the client can currently reach. The owner wants
-the mark to persist for the life of the call, so a transcript still shows
-which commands ran under a bash-guard rule.
-
-The fix is a host mirror projection, the pattern `plugins/durable-todos`
-already demonstrates end to end: `plugins/durable-todos/src/projection.ts`
-defines a `ProjectionDefinition` (key, `stateVersion`, zod `schema`, `init`,
-`apply`, `view`) and declaration-merges its key into `SessionProjectionMap`;
-`src/index.ts` registers it with `scope.sessionProjections.register(...)`;
-the client reads it with `props.useProjection(key)`.
-
-Here that means: a host half records, per `callId`, that bash-guard raised
-the approval, and `BashRow` reads that projection instead of depending on
-`snapshot.pending` alone.
-
-**Acceptance criteria**
-
-- A bash call approved through a bash-guard rule keeps its blue outline after
-  the approval is answered, and after a page reload.
-- A sandbox escalation still outlines orange, not blue.
-- A bash call that never raised an approval has no outline at all.
+Shipped in `63a9f5f`. A host projection (`tool-render/guarded-approvals`) folds
+`approval/asked` events into a callId-keyed set, and `BashRow` marks blue from
+the live pending check, that durable set, or the rewritten-command signal.
+Live verification stays in the Human review queue below.
 
 ## Human review queue
 
