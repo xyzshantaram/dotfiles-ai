@@ -80,42 +80,6 @@
   color: var(--dsw-alias-label-tertiary);
   padding-left: 8px;
 }
-/* Sliding toggle switch for the web search row. Off: knob left, neutral
-   track. On: knob right, track and knob take the business color. */
-.composer-menu-toggle-track {
-  width: 34px;
-  height: 18px;
-  border-radius: 999px;
-  background: var(--dsw-alias-border-l2);
-  transition: background-color 0.15s ease;
-  flex: none;
-  position: relative;
-}
-.composer-menu-toggle-track[data-on="true"] {
-  background: var(--dsw-alias-state-business-primary);
-}
-.composer-menu-toggle-knob {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--dsw-specific-menu);
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  transform: translateX(0);
-  transition: transform 0.15s ease;
-}
-.composer-menu-toggle-track[data-on="true"] .composer-menu-toggle-knob {
-  transform: translateX(16px);
-}
-/* Unknown mode (first fetch in flight) or unavailable target: read as
-   switched off and dimmed, with the row disabled on the Radix side. */
-.composer-menu-toggle-track[data-pending="true"] {
-  opacity: 0.5;
-}
-.composer-menu-item[data-disabled] .composer-menu-toggle-track {
-  opacity: 0.5;
-}
 .composer-menu-separator {
   height: 1px;
   background: var(--dsw-alias-border-l3);

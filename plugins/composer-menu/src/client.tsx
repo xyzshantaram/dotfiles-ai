@@ -87,6 +87,61 @@ function apply(ctx: any) {
     }
   }
 
+  // Two composer-row corrections, both needing hashed shipped class names, so
+  // they resolve lazily beside ensureShippedHidden and are injected once.
+  //
+  // 1. The shipped `modes` group holds the access select (which this menu
+  //    hides) and the plan seat. An empty flex child still consumes one of the
+  //    tool row's gaps, which pushed the menu trigger off the composer's
+  //    bottom-left corner. `display: contents` removes the box while keeping
+  //    any plan seat visible as a sibling.
+  // 2. The attachment picker registers in conversation.input.right, and that
+  //    whole slot renders BEFORE the model seat, the context meter, and the
+  //    send/stop buttons. DOM order cannot be changed from here, so flex
+  //    `order` moves the picker past the seats while the primary buttons stay
+  //    last. The picker may be a direct flex child or wrapped by the slot, so
+  //    both shapes are matched.
+  let layoutDone = false;
+  let layoutWarned = false;
+  function ensureComposerLayout() {
+    if (layoutDone) return;
+    const modes = shippedClass("InputBar.module.css", "_modes");
+    const trailing = shippedClass("InputBar.module.css", "_trailing");
+    const primary = shippedClass("InputBar.module.css", "_primary");
+    if (modes === null || trailing === null || primary === null) {
+      if (attempts >= 20 && !layoutWarned) {
+        layoutWarned = true;
+        console.error(
+          "composer menu: could not read the InputBar row classes, so the menu " +
+            "and the attach button keep their shipped positions.",
+        );
+      }
+      return;
+    }
+    injectStyle(
+      PLUGIN_NAME,
+      "composer-menu-row-layout",
+      "." +
+        modes +
+        " { display: contents; }\n" +
+        "." +
+        trailing +
+        " > .dsh-p2p-picker, ." +
+        trailing +
+        " > *:has(.dsh-p2p-picker) { order: 1; }\n" +
+        "." +
+        trailing +
+        " > ." +
+        primary +
+        ", ." +
+        trailing +
+        " > *:has(> ." +
+        primary +
+        ") { order: 2; }",
+    );
+    layoutDone = true;
+  }
+
   /** Post one preset choice to the host route. */
   function choose(sessionId: string, preset: string) {
     postJson("/composer-menu/api/permission", { sessionId: sessionId, preset: preset }).then(
@@ -99,6 +154,7 @@ function apply(ctx: any) {
   function Menu(props: any) {
     react.useEffect(() => {
       ensureShippedHidden();
+      ensureComposerLayout();
     });
 
     const [open, setOpen] = react.useState(false);
@@ -230,85 +286,115 @@ function apply(ctx: any) {
       );
     }
 
-    // The web search toggle, moved out of dsh-web-tools' left-edge button.
-    // Data comes from that plugin's routes: mode "required" forces a search
-    // before the answer, "auto" leaves the choice to the agent. The row
-    // refetches on every mount (the menu content only mounts while open) and
-    // on window focus; an always-visible control needed polling, a menu row
-    // does not.
-    const SEARCH_MODE_API = "/web-tools/api/search-mode";
-    function SearchToggle() {
-      const [mode, setMode] = react.useState(null as null | "auto" | "required");
-      const [available, setAvailable] = react.useState(true);
-      const inFlight = react.useRef(false);
+    // The web search submenu, moved out of dsh-web-tools' left-edge button.
+    // "force" is that plugin's "required" mode, "auto" leaves the choice to
+    // the agent, and "off" hides the web tools entirely (handled by our own
+    // host route). The submenu refetches on mount (the menu content only
+    // mounts while open) and on window focus.
+    const [value, setValue] = react.useState("auto" as "force" | "auto" | "off");
+    const inFlight = react.useRef(false);
 
-      /** Read the current mode. Failures keep the last known state. */
-      const refresh = react.useCallback(() => {
-        postJson(SEARCH_MODE_API + "/get", { sessionId: props.sessionId }).then((result) => {
-          const value = result.data && result.data.value;
-          if (result.error || !value) {
-            if (result.error) console.error("composer menu: " + result.error);
-            return;
-          }
-          setMode(value.mode);
-          setAvailable(value.available !== false);
+    /** Read both endpoints and compose one value.
+     *
+     * The two calls are independent on purpose. Off is owned by this plugin's
+     * own host route, so a failing dsh-web-tools route must not hide it: a
+     * session that is off still reads as off. A missing answer falls back to
+     * "auto", which is the state the host defaults to as well. */
+    const refresh = react.useCallback(() => {
+      Promise.all([
+        postJson("/web-tools/api/search-mode/get", { sessionId: props.sessionId }),
+        postJson("/composer-menu/api/web-mode/get", { sessionId: props.sessionId }),
+      ]).then(([searchResult, offResult]) => {
+        if (searchResult.error) console.error("composer menu: " + searchResult.error);
+        if (offResult.error) console.error("composer menu: " + offResult.error);
+        if (offResult.data && offResult.data.off === true) {
+          setValue("off");
+          return;
+        }
+        const payload = searchResult.data && searchResult.data.value;
+        setValue(payload && payload.mode === "required" ? "force" : "auto");
+      });
+    }, [props.sessionId]);
+
+    react.useEffect(() => {
+      refresh();
+      window.addEventListener("focus", refresh);
+      return () => window.removeEventListener("focus", refresh);
+    }, [refresh]);
+
+    /** Optimistic choice with a revert to the previous value on failure.
+     * One request at a time, so a fast second click cannot revert to a
+     * stale value. */
+    const select = (next: "force" | "auto" | "off") => {
+      if (inFlight.current) return;
+      const previous = value;
+      inFlight.current = true;
+      setValue(next);
+      const setOff = (off: boolean) =>
+        postJson("/composer-menu/api/web-mode/set", {
+          sessionId: props.sessionId,
+          off: off,
         });
-      }, [props.sessionId]);
-
-      react.useEffect(() => {
-        refresh();
-        window.addEventListener("focus", refresh);
-        return () => window.removeEventListener("focus", refresh);
-      }, [refresh]);
-
-      /** Optimistic switch with a revert to the previous mode on failure.
-       * One request at a time, so a fast second click cannot revert to a
-       * stale value. */
-      const toggle = () => {
-        if (mode === null || !available || inFlight.current) return;
-        const previous = mode;
-        const next = mode === "required" ? "auto" : "required";
-        inFlight.current = true;
-        setMode(next);
-        postJson(SEARCH_MODE_API + "/set", { sessionId: props.sessionId, mode: next }).then(
-          (result) => {
-            inFlight.current = false;
-            if (result.error) {
-              setMode(previous);
-              console.error("composer menu: " + result.error);
-              return;
-            }
-            refresh();
-          },
+      // Force and Auto differ only in the mode they hand dsh-web-tools, so
+      // they share one path. Both also clear our own off flag, because
+      // choosing either one means the web tools are visible again.
+      const send = () => {
+        if (next === "off") return setOff(true);
+        return setOff(false).then(() =>
+          postJson("/web-tools/api/search-mode/set", {
+            sessionId: props.sessionId,
+            mode: next === "force" ? "required" : "auto",
+          }),
         );
       };
+      send().then((result) => {
+        inFlight.current = false;
+        if (result.error) {
+          setValue(previous);
+          console.error("composer menu: " + result.error);
+          return;
+        }
+        refresh();
+      });
+    };
 
-      const on = mode === "required";
-      return react.createElement(
-        DropdownMenu.Item,
-        { className: "composer-menu-item", disabled: mode === null || !available, onSelect: toggle },
-        react.createElement("span", { key: "icon", className: "composer-menu-icon" }),
+    const searchBody = react.createElement(
+      DropdownMenu.RadioGroup,
+      { value: value },
+      (["force", "auto", "off"] as const).map((mode) =>
         react.createElement(
-          "span",
-          { key: "label", className: "composer-menu-label" },
-          "Web search",
-        ),
-        react.createElement(
-          "span",
+          DropdownMenu.RadioItem,
           {
-            key: "switch",
-            className: "composer-menu-toggle-track",
-            "data-on": on ? "true" : "false",
-            "data-pending": mode === null ? "true" : undefined,
-            role: "switch",
-            "aria-checked": on,
-            "aria-label": "Web search",
+            key: mode,
+            value: mode,
+            className: "composer-menu-item",
+            onSelect: () => select(mode),
           },
-          react.createElement("span", { className: "composer-menu-toggle-knob" }),
+          row(mode === "force" ? "Force" : mode === "auto" ? "Auto" : "Off"),
         ),
-      );
-    }
-    const searchRow = react.createElement(SearchToggle);
+      ),
+    );
+
+    const searchSub = react.createElement(
+      DropdownMenu.Sub,
+      null,
+      react.createElement(
+        DropdownMenu.SubTrigger,
+        { className: "composer-menu-item" },
+        react.createElement("span", { key: "mark", className: "composer-menu-mark" }),
+        react.createElement("span", { key: "label", className: "composer-menu-label" }, "Web search"),
+        react.createElement("span", { key: "chev", className: "composer-menu-chevron" }, "›"),
+      ),
+      react.createElement(
+        DropdownMenu.Portal,
+        null,
+        react.createElement(
+          DropdownMenu.SubContent,
+          { className: "composer-menu-content" },
+          searchBody,
+        ),
+      ),
+    );
 
     const sandboxSub = react.createElement(
       DropdownMenu.Sub,
@@ -380,7 +466,7 @@ function apply(ctx: any) {
           { side: "top", align: "start", sideOffset: 8, className: "composer-menu-content" },
           sandboxSub,
           react.createElement(DropdownMenu.Separator, { className: "composer-menu-separator" }),
-          searchRow,
+          searchSub,
           hasExtra
             ? react.createElement(DropdownMenu.Separator, { className: "composer-menu-separator" })
             : null,

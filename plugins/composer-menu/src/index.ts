@@ -18,7 +18,11 @@ interface HostContext {
   webServer: WebServerHost;
   sessions: { get(id: string): unknown };
   permissionPresets: { set(session: unknown, name: string): void };
+  on(event: string, listener: (...args: any[]) => any): () => void;
 }
+
+// Sessions with the web tools off, keyed by the id the browser sends.
+const webOff = new Map<string, boolean>();
 
 const name = "composer-menu";
 const inject = ["webServer", "sessions", "permissionPresets"];
@@ -37,7 +41,39 @@ function readBody(req: IncomingMessage): Promise<string> {
 }
 
 function apply(ctx: HostContext): () => void {
-  return ctx.webServer.register({
+  // isOff checks both keys because the browser sends the session id and the
+  // gate sees the agent id. Those are expected to be the same value.
+  const isOff = (agent: any): boolean => {
+    if (webOff.get(agent.id) === true) return true;
+    const session = agent.session;
+    if (typeof session === "object" && session !== null && typeof session.id === "string")
+      return webOff.get(session.id) === true;
+    return false;
+  };
+
+  const stopCreated = ctx.on("agent/created", (payload: any) => {
+    const agent = payload.agent;
+    return agent.ctx.effect(() => {
+      const stop = agent.ctx.on(
+        "system-prompt/assemble",
+        async (assembly: any, context: any, next: () => Promise<any>) => {
+          const result = await next();
+          if (!isOff(agent)) return result;
+          return {
+            ...result,
+            tools: result.tools.filter(
+              (tool: any) => tool.name !== "web_search" && tool.name !== "web_fetch",
+            ),
+          };
+        },
+      );
+      return () => {
+        if (stop !== undefined) stop();
+      };
+    }, "composer-menu: web tools gate");
+  });
+
+  const disposeRoutes = ctx.webServer.register({
     kind: "prefix",
     path: "/composer-menu",
     async handler(req, res) {
@@ -47,44 +83,80 @@ function apply(ctx: HostContext): () => void {
       };
 
       const url = new URL(req.url ?? "/", "http://" + (req.headers.host ?? "127.0.0.1"));
-      if (req.method !== "POST" || url.pathname !== "/composer-menu/api/permission")
-        return reply(404, { error: "not found" });
+      if (req.method !== "POST") return reply(404, { error: "not found" });
 
-      // This route raises sandbox permissions, so it must not be reachable from
-      // any page the browser happens to load. A cross-origin JSON POST is
-      // stopped by the CORS preflight, but a text/plain POST carrying a JSON
-      // body does not preflight, so the preflight alone is not a defence.
-      // Browsers always send Origin on a POST, so demand that it matches.
-      if (req.headers.origin !== url.origin)
-        return reply(403, { error: "cross-origin request refused" });
+      // One gate for every route here. The permission route raises sandbox
+      // permissions, so it must not be reachable from any page the browser
+      // happens to load. A cross-origin JSON POST is stopped by the CORS
+      // preflight, but a text/plain POST carrying a JSON body does not
+      // preflight, so the preflight alone is not a defence. Browsers always
+      // send Origin on a POST, so demand that it matches. The web-mode routes
+      // hold the same line rather than each inventing their own.
+      // Returns the parsed body, or null once it has already replied.
+      const readGuardedBody = async (): Promise<Record<string, unknown> | null> => {
+        if (req.headers.origin !== url.origin) {
+          reply(403, { error: "cross-origin request refused" });
+          return null;
+        }
+        let body: unknown;
+        try {
+          body = JSON.parse(await readBody(req));
+        } catch {
+          reply(400, { error: "the request body must be JSON" });
+          return null;
+        }
+        if (typeof body !== "object" || body === null) {
+          reply(400, { error: "the request body must be a JSON object" });
+          return null;
+        }
+        return body as Record<string, unknown>;
+      };
 
-      let body: unknown;
-      try {
-        body = JSON.parse(await readBody(req));
-      } catch {
-        return reply(400, { error: "the request body must be JSON" });
+      if (url.pathname === "/composer-menu/api/permission") {
+        const body = await readGuardedBody();
+        if (body === null) return;
+        if (typeof body.sessionId !== "string" || typeof body.preset !== "string")
+          return reply(400, { error: 'expected a JSON body { "sessionId", "preset" }' });
+
+        const { sessionId, preset } = body as { sessionId: string; preset: string };
+        const session = ctx.sessions.get(sessionId);
+        if (session === undefined) return reply(404, { error: "no such session: " + sessionId });
+
+        // An unknown preset name throws, so map the failure onto a 400.
+        try {
+          ctx.permissionPresets.set(session, preset);
+        } catch (e) {
+          return reply(400, { error: String((e as Error).message ?? e) });
+        }
+        return reply(200, { ok: true });
       }
-      if (
-        typeof body !== "object" ||
-        body === null ||
-        typeof (body as { sessionId?: unknown }).sessionId !== "string" ||
-        typeof (body as { preset?: unknown }).preset !== "string"
-      )
-        return reply(400, { error: 'expected a JSON body { "sessionId", "preset" }' });
 
-      const { sessionId, preset } = body as { sessionId: string; preset: string };
-      const session = ctx.sessions.get(sessionId);
-      if (session === undefined) return reply(404, { error: "no such session: " + sessionId });
-
-      // An unknown preset name throws, so map the failure onto a 400.
-      try {
-        ctx.permissionPresets.set(session, preset);
-      } catch (e) {
-        return reply(400, { error: String((e as Error).message ?? e) });
+      if (url.pathname === "/composer-menu/api/web-mode/get") {
+        const body = await readGuardedBody();
+        if (body === null) return;
+        if (typeof body.sessionId !== "string")
+          return reply(400, { error: 'expected a JSON body { "sessionId" }' });
+        return reply(200, { ok: true, off: webOff.get(body.sessionId) === true });
       }
-      return reply(200, { ok: true });
+
+      if (url.pathname === "/composer-menu/api/web-mode/set") {
+        const body = await readGuardedBody();
+        if (body === null) return;
+        if (typeof body.sessionId !== "string" || typeof body.off !== "boolean")
+          return reply(400, { error: 'expected a JSON body { "sessionId", "off" }' });
+        if (body.off) webOff.set(body.sessionId, true);
+        else webOff.delete(body.sessionId);
+        return reply(200, { ok: true });
+      }
+
+      return reply(404, { error: "not found" });
     },
   });
+
+  return () => {
+    disposeRoutes();
+    if (stopCreated !== undefined) stopCreated();
+  };
 }
 
 export { apply, inject, name };
