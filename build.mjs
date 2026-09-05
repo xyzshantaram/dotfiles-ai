@@ -354,12 +354,26 @@ await wrapClientBundle(
   join(here, "plugins/tool-render/dist/client.js"),
   "tool-render",
 );
+// The banner is load-bearing, same as bash-guard/mcp-servers: guard.ts
+// imports yaml, whose composer guards a feature check with
+// `require("process")` (a bare specifier, not `node:process`), which the
+// `node:*` external pattern does not match. esbuild inlines its __require
+// shim for that call, and the shim throws in ESM output because no `require`
+// binding exists. Restoring a real `require` through createRequire satisfies
+// the shim. Without this the whole plugin tree fails to load and dsh does
+// not boot (Dynamic require of "process" is not supported).
 await build({
   entryPoints: [join(here, "plugins/tool-render/src/index.ts")],
   bundle: true,
   platform: "node",
   format: "esm",
   external: ["@deepseek-ai/*", "node:*"],
+  banner: {
+    js: [
+      'import { createRequire as __dshCreateRequire } from "node:module";',
+      "const require = __dshCreateRequire(import.meta.url);",
+    ].join("\n"),
+  },
   outfile: join(here, "plugins/tool-render/dist/index.js"),
   logLevel: "info",
 });
