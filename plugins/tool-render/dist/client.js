@@ -2456,11 +2456,27 @@ var client_default = `.tool-render-row {
   color: var(--dsw-alias-label-tertiary);
 }
 /* Each of the four ask-card text fields now renders through MarkdownText,
-   which wraps even one plain line in a <p>. These four spots are one line of
-   layout, not a markdown body, so a paragraph's default block margin would
-   only add unwanted vertical gaps. Zero it and keep the field's own text
-   metrics. Anything beyond a paragraph (a list, a heading) still renders; it
-   just does not get this rule's own tight spacing. */
+   which wraps even one plain line in its own markup. That cost two things
+   this row depended on: MarkdownText's own prose elements carry their own
+   color and font shorthand at every level of whatever it nests (a wrapper
+   div, then a <p>, and so on), overriding these four classes' own colors
+   (including the data-selected bold+primary label) and sizes, and a
+   paragraph's default block margin added unwanted vertical gaps in what is
+   one line of layout, not a markdown body. \`*\` resets color and font on
+   EVERY descendant, however deep MarkdownText nests -- each level inherits
+   from its own immediate parent, so the reset cascades all the way down to
+   the actual text, including an ancestor's font-weight or font-style such as
+   data-selected's bold or the note's italic. \`margin: 0\` on \`p\` alone
+   removes the paragraph gap. A genuine list or heading inside an answer
+   still renders; it just does not get this rule's own tight spacing or
+   color override. */
+.tool-render-question-prompt *,
+.tool-render-option-label *,
+.tool-render-option-description *,
+.tool-render-answer-note * {
+  color: inherit;
+  font: inherit;
+}
 .tool-render-question-prompt p,
 .tool-render-option-label p,
 .tool-render-option-description p,
