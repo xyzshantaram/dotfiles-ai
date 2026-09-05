@@ -1,0 +1,593 @@
+{
+ "stats": {
+  "files": 639,
+  "lines": 2062582,
+  "badLines": 0,
+  "sessions": 639,
+  "bashCalls": 33212,
+  "interventions": {
+   "translated": 0,
+   "could_not_translate": 53,
+   "parse_fail": 9,
+   "denied_by_rule": 248,
+   "blocked_approval": 0,
+   "not_run_directly": 284,
+   "other_guard": 0,
+   "translated_silent": 219,
+   "user_rejected": 36,
+   "could_not_apply": 4
+  },
+  "tokenSteps": {
+   "totalSteps": 57400,
+   "refusedSteps": 614,
+   "totalIn": 10449599761,
+   "totalOut": 52990347,
+   "refusedIn": 70015837,
+   "refusedOut": 533730
+  }
+ },
+ "topFailures": [
+  {
+   "cmd": "cd",
+   "count": 257,
+   "example": {
+    "cmd": "cd /tmp/dsh/grants && grep -n -i \"satoshis to 20 projects\" hrf1.txt | head; grep -n -i \"grantees\\|recipient\" hrf1.txt | head",
+    "text": "Error: bash-guard: that command is not run directly. Run this instead:\n\n  cd /tmp/dsh/grants && rg -n -i 'satoshis to 20 projects' hrf1.txt | head; rg -n -i 'grantees\\|recipient' hrf1.txt | head\n"
+   }
+  },
+  {
+   "cmd": "grep",
+   "count": 85,
+   "example": {
+    "cmd": "grep -n \"hn_49156683\\|hn_48747976\\|hn_49522897\" /tmp/dsh-spill-tehW5m/session-3fed05eb54c7/526bda337801-bash.txt | head; grep -c \"^48\\|^49\\|^47\" /tmp/dsh-spill-tehW5m/session-3fed05eb54c7/526bda337801-bash.txt",
+    "text": "Error: bash-guard: that command is not run directly. Run this instead:\n\n  rg -n 'hn_49156683\\|hn_48747976\\|hn_49522897' /tmp/dsh-spill-tehW5m/session-3fed05eb54c7/526bda337801-bash.txt | head; rg -c '^48\\|^49\\|^47' /tmp/dsh-spill-tehW5m/session-3fed0"
+   }
+  },
+  {
+   "cmd": "ls",
+   "count": 48,
+   "example": {
+    "cmd": "ls -la ~/repos/dotfiles-ai 2>/dev/null && echo \"---STRUCTURE---\" && find ~/repos/dotfiles-ai -maxdepth 2 -type d 2>/dev/null | head -60",
+    "text": "Error: bash-guard: the following command was denied:\n\n  ls -la ~/repos/dotfiles-ai 2>/dev/null && echo \"---STRUCTURE---\" && find ~/repos/dotfiles-ai -maxdepth 2 -type d 2>/dev/null | head -60\n\nMatched rule(s):\n  • find (~/repos/dotfiles-ai): find is "
+   }
+  },
+  {
+   "cmd": "D",
+   "count": 47,
+   "example": {
+    "cmd": "D=/home/sid/.local/share/fnm/node-versions/v24.15.0/installation/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai; find $D/dsh-session-projection/lib $D/dsh-session-projection-cache/lib -name '*.js' | head; find $D/dsh-goal/lib $D/dsh-client-connection/lib -name '*.js' | head -30",
+    "text": "Error: bash-guard: the following command was denied:\n\n  D=/home/sid/.local/share/fnm/node-versions/v24.15.0/installation/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai; find $D/dsh-session-projection/lib $D/dsh-session-projection-cache/l"
+   }
+  },
+  {
+   "cmd": "find",
+   "count": 22,
+   "example": {
+    "cmd": "find /home/sid/repos/pseudows -type f -name \"*.html\" -o -name \"*.js\" | head -20",
+    "text": "Error: bash-guard: could not translate `find /home/sid/repos/pseudows -type f -name \"*.html\" -o -name \"*.js\"`. fd has no boolean expressions, so the find operator -o can not be used. Run the rg or fd equivalent yourself."
+   }
+  },
+  {
+   "cmd": "git",
+   "count": 21,
+   "example": {
+    "cmd": "git show f0e7d56~1:src/client/mark-done-modal.tsx | grep -n \"working\\|onClose\\|useEffect\\|useState\\|return null\" | head -40; echo ---; git show f0e7d56~1:src/client/signoff-dialog.tsx | grep -n \"working\\|onClose\\|useState\\|return null\" | head -20",
+    "text": "Error: bash-guard: that command is not run directly. Run this instead:\n\n  git show f0e7d56~1:src/client/mark-done-modal.tsx | rg -n 'working\\|onClose\\|useEffect\\|useState\\|return null' | head -40; echo ---; git show f0e7d56~1:src/client/signoff-dialo"
+   }
+  },
+  {
+   "cmd": "echo",
+   "count": 19,
+   "example": {
+    "cmd": "echo \"=== python ===\" && python3 --version 2>&1; echo \"=== matplotlib ===\" && python3 -c \"import matplotlib; print(matplotlib.__version__)\" 2>&1; echo \"=== pandas ===\" && python3 -c \"import pandas; print(pandas.__version__)\" 2>&1; echo \"=== pip list relevant ===\" && pip3 list 2>/dev/null | grep -iE ",
+    "text": "Error: bash-guard: the following command was denied:\n\n  echo \"=== python ===\" && python3 --version 2>&1; echo \"=== matplotlib ===\" && python3 -c \"import matplotlib; print(matplotlib.__version__)\" 2>&1; echo \"=== pandas ===\" && python3 -c \"import pand"
+   }
+  },
+  {
+   "cmd": "cat",
+   "count": 16,
+   "example": {
+    "cmd": "cat /home/sid/repos/colle/mod.ts; ls /home/sid/repos/colle/src; grep -n \"route\\|path\\|pathname ===\\|startsWith\" /home/sid/repos/colle/src/*.ts /home/sid/repos/colle/src/handlers/*.ts | head -60",
+    "text": "Error: bash-guard: the following command was denied:\n\n  cat /home/sid/repos/colle/mod.ts; ls /home/sid/repos/colle/src; grep -n \"route\\|path\\|pathname ===\\|startsWith\" /home/sid/repos/colle/src/*.ts /home/sid/repos/colle/src/handlers/*.ts | head -60\n"
+   }
+  },
+  {
+   "cmd": "pnpm",
+   "count": 16,
+   "example": {
+    "cmd": "pnpm exec vitest run tests/p14-frontmatter.test.ts 2>&1 | grep -E \"✓|×|Tests|Test Files\"; echo \"EXIT:${PIPESTATUS[0]}\"; pnpm exec vitest run tests/p14-frontmatter.test.ts >/dev/null 2>&1; echo \"VITEST_EXIT:$?\"",
+    "text": "Error: bash-guard: that command is not run directly. Run this instead:\n\n  pnpm exec vitest run tests/p14-frontmatter.test.ts 2>&1 | rg '✓|×|Tests|Test Files'; echo \"EXIT:${PIPESTATUS[0]}\"; pnpm exec vitest run tests/p14-frontmatter.test.ts >/dev/null"
+   }
+  },
+  {
+   "cmd": "set",
+   "count": 12,
+   "example": {
+    "cmd": "set -e\nR=/home/sid/repos/resume-new\nS=/home/sid/ai-scratch/job-search/resume\nprintf 'out/\\n' > $R/.gitignore\ncp $S/0*.typ $R/\nmkdir -p $R/lib/icons\ncp $S/lib/shared.typ $R/lib/\ncp $S/lib/icons/*.svg $R/lib/icons/\ncd $R\ngit rm -q --cached cyblog-footer.html cyblog-meta index.html resume.css Siddharth",
+    "text": "Error: bash-guard: the following command was denied:\n\n  set -e\nR=/home/sid/repos/resume-new\nS=/home/sid/ai-scratch/job-search/resume\nprintf 'out/\\n' > $R/.gitignore\ncp $S/0*.typ $R/\nmkdir -p $R/lib/icons\ncp $S/lib/shared.typ $R/lib/\ncp $S/lib/icons/*"
+   }
+  },
+  {
+   "cmd": "rg",
+   "count": 10,
+   "example": {
+    "cmd": "rg -c '^== ' /tmp/dsh/mirror-dryrun.log; mkdir -p /tmp/dsh/gl-mirror-test && git init --bare -q /tmp/dsh/gl-mirror-test/x.git && cd /tmp/dsh/gl-mirror-test/x.git && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m x && git update-ref refs/tags/v1 HEAD && git rev-",
+    "text": "Error: bash-guard: the following command was denied:\n\n  rg -c '^== ' /tmp/dsh/mirror-dryrun.log; mkdir -p /tmp/dsh/gl-mirror-test && git init --bare -q /tmp/dsh/gl-mirror-test/x.git && cd /tmp/dsh/gl-mirror-test/x.git && git config user.email t@t && "
+   }
+  },
+  {
+   "cmd": "DSH",
+   "count": 7,
+   "example": {
+    "cmd": "DSH=/home/sid/.local/share/fnm/node-versions/v24.15.0/installation/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai; grep -rl \"trajectory\" $DSH --include=package.json | head; ls $DSH | grep -i traj",
+    "text": "Error: bash-guard: that command is not run directly. Run this instead:\n\n  DSH=/home/sid/.local/share/fnm/node-versions/v24.15.0/installation/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai; grep -rl \"trajectory\" $DSH --include=package.jso"
+   }
+  },
+  {
+   "cmd": "B",
+   "count": 7,
+   "example": {
+    "cmd": "B=/home/sid/.local/share/fnm/node-versions/v24.15.0/installation/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai; rg -rln \"tools\" $B/dsh-web/lib $B/dsh-client-modules 2>/dev/null | head; ls $B/dsh-web/lib $B/dsh-client-modules 2>/dev/null | head -40",
+    "text": "Error: bash-guard: that command is not run directly. Run this instead:\n\n  B=/home/sid/.local/share/fnm/node-versions/v24.15.0/installation/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai; rg \"tools\" $B/dsh-web/lib $B/dsh-client-modules 2>"
+   }
+  },
+  {
+   "cmd": "node",
+   "count": 6,
+   "example": {
+    "cmd": "node --check skills/aidos-plan/verify-plan.mjs && echo SYNTAX_OK; grep -n \"parsePlan !== null\" skills/aidos-plan/verify-plan.mjs",
+    "text": "Error: bash-guard: that command is not run directly. Run this instead:\n\n  node --check skills/aidos-plan/verify-plan.mjs && echo SYNTAX_OK; rg -n 'parsePlan !== null' skills/aidos-plan/verify-plan.mjs\n"
+   }
+  },
+  {
+   "cmd": "python3",
+   "count": 5,
+   "example": {
+    "cmd": "python3 -c \"import websocket\" 2>&1; pip3 --version 2>&1 | head -1; ls /home/sid/repos/writers-jam/node_modules/.bin 2>/dev/null | grep -i \"puppeteer\\|playwright\" | head",
+    "text": "Error: bash-guard: that command is not run directly. Run this instead:\n\n  python3 -c \"import websocket\" 2>&1; pip3 --version 2>&1 | head -1; ls /home/sid/repos/writers-jam/node_modules/.bin 2>/dev/null | rg -i 'puppeteer\\|playwright' | head\n"
+   }
+  },
+  {
+   "cmd": "mkdir",
+   "count": 5,
+   "example": {
+    "cmd": "mkdir -p /tmp/dsh/shots/monorail2 && ls /home/sid/repos/monorail/node_modules/.bin/ | grep -i playwright; node --version",
+    "text": "Error: bash-guard: that command is not run directly. Run this instead:\n\n  mkdir -p /tmp/dsh/shots/monorail2 && ls /home/sid/repos/monorail/node_modules/.bin/ | rg -i playwright; node --version\n"
+   }
+  },
+  {
+   "cmd": "P",
+   "count": 4,
+   "example": {
+    "cmd": "P=/home/sid/.cache/typst/packages/preview/basic-resume/0.2.9; grep -n \"level: 2\" -A 22 \"$P/src/resume.typ\" | head -40",
+    "text": "Error: bash-guard: the following command was denied:\n\n  P=/home/sid/.cache/typst/packages/preview/basic-resume/0.2.9; grep -n \"level: 2\" -A 22 \"$P/src/resume.typ\" | head -40\n\nMatched rule(s):\n  • grep (level: 2): grep is normally translated to rg aut"
+   }
+  },
+  {
+   "cmd": "W",
+   "count": 4,
+   "example": {
+    "cmd": "W=/tmp/dsh/aidos/--home-sid-repos-aidos--/114; ls -d \"$W\" 2>&1 && cd \"$W\" && git status --porcelain && echo \"[porcelain above; empty = clean]\" && git rev-parse HEAD && git log --oneline -2 && echo \"--- worktree list (from real repo) ---\" && git -C /home/sid/repos/aidos worktree list && echo \"--- nod",
+    "text": "Error: bash-guard: the user rejected this command (rejected), so it did not run.\n\nbash-guard: git blocked by 1 filter (worktree is blocked) — needs your approval"
+   }
+  },
+  {
+   "cmd": "head",
+   "count": 3,
+   "example": {
+    "cmd": "head -30 /home/sid/repos/resume/01-nostr-bitcoin.typ; echo ---; grep -n \"airy\\|basic-resume\" /home/sid/repos/resume/*.typ; echo ---; cat ~/.cache/typst/packages/preview/basic-resume/0.2.9/src/lib.typ 2>/dev/null | head -120",
+    "text": "Error: bash-guard: the following command was denied:\n\n  head -30 /home/sid/repos/resume/01-nostr-bitcoin.typ; echo ---; grep -n \"airy\\|basic-resume\" /home/sid/repos/resume/*.typ; echo ---; cat ~/.cache/typst/packages/preview/basic-resume/0.2.9/src/li"
+   }
+  },
+  {
+   "cmd": "rm",
+   "count": 3,
+   "example": {
+    "cmd": "rm -rf /tmp/dsh/pristine && cp -r /home/sid/repos/resume /tmp/dsh/pristine && cd /tmp/dsh/pristine && git stash list >/dev/null 2>&1; git init -q . && git add -A && git -c user.email=a@a -c user.name=a commit -qm base && cp /tmp/dsh/resume/lib/shared.typ lib/ && cp /tmp/dsh/resume/lib/page.css lib/ ",
+    "text": "Error: bash-guard: the following command was denied:\n\n  rm -rf /tmp/dsh/pristine && cp -r /home/sid/repos/resume /tmp/dsh/pristine && cd /tmp/dsh/pristine && git stash list >/dev/null 2>&1; git init -q . && git add -A && git -c user.email=a@a -c user"
+   }
+  },
+  {
+   "cmd": "npx",
+   "count": 3,
+   "example": {
+    "cmd": "npx vitest run tests/test-30-review-pass-is-its-own-kind.test.ts tests/test-30-tool-review-pass-is-its-own-kind.test.ts 2>&1 | tail -20",
+    "text": "Error: bash-guard: the following command was denied:\n\n  npx vitest run tests/test-30-review-pass-is-its-own-kind.test.ts tests/test-30-tool-review-pass-is-its-own-kind.test.ts 2>&1 | tail -20\n\nMatched rule(s):\n  • npx (vitest): Planning phase is read"
+   }
+  },
+  {
+   "cmd": "wc",
+   "count": 3,
+   "example": {
+    "cmd": "wc -l /home/sid/repos/aidos/PLAN.md 2>&1; echo \"=== head ===\"; head -40 /home/sid/repos/aidos/PLAN.md 2>&1; echo \"=== ticket lines ===\"; grep -cE '^- \\[' /home/sid/repos/aidos/PLAN.md 2>&1",
+    "text": "Error: bash-guard: that command is not run directly. Run this instead:\n\n  wc -l /home/sid/repos/aidos/PLAN.md 2>&1; echo \"=== head ===\"; head -40 /home/sid/repos/aidos/PLAN.md 2>&1; echo \"=== ticket lines ===\"; rg -c '^- \\[' /home/sid/repos/aidos/PLA"
+   }
+  },
+  {
+   "cmd": "f",
+   "count": 3,
+   "example": {
+    "cmd": "f=~/.dsh/sessions/--home-sid-repos-dotfiles-ai--/2a897fd8-ff24-4dea-9b90-07ae41bf972c/session.jsonl.zstd; zstd -dc \"$f\" | grep -o '\"usage\":{[^}]*}' | head -3; echo \"---FIELDS---\"; zstd -dc \"$f\" | grep -oE '\"(inputTokens|outputTokens|cacheRead|cacheWrite|totalTokens|promptTokens|cachedInputTokens)\"' ",
+    "text": "Error: bash-guard: that command is not run directly. Run this instead:\n\n  f=~/.dsh/sessions/--home-sid-repos-dotfiles-ai--/2a897fd8-ff24-4dea-9b90-07ae41bf972c/session.jsonl.zstd; zstd -dc \"$f\" | rg -o '\"usage\":{[^}]*}' | head -3; echo \"---FIELDS---\""
+   }
+  },
+  {
+   "cmd": "curl",
+   "count": 2,
+   "example": {
+    "cmd": "curl -sL https://opensats.org/blog/call-for-applications-spring-2026 | sed 's/<[^>]*>/ /g' | tr -s ' \\n' ' \\n' | head -c 3000; echo; echo ===; curl -sL https://www.256foundation.org/ | sed 's/<[^>]*>/ /g' | tr -s ' \\n' ' \\n' | grep -iA3 -B3 \"grant\" | head -c 2000",
+    "text": "Error: bash-guard: that command is not run directly. Run this instead:\n\n  curl -sL https://opensats.org/blog/call-for-applications-spring-2026 | sed 's/<[^>]*>/ /g' | tr -s ' \\n' ' \\n' | head -c 3000; echo; echo ===; curl -sL https://www.256foundatio"
+   }
+  },
+  {
+   "cmd": "bash",
+   "count": 2,
+   "example": {
+    "cmd": "bash -n scripts/mirror-to-github.sh && echo PARSE_OK && bash scripts/mirror-to-github.sh 2>&1 | tee /tmp/dsh/mirror-dryrun.log | tail -30 && echo \"---\" && grep -E 'js-dev-mcp|prism' scripts/mirror-to-github.sh; echo \"grep exit: $?\"",
+    "text": "Error: bash-guard: that command is not run directly. Run this instead:\n\n  bash -n scripts/mirror-to-github.sh && echo PARSE_OK && bash scripts/mirror-to-github.sh 2>&1 | tee /tmp/dsh/mirror-dryrun.log | tail -30 && echo \"---\" && rg 'js-dev-mcp|prism'"
+   }
+  }
+ ],
+ "topSuccess": [
+  {
+   "cmd": "cd",
+   "count": 120,
+   "example": {
+    "cmd": "cd ~/repos/dotfiles-ai && git log --oneline -2 -- plugins/tool-render; git show HEAD:plugins/tool-render/src/client.module.css | sha256sum; git show HEAD:plugins/tool-render/src/text.ts | sha256sum\ncd /home/sid/repos/aidos && sha256sum src/client/vendor/tool-render/tool-render.css src/client/vendor/",
+    "ran": "cd ~/repos/dotfiles-ai && git log --oneline -2 -- plugins/tool-render; git show HEAD:plugins/tool-render/src/client.module.css | sha256sum; git show HEAD:plugins/tool-render/src/text.ts | sha256sum\ncd /home/sid/repos/aidos && sha256sum src/client/vendor/tool-render/tool-render.css src/client/vendor/"
+   }
+  },
+  {
+   "cmd": "rg",
+   "count": 16,
+   "example": {
+    "cmd": "rg -n -B5 -A5 \"user_signoff|user_verified\" src/host/aidos-core.ts | grep -A10 -B10 \"only.*human\\|human.*only\\|attach\"",
+    "ran": "rg -n -B5 -A5 \"user_signoff|user_verified\" src/host/aidos-core.ts | rg -A 10 -B 10 'only.*human\\|human.*only\\|attach'"
+   }
+  },
+  {
+   "cmd": "D",
+   "count": 15,
+   "example": {
+    "cmd": "D=/home/sid/.local/share/fnm/node-versions/v24.15.0/installation/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai; rg -rln 'dsh-client-ui-primitives' $D/dsh-web-frontend/dist/assets/index-CA9Bpko5.js 2>/dev/null; rg -c 'dsh-client-ui-primitives' $D/dsh-web-frontend/dist/assets/index-CA9Bp",
+    "ran": "D=/home/sid/.local/share/fnm/node-versions/v24.15.0/installation/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai; rg 'dsh-client-ui-primitives' $D/dsh-web-frontend/dist/assets/index-CA9Bpko5.js 2>/dev/null; rg -c 'dsh-client-ui-primitives' $D/dsh-web-frontend/dist/assets/index-CA9Bpko5.j"
+   }
+  },
+  {
+   "cmd": "find",
+   "count": 15,
+   "example": {
+    "cmd": "find /home/sid/repos/dotfiles-ai/node_modules/@deepseek-ai/dsh-session-projection -name \"*.d.ts\" | head; rg -n \"faceOf\" /home/sid/repos/dotfiles-ai/node_modules/@deepseek-ai/dsh-session-projection -l",
+    "ran": "fd --search-path /home/sid/repos/dotfiles-ai/node_modules/@deepseek-ai/dsh-session-projection -g '*.d.ts' | head; rg -n \"faceOf\" /home/sid/repos/dotfiles-ai/node_modules/@deepseek-ai/dsh-session-projection -l"
+   }
+  },
+  {
+   "cmd": "ls",
+   "count": 12,
+   "example": {
+    "cmd": "ls node_modules/.pnpm 2>/dev/null | rg -i 'client-ui-primitives' ; rg -o 'export .*(Icon[A-Za-z0-9]+)' node_modules/.pnpm/@deepseek-ai+dsh-client-ui-primitives*/node_modules/@deepseek-ai/dsh-client-ui-primitives/dist/*.d.ts --no-filename -r '$1' 2>/dev/null | sort -u | rg -i 'play|queue|check|list|t",
+    "ran": "ls node_modules/.pnpm 2>/dev/null | rg -i 'client-ui-primitives' ; rg -o 'export .*(Icon[A-Za-z0-9]+)' node_modules/.pnpm/@deepseek-ai+dsh-client-ui-primitives*/node_modules/@deepseek-ai/dsh-client-ui-primitives/dist/*.d.ts --no-filename 2>/dev/null | sort -u | rg -i 'play|queue|check|list|task'"
+   }
+  },
+  {
+   "cmd": "grep",
+   "count": 10,
+   "example": {
+    "cmd": "grep -n \"tool-todo\\|dsh-tool-todo\\|todo\" /home/sid/repos/aidos/presets/aidos/agent.cordis.yml | head; echo ---; grep -rn \"tool-todo\" /home/sid/repos/aidos/src /home/sid/repos/aidos/lib 2>/dev/null | grep -v node_modules | head -20",
+    "ran": "rg -n 'tool-todo\\|dsh-tool-todo\\|todo' /home/sid/repos/aidos/presets/aidos/agent.cordis.yml | head; echo ---; rg -n tool-todo /home/sid/repos/aidos/src /home/sid/repos/aidos/lib 2>/dev/null | rg -v node_modules | head -20"
+   }
+  },
+  {
+   "cmd": "set",
+   "count": 3,
+   "example": {
+    "cmd": "set -e\nT=$(mktemp -d /tmp/aidos-probe-XXXX)\ncd /home/sid/repos/aidos\ntar --exclude=./node_modules --exclude=./.git -cf - . | (cd \"$T\" && tar xf -)\nln -s /home/sid/repos/aidos/node_modules \"$T/node_modules\"\ncd \"$T\"\ncat > tests/zz-probe112.test.ts <<'TS'\nimport { describe, expect, it } from \"vitest\";\n",
+    "ran": "set -e\nT=$(mktemp -d /tmp/aidos-probe-XXXX)\ncd /home/sid/repos/aidos\ntar --exclude=./node_modules --exclude=./.git -cf - . | (cd \"$T\" && tar xf -)\nln -s /home/sid/repos/aidos/node_modules \"$T/node_modules\"\ncd \"$T\"\ncat > tests/zz-probe112.test.ts <<'TS'\nimport { describe, expect, it } from \"vitest\";\n"
+   }
+  },
+  {
+   "cmd": "node",
+   "count": 3,
+   "example": {
+    "cmd": "node build.mjs 2>&1 | grep -A2 tool-render; echo \"build exit: $?\"; pnpm exec vitest run plugins/tool-render/ 2>&1 | tail -8",
+    "ran": "node build.mjs 2>&1 | rg -A 2 tool-render; echo \"build exit: $?\"; pnpm exec vitest run plugins/tool-render/ 2>&1 | tail -8"
+   }
+  },
+  {
+   "cmd": "S",
+   "count": 3,
+   "example": {
+    "cmd": "S=/home/sid/.local/share/fnm/node-versions/v24.15.0/installation/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-ui-slots; ls $S/lib/types 2>/dev/null || ls $S; rg -rn 'useProjection' /home/sid/.local/share/fnm/node-versions/v24.15.0/installation/lib/node_modules/@deepseek-ai/",
+    "ran": "S=/home/sid/.local/share/fnm/node-versions/v24.15.0/installation/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-ui-slots; ls $S/lib/types 2>/dev/null || ls $S; rg 'useProjection' /home/sid/.local/share/fnm/node-versions/v24.15.0/installation/lib/node_modules/@deepseek-ai/dsh/"
+   }
+  },
+  {
+   "cmd": "echo",
+   "count": 3,
+   "example": {
+    "cmd": "echo \"=== FINAL VERIFICATION ===\" && \\\necho && \\\necho \"✅ Workspace Files:\" && \\\nls -lh /home/sid/repos/thursday/packages/install/src/install.ts /home/sid/repos/thursday/packages/install/tests/install.test.ts && \\\necho && \\\necho \"✅ Durable Checkpoint Files:\" && \\\nls -lh /home/sid/.dsh/aidos/scratch/-",
+    "ran": "echo \"=== FINAL VERIFICATION ===\" && \\\necho && \\\necho \"✅ Workspace Files:\" && \\\nls -lh /home/sid/repos/thursday/packages/install/src/install.ts /home/sid/repos/thursday/packages/install/tests/install.test.ts && \\\necho && \\\necho \"✅ Durable Checkpoint Files:\" && \\\nls -lh /home/sid/.dsh/aidos/scratch/-"
+   }
+  },
+  {
+   "cmd": "git",
+   "count": 2,
+   "example": {
+    "cmd": "git log --oneline -25 && grep -rn \"automated_check\" src/host src/kernel --include=\"*.ts\" -l",
+    "ran": "git log --oneline -25 && rg -n -g '*.ts' -l automated_check src/host src/kernel"
+   }
+  },
+  {
+   "cmd": "sed",
+   "count": 2,
+   "example": {
+    "cmd": "sed -n '325,345p' /home/sid/repos/dotfiles-ai/plugins/tool-render/src/client.module.css 2>&1; echo \"=== error colour ===\"; grep -rn \"dsw-static-red-400\\|alias-state-error-primary\" /home/sid/repos/dotfiles-ai --include=*.css --include=*.ts --include=*.tsx 2>/dev/null | head -20; echo \"=== ff8c00 ===\"",
+    "ran": "sed -n '325,345p' /home/sid/repos/dotfiles-ai/plugins/tool-render/src/client.module.css 2>&1; echo \"=== error colour ===\"; grep -rn \"dsw-static-red-400\\|alias-state-error-primary\" /home/sid/repos/dotfiles-ai --include=*.css --include=*.ts --include=*.tsx 2>/dev/null | head -20; echo \"=== ff8c00 ===\""
+   }
+  },
+  {
+   "cmd": "head",
+   "count": 2,
+   "example": {
+    "cmd": "head -120 /home/sid/repos/thursday/docs/dsh-home.md; echo ...; grep -n -i \"slot\\|TH5\\|sidebar\\|composer\" /home/sid/repos/thursday/docs/dsh-home.md | head -40",
+    "ran": "head -120 /home/sid/repos/thursday/docs/dsh-home.md; echo ...; rg -n -i 'slot\\|TH5\\|sidebar\\|composer' /home/sid/repos/thursday/docs/dsh-home.md | head -40"
+   }
+  },
+  {
+   "cmd": "curl",
+   "count": 2,
+   "example": {
+    "cmd": "curl -s \"https://api.github.com/repos/gioblu/NPC-Forge/git/trees/main?recursive=1\" | grep '\"path\"' | head -80; echo ---; curl -s \"https://api.github.com/repos/gioblu/NPC-Forge/languages\"",
+    "ran": "curl -s \"https://api.github.com/repos/gioblu/NPC-Forge/git/trees/main?recursive=1\" | rg '\"path\"' | head -80; echo ---; curl -s \"https://api.github.com/repos/gioblu/NPC-Forge/languages\""
+   }
+  },
+  {
+   "cmd": "T",
+   "count": 1,
+   "example": {
+    "cmd": "T=/tmp/aidos-mut-jc1y\ncd \"$T\"\nrun() {\n  echo \"----- MUTATION: $1 -----\"\n  npx vitest run tests/u51-allowlist-request.test.ts 2>&1 | grep -E \"✓|×|✗|Tests |FAIL|AssertionError\" | head -25\n  echo\n}\ncp src/host/aidos-core.ts /tmp/orig-core.ts\n\n# M1: revert the fix entirely\npython3 - <<'EOF'\np='src/host/",
+    "ran": "T=/tmp/aidos-mut-jc1y\ncd \"$T\"\nrun() {\n  echo \"----- MUTATION: $1 -----\"\n  npx vitest run tests/u51-allowlist-request.test.ts 2>&1 | rg '✓|×|✗|Tests |FAIL|AssertionError' | head -25\n  echo\n}\ncp src/host/aidos-core.ts /tmp/orig-core.ts\n\n# M1: revert the fix entirely\npython3 - <<'EOF'\np='src/host/aidos"
+   }
+  },
+  {
+   "cmd": "DSH",
+   "count": 1,
+   "example": {
+    "cmd": "DSH=/home/sid/.local/share/fnm/node-versions/v24.15.0/installation/lib/node_modules/@deepseek-ai/dsh; ls $DSH; rg -l -i 'compaction' $DSH/dist 2>/dev/null | head; rg -rn 'context' $DSH/package.json | head -3",
+    "ran": "DSH=/home/sid/.local/share/fnm/node-versions/v24.15.0/installation/lib/node_modules/@deepseek-ai/dsh; ls $DSH; rg -l -i 'compaction' $DSH/dist 2>/dev/null | head; rg 'context' $DSH/package.json | head -3"
+   }
+  },
+  {
+   "cmd": "R",
+   "count": 1,
+   "example": {
+    "cmd": "R=/home/sid/.local/share/fnm/node-versions/v24.15.0/installation/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-runtime/lib/types/client; rg -n 'CompactionSummaryNode' $R/*.d.ts $R/**/*.d.ts 2>/dev/null | head; rg -rn 'interface CompactionSummaryNode' $R 2>/dev/null",
+    "ran": "R=/home/sid/.local/share/fnm/node-versions/v24.15.0/installation/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-runtime/lib/types/client; rg -n 'CompactionSummaryNode' $R/*.d.ts $R/**/*.d.ts 2>/dev/null | head; rg 'interface CompactionSummaryNode' $R 2>/dev/null"
+   }
+  },
+  {
+   "cmd": "W",
+   "count": 1,
+   "example": {
+    "cmd": "W=/home/sid/.dsh/profiles/web/node_modules/dsh-web-tools; rg -rn \"\" -l >/dev/null 2>&1; rg -n \"view(sessionId)|available\" $W/lib/host/*.js | rg -i \"available\" | head -20; echo \"=== searchMode runtime ===\"; rg -ln \"searchMode\" $W/lib/host/ | head",
+    "ran": "W=/home/sid/.dsh/profiles/web/node_modules/dsh-web-tools; rg \"\" -l >/dev/null 2>&1; rg -n \"view(sessionId)|available\" $W/lib/host/*.js | rg -i \"available\" | head -20; echo \"=== searchMode runtime ===\"; rg -ln \"searchMode\" $W/lib/host/ | head"
+   }
+  },
+  {
+   "cmd": "B",
+   "count": 1,
+   "example": {
+    "cmd": "B=/home/sid/.local/share/fnm/node-versions/v24.15.0/installation/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai; rg -rn \"\" --files $B -g '*.d.ts' 2>/dev/null | xargs rg -ln \"interface PendingInteraction\" 2>/dev/null | head -3",
+    "ran": "B=/home/sid/.local/share/fnm/node-versions/v24.15.0/installation/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai; rg \"\" --files $B -g '*.d.ts' 2>/dev/null | xargs rg -ln \"interface PendingInteraction\" 2>/dev/null | head -3"
+   }
+  },
+  {
+   "cmd": "SCRIPT",
+   "count": 1,
+   "example": {
+    "cmd": "SCRIPT=/tmp/dsh/work/bootstrapper2/install/install.sh\nDASH=/tmp/dsh/tools/bin/dash\nOUT=/tmp/dsh/work/bootstrapper2-out\nSANDHOME=$OUT/fakehome2; STUB=$OUT/stubbin2; SRC=$OUT/fakesrc2; LOG=$OUT/corepack.log\nrm -rf \"$SANDHOME\" \"$STUB\" \"$SRC\"; mkdir -p \"$SANDHOME\" \"$STUB\" \"$SRC/node_modules\" \"$SRC/packa",
+    "ran": "SCRIPT=/tmp/dsh/work/bootstrapper2/install/install.sh\nDASH=/tmp/dsh/tools/bin/dash\nOUT=/tmp/dsh/work/bootstrapper2-out\nSANDHOME=$OUT/fakehome2; STUB=$OUT/stubbin2; SRC=$OUT/fakesrc2; LOG=$OUT/corepack.log\nrm -rf \"$SANDHOME\" \"$STUB\" \"$SRC\"; mkdir -p \"$SANDHOME\" \"$STUB\" \"$SRC/node_modules\" \"$SRC/packa"
+   }
+  },
+  {
+   "cmd": "base",
+   "count": 1,
+   "example": {
+    "cmd": "base=https://raw.githubusercontent.com/gioblu/NPC-Forge/main; curl -s $base/npcs/termy/dataset/templates_files.json | head -c 2500; echo; echo ====; curl -s $base/docs/dataset.md | grep -i -A3 permission | head -30",
+    "ran": "base=https://raw.githubusercontent.com/gioblu/NPC-Forge/main; curl -s $base/npcs/termy/dataset/templates_files.json | head -c 2500; echo; echo ====; curl -s $base/docs/dataset.md | rg -i -A 3 permission | head -30"
+   }
+  },
+  {
+   "cmd": "cat",
+   "count": 1,
+   "example": {
+    "cmd": "cat /home/sid/repos/thursday/packages/plugins/README.md 2>&1 | head -40; echo \"=====MOUNT=====\"; mount | grep -i \"dotfiles\\|repos\" 2>&1 | head; echo \"=====TEST-THURSDAY-WRITE=====\"; touch /home/sid/repos/thursday/.n4probe && echo THURSDAY_WRITE_OK && rm /home/sid/repos/thursday/.n4probe",
+    "ran": "cat /home/sid/repos/thursday/packages/plugins/README.md 2>&1 | head -40; echo \"=====MOUNT=====\"; mount | rg -i 'dotfiles\\|repos' 2>&1 | head; echo \"=====TEST-THURSDAY-WRITE=====\"; touch /home/sid/repos/thursday/.n4probe && echo THURSDAY_WRITE_OK && rm /home/sid/repos/thursday/.n4probe"
+   }
+  },
+  {
+   "cmd": "f",
+   "count": 1,
+   "example": {
+    "cmd": "f=/home/sid/.dsh/sessions/--home-sid-repos-thursday--/000eec93-0142-48b2-8bfc-2aa1baaaecbd/session.jsonl.zstd; zstd -dc $f | grep -n 'bash-guard\\|\"bash\"\\|tool' | head -20 | cut -c1-1200",
+    "ran": "f=/home/sid/.dsh/sessions/--home-sid-repos-thursday--/000eec93-0142-48b2-8bfc-2aa1baaaecbd/session.jsonl.zstd; zstd -dc $f | rg -n 'bash-guard\\|\"bash\"\\|tool' | head -20 | cut -c1-1200"
+   }
+  },
+  {
+   "cmd": "systemctl",
+   "count": 1,
+   "example": {
+    "cmd": "systemctl list-units --type=service --all 2>/dev/null | grep -i dsh; systemctl --user list-units --type=service --all 2>/dev/null | grep -i dsh; echo \"---journalctl availability---\"; which journalctl",
+    "ran": "systemctl list-units --type=service --all 2>/dev/null | rg -i dsh; systemctl --user list-units --type=service --all 2>/dev/null | rg -i dsh; echo \"---journalctl availability---\"; which journalctl"
+   }
+  },
+  {
+   "cmd": "ss",
+   "count": 1,
+   "example": {
+    "cmd": "ss -tlnp 2>/dev/null | grep -E ':(3080|1337)' ; echo \"---\"; ps aux | grep -iE 'dsh|node' | grep -v grep",
+    "ran": "ss -tlnp 2>/dev/null | rg ':(3080|1337)' ; echo \"---\"; ps aux | rg -i 'dsh|node' | rg -v grep"
+   }
+  }
+ ],
+ "topReasons": [
+  [
+   "bash-guard: that command is not run directly",
+   284
+  ],
+  [
+   "bash-guard: the user rejected this command (rejected), so it did not run.\n\nbash-guard: that command is not run directly",
+   15
+  ],
+  [
+   "bash-guard: the user rejected this command (rejected), so it did not run.\n\nbash-guard: git blocked by 1 filter (checkout is blocked) — needs your approval",
+   6
+  ],
+  [
+   "bash-guard: the user rejected this command (rejected), so it did not run.\n\nbash-guard: git blocked by 1 filter (worktree is blocked) — needs your approval",
+   5
+  ],
+  [
+   "bash-guard: the user rejected this command (rejected), so it did not run.\n\nbash-guard: git blocked by 1 filter (stash is blocked) — needs your approval",
+   5
+  ],
+  [
+   "bash-guard: could not apply the translated command; refusing to run the original.",
+   4
+  ],
+  [
+   "bash-guard: parse errors in command; refusing to run it unparsed. expected 'done' to close 'for'",
+   3
+  ],
+  [
+   "bash-guard: could not translate `find . -name SKILL.md -not -path './node_modules/*' 2>/dev/null`. fd has no boolean expressions, so the find operator -not can ",
+   3
+  ],
+  [
+   "bash-guard: could not translate `find . -maxdepth 3 -name '_client.bundle.js' -newer package.json 2>/dev/null`. fd --newer takes a date or a duration, not a fil",
+   3
+  ],
+  [
+   "bash-guard: parse errors in command; refusing to run it unparsed. unterminated double quote",
+   3
+  ],
+  [
+   "bash-guard: parse errors in command; refusing to run it unparsed. unterminated single quote",
+   2
+  ],
+  [
+   "bash-guard: could not translate `find cls -size 0`. fd has no equivalent for the find size 0",
+   2
+  ],
+  [
+   "bash-guard: the user rejected this command (rejected), so it did not run.\n\nbash-guard: git blocked by 1 filter (branch is blocked) — needs your approval",
+   2
+  ],
+  [
+   "bash-guard: the user rejected this command (rejected), so it did not run.\n\nbash-guard: git blocked by 1 filter (remote is blocked) — needs your approval",
+   2
+  ],
+  [
+   "bash-guard: could not translate `find . -type f -not -path \"./node_modules/*\"`. fd has no boolean expressions, so the find operator -not can not be used",
+   2
+  ],
+  [
+   "bash-guard: could not translate `find /home/sid -name Colle.js -path \"*colle*\" 2>/dev/null`. fd matches one pattern, so -name and -path can not be combined",
+   1
+  ],
+  [
+   "bash-guard: could not translate `find /home/sid/repos/pseudows -type f -name \"*.html\" -o -name \"*.js\"`. fd has no boolean expressions, so the find operator -o c",
+   1
+  ],
+  [
+   "bash-guard: could not translate `find /home/sid -maxdepth 4 -type d -name \"apps\" -path \"*dsh*\" 2>/dev/null`. fd matches one pattern, so -name and -path can not ",
+   1
+  ],
+  [
+   "bash-guard: could not translate `find tests -type f -name \"*.test.ts\" -o -name \"*.test.tsx\"`. fd has no boolean expressions, so the find operator -o can not be ",
+   1
+  ],
+  [
+   "bash-guard: could not translate `find tests -name \"*.test.ts\" -o -name \"*.test.tsx\"`. fd has no boolean expressions, so the find operator -o can not be used",
+   1
+  ],
+  [
+   "bash-guard: could not translate `find src -name '*.ts' -o -name '*.tsx'`. fd has no boolean expressions, so the find operator -o can not be used",
+   1
+  ],
+  [
+   "bash-guard: could not translate `find . -name \"criterion-linker.tsx\" -o -name \"mark-done-modal.tsx\" -o -name \"detail-panel.tsx\" 2>/dev/null`. fd has no boolean ",
+   1
+  ],
+  [
+   "bash-guard: could not translate `find . -path ./node_modules -prune -o -type d -name \"*vendor*\" -print 2>/dev/null`. fd has no safe equivalent for the find pred",
+   1
+  ],
+  [
+   "bash-guard: could not translate `find node_modules/@deepseek-ai/dsh-typert-protocol -name \"*.js\" -o -name \"*.d.ts\"`. fd has no boolean expressions, so the find ",
+   1
+  ],
+  [
+   "bash-guard: could not translate `find . -maxdepth 4 -name \"*.sqlite*\" -o -maxdepth 4 -name \"*.db\" 2>/dev/null`. fd has no boolean expressions, so the find opera",
+   1
+  ]
+ ],
+ "byWorkspace": {
+  "--home-sid-ai-scratch--": {
+   "calls": 381,
+   "translated": 0,
+   "fail": 7,
+   "denied": 8,
+   "other": 0
+  },
+  "--home-sid-ai-scratch-job-search--": {
+   "calls": 1022,
+   "translated": 0,
+   "fail": 26,
+   "denied": 16,
+   "other": 0
+  },
+  "--home-sid-repos-aidos--": {
+   "calls": 15733,
+   "translated": 42,
+   "fail": 195,
+   "denied": 83,
+   "other": 0
+  },
+  "--home-sid-repos-dotfiles-ai--": {
+   "calls": 13489,
+   "translated": 48,
+   "fail": 119,
+   "denied": 109,
+   "other": 0
+  },
+  "--home-sid-repos-nostr-canvas--": {
+   "calls": 3,
+   "translated": 0,
+   "fail": 1,
+   "denied": 0,
+   "other": 0
+  },
+  "--home-sid-repos-thursday--": {
+   "calls": 2584,
+   "translated": 129,
+   "fail": 38,
+   "denied": 32,
+   "other": 0
+  }
+ },
+ "byMonth": {
+  "2026-09": {
+   "calls": 14092,
+   "fail": 325,
+   "denied": 134,
+   "translated": 219
+  },
+  "2026-08": {
+   "calls": 19120,
+   "fail": 61,
+   "denied": 114,
+   "translated": 0
+  }
+ }
+}
