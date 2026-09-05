@@ -45,7 +45,6 @@ import {
 import { entryHead, normalizeEntry, chainNameForRoutes } from "../../profile-routes";
 import settingsCss from "../../shared/settings.css";
 import localCss from "./client.module.css";
-import { IconChevronDownOutline14 } from "@deepseek-ai/dsh-client-ui-primitives";
 
 window.__ModuleLoader__.load({
   id: "profiles-client",
@@ -54,6 +53,12 @@ window.__ModuleLoader__.load({
 
     /** React comes from the browser module table. */
     var react = require("react");
+    /** Primitives come from the browser module table via the factory's
+     * require. It must stay INSIDE the factory: a top-level import becomes
+     * a top-level __require that throws at bundle evaluation, before
+     * __ModuleLoader__.load runs, so the bundle loads without registering. */
+    var IconChevronDownOutline14 =
+      require("@deepseek-ai/dsh-client-ui-primitives").IconChevronDownOutline14;
     var useSyncExternalStore = react.useSyncExternalStore;
     var useCallback = react.useCallback;
     var useState = react.useState;
