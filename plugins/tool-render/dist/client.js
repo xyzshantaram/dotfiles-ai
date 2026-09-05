@@ -1743,6 +1743,15 @@ function stripOuterFence(text) {
   var match = /^(`{3,})[^\n]*\n([\s\S]*?)\n?\1$/.exec(trimmed);
   return match === null ? text : match[2];
 }
+function compactionCommandError(data) {
+  if (data === null || data === void 0 || typeof data !== "object") return null;
+  var command = data.command;
+  if (command === null || command === void 0 || typeof command !== "object") return null;
+  var outcome = command.outcome;
+  if (outcome === null || outcome === void 0 || typeof outcome !== "object") return null;
+  if (outcome.kind !== "error") return null;
+  return typeof outcome.text === "string" && outcome.text !== "" ? outcome.text : "compaction failed";
+}
 function compactionSummaryNode(data) {
   if (data === null || data === void 0 || typeof data !== "object") return null;
   if (data.kind === "compaction") return data;
@@ -17429,9 +17438,10 @@ function CompactionRow(props) {
   var expandedState = useState(false);
   var expanded = expandedState[0];
   var setExpanded = expandedState[1];
-  var node = compactionSummaryNode(
-    props.node !== null && props.node !== void 0 && typeof props.node === "object" ? props.node.data : null
-  );
+  var data = props.node !== null && props.node !== void 0 && typeof props.node === "object" ? props.node.data : null;
+  var node = compactionSummaryNode(data);
+  var commandError = compactionCommandError(data);
+  var errorSummary = commandError !== null ? firstLineOfError(commandError) : void 0;
   var summary = node !== null && typeof node.summary === "string" ? node.summary : "";
   var summaryEventSeq = node !== null && typeof node.summaryEventSeq === "number" ? node.summaryEventSeq : void 0;
   var counts = node !== null && typeof node.shadowedItemCount === "number" && typeof node.shadowedTokenCount === "number" ? String(node.shadowedItemCount) + " items, " + String(node.shadowedTokenCount) + " tokens compacted" : null;
@@ -17445,13 +17455,16 @@ function CompactionRow(props) {
       toolName: "Compaction",
       icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
       title: "Compaction",
-      summary: counts !== null ? counts : fallbackText !== "" ? firstLine(fallbackText) : "Compaction",
-      expandable: fallbackBody !== null,
+      summary: commandError !== null ? "Compaction" : counts !== null ? counts : fallbackText !== "" ? firstLine(fallbackText) : "Compaction",
+      state: commandError !== null ? "error" : void 0,
+      expandable: fallbackBody !== null || commandError !== null,
       expanded,
       onToggle: function() {
         setExpanded(!expanded);
       },
-      body: fallbackBody
+      body: fallbackBody,
+      errorSummary,
+      errorText: commandError
     });
   }
   var pretty = view;

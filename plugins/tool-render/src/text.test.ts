@@ -9,6 +9,7 @@ import {
   deIndent,
   isBuiltinReadEnvelope,
   looksLikeRawHtml,
+  compactionCommandError,
   compactionSummaryNode,
   numberedReadRows,
   parseAgentLines,
@@ -386,5 +387,38 @@ describe("compactionSummaryNode", () => {
   it("returns null for anything else", () => {
     expect(compactionSummaryNode(null as never)).toBeNull();
     expect(compactionSummaryNode({ kind: "assistant-step" } as never)).toBeNull();
+  });
+});
+
+describe("compactionCommandError", () => {
+  it("returns the outcome text for a failed manual compaction", () => {
+    var data = {
+      command: { kind: "command", outcome: { kind: "error", text: "shrink gate failed" } },
+      compaction: null,
+    };
+    expect(compactionCommandError(data as never)).toBe("shrink gate failed");
+  });
+
+  it("falls back to a generic message when the outcome carries no text", () => {
+    var data = { command: { kind: "command", outcome: { kind: "error" } }, compaction: null };
+    expect(compactionCommandError(data as never)).toBe("compaction failed");
+  });
+
+  it("returns null for a successful command", () => {
+    var data = {
+      command: { kind: "command", outcome: { kind: "success" } },
+      compaction: { kind: "compaction" },
+    };
+    expect(compactionCommandError(data as never)).toBeNull();
+  });
+
+  it("returns null while the command is still running (outcome null)", () => {
+    var data = { command: { kind: "command", outcome: null }, compaction: null };
+    expect(compactionCommandError(data as never)).toBeNull();
+  });
+
+  it("returns null for the bare compaction key, which has no command wrapper", () => {
+    expect(compactionCommandError({ kind: "compaction", summary: "x" } as never)).toBeNull();
+    expect(compactionCommandError(null as never)).toBeNull();
   });
 });

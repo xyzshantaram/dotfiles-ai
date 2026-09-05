@@ -236,6 +236,25 @@ export function stripOuterFence(text) {
   return match === null ? text : match[2];
 }
 
+// ---- manual-compaction command outcome. ----
+// The manual-compaction chat node wraps { command, compaction }. `command` is
+// a CommandNode -- the /compact invocation's own lifecycle -- and its
+// `outcome` is the authoritative failure signal: { kind: 'success' | 'error',
+// text?, sourceEventSeq? } | null. `compaction` stays null on a failure for
+// the same reason it stays null while still running: nothing landed to
+// summarize. A failed run must be told apart from a still-running one, or the
+// card silently shows a blank "Compaction" row on a real failure. Returns the
+// outcome's error text, or null when there is no error to show.
+export function compactionCommandError(data) {
+  if (data === null || data === undefined || typeof data !== "object") return null;
+  var command = data.command;
+  if (command === null || command === undefined || typeof command !== "object") return null;
+  var outcome = command.outcome;
+  if (outcome === null || outcome === undefined || typeof outcome !== "object") return null;
+  if (outcome.kind !== "error") return null;
+  return typeof outcome.text === "string" && outcome.text !== "" ? outcome.text : "compaction failed";
+}
+
 // ---- compaction chat-node shapes. ----
 // The compaction card sits on conversation.chat.node, and two keys reach it
 // with different data. Key "compaction" hands the summary node itself. Key
