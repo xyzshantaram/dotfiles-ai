@@ -1129,6 +1129,45 @@ print("  relocated the attach button to the right edge")
 PY
 }
 
+# Stop dsh-web-tools' left-edge search-mode button from polling forever.
+# composer-menu already hides this button with CSS (its Force/Auto/Off
+# submenu replaces it), but hiding it visually does not stop it mounting:
+# its own effect still runs and calls setInterval(refresh, 1000)
+# unconditionally, regardless of document.hidden, regardless of tab focus,
+# forever, for a control nobody can see. That is the client-side log churn
+# while the page sits unfocused. This is the ONLY setInterval in the whole
+# bundle. The button is functionally redundant now, so the fix removes the
+# interval outright rather than teaching it to respect visibility: the
+# mount-time and focus-triggered refreshes in the surrounding code are left
+# alone, only the recurring poll is dropped. Idempotent: the rewrite matches
+# the live call only, so a patched file is left untouched. A plugin update
+# restores the original text; rerunning sync reapplies this.
+step_stop_web_tools_search_poll() {
+	local client_js
+	client_js="$DSH_HOME/profiles/web/node_modules/dsh-web-tools/lib/client.js"
+	if [ ! -f "$client_js" ]; then
+		echo "  WARNING: dsh-web-tools not installed; skipping search-button poll patch."
+		return 0
+	fi
+	python3 - "$client_js" <<'PY'
+import sys
+
+path = sys.argv[1]
+text = open(path).read()
+needle = "const interval = setInterval(refresh, REVALIDATE_MS);"
+replacement = "const interval = void 0; /* dotfiles-ai: superseded by composer-menu's submenu */"
+count = text.count(needle)
+if count == 0:
+    if replacement in text:
+        print("  web-tools search-button poll already stopped; no change")
+        sys.exit(0)
+    print("  WARNING: web-tools search-button poll call not found; skipping.")
+    sys.exit(0)
+open(path, "w").write(text.replace(needle, replacement))
+print("  stopped the web-tools search-button background poll")
+PY
+}
+
 step_disable_replaced_jobs_rows() {
 	# Effort 6: job-viewer replaces both dsh-tool-jobs (the model-facing
 	# job_list/job_output/job_kill tools, id tool-jobs, in the standard
@@ -1278,6 +1317,7 @@ STEPS=(
 	"Disable builtin tool rows in the standard preset|step_disable_preset_builtin_tools"
 	"Disable tool-jobs and ui-jobs (job-viewer replaces both)|step_disable_replaced_jobs_rows"
 	"Relocate the attach button to the send/steer edge|step_relocate_attach_button"
+	"Stop the web-tools search-button background poll|step_stop_web_tools_search_poll"
 	"Register the aidos agent preset|step_register_aidos_preset"
 	"Verify builtin tool rows are disabled|step_verify_preset_tool_disabled"
 	"Regenerate settings.yaml from the repo template|step_set_defaults"
