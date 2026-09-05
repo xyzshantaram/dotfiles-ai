@@ -17,6 +17,15 @@ var name = PLUGIN_NAME;
 function apply(ctx: any) {
   injectStyle(PLUGIN_NAME, "composer-menu", localCss);
 
+  // The web search toggle from dsh-web-tools is our replacement target. Its
+  // trigger class is a stable literal in the plugin's own injected style tag,
+  // not a hashed CSS module name, so one plain rule hides it.
+  injectStyle(
+    PLUGIN_NAME,
+    "composer-menu-hide-web-tools",
+    ".wt-search-mode-trigger { display: none !important; }",
+  );
+
   ctx.slots.inject("conversation.input.left", function* () {
     yield ctx.slots.register(
       {
@@ -221,6 +230,86 @@ function apply(ctx: any) {
       );
     }
 
+    // The web search toggle, moved out of dsh-web-tools' left-edge button.
+    // Data comes from that plugin's routes: mode "required" forces a search
+    // before the answer, "auto" leaves the choice to the agent. The row
+    // refetches on every mount (the menu content only mounts while open) and
+    // on window focus; an always-visible control needed polling, a menu row
+    // does not.
+    const SEARCH_MODE_API = "/web-tools/api/search-mode";
+    function SearchToggle() {
+      const [mode, setMode] = react.useState(null as null | "auto" | "required");
+      const [available, setAvailable] = react.useState(true);
+      const inFlight = react.useRef(false);
+
+      /** Read the current mode. Failures keep the last known state. */
+      const refresh = react.useCallback(() => {
+        postJson(SEARCH_MODE_API + "/get", { sessionId: props.sessionId }).then((result) => {
+          const value = result.data && result.data.value;
+          if (result.error || !value) {
+            if (result.error) console.error("composer menu: " + result.error);
+            return;
+          }
+          setMode(value.mode);
+          setAvailable(value.available !== false);
+        });
+      }, [props.sessionId]);
+
+      react.useEffect(() => {
+        refresh();
+        window.addEventListener("focus", refresh);
+        return () => window.removeEventListener("focus", refresh);
+      }, [refresh]);
+
+      /** Optimistic switch with a revert to the previous mode on failure.
+       * One request at a time, so a fast second click cannot revert to a
+       * stale value. */
+      const toggle = () => {
+        if (mode === null || !available || inFlight.current) return;
+        const previous = mode;
+        const next = mode === "required" ? "auto" : "required";
+        inFlight.current = true;
+        setMode(next);
+        postJson(SEARCH_MODE_API + "/set", { sessionId: props.sessionId, mode: next }).then(
+          (result) => {
+            inFlight.current = false;
+            if (result.error) {
+              setMode(previous);
+              console.error("composer menu: " + result.error);
+              return;
+            }
+            refresh();
+          },
+        );
+      };
+
+      const on = mode === "required";
+      return react.createElement(
+        DropdownMenu.Item,
+        { className: "composer-menu-item", disabled: mode === null || !available, onSelect: toggle },
+        react.createElement("span", { key: "icon", className: "composer-menu-icon" }),
+        react.createElement(
+          "span",
+          { key: "label", className: "composer-menu-label" },
+          "Web search",
+        ),
+        react.createElement(
+          "span",
+          {
+            key: "switch",
+            className: "composer-menu-toggle-track",
+            "data-on": on ? "true" : "false",
+            "data-pending": mode === null ? "true" : undefined,
+            role: "switch",
+            "aria-checked": on,
+            "aria-label": "Web search",
+          },
+          react.createElement("span", { className: "composer-menu-toggle-knob" }),
+        ),
+      );
+    }
+    const searchRow = react.createElement(SearchToggle);
+
     const sandboxSub = react.createElement(
       DropdownMenu.Sub,
       null,
@@ -290,6 +379,8 @@ function apply(ctx: any) {
           DropdownMenu.Content,
           { side: "top", align: "start", sideOffset: 8, className: "composer-menu-content" },
           sandboxSub,
+          react.createElement(DropdownMenu.Separator, { className: "composer-menu-separator" }),
+          searchRow,
           hasExtra
             ? react.createElement(DropdownMenu.Separator, { className: "composer-menu-separator" })
             : null,
