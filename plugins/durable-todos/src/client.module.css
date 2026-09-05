@@ -60,12 +60,20 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* Optical correction: the counts share the title's 20px line box but are
+     1px smaller, so their glyphs sit about half a pixel high against the
+     title's. Box centering is correct; this drops the glyphs the missing
+     half pixel without moving the box. */
+  position: relative;
+  top: 0.5px;
 }
 .durable-todos-carried {
   flex: none;
   font-size: 0.75rem;
   line-height: 1.25rem;
   color: var(--dsw-alias-label-caption);
+  position: relative;
+  top: 0.5px;
 }
 .durable-todos-remind {
   box-sizing: border-box;
