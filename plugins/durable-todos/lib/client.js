@@ -126,132 +126,14 @@ var HLJS_THEME_CSS = [
 ].join("");
 
 // css-text:/home/sid/repos/dotfiles-ai/plugins/durable-todos/src/client.module.css
-var client_default = `.durable-todos-card {
-  box-sizing: border-box;
-  width: 100%;
-  max-width: var(--dsh-composer-card-max-width);
-  margin-inline: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 0.625rem;
-  padding: 0.5rem 0.625rem;
-  background: var(--dsw-alias-bg-layer-1);
-}
-.durable-todos-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-width: 0;
-}
-.durable-todos-toggle {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  min-width: 0;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: inherit;
-  text-align: left;
-  padding: 0;
-  font: inherit;
-}
-.durable-todos-toggle:hover {
-  opacity: 0.7;
-}
-.durable-todos-chevron {
-  flex: none;
-  color: var(--dsw-alias-label-secondary);
-  border-radius: 0.375rem;
-  transform: rotate(-90deg);
-  transition: transform 0.12s;
-}
-.durable-todos-chevron-open {
-  transform: rotate(0deg);
-}
-.durable-todos-title {
-  flex: none;
-  font-size: 0.8125rem;
-  line-height: 1.25rem;
-  font-weight: 600;
-  color: var(--dsw-alias-label-primary);
-}
-.durable-todos-summary {
-  flex: 1;
-  font-size: 0.75rem;
-  line-height: 1.25rem;
-  color: var(--dsw-alias-label-caption);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  /* Optical correction: the counts share the title's 20px line box but are
-     1px smaller, so their glyphs sit about half a pixel high against the
-     title's. Box centering is correct; this drops the glyphs the missing
-     half pixel without moving the box. */
-  position: relative;
-  top: 0.5px;
-}
-.durable-todos-carried {
-  flex: none;
-  font-size: 0.75rem;
-  line-height: 1.25rem;
-  color: var(--dsw-alias-label-caption);
-  position: relative;
-  top: 0.5px;
-}
-.durable-todos-remind {
-  box-sizing: border-box;
-  flex: none;
-  white-space: nowrap;
-  font-size: 0.75rem;
-  line-height: 1.25rem;
-  font-weight: 600;
-  padding: 0.125rem 0.5rem;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 0.375rem;
-  background: var(--dsw-alias-bg-layer-1);
-  color: var(--dsw-alias-label-primary);
-  cursor: pointer;
-}
-.durable-todos-remind:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-.durable-todos-running-line {
-  font-size: 0.8125rem;
-  line-height: 1.25rem;
-  color: var(--dsw-alias-label-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding: 0.125rem 0.25rem;
-}
-/* The list scrolls, the header does not. A long plan therefore never pushes
-   the counts, the Remind button or the current-item line out of view. */
-.durable-todos-plan {
-  flex-direction: column;
-  display: flex;
-  max-height: 30vh;
-  overflow-y: auto;
-}
-/* Plan row (item, checkbox, content) is shared PLAN_ROW_CSS from
-   shared/client-util.ts, injected via the dsh-plan-row style tag. */
-.durable-todos-empty {
-  font-size: 0.8125rem;
-  line-height: 1.25rem;
-  color: var(--dsw-alias-label-caption);
-}
-/* Hide shipped todo panel; replaced by this plugin. */
-[data-testid="todo-panel"] {
-  display: none !important;
-}
-`;
+var client_default = '.durable-todos-card {\n  box-sizing: border-box;\n  width: 100%;\n  max-width: var(--dsh-composer-card-max-width);\n  margin-inline: auto;\n  display: flex;\n  flex-direction: column;\n  gap: 0.375rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.625rem;\n  padding: 0.5rem 0.625rem;\n  background: var(--dsw-alias-bg-layer-1);\n}\n.durable-todos-header {\n  display: flex;\n  align-items: center;\n  gap: 0.5rem;\n  min-width: 0;\n}\n.durable-todos-toggle {\n  flex: 1;\n  display: flex;\n  align-items: center;\n  gap: 0.375rem;\n  min-width: 0;\n  background: none;\n  border: none;\n  cursor: pointer;\n  color: inherit;\n  text-align: left;\n  padding: 0;\n  font: inherit;\n}\n.durable-todos-toggle:hover:not(:disabled) {\n  opacity: 0.7;\n}\n.durable-todos-toggle:disabled {\n  cursor: default;\n}\n.durable-todos-chevron {\n  flex: none;\n  color: var(--dsw-alias-label-secondary);\n  border-radius: 0.375rem;\n  transform: rotate(-90deg);\n  transition: transform 0.12s;\n}\n.durable-todos-chevron-open {\n  transform: rotate(0deg);\n}\n.durable-todos-chevron-disabled {\n  opacity: 0.35;\n}\n.durable-todos-name-badge {\n  box-sizing: border-box;\n  display: inline-flex;\n  align-items: center;\n  flex: none;\n  height: 1.5rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.375rem;\n  padding: 0.0625rem 0.375rem;\n  background: var(--dsw-alias-bg-tertiary);\n  color: var(--dsw-alias-label-primary);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  font-weight: 500;\n  white-space: nowrap;\n}\n.durable-todos-counts {\n  box-sizing: border-box;\n  display: inline-flex;\n  align-items: stretch;\n  flex: none;\n  height: 1.5rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.375rem;\n  overflow: hidden;\n}\n.durable-todos-count {\n  display: inline-flex;\n  align-items: center;\n  gap: 0.25rem;\n  padding: 0 0.375rem;\n  white-space: nowrap;\n  color: var(--dsw-alias-label-primary);\n}\n.durable-todos-count + .durable-todos-count {\n  border-left: 1px solid var(--dsw-alias-border-l2);\n}\n.durable-todos-count svg {\n  flex: none;\n  color: var(--dsw-alias-label-caption);\n}\n.durable-todos-count-label {\n  font-size: 0.625rem;\n  font-weight: 700;\n  letter-spacing: 0.03em;\n  color: var(--dsw-alias-label-caption);\n}\n.durable-todos-count-sep {\n  color: var(--dsw-alias-label-caption);\n}\n.durable-todos-count-value {\n  font-size: 0.75rem;\n  font-weight: 600;\n}\n.durable-todos-remind {\n  box-sizing: border-box;\n  flex: none;\n  white-space: nowrap;\n  font-size: 0.75rem;\n  line-height: 1.25rem;\n  font-weight: 600;\n  padding: 0.125rem 0.5rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.375rem;\n  background: var(--dsw-alias-bg-layer-1);\n  color: var(--dsw-alias-label-primary);\n  cursor: pointer;\n}\n.durable-todos-remind:hover {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.durable-todos-running-line {\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  color: var(--dsw-alias-label-secondary);\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  padding: 0.125rem 0.25rem;\n}\n/* The list scrolls, the header does not. A long plan therefore never pushes\n   the counts, the Remind button or the current-item line out of view. */\n.durable-todos-plan {\n  flex-direction: column;\n  display: flex;\n  max-height: 30vh;\n  overflow-y: auto;\n}\n/* Plan row (item, checkbox, content) is shared PLAN_ROW_CSS from\n   shared/client-util.ts, injected via the dsh-plan-row style tag. */\n/* Hide shipped todo panel; replaced by this plugin. */\n[data-testid="todo-panel"] {\n  display: none !important;\n}\n';
 
 // plugins/durable-todos/src/client.tsx
 var IconChevronDownOutline142 = primitives.IconChevronDownOutline14;
+var IconChecklistOutline142 = primitives.IconChecklistOutline14;
+var IconPlayOutline162 = primitives.IconPlayOutline16;
+var IconQueueOutline142 = primitives.IconQueueOutline14;
+var IconCheckOutline142 = primitives.IconCheckOutline14;
 var PLUGIN_NAME = "durable-todos";
 var STYLE_TAG_ID = "durable-todos-style";
 function isUnfinished(item) {
@@ -274,7 +156,6 @@ function makePanel() {
       return session.running;
     });
     var todos = value === null || value === void 0 ? null : value.todos;
-    var carriedOver = value !== null && value !== void 0 ? value.carriedOver : false;
     var unfinished = todos === null ? [] : todos.filter(isUnfinished);
     var [collapsed, setCollapsed] = react.useState(true);
     var draft = props.useInput(function(input) {
@@ -296,20 +177,22 @@ function makePanel() {
       return item.status === "completed";
     }).length : 0;
     var totalCount = todos ? todos.length : 0;
-    var buildSummary = function() {
-      if (totalCount === 0) return "No work items";
-      var parts = [totalCount + " total"];
-      if (inProgressCount > 0) parts.push(inProgressCount + " in progress");
-      if (pendingCount > 0) parts.push(pendingCount + " pending");
-      if (completedCount > 0) parts.push(completedCount + " done");
-      return parts.join(" \xB7 ");
-    };
+    var expandable = todos !== null && todos.length > 0;
+    var countSegments = [
+      { key: "total", label: "TOTAL", value: totalCount, Icon: IconChecklistOutline142, keep: true },
+      { key: "doing", label: "DOING", value: inProgressCount, Icon: IconPlayOutline162, keep: inProgressCount > 0 },
+      { key: "pending", label: "PENDING", value: pendingCount, Icon: IconQueueOutline142, keep: pendingCount > 0 },
+      { key: "done", label: "DONE", value: completedCount, Icon: IconCheckOutline142, keep: completedCount > 0 }
+    ].filter(function(segment) {
+      return segment.keep;
+    });
     return /* @__PURE__ */ react.createElement("div", { className: "durable-todos-card" }, /* @__PURE__ */ react.createElement("div", { className: "durable-todos-header" }, /* @__PURE__ */ react.createElement(
       "button",
       {
         type: "button",
         className: "durable-todos-toggle",
         "aria-expanded": !collapsed,
+        disabled: expandable ? void 0 : true,
         onClick: function() {
           setCollapsed(!collapsed);
         }
@@ -317,16 +200,18 @@ function makePanel() {
       /* @__PURE__ */ react.createElement(
         IconChevronDownOutline142,
         {
-          className: collapsed ? "durable-todos-chevron" : "durable-todos-chevron durable-todos-chevron-open",
+          className: collapsed ? expandable ? "durable-todos-chevron" : "durable-todos-chevron durable-todos-chevron-disabled" : "durable-todos-chevron durable-todos-chevron-open",
           "aria-hidden": true
         }
       ),
-      /* @__PURE__ */ react.createElement("span", { className: "durable-todos-title" }, "To-do list"),
-      /* @__PURE__ */ react.createElement("span", { className: "durable-todos-summary" }, buildSummary())
-    ), carriedOver ? /* @__PURE__ */ react.createElement("span", { className: "durable-todos-carried" }, "carried over") : null, unfinished.length > 0 ? /* @__PURE__ */ react.createElement("button", { type: "button", className: "durable-todos-remind", onClick: onRemind }, "Remind") : null), inProgressItem ? /* @__PURE__ */ react.createElement("div", { className: "durable-todos-running-line" }, "Current: " + inProgressItem.content) : null, !collapsed ? /* @__PURE__ */ react.createElement(react.Fragment, null, todos === null || todos.length === 0 ? /* @__PURE__ */ react.createElement("div", { className: "durable-todos-empty" }, "No work items") : /* @__PURE__ */ react.createElement("div", { className: "durable-todos-plan" }, todos.map(function(item, index) {
+      /* @__PURE__ */ react.createElement("span", { className: "durable-todos-name-badge" }, "To-do list"),
+      /* @__PURE__ */ react.createElement("span", { className: "durable-todos-counts" }, countSegments.map(function(segment) {
+        return /* @__PURE__ */ react.createElement("span", { key: segment.key, className: "durable-todos-count" }, /* @__PURE__ */ react.createElement(segment.Icon, { size: 14 }), /* @__PURE__ */ react.createElement("span", { className: "durable-todos-count-label" }, segment.label), /* @__PURE__ */ react.createElement("span", { className: "durable-todos-count-sep", "aria-hidden": true }, "\xB7"), /* @__PURE__ */ react.createElement("span", { className: "durable-todos-count-value" }, segment.value));
+      }))
+    ), unfinished.length > 0 ? /* @__PURE__ */ react.createElement("button", { type: "button", className: "durable-todos-remind", onClick: onRemind }, "Remind") : null), inProgressItem ? /* @__PURE__ */ react.createElement("div", { className: "durable-todos-running-line" }, "Current: " + inProgressItem.content) : null, !collapsed ? /* @__PURE__ */ react.createElement("div", { className: "durable-todos-plan" }, todos.map(function(item, index) {
       var attrs = item.status === "completed" ? { "data-done": true } : item.status === "in_progress" ? { "data-active": true } : { "data-pending": true };
       return /* @__PURE__ */ react.createElement("div", { key: index, className: "dsh-plan-item", ...attrs }, /* @__PURE__ */ react.createElement("span", { className: "dsh-plan-checkbox", "aria-hidden": true }), /* @__PURE__ */ react.createElement("span", { className: "dsh-plan-content" }, item.content));
-    }))) : null);
+    })) : null);
   };
 }
 var name = PLUGIN_NAME;

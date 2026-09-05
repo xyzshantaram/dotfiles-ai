@@ -7,6 +7,10 @@ import { injectStyle, PLAN_ROW_CSS } from "../../shared/client-util";
 import localCss from "./client.module.css";
 
 var IconChevronDownOutline14 = primitives.IconChevronDownOutline14;
+var IconChecklistOutline14 = primitives.IconChecklistOutline14;
+var IconPlayOutline16 = primitives.IconPlayOutline16;
+var IconQueueOutline14 = primitives.IconQueueOutline14;
+var IconCheckOutline14 = primitives.IconCheckOutline14;
 
 var PLUGIN_NAME = "durable-todos";
 var STYLE_TAG_ID = "durable-todos-style";
@@ -70,7 +74,6 @@ function makePanel() {
       return session.running;
     });
     var todos = value === null || value === undefined ? null : value.todos;
-    var carriedOver = value !== null && value !== undefined ? value.carriedOver : false;
     var unfinished = todos === null ? [] : todos.filter(isUnfinished);
     var [collapsed, setCollapsed] = react.useState(true);
     var draft = props.useInput(function (input) {
@@ -107,16 +110,16 @@ function makePanel() {
       : 0;
     var totalCount = todos ? todos.length : 0;
 
-    var buildSummary = function () {
-      // An empty list still says something, so the collapsed header never
-      // reads as a bare title with no state beside it.
-      if (totalCount === 0) return "No work items";
-      var parts = [totalCount + " total"];
-      if (inProgressCount > 0) parts.push(inProgressCount + " in progress");
-      if (pendingCount > 0) parts.push(pendingCount + " pending");
-      if (completedCount > 0) parts.push(completedCount + " done");
-      return parts.join(" · ");
-    };
+    var expandable = todos !== null && todos.length > 0;
+
+    var countSegments = [
+      { key: "total", label: "TOTAL", value: totalCount, Icon: IconChecklistOutline14, keep: true },
+      { key: "doing", label: "DOING", value: inProgressCount, Icon: IconPlayOutline16, keep: inProgressCount > 0 },
+      { key: "pending", label: "PENDING", value: pendingCount, Icon: IconQueueOutline14, keep: pendingCount > 0 },
+      { key: "done", label: "DONE", value: completedCount, Icon: IconCheckOutline14, keep: completedCount > 0 },
+    ].filter(function (segment) {
+      return segment.keep;
+    });
 
     return (
       <div className="durable-todos-card">
@@ -125,20 +128,37 @@ function makePanel() {
             type="button"
             className="durable-todos-toggle"
             aria-expanded={!collapsed}
+            disabled={expandable ? undefined : true}
             onClick={function () {
               setCollapsed(!collapsed);
             }}
           >
             <IconChevronDownOutline14
               className={
-                collapsed ? "durable-todos-chevron" : "durable-todos-chevron durable-todos-chevron-open"
+                collapsed
+                  ? expandable
+                    ? "durable-todos-chevron"
+                    : "durable-todos-chevron durable-todos-chevron-disabled"
+                  : "durable-todos-chevron durable-todos-chevron-open"
               }
               aria-hidden={true}
             />
-            <span className="durable-todos-title">To-do list</span>
-            <span className="durable-todos-summary">{buildSummary()}</span>
+            <span className="durable-todos-name-badge">To-do list</span>
+            <span className="durable-todos-counts">
+              {countSegments.map(function (segment) {
+                return (
+                  <span key={segment.key} className="durable-todos-count">
+                    <segment.Icon size={14} />
+                    <span className="durable-todos-count-label">{segment.label}</span>
+                    <span className="durable-todos-count-sep" aria-hidden={true}>
+                      ·
+                    </span>
+                    <span className="durable-todos-count-value">{segment.value}</span>
+                  </span>
+                );
+              })}
+            </span>
           </button>
-          {carriedOver ? <span className="durable-todos-carried">carried over</span> : null}
           {unfinished.length > 0 ? (
             <button type="button" className="durable-todos-remind" onClick={onRemind}>
               Remind
@@ -149,28 +169,22 @@ function makePanel() {
           <div className="durable-todos-running-line">{"Current: " + inProgressItem.content}</div>
         ) : null}
         {!collapsed ? (
-          <>
-            {todos === null || todos.length === 0 ? (
-              <div className="durable-todos-empty">No work items</div>
-            ) : (
-              <div className="durable-todos-plan">
-                {todos.map(function (item, index) {
-                  var attrs =
-                    item.status === "completed"
-                      ? { "data-done": true }
-                      : item.status === "in_progress"
-                        ? { "data-active": true }
-                        : { "data-pending": true };
-                  return (
-                    <div key={index} className="dsh-plan-item" {...attrs}>
-                      <span className="dsh-plan-checkbox" aria-hidden={true} />
-                      <span className="dsh-plan-content">{item.content}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </>
+          <div className="durable-todos-plan">
+            {todos.map(function (item, index) {
+              var attrs =
+                item.status === "completed"
+                  ? { "data-done": true }
+                  : item.status === "in_progress"
+                    ? { "data-active": true }
+                    : { "data-pending": true };
+              return (
+                <div key={index} className="dsh-plan-item" {...attrs}>
+                  <span className="dsh-plan-checkbox" aria-hidden={true} />
+                  <span className="dsh-plan-content">{item.content}</span>
+                </div>
+              );
+            })}
+          </div>
         ) : null}
       </div>
     );

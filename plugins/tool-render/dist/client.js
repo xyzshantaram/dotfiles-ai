@@ -1989,6 +1989,10 @@ var client_default = `.tool-render-row {
 .tool-render-chevron-open {
   transform: rotate(0deg);
 }
+.tool-render-chevron-disabled {
+  opacity: 0.35;
+  pointer-events: none;
+}
 .tool-render-title {
   color: var(--dsw-alias-label-secondary);
   flex: none;
@@ -15792,7 +15796,7 @@ function toolRenderRow(options) {
         {
           className: open ? "tool-render-chevron tool-render-chevron-open" : "tool-render-chevron"
         }
-      ) : null,
+      ) : /* @__PURE__ */ import_react.default.createElement(IconChevronDownOutline142, { className: "tool-render-chevron tool-render-chevron-disabled", "aria-hidden": true }),
       leading,
       leading === null ? /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-title" }, options.title) : null,
       options.badge !== void 0 && options.badge !== null && options.badge !== "" ? /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-badge" }, options.badge) : null,
