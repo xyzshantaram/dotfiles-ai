@@ -286,6 +286,7 @@ function chainForDepth(ctx, depth) {
 }
 function registerFailover(ctx, alwaysMaxRetries) {
   const state = /* @__PURE__ */ new WeakMap();
+  const lastSelected = /* @__PURE__ */ new WeakMap();
   function getAgentState(agent) {
     let m = state.get(agent);
     if (!m) {
@@ -349,7 +350,7 @@ function registerFailover(ctx, alwaysMaxRetries) {
     if (!s || s.stepKey !== stepKey) {
       s = { stepKey, levels, cursor: 0, retries: 0, failures: [] };
       agentMap.set(stepKey, s);
-      ctx.logger.info(`failover chain reset for session ${sessionLabel(agent)}`);
+      ctx.logger.debug(`failover chain reset for session ${sessionLabel(agent)}`);
     } else {
       s.levels = levels;
       if (s.cursor >= s.levels.length) s.cursor = 0;
@@ -411,9 +412,17 @@ function registerFailover(ctx, alwaysMaxRetries) {
 ${tried}`);
     }
     const level = s.levels[s.cursor];
-    ctx.logger.info(
-      `failover chain selected ${level.provider}/${level.model} for session ${sessionLabel(agent)}`
-    );
+    const selectionMark = `${level.provider}/${level.model}`;
+    if (lastSelected.get(agent) !== selectionMark) {
+      lastSelected.set(agent, selectionMark);
+      ctx.logger.info(
+        `failover chain selected ${level.provider}/${level.model} for session ${sessionLabel(agent)}`
+      );
+    } else {
+      ctx.logger.debug(
+        `failover chain selected ${level.provider}/${level.model} for session ${sessionLabel(agent)}`
+      );
+    }
     return buildConfig(proposal, level);
   });
   ctx.on("agent/request-error", (payload, next) => {
