@@ -54,6 +54,7 @@
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
+  gap: 0.25rem;
   flex: none;
   height: 1.5rem;
   border: 1px solid var(--dsw-alias-border-l2);
@@ -65,6 +66,10 @@
   line-height: 1.125rem;
   font-weight: 500;
   white-space: nowrap;
+}
+.durable-todos-name-badge svg {
+  flex: none;
+  color: var(--dsw-alias-label-caption);
 }
 .durable-todos-counts {
   box-sizing: border-box;
