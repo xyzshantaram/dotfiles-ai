@@ -6370,7 +6370,7 @@ function postJson(url, body) {
 }
 
 // css-text:/home/sid/repos/dotfiles-ai/plugins/composer-menu/src/client.module.css
-var client_default = '/* Composer overflow menu, styled after the context meter panel. */\n.composer-menu-trigger {\n  width: 28px;\n  height: 28px;\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  background: 0 0;\n  border: none;\n  border-radius: 999px;\n  flex: none;\n  place-items: center;\n  display: grid;\n  padding: 0;\n}\n.composer-menu-trigger:hover,\n.composer-menu-trigger[data-state="open"] {\n  background: var(--dsw-alias-interactive-bg-hover);\n  color: var(--dsw-alias-label-primary);\n}\n.composer-menu-content {\n  z-index: 100;\n  box-sizing: border-box;\n  min-width: 208px;\n  border: 1px solid var(--dsw-alias-border-inverted);\n  background: var(--dsw-specific-menu);\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-primary);\n  border-radius: 12px;\n  padding: 6px;\n  font-size: 13px;\n  line-height: 20px;\n  user-select: none;\n}\n.composer-menu-item {\n  align-items: center;\n  gap: 8px;\n  display: flex;\n  cursor: default;\n  outline: none;\n  border-radius: 8px;\n  padding: 7px 10px;\n  white-space: nowrap;\n  color: var(--dsw-alias-label-primary);\n}\n/* Radix marks the row under the pointer or the keyboard cursor. Both use the\n   same token, so mouse and keyboard read identically. */\n.composer-menu-item[data-highlighted] {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.composer-menu-item[data-disabled] {\n  color: var(--dsw-alias-label-tertiary);\n}\n/* A fixed leading icon column, present whether or not a row has an icon, so\n   labels line up in a column instead of shifting between rows. */\n.composer-menu-icon {\n  width: 16px;\n  flex: none;\n  place-items: center;\n  display: grid;\n  color: var(--dsw-alias-label-secondary);\n}\n/* A fixed trailing slot for the selection check, present whether or not the\n   row is selected, so labels line up in a column instead of shifting when\n   the check mark appears. */\n.composer-menu-mark {\n  width: 14px;\n  flex: none;\n  place-items: center;\n  display: grid;\n  color: var(--dsw-alias-label-secondary);\n}\n.composer-menu-indicator {\n  display: inline-flex;\n}\n.composer-menu-label {\n  flex: auto;\n}\n.composer-menu-chevron {\n  flex: none;\n  color: var(--dsw-alias-label-tertiary);\n  padding-left: 8px;\n}\n.composer-menu-separator {\n  height: 1px;\n  background: var(--dsw-alias-border-l3);\n  margin: 6px 4px;\n}\n';
+var client_default = '/* Composer overflow menu, styled after the context meter panel. */\n.composer-menu-trigger {\n  width: 28px;\n  height: 28px;\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  background: 0 0;\n  border: none;\n  border-radius: 999px;\n  flex: none;\n  place-items: center;\n  display: grid;\n  padding: 0;\n}\n.composer-menu-trigger:hover,\n.composer-menu-trigger[data-state="open"] {\n  background: var(--dsw-alias-interactive-bg-hover);\n  color: var(--dsw-alias-label-primary);\n}\n.composer-menu-content {\n  z-index: 100;\n  box-sizing: border-box;\n  min-width: 208px;\n  border: 1px solid var(--dsw-alias-border-inverted);\n  background: var(--dsw-specific-menu);\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-primary);\n  border-radius: 12px;\n  padding: 6px;\n  font-size: 13px;\n  line-height: 20px;\n  user-select: none;\n}\n.composer-menu-item {\n  align-items: center;\n  gap: 8px;\n  display: flex;\n  cursor: default;\n  outline: none;\n  border-radius: 8px;\n  padding: 7px 10px;\n  white-space: nowrap;\n  color: var(--dsw-alias-label-primary);\n}\n/* Radix marks the row under the pointer or the keyboard cursor. Both use the\n   same token, so mouse and keyboard read identically. */\n.composer-menu-item[data-highlighted] {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.composer-menu-item[data-disabled] {\n  color: var(--dsw-alias-label-tertiary);\n}\n/* A fixed leading icon column, present whether or not a row has an icon, so\n   labels line up in a column instead of shifting between rows. */\n.composer-menu-icon {\n  width: 16px;\n  flex: none;\n  place-items: center;\n  display: grid;\n  color: var(--dsw-alias-label-secondary);\n}\n/* A fixed trailing slot for the selection check, present whether or not the\n   row is selected, so labels line up in a column instead of shifting when\n   the check mark appears. */\n.composer-menu-mark {\n  width: 14px;\n  flex: none;\n  place-items: center;\n  display: grid;\n  color: var(--dsw-alias-label-secondary);\n}\n.composer-menu-indicator {\n  display: inline-flex;\n}\n.composer-menu-label {\n  flex: auto;\n}\n.composer-menu-chevron {\n  flex: none;\n  color: var(--dsw-alias-label-tertiary);\n  padding-left: 8px;\n}\n/* Sliding toggle switch for the web search row. Off: knob left, neutral\n   track. On: knob right, track and knob take the business color. */\n.composer-menu-toggle-track {\n  width: 34px;\n  height: 18px;\n  border-radius: 999px;\n  background: var(--dsw-alias-border-l2);\n  transition: background-color 0.15s ease;\n  flex: none;\n  position: relative;\n}\n.composer-menu-toggle-track[data-on="true"] {\n  background: var(--dsw-alias-state-business-primary);\n}\n.composer-menu-toggle-knob {\n  width: 14px;\n  height: 14px;\n  border-radius: 50%;\n  background: var(--dsw-specific-menu);\n  position: absolute;\n  top: 2px;\n  left: 2px;\n  transform: translateX(0);\n  transition: transform 0.15s ease;\n}\n.composer-menu-toggle-track[data-on="true"] .composer-menu-toggle-knob {\n  transform: translateX(16px);\n}\n/* Unknown mode (first fetch in flight) or unavailable target: read as\n   switched off and dimmed, with the row disabled on the Radix side. */\n.composer-menu-toggle-track[data-pending="true"] {\n  opacity: 0.5;\n}\n.composer-menu-item[data-disabled] .composer-menu-toggle-track {\n  opacity: 0.5;\n}\n.composer-menu-separator {\n  height: 1px;\n  background: var(--dsw-alias-border-l3);\n  margin: 6px 4px;\n}\n';
 
 // plugins/composer-menu/src/client.tsx
 var PLUGIN_NAME = "composer-menu";
@@ -6378,6 +6378,11 @@ var inject = ["slots"];
 var name = PLUGIN_NAME;
 function apply(ctx) {
   injectStyle(PLUGIN_NAME, "composer-menu", client_default);
+  injectStyle(
+    PLUGIN_NAME,
+    "composer-menu-hide-web-tools",
+    ".wt-search-mode-trigger { display: none !important; }"
+  );
   ctx.slots.inject("conversation.input.left", function* () {
     yield ctx.slots.register(
       {
@@ -6537,6 +6542,71 @@ function apply(ctx) {
         )
       );
     }
+    const SEARCH_MODE_API = "/web-tools/api/search-mode";
+    function SearchToggle() {
+      const [mode, setMode] = react.useState(null);
+      const [available, setAvailable] = react.useState(true);
+      const inFlight = react.useRef(false);
+      const refresh = react.useCallback(() => {
+        postJson(SEARCH_MODE_API + "/get", { sessionId: props.sessionId }).then((result) => {
+          const value = result.data && result.data.value;
+          if (result.error || !value) {
+            if (result.error) console.error("composer menu: " + result.error);
+            return;
+          }
+          setMode(value.mode);
+          setAvailable(value.available !== false);
+        });
+      }, [props.sessionId]);
+      react.useEffect(() => {
+        refresh();
+        window.addEventListener("focus", refresh);
+        return () => window.removeEventListener("focus", refresh);
+      }, [refresh]);
+      const toggle = () => {
+        if (mode === null || !available || inFlight.current) return;
+        const previous = mode;
+        const next = mode === "required" ? "auto" : "required";
+        inFlight.current = true;
+        setMode(next);
+        postJson(SEARCH_MODE_API + "/set", { sessionId: props.sessionId, mode: next }).then(
+          (result) => {
+            inFlight.current = false;
+            if (result.error) {
+              setMode(previous);
+              console.error("composer menu: " + result.error);
+              return;
+            }
+            refresh();
+          }
+        );
+      };
+      const on = mode === "required";
+      return react.createElement(
+        Item22,
+        { className: "composer-menu-item", disabled: mode === null || !available, onSelect: toggle },
+        react.createElement("span", { key: "icon", className: "composer-menu-icon" }),
+        react.createElement(
+          "span",
+          { key: "label", className: "composer-menu-label" },
+          "Web search"
+        ),
+        react.createElement(
+          "span",
+          {
+            key: "switch",
+            className: "composer-menu-toggle-track",
+            "data-on": on ? "true" : "false",
+            "data-pending": mode === null ? "true" : void 0,
+            role: "switch",
+            "aria-checked": on,
+            "aria-label": "Web search"
+          },
+          react.createElement("span", { className: "composer-menu-toggle-knob" })
+        )
+      );
+    }
+    const searchRow = react.createElement(SearchToggle);
     const sandboxSub = react.createElement(
       Sub2,
       null,
@@ -6605,6 +6675,8 @@ function apply(ctx) {
           Content22,
           { side: "top", align: "start", sideOffset: 8, className: "composer-menu-content" },
           sandboxSub,
+          react.createElement(Separator2, { className: "composer-menu-separator" }),
+          searchRow,
           hasExtra ? react.createElement(Separator2, { className: "composer-menu-separator" }) : null,
           // display: contents keeps this div out of layout entirely, so it is
           // purely a measuring point for the MutationObserver above; it never
