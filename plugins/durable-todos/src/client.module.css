@@ -102,6 +102,20 @@
   letter-spacing: 0.03em;
   color: var(--dsw-alias-label-caption);
 }
+/* State coloring. The icon and the label take the state hue; the count
+   itself stays label-primary so the number keeps its contrast. */
+.durable-todos-count[data-state="doing"] svg,
+.durable-todos-count[data-state="doing"] .durable-todos-count-label {
+  color: var(--dsw-alias-state-warn-primary);
+}
+.durable-todos-count[data-state="pending"] svg,
+.durable-todos-count[data-state="pending"] .durable-todos-count-label {
+  color: var(--dsw-alias-state-business-primary);
+}
+.durable-todos-count[data-state="done"] svg,
+.durable-todos-count[data-state="done"] .durable-todos-count-label {
+  color: var(--dsw-alias-state-success-primary);
+}
 .durable-todos-count-sep {
   color: var(--dsw-alias-label-caption);
 }
