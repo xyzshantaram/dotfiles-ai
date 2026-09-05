@@ -1911,6 +1911,14 @@ var PLAN_ROW_CSS = `
 .dsh-plan-item[data-done] .dsh-plan-checkbox {
   border-color: var(--dsw-alias-state-success-primary);
 }
+/* State hue on the box itself: pending is queued (blue), active is running
+   (amber), done keeps its green. Matches the header badge state colors. */
+.dsh-plan-item[data-pending] .dsh-plan-checkbox {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+.dsh-plan-item[data-active] .dsh-plan-checkbox {
+  border-color: var(--dsw-alias-state-warn-primary);
+}
 .dsh-plan-item[data-done] .dsh-plan-checkbox::after {
   color: var(--dsw-alias-state-success-primary);
   content: "\u2713";
@@ -1920,7 +1928,7 @@ var PLAN_ROW_CSS = `
   text-align: center;
 }
 .dsh-plan-item[data-active] .dsh-plan-checkbox::after {
-  background: var(--dsw-alias-label-tertiary);
+  background: var(--dsw-alias-state-warn-primary);
   content: "";
   height: 0.09375rem;
   left: 0.1875rem;

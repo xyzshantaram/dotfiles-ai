@@ -157,7 +157,7 @@ function makePanel() {
             <span className="durable-todos-counts">
               {countSegments.map(function (segment) {
                 return (
-                  <span key={segment.key} className="durable-todos-count">
+                  <span key={segment.key} className="durable-todos-count" data-state={segment.key}>
                     <segment.Icon size={14} />
                     <span className="durable-todos-count-label">{segment.label}</span>
                     <span className="durable-todos-count-sep" aria-hidden={true}>
