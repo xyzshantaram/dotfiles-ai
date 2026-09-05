@@ -42,7 +42,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#fc435af68e384963a8575abd1ddac08e54daaa49}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#90b69e3724ca82855552e4aa07c49267507021bb}"
 
 # Git-hosted specs whose build scripts pnpm must be allowed to run. pnpm 10+
 # blocks lifecycle scripts (prepare/postinstall) unless the exact resolved
@@ -210,6 +210,19 @@ step_write_web_patch() {
     files:
       roots:
         - /tmp/dsh
+
+# The spill store's default root is a private mkdtemp directory under the OS
+# tmpdir (dsh-spill-local/lib/index.js). That path sits outside the sandbox's
+# writable roots, so a spilled tool result lands where the agent cannot follow:
+# every read of the spilled path fails under the default workspace policy.
+# /tmp/dsh is the sanctioned scratch root the sandbox already allows and the
+# file panel already exposes (see files.roots above), so pin the spill root
+# under it. The shipped spill-local row carries no other config keys, so a
+# wholesale config replace is safe.
+- id: spill-local
+  name: '@deepseek-ai/dsh-spill-local'
+  config:
+    root: /tmp/dsh/spill
 
 PATCH
 }
