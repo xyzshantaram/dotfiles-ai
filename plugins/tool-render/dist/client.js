@@ -15777,6 +15777,7 @@ function toolRenderRow(options) {
     "div",
     {
       className: "tool-render-card",
+      "data-call-id": options.callId ?? void 0,
       "data-escalated": options.escalated || void 0,
       "data-guard-approval": options.guardApproval || void 0,
       "data-error": options.state === "error" || void 0,
@@ -15804,7 +15805,13 @@ function toolRenderRow(options) {
         {
           className: open ? "tool-render-chevron tool-render-chevron-open" : "tool-render-chevron"
         }
-      ) : /* @__PURE__ */ import_react.default.createElement(IconChevronDownOutline142, { className: "tool-render-chevron tool-render-chevron-disabled", "aria-hidden": true }),
+      ) : /* @__PURE__ */ import_react.default.createElement(
+        IconChevronDownOutline142,
+        {
+          className: "tool-render-chevron tool-render-chevron-disabled",
+          "aria-hidden": true
+        }
+      ),
       leading,
       leading === null ? /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-title" }, options.title) : null,
       options.badge !== void 0 && options.badge !== null && options.badge !== "" ? /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-badge" }, options.badge) : null,
@@ -15838,6 +15845,7 @@ function ReadRow(props) {
     }
   }
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Read file",
     icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
     title: "Read",
@@ -15930,6 +15938,7 @@ function BashRow(props) {
     body = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-io" }, inner);
   }
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Run bash",
     icon: /* @__PURE__ */ import_react.default.createElement(IconApiOutline142, { size: 14 }),
     title: "Bash",
@@ -16209,6 +16218,7 @@ function makeEditRow(toolTitle) {
     var block = props.block;
     if (block === null || typeof block !== "object") {
       return toolRenderRow({
+        callId: props.callId,
         toolName: editBadgeLabel(callNameOf(block), toolTitle),
         icon: /* @__PURE__ */ import_react.default.createElement(IconEditOutline162, { size: 14 }),
         title: toolTitle,
@@ -16256,6 +16266,7 @@ function makeEditRow(toolTitle) {
       body = /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output", "tool-render-error": state === "error" || void 0 }, output);
     }
     return toolRenderRow({
+      callId: props.callId,
       // One component serves the `edit`, `undo_edit`, and `undo_last_edit`
       // registrations. The block carries the real call name, so the badge
       // shows the right human-readable label for the exact call being rendered.
@@ -16507,6 +16518,7 @@ function WriteRow(props) {
     body = /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output", "tool-render-error": state === "error" || void 0 }, output);
   }
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Write file",
     icon: /* @__PURE__ */ import_react.default.createElement(IconEditOutline162, { size: 14 }),
     title: "Write",
@@ -16590,6 +16602,7 @@ function TodoRow(props) {
     body = planBody(todos);
   }
   return toolRenderRow({
+    callId: props.callId,
     toolName: "To-do list",
     icon: /* @__PURE__ */ import_react.default.createElement(IconChecklistOutline142, { size: 14 }),
     title: "To-do list",
@@ -16730,6 +16743,7 @@ function AskRow(props) {
     body = askBody(questions, answers);
   }
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Ask user",
     icon: /* @__PURE__ */ import_react.default.createElement(IconQuestionOutline142, { size: 14 }),
     title: "Ask user",
@@ -16772,6 +16786,7 @@ function SubagentRow(props) {
     body = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: prompt }));
   }
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Dispatch",
     icon: /* @__PURE__ */ import_react.default.createElement(IconAgentPresetOutline162, { size: 14 }),
     title,
@@ -16811,6 +16826,7 @@ function JobOutputRow(props) {
   var summary = statusMatch !== null ? "status: " + statusMatch[1] : "Job output";
   var body = state !== "error" && output !== null && output !== "" ? /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output" }, stripAnsi(output)) : null;
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Job output",
     icon: /* @__PURE__ */ import_react.default.createElement(IconApiOutline142, null),
     title: "Job output",
@@ -16853,6 +16869,7 @@ function PackageRow(props) {
   var summary = target !== void 0 && target !== "" ? target : title;
   var body = state !== "error" && output !== null && output !== "" ? /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output" }, stripAnsi(output)) : null;
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Manage package",
     icon: /* @__PURE__ */ import_react.default.createElement(IconApiOutline142, null),
     title,
@@ -16882,6 +16899,7 @@ function SendMessageRow(props) {
   var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
   var body = state !== "error" && args !== null ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: args.message })) : null;
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Message",
     icon: /* @__PURE__ */ import_react.default.createElement(IconAgentPresetOutline162, { size: 14 }),
     title: "Message",
@@ -16908,6 +16926,7 @@ function InterruptAgentRow(props) {
   var state = rowStateOf(block);
   var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Interrupt agent",
     icon: /* @__PURE__ */ import_react.default.createElement(IconStopFill162, { size: 14 }),
     title: "Interrupt agent",
@@ -16965,6 +16984,7 @@ function ListAgentsRow(props) {
     );
   })) : null;
   return toolRenderRow({
+    callId: props.callId,
     toolName: "List agents",
     icon: /* @__PURE__ */ import_react.default.createElement(IconAgentPresetOutline162, { size: 14 }),
     title: "List agents",
@@ -16992,6 +17012,50 @@ function contextText(content) {
   }
   return parts.join("\n\n");
 }
+var FAILOVER_LINE_RE = /^LLM failover (\S+)\/(\S+) -> (\S+)\/(\S+) \(([^)]+)\)$/;
+function FailoverRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var text = contextText(props.content);
+  var lines = text.split("\n");
+  var firstLine2 = lines.length > 0 ? lines[0] : "";
+  var match = FAILOVER_LINE_RE.exec(firstLine2);
+  if (match === null) {
+    return GenericContextCard({
+      content: props.content,
+      source: props.source,
+      provenance: props.provenance,
+      form: props.form
+    });
+  }
+  var fromProv = match[1];
+  var fromModel = match[2];
+  var toProv = match[3];
+  var toModel = match[4];
+  var code = match[5];
+  var detailStart = text.indexOf("\n\n");
+  var detail = detailStart !== -1 ? text.slice(detailStart + 2) : "";
+  var detailFirstLine = detail.length > 0 ? firstLine2(detail) : "";
+  var summary = `${fromProv}/${fromModel} -> ${toProv}/${toModel}`;
+  var errorSummary = code + (detailFirstLine ? " \xB7 " + detailFirstLine : "");
+  var errorText = detail !== "" ? detail : void 0;
+  return toolRenderRow({
+    toolName: "LLM failover",
+    icon: /* @__PURE__ */ import_react.default.createElement(IconApiOutline142, { size: 14 }),
+    title: "LLM failover",
+    summary,
+    state: "error",
+    expandable: errorText !== void 0,
+    expanded,
+    onToggle: function() {
+      setExpanded(!expanded);
+    },
+    errorSummary,
+    errorText,
+    body: errorText !== void 0 ? /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output", "tool-render-error": true }, errorText) : null
+  });
+}
 function pluginSourceKey(source) {
   if (source === null || typeof source !== "object") return void 0;
   if (source.kind !== "plugin") return void 0;
@@ -17014,6 +17078,7 @@ function SkillContentCard(props) {
   var setExpanded = expandedState[1];
   var body = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement("table", { className: "tool-render-skill-table" }, /* @__PURE__ */ import_react.default.createElement("tbody", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", null, "Name"), /* @__PURE__ */ import_react.default.createElement("td", null, props.name)), /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", null, "Resources"), /* @__PURE__ */ import_react.default.createElement("td", null, props.resourceHint)))), markdownWithReminders(props.instructions));
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Skill",
     icon: /* @__PURE__ */ import_react.default.createElement(IconChecklistOutline142, null),
     title: "Skill",
@@ -17049,6 +17114,7 @@ function GenericContextCard(props) {
   var badge = provenance !== null && provenance !== void 0 && typeof provenance.label === "string" && provenance.label !== "" ? provenance.label : void 0;
   var body = text !== "" ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, markdownWithReminders(text)) : null;
   return toolRenderRow({
+    callId: props.callId,
     toolName: title,
     icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
     title,
@@ -17101,6 +17167,7 @@ function SkillRow(props) {
   var args = parseArgs(argsRawOf(block));
   var skillName = args !== null ? pickString(args, ["name"]) : void 0;
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Load skill",
     icon: /* @__PURE__ */ import_react.default.createElement(IconChecklistOutline142, null),
     title: "Skill",
@@ -17189,6 +17256,7 @@ function ReadImageRow(props) {
     body = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-image-body" }, /* @__PURE__ */ import_react.default.createElement(EmbedImage, { filePath: meta.path, alt: basenameOf(meta.path) }), /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-image-meta" }, /* @__PURE__ */ import_react.default.createElement("div", null, basenameOf(meta.path)), /* @__PURE__ */ import_react.default.createElement("div", null, meta.mediaType), /* @__PURE__ */ import_react.default.createElement("div", null, meta.path)));
   }
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Read image",
     icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
     title: "Read image",
@@ -17247,6 +17315,7 @@ function SeeRow(props) {
     ) : null, imagePath !== void 0 ? /* @__PURE__ */ import_react.default.createElement(EmbedImage, { filePath: imagePath, alt: basenameOf(imagePath) }) : null, imagePath !== void 0 ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-image-meta" }, imagePath) : null);
   }
   return toolRenderRow({
+    callId: props.callId,
     toolName: "See image",
     icon: /* @__PURE__ */ import_react.default.createElement(IconQuestionOutline142, { size: 14 }),
     title: "See",
@@ -17296,6 +17365,7 @@ function WebSearchRow(props) {
   var summary = searchSummary(queries, state, output);
   var body = state !== "error" && output !== null && output !== "" ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: output })) : null;
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Web search",
     icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
     title: "Web search",
@@ -17330,6 +17400,7 @@ function WebFetchRow(props) {
     body = looksLikeRawHtml(output) ? /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-fetch-body tool-render-fetch-raw" }, output) : /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-fetch-body" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: output }));
   }
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Web fetch",
     icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
     title: "Web fetch",
@@ -17456,6 +17527,7 @@ function CompactionRow(props) {
     var fallbackText = stripOuterFence(summary);
     var fallbackBody = fallbackText !== "" ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: fallbackText })) : null;
     return toolRenderRow({
+      callId: props.callId,
       toolName: "Compaction",
       icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
       title: "Compaction",
@@ -17473,6 +17545,7 @@ function CompactionRow(props) {
   }
   var pretty = view;
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Compaction",
     icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
     title: "Compaction",
@@ -17488,6 +17561,16 @@ function CompactionRow(props) {
 var inject = ["slots"];
 var name = PLUGIN_NAME;
 function apply(ctx) {
+  ctx.slots.inject("context.injection.view", function* () {
+    yield ctx.slots.register(
+      {
+        name: "context.injection.view",
+        key: "profiles",
+        priority: -100
+      },
+      FailoverRow
+    );
+  });
   ctx.slots.inject("tool.call.toolview", function* () {
     yield ctx.slots.register(
       {

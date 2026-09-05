@@ -111,6 +111,7 @@
 import type { Context } from "@deepseek-ai/cordis";
 import z from "@deepseek-ai/schemastery";
 import type { LlmCallConfig } from "@deepseek-ai/dsh-llm";
+import { createUserMessage } from "@deepseek-ai/dsh-llm";
 import { settingsNamespace } from "@deepseek-ai/dsh-settings";
 import type { RequestErrorAction } from "@deepseek-ai/dsh-agent";
 import { chainOf, type RouteCandidate } from "./profile-routes";
@@ -178,34 +179,41 @@ function activeEntry(profile: ProfileSettings | undefined): unknown {
 // its class time to live. Selections skip the dead rung at proposal time and
 // when the waterfall walks the chain. Any `profile` namespace update clears
 // the whole cache: a manual active flip rewrites every chain anyway.
-const ERROR_CLASSES = ["auth", "no-credits", "model-unavailable", "rate-limit"] as const;
+const ERROR_CLASSES = [
+  "auth",
+  "no-credits",
+  "model-unavailable",
+  "rate-limit",
+  "server-error",
+] as const;
 type ErrorClass = (typeof ERROR_CLASSES)[number];
 const ERROR_TTL_MS: Record<ErrorClass, number> = {
   auth: 600_000,
   "no-credits": 600_000,
   "model-unavailable": 600_000,
-  // Rate limits do not use this base directly. See rateLimitTtlMs below:
+  // Rate limits and server errors do not use this base directly. See doubleStrikes below:
   // a fixed window shorter than the same-provider retry loop expires before
   // the next request, so the chain walks back into the limited model and
   // pays the full retry cost again. The window therefore doubles per
   // consecutive strike instead.
   "rate-limit": 60_000,
+  "server-error": 60_000,
 };
-/** Ceiling for the doubling rate-limit window. */
+/** Ceiling for the doubling rate-limit and server-error window. */
 const RATE_LIMIT_MAX_TTL_MS = 900_000;
 const downCache = new Map<string, number>();
-/** Consecutive rate-limit strikes per level key; drives the doubling window. */
-const rateLimitStrikes = new Map<string, number>();
+/** Consecutive strikes per level key for classes that double; drives the doubling window. */
+const doubleStrikes = new Map<string, number>();
 
 function errorKey(level: Level, cls: ErrorClass): string {
   return `${level.provider}:${level.model}:${cls}`;
 }
 
-/** Effective down-window for one cache entry. Rate limits double per strike,
+/** Effective down-window for one cache entry. Rate limits and server errors double per strike,
  * capped; every other class uses its fixed table value. */
 function effectiveTtlMs(key: string, cls: ErrorClass): number {
-  if (cls !== "rate-limit") return ERROR_TTL_MS[cls];
-  const strikes = rateLimitStrikes.get(key) ?? 1;
+  if (cls !== "rate-limit" && cls !== "server-error") return ERROR_TTL_MS[cls];
+  const strikes = doubleStrikes.get(key) ?? 1;
   return Math.min(ERROR_TTL_MS[cls] * 2 ** (strikes - 1), RATE_LIMIT_MAX_TTL_MS);
 }
 
@@ -234,6 +242,14 @@ const ERROR_CODE_CLASS: Record<string, ErrorClass> = {
   QUOTA_EXCEEDED: "no-credits",
   PAYMENT_REQUIRED: "no-credits",
   HTTP_402: "no-credits",
+  SERVER: "server-error",
+  HTTP_500: "server-error",
+  HTTP_502: "server-error",
+  HTTP_503: "server-error",
+  HTTP_504: "server-error",
+  INTERNAL: "server-error",
+  INTERNAL_ERROR: "server-error",
+  SERVICE_UNAVAILABLE: "server-error",
 };
 
 /**
@@ -268,6 +284,9 @@ export function normalizeErrorClass(
   if (/rate limit|too many requests|usage limit|usage_limit/.test(m)) {
     return "rate-limit";
   }
+  if (/internal server error|service unavailable|bad gateway|gateway timeout|http 5\d\d/.test(m)) {
+    return "server-error";
+  }
   if (
     /unknown model|no such model|has no configured model|no configured model|model .{0,40}(not found|does not exist|is not available|is not supported)/.test(
       m,
@@ -278,13 +297,33 @@ export function normalizeErrorClass(
   return undefined;
 }
 
+/**
+ * Format a failover notice for injection as a chat row. Returns plain text with
+ * no markdown. First line has the exact shape `LLM failover FROMPROV/FROMMODEL
+ * -> TOPROV/TOMODEL (CODE)`, then a blank line, then the message trimmed to
+ * 500 chars.
+ */
+export function failoverNoticeText(
+  fromProvider: string,
+  fromModel: string,
+  toProvider: string,
+  toModel: string,
+  code: string | undefined,
+  message: string,
+): string {
+  const header = `LLM failover ${fromProvider}/${fromModel} -> ${toProvider}/${toModel} (${code ?? "UNKNOWN"})`;
+  const detail = String(message ?? "").trim();
+  const trimmed = detail.length > 500 ? detail.slice(0, 500) : detail;
+  return `${header}\n\n${trimmed}`;
+}
+
 function markDown(level: Level, code: string | undefined, message: string): void {
   const cls = normalizeErrorClass(code, message);
   if (!cls) return;
   const key = errorKey(level, cls);
   downCache.set(key, Date.now());
-  if (cls === "rate-limit") {
-    rateLimitStrikes.set(key, (rateLimitStrikes.get(key) ?? 0) + 1);
+  if (cls === "rate-limit" || cls === "server-error") {
+    doubleStrikes.set(key, (doubleStrikes.get(key) ?? 0) + 1);
   }
 }
 
@@ -297,7 +336,7 @@ function isCachedDown(level: Level): boolean {
     if (at === undefined) continue;
     if (now - at < effectiveTtlMs(key, cls)) return true;
     downCache.delete(key);
-    rateLimitStrikes.delete(key);
+    doubleStrikes.delete(key);
   }
   return false;
 }
@@ -309,7 +348,7 @@ function liveDownKeys(): string[] {
     const cls = key.slice(key.lastIndexOf(":") + 1) as ErrorClass;
     if (now - at >= effectiveTtlMs(key, cls)) {
       downCache.delete(key);
-      rateLimitStrikes.delete(key);
+      doubleStrikes.delete(key);
     }
   }
   return [...downCache.keys()];
@@ -580,6 +619,36 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
       ctx.logger.info(
         `session ${sessionLabel(agent)} failing over from ${cur.provider}/${cur.model} to ${nxt.provider}/${nxt.model}`,
       );
+
+      // Deliver a chat row for the failover switchover. Call inject as a
+      // method: detaching it loses `this` and fails reading `send`.
+      const agentObj = agent as { inject?: (message: unknown) => void };
+      if (typeof agentObj.inject === "function") {
+        try {
+          const noticeText = failoverNoticeText(
+            cur.provider,
+            cur.model,
+            nxt.provider,
+            nxt.model,
+            failure.code,
+            failure.message ?? "",
+          );
+          void agentObj.inject(
+            createUserMessage({
+              content: [{ type: "text", text: noticeText }],
+              source: {
+                kind: "plugin",
+                plugin: "profiles",
+                form: "notice",
+                summary: "llm failover",
+              },
+            }),
+          );
+        } catch (error) {
+          ctx.logger.warn(`profiles: failed to inject failover notice: ${error}`);
+        }
+      }
+
       return { kind: "retry" } as unknown as Promise<RequestErrorAction>;
     }
 
@@ -910,7 +979,7 @@ function makeErrorCacheHandler(ctx: Context) {
       return;
     }
     downCache.clear();
-    rateLimitStrikes.clear();
+    doubleStrikes.clear();
     sendJson(res, 200, { ok: true, down: liveDownKeys() });
     return;
   };
@@ -946,6 +1015,7 @@ export function apply(ctx: Context, config: unknown): void {
   ctx.on("settings/updated", (ns, next, prev) => {
     if (ns !== PROFILE_NS) return;
     downCache.clear();
+    doubleStrikes.clear();
     const nextHead = chainOf(
       activeEntry(next as ProfileSettings),
       "orchestrator",
