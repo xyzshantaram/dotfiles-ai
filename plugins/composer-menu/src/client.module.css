@@ -37,10 +37,20 @@
   display: flex;
   cursor: default;
   outline: none;
+  border: none;
   border-radius: 8px;
   padding: 7px 10px;
   white-space: nowrap;
   color: var(--dsw-alias-label-primary);
+}
+/* The shipped theme draws divider rules under native menu rows. This menu
+   uses its own separators between groups, so foreign per-row rules read as
+   a stray underline under every entry. Kill them inside our content. */
+.composer-menu-content [role="menuitem"],
+.composer-menu-content [role="menuitemradio"],
+.composer-menu-content [role="menuitemcheckbox"] {
+  border-bottom: none;
+  box-shadow: none;
 }
 /* Radix marks the row under the pointer or the keyboard cursor. Both use the
    same token, so mouse and keyboard read identically. */
@@ -79,9 +89,4 @@
   flex: none;
   color: var(--dsw-alias-label-tertiary);
   padding-left: 8px;
-}
-.composer-menu-separator {
-  height: 1px;
-  background: var(--dsw-alias-border-l3);
-  margin: 6px 4px;
 }

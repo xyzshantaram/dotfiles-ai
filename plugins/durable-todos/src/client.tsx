@@ -18,7 +18,9 @@ var STYLE_TAG_ID = "durable-todos-style";
 /** Props the input dock slot hands to every registered component. */
 interface DockProps {
   useProjection(key: "durable-todos/todos"): DurableTodosView | null | undefined;
-  useSession(selector: (session: { running: boolean }) => boolean): boolean;
+  useSession(
+    selector: (session: { running: boolean; chat?: { nodes?: { size: number } } }) => boolean,
+  ): boolean;
   inputActions: {
     setDraft(text: string): void;
     submit(): void;
@@ -73,6 +75,17 @@ function makePanel() {
     var running = props.useSession(function (session) {
       return session.running;
     });
+    // New chat screen has no chat nodes yet; the panel would sit empty in
+    // the dock, so render nothing until the first turn exists.
+    var isNewChat = props.useSession(function (session) {
+      return (
+        session.chat === undefined ||
+        session.chat === null ||
+        session.chat.nodes === undefined ||
+        session.chat.nodes === null ||
+        session.chat.nodes.size === 0
+      );
+    });
     var todos = value === null || value === undefined ? null : value.todos;
     var unfinished = todos === null ? [] : todos.filter(isUnfinished);
     var [collapsed, setCollapsed] = react.useState(true);
@@ -113,12 +126,32 @@ function makePanel() {
     var expandable = todos !== null && todos.length > 0;
 
     var countSegments = [
-      { key: "doing", label: "DOING", value: inProgressCount, Icon: IconPlayOutline16, keep: inProgressCount > 0 },
-      { key: "pending", label: "PENDING", value: pendingCount, Icon: IconQueueOutline14, keep: pendingCount > 0 },
-      { key: "done", label: "DONE", value: completedCount, Icon: IconCheckOutline14, keep: completedCount > 0 },
+      {
+        key: "doing",
+        label: "IN PROGRESS",
+        value: inProgressCount,
+        Icon: IconPlayOutline16,
+        keep: inProgressCount > 0,
+      },
+      {
+        key: "pending",
+        label: "PENDING",
+        value: pendingCount,
+        Icon: IconQueueOutline14,
+        keep: pendingCount > 0,
+      },
+      {
+        key: "done",
+        label: "DONE",
+        value: completedCount,
+        Icon: IconCheckOutline14,
+        keep: completedCount > 0,
+      },
     ].filter(function (segment) {
       return segment.keep;
     });
+
+    if (isNewChat) return null;
 
     return (
       <div className="durable-todos-card">

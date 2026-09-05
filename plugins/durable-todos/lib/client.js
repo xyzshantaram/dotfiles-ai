@@ -163,6 +163,9 @@ function makePanel() {
     var running = props.useSession(function(session) {
       return session.running;
     });
+    var isNewChat = props.useSession(function(session) {
+      return session.chat === void 0 || session.chat === null || session.chat.nodes === void 0 || session.chat.nodes === null || session.chat.nodes.size === 0;
+    });
     var todos = value === null || value === void 0 ? null : value.todos;
     var unfinished = todos === null ? [] : todos.filter(isUnfinished);
     var [collapsed, setCollapsed] = react.useState(true);
@@ -187,12 +190,31 @@ function makePanel() {
     var totalCount = todos ? todos.length : 0;
     var expandable = todos !== null && todos.length > 0;
     var countSegments = [
-      { key: "doing", label: "DOING", value: inProgressCount, Icon: IconPlayOutline162, keep: inProgressCount > 0 },
-      { key: "pending", label: "PENDING", value: pendingCount, Icon: IconQueueOutline142, keep: pendingCount > 0 },
-      { key: "done", label: "DONE", value: completedCount, Icon: IconCheckOutline142, keep: completedCount > 0 }
+      {
+        key: "doing",
+        label: "IN PROGRESS",
+        value: inProgressCount,
+        Icon: IconPlayOutline162,
+        keep: inProgressCount > 0
+      },
+      {
+        key: "pending",
+        label: "PENDING",
+        value: pendingCount,
+        Icon: IconQueueOutline142,
+        keep: pendingCount > 0
+      },
+      {
+        key: "done",
+        label: "DONE",
+        value: completedCount,
+        Icon: IconCheckOutline142,
+        keep: completedCount > 0
+      }
     ].filter(function(segment) {
       return segment.keep;
     });
+    if (isNewChat) return null;
     return /* @__PURE__ */ react.createElement("div", { className: "durable-todos-card" }, /* @__PURE__ */ react.createElement("div", { className: "durable-todos-header" }, /* @__PURE__ */ react.createElement(
       "button",
       {
