@@ -2455,6 +2455,18 @@ var client_default = `.tool-render-row {
 .tool-render-ask[tool-render-error] .tool-render-question-prompt {
   color: var(--dsw-alias-label-tertiary);
 }
+/* Each of the four ask-card text fields now renders through MarkdownText,
+   which wraps even one plain line in a <p>. These four spots are one line of
+   layout, not a markdown body, so a paragraph's default block margin would
+   only add unwanted vertical gaps. Zero it and keep the field's own text
+   metrics. Anything beyond a paragraph (a list, a heading) still renders; it
+   just does not get this rule's own tight spacing. */
+.tool-render-question-prompt p,
+.tool-render-option-label p,
+.tool-render-option-description p,
+.tool-render-answer-note p {
+  margin: 0;
+}
 
 /* list_agents roster: one line per agent, status first so the column reads
    down the left edge. A descendants listing indents each line by its own
@@ -16625,7 +16637,7 @@ function askBody(questions, answers) {
       var label = option.label;
       var isSelected = picked !== null && picked.indexOf(label) !== -1;
       rows.push(
-        /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-option", "data-selected": isSelected || void 0 }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-option-marker", "aria-hidden": true }, isSelected ? "\u25C9" : "\u25CB"), /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-option-text" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-option-label" }, label), option.description !== null && option.description !== void 0 ? /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-option-description" }, option.description) : null))
+        /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-option", "data-selected": isSelected || void 0 }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-option-marker", "aria-hidden": true }, isSelected ? "\u25C9" : "\u25CB"), /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-option-text" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-option-label" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: label })), option.description !== null && option.description !== void 0 ? /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-option-description" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: option.description })) : null))
       );
     }
     if (picked !== null) {
@@ -16639,17 +16651,17 @@ function askBody(questions, answers) {
         }
         if (!known) {
           rows.push(
-            /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-option", "data-selected": true }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-option-marker", "aria-hidden": true }, "\u25C9"), /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-option-label" }, picked[j]))
+            /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-option", "data-selected": true }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-option-marker", "aria-hidden": true }, "\u25C9"), /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-option-label" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: picked[j] })))
           );
         }
       }
     }
     var note = null;
     if (answer !== void 0 && typeof answer.custom === "string" && answer.custom !== "") {
-      note = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-answer-note" }, answer.custom);
+      note = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-answer-note" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: answer.custom }));
     }
     children.push(
-      /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-question" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-question-prompt" }, q.question), rows, note)
+      /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-question" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-question-prompt" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: q.question })), rows, note)
     );
   }
   return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-ask" }, children);

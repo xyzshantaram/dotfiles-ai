@@ -1764,9 +1764,13 @@ function askBody(questions, answers) {
             {isSelected ? "◉" : "○"}
           </span>
           <span className="tool-render-option-text">
-            <span className="tool-render-option-label">{label}</span>
+            <span className="tool-render-option-label">
+              <MarkdownText text={label} />
+            </span>
             {option.description !== null && option.description !== undefined ? (
-              <span className="tool-render-option-description">{option.description}</span>
+              <span className="tool-render-option-description">
+                <MarkdownText text={option.description} />
+              </span>
             ) : null}
           </span>
         </div>,
@@ -1787,7 +1791,9 @@ function askBody(questions, answers) {
               <span className="tool-render-option-marker" aria-hidden={true}>
                 {"◉"}
               </span>
-              <span className="tool-render-option-label">{picked[j]}</span>
+              <span className="tool-render-option-label">
+                <MarkdownText text={picked[j]} />
+              </span>
             </div>,
           );
         }
@@ -1795,11 +1801,17 @@ function askBody(questions, answers) {
     }
     var note = null;
     if (answer !== undefined && typeof answer.custom === "string" && answer.custom !== "") {
-      note = <div className="tool-render-answer-note">{answer.custom}</div>;
+      note = (
+        <div className="tool-render-answer-note">
+          <MarkdownText text={answer.custom} />
+        </div>
+      );
     }
     children.push(
       <div className="tool-render-question">
-        <div className="tool-render-question-prompt">{q.question}</div>
+        <div className="tool-render-question-prompt">
+          <MarkdownText text={q.question} />
+        </div>
         {rows}
         {note}
       </div>,

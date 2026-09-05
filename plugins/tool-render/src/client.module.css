@@ -494,6 +494,18 @@
 .tool-render-ask[tool-render-error] .tool-render-question-prompt {
   color: var(--dsw-alias-label-tertiary);
 }
+/* Each of the four ask-card text fields now renders through MarkdownText,
+   which wraps even one plain line in a <p>. These four spots are one line of
+   layout, not a markdown body, so a paragraph's default block margin would
+   only add unwanted vertical gaps. Zero it and keep the field's own text
+   metrics. Anything beyond a paragraph (a list, a heading) still renders; it
+   just does not get this rule's own tight spacing. */
+.tool-render-question-prompt p,
+.tool-render-option-label p,
+.tool-render-option-description p,
+.tool-render-answer-note p {
+  margin: 0;
+}
 
 /* list_agents roster: one line per agent, status first so the column reads
    down the left edge. A descendants listing indents each line by its own
