@@ -67,6 +67,11 @@
 .profiles-client-chevron {
   color: var(--dsw-alias-label-caption);
   flex: none;
+  transform: rotate(-90deg);
+  transition: transform 0.12s;
+}
+.profiles-client-chevron-open {
+  transform: rotate(0deg);
 }
 .profiles-client-menu {
   z-index: 20;

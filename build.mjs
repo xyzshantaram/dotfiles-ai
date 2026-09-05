@@ -373,7 +373,11 @@ await build({
   bundle: true,
   platform: "browser",
   format: "iife",
-  external: ["react"],
+  // The primitives package stays external like react: the manifest's
+  // dsh.client.inject lists it, so the browser module table resolves it at
+  // evaluation. Bundling it here would inline a second copy beside the one
+  // tool-render already ships.
+  external: ["react", "@deepseek-ai/*"],
   jsx: "transform",
   jsxFactory: "react.createElement",
   jsxFragment: "react.Fragment",
