@@ -2339,12 +2339,6 @@ var client_default = `.tool-render-row {
   background: var(--dsw-alias-bg-layer-1);
   padding: 0.15625rem 0.5rem;
 }
-/* A frameless card (context injections) drops only the border, which read as
-   a stray outline around a one-line row. It keeps the layer background and
-   the row's metrics, so the card still sits on its own surface. */
-.tool-render-card[data-frameless] {
-  border-color: transparent;
-}
 .tool-render-card[data-escalated] {
   outline: 3px solid var(--dsh-outline-escalated);
 }
@@ -2615,11 +2609,11 @@ var client_default = `.tool-render-row {
   margin: 0;
 }
 /* A <system-reminder> block, framed instead of hidden: every character of
-   its text still renders, just under a chip instead of literal tags. */
+   its text still renders, just under a chip instead of literal tags. The
+   left border this used to carry read as a blockquote and was mistaken for
+   a stray outline on the whole card; dropped. */
 .tool-render-reminder {
-  border-left: 2px solid var(--dsw-alias-border-l2);
   margin: 0.5rem 0;
-  padding-left: 0.5rem;
 }
 .tool-render-reminder-chip {
   display: inline-block;
@@ -15774,8 +15768,7 @@ function toolRenderRow(options) {
       "data-escalated": options.escalated || void 0,
       "data-guard-approval": options.guardApproval || void 0,
       "data-error": options.state === "error" || void 0,
-      "data-stopped": options.state === "stopped" || void 0,
-      "data-frameless": options.frameless || void 0
+      "data-stopped": options.state === "stopped" || void 0
     },
     /* @__PURE__ */ import_react.default.createElement(
       "div",
@@ -17054,8 +17047,7 @@ function GenericContextCard(props) {
     onToggle: function() {
       setExpanded(!expanded);
     },
-    body,
-    frameless: true
+    body
   });
 }
 function ContextRow(props) {

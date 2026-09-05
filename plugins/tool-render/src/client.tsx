@@ -522,8 +522,6 @@ function toolNameBadge(toolName, icon, state) {
 }
 
 // ---- Row chrome (shared look, mirrors the shipped ToolRow seating). ----
-// options.frameless drops the card's border and background, for rows that
-// read as plain page content (context injections) rather than tool calls.
 function toolRenderRow(options) {
   // Every expandable row toggles, errored ones included. An errored row starts
   // collapsed like any other and reports its tool name and error message on the
@@ -583,7 +581,6 @@ function toolRenderRow(options) {
       data-guard-approval={options.guardApproval || undefined}
       data-error={options.state === "error" || undefined}
       data-stopped={options.state === "stopped" || undefined}
-      data-frameless={options.frameless || undefined}
     >
       <div
         className="tool-render-row"
@@ -2346,7 +2343,6 @@ function GenericContextCard(props) {
       setExpanded(!expanded);
     },
     body: body,
-    frameless: true,
   });
 }
 
