@@ -1737,6 +1737,12 @@ function looksLikeRawHtml(text) {
   if (head.charAt(0) !== "<") return false;
   return /^<[a-z][a-z0-9-]*(\s|>|\/>)/i.test(head);
 }
+function stripOuterFence(text) {
+  if (typeof text !== "string" || text === "") return text;
+  var trimmed = text.trim();
+  var match = /^(`{3,})[^\n]*\n([\s\S]*?)\n?\1$/.exec(trimmed);
+  return match === null ? text : match[2];
+}
 function compactionSummaryNode(data) {
   if (data === null || data === void 0 || typeof data !== "object") return null;
   if (data.kind === "compaction") return data;
@@ -17405,12 +17411,13 @@ function CompactionRow(props) {
   var view = views !== null && views !== void 0 && summaryEventSeq !== void 0 ? views[String(summaryEventSeq)] : null;
   var rows = view !== null && view !== void 0 ? prettyRows(view) : null;
   if (rows === null || rows.length === 0) {
-    var fallbackBody = summary !== "" ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: summary })) : null;
+    var fallbackText = stripOuterFence(summary);
+    var fallbackBody = fallbackText !== "" ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: fallbackText })) : null;
     return toolRenderRow({
       toolName: "Compaction",
       icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
       title: "Compaction",
-      summary: counts !== null ? counts : summary !== "" ? firstLine(summary) : "Compaction",
+      summary: counts !== null ? counts : fallbackText !== "" ? firstLine(fallbackText) : "Compaction",
       expandable: fallbackBody !== null,
       expanded,
       onToggle: function() {

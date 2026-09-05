@@ -6428,32 +6428,57 @@ function apply(ctx) {
         }
         continue;
       }
-      injectStyle(PLUGIN_NAME, target.id, "." + cls + " { display: none !important; }");
+      injectStyle(
+        PLUGIN_NAME,
+        target.id,
+        "." + cls + " { display: none !important; }\nspan:has(> ." + cls + ") { display: none !important; }"
+      );
       done.add(target.id);
     }
   }
-  let layoutDone = false;
-  let layoutWarned = false;
-  function ensureComposerLayout() {
-    if (layoutDone) return;
+  let modesDone = false;
+  let modesWarned = false;
+  function ensureModesCollapsed() {
+    if (modesDone) return;
     const modes = shippedClass("InputBar.module.css", "_modes");
-    const trailing = shippedClass("InputBar.module.css", "_trailing");
-    const primary = shippedClass("InputBar.module.css", "_primary");
-    if (modes === null || trailing === null || primary === null) {
-      if (attempts >= 20 && !layoutWarned) {
-        layoutWarned = true;
+    if (modes === null) {
+      if (attempts >= 20 && !modesWarned) {
+        modesWarned = true;
         console.error(
-          "composer menu: could not read the InputBar row classes, so the menu and the attach button keep their shipped positions."
+          "composer menu: could not read the InputBar modes class, so the menu trigger keeps its shipped position."
         );
       }
       return;
     }
-    injectStyle(
-      PLUGIN_NAME,
-      "composer-menu-row-layout",
-      "." + modes + " { display: contents; }\n." + trailing + " > .dsh-p2p-picker, ." + trailing + " > *:has(.dsh-p2p-picker) { order: 1; }\n." + trailing + " > ." + primary + ", ." + trailing + " > *:has(> ." + primary + ") { order: 2; }"
-    );
-    layoutDone = true;
+    injectStyle(PLUGIN_NAME, "composer-menu-collapse-modes", "." + modes + " { display: contents; }");
+    modesDone = true;
+  }
+  let pickerWarned = false;
+  function placePickerBeforeSend() {
+    const picker = document.querySelector(".dsh-p2p-picker");
+    if (picker === null) return;
+    const trailing = shippedClass("InputBar.module.css", "_trailing");
+    if (trailing === null) {
+      if (attempts >= 20 && !pickerWarned) {
+        pickerWarned = true;
+        console.error(
+          "composer menu: could not read the composer tool row class, so the attach button stays left of the model select."
+        );
+      }
+      return;
+    }
+    const rowEl = picker.closest("." + trailing);
+    if (rowEl === null) return;
+    const chain = [];
+    let node = picker;
+    while (node !== null && node !== rowEl) {
+      chain.push(node);
+      node = node.parentElement;
+    }
+    if (node !== rowEl) return;
+    for (const item of chain) item.style.order = "2";
+    const last = rowEl.lastElementChild;
+    if (last !== null && chain.indexOf(last) === -1) last.style.order = "3";
   }
   function choose(sessionId, preset) {
     postJson("/composer-menu/api/permission", { sessionId, preset }).then(
@@ -6465,7 +6490,8 @@ function apply(ctx) {
   function Menu2(props) {
     react.useEffect(() => {
       ensureShippedHidden();
-      ensureComposerLayout();
+      ensureModesCollapsed();
+      placePickerBeforeSend();
     });
     const [open, setOpen] = react.useState(false);
     const extraRef = react.useRef(null);

@@ -195,7 +195,7 @@ function apply(ctx) {
     if (node !== rowEl) return;
     for (const item of chain) item.style.order = "1";
     const last = rowEl.lastElementChild;
-    if (last !== null && chain.indexOf(last) === -1) last.style.order = "2";
+    if (last !== null && chain.indexOf(last) === -1) last.style.order = "3";
   }
   function Meter(props) {
     const useProjection = props.useProjection;
