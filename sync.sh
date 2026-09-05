@@ -361,6 +361,17 @@ step_install_plugins() {
 				done
 				return "$batch_rc"
 			fi
+			# A batch add over an ALREADY-installed spec relinks the package but
+			# skips the per-plugin reconcile, so the plugin's client-module
+			# table (dsh.client.inject) can go stale -- the observed failure
+			# was dsh-paste-to-path booting with "require
+			# dsh-client-ui-attachment missed the module table". A named
+			# re-add forces the reconcile and converges. Keep this list in
+			# step with plugins whose client halves declare an inject list.
+			local readd
+			for readd in dsh-paste-to-path; do
+				dsh_plugin_add "$readd" || true
+			done
 		fi
 	else
 		echo "WARNING: dsh not on PATH; skipping third-party plugin installs."
