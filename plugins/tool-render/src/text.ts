@@ -220,6 +220,23 @@ export function looksLikeRawHtml(text) {
   return /^<[a-z][a-z0-9-]*(\s|>|\/>)/i.test(head);
 }
 
+// ---- compaction chat-node shapes. ----
+// The compaction card sits on conversation.chat.node, and two keys reach it
+// with different data. Key "compaction" hands the summary node itself. Key
+// "manual-compaction" wraps it as { command, compaction }, where compaction
+// stays null while the run is still going. The summary node names itself
+// with kind "compaction", so one test serves both keys.
+// Returns the summary node, or null when there is none to show yet.
+export function compactionSummaryNode(data) {
+  if (data === null || data === undefined || typeof data !== "object") return null;
+  if (data.kind === "compaction") return data;
+  var wrapped = data.compaction;
+  if (wrapped !== null && wrapped !== undefined && typeof wrapped === "object") {
+    if (wrapped.kind === "compaction") return wrapped;
+  }
+  return null;
+}
+
 // ---- list_agents result parsing. ----
 // The shipped tool renders one line per agent (dsh-tool-subagent-control's
 // list-agents render): `<id> [<status>] — <label>` for a child, and
