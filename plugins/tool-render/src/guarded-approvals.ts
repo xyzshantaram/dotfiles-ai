@@ -34,7 +34,10 @@ export const guardedApprovalsProjection: ProjectionDefinition<
   GuardedApprovalsState
 > = {
   key: GUARDED_APPROVALS_KEY,
-  stateVersion: 1,
+  // Version 2: the reason matcher learned the shipped guard's plain-text
+  // "bash-guard:" format, so the previously folded (empty) state is stale
+  // and the log must be replayed.
+  stateVersion: 2,
   schema: viewSchema,
   init(): GuardedApprovalsState {
     return { entries: [] };

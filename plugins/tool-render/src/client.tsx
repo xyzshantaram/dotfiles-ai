@@ -59,6 +59,7 @@ import {
   extractHunk,
   numberedReadRows,
   looksLikeRawHtml,
+  parseAgentLines,
   parseSkillContent,
   readStartLine,
   splitSystemReminders,
@@ -494,8 +495,12 @@ function toolNameBadge(toolName, icon, state) {
     : isBash
       ? "color-mix(in srgb, var(--dsh-outline-guard) 55%, var(--dsw-alias-bg-tertiary))"
       : "color-mix(in srgb, hsl(" + hue + " 65% 45%) 55%, var(--dsw-alias-bg-tertiary))";
+  // A filled badge (the error red) takes a white outline: a border in the
+  // fill's own hue bleeds into the fill and makes the badge read taller
+  // than its text. Outline-only badges keep their hue border, which is the
+  // visible edge they have.
   var border = isError
-    ? "var(--dsw-alias-state-error-primary)"
+    ? "#fff"
     : isBash
       ? "var(--dsh-outline-guard)"
       : "hsl(" + hue + " 55% 60%)";
@@ -514,6 +519,8 @@ function toolNameBadge(toolName, icon, state) {
 }
 
 // ---- Row chrome (shared look, mirrors the shipped ToolRow seating). ----
+// options.frameless drops the card's border and background, for rows that
+// read as plain page content (context injections) rather than tool calls.
 function toolRenderRow(options) {
   // Every expandable row toggles, errored ones included. An errored row starts
   // collapsed like any other and reports its tool name and error message on the
@@ -573,6 +580,7 @@ function toolRenderRow(options) {
       data-guard-approval={options.guardApproval || undefined}
       data-error={options.state === "error" || undefined}
       data-stopped={options.state === "stopped" || undefined}
+      data-frameless={options.frameless || undefined}
     >
       <div
         className="tool-render-row"
@@ -2094,6 +2102,82 @@ function InterruptAgentRow(props) {
   });
 }
 
+// ---- list_agents row: the roster as a small table instead of raw lines. ----
+// The shipped tool renders one line per agent; parseAgentLines in text.ts
+// turns those lines back into fields. The row names the counts, and the body
+// lists one entry per agent with its status, id and label. A `descendants`
+// listing indents each entry by its own depth, so the tree shape reads
+// without repeating the parent id on every line. A line the parser does not
+// recognise is dropped, so the fallback is a shorter list, never a broken
+// card.
+function agentsSummaryText(entries) {
+  if (entries.length === 0) return "No subagents";
+  var running = 0;
+  for (var i = 0; i < entries.length; i++) {
+    if (entries[i].status === "running") running++;
+  }
+  var head = entries.length === 1 ? "1 agent" : String(entries.length) + " agents";
+  return running > 0 ? head + " · " + String(running) + " running" : head;
+}
+
+function ListAgentsRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var block = props.block;
+  var done = doneOf(block);
+  var output = done ? resultTextOf(block) : null;
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary =
+    state === "error" && errorText !== null && errorText !== ""
+      ? firstLineOfError(errorText)
+      : undefined;
+  var entries = state === "error" || output === null ? [] : parseAgentLines(output);
+  var body =
+    entries.length > 0 ? (
+      <div className="tool-render-agents">
+        {entries.map(function (entry, index) {
+          var depth = typeof entry.depth === "number" && entry.depth > 0 ? entry.depth : 0;
+          return (
+            <div
+              key={String(index)}
+              className="tool-render-agent"
+              style={depth > 0 ? { paddingLeft: String(depth * 0.75) + "rem" } : undefined}
+            >
+              <span
+                className="tool-render-agent-status"
+                data-status={entry.status !== null ? entry.status : "diagnostic"}
+              >
+                {entry.status !== null ? entry.status : entry.reason}
+              </span>
+              <span className="tool-render-agent-id" title={entry.id} data-dsh-tip="">
+                {entry.id}
+              </span>
+              <span className="tool-render-agent-label">{entry.label}</span>
+            </div>
+          );
+        })}
+      </div>
+    ) : null;
+  return toolRenderRow({
+    toolName: "List agents",
+    icon: <IconAgentPresetOutline16 size={14} />,
+    title: "List agents",
+    summary: state === "running" ? "List agents" : agentsSummaryText(entries),
+    state: state,
+    expandable: body !== null,
+    expanded: expanded,
+    onToggle: function () {
+      setExpanded(!expanded);
+    },
+    body: body,
+    errorSummary: errorSummary,
+    errorText: errorText,
+    inspect: props.inspect,
+  });
+}
+
 // ---- context injection row: replaces the shipped ContextInjectionRow on
 // conversation.chat.node (key "context"). One treatment for every injection
 // form: render the text as markdown, name the producer as a badge, instead
@@ -2247,6 +2331,7 @@ function GenericContextCard(props) {
       setExpanded(!expanded);
     },
     body: body,
+    frameless: true,
   });
 }
 
@@ -2862,14 +2947,17 @@ function CompactionRow(props) {
   var expandedState = useState(false);
   var expanded = expandedState[0];
   var setExpanded = expandedState[1];
-  var node = props.node;
-  var data = node !== null && node !== undefined && typeof node === "object" ? node.data : null;
-  var summary = data !== null && data !== undefined && typeof data.summary === "string"
-    ? data.summary
-    : "";
+  // The toolview slot hands rows an owner object: { callId, toolName, block,
+  // openFile, cwd, home, inspect }. The compaction node arrives as
+  // props.block and is FLAT -- the session projects it as
+  // { kind: "compaction", seq, time, summary, summaryEventSeq,
+  // shadowedItemCount, shadowedTokenCount } with no .data wrapper.
+  var node = props.block;
+  var summary =
+    node !== null && node !== undefined && typeof node.summary === "string" ? node.summary : "";
   var summaryEventSeq =
-    data !== null && data !== undefined && typeof data.summaryEventSeq === "number"
-      ? data.summaryEventSeq
+    node !== null && node !== undefined && typeof node.summaryEventSeq === "number"
+      ? node.summaryEventSeq
       : undefined;
   var views = useCompactionViews(props.useSession);
   var view =
@@ -3006,6 +3094,14 @@ function apply(ctx) {
         priority: -100,
       },
       InterruptAgentRow,
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "list_agents",
+        priority: -100,
+      },
+      ListAgentsRow,
     );
     yield ctx.slots.register(
       {

@@ -10,6 +10,7 @@ import {
   isBuiltinReadEnvelope,
   looksLikeRawHtml,
   numberedReadRows,
+  parseAgentLines,
   parseSkillContent,
   readStartLine,
   splitSystemReminders,
@@ -325,5 +326,34 @@ describe("looksLikeRawHtml", () => {
   it("rejects empty and non-string input", () => {
     expect(looksLikeRawHtml("")).toBe(false);
     expect(looksLikeRawHtml(undefined as never)).toBe(false);
+  });
+});
+
+describe("parseAgentLines", () => {
+  it("parses a children-scope roster", () => {
+    var text = "sub-1 [running] — Audit the config\nsub-2 [ready] — Write the report";
+    expect(parseAgentLines(text)).toEqual([
+      { id: "sub-1", status: "running", reason: null, parent: null, depth: null, label: "Audit the config" },
+      { id: "sub-2", status: "ready", reason: null, parent: null, depth: null, label: "Write the report" },
+    ]);
+  });
+
+  it("parses a diagnostic row, which carries a reason and no label", () => {
+    expect(parseAgentLines("sub-3 [diagnostic: corrupt]")).toEqual([
+      { id: "sub-3", status: null, reason: "corrupt", parent: null, depth: null, label: "" },
+    ]);
+  });
+
+  it("parses the descendants scope position fields", () => {
+    var text = "sub-4 [idle] parent=sub-1 depth=2 — Deep worker";
+    expect(parseAgentLines(text)).toEqual([
+      { id: "sub-4", status: "idle", reason: null, parent: "sub-1", depth: 2, label: "Deep worker" },
+    ]);
+  });
+
+  it("returns an empty list for the empty roster and for junk lines", () => {
+    expect(parseAgentLines("(no subagents)")).toEqual([]);
+    expect(parseAgentLines("")).toEqual([]);
+    expect(parseAgentLines("something else entirely")).toEqual([]);
   });
 });

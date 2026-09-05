@@ -220,6 +220,40 @@ export function looksLikeRawHtml(text) {
   return /^<[a-z][a-z0-9-]*(\s|>|\/>)/i.test(head);
 }
 
+// ---- list_agents result parsing. ----
+// The shipped tool renders one line per agent (dsh-tool-subagent-control's
+// list-agents render): `<id> [<status>] — <label>` for a child, and
+// `<id> [diagnostic: <reason>]` for one that could not be read. A
+// `descendants` scope inserts ` parent=<id> depth=<n>` before the label.
+// An empty roster renders the single line "(no subagents)".
+// A line that does not match is skipped, so a future format change degrades
+// to a shorter list instead of a broken card.
+var AGENT_LINE_RE =
+  /^(\S+)\s+\[([^\]]+)\](?:\s+parent=(\S+)\s+depth=(-?\d+))?(?:\s+—\s+([\s\S]*))?$/;
+
+export function parseAgentLines(text) {
+  if (typeof text !== "string" || text === "") return [];
+  var out = [];
+  var lines = text.split("\n");
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].trim();
+    if (line === "" || line === "(no subagents)") continue;
+    var m = AGENT_LINE_RE.exec(line);
+    if (m === null) continue;
+    var mark = m[2];
+    var diagnostic = mark.indexOf("diagnostic:") === 0;
+    out.push({
+      id: m[1],
+      status: diagnostic ? null : mark,
+      reason: diagnostic ? mark.slice("diagnostic:".length).trim() : null,
+      parent: m[3] !== undefined ? m[3] : null,
+      depth: m[4] !== undefined ? Number(m[4]) : null,
+      label: m[5] !== undefined ? m[5] : "",
+    });
+  }
+  return out;
+}
+
 export function extractHunk(readText, removeFrom, removeTo, replacementText, startLine) {
   if (typeof readText !== "string" || readText === "") return null;
   var rows = [];
