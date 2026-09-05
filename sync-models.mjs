@@ -6,12 +6,11 @@
 // What it does:
 //   1. Reads home/settings.yaml (the repo source of truth) with the `yaml`
 //      package, keeping the source CST so comments and formatting survive.
-//   2. For the seeded providers (`command-code`, `opencode-zen`, `zai`), calls
-//      {baseURL}/models and learns the model ids the provider actually serves.
-//      A provider listed in CATALOG_EXCLUDED (a gateway-extras route)
-//      subtracts the models.dev provider's own models, so it only lists
-//      what that provider does not ship.
-//   3. For `command-code`, `opencode-zen`, and `zai`, regenerates the entire
+//   2. For the seeded providers, calls {baseURL}/models and learns the model
+//      ids the provider actually serves. A route listed in CATALOG_EXCLUDED
+//      cuts the catalog's own ids but keeps chain-mentioned ids the live
+//      endpoint serves, so chain refs never warn on a dup id.
+//   3. For every seeded provider, regenerates the entire
 //      `models:` sequence between a `# sync-models:begin` / `# sync-models:end`
 //      marker pair from a fresh {baseURL}/models fetch, on every run. It never
 //      appends just the missing ids: the whole marked block is replaced from
@@ -74,14 +73,14 @@ function credentialsKey(name) {
 // `reasoning_options`. We fetch it once per run and index it.
 const MODELS_DEV_URL = "https://models.dev/api.json";
 
-// Gateway-extras providers: a hand-declared route whose `models:` list is
-// seeded from the live gateway MINUS the models.dev provider's model ids for
-// a catalog route, so the hand-declared route only lists what the catalog
-// does not ship. Key = the hand-declared provider route; value = the
-// models.dev provider whose model ids are excluded before seeding. An empty
-// result is normal and correct: it means the catalog already covers every
-// model the gateway serves.
-const CATALOG_EXCLUDED = { "opencode-zen": "opencode" };
+// Gateway-extras providers: a hand-declared route seeded from the live
+// gateway MINUS the models.dev provider's model ids for a catalog route, so
+// the block stays a small supplementary catalog. Key = the hand-declared
+// provider route; value = the models.dev provider whose model ids are cut.
+// Exemption: an id named by profile.chains for that route AND served live by
+// it stays seeded even when the catalog ships it, so chain refs never warn.
+// Billing differs per route, so that dup is valid.
+const CATALOG_EXCLUDED = { "opencode-zen": "opencode", "opencode-go": "opencode" };
 // Catalog routes: the settings block serves the installed models.dev provider
 // as-is (no `models:` list to seed). The seed loop must not touch them, and
 // the chain check verifies their refs against the models.dev provider.
@@ -114,7 +113,7 @@ const VISION_MODELS = new Set([
 ]);
 
 // Map our provider route to the models.dev provider we should look at first.
-const TIER1_ROUTE = { "opencode-zen": "opencode" };
+const TIER1_ROUTE = { "opencode-zen": "opencode", "opencode-go": "opencode" };
 // Map a regex of model id to the first-party vendor's models.dev provider.
 // Every value is confirmed present in models.dev. There is deliberately no
 // tencent entry: models.dev has no tencent provider.
@@ -258,7 +257,7 @@ const MARKER_BEGIN_COMMENT = "# sync-models:begin";
 const MARKER_END_COMMENT = "# sync-models:end";
 const MARKER_BEGIN = "      " + MARKER_BEGIN_COMMENT;
 const MARKER_END = "      " + MARKER_END_COMMENT;
-const SEEDED_PROVIDERS = new Set(["command-code", "opencode-zen", "meridian", "zai"]);
+const SEEDED_PROVIDERS = new Set(["command-code", "opencode-zen", "opencode-go", "meridian", "zai"]);
 // Model-listing path for a provider whose endpoint is not at `{baseURL}/models`.
 // meridian proxies the Anthropic API and serves an OpenAI-shaped list at
 // /v1/models; a GET on /models returns "Endpoint not supported".
@@ -478,6 +477,17 @@ async function main() {
   const doc = YAML.parseDocument(text, { keepSourceTokens: true });
   const { providers, byName, chainRefs, visionChainRefs, modelSyncRange } =
     analyzeDocument(doc, text);
+  // Chain-mentioned model ids per provider route. The catalog cut exempts
+  // these when the live endpoint serves them.
+  const chainByProvider = new Map();
+  for (const ref of chainRefs) {
+    const slash = ref.indexOf("/");
+    if (slash < 0) continue;
+    const prov = ref.slice(0, slash);
+    const model = ref.slice(slash + 1);
+    if (!chainByProvider.has(prov)) chainByProvider.set(prov, new Set());
+    chainByProvider.get(prov).add(model);
+  }
   const lines = text.split("\n");
 
   // Single source of metadata: models.dev. Fetched once and indexed.
@@ -524,16 +534,19 @@ async function main() {
       continue;
     }
     console.log(`  provider exposes ${ids.length} model id(s)`);
-    // Gateway-extras: subtract the catalog provider's own models so this route
-    // only lists what the catalog does not already ship. Fail closed: if the
-    // catalog cannot be resolved, do not seed, because seeding everything
-    // would duplicate the catalog's models here.
+    // Gateway-extras: cut the catalog provider's own models so this route
+    // only lists what the catalog does not ship, except chain-mentioned ids
+    // the live endpoint serves: those stay seeded so chain refs never warn.
+    // Fail closed: if the catalog cannot be resolved, do not seed, because
+    // seeding everything would duplicate the catalog's models here.
     const excludeCatalog = CATALOG_EXCLUDED[p.name];
     if (excludeCatalog) {
       try {
         const catalogIds = await fetchCatalogModelIds(excludeCatalog);
-        ids = ids.filter((id) => !catalogIds.has(id));
-        console.log(`  excluding ${catalogIds.size} catalog model id(s) (${excludeCatalog})`);
+        const mentioned = chainByProvider.get(p.name);
+        ids = ids.filter((id) => !catalogIds.has(id) || (mentioned && mentioned.has(id)));
+        const exempt = ids.filter((id) => catalogIds.has(id)).length;
+        console.log(`  excluding ${catalogIds.size} catalog model id(s) (${excludeCatalog}), ${exempt} chain-mentioned exempt`);
       } catch (e) {
         console.warn(
           `  ! could not fetch ${excludeCatalog} catalog: ${e.message}; skipping ${p.name}`,
