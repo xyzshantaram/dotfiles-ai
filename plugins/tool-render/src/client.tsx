@@ -502,11 +502,7 @@ function toolNameBadge(toolName, icon, state) {
   // fill's own hue bleeds into the fill and makes the badge read taller
   // than its text. Outline-only badges keep their hue border, which is the
   // visible edge they have.
-  var border = isError
-    ? "#fff"
-    : isBash
-      ? "var(--dsh-outline-guard)"
-      : "hsl(" + hue + " 55% 60%)";
+  var border = isError ? "#fff" : isBash ? "var(--dsh-outline-guard)" : "hsl(" + hue + " 55% 60%)";
   var color = isError ? "#fff" : undefined;
   return (
     <span
@@ -577,6 +573,9 @@ function toolRenderRow(options) {
   return (
     <div
       className="tool-render-card"
+      // Jump anchor for composer-approvals: the attribute is absent when the
+      // row type has no callId in scope, which simply marks it not jumpable.
+      data-call-id={options.callId ?? undefined}
       data-escalated={options.escalated || undefined}
       data-guard-approval={options.guardApproval || undefined}
       data-error={options.state === "error" || undefined}
@@ -603,10 +602,15 @@ function toolRenderRow(options) {
       >
         {interactive ? (
           <IconChevronDownOutline14
-            className={open ? "tool-render-chevron tool-render-chevron-open" : "tool-render-chevron"}
+            className={
+              open ? "tool-render-chevron tool-render-chevron-open" : "tool-render-chevron"
+            }
           />
         ) : (
-          <IconChevronDownOutline14 className="tool-render-chevron tool-render-chevron-disabled" aria-hidden={true} />
+          <IconChevronDownOutline14
+            className="tool-render-chevron tool-render-chevron-disabled"
+            aria-hidden={true}
+          />
         )}
         {leading}
         {leading === null ? <span className="tool-render-title">{options.title}</span> : null}
@@ -675,6 +679,7 @@ function ReadRow(props) {
     }
   }
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Read file",
     icon: <IconBrowseOutline16 size={14} />,
     title: "Read",
@@ -790,6 +795,7 @@ function BashRow(props) {
     body = <div className="tool-render-io">{inner}</div>;
   }
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Run bash",
     icon: <IconApiOutline14 size={14} />,
     title: "Bash",
@@ -1171,6 +1177,7 @@ function makeEditRow(toolTitle) {
     var block = props.block;
     if (block === null || typeof block !== "object") {
       return toolRenderRow({
+        callId: props.callId,
         toolName: editBadgeLabel(callNameOf(block), toolTitle),
         icon: <IconEditOutline16 size={14} />,
         title: toolTitle,
@@ -1225,6 +1232,7 @@ function makeEditRow(toolTitle) {
       );
     }
     return toolRenderRow({
+      callId: props.callId,
       // One component serves the `edit`, `undo_edit`, and `undo_last_edit`
       // registrations. The block carries the real call name, so the badge
       // shows the right human-readable label for the exact call being rendered.
@@ -1567,6 +1575,7 @@ function WriteRow(props) {
     );
   }
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Write file",
     icon: <IconEditOutline16 size={14} />,
     title: "Write",
@@ -1672,6 +1681,7 @@ function TodoRow(props) {
     body = planBody(todos);
   }
   return toolRenderRow({
+    callId: props.callId,
     toolName: "To-do list",
     icon: <IconChecklistOutline14 size={14} />,
     title: "To-do list",
@@ -1857,6 +1867,7 @@ function AskRow(props) {
     body = askBody(questions, answers);
   }
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Ask user",
     icon: <IconQuestionOutline14 size={14} />,
     title: "Ask user",
@@ -1914,6 +1925,7 @@ function SubagentRow(props) {
     );
   }
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Dispatch",
     icon: <IconAgentPresetOutline16 size={14} />,
     title: title,
@@ -1971,6 +1983,7 @@ function JobOutputRow(props) {
       <pre className="tool-render-output">{stripAnsi(output)}</pre>
     ) : null;
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Job output",
     icon: <IconApiOutline14 />,
     title: "Job output",
@@ -2027,6 +2040,7 @@ function PackageRow(props) {
       <pre className="tool-render-output">{stripAnsi(output)}</pre>
     ) : null;
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Manage package",
     icon: <IconApiOutline14 />,
     title: title,
@@ -2065,6 +2079,7 @@ function SendMessageRow(props) {
       </div>
     ) : null;
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Message",
     icon: <IconAgentPresetOutline16 size={14} />,
     title: "Message",
@@ -2101,6 +2116,7 @@ function InterruptAgentRow(props) {
       ? firstLineOfError(errorText)
       : undefined;
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Interrupt agent",
     icon: <IconStopFill16 size={14} />,
     title: "Interrupt agent",
@@ -2175,6 +2191,7 @@ function ListAgentsRow(props) {
       </div>
     ) : null;
   return toolRenderRow({
+    callId: props.callId,
     toolName: "List agents",
     icon: <IconAgentPresetOutline16 size={14} />,
     title: "List agents",
@@ -2221,6 +2238,69 @@ function contextText(content) {
   // no space, and a following markdown heading needs a blank line to parse
   // as a heading at all, not just to look right.
   return parts.join("\n\n");
+}
+
+// Parse and render a profiles plugin failover notice. The first line has the
+// exact shape `LLM failover FROMPROV/FROMMODEL -> TOPROV/TOMODEL (CODE)`,
+// followed by a blank line and the full error message. The regex extracts the
+// route change for the summary and code plus first detail line for the error
+// summary.
+var FAILOVER_LINE_RE = /^LLM failover (\S+)\/(\S+) -> (\S+)\/(\S+) \(([^)]+)\)$/;
+
+function FailoverRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var text = contextText(props.content);
+  var lines = text.split("\n");
+  var firstLine = lines.length > 0 ? lines[0] : "";
+  var match = FAILOVER_LINE_RE.exec(firstLine);
+
+  if (match === null) {
+    // Parsing failed. Fall back to generic card.
+    return GenericContextCard({
+      content: props.content,
+      source: props.source,
+      provenance: props.provenance,
+      form: props.form,
+    });
+  }
+
+  var fromProv = match[1];
+  var fromModel = match[2];
+  var toProv = match[3];
+  var toModel = match[4];
+  var code = match[5];
+
+  // Detail is everything after the first line and blank line.
+  var detailStart = text.indexOf("\n\n");
+  var detail = detailStart !== -1 ? text.slice(detailStart + 2) : "";
+  var detailFirstLine = detail.length > 0 ? firstLine(detail) : "";
+
+  var summary = `${fromProv}/${fromModel} -> ${toProv}/${toModel}`;
+  var errorSummary = code + (detailFirstLine ? " · " + detailFirstLine : "");
+  var errorText = detail !== "" ? detail : undefined;
+
+  return toolRenderRow({
+    toolName: "LLM failover",
+    icon: <IconApiOutline14 size={14} />,
+    title: "LLM failover",
+    summary: summary,
+    state: "error",
+    expandable: errorText !== undefined,
+    expanded: expanded,
+    onToggle: function () {
+      setExpanded(!expanded);
+    },
+    errorSummary: errorSummary,
+    errorText: errorText,
+    body:
+      errorText !== undefined ? (
+        <pre className="tool-render-output" tool-render-error={true}>
+          {errorText}
+        </pre>
+      ) : null,
+  });
 }
 
 // A plugin-authored injection names itself in source: { kind: "plugin",
@@ -2285,6 +2365,7 @@ function SkillContentCard(props) {
     </div>
   );
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Skill",
     icon: <IconChecklistOutline14 />,
     title: "Skill",
@@ -2334,6 +2415,7 @@ function GenericContextCard(props) {
       <div className="tool-render-markdown-body">{markdownWithReminders(text)}</div>
     ) : null;
   return toolRenderRow({
+    callId: props.callId,
     toolName: title,
     icon: <IconBrowseOutline16 size={14} />,
     title: title,
@@ -2408,6 +2490,7 @@ function SkillRow(props) {
   var args = parseArgs(argsRawOf(block));
   var skillName = args !== null ? pickString(args, ["name"]) : undefined;
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Load skill",
     icon: <IconChecklistOutline14 />,
     title: "Skill",
@@ -2549,6 +2632,7 @@ function ReadImageRow(props) {
     );
   }
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Read image",
     icon: <IconBrowseOutline16 size={14} />,
     title: "Read image",
@@ -2629,13 +2713,12 @@ function SeeRow(props) {
         {imagePath !== undefined ? (
           <EmbedImage filePath={imagePath} alt={basenameOf(imagePath)} />
         ) : null}
-        {imagePath !== undefined ? (
-          <div className="tool-render-image-meta">{imagePath}</div>
-        ) : null}
+        {imagePath !== undefined ? <div className="tool-render-image-meta">{imagePath}</div> : null}
       </div>
     );
   }
   return toolRenderRow({
+    callId: props.callId,
     toolName: "See image",
     icon: <IconQuestionOutline14 size={14} />,
     title: "See",
@@ -2702,6 +2785,7 @@ function WebSearchRow(props) {
       </div>
     ) : null;
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Web search",
     icon: <IconBrowseOutline16 size={14} />,
     title: "Web search",
@@ -2752,6 +2836,7 @@ function WebFetchRow(props) {
     );
   }
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Web fetch",
     icon: <IconBrowseOutline16 size={14} />,
     title: "Web fetch",
@@ -2881,12 +2966,7 @@ function useGuardedApprovals(useSession) {
 
 function compactionSummaryText(rows, span) {
   return (
-    "Compacted " +
-    countMessageRows(rows) +
-    " messages · seqs " +
-    span.minSeq +
-    "–" +
-    span.maxSeq
+    "Compacted " + countMessageRows(rows) + " messages · seqs " + span.minSeq + "–" + span.maxSeq
   );
 }
 
@@ -3010,6 +3090,7 @@ function CompactionRow(props) {
         </div>
       ) : null;
     return toolRenderRow({
+      callId: props.callId,
       toolName: "Compaction",
       icon: <IconBrowseOutline16 size={14} />,
       title: "Compaction",
@@ -3034,6 +3115,7 @@ function CompactionRow(props) {
   }
   var pretty = view;
   return toolRenderRow({
+    callId: props.callId,
     toolName: "Compaction",
     icon: <IconBrowseOutline16 size={14} />,
     title: "Compaction",
@@ -3052,6 +3134,16 @@ var inject = ["slots"];
 var name = PLUGIN_NAME;
 
 function apply(ctx) {
+  ctx.slots.inject("context.injection.view", function* () {
+    yield ctx.slots.register(
+      {
+        name: "context.injection.view",
+        key: "profiles",
+        priority: -100,
+      },
+      FailoverRow,
+    );
+  });
   ctx.slots.inject("tool.call.toolview", function* () {
     yield ctx.slots.register(
       {
