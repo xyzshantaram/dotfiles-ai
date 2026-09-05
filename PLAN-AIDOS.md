@@ -8,9 +8,10 @@ Every ticket below is verified open against the tree as of 2026-09-05.
 
 Finish the bundle's open tickets: guard and sync friction, the remaining
 tool-render cards, the attachment-drop transport, the pending browser-polish
-fixes, the screenshot gallery, a fork-side fix, and two new tickets from a
-live session today: a full audit of the bash-guard client-side surface, and
-a design pass to unify error handling across every tool-render row.
+fixes, the screenshot gallery, a fork-side fix, a full audit of the
+bash-guard client-side surface (H6), and unifying error handling across
+every tool-render row, now grilled and settled into two tickets: an audit
+(C6a) followed by the actual build and a strict-mode retrofit (C6b).
 
 ## Critical context
 
@@ -18,6 +19,20 @@ a design pass to unify error handling across every tool-render row.
   skills, and the web profile patch. Client plugins live under `plugins/`
   and build via `node build.mjs`; typecheck is `npx tsc --noEmit`; tests run
   with `pnpm exec vitest run plugins/<name>/`.
+- `node build.mjs` rebuilds EVERY bundle. Run it once, sequentially, after
+  all source edits land. Parallel subagent dispatches that each ran it have
+  raced and corrupted intermediate state. Do not put it in a fan-out.
+- Log level convention for this bundle's call sites, settled with the owner
+  on 2026-09-05 to live here and not in `home/AGENTS.md`: `error` = the
+  operation failed and the caller is affected; `warn` = a fallback fired or
+  something was refused; `info` = a state change a person would want in a
+  normal-volume log; `debug` = per-call trace and payload detail. The test
+  for `info` is volume: anything that fires on every model step is `debug`,
+  which is why the profile-failover lines were demoted in `06e43a9`. This
+  governs what a call site EMITS. It is separate from
+  `plugins/log-exporter.ts`, which only decides what gets PRINTED, and which
+  already documents its own cordis-filtering trap in a code comment at
+  lines 32-35 — read that before touching `levels`.
 - **Correction, 2026-09-05, do not repeat this mistake.** bash-guard
   identifies itself with the plain-text prefix `bash-guard:` — for example
   `bash-guard: the following command needs approval:\n\n  <command>\n\n
@@ -67,9 +82,12 @@ a design pass to unify error handling across every tool-render row.
   run on a given machine. `set -euo pipefail` means one failing earlier step
   silently blocks every step after it. Verify a step's actual effect against
   the live install before trusting that sync.sh already applied it.
-- One ticket (TypeScript and tests across the whole repo, old Effort 11 T9)
+- One ticket (TypeScript and tests across the WHOLE repo, old Effort 11 T9)
   is deliberately absent: it is unscoped and needs a design pass before it
-  can carry criteria.
+  can carry criteria. C6b's strict-mode retrofit is a DIFFERENT, narrower
+  thing — scoped to one file, `plugins/tool-render/src/client.tsx` — settled
+  with the owner on 2026-09-05. Do not conflate the two or treat C6b as
+  having settled T9's own repo-wide question.
 
 ## Phase 1: Harness and guard friction — `pending`
 
@@ -111,12 +129,43 @@ a design pass to unify error handling across every tool-render row.
   - `rg better-edit` across the repo returns no hits outside git history
 - [ ] **Ticket H5: manifest-guard documents the supported script route.** The
   deny message should name the sanctioned way to change a manifest, so the
-  model stops retrying the blocked write.
+  model stops retrying the blocked write. `DENY_MESSAGE` at
+  `plugins/manifest-guard.ts:81-84` currently reads: "Direct edits to <name>
+  are denied. Use the package tool for dependency changes. Ask the user to
+  run the change when the tool cannot." That is a dead end for a subagent. A
+  subagent cannot ask the user, and the package tool cannot scaffold a NEW
+  manifest — only change dependencies in an existing one. So a subagent that
+  must scaffold a package has no legal move left. On 2026-09-05 one routed
+  around the guard with a heredoc and reported that honestly. That was the
+  right call, and the message should have said so.
+
+  The work:
+
+  - Rewrite `DENY_MESSAGE`. It must name the supported script route AND
+    state its limit: dependency versions still go through the package tool,
+    and a version workaround still needs the user.
+  - Amend the rule at `home/AGENTS.md:56-57`. It currently reads as an
+    absolute ("NEVER EVER install dependencies manually by editing
+    Cargo.toml/package.json/... ALWAYS use the relevant command"), which as
+    written forbids the supported case. **Settled with the owner,
+    2026-09-05: yes, carve out scripted structural edits.** Keep the
+    dependency prohibition intact and carve out only the structural,
+    scripted case. Word the carve-out tightly — the risk the owner
+    acknowledged is an agent reading the exception too broadly and hand
+    editing dependencies under cover of it.
+  - Put the same note in the `customize-setup` skill. That is what an agent
+    reads before adding a plugin, which is exactly when it needs to
+    scaffold a manifest.
 
   **Evaluate:**
 
   - a blocked package.json write returns a message that names the script route
   - the message text lives in one place in plugins/manifest-guard.ts
+  - `home/AGENTS.md` and the deny message agree with each other, and both
+    state that dependency versions stay with the package tool unless the
+    user says otherwise
+  - editing dependencies in an EXISTING manifest through the fs tools is
+    still denied — confirm by trying it, not by reading the code
 - [ ] **Ticket H6: Audit the entire bash-guard client-side surface.** Asked
   for 2026-09-05, after the third live bug in this same surface in one
   session: the blue durable-approval mark on a tool-call card does not stick
@@ -145,12 +194,21 @@ a design pass to unify error handling across every tool-render row.
     instead of two hand-synced copies, given this exact duplication is what
     let one of them silently drift wrong.
 
+  **Settled with the owner, 2026-09-05: the deliverable is a written report
+  first, then a go/no-go from the owner before any fix lands.** This is an
+  investigation ticket. It does not fix anything itself.
+
   **Evaluate:**
 
-  - grill the owner on the audit's exact deliverable (a written finding
-    report, a fix list, or both) before dispatching any part of this
-    ticket — it states the investigation's scope, not yet its own
-    acceptance criteria
+  - the report is delivered and reviewed with the owner before any fix from
+    it is dispatched
+  - the report names every surface bash-guard's outcome reaches, with a
+    yes/no on whether each one uses `isBashGuardReason`, `parseGuardReason`,
+    or a third copy of similar logic
+  - the report states concretely, not just asserts, which tools show
+    durable blue reliably and which do not, and traces why for each one
+  - the report recommends, with reasoning, whether the two
+    `isBashGuardReason` copies should become one shared function
 
 ## Phase 2: tool-render cards and tooltips — `pending`
 
@@ -182,42 +240,65 @@ a design pass to unify error handling across every tool-render row.
   - loading a gated skill by slash command produces a notice naming the tools
     that appear next step
   - the notice does not appear when the skill gates no tools
-- [ ] **Ticket C6: Unify error handling across every tool-render row.**
-  Asked for 2026-09-05: every registered card should have a properly wired
-  error path and a properly wired body, and the contract should be strong
-  enough that a new row missing either one fails loudly at typecheck time
-  rather than silently shipping a blank or wordless card on failure — which
-  is exactly what happened with the compaction card twice in one session
-  before it was caught.
-
-  **UNSCOPED, like the old Effort 11 T9. Grill the owner before planning
-  it.** Open questions a grilling pass needs to settle:
-
-  - What counts as "properly wired": every row must call `rowStateOf` (or
-    an equivalent) and pass `state`/`errorSummary`/`errorText` to
-    `toolRenderRow`, even when its own tool can never realistically error?
-  - What does "unify" mean concretely: one shared row-building helper every
-    row must go through, a lint rule, a TypeScript type that makes the
-    error fields required on the options object, or something else?
-  - "Loudly fail in the type system" needs a concrete mechanism proposal
-    before it can be scoped: this file is currently loose JS-in-TS (`var`,
-    no annotations, `tsconfig.json` has `strict: false` per the retired
-    audit sweep), so enforcing this at the type level may require touching
-    that convention, which is its own decision.
-  - Does this ticket also require auditing every EXISTING row (there are
-    upwards of twenty registered keys in `plugins/tool-render/src/client.tsx`)
-    to find which ones are already missing a wired error path today, before
-    designing the unification? That audit itself could be its own ticket.
+- [ ] **Ticket C6a: Audit tool-render's existing error handling row by row.**
+  First half of unifying error handling across every tool-render row
+  (asked for 2026-09-05). Blocks C6b. Inventory every registered row in
+  `plugins/tool-render/src/client.tsx` (upwards of twenty): does its
+  underlying tool have a genuine failure mode (an `isError` result, an
+  `outcome`/error field, or similar), and if so, does the row already wire
+  `state`/`errorSummary`/`errorText` to `toolRenderRow` correctly today?
+  Settled with the owner: a tool with no genuine failure mode (for example
+  `ask_user_question`) is out of scope for the contract entirely, not
+  forced to wire an unreachable error path.
 
   **Evaluate:**
 
-  - not settled yet — grill the owner on the open questions above before
-    this ticket carries real acceptance criteria
+  - a written inventory names every registered row, states whether its
+    tool can genuinely fail, and states whether it already wires the error
+    path correctly
+  - the inventory is reviewed with the owner before C6b starts
+- [ ] **Ticket C6b: Build the shared row helper and go strict.** Blocked on
+  C6a. Settled with the owner, 2026-09-05:
+
+  - Unify via one shared row-building helper. Every row C6a identifies as
+    needing the error contract calls this helper instead of hand-rolling
+    its own `state`/`errorSummary`/`errorText` reads. The helper's own
+    parameters make these fields required, so a caller missing one is a
+    real compile error, not a convention someone can forget.
+  - `plugins/tool-render/src/client.tsx` — this one file, not the whole
+    repo — gets retrofitted to pass `tsc --noEmit` under `strict: true` as
+    part of this ticket. This is likely a large undertaking on its own: the
+    file is currently consistent `var`, no-annotations style throughout,
+    well beyond the error-handling code, and turning on strict mode checks
+    the WHOLE file at once. Confirm the actual mechanism for scoping strict
+    mode to one file or plugin (a per-package tsconfig, most likely) before
+    claiming this is done — do not assume it works without checking.
+  - This is separate from the old Effort 11 T9 (TypeScript and tests across
+    the WHOLE repo), which stays unscoped and untouched by this ticket.
+
+  **Evaluate:**
+
+  - every row C6a identified as needing the error contract calls the
+    shared helper, and no row that needs it still hand-rolls the fields
+  - `plugins/tool-render/src/client.tsx` passes `tsc --noEmit` under
+    `strict: true`
+  - a deliberately broken test case (a row missing a required error field)
+    fails at compile time, confirmed live and then reverted — proof the
+    contract actually enforces itself, not just that the happy path
+    compiles
+  - the existing test suite still passes in full
 
 ## Phase 3: Attachment transport — `pending`
 
 - [ ] **Ticket A1: An attachment-drop plugin.** Replace dsh-paste-to-path with
-  our own drop plugin that lands files under `/tmp/dsh`.
+  our own drop plugin that lands files under `/tmp/dsh`. **Re-confirmed with
+  the owner on 2026-09-05 and it still stands**, even though that same
+  session relocated dsh-paste-to-path's picker and the owner verified it
+  works. The reason to still replace it: today we fix an upstream plugin's
+  placement by reaching into its DOM from outside, which can break on any
+  upstream change. Owning the plugin removes that dependency and puts the
+  landing path under our control. Do not reopen this on the grounds that
+  the current surface works — that was already weighed.
 
   **Evaluate:**
 
