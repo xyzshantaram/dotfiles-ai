@@ -724,8 +724,6 @@ function makeSwitchHandler(ctx) {
 }
 function makeErrorCacheHandler(ctx) {
   void ctx;
-  // No auth check, by convention: this server only serves localhost plugin
-  // clients, the same trust model as the profile switch endpoint above.
   return async (req, res) => {
     if (req.method !== "DELETE") {
       sendJson(res, 405, { ok: false, error: `method ${req.method} not allowed` });
@@ -793,5 +791,6 @@ export {
   Config,
   apply,
   inject,
-  name
+  name,
+  normalizeErrorClass
 };

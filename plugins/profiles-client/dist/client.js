@@ -167,7 +167,7 @@
   var settings_default = "/* Shared settings-page vocabulary, normalized from the session-archive,\n * subscriptions, and profiles settings panels. One rule set in one file so\n * the three panels cannot drift. Radius and padding disagreements are\n * normalized to the session-archive (or median) value; the var(--dsw-...)\n * aliases the current rules use are kept as-is. */\n\n/* Page-level container:airy vertical rhythm, no own box. */\n.dsp-root {\n  box-sizing: border-box;\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n  padding: 0;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Header row (title + refresh). */\n.dsp-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 0.75rem;\n}\n\n.dsp-title {\n  font-size: 1.5rem;\n  font-weight: 650;\n  margin: 0;\n  line-height: 1.2;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Refresh:session-archive/profiles form (no box, color shift only).\n * subscriptions pads and rounds the hit area; normalized away. */\n.dsp-refresh {\n  cursor: pointer;\n  border: none;\n  background: none;\n  padding: 0;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n}\n.dsp-refresh:hover {\n  color: var(--dsw-alias-label-primary);\n}\n\n.dsp-err {\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-state-error-primary);\n}\n\n/* Large setting card. Padding is the median of 16/20/24 (session-archive\n * 20px); the radius is the two-agreeing 20px, not profiles' 12px. */\n.dsp-section {\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.875rem;\n  padding: 1.25rem;\n  background: var(--dsw-alias-bg-tertiary);\n}\n\n/* Card title:subscriptions' 1.5rem/700 matches the page-title vocabulary;\n * profiles' smaller 16px/600 card title normalized up. */\n.dsp-section-title {\n  font-size: 1.125rem;\n  font-weight: 600;\n  margin: 0;\n  line-height: 1.2;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Setting row:horizontal in session-archive and profiles (subscriptions\n * stacks its label and meta vertically; normalized to the horizontal form). */\n.dsp-row {\n  display: flex;\n  align-items: center;\n  gap: 0.75rem;\n  min-width: 0;\n}\n\n/* Row label:only subscriptions defines one; ported verbatim, with its\n * emphasized <b> children. */\n.dsp-row-label {\n  display: flex;\n  align-items: baseline;\n  gap: 0.625rem;\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.dsp-row-label b {\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n  font-size: 0.9375rem;\n}\n.dsp-row-label b:last-child {\n  margin-left: auto;\n}\n";
 
   // css-text:/home/sid/repos/dotfiles-ai/plugins/profiles-client/src/client.module.css
-  var client_default = ".profiles-client-root {\n  min-width: 0;\n  position: relative;\n}\n.profiles-client-trigger {\n  min-width: 0;\n  max-width: min(22.5rem, 45cqw);\n  height: 1.75rem;\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  background: 0 0;\n  border: none;\n  border-radius: 0.75rem;\n  outline: none;\n  align-items: center;\n  gap: 0.3125rem;\n  padding: 0 0.4375rem;\n  font-size: 0.8125rem;\n  font-weight: 500;\n  line-height: 1.25rem;\n  display: flex;\n}\n.profiles-client-trigger:hover:not(:disabled) {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.profiles-client-trigger:focus-visible {\n  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);\n}\n.profiles-client-trigger:disabled {\n  color: var(--dsw-alias-label-dimmed);\n  cursor: default;\n}\n.profiles-client-profile-pill {\n  flex: none;\n  box-sizing: border-box;\n  display: inline-flex;\n  align-items: center;\n  gap: 0.25rem;\n  padding: 0 0.375rem;\n  border-radius: 0.4375rem;\n  background: var(--dsw-alias-interactive-bg-hover);\n  color: #fff;\n  font-size: 0.75rem;\n  font-weight: 700;\n  line-height: 1.25rem;\n  white-space: nowrap;\n  text-transform: uppercase;\n}\n.profiles-client-pill-dot {\n  flex: none;\n  width: 0.375rem;\n  height: 0.375rem;\n  border-radius: 50%;\n}\n.profiles-client-pill-dot.profiles-client-pill-dot-matched {\n  background: var(--dsw-alias-state-info-primary, #3b82f6);\n}\n.profiles-client-pill-dot.profiles-client-pill-dot-changed {\n  background: #f59e0b;\n}\n.profiles-client-model-label {\n  display: flex;\n  align-items: baseline;\n  gap: 0.25rem;\n  flex: 1;\n  min-width: 0;\n  overflow: hidden;\n}\n.profiles-client-model-name {\n  flex: 1;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n.profiles-client-model-provider {\n  flex: none;\n  flex-shrink: 0;\n  white-space: nowrap;\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.75rem;\n  line-height: 1.25rem;\n}\n.profiles-client-chevron {\n  color: var(--dsw-alias-label-caption);\n  flex: none;\n  transform: rotate(-90deg);\n  transition: transform 0.12s;\n}\n.profiles-client-chevron-open {\n  transform: rotate(0deg);\n}\n.profiles-client-menu {\n  z-index: 20;\n  border: 1px solid var(--dsw-alias-border-inverted);\n  background: var(--dsw-specific-menu);\n  width: max-content;\n  min-width: 13.75rem;\n  max-width: min(26.25rem, 100vw - 2rem);\n  max-height: min(25rem, 100vh - 6rem);\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-primary);\n  border-radius: 0.5rem;\n  flex-direction: column;\n  padding: 0.1875rem;\n  display: flex;\n  position: absolute;\n  bottom: calc(100% + 0.5rem);\n  right: 0;\n  overflow-x: hidden;\n  overflow-y: auto;\n}\n.profiles-client-option {\n  box-sizing: border-box;\n  width: auto;\n  min-width: 100%;\n  min-height: 2.125rem;\n  color: inherit;\n  text-align: left;\n  cursor: pointer;\n  background: 0 0;\n  border: none;\n  border-radius: 0.5rem;\n  outline: none;\n  align-items: center;\n  gap: 0.5rem;\n  padding: 0.25rem 0.4375rem;\n  display: flex;\n}\n.profiles-client-option:hover:not(:disabled) {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.profiles-client-option-copy {\n  flex-direction: column;\n  flex: 1;\n  min-width: 0;\n  display: flex;\n}\n.profiles-client-option-copy-model {\n  flex-direction: row;\n  align-items: baseline;\n  gap: 0.5rem;\n}\n.profiles-client-option-copy-model .profiles-client-option-name {\n  flex: 1;\n  min-width: 0;\n}\n.profiles-client-option-copy-model .profiles-client-option-detail {\n  flex: none;\n  flex-shrink: 0;\n}\n.profiles-client-option-name {\n  color: inherit;\n  flex: 1;\n  min-width: 0;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 0.8125rem;\n  font-weight: 500;\n  line-height: 1.25rem;\n  overflow: hidden;\n}\n.profiles-client-option-profile {\n  font-weight: 700;\n}\n.profiles-client-option-model {\n  font-size: 0.75rem;\n  font-weight: 500;\n}\n.profiles-client-option-detail {\n  color: var(--dsw-alias-label-tertiary);\n  flex: none;\n  flex-shrink: 0;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 0.75rem;\n  line-height: 1rem;\n  overflow: hidden;\n}\n.profiles-client-check {\n  color: var(--dsw-alias-label-primary);\n  flex: 0 0 0.875rem;\n}\n.profiles-client-effort-row {\n  display: flex;\n  align-items: center;\n  gap: 0.5rem;\n  min-width: 0;\n  padding: 0.25rem 0.4375rem;\n}\n.profiles-client-effort-label {\n  flex: 1;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 0.75rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.profiles-client-error-row {\n  display: flex;\n  align-items: center;\n  gap: 0.5rem;\n  min-width: 0;\n  padding: 0.25rem 0.4375rem;\n  font-size: 0.75rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.profiles-client-error-count {\n  flex: 1;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n.profiles-client-error-reset {\n  flex: none;\n  flex-shrink: 0;\n  cursor: pointer;\n  border: none;\n  background: none;\n  padding: 0;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.75rem;\n  line-height: 1rem;\n}\n.profiles-client-error-reset:hover {\n  color: var(--dsw-alias-label-primary);\n}\n.profiles-client-effort {\n  box-sizing: border-box;\n  width: calc(100% - 1rem);\n  min-width: 0;\n  margin-left: 0.5rem;\n  height: 1.5rem;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  padding: 0 0.375rem;\n  font-size: 0.6875rem;\n  line-height: 1rem;\n}\n.profiles-client-effort-row .profiles-client-effort {\n  flex: 1;\n  width: auto;\n  margin-left: 0;\n}\n.profiles-client-search {\n  box-sizing: border-box;\n  width: 100%;\n  height: 2rem;\n  margin: 0.25rem 0 0.5rem;\n  padding: 0 0.625rem;\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  outline: none;\n}\n.profiles-client-search::placeholder {\n  color: var(--dsw-alias-label-tertiary);\n}\n.profiles-client-search:focus-visible {\n  border-color: var(--dsw-alias-border-l3);\n  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);\n}\n.profiles-client-strip {\n  color: var(--dsw-alias-label-tertiary);\n  padding: 0.625rem;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n}\n\n.pf-panel-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 0.75rem;\n}\n.pf-panel-active {\n  display: flex;\n  gap: 0.75rem;\n  flex-wrap: wrap;\n}\n.pf-panel-active-btn {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  padding: 0.3125rem 0.625rem;\n  min-height: 2.375rem;\n  cursor: pointer;\n}\n.pf-panel-active-btn-on {\n  color: var(--dsw-alias-label-primary);\n  border-color: var(--dsw-alias-border-l3);\n}\n.pf-panel-entry {\n  display: flex;\n  flex-direction: column;\n  gap: 0.625rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.625rem;\n  padding: 0.875rem;\n  background: var(--dsw-alias-bg-tertiary);\n}\n.pf-panel-entry-title {\n  font-size: 0.9375rem;\n  font-weight: 600;\n  margin: 0;\n  color: var(--dsw-alias-label-primary);\n}\n.pf-panel-chain {\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n}\n.pf-panel-chain-title {\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  color: var(--dsw-alias-label-secondary);\n  margin: 0;\n}\n.pf-panel-row {\n  display: flex;\n  gap: 0.75rem;\n  align-items: center;\n  min-width: 0;\n}\n.pf-panel-input {\n  box-sizing: border-box;\n  flex: 1;\n  min-width: 0;\n  height: 2.5rem;\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  padding: 0 0.5rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n}\n.pf-panel-input:focus-visible {\n  outline: 2px solid var(--dsw-alias-state-business-primary);\n  outline-offset: -0.125rem;\n}\n.pf-panel-del {\n  flex: none;\n  cursor: pointer;\n  border: none;\n  background: none;\n  padding: 0 0.25rem;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 1rem;\n  line-height: 1.25rem;\n}\n.pf-panel-add {\n  align-self: flex-start;\n  color: var(--dsw-alias-label-secondary);\n  background: none;\n  border: 1px dashed var(--dsw-alias-border-l2);\n  border-radius: 0.4375rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n  padding: 0.1875rem 0.6875rem;\n  cursor: pointer;\n}\n.pf-panel-add:hover {\n  color: var(--dsw-alias-label-primary);\n}\n.pf-panel-meta {\n  font-size: 0.875rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.pf-panel-ref {\n  flex: none;\n  color: var(--dsw-alias-label-tertiary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border-radius: 0.4375rem;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  padding: 0.0625rem 0.5rem;\n}\n.pf-panel-actions {\n  display: flex;\n  align-items: center;\n  gap: 0.75rem;\n}\n.pf-panel-save {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 0.5rem;\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  padding: 0.3125rem 0.625rem;\n  min-height: 2.375rem;\n  cursor: pointer;\n}\n.pf-panel-save:disabled {\n  opacity: 0.5;\n  cursor: default;\n}\n.pf-panel-status {\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n}\n.pf-panel-ok {\n  color: var(--dsw-alias-state-success-primary);\n}\n.pf-panel-bad {\n  color: var(--dsw-alias-state-error-primary);\n}\n.pf-panel-select {\n  box-sizing: border-box;\n  flex: 1;\n  min-width: 0;\n  height: 2.5rem;\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  padding: 0 0.5rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n  cursor: pointer;\n}\n.pf-panel-select:focus-visible {\n  outline: 2px solid var(--dsw-alias-state-business-primary);\n  outline-offset: -0.125rem;\n}\n.pf-panel-effort {\n  box-sizing: border-box;\n  flex: 0 0 auto;\n  min-width: 0;\n  margin-left: 0.5rem;\n  height: 2.5rem;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  padding: 0 0.5rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n  cursor: pointer;\n}\n.pf-panel-select option,\n.pf-panel-effort option {\n  background: var(--dsw-alias-bg-layer-1);\n  color: var(--dsw-alias-label-primary);\n}\n/* Dropdown group headings invert \u2014 black on white \u2014 so they never render\n   white-on-white against the dropdown surface in the dark theme. */\n.pf-panel-select optgroup,\n.pf-panel-effort optgroup {\n  color: #000;\n  background: #fff;\n  font-weight: 700;\n}\n.pf-panel-model-row {\n  display: flex;\n  flex-direction: column;\n  gap: 0.125rem;\n}\n.pf-panel-add-select {\n  align-self: flex-start;\n  border-style: dashed;\n}\n.profiles-client-menu .dsp-section-title {\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  font-weight: 700;\n  text-transform: uppercase;\n  margin: 0.25rem 0 0;\n  padding: 0.25rem 0.4375rem;\n}\n";
+  var client_default = ".profiles-client-root {\n  display: inline-block;\n  min-width: 0;\n  position: relative;\n}\n.profiles-client-trigger {\n  min-width: 0;\n  max-width: min(22.5rem, 45cqw);\n  height: 1.75rem;\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  background: 0 0;\n  border: none;\n  border-radius: 0.75rem;\n  outline: none;\n  align-items: center;\n  gap: 0.3125rem;\n  padding: 0 0.4375rem;\n  font-size: 0.8125rem;\n  font-weight: 500;\n  line-height: 1.25rem;\n  display: flex;\n}\n.profiles-client-trigger:hover:not(:disabled) {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.profiles-client-trigger:focus-visible {\n  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);\n}\n.profiles-client-trigger:disabled {\n  color: var(--dsw-alias-label-dimmed);\n  cursor: default;\n}\n.profiles-client-profile-pill {\n  flex: none;\n  box-sizing: border-box;\n  display: inline-flex;\n  align-items: center;\n  gap: 0.25rem;\n  padding: 0 0.375rem;\n  border-radius: 0.4375rem;\n  background: var(--dsw-alias-interactive-bg-hover);\n  color: #fff;\n  font-size: 0.75rem;\n  font-weight: 700;\n  line-height: 1.25rem;\n  white-space: nowrap;\n  text-transform: uppercase;\n}\n.profiles-client-pill-dot {\n  flex: none;\n  width: 0.375rem;\n  height: 0.375rem;\n  border-radius: 50%;\n}\n.profiles-client-pill-dot.profiles-client-pill-dot-matched {\n  background: var(--dsw-alias-state-info-primary, #3b82f6);\n}\n.profiles-client-pill-dot.profiles-client-pill-dot-changed {\n  background: #f59e0b;\n}\n.profiles-client-model-label {\n  display: flex;\n  align-items: center;\n  gap: 0.25rem;\n  flex: 1;\n  min-width: 0;\n  overflow: hidden;\n}\n.profiles-client-model-name {\n  flex: 1;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  color: #fff;\n  line-height: 1.25rem;\n  transform: translateY(-1px);\n}\n.profiles-client-model-provider {\n  flex: none;\n  flex-shrink: 0;\n  white-space: nowrap;\n  color: rgba(255, 255, 255, 0.75);\n  font-size: 0.75rem;\n  line-height: 1.25rem;\n}\n.profiles-client-chevron {\n  color: var(--dsw-alias-label-caption);\n  flex: none;\n  transform: rotate(-90deg);\n  transition: transform 0.12s;\n}\n.profiles-client-chevron-open {\n  transform: rotate(0deg);\n}\n.profiles-client-menu {\n  z-index: 20;\n  border: 1px solid var(--dsw-alias-border-inverted);\n  background: var(--dsw-specific-menu);\n  width: max-content;\n  min-width: 13.75rem;\n  max-width: min(26.25rem, 100vw - 2rem);\n  max-height: min(25rem, 100vh - 6rem);\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-primary);\n  border-radius: 0.5rem;\n  flex-direction: column;\n  padding: 0.1875rem;\n  display: flex;\n  position: absolute;\n  bottom: calc(100% + 0.5rem);\n  left: 0;\n  right: 0;\n  width: max-content;\n  margin-left: auto;\n  margin-right: auto;\n  overflow-x: hidden;\n  overflow-y: auto;\n}\n.profiles-client-option {\n  box-sizing: border-box;\n  width: auto;\n  min-width: 100%;\n  min-height: 2.125rem;\n  color: inherit;\n  text-align: left;\n  cursor: pointer;\n  background: 0 0;\n  border: none;\n  border-radius: 0.5rem;\n  outline: none;\n  align-items: center;\n  gap: 0.5rem;\n  padding: 0.25rem 0.4375rem;\n  display: flex;\n}\n.profiles-client-option:hover:not(:disabled) {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.profiles-client-option-copy {\n  flex-direction: column;\n  flex: 1;\n  min-width: 0;\n  display: flex;\n}\n.profiles-client-option-copy-model {\n  flex-direction: row;\n  align-items: baseline;\n  gap: 0.5rem;\n}\n.profiles-client-option-copy-model .profiles-client-option-name {\n  flex: 1;\n  min-width: 0;\n}\n.profiles-client-option-copy-model .profiles-client-option-detail {\n  flex: none;\n  flex-shrink: 0;\n}\n.profiles-client-option-name {\n  color: inherit;\n  flex: 1;\n  min-width: 0;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 0.8125rem;\n  font-weight: 500;\n  line-height: 1.25rem;\n  overflow: hidden;\n}\n.profiles-client-option-profile {\n  font-weight: 700;\n}\n.profiles-client-option-model {\n  font-size: 0.75rem;\n  font-weight: 700;\n}\n.profiles-client-option-detail {\n  color: var(--dsw-alias-label-tertiary);\n  flex: none;\n  flex-shrink: 0;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 0.75rem;\n  line-height: 1rem;\n  overflow: hidden;\n}\n.profiles-client-check {\n  color: var(--dsw-alias-label-primary);\n  flex: 0 0 0.875rem;\n}\n.profiles-client-effort-row {\n  display: flex;\n  flex-direction: column;\n  align-items: stretch;\n  gap: 0.375rem;\n  box-sizing: border-box;\n  width: 100%;\n  min-width: 0;\n  padding: 0.25rem 0.4375rem;\n}\n.profiles-client-effort-title {\n  font-size: 0.75rem;\n  line-height: 1rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.profiles-client-error-row {\n  display: flex;\n  align-items: center;\n  gap: 0.5rem;\n  min-width: 0;\n  padding: 0.25rem 0.4375rem;\n  font-size: 0.75rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.profiles-client-error-count {\n  flex: 1;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n.profiles-client-error-reset {\n  flex: none;\n  flex-shrink: 0;\n  cursor: pointer;\n  border: none;\n  background: none;\n  padding: 0;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.75rem;\n  line-height: 1rem;\n}\n.profiles-client-error-reset:hover {\n  color: var(--dsw-alias-label-primary);\n}\n.profiles-client-effort {\n  box-sizing: border-box;\n  width: calc(100% - 1rem);\n  min-width: 0;\n  margin-left: 0.5rem;\n  height: 1.5rem;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  padding: 0 0.375rem;\n  font-size: 0.6875rem;\n  line-height: 1rem;\n}\n.profiles-client-effort-row .profiles-client-effort {\n  flex: 1;\n  width: auto;\n  margin-left: 0;\n}\n.profiles-client-effort-slider {\n  width: 100%;\n  min-width: 0;\n  height: 1.5rem;\n  margin: 0;\n  background: transparent;\n  cursor: pointer;\n  appearance: none;\n  -webkit-appearance: none;\n}\n.profiles-client-effort-slider::-webkit-slider-runnable-track {\n  height: 0.5rem;\n  background: linear-gradient(90deg, #0a5cff 0%, #ff8400 100%);\n  border-radius: 0.25rem;\n}\n.profiles-client-effort-slider::-webkit-slider-thumb {\n  width: 0.875rem;\n  height: 0.875rem;\n  margin-top: -0.1875rem;\n  background: #fff;\n  border: none;\n  border-radius: 50%;\n  appearance: none;\n  -webkit-appearance: none;\n  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);\n}\n.profiles-client-effort-slider::-moz-range-track {\n  height: 0.5rem;\n  background: linear-gradient(90deg, #0a5cff 0%, #ff8400 100%);\n  border-radius: 0.25rem;\n}\n.profiles-client-effort-slider::-moz-range-progress {\n  height: 0.5rem;\n  background: transparent;\n  border-radius: 0.25rem;\n}\n.profiles-client-effort-slider::-moz-range-thumb {\n  width: 0.875rem;\n  height: 0.875rem;\n  background: #fff;\n  border: none;\n  border-radius: 50%;\n  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);\n}\n.profiles-client-effort-slider-wrap {\n  position: relative;\n  width: 100%;\n}\n.profiles-client-effort-tick {\n  position: absolute;\n  top: calc(50% - 0.25rem);\n  transform: translate(-50%, -50%);\n  width: 2px;\n  height: 0.625rem;\n  background: #fff;\n  pointer-events: none;\n}\n.profiles-client-effort-labels {\n  position: relative;\n  width: 100%;\n  height: 1rem;\n}\n.profiles-client-effort-stop {\n  position: absolute;\n  top: 0;\n  transform: translateX(-50%);\n  text-transform: uppercase;\n  font-size: 0.625rem;\n  line-height: 1rem;\n  white-space: nowrap;\n  color: var(--dsw-alias-label-secondary);\n}\n.profiles-client-effort-stop-active {\n  color: var(--dsw-alias-label-primary);\n}\n.profiles-client-effort-chevron {\n  flex: none;\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 1rem;\n  line-height: 1;\n}\n.profiles-client-effort-popover {\n  position: fixed;\n  z-index: 30;\n  box-sizing: border-box;\n  width: 15rem;\n  background: var(--dsw-specific-menu);\n  border: 1px solid var(--dsw-alias-border-inverted);\n  border-radius: 0.5rem;\n  box-shadow: var(--dsw-shadow-lv3);\n  padding: 0.5rem;\n  color: var(--dsw-alias-label-primary);\n}\n.profiles-client-search {\n  box-sizing: border-box;\n  width: 100%;\n  height: 2rem;\n  margin: 0.25rem 0 0.5rem;\n  padding: 0 0.625rem;\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  outline: none;\n}\n.profiles-client-search::placeholder {\n  color: var(--dsw-alias-label-tertiary);\n}\n.profiles-client-search:focus-visible {\n  border-color: var(--dsw-alias-border-l3);\n  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);\n}\n.profiles-client-strip {\n  color: var(--dsw-alias-label-tertiary);\n  padding: 0.625rem;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n}\n\n.pf-panel-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 0.75rem;\n}\n.pf-panel-active {\n  display: flex;\n  gap: 0.75rem;\n  flex-wrap: wrap;\n}\n.pf-panel-active-btn {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  padding: 0.3125rem 0.625rem;\n  min-height: 2.375rem;\n  cursor: pointer;\n}\n.pf-panel-active-btn-on {\n  color: var(--dsw-alias-label-primary);\n  border-color: var(--dsw-alias-border-l3);\n}\n.pf-panel-entry {\n  display: flex;\n  flex-direction: column;\n  gap: 0.625rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.625rem;\n  padding: 0.875rem;\n  background: var(--dsw-alias-bg-tertiary);\n}\n.pf-panel-entry-title {\n  font-size: 0.9375rem;\n  font-weight: 600;\n  margin: 0;\n  color: var(--dsw-alias-label-primary);\n}\n.pf-panel-chain {\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n}\n.pf-panel-chain-title {\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  color: var(--dsw-alias-label-secondary);\n  margin: 0;\n}\n.pf-panel-row {\n  display: flex;\n  gap: 0.75rem;\n  align-items: center;\n  min-width: 0;\n}\n.pf-panel-input {\n  box-sizing: border-box;\n  flex: 1;\n  min-width: 0;\n  height: 2.5rem;\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  padding: 0 0.5rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n}\n.pf-panel-input:focus-visible {\n  outline: 2px solid var(--dsw-alias-state-business-primary);\n  outline-offset: -0.125rem;\n}\n.pf-panel-del {\n  flex: none;\n  cursor: pointer;\n  border: none;\n  background: none;\n  padding: 0 0.25rem;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 1rem;\n  line-height: 1.25rem;\n}\n.pf-panel-add {\n  align-self: flex-start;\n  color: var(--dsw-alias-label-secondary);\n  background: none;\n  border: 1px dashed var(--dsw-alias-border-l2);\n  border-radius: 0.4375rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n  padding: 0.1875rem 0.6875rem;\n  cursor: pointer;\n}\n.pf-panel-add:hover {\n  color: var(--dsw-alias-label-primary);\n}\n.pf-panel-meta {\n  font-size: 0.875rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.pf-panel-ref {\n  flex: none;\n  color: var(--dsw-alias-label-tertiary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border-radius: 0.4375rem;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  padding: 0.0625rem 0.5rem;\n}\n.pf-panel-actions {\n  display: flex;\n  align-items: center;\n  gap: 0.75rem;\n}\n.pf-panel-save {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 0.5rem;\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  padding: 0.3125rem 0.625rem;\n  min-height: 2.375rem;\n  cursor: pointer;\n}\n.pf-panel-save:disabled {\n  opacity: 0.5;\n  cursor: default;\n}\n.pf-panel-status {\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n}\n.pf-panel-ok {\n  color: var(--dsw-alias-state-success-primary);\n}\n.pf-panel-bad {\n  color: var(--dsw-alias-state-error-primary);\n}\n.pf-panel-select {\n  box-sizing: border-box;\n  flex: 1;\n  min-width: 0;\n  height: 2.5rem;\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  padding: 0 0.5rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n  cursor: pointer;\n}\n.pf-panel-select:focus-visible {\n  outline: 2px solid var(--dsw-alias-state-business-primary);\n  outline-offset: -0.125rem;\n}\n.pf-panel-effort {\n  box-sizing: border-box;\n  flex: 0 0 auto;\n  min-width: 0;\n  margin-left: 0.5rem;\n  height: 2.5rem;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  padding: 0 0.5rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n  cursor: pointer;\n}\n.pf-panel-select option,\n.pf-panel-effort option {\n  background: var(--dsw-alias-bg-layer-1);\n  color: var(--dsw-alias-label-primary);\n}\n/* Dropdown group headings invert \u2014 black on white \u2014 so they never render\n   white-on-white against the dropdown surface in the dark theme. */\n.pf-panel-select optgroup,\n.pf-panel-effort optgroup {\n  color: #000;\n  background: #fff;\n  font-weight: 700;\n}\n.pf-panel-model-row {\n  display: flex;\n  flex-direction: column;\n  gap: 0.125rem;\n}\n.pf-panel-add-select {\n  align-self: flex-start;\n  border-style: dashed;\n}\n.profiles-client-menu .dsp-section-title {\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  font-weight: 700;\n  text-transform: uppercase;\n  color: var(--dsw-alias-label-tertiary);\n  margin: 0.25rem 0 0;\n  padding: 0.25rem 0.4375rem;\n}\n";
 
   // plugins/profiles-client/src/client.tsx
   window.__ModuleLoader__.load({
@@ -198,7 +198,7 @@
         "seat.fallback": "Model",
         "seat.aria": "Select model or profile",
         "menu.profiles": "Profiles",
-        "menu.default": "Default",
+        "menu.default": "Profile default",
         "menu.models": "Models",
         "menu.searchPlaceholder": "Search models\u2026",
         "menu.noResults": "No models match"
@@ -207,7 +207,7 @@
         "seat.fallback": "\u6A21\u578B",
         "seat.aria": "\u9009\u62E9\u6A21\u578B\u6216\u914D\u7F6E",
         "menu.profiles": "\u914D\u7F6E",
-        "menu.default": "\u9ED8\u8BA4",
+        "menu.default": "\u914D\u7F6E\u9ED8\u8BA4",
         "menu.models": "\u6A21\u578B",
         "menu.searchPlaceholder": "\u641C\u7D22\u6A21\u578B\u2026",
         "menu.noResults": "\u65E0\u5339\u914D\u6A21\u578B"
@@ -340,6 +340,15 @@
           var errorDownState = useState([]);
           var errorDown = errorDownState[0];
           var setErrorDown = errorDownState[1];
+          var effortOpenState = useState(false);
+          var effortOpen = effortOpenState[0];
+          var setEffortOpen = effortOpenState[1];
+          var effortPosState = useState(null);
+          var effortPos = effortPosState[0];
+          var setEffortPos = effortPosState[1];
+          var effortRowRef = useRef(null);
+          var menuRef = useRef(null);
+          var effortPanelRef = useRef(null);
           useEffect(
             function() {
               if (open) {
@@ -369,6 +378,44 @@
               };
             },
             [open]
+          );
+          useEffect(
+            function() {
+              if (!open) {
+                setEffortOpen(false);
+                setEffortPos(null);
+              }
+            },
+            [open]
+          );
+          useEffect(
+            function() {
+              if (!effortOpen) return;
+              if (effortPanelRef.current === null) return;
+              if (effortPos === null) return;
+              var rect = effortPanelRef.current.getBoundingClientRect();
+              var nextTop = effortPos.top;
+              var nextLeft = effortPos.left;
+              var changed = false;
+              if (rect.bottom > window.innerHeight - 8) {
+                nextTop = Math.max(8, window.innerHeight - rect.height - 8);
+                changed = true;
+              }
+              if (rect.top < 8) {
+                nextTop = 8;
+                changed = true;
+              }
+              if (rect.right > window.innerWidth - 8) {
+                nextLeft = Math.max(8, window.innerWidth - rect.width - 8);
+                changed = true;
+              }
+              if (rect.left < 8) {
+                nextLeft = 8;
+                changed = true;
+              }
+              if (changed) setEffortPos({ top: nextTop, left: nextLeft });
+            },
+            [effortOpen]
           );
           var fetchProfiles = function() {
             fetchJson("/profiles/config").then(function(result) {
@@ -458,6 +505,13 @@
           }
           var onKeyDown = function(event) {
             if (event.key === "Escape" && open) {
+              if (effortOpen) {
+                event.preventDefault();
+                event.stopPropagation();
+                setEffortOpen(false);
+                setEffortPos(null);
+                return;
+              }
               event.preventDefault();
               setOpen(false);
             }
@@ -483,6 +537,65 @@
           }
           var seatEffortList = seatCurrentCat !== null ? seatEffortsOf(seatCurrentCat.reasoning) : [];
           var seatEffortValue = current !== void 0 && current !== null && typeof current.reasoningEffort === "string" && current.reasoningEffort !== "" ? current.reasoningEffort : "";
+          var seatEffortStops = [{ id: "", name: "Default" }].concat(
+            seatEffortList.map(function(eff) {
+              return { id: eff.id, name: eff.name };
+            })
+          );
+          var seatEffortIndex = 0;
+          for (var sei = 0; sei < seatEffortStops.length; sei++) {
+            if (seatEffortStops[sei].id === seatEffortValue) {
+              seatEffortIndex = sei;
+              break;
+            }
+          }
+          var seatEffortName = seatEffortStops[seatEffortIndex].name;
+          var stopLeftOf = function(index) {
+            if (seatEffortStops.length <= 1) return "50%";
+            return "calc(0.4375rem + (100% - 0.875rem) * " + index + " / " + (seatEffortStops.length - 1) + ")";
+          };
+          var closeEffort = function() {
+            setEffortOpen(false);
+            setEffortPos(null);
+          };
+          var toggleEffort = function() {
+            if (effortOpen) {
+              closeEffort();
+              return;
+            }
+            var rowRect = effortRowRef.current !== null ? effortRowRef.current.getBoundingClientRect() : null;
+            var menuRect = menuRef.current !== null ? menuRef.current.getBoundingClientRect() : null;
+            var panelWidth = 240;
+            var gap = 8;
+            var top = rowRect !== null ? rowRect.top : 100;
+            var left = 100;
+            if (menuRect !== null) {
+              if (menuRect.left >= panelWidth + gap + 8) {
+                left = menuRect.left - panelWidth - gap;
+              } else {
+                left = menuRect.right + gap;
+                if (left + panelWidth > window.innerWidth - 8) {
+                  left = Math.max(8, window.innerWidth - panelWidth - 8);
+                }
+              }
+            } else if (rowRect !== null) {
+              if (rowRect.left >= panelWidth + gap + 8) {
+                left = rowRect.left - panelWidth - gap;
+              } else {
+                left = rowRect.right + gap;
+              }
+            }
+            var estHeight = 160;
+            var maxTop = window.innerHeight - estHeight - 8;
+            if (maxTop < 8) maxTop = 8;
+            if (top < 8) top = 8;
+            if (top > maxTop) top = maxTop;
+            setEffortPos({ top, left });
+            setEffortOpen(true);
+          };
+          var onMenuScroll = function() {
+            if (effortOpen) closeEffort();
+          };
           return /* @__PURE__ */ react.createElement("div", { className: "profiles-client-root", ref: rootRef, onKeyDown }, /* @__PURE__ */ react.createElement(
             "button",
             {
@@ -506,7 +619,7 @@
                 "aria-hidden": true
               }
             )) : null,
-            /* @__PURE__ */ react.createElement("span", { className: "profiles-client-model-label" }, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-model-name" }, triggerModelText), triggerProviderText !== null ? /* @__PURE__ */ react.createElement("span", { className: "profiles-client-model-provider" }, triggerProviderText) : null),
+            /* @__PURE__ */ react.createElement("span", { className: "profiles-client-model-label" }, triggerProviderText !== null ? /* @__PURE__ */ react.createElement("span", { className: "profiles-client-model-provider" }, triggerProviderText) : null, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-model-name" }, triggerModelText)),
             /* @__PURE__ */ react.createElement(
               IconChevronDownOutline14,
               {
@@ -514,115 +627,165 @@
                 "aria-hidden": true
               }
             )
-          ), open ? /* @__PURE__ */ react.createElement("div", { className: "profiles-client-menu", role: "listbox" }, seatEffortList.length > 0 && current !== void 0 && current !== null ? /* @__PURE__ */ react.createElement("div", { className: "profiles-client-effort-row" }, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-effort-label" }, currentPretty !== null ? currentPretty.model : current.model), /* @__PURE__ */ react.createElement(
-            "select",
+          ), open ? /* @__PURE__ */ react.createElement(
+            "div",
             {
-              className: "profiles-client-effort",
-              value: seatEffortValue,
-              "aria-label": "Model reasoning effort",
-              onChange: function(event) {
-                var effort = event.target.value;
-                select({
-                  provider: current.provider,
-                  model: current.model,
-                  reasoningEffort: effort === "" ? void 0 : effort
-                });
-              }
+              className: "profiles-client-menu",
+              role: "listbox",
+              ref: menuRef,
+              onScroll: onMenuScroll
             },
-            /* @__PURE__ */ react.createElement("option", { value: "" }, "Default"),
-            seatEffortList.map(function(eff) {
-              return /* @__PURE__ */ react.createElement(
-                "option",
-                {
-                  key: eff.id,
-                  value: eff.id,
-                  title: eff.description !== void 0 ? eff.description : void 0
-                },
-                eff.name
-              );
-            })
-          )) : null, /* @__PURE__ */ react.createElement(
-            "button",
-            {
-              type: "button",
-              className: "profiles-client-option",
-              onClick: function() {
-                if (face.head !== void 0) pick(face.head);
-              }
-            },
-            /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-copy" }, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-name profiles-client-option-profile" }, t("menu.default")), /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-detail" }, face.head !== void 0 ? prettyOf(face.head.provider, face.head.model).provider + "/" + prettyOf(face.head.provider, face.head.model).model : ""))
-          ), profileRows.length > 0 ? /* @__PURE__ */ react.createElement("div", null, /* @__PURE__ */ react.createElement("div", { className: "dsp-section-title" }, t("menu.profiles")), profileRows.map(function(row) {
-            var isActive = row.key === face.active;
-            var headPretty = prettyOf(row.head.provider, row.head.model);
-            return /* @__PURE__ */ react.createElement(
+            seatEffortList.length > 0 && current !== void 0 && current !== null ? /* @__PURE__ */ react.createElement("div", null, /* @__PURE__ */ react.createElement(
               "button",
               {
-                key: row.key,
                 type: "button",
                 className: "profiles-client-option",
-                onClick: function() {
-                  putJson("/profiles/switch", { active: row.key }).then(
-                    function(result) {
-                      if (!result.error) setOpen(false);
-                      if (!result.error) {
-                        request("DELETE", "/profiles/error-cache").then(function() {
-                          fetchProfiles();
-                        });
-                      }
-                    }
-                  );
+                ref: effortRowRef,
+                "aria-expanded": effortOpen,
+                "aria-haspopup": "dialog",
+                onClick: toggleEffort
+              },
+              /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-copy" }, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-name" }, "Reasoning"), /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-detail" }, seatEffortName)),
+              /* @__PURE__ */ react.createElement("span", { className: "profiles-client-effort-chevron", "aria-hidden": true }, "\u203A")
+            ), effortOpen ? /* @__PURE__ */ react.createElement(
+              "div",
+              {
+                className: "profiles-client-effort-popover",
+                ref: effortPanelRef,
+                role: "dialog",
+                "aria-label": "Model reasoning effort",
+                style: {
+                  top: effortPos !== null ? effortPos.top : 0,
+                  left: effortPos !== null ? effortPos.left : 0
                 }
               },
-              /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-copy" }, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-name profiles-client-option-profile" }, row.key + (isActive ? " \xB7" : "")), /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-detail" }, headPretty.provider + "/" + headPretty.model)),
-              isActive ? /* @__PURE__ */ react.createElement("span", { className: "profiles-client-check", "aria-hidden": true }, "\u2713") : null
-            );
-          })) : null, /* @__PURE__ */ react.createElement("div", null, /* @__PURE__ */ react.createElement("div", { className: "dsp-section-title" }, t("menu.models")), /* @__PURE__ */ react.createElement(
-            "input",
-            {
-              ref: searchInputRef,
-              className: "profiles-client-search",
-              type: "search",
-              placeholder: t("menu.searchPlaceholder"),
-              value: modelQuery,
-              "aria-label": t("menu.searchPlaceholder"),
-              onChange: function(event) {
-                setModelQuery(event.target.value);
-              },
-              onKeyDown: function(event) {
-                event.stopPropagation();
-              },
-              onMouseDown: function(event) {
-                event.stopPropagation();
-              }
-            }
-          ), state.status === "error" && state.error ? /* @__PURE__ */ react.createElement("div", { className: "profiles-client-strip" }, state.error) : null, modelGroups.length === 0 && trimmedQuery !== "" ? /* @__PURE__ */ react.createElement("div", { className: "profiles-client-strip" }, t("menu.noResults")) : modelGroups.map(function(grp) {
-            return /* @__PURE__ */ react.createElement("div", { key: grp.id }, /* @__PURE__ */ react.createElement("div", { className: "dsp-section-title" }, grp.label), grp.models.map(function(row) {
-              var isActive = current !== void 0 && current !== null && current.provider === grp.id && current.model === row.id;
+              /* @__PURE__ */ react.createElement("div", { className: "profiles-client-effort-row" }, /* @__PURE__ */ react.createElement("div", { className: "profiles-client-effort-slider-wrap" }, /* @__PURE__ */ react.createElement(
+                "input",
+                {
+                  type: "range",
+                  className: "profiles-client-effort-slider",
+                  min: 0,
+                  max: seatEffortStops.length - 1,
+                  step: 1,
+                  value: seatEffortIndex,
+                  "aria-label": "Model reasoning effort",
+                  onChange: function(event) {
+                    var index = Number(event.target.value);
+                    var stop = seatEffortStops[index];
+                    select({
+                      provider: current.provider,
+                      model: current.model,
+                      reasoningEffort: stop !== void 0 && stop.id !== "" ? stop.id : void 0
+                    });
+                  }
+                }
+              ), seatEffortStops.map(function(stop, tickIndex) {
+                return /* @__PURE__ */ react.createElement(
+                  "span",
+                  {
+                    key: stop.id !== "" ? stop.id : "default",
+                    className: "profiles-client-effort-tick",
+                    "aria-hidden": true,
+                    style: { left: stopLeftOf(tickIndex) }
+                  }
+                );
+              })), /* @__PURE__ */ react.createElement("div", { className: "profiles-client-effort-labels" }, seatEffortStops.map(function(stop, labelIndex) {
+                return /* @__PURE__ */ react.createElement(
+                  "span",
+                  {
+                    key: stop.id !== "" ? stop.id : "default",
+                    className: labelIndex === seatEffortIndex ? "profiles-client-effort-stop profiles-client-effort-stop-active" : "profiles-client-effort-stop",
+                    style: { left: stopLeftOf(labelIndex) }
+                  },
+                  stop.name
+                );
+              })))
+            ) : null) : null,
+            profileRows.length > 0 ? /* @__PURE__ */ react.createElement("div", null, /* @__PURE__ */ react.createElement("div", { className: "dsp-section-title" }, t("menu.profiles")), profileRows.map(function(row) {
+              var isActive = row.key === face.active;
+              var headPretty = prettyOf(row.head.provider, row.head.model);
               return /* @__PURE__ */ react.createElement(
                 "button",
                 {
-                  key: grp.id + "/" + row.id,
+                  key: row.key,
                   type: "button",
                   className: "profiles-client-option",
                   onClick: function() {
-                    pick({ provider: grp.id, model: row.id });
+                    putJson("/profiles/switch", { active: row.key }).then(
+                      function(result) {
+                        if (!result.error) setOpen(false);
+                        if (!result.error) {
+                          request("DELETE", "/profiles/error-cache").then(function() {
+                            fetchProfiles();
+                          });
+                        }
+                      }
+                    );
                   }
                 },
-                /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-copy profiles-client-option-copy-model" }, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-name profiles-client-option-model" }, row.name), /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-detail" }, grp.label)),
+                /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-copy" }, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-name profiles-client-option-profile" }, row.key + (isActive ? " \xB7" : "")), /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-detail" }, headPretty.provider + "/" + headPretty.model)),
                 isActive ? /* @__PURE__ */ react.createElement("span", { className: "profiles-client-check", "aria-hidden": true }, "\u2713") : null
               );
-            }));
-          })), errorDown.length > 0 ? /* @__PURE__ */ react.createElement("div", { className: "profiles-client-error-row" }, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-error-count" }, errorDown.length + " cached down"), /* @__PURE__ */ react.createElement(
-            "button",
-            {
-              type: "button",
-              className: "profiles-client-error-reset",
-              onClick: function() {
-                resetErrorCache();
+            })) : null,
+            /* @__PURE__ */ react.createElement("div", null, /* @__PURE__ */ react.createElement("div", { className: "dsp-section-title" }, t("menu.models")), /* @__PURE__ */ react.createElement(
+              "button",
+              {
+                type: "button",
+                className: "profiles-client-option",
+                onClick: function() {
+                  if (face.head !== void 0) pick(face.head);
+                }
+              },
+              /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-copy" }, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-name profiles-client-option-profile" }, t("menu.default")), /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-detail" }, face.head !== void 0 ? prettyOf(face.head.provider, face.head.model).provider + "/" + prettyOf(face.head.provider, face.head.model).model : ""))
+            ), /* @__PURE__ */ react.createElement(
+              "input",
+              {
+                ref: searchInputRef,
+                className: "profiles-client-search",
+                type: "search",
+                placeholder: t("menu.searchPlaceholder"),
+                value: modelQuery,
+                "aria-label": t("menu.searchPlaceholder"),
+                onChange: function(event) {
+                  setModelQuery(event.target.value);
+                },
+                onKeyDown: function(event) {
+                  event.stopPropagation();
+                },
+                onMouseDown: function(event) {
+                  event.stopPropagation();
+                }
               }
-            },
-            "Reset"
-          )) : null) : null);
+            ), state.status === "error" && state.error ? /* @__PURE__ */ react.createElement("div", { className: "profiles-client-strip" }, state.error) : null, modelGroups.length === 0 && trimmedQuery !== "" ? /* @__PURE__ */ react.createElement("div", { className: "profiles-client-strip" }, t("menu.noResults")) : modelGroups.map(function(grp) {
+              return /* @__PURE__ */ react.createElement("div", { key: grp.id }, /* @__PURE__ */ react.createElement("div", { className: "dsp-section-title" }, grp.label), grp.models.map(function(row) {
+                var isActive = current !== void 0 && current !== null && current.provider === grp.id && current.model === row.id;
+                return /* @__PURE__ */ react.createElement(
+                  "button",
+                  {
+                    key: grp.id + "/" + row.id,
+                    type: "button",
+                    className: "profiles-client-option",
+                    onClick: function() {
+                      pick({ provider: grp.id, model: row.id });
+                    }
+                  },
+                  /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-copy profiles-client-option-copy-model" }, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-name profiles-client-option-model" }, row.name), /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-detail" }, grp.label)),
+                  isActive ? /* @__PURE__ */ react.createElement("span", { className: "profiles-client-check", "aria-hidden": true }, "\u2713") : null
+                );
+              }));
+            })),
+            errorDown.length > 0 ? /* @__PURE__ */ react.createElement("div", { className: "profiles-client-error-row" }, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-error-count" }, errorDown.length + " cached down"), /* @__PURE__ */ react.createElement(
+              "button",
+              {
+                type: "button",
+                className: "profiles-client-error-reset",
+                onClick: function() {
+                  resetErrorCache();
+                }
+              },
+              "Reset"
+            )) : null
+          ) : null);
         }
         return ProfileModelSeat;
       }

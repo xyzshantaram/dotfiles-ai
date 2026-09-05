@@ -93,7 +93,7 @@ window.__ModuleLoader__.load({
       "seat.fallback": "Model",
       "seat.aria": "Select model or profile",
       "menu.profiles": "Profiles",
-      "menu.default": "Default",
+      "menu.default": "Profile default",
       "menu.models": "Models",
       "menu.searchPlaceholder": "Search models\u2026",
       "menu.noResults": "No models match",
@@ -104,7 +104,7 @@ window.__ModuleLoader__.load({
       "seat.fallback": "\u6a21\u578b",
       "seat.aria": "\u9009\u62e9\u6a21\u578b\u6216\u914d\u7f6e",
       "menu.profiles": "\u914d\u7f6e",
-      "menu.default": "\u9ed8\u8ba4",
+      "menu.default": "配置默认",
       "menu.models": "\u6a21\u578b",
       "menu.searchPlaceholder": "\u641c\u7d22\u6a21\u578b\u2026",
       "menu.noResults": "\u65e0\u5339\u914d\u6a21\u578b",
@@ -281,6 +281,15 @@ window.__ModuleLoader__.load({
         var errorDownState = useState([]);
         var errorDown = errorDownState[0];
         var setErrorDown = errorDownState[1];
+        var effortOpenState = useState(false);
+        var effortOpen = effortOpenState[0];
+        var setEffortOpen = effortOpenState[1];
+        var effortPosState = useState(null);
+        var effortPos = effortPosState[0];
+        var setEffortPos = effortPosState[1];
+        var effortRowRef = useRef(null);
+        var menuRef = useRef(null);
+        var effortPanelRef = useRef(null);
 
         useEffect(
           function () {
@@ -313,6 +322,46 @@ window.__ModuleLoader__.load({
             };
           },
           [open],
+        );
+
+        useEffect(
+          function () {
+            if (!open) {
+              setEffortOpen(false);
+              setEffortPos(null);
+            }
+          },
+          [open],
+        );
+
+        useEffect(
+          function () {
+            if (!effortOpen) return;
+            if (effortPanelRef.current === null) return;
+            if (effortPos === null) return;
+            var rect = effortPanelRef.current.getBoundingClientRect();
+            var nextTop = effortPos.top;
+            var nextLeft = effortPos.left;
+            var changed = false;
+            if (rect.bottom > window.innerHeight - 8) {
+              nextTop = Math.max(8, window.innerHeight - rect.height - 8);
+              changed = true;
+            }
+            if (rect.top < 8) {
+              nextTop = 8;
+              changed = true;
+            }
+            if (rect.right > window.innerWidth - 8) {
+              nextLeft = Math.max(8, window.innerWidth - rect.width - 8);
+              changed = true;
+            }
+            if (rect.left < 8) {
+              nextLeft = 8;
+              changed = true;
+            }
+            if (changed) setEffortPos({ top: nextTop, left: nextLeft });
+          },
+          [effortOpen],
         );
 
         var fetchProfiles = function () {
@@ -443,6 +492,13 @@ window.__ModuleLoader__.load({
 
         var onKeyDown = function (event) {
           if (event.key === "Escape" && open) {
+            if (effortOpen) {
+              event.preventDefault();
+              event.stopPropagation();
+              setEffortOpen(false);
+              setEffortPos(null);
+              return;
+            }
             event.preventDefault();
             setOpen(false);
           }
@@ -493,6 +549,72 @@ window.__ModuleLoader__.load({
           current.reasoningEffort !== ""
             ? current.reasoningEffort
             : "";
+        var seatEffortStops = [{ id: "", name: "Default" }].concat(
+          seatEffortList.map(function (eff) {
+            return { id: eff.id, name: eff.name };
+          }),
+        );
+        var seatEffortIndex = 0;
+        for (var sei = 0; sei < seatEffortStops.length; sei++) {
+          if (seatEffortStops[sei].id === seatEffortValue) {
+            seatEffortIndex = sei;
+            break;
+          }
+        }
+        var seatEffortName = seatEffortStops[seatEffortIndex].name;
+        var stopLeftOf = function (index) {
+          if (seatEffortStops.length <= 1) return "50%";
+          return (
+            "calc(0.4375rem + (100% - 0.875rem) * " +
+            index +
+            " / " +
+            (seatEffortStops.length - 1) +
+            ")"
+          );
+        };
+        var closeEffort = function () {
+          setEffortOpen(false);
+          setEffortPos(null);
+        };
+        var toggleEffort = function () {
+          if (effortOpen) {
+            closeEffort();
+            return;
+          }
+          var rowRect =
+            effortRowRef.current !== null ? effortRowRef.current.getBoundingClientRect() : null;
+          var menuRect = menuRef.current !== null ? menuRef.current.getBoundingClientRect() : null;
+          var panelWidth = 240;
+          var gap = 8;
+          var top = rowRect !== null ? rowRect.top : 100;
+          var left = 100;
+          if (menuRect !== null) {
+            if (menuRect.left >= panelWidth + gap + 8) {
+              left = menuRect.left - panelWidth - gap;
+            } else {
+              left = menuRect.right + gap;
+              if (left + panelWidth > window.innerWidth - 8) {
+                left = Math.max(8, window.innerWidth - panelWidth - 8);
+              }
+            }
+          } else if (rowRect !== null) {
+            if (rowRect.left >= panelWidth + gap + 8) {
+              left = rowRect.left - panelWidth - gap;
+            } else {
+              left = rowRect.right + gap;
+            }
+          }
+          var estHeight = 160;
+          var maxTop = window.innerHeight - estHeight - 8;
+          if (maxTop < 8) maxTop = 8;
+          if (top < 8) top = 8;
+          if (top > maxTop) top = maxTop;
+          setEffortPos({ top: top, left: left });
+          setEffortOpen(true);
+        };
+        var onMenuScroll = function () {
+          if (effortOpen) closeEffort();
+        };
 
         return (
           <div className="profiles-client-root" ref={rootRef} onKeyDown={onKeyDown}>
@@ -525,10 +647,10 @@ window.__ModuleLoader__.load({
                 </span>
               ) : null}
               <span className="profiles-client-model-label">
-                <span className="profiles-client-model-name">{triggerModelText}</span>
                 {triggerProviderText !== null ? (
                   <span className="profiles-client-model-provider">{triggerProviderText}</span>
                 ) : null}
+                <span className="profiles-client-model-name">{triggerModelText}</span>
               </span>
               <IconChevronDownOutline14
                 className={
@@ -540,60 +662,95 @@ window.__ModuleLoader__.load({
               />
             </button>
             {open ? (
-              <div className="profiles-client-menu" role="listbox">
+              <div
+                className="profiles-client-menu"
+                role="listbox"
+                ref={menuRef}
+                onScroll={onMenuScroll}
+              >
                 {seatEffortList.length > 0 && current !== void 0 && current !== null ? (
-                  <div className="profiles-client-effort-row">
-                    <span className="profiles-client-effort-label">
-                      {currentPretty !== null ? currentPretty.model : current.model}
-                    </span>
-                    <select
-                      className="profiles-client-effort"
-                      value={seatEffortValue}
-                      aria-label="Model reasoning effort"
-                      onChange={function (event) {
-                        var effort = event.target.value;
-                        select({
-                          provider: current.provider,
-                          model: current.model,
-                          reasoningEffort: effort === "" ? undefined : effort,
-                        });
-                      }}
+                  <div>
+                    <button
+                      type="button"
+                      className="profiles-client-option"
+                      ref={effortRowRef}
+                      aria-expanded={effortOpen}
+                      aria-haspopup="dialog"
+                      onClick={toggleEffort}
                     >
-                      <option value="">Default</option>
-                      {seatEffortList.map(function (eff) {
-                        return (
-                          <option
-                            key={eff.id}
-                            value={eff.id}
-                            title={eff.description !== void 0 ? eff.description : undefined}
-                          >
-                            {eff.name}
-                          </option>
-                        );
-                      })}
-                    </select>
+                      <span className="profiles-client-option-copy">
+                        <span className="profiles-client-option-name">Reasoning</span>
+                        <span className="profiles-client-option-detail">{seatEffortName}</span>
+                      </span>
+                      <span className="profiles-client-effort-chevron" aria-hidden={true}>
+                        ›
+                      </span>
+                    </button>
+                    {effortOpen ? (
+                      <div
+                        className="profiles-client-effort-popover"
+                        ref={effortPanelRef}
+                        role="dialog"
+                        aria-label="Model reasoning effort"
+                        style={{
+                          top: effortPos !== null ? effortPos.top : 0,
+                          left: effortPos !== null ? effortPos.left : 0,
+                        }}
+                      >
+                        <div className="profiles-client-effort-row">
+                          <div className="profiles-client-effort-slider-wrap">
+                            <input
+                              type="range"
+                              className="profiles-client-effort-slider"
+                              min={0}
+                              max={seatEffortStops.length - 1}
+                              step={1}
+                              value={seatEffortIndex}
+                              aria-label="Model reasoning effort"
+                              onChange={function (event) {
+                                var index = Number(event.target.value);
+                                var stop = seatEffortStops[index];
+                                select({
+                                  provider: current.provider,
+                                  model: current.model,
+                                  reasoningEffort:
+                                    stop !== void 0 && stop.id !== "" ? stop.id : undefined,
+                                });
+                              }}
+                            />
+                            {seatEffortStops.map(function (stop, tickIndex) {
+                              return (
+                                <span
+                                  key={stop.id !== "" ? stop.id : "default"}
+                                  className="profiles-client-effort-tick"
+                                  aria-hidden={true}
+                                  style={{ left: stopLeftOf(tickIndex) }}
+                                />
+                              );
+                            })}
+                          </div>
+                          <div className="profiles-client-effort-labels">
+                            {seatEffortStops.map(function (stop, labelIndex) {
+                              return (
+                                <span
+                                  key={stop.id !== "" ? stop.id : "default"}
+                                  className={
+                                    labelIndex === seatEffortIndex
+                                      ? "profiles-client-effort-stop profiles-client-effort-stop-active"
+                                      : "profiles-client-effort-stop"
+                                  }
+                                  style={{ left: stopLeftOf(labelIndex) }}
+                                >
+                                  {stop.name}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
-                <button
-                  type="button"
-                  className="profiles-client-option"
-                  onClick={function () {
-                    if (face.head !== void 0) pick(face.head);
-                  }}
-                >
-                  <span className="profiles-client-option-copy">
-                    <span className="profiles-client-option-name profiles-client-option-profile">
-                      {t("menu.default")}
-                    </span>
-                    <span className="profiles-client-option-detail">
-                      {face.head !== void 0
-                        ? prettyOf(face.head.provider, face.head.model).provider +
-                          "/" +
-                          prettyOf(face.head.provider, face.head.model).model
-                        : ""}
-                    </span>
-                  </span>
-                </button>
                 {profileRows.length > 0 ? (
                   <div>
                     <div className="dsp-section-title">{t("menu.profiles")}</div>
@@ -638,6 +795,26 @@ window.__ModuleLoader__.load({
                 ) : null}
                 <div>
                   <div className="dsp-section-title">{t("menu.models")}</div>
+                  <button
+                    type="button"
+                    className="profiles-client-option"
+                    onClick={function () {
+                      if (face.head !== void 0) pick(face.head);
+                    }}
+                  >
+                    <span className="profiles-client-option-copy">
+                      <span className="profiles-client-option-name profiles-client-option-profile">
+                        {t("menu.default")}
+                      </span>
+                      <span className="profiles-client-option-detail">
+                        {face.head !== void 0
+                          ? prettyOf(face.head.provider, face.head.model).provider +
+                            "/" +
+                            prettyOf(face.head.provider, face.head.model).model
+                          : ""}
+                      </span>
+                    </span>
+                  </button>
                   <input
                     ref={searchInputRef}
                     className="profiles-client-search"
