@@ -1,4 +1,5 @@
 .profiles-client-root {
+  display: inline-block;
   min-width: 0;
   position: relative;
 }
@@ -60,7 +61,7 @@
 }
 .profiles-client-model-label {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.25rem;
   flex: 1;
   min-width: 0;
@@ -72,12 +73,15 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: #fff;
+  line-height: 1.25rem;
+  transform: translateY(-1px);
 }
 .profiles-client-model-provider {
   flex: none;
   flex-shrink: 0;
   white-space: nowrap;
-  color: var(--dsw-alias-label-tertiary);
+  color: rgba(255, 255, 255, 0.75);
   font-size: 0.75rem;
   line-height: 1.25rem;
 }
@@ -106,7 +110,11 @@
   display: flex;
   position: absolute;
   bottom: calc(100% + 0.5rem);
+  left: 0;
   right: 0;
+  width: max-content;
+  margin-left: auto;
+  margin-right: auto;
   overflow-x: hidden;
   overflow-y: auto;
 }
@@ -165,7 +173,7 @@
 }
 .profiles-client-option-model {
   font-size: 0.75rem;
-  font-weight: 500;
+  font-weight: 700;
 }
 .profiles-client-option-detail {
   color: var(--dsw-alias-label-tertiary);
@@ -183,18 +191,17 @@
 }
 .profiles-client-effort-row {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.375rem;
+  box-sizing: border-box;
+  width: 100%;
   min-width: 0;
   padding: 0.25rem 0.4375rem;
 }
-.profiles-client-effort-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.profiles-client-effort-title {
   font-size: 0.75rem;
+  line-height: 1rem;
   color: var(--dsw-alias-label-secondary);
 }
 .profiles-client-error-row {
@@ -245,6 +252,99 @@
   flex: 1;
   width: auto;
   margin-left: 0;
+}
+.profiles-client-effort-slider {
+  width: 100%;
+  min-width: 0;
+  height: 1.5rem;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.profiles-client-effort-slider::-webkit-slider-runnable-track {
+  height: 0.5rem;
+  background: linear-gradient(90deg, #0a5cff 0%, #ff8400 100%);
+  border-radius: 0.25rem;
+}
+.profiles-client-effort-slider::-webkit-slider-thumb {
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-top: -0.1875rem;
+  background: #fff;
+  border: none;
+  border-radius: 50%;
+  appearance: none;
+  -webkit-appearance: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+.profiles-client-effort-slider::-moz-range-track {
+  height: 0.5rem;
+  background: linear-gradient(90deg, #0a5cff 0%, #ff8400 100%);
+  border-radius: 0.25rem;
+}
+.profiles-client-effort-slider::-moz-range-progress {
+  height: 0.5rem;
+  background: transparent;
+  border-radius: 0.25rem;
+}
+.profiles-client-effort-slider::-moz-range-thumb {
+  width: 0.875rem;
+  height: 0.875rem;
+  background: #fff;
+  border: none;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+.profiles-client-effort-slider-wrap {
+  position: relative;
+  width: 100%;
+}
+.profiles-client-effort-tick {
+  position: absolute;
+  top: calc(50% - 0.25rem);
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 0.625rem;
+  background: #fff;
+  pointer-events: none;
+}
+.profiles-client-effort-labels {
+  position: relative;
+  width: 100%;
+  height: 1rem;
+}
+.profiles-client-effort-stop {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  text-transform: uppercase;
+  font-size: 0.625rem;
+  line-height: 1rem;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary);
+}
+.profiles-client-effort-stop-active {
+  color: var(--dsw-alias-label-primary);
+}
+.profiles-client-effort-chevron {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 1rem;
+  line-height: 1;
+}
+.profiles-client-effort-popover {
+  position: fixed;
+  z-index: 30;
+  box-sizing: border-box;
+  width: 15rem;
+  background: var(--dsw-specific-menu);
+  border: 1px solid var(--dsw-alias-border-inverted);
+  border-radius: 0.5rem;
+  box-shadow: var(--dsw-shadow-lv3);
+  padding: 0.5rem;
+  color: var(--dsw-alias-label-primary);
 }
 .profiles-client-search {
   box-sizing: border-box;
@@ -483,6 +583,7 @@
   line-height: 1.25rem;
   font-weight: 700;
   text-transform: uppercase;
+  color: var(--dsw-alias-label-tertiary);
   margin: 0.25rem 0 0;
   padding: 0.25rem 0.4375rem;
 }
