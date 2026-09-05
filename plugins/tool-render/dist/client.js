@@ -17037,7 +17037,9 @@ function useCompactionViews(useSession) {
   var viewsState = useState(null);
   var views = viewsState[0];
   var setViews = viewsState[1];
-  var session = typeof useSession === "function" ? useSession() : void 0;
+  var session = typeof useSession === "function" ? useSession(function(value) {
+    return value;
+  }) : void 0;
   if (session !== null && session !== void 0 && session.projections !== void 0 && session.projections !== null && typeof session.projections.faceOf === "function") {
     try {
       face = session.projections.faceOf(COMPACTION_VIEWS_KEY);
@@ -17063,7 +17065,9 @@ function useGuardedApprovals(useSession) {
   var recordState = useState(null);
   var record = recordState[0];
   var setRecord = recordState[1];
-  var session = typeof useSession === "function" ? useSession() : void 0;
+  var session = typeof useSession === "function" ? useSession(function(value) {
+    return value;
+  }) : void 0;
   if (session !== null && session !== void 0 && session.projections !== void 0 && session.projections !== null && typeof session.projections.faceOf === "function") {
     try {
       face = session.projections.faceOf(GUARDED_APPROVALS_KEY);

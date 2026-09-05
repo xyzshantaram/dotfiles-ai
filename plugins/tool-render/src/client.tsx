@@ -2573,7 +2573,16 @@ function useCompactionViews(useSession) {
   // projections (an older seat) just leaves face null and the row falls
   // back. useSession is a hook: it is called unconditionally, before any
   // branch.
-  var session = typeof useSession === "function" ? useSession() : undefined;
+  // The selector hook passes its selector straight into
+  // useSyncExternalStoreWithSelector, so a bare useSession() crashes with
+  // "l is not a function". The session source's snapshot IS the session
+  // face, so the identity selector returns it.
+  var session =
+    typeof useSession === "function"
+      ? useSession(function (value) {
+          return value;
+        })
+      : undefined;
   if (
     session !== null &&
     session !== undefined &&
@@ -2616,7 +2625,16 @@ function useGuardedApprovals(useSession) {
   var recordState = useState(null);
   var record = recordState[0];
   var setRecord = recordState[1];
-  var session = typeof useSession === "function" ? useSession() : undefined;
+  // The selector hook passes its selector straight into
+  // useSyncExternalStoreWithSelector, so a bare useSession() crashes with
+  // "l is not a function". The session source's snapshot IS the session
+  // face, so the identity selector returns it.
+  var session =
+    typeof useSession === "function"
+      ? useSession(function (value) {
+          return value;
+        })
+      : undefined;
   if (
     session !== null &&
     session !== undefined &&
