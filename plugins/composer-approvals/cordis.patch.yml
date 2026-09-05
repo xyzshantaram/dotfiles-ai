@@ -1,0 +1,7 @@
+# Pending-approval indicator (client plugin).
+# The indicator and modal live in the ./client bundle. The host row exists so
+# the client-module registry mounts this package in the web profile and serves
+# that bundle in the boot graph.
+- insert:
+    - id: composer-approvals
+      name: composer-approvals

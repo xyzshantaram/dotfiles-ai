@@ -263,6 +263,24 @@ await wrapClientBundle(
   "composer-menu",
 );
 
+// composer-approvals: the pending-approval indicator beside the overflow
+// trigger, with a modal listing every pending approval. Plain client plugin:
+// host half bundles via esbuild, client half via the module-loader facade.
+await build({
+  entryPoints: [join(here, "plugins/composer-approvals/src/index.ts")],
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  external: ["-ai/*", "node:*"],
+  outfile: join(here, "plugins/composer-approvals/lib/index.js"),
+  logLevel: "info",
+});
+await wrapClientBundle(
+  join(here, "plugins/composer-approvals/src/client.tsx"),
+  join(here, "plugins/composer-approvals/lib/client.js"),
+  "composer-approvals",
+);
+
 // W18: combined subscription panel (OpenCode GO + Claude/meridian) CLIENT
 // plugin package. The host half bundles via esbuild; lz4 stays
 // external (native .node addons esbuild cannot bundle; runtime
