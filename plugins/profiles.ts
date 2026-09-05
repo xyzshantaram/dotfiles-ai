@@ -217,7 +217,9 @@ const ERROR_CODE_CLASS: Record<string, ErrorClass> = {
   NO_ADAPTER: "model-unavailable",
   INVALID_MODEL_INFO: "model-unavailable",
   MODEL_NOT_FOUND: "model-unavailable",
+  UNKNOWN_MODEL: "model-unavailable",
   HTTP_404: "model-unavailable",
+  QUOTA: "rate-limit",
   RATE_LIMIT: "rate-limit",
   HTTP_429: "rate-limit",
   TOO_MANY_REQUESTS: "rate-limit",
@@ -235,14 +237,18 @@ const ERROR_CODE_CLASS: Record<string, ErrorClass> = {
 };
 
 /**
- * Classify a provider failure into a cacheable class. Read the structured code
- * first, then a narrow message test. Anything else is transient and is NOT
- * cached.
+ * Classify a provider failure into a cacheable class. The no-credits message
+ * test runs first, then the structured code table, then the remaining message
+ * tests. Anything else is transient and is NOT cached.
  */
-function normalizeErrorClass(code: string | undefined, message: string): ErrorClass | undefined {
-  const codeClass = code ? ERROR_CODE_CLASS[code.trim().toUpperCase()] : undefined;
-  if (codeClass !== undefined) return codeClass;
+export function normalizeErrorClass(
+  code: string | undefined,
+  message: string,
+): ErrorClass | undefined {
   const m = String(message ?? "").toLowerCase();
+  // Order matters: a QUOTA code with an insufficient-credits message must
+  // stay no-credits, so the no-credits message test runs before the code
+  // table; the remaining message tests run after it.
   if (
     /insufficient\s+(funds|balance|credits?|quota)|quota exceeded|billing|payment required|out of credits?/.test(
       m,
@@ -250,6 +256,8 @@ function normalizeErrorClass(code: string | undefined, message: string): ErrorCl
   ) {
     return "no-credits";
   }
+  const codeClass = code ? ERROR_CODE_CLASS[code.trim().toUpperCase()] : undefined;
+  if (codeClass !== undefined) return codeClass;
   if (
     /invalid api key|unauthorized|authentication fail|invalid authentication|permission denied/.test(
       m,
@@ -257,11 +265,11 @@ function normalizeErrorClass(code: string | undefined, message: string): ErrorCl
   ) {
     return "auth";
   }
-  if (/rate limit|too many requests/.test(m)) {
+  if (/rate limit|too many requests|usage limit|usage_limit/.test(m)) {
     return "rate-limit";
   }
   if (
-    /unknown model|no such model|model .{0,40}(not found|does not exist|is not available|is not supported)/.test(
+    /unknown model|no such model|has no configured model|no configured model|model .{0,40}(not found|does not exist|is not available|is not supported)/.test(
       m,
     )
   ) {
@@ -892,6 +900,22 @@ function makeSwitchHandler(ctx: Context) {
   };
 }
 
+function makeErrorCacheHandler(ctx: Context) {
+  void ctx;
+  // No auth check, by convention: this server only serves localhost plugin
+  // clients, the same trust model as the profile switch endpoint above.
+  return async (req: IncomingMessage, res: ServerResponse) => {
+    if (req.method !== "DELETE") {
+      sendJson(res, 405, { ok: false, error: `method ${req.method} not allowed` });
+      return;
+    }
+    downCache.clear();
+    rateLimitStrikes.clear();
+    sendJson(res, 200, { ok: true, down: liveDownKeys() });
+    return;
+  };
+}
+
 export function apply(ctx: Context, config: unknown): void {
   const cfg = (config ?? {}) as ProfilesConfig;
 
@@ -911,6 +935,11 @@ export function apply(ctx: Context, config: unknown): void {
       kind: "exact",
       path: "/profiles/switch",
       handler: makeSwitchHandler(ctx),
+    });
+    server.register({
+      kind: "exact",
+      path: "/profiles/error-cache",
+      handler: makeErrorCacheHandler(ctx),
     });
   });
 

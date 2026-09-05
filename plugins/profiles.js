@@ -191,7 +191,9 @@ var ERROR_CODE_CLASS = {
   NO_ADAPTER: "model-unavailable",
   INVALID_MODEL_INFO: "model-unavailable",
   MODEL_NOT_FOUND: "model-unavailable",
+  UNKNOWN_MODEL: "model-unavailable",
   HTTP_404: "model-unavailable",
+  QUOTA: "rate-limit",
   RATE_LIMIT: "rate-limit",
   HTTP_429: "rate-limit",
   TOO_MANY_REQUESTS: "rate-limit",
@@ -208,23 +210,23 @@ var ERROR_CODE_CLASS = {
   HTTP_402: "no-credits"
 };
 function normalizeErrorClass(code, message) {
-  const codeClass = code ? ERROR_CODE_CLASS[code.trim().toUpperCase()] : void 0;
-  if (codeClass !== void 0) return codeClass;
   const m = String(message ?? "").toLowerCase();
   if (/insufficient\s+(funds|balance|credits?|quota)|quota exceeded|billing|payment required|out of credits?/.test(
     m
   )) {
     return "no-credits";
   }
+  const codeClass = code ? ERROR_CODE_CLASS[code.trim().toUpperCase()] : void 0;
+  if (codeClass !== void 0) return codeClass;
   if (/invalid api key|unauthorized|authentication fail|invalid authentication|permission denied/.test(
     m
   )) {
     return "auth";
   }
-  if (/rate limit|too many requests/.test(m)) {
+  if (/rate limit|too many requests|usage limit|usage_limit/.test(m)) {
     return "rate-limit";
   }
-  if (/unknown model|no such model|model .{0,40}(not found|does not exist|is not available|is not supported)/.test(
+  if (/unknown model|no such model|has no configured model|no configured model|model .{0,40}(not found|does not exist|is not available|is not supported)/.test(
     m
   )) {
     return "model-unavailable";
@@ -720,6 +722,21 @@ function makeSwitchHandler(ctx) {
     });
   };
 }
+function makeErrorCacheHandler(ctx) {
+  void ctx;
+  // No auth check, by convention: this server only serves localhost plugin
+  // clients, the same trust model as the profile switch endpoint above.
+  return async (req, res) => {
+    if (req.method !== "DELETE") {
+      sendJson(res, 405, { ok: false, error: `method ${req.method} not allowed` });
+      return;
+    }
+    downCache.clear();
+    rateLimitStrikes.clear();
+    sendJson(res, 200, { ok: true, down: liveDownKeys() });
+    return;
+  };
+}
 function apply(ctx, config) {
   const cfg = config ?? {};
   registerFailover(ctx, cfg.alwaysMaxRetries ?? 2);
@@ -734,6 +751,11 @@ function apply(ctx, config) {
       kind: "exact",
       path: "/profiles/switch",
       handler: makeSwitchHandler(ctx)
+    });
+    server.register({
+      kind: "exact",
+      path: "/profiles/error-cache",
+      handler: makeErrorCacheHandler(ctx)
     });
   });
   ctx.on("settings/updated", (ns, next, prev) => {

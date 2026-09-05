@@ -167,7 +167,7 @@
   var settings_default = "/* Shared settings-page vocabulary, normalized from the session-archive,\n * subscriptions, and profiles settings panels. One rule set in one file so\n * the three panels cannot drift. Radius and padding disagreements are\n * normalized to the session-archive (or median) value; the var(--dsw-...)\n * aliases the current rules use are kept as-is. */\n\n/* Page-level container:airy vertical rhythm, no own box. */\n.dsp-root {\n  box-sizing: border-box;\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n  padding: 0;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Header row (title + refresh). */\n.dsp-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 0.75rem;\n}\n\n.dsp-title {\n  font-size: 1.5rem;\n  font-weight: 650;\n  margin: 0;\n  line-height: 1.2;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Refresh:session-archive/profiles form (no box, color shift only).\n * subscriptions pads and rounds the hit area; normalized away. */\n.dsp-refresh {\n  cursor: pointer;\n  border: none;\n  background: none;\n  padding: 0;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n}\n.dsp-refresh:hover {\n  color: var(--dsw-alias-label-primary);\n}\n\n.dsp-err {\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-state-error-primary);\n}\n\n/* Large setting card. Padding is the median of 16/20/24 (session-archive\n * 20px); the radius is the two-agreeing 20px, not profiles' 12px. */\n.dsp-section {\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.875rem;\n  padding: 1.25rem;\n  background: var(--dsw-alias-bg-tertiary);\n}\n\n/* Card title:subscriptions' 1.5rem/700 matches the page-title vocabulary;\n * profiles' smaller 16px/600 card title normalized up. */\n.dsp-section-title {\n  font-size: 1.125rem;\n  font-weight: 600;\n  margin: 0;\n  line-height: 1.2;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Setting row:horizontal in session-archive and profiles (subscriptions\n * stacks its label and meta vertically; normalized to the horizontal form). */\n.dsp-row {\n  display: flex;\n  align-items: center;\n  gap: 0.75rem;\n  min-width: 0;\n}\n\n/* Row label:only subscriptions defines one; ported verbatim, with its\n * emphasized <b> children. */\n.dsp-row-label {\n  display: flex;\n  align-items: baseline;\n  gap: 0.625rem;\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.dsp-row-label b {\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n  font-size: 0.9375rem;\n}\n.dsp-row-label b:last-child {\n  margin-left: auto;\n}\n";
 
   // css-text:/home/sid/repos/dotfiles-ai/plugins/profiles-client/src/client.module.css
-  var client_default = ".profiles-client-root {\n  min-width: 0;\n  position: relative;\n}\n.profiles-client-trigger {\n  min-width: 0;\n  max-width: min(22.5rem, 45cqw);\n  height: 1.75rem;\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  background: 0 0;\n  border: none;\n  border-radius: 0.75rem;\n  outline: none;\n  align-items: center;\n  gap: 0.3125rem;\n  padding: 0 0.4375rem;\n  font-size: 0.8125rem;\n  font-weight: 500;\n  line-height: 1.25rem;\n  display: flex;\n}\n.profiles-client-trigger:hover:not(:disabled) {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.profiles-client-trigger:focus-visible {\n  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);\n}\n.profiles-client-trigger:disabled {\n  color: var(--dsw-alias-label-dimmed);\n  cursor: default;\n}\n.profiles-client-profile-pill {\n  flex: none;\n  box-sizing: border-box;\n  display: inline-flex;\n  align-items: center;\n  gap: 0.25rem;\n  padding: 0 0.375rem;\n  border-radius: 0.4375rem;\n  background: var(--dsw-alias-interactive-bg-hover);\n  color: #fff;\n  font-size: 0.75rem;\n  font-weight: 700;\n  line-height: 1.25rem;\n  white-space: nowrap;\n  text-transform: uppercase;\n}\n.profiles-client-pill-dot {\n  flex: none;\n  width: 0.375rem;\n  height: 0.375rem;\n  border-radius: 50%;\n}\n.profiles-client-pill-dot.profiles-client-pill-dot-matched {\n  background: var(--dsw-alias-state-info-primary, #3b82f6);\n}\n.profiles-client-pill-dot.profiles-client-pill-dot-changed {\n  background: #f59e0b;\n}\n.profiles-client-model-label {\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  min-width: 0;\n  overflow: hidden;\n}\n.profiles-client-chevron {\n  color: var(--dsw-alias-label-caption);\n  flex: none;\n  transform: rotate(-90deg);\n  transition: transform 0.12s;\n}\n.profiles-client-chevron-open {\n  transform: rotate(0deg);\n}\n.profiles-client-menu {\n  z-index: 20;\n  border: 1px solid var(--dsw-alias-border-inverted);\n  background: var(--dsw-specific-menu);\n  width: max-content;\n  min-width: 13.75rem;\n  max-width: min(26.25rem, 100vw - 2rem);\n  max-height: min(25rem, 100vh - 6rem);\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-primary);\n  border-radius: 0.5rem;\n  flex-direction: column;\n  padding: 0.1875rem;\n  display: flex;\n  position: absolute;\n  bottom: calc(100% + 0.5rem);\n  right: 0;\n  overflow-x: hidden;\n  overflow-y: auto;\n}\n.profiles-client-option {\n  box-sizing: border-box;\n  width: auto;\n  min-width: 100%;\n  min-height: 2.125rem;\n  color: inherit;\n  text-align: left;\n  cursor: pointer;\n  background: 0 0;\n  border: none;\n  border-radius: 0.5rem;\n  outline: none;\n  align-items: center;\n  gap: 0.5rem;\n  padding: 0.25rem 0.4375rem;\n  display: flex;\n}\n.profiles-client-option:hover:not(:disabled) {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.profiles-client-option-copy {\n  flex-direction: column;\n  flex: 1;\n  min-width: 0;\n  display: flex;\n}\n.profiles-client-option-name {\n  color: inherit;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 0.8125rem;\n  font-weight: 500;\n  line-height: 1.25rem;\n  overflow: hidden;\n}\n.profiles-client-option-profile {\n  font-weight: 700;\n}\n.profiles-client-option-model {\n  font-size: 0.75rem;\n  font-weight: 500;\n}\n.profiles-client-option-detail {\n  color: var(--dsw-alias-label-tertiary);\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 0.75rem;\n  line-height: 1rem;\n  overflow: hidden;\n}\n.profiles-client-check {\n  color: var(--dsw-alias-label-primary);\n  flex: 0 0 0.875rem;\n}\n.profiles-client-model-row {\n  display: flex;\n  flex-direction: column;\n  gap: 0.125rem;\n}\n.profiles-client-effort {\n  box-sizing: border-box;\n  width: calc(100% - 1rem);\n  min-width: 0;\n  margin-left: 0.5rem;\n  height: 1.5rem;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  padding: 0 0.375rem;\n  font-size: 0.6875rem;\n  line-height: 1rem;\n}\n.profiles-client-search {\n  box-sizing: border-box;\n  width: 100%;\n  height: 2rem;\n  margin: 0.25rem 0 0.5rem;\n  padding: 0 0.625rem;\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  outline: none;\n}\n.profiles-client-search::placeholder {\n  color: var(--dsw-alias-label-tertiary);\n}\n.profiles-client-search:focus-visible {\n  border-color: var(--dsw-alias-border-l3);\n  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);\n}\n.profiles-client-strip {\n  color: var(--dsw-alias-label-tertiary);\n  padding: 0.625rem;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n}\n\n.pf-panel-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 0.75rem;\n}\n.pf-panel-active {\n  display: flex;\n  gap: 0.75rem;\n  flex-wrap: wrap;\n}\n.pf-panel-active-btn {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  padding: 0.3125rem 0.625rem;\n  min-height: 2.375rem;\n  cursor: pointer;\n}\n.pf-panel-active-btn-on {\n  color: var(--dsw-alias-label-primary);\n  border-color: var(--dsw-alias-border-l3);\n}\n.pf-panel-entry {\n  display: flex;\n  flex-direction: column;\n  gap: 0.625rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.625rem;\n  padding: 0.875rem;\n  background: var(--dsw-alias-bg-tertiary);\n}\n.pf-panel-entry-title {\n  font-size: 0.9375rem;\n  font-weight: 600;\n  margin: 0;\n  color: var(--dsw-alias-label-primary);\n}\n.pf-panel-chain {\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n}\n.pf-panel-chain-title {\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  color: var(--dsw-alias-label-secondary);\n  margin: 0;\n}\n.pf-panel-row {\n  display: flex;\n  gap: 0.75rem;\n  align-items: center;\n  min-width: 0;\n}\n.pf-panel-input {\n  box-sizing: border-box;\n  flex: 1;\n  min-width: 0;\n  height: 2.5rem;\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  padding: 0 0.5rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n}\n.pf-panel-input:focus-visible {\n  outline: 2px solid var(--dsw-alias-state-business-primary);\n  outline-offset: -0.125rem;\n}\n.pf-panel-del {\n  flex: none;\n  cursor: pointer;\n  border: none;\n  background: none;\n  padding: 0 0.25rem;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 1rem;\n  line-height: 1.25rem;\n}\n.pf-panel-add {\n  align-self: flex-start;\n  color: var(--dsw-alias-label-secondary);\n  background: none;\n  border: 1px dashed var(--dsw-alias-border-l2);\n  border-radius: 0.4375rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n  padding: 0.1875rem 0.6875rem;\n  cursor: pointer;\n}\n.pf-panel-add:hover {\n  color: var(--dsw-alias-label-primary);\n}\n.pf-panel-meta {\n  font-size: 0.875rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.pf-panel-ref {\n  flex: none;\n  color: var(--dsw-alias-label-tertiary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border-radius: 0.4375rem;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  padding: 0.0625rem 0.5rem;\n}\n.pf-panel-actions {\n  display: flex;\n  align-items: center;\n  gap: 0.75rem;\n}\n.pf-panel-save {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 0.5rem;\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  padding: 0.3125rem 0.625rem;\n  min-height: 2.375rem;\n  cursor: pointer;\n}\n.pf-panel-save:disabled {\n  opacity: 0.5;\n  cursor: default;\n}\n.pf-panel-status {\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n}\n.pf-panel-ok {\n  color: var(--dsw-alias-state-success-primary);\n}\n.pf-panel-bad {\n  color: var(--dsw-alias-state-error-primary);\n}\n.pf-panel-select {\n  box-sizing: border-box;\n  flex: 1;\n  min-width: 0;\n  height: 2.5rem;\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  padding: 0 0.5rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n  cursor: pointer;\n}\n.pf-panel-select:focus-visible {\n  outline: 2px solid var(--dsw-alias-state-business-primary);\n  outline-offset: -0.125rem;\n}\n.pf-panel-effort {\n  box-sizing: border-box;\n  flex: 0 0 auto;\n  min-width: 0;\n  margin-left: 0.5rem;\n  height: 2.5rem;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  padding: 0 0.5rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n  cursor: pointer;\n}\n.pf-panel-select option,\n.pf-panel-effort option {\n  background: var(--dsw-alias-bg-layer-1);\n  color: var(--dsw-alias-label-primary);\n}\n/* Dropdown group headings invert \u2014 black on white \u2014 so they never render\n   white-on-white against the dropdown surface in the dark theme. */\n.pf-panel-select optgroup,\n.pf-panel-effort optgroup {\n  color: #000;\n  background: #fff;\n  font-weight: 700;\n}\n.pf-panel-model-row {\n  display: flex;\n  flex-direction: column;\n  gap: 0.125rem;\n}\n.pf-panel-add-select {\n  align-self: flex-start;\n  border-style: dashed;\n}\n.profiles-client-menu .dsp-section-title {\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  font-weight: 700;\n  text-transform: uppercase;\n  margin: 0.25rem 0 0;\n  padding: 0.25rem 0.4375rem;\n}\n";
+  var client_default = ".profiles-client-root {\n  min-width: 0;\n  position: relative;\n}\n.profiles-client-trigger {\n  min-width: 0;\n  max-width: min(22.5rem, 45cqw);\n  height: 1.75rem;\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  background: 0 0;\n  border: none;\n  border-radius: 0.75rem;\n  outline: none;\n  align-items: center;\n  gap: 0.3125rem;\n  padding: 0 0.4375rem;\n  font-size: 0.8125rem;\n  font-weight: 500;\n  line-height: 1.25rem;\n  display: flex;\n}\n.profiles-client-trigger:hover:not(:disabled) {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.profiles-client-trigger:focus-visible {\n  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);\n}\n.profiles-client-trigger:disabled {\n  color: var(--dsw-alias-label-dimmed);\n  cursor: default;\n}\n.profiles-client-profile-pill {\n  flex: none;\n  box-sizing: border-box;\n  display: inline-flex;\n  align-items: center;\n  gap: 0.25rem;\n  padding: 0 0.375rem;\n  border-radius: 0.4375rem;\n  background: var(--dsw-alias-interactive-bg-hover);\n  color: #fff;\n  font-size: 0.75rem;\n  font-weight: 700;\n  line-height: 1.25rem;\n  white-space: nowrap;\n  text-transform: uppercase;\n}\n.profiles-client-pill-dot {\n  flex: none;\n  width: 0.375rem;\n  height: 0.375rem;\n  border-radius: 50%;\n}\n.profiles-client-pill-dot.profiles-client-pill-dot-matched {\n  background: var(--dsw-alias-state-info-primary, #3b82f6);\n}\n.profiles-client-pill-dot.profiles-client-pill-dot-changed {\n  background: #f59e0b;\n}\n.profiles-client-model-label {\n  display: flex;\n  align-items: baseline;\n  gap: 0.25rem;\n  flex: 1;\n  min-width: 0;\n  overflow: hidden;\n}\n.profiles-client-model-name {\n  flex: 1;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n.profiles-client-model-provider {\n  flex: none;\n  flex-shrink: 0;\n  white-space: nowrap;\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.75rem;\n  line-height: 1.25rem;\n}\n.profiles-client-chevron {\n  color: var(--dsw-alias-label-caption);\n  flex: none;\n  transform: rotate(-90deg);\n  transition: transform 0.12s;\n}\n.profiles-client-chevron-open {\n  transform: rotate(0deg);\n}\n.profiles-client-menu {\n  z-index: 20;\n  border: 1px solid var(--dsw-alias-border-inverted);\n  background: var(--dsw-specific-menu);\n  width: max-content;\n  min-width: 13.75rem;\n  max-width: min(26.25rem, 100vw - 2rem);\n  max-height: min(25rem, 100vh - 6rem);\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-primary);\n  border-radius: 0.5rem;\n  flex-direction: column;\n  padding: 0.1875rem;\n  display: flex;\n  position: absolute;\n  bottom: calc(100% + 0.5rem);\n  right: 0;\n  overflow-x: hidden;\n  overflow-y: auto;\n}\n.profiles-client-option {\n  box-sizing: border-box;\n  width: auto;\n  min-width: 100%;\n  min-height: 2.125rem;\n  color: inherit;\n  text-align: left;\n  cursor: pointer;\n  background: 0 0;\n  border: none;\n  border-radius: 0.5rem;\n  outline: none;\n  align-items: center;\n  gap: 0.5rem;\n  padding: 0.25rem 0.4375rem;\n  display: flex;\n}\n.profiles-client-option:hover:not(:disabled) {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.profiles-client-option-copy {\n  flex-direction: column;\n  flex: 1;\n  min-width: 0;\n  display: flex;\n}\n.profiles-client-option-copy-model {\n  flex-direction: row;\n  align-items: baseline;\n  gap: 0.5rem;\n}\n.profiles-client-option-copy-model .profiles-client-option-name {\n  flex: 1;\n  min-width: 0;\n}\n.profiles-client-option-copy-model .profiles-client-option-detail {\n  flex: none;\n  flex-shrink: 0;\n}\n.profiles-client-option-name {\n  color: inherit;\n  flex: 1;\n  min-width: 0;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 0.8125rem;\n  font-weight: 500;\n  line-height: 1.25rem;\n  overflow: hidden;\n}\n.profiles-client-option-profile {\n  font-weight: 700;\n}\n.profiles-client-option-model {\n  font-size: 0.75rem;\n  font-weight: 500;\n}\n.profiles-client-option-detail {\n  color: var(--dsw-alias-label-tertiary);\n  flex: none;\n  flex-shrink: 0;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 0.75rem;\n  line-height: 1rem;\n  overflow: hidden;\n}\n.profiles-client-check {\n  color: var(--dsw-alias-label-primary);\n  flex: 0 0 0.875rem;\n}\n.profiles-client-effort-row {\n  display: flex;\n  align-items: center;\n  gap: 0.5rem;\n  min-width: 0;\n  padding: 0.25rem 0.4375rem;\n}\n.profiles-client-effort-label {\n  flex: 1;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 0.75rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.profiles-client-error-row {\n  display: flex;\n  align-items: center;\n  gap: 0.5rem;\n  min-width: 0;\n  padding: 0.25rem 0.4375rem;\n  font-size: 0.75rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.profiles-client-error-count {\n  flex: 1;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n.profiles-client-error-reset {\n  flex: none;\n  flex-shrink: 0;\n  cursor: pointer;\n  border: none;\n  background: none;\n  padding: 0;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.75rem;\n  line-height: 1rem;\n}\n.profiles-client-error-reset:hover {\n  color: var(--dsw-alias-label-primary);\n}\n.profiles-client-effort {\n  box-sizing: border-box;\n  width: calc(100% - 1rem);\n  min-width: 0;\n  margin-left: 0.5rem;\n  height: 1.5rem;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  padding: 0 0.375rem;\n  font-size: 0.6875rem;\n  line-height: 1rem;\n}\n.profiles-client-effort-row .profiles-client-effort {\n  flex: 1;\n  width: auto;\n  margin-left: 0;\n}\n.profiles-client-search {\n  box-sizing: border-box;\n  width: 100%;\n  height: 2rem;\n  margin: 0.25rem 0 0.5rem;\n  padding: 0 0.625rem;\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  outline: none;\n}\n.profiles-client-search::placeholder {\n  color: var(--dsw-alias-label-tertiary);\n}\n.profiles-client-search:focus-visible {\n  border-color: var(--dsw-alias-border-l3);\n  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);\n}\n.profiles-client-strip {\n  color: var(--dsw-alias-label-tertiary);\n  padding: 0.625rem;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n}\n\n.pf-panel-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 0.75rem;\n}\n.pf-panel-active {\n  display: flex;\n  gap: 0.75rem;\n  flex-wrap: wrap;\n}\n.pf-panel-active-btn {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  padding: 0.3125rem 0.625rem;\n  min-height: 2.375rem;\n  cursor: pointer;\n}\n.pf-panel-active-btn-on {\n  color: var(--dsw-alias-label-primary);\n  border-color: var(--dsw-alias-border-l3);\n}\n.pf-panel-entry {\n  display: flex;\n  flex-direction: column;\n  gap: 0.625rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.625rem;\n  padding: 0.875rem;\n  background: var(--dsw-alias-bg-tertiary);\n}\n.pf-panel-entry-title {\n  font-size: 0.9375rem;\n  font-weight: 600;\n  margin: 0;\n  color: var(--dsw-alias-label-primary);\n}\n.pf-panel-chain {\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n}\n.pf-panel-chain-title {\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  color: var(--dsw-alias-label-secondary);\n  margin: 0;\n}\n.pf-panel-row {\n  display: flex;\n  gap: 0.75rem;\n  align-items: center;\n  min-width: 0;\n}\n.pf-panel-input {\n  box-sizing: border-box;\n  flex: 1;\n  min-width: 0;\n  height: 2.5rem;\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  padding: 0 0.5rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n}\n.pf-panel-input:focus-visible {\n  outline: 2px solid var(--dsw-alias-state-business-primary);\n  outline-offset: -0.125rem;\n}\n.pf-panel-del {\n  flex: none;\n  cursor: pointer;\n  border: none;\n  background: none;\n  padding: 0 0.25rem;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 1rem;\n  line-height: 1.25rem;\n}\n.pf-panel-add {\n  align-self: flex-start;\n  color: var(--dsw-alias-label-secondary);\n  background: none;\n  border: 1px dashed var(--dsw-alias-border-l2);\n  border-radius: 0.4375rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n  padding: 0.1875rem 0.6875rem;\n  cursor: pointer;\n}\n.pf-panel-add:hover {\n  color: var(--dsw-alias-label-primary);\n}\n.pf-panel-meta {\n  font-size: 0.875rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.pf-panel-ref {\n  flex: none;\n  color: var(--dsw-alias-label-tertiary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border-radius: 0.4375rem;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  padding: 0.0625rem 0.5rem;\n}\n.pf-panel-actions {\n  display: flex;\n  align-items: center;\n  gap: 0.75rem;\n}\n.pf-panel-save {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 0.5rem;\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  padding: 0.3125rem 0.625rem;\n  min-height: 2.375rem;\n  cursor: pointer;\n}\n.pf-panel-save:disabled {\n  opacity: 0.5;\n  cursor: default;\n}\n.pf-panel-status {\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n}\n.pf-panel-ok {\n  color: var(--dsw-alias-state-success-primary);\n}\n.pf-panel-bad {\n  color: var(--dsw-alias-state-error-primary);\n}\n.pf-panel-select {\n  box-sizing: border-box;\n  flex: 1;\n  min-width: 0;\n  height: 2.5rem;\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  padding: 0 0.5rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n  cursor: pointer;\n}\n.pf-panel-select:focus-visible {\n  outline: 2px solid var(--dsw-alias-state-business-primary);\n  outline-offset: -0.125rem;\n}\n.pf-panel-effort {\n  box-sizing: border-box;\n  flex: 0 0 auto;\n  min-width: 0;\n  margin-left: 0.5rem;\n  height: 2.5rem;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  padding: 0 0.5rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n  cursor: pointer;\n}\n.pf-panel-select option,\n.pf-panel-effort option {\n  background: var(--dsw-alias-bg-layer-1);\n  color: var(--dsw-alias-label-primary);\n}\n/* Dropdown group headings invert \u2014 black on white \u2014 so they never render\n   white-on-white against the dropdown surface in the dark theme. */\n.pf-panel-select optgroup,\n.pf-panel-effort optgroup {\n  color: #000;\n  background: #fff;\n  font-weight: 700;\n}\n.pf-panel-model-row {\n  display: flex;\n  flex-direction: column;\n  gap: 0.125rem;\n}\n.pf-panel-add-select {\n  align-self: flex-start;\n  border-style: dashed;\n}\n.profiles-client-menu .dsp-section-title {\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  font-weight: 700;\n  text-transform: uppercase;\n  margin: 0.25rem 0 0;\n  padding: 0.25rem 0.4375rem;\n}\n";
 
   // plugins/profiles-client/src/client.tsx
   window.__ModuleLoader__.load({
@@ -337,6 +337,9 @@
           var profileConfigState = useState(null);
           var profileConfig = profileConfigState[0];
           var setProfileConfig = profileConfigState[1];
+          var errorDownState = useState([]);
+          var errorDown = errorDownState[0];
+          var setErrorDown = errorDownState[1];
           useEffect(
             function() {
               if (open) {
@@ -373,6 +376,13 @@
               if (result.data !== null && result.data !== void 0 && result.data.config !== null && result.data.config !== void 0) {
                 setProfileConfig(result.data.config);
               }
+              var down = result.data !== null && result.data !== void 0 && result.data.errorCache !== null && result.data.errorCache !== void 0 && Array.isArray(result.data.errorCache.down) ? result.data.errorCache.down : [];
+              setErrorDown(down);
+            });
+          };
+          var resetErrorCache = function() {
+            request("DELETE", "/profiles/error-cache").then(function() {
+              fetchProfiles();
             });
           };
           useEffect(
@@ -430,11 +440,22 @@
             select(selection).then(
               function(accepted) {
                 if (accepted) setOpen(false);
+                if (accepted) {
+                  request("DELETE", "/profiles/error-cache").then(function() {
+                    fetchProfiles();
+                  });
+                }
               },
               function() {
               }
             );
           };
+          function seatEffortsOf(reasoning) {
+            if (reasoning !== void 0 && reasoning !== null && Array.isArray(reasoning.efforts)) {
+              return reasoning.efforts;
+            }
+            return [];
+          }
           var onKeyDown = function(event) {
             if (event.key === "Escape" && open) {
               event.preventDefault();
@@ -444,7 +465,24 @@
           var currentPretty = current !== void 0 && current !== null ? prettyOf(current.provider, current.model) : null;
           var headText = face.head !== void 0 && face.head !== null ? face.head.model + " (" + face.head.provider + ")" : null;
           var hasProfile = face.active !== void 0 && face.active !== "";
-          var modelText = currentPretty !== null ? currentPretty.model + " (" + currentPretty.provider + ")" : headText !== null ? headText : t("seat.fallback");
+          var triggerModelText = currentPretty !== null ? currentPretty.model : face.head !== void 0 && face.head !== null ? prettyOf(face.head.provider, face.head.model).model : t("seat.fallback");
+          var triggerProviderText = currentPretty !== null ? currentPretty.provider : face.head !== void 0 && face.head !== null ? prettyOf(face.head.provider, face.head.model).provider : null;
+          var seatCurrentCat = null;
+          if (current !== void 0 && current !== null) {
+            for (var sgi = 0; sgi < state.groups.length; sgi++) {
+              if (state.groups[sgi].id !== current.provider) continue;
+              var sgModels = state.groups[sgi].models !== void 0 && state.groups[sgi].models !== null ? state.groups[sgi].models : [];
+              for (var smi = 0; smi < sgModels.length; smi++) {
+                if (sgModels[smi].id === current.model) {
+                  seatCurrentCat = sgModels[smi];
+                  break;
+                }
+              }
+              break;
+            }
+          }
+          var seatEffortList = seatCurrentCat !== null ? seatEffortsOf(seatCurrentCat.reasoning) : [];
+          var seatEffortValue = current !== void 0 && current !== null && typeof current.reasoningEffort === "string" && current.reasoningEffort !== "" ? current.reasoningEffort : "";
           return /* @__PURE__ */ react.createElement("div", { className: "profiles-client-root", ref: rootRef, onKeyDown }, /* @__PURE__ */ react.createElement(
             "button",
             {
@@ -468,7 +506,7 @@
                 "aria-hidden": true
               }
             )) : null,
-            /* @__PURE__ */ react.createElement("span", { className: "profiles-client-model-label" }, modelText),
+            /* @__PURE__ */ react.createElement("span", { className: "profiles-client-model-label" }, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-model-name" }, triggerModelText), triggerProviderText !== null ? /* @__PURE__ */ react.createElement("span", { className: "profiles-client-model-provider" }, triggerProviderText) : null),
             /* @__PURE__ */ react.createElement(
               IconChevronDownOutline14,
               {
@@ -476,7 +514,34 @@
                 "aria-hidden": true
               }
             )
-          ), open ? /* @__PURE__ */ react.createElement("div", { className: "profiles-client-menu", role: "listbox" }, /* @__PURE__ */ react.createElement(
+          ), open ? /* @__PURE__ */ react.createElement("div", { className: "profiles-client-menu", role: "listbox" }, seatEffortList.length > 0 && current !== void 0 && current !== null ? /* @__PURE__ */ react.createElement("div", { className: "profiles-client-effort-row" }, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-effort-label" }, currentPretty !== null ? currentPretty.model : current.model), /* @__PURE__ */ react.createElement(
+            "select",
+            {
+              className: "profiles-client-effort",
+              value: seatEffortValue,
+              "aria-label": "Model reasoning effort",
+              onChange: function(event) {
+                var effort = event.target.value;
+                select({
+                  provider: current.provider,
+                  model: current.model,
+                  reasoningEffort: effort === "" ? void 0 : effort
+                });
+              }
+            },
+            /* @__PURE__ */ react.createElement("option", { value: "" }, "Default"),
+            seatEffortList.map(function(eff) {
+              return /* @__PURE__ */ react.createElement(
+                "option",
+                {
+                  key: eff.id,
+                  value: eff.id,
+                  title: eff.description !== void 0 ? eff.description : void 0
+                },
+                eff.name
+              );
+            })
+          )) : null, /* @__PURE__ */ react.createElement(
             "button",
             {
               type: "button",
@@ -499,6 +564,11 @@
                   putJson("/profiles/switch", { active: row.key }).then(
                     function(result) {
                       if (!result.error) setOpen(false);
+                      if (!result.error) {
+                        request("DELETE", "/profiles/error-cache").then(function() {
+                          fetchProfiles();
+                        });
+                      }
                     }
                   );
                 }
@@ -529,26 +599,30 @@
             return /* @__PURE__ */ react.createElement("div", { key: grp.id }, /* @__PURE__ */ react.createElement("div", { className: "dsp-section-title" }, grp.label), grp.models.map(function(row) {
               var isActive = current !== void 0 && current !== null && current.provider === grp.id && current.model === row.id;
               return /* @__PURE__ */ react.createElement(
-                "div",
+                "button",
                 {
                   key: grp.id + "/" + row.id,
-                  className: "profiles-client-model-row"
+                  type: "button",
+                  className: "profiles-client-option",
+                  onClick: function() {
+                    pick({ provider: grp.id, model: row.id });
+                  }
                 },
-                /* @__PURE__ */ react.createElement(
-                  "button",
-                  {
-                    type: "button",
-                    className: "profiles-client-option",
-                    onClick: function() {
-                      pick({ provider: grp.id, model: row.id });
-                    }
-                  },
-                  /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-copy" }, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-name profiles-client-option-model" }, row.name), /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-detail" }, grp.label)),
-                  isActive ? /* @__PURE__ */ react.createElement("span", { className: "profiles-client-check", "aria-hidden": true }, "\u2713") : null
-                )
+                /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-copy profiles-client-option-copy-model" }, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-name profiles-client-option-model" }, row.name), /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-detail" }, grp.label)),
+                isActive ? /* @__PURE__ */ react.createElement("span", { className: "profiles-client-check", "aria-hidden": true }, "\u2713") : null
               );
             }));
-          }))) : null);
+          })), errorDown.length > 0 ? /* @__PURE__ */ react.createElement("div", { className: "profiles-client-error-row" }, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-error-count" }, errorDown.length + " cached down"), /* @__PURE__ */ react.createElement(
+            "button",
+            {
+              type: "button",
+              className: "profiles-client-error-reset",
+              onClick: function() {
+                resetErrorCache();
+              }
+            },
+            "Reset"
+          )) : null) : null);
         }
         return ProfileModelSeat;
       }
@@ -706,6 +780,19 @@
               if (chain === void 0) return next;
               if (Array.isArray(chain)) {
                 var step = chain[index];
+                if (typeof step === "string") {
+                  if (effort === "") return next;
+                  if (step.indexOf("chain:") === 0) return next;
+                  if (next.chains[step] !== void 0) return next;
+                  var slash = step.indexOf("/");
+                  if (slash <= 0) return next;
+                  chain[index] = {
+                    provider: step.slice(0, slash),
+                    model: step.slice(slash + 1),
+                    reasoningEffort: effort
+                  };
+                  return next;
+                }
                 if (step !== null && typeof step === "object" && step.provider !== void 0) {
                   if (effort === "") {
                     chain[index] = step.provider + "/" + step.model;
@@ -734,11 +821,44 @@
                 chain[index] = "";
                 return next;
               }
+              if (value.indexOf("chain:") === 0) {
+                chain[index] = value;
+                return next;
+              }
               var slash = value.indexOf("/");
-              if (slash <= 0) return next;
+              if (slash <= 0) {
+                chain[index] = value;
+                return next;
+              }
               var step = chain[index];
               if (step !== null && typeof step === "object") {
-                chain[index] = { provider: value.slice(0, slash), model: value.slice(slash + 1) };
+                var newProvider = value.slice(0, slash);
+                var newModel = value.slice(slash + 1);
+                var oldEffort = typeof step.reasoningEffort === "string" ? step.reasoningEffort : "";
+                var keepEffort = false;
+                if (oldEffort !== "") {
+                  for (var kci = 0; kci < catalogModels.length; kci++) {
+                    if (catalogModels[kci].provider === newProvider && catalogModels[kci].model === newModel) {
+                      var advertised = effortsOf(catalogModels[kci].reasoning);
+                      for (var kei = 0; kei < advertised.length; kei++) {
+                        if (advertised[kei].id === oldEffort) {
+                          keepEffort = true;
+                          break;
+                        }
+                      }
+                      break;
+                    }
+                  }
+                }
+                if (keepEffort) {
+                  chain[index] = {
+                    provider: newProvider,
+                    model: newModel,
+                    reasoningEffort: oldEffort
+                  };
+                } else {
+                  chain[index] = { provider: newProvider, model: newModel };
+                }
               } else {
                 chain[index] = value;
               }
@@ -880,6 +1000,36 @@
           };
           var downRungs = (errorCache.down || []).length;
           var chainKeys = Object.keys(config.chains);
+          function catalogHasRoute(value) {
+            if (typeof value !== "string") return false;
+            var slash = value.indexOf("/");
+            if (slash <= 0) return false;
+            var provider = value.slice(0, slash);
+            var model = value.slice(slash + 1);
+            for (var hi = 0; hi < catalogModels.length; hi++) {
+              if (catalogModels[hi].provider === provider && catalogModels[hi].model === model) {
+                return true;
+              }
+            }
+            return false;
+          }
+          function stepIsKnown(value) {
+            if (value === "" || value === void 0) return true;
+            if (typeof value !== "string") return true;
+            if (value.indexOf("chain:") === 0) {
+              return chainKeys.indexOf(value.slice("chain:".length)) !== -1;
+            }
+            if (chainKeys.indexOf(value) !== -1) return true;
+            return catalogHasRoute(value);
+          }
+          function staleStepOption(value) {
+            if (value === "" || value === void 0 || stepIsKnown(value)) return null;
+            return /* @__PURE__ */ react.createElement("option", { value }, value + " (not in catalog)");
+          }
+          function entryRefIsKnown(ref) {
+            if (ref === void 0) return true;
+            return chainKeys.indexOf(ref) !== -1;
+          }
           function modelChainOptions(includeChains) {
             var groups = [];
             if (includeChains && chainKeys.length > 0) {
@@ -987,6 +1137,7 @@
                 chainKeys.map(function(key) {
                   return /* @__PURE__ */ react.createElement("option", { key, value: key }, key);
                 }),
+                currentRef !== void 0 && !entryRefIsKnown(currentRef) ? /* @__PURE__ */ react.createElement("option", { value: currentRef }, currentRef + " (not in catalog)") : null,
                 isInline ? /* @__PURE__ */ react.createElement("option", { value: "__inline__" }, fieldSummary(field, config.chains)) : null
               ), /* @__PURE__ */ react.createElement(
                 "button",
@@ -1025,10 +1176,22 @@
               var stepValue = typeof row.step === "string" ? row.step : row.step && row.step.provider && row.step.model ? row.step.provider + "/" + row.step.model : "";
               var step = row.step;
               var isPair = step !== null && typeof step === "object" && typeof step.provider === "string" && step.provider !== "" && typeof step.model === "string" && step.model !== "";
-              var catModel = null;
+              var lookupProvider = null;
+              var lookupModel = null;
               if (isPair) {
+                lookupProvider = step.provider;
+                lookupModel = step.model;
+              } else if (typeof step === "string" && step !== "" && step.indexOf("chain:") !== 0 && chainKeys.indexOf(step) === -1) {
+                var sslash = step.indexOf("/");
+                if (sslash > 0) {
+                  lookupProvider = step.slice(0, sslash);
+                  lookupModel = step.slice(sslash + 1);
+                }
+              }
+              var catModel = null;
+              if (lookupProvider !== null) {
                 for (var ci = 0; ci < catalogModels.length; ci++) {
-                  if (catalogModels[ci].provider === step.provider && catalogModels[ci].model === step.model) {
+                  if (catalogModels[ci].provider === lookupProvider && catalogModels[ci].model === lookupModel) {
                     catModel = catalogModels[ci];
                     break;
                   }
@@ -1046,7 +1209,8 @@
                   }
                 },
                 /* @__PURE__ */ react.createElement("option", { value: "" }, "\u2014 select step \u2014"),
-                modelChainOptions(true)
+                modelChainOptions(true),
+                staleStepOption(stepValue)
               ), efforts.length > 0 ? /* @__PURE__ */ react.createElement(
                 "select",
                 {
@@ -1083,6 +1247,7 @@
               ));
             }) : steps.map(function(rung, index) {
               var rungKey = rung.provider + "/" + rung.model;
+              var rungSelectValue = rung.provider !== "" && rung.model !== "" ? rungKey : "";
               var catModel = null;
               for (var ci = 0; ci < catalogModels.length; ci++) {
                 if (catalogModels[ci].provider === rung.provider && catalogModels[ci].model === rung.model) {
@@ -1092,17 +1257,19 @@
               }
               var efforts = catModel !== null ? effortsOf(catModel.reasoning) : [];
               var currentEffort = typeof rung.reasoningEffort === "string" ? rung.reasoningEffort : "";
+              var rungStale = rungSelectValue !== "" && !catalogHasRoute(rungSelectValue);
               return /* @__PURE__ */ react.createElement("div", { className: "pf-panel-model-row", key: index }, /* @__PURE__ */ react.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ react.createElement(
                 "select",
                 {
                   className: "pf-panel-select",
-                  value: rungKey,
+                  value: rungSelectValue,
                   onChange: function(event) {
                     setChainRungModel(chainName, index, event.target.value);
                   }
                 },
                 /* @__PURE__ */ react.createElement("option", { value: "" }, "\u2014 select model \u2014"),
-                modelChainOptions(false)
+                modelChainOptions(false),
+                rungStale ? /* @__PURE__ */ react.createElement("option", { value: rungSelectValue }, rungSelectValue + " (not in catalog)") : null
               ), efforts.length > 0 ? /* @__PURE__ */ react.createElement(
                 "select",
                 {
@@ -1152,7 +1319,19 @@
               isComposition ? modelChainOptions(true) : modelChainOptions(false),
               /* @__PURE__ */ react.createElement("option", { value: "__new__" }, "New named chain\u2026")
             )), resolved.length > 0 ? /* @__PURE__ */ react.createElement("div", { className: "pf-panel-meta" }, "Resolves to " + resolved.length + " route" + (resolved.length === 1 ? "" : "s") + ": " + resolved[0].provider + "/" + resolved[0].model + (resolved.length > 1 ? " \u2026" : "")) : null);
-          })), /* @__PURE__ */ react.createElement("div", { className: "pf-panel-meta" }, downRungs > 0 ? /* @__PURE__ */ react.createElement("span", null, downRungs + " rung" + (downRungs === 1 ? "" : "s") + " cached down ", /* @__PURE__ */ react.createElement("button", { type: "button", className: "dsp-refresh", onClick: fetchConfig }, "Retry now")) : null), /* @__PURE__ */ react.createElement("div", { className: "pf-panel-actions" }, /* @__PURE__ */ react.createElement(
+          })), /* @__PURE__ */ react.createElement("div", { className: "pf-panel-meta" }, downRungs > 0 ? /* @__PURE__ */ react.createElement("span", null, downRungs + " rung" + (downRungs === 1 ? "" : "s") + " cached down ", /* @__PURE__ */ react.createElement(
+            "button",
+            {
+              type: "button",
+              className: "dsp-refresh",
+              onClick: function() {
+                request("DELETE", "/profiles/error-cache").then(function() {
+                  fetchConfig();
+                });
+              }
+            },
+            "Reset"
+          )) : null), /* @__PURE__ */ react.createElement("div", { className: "pf-panel-actions" }, /* @__PURE__ */ react.createElement(
             "button",
             {
               type: "button",
