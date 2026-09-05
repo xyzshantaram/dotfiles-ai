@@ -97,7 +97,7 @@ llm-pi-ai:
           xhigh: xhigh
       # sync-models:end
     command-code:
-      displayName: Command Code
+      displayName: Cmd Code
       apiKeyEnv: CMD_API_KEY
       api: openai-completions
       baseURL: https://api.commandcode.ai/provider/v1
