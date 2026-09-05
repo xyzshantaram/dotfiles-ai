@@ -462,28 +462,25 @@ function apply(ctx: any) {
             "svg",
             { width: 14, height: 14, viewBox: "0 0 14 14", "aria-hidden": true },
             [
-              react.createElement("rect", {
+              react.createElement("circle", {
                 key: "a",
-                x: 1,
-                y: 3,
-                width: 12,
-                height: 2,
+                cx: 7,
+                cy: 4,
+                r: 1.3,
                 fill: "currentColor",
               }),
-              react.createElement("rect", {
+              react.createElement("circle", {
                 key: "b",
-                x: 1,
-                y: 6,
-                width: 12,
-                height: 2,
+                cx: 7,
+                cy: 7,
+                r: 1.3,
                 fill: "currentColor",
               }),
-              react.createElement("rect", {
+              react.createElement("circle", {
                 key: "c",
-                x: 1,
-                y: 9,
-                width: 12,
-                height: 2,
+                cx: 7,
+                cy: 10,
+                r: 1.3,
                 fill: "currentColor",
               }),
             ],
