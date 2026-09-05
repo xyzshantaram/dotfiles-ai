@@ -45,6 +45,7 @@ import {
 import { entryHead, normalizeEntry, chainNameForRoutes } from "../../profile-routes";
 import settingsCss from "../../shared/settings.css";
 import localCss from "./client.module.css";
+import { IconChevronDownOutline14 } from "@deepseek-ai/dsh-client-ui-primitives";
 
 window.__ModuleLoader__.load({
   id: "profiles-client",
@@ -456,9 +457,14 @@ window.__ModuleLoader__.load({
                 </span>
               ) : null}
               <span className="profiles-client-model-label">{modelText}</span>
-              <span className="profiles-client-chevron" aria-hidden={true}>
-                ▾
-              </span>
+              <IconChevronDownOutline14
+                className={
+                  open
+                    ? "profiles-client-chevron profiles-client-chevron-open"
+                    : "profiles-client-chevron"
+                }
+                aria-hidden={true}
+              />
             </button>
             {open ? (
               <div className="profiles-client-menu" role="listbox">
