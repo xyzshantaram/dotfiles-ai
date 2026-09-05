@@ -19,6 +19,10 @@
 .tool-render-chevron-open {
   transform: rotate(0deg);
 }
+.tool-render-chevron-disabled {
+  opacity: 0.35;
+  pointer-events: none;
+}
 .tool-render-title {
   color: var(--dsw-alias-label-secondary);
   flex: none;

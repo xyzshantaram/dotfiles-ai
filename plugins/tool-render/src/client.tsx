@@ -605,7 +605,9 @@ function toolRenderRow(options) {
           <IconChevronDownOutline14
             className={open ? "tool-render-chevron tool-render-chevron-open" : "tool-render-chevron"}
           />
-        ) : null}
+        ) : (
+          <IconChevronDownOutline14 className="tool-render-chevron tool-render-chevron-disabled" aria-hidden={true} />
+        )}
         {leading}
         {leading === null ? <span className="tool-render-title">{options.title}</span> : null}
         {options.badge !== undefined && options.badge !== null && options.badge !== "" ? (
