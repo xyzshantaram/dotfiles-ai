@@ -274,6 +274,10 @@ step_install_plugins() {
 		# the composer carries a PATH reference. Replaced dsh-paste-input.
 		pnpm_ins "github:Johnny-xuan/dsh-paste-to-path#d68fb104ca25a663ba3912bb17f8c2ab32d60e37"
 		pnpm_ins "github:davidgereb/dsh-plugin-better-mobile-ui#16e21548315866b50d5f3f64b91a70f24f3318ba"
+		# Multi-provider web search/fetch (Exa, Tavily, Firecrawl, Brave, and
+		# friends) behind the standard web_search/web_fetch interface, with a
+		# Settings card for provider keys. Self-mounts via its own bundle patch.
+		pnpm_ins "github:A3Boy/dsh-web-tools#9b45045ac8a011429d494399a49846ae907c07d3"
 		# The MCP manager plugins on npm and GitHub are all visual editors for
 		# cordis.patch.yml that delegate to dsh-mcp-client, so none of them can
 		# run a browser login. Our own plugins/mcp-servers replaced them.
@@ -403,6 +407,7 @@ step_report_extra_plugins() {
 		"dsh-better-markdown"
 		"dsh-input-history"
 		"dsh-paste-to-path"
+		"dsh-web-tools"
 		"durable-todos"
 		"profiles-client"
 		"session-archive"
