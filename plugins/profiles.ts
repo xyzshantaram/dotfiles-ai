@@ -356,6 +356,14 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
   // stepKey still guards a stale step within one agent. A plain Map keyed
   // on "turn:step" would collide across agents at the same coordinate.
   const state = new WeakMap<object, Map<string, StepState>>();
+  // Last provider/model logged at info for this agent, so a steady chain
+  // (the common case) logs once and then stays quiet instead of repeating
+  // "chain selected" on every single step. A real change -- an actual
+  // failover, or the first request of a session -- still logs at info. A
+  // step that lands back on the same level as last time logs at debug
+  // instead, matching this bundle's convention: info is a state change a
+  // person would want in a normal-volume log, debug is per-call trace.
+  const lastSelected = new WeakMap<object, string>();
 
   function getAgentState(agent: object): Map<string, StepState> {
     let m = state.get(agent);
@@ -428,7 +436,9 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
     if (!s || s.stepKey !== stepKey) {
       s = { stepKey, levels, cursor: 0, retries: 0, failures: [] };
       agentMap.set(stepKey, s);
-      ctx.logger.info(`failover chain reset for session ${sessionLabel(agent)}`);
+      // Fresh state for a fresh stepKey happens on EVERY step, not just a
+      // real reset, so this is trace detail, not a state change.
+      ctx.logger.debug(`failover chain reset for session ${sessionLabel(agent)}`);
     } else {
       s.levels = levels;
       if (s.cursor >= s.levels.length) s.cursor = 0;
@@ -495,9 +505,17 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
     }
 
     const level = s.levels[s.cursor];
-    ctx.logger.info(
-      `failover chain selected ${level.provider}/${level.model} for session ${sessionLabel(agent)}`,
-    );
+    const selectionMark = `${level.provider}/${level.model}`;
+    if (lastSelected.get(agent) !== selectionMark) {
+      lastSelected.set(agent, selectionMark);
+      ctx.logger.info(
+        `failover chain selected ${level.provider}/${level.model} for session ${sessionLabel(agent)}`,
+      );
+    } else {
+      ctx.logger.debug(
+        `failover chain selected ${level.provider}/${level.model} for session ${sessionLabel(agent)}`,
+      );
+    }
     return buildConfig(proposal, level);
   });
 
