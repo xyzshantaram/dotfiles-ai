@@ -5807,20 +5807,6 @@ var MenuItemIndicator = /* @__PURE__ */ React33.forwardRef(
     );
   }, "MenuItemIndicator")
 );
-var MenuSeparator = /* @__PURE__ */ React33.forwardRef(
-  /* @__PURE__ */ __name21(function MenuSeparator2(props, forwardedRef) {
-    const { __scopeMenu, ...separatorProps } = props;
-    return /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
-      Primitive.div,
-      {
-        role: "separator",
-        "aria-orientation": "horizontal",
-        ...separatorProps,
-        ref: forwardedRef
-      }
-    );
-  }, "MenuSeparator")
-);
 var SUB_NAME = "MenuSub";
 var [MenuSubProvider, useMenuSubContext] = createMenuContext(SUB_NAME);
 var MenuSub = /* @__PURE__ */ __name21((props) => {
@@ -6081,7 +6067,6 @@ var Item2 = MenuItem;
 var RadioGroup = MenuRadioGroup;
 var RadioItem = MenuRadioItem;
 var ItemIndicator = MenuItemIndicator;
-var Separator = MenuSeparator;
 var Sub = MenuSub;
 var SubTrigger = MenuSubTrigger;
 var SubContent = MenuSubContent;
@@ -6237,11 +6222,6 @@ var DropdownMenuItemIndicator = /* @__PURE__ */ React34.forwardRef(/* @__PURE__ 
   const menuScope = useMenuScope(__scopeDropdownMenu);
   return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(ItemIndicator, { ...menuScope, ...itemIndicatorProps, ref: forwardedRef });
 }, "DropdownMenuItemIndicator"));
-var DropdownMenuSeparator = /* @__PURE__ */ React34.forwardRef(/* @__PURE__ */ __name22(function DropdownMenuSeparator2(props, forwardedRef) {
-  const { __scopeDropdownMenu, ...separatorProps } = props;
-  const menuScope = useMenuScope(__scopeDropdownMenu);
-  return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(Separator, { ...menuScope, ...separatorProps, ref: forwardedRef });
-}, "DropdownMenuSeparator"));
 var DropdownMenuSub = /* @__PURE__ */ __name22((props) => {
   const { __scopeDropdownMenu, children, open: openProp, onOpenChange, defaultOpen } = props;
   const menuScope = useMenuScope(__scopeDropdownMenu);
@@ -6289,7 +6269,6 @@ var Item22 = DropdownMenuItem;
 var RadioGroup2 = DropdownMenuRadioGroup;
 var RadioItem2 = DropdownMenuRadioItem;
 var ItemIndicator2 = DropdownMenuItemIndicator;
-var Separator2 = DropdownMenuSeparator;
 var Sub2 = DropdownMenuSub;
 var SubTrigger2 = DropdownMenuSubTrigger;
 var SubContent2 = DropdownMenuSubContent;
@@ -6370,7 +6349,7 @@ function postJson(url, body) {
 }
 
 // css-text:/home/sid/repos/dotfiles-ai/plugins/composer-menu/src/client.module.css
-var client_default = '/* Composer overflow menu, styled after the context meter panel. */\n.composer-menu-trigger {\n  width: 28px;\n  height: 28px;\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  background: 0 0;\n  border: none;\n  border-radius: 999px;\n  flex: none;\n  place-items: center;\n  display: grid;\n  padding: 0;\n}\n.composer-menu-trigger:hover,\n.composer-menu-trigger[data-state="open"] {\n  background: var(--dsw-alias-interactive-bg-hover);\n  color: var(--dsw-alias-label-primary);\n}\n.composer-menu-content {\n  z-index: 100;\n  box-sizing: border-box;\n  min-width: 208px;\n  border: 1px solid var(--dsw-alias-border-inverted);\n  background: var(--dsw-specific-menu);\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-primary);\n  border-radius: 12px;\n  padding: 6px;\n  font-size: 13px;\n  line-height: 20px;\n  user-select: none;\n}\n.composer-menu-item {\n  align-items: center;\n  gap: 8px;\n  display: flex;\n  cursor: default;\n  outline: none;\n  border-radius: 8px;\n  padding: 7px 10px;\n  white-space: nowrap;\n  color: var(--dsw-alias-label-primary);\n}\n/* Radix marks the row under the pointer or the keyboard cursor. Both use the\n   same token, so mouse and keyboard read identically. */\n.composer-menu-item[data-highlighted] {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.composer-menu-item[data-disabled] {\n  color: var(--dsw-alias-label-tertiary);\n}\n/* A fixed leading icon column, present whether or not a row has an icon, so\n   labels line up in a column instead of shifting between rows. */\n.composer-menu-icon {\n  width: 16px;\n  flex: none;\n  place-items: center;\n  display: grid;\n  color: var(--dsw-alias-label-secondary);\n}\n/* A fixed trailing slot for the selection check, present whether or not the\n   row is selected, so labels line up in a column instead of shifting when\n   the check mark appears. */\n.composer-menu-mark {\n  width: 14px;\n  flex: none;\n  place-items: center;\n  display: grid;\n  color: var(--dsw-alias-label-secondary);\n}\n.composer-menu-indicator {\n  display: inline-flex;\n}\n.composer-menu-label {\n  flex: auto;\n}\n.composer-menu-chevron {\n  flex: none;\n  color: var(--dsw-alias-label-tertiary);\n  padding-left: 8px;\n}\n.composer-menu-separator {\n  height: 1px;\n  background: var(--dsw-alias-border-l3);\n  margin: 6px 4px;\n}\n';
+var client_default = '/* Composer overflow menu, styled after the context meter panel. */\n.composer-menu-trigger {\n  width: 28px;\n  height: 28px;\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  background: 0 0;\n  border: none;\n  border-radius: 999px;\n  flex: none;\n  place-items: center;\n  display: grid;\n  padding: 0;\n}\n.composer-menu-trigger:hover,\n.composer-menu-trigger[data-state="open"] {\n  background: var(--dsw-alias-interactive-bg-hover);\n  color: var(--dsw-alias-label-primary);\n}\n.composer-menu-content {\n  z-index: 100;\n  box-sizing: border-box;\n  min-width: 208px;\n  border: 1px solid var(--dsw-alias-border-inverted);\n  background: var(--dsw-specific-menu);\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-primary);\n  border-radius: 12px;\n  padding: 6px;\n  font-size: 13px;\n  line-height: 20px;\n  user-select: none;\n}\n.composer-menu-item {\n  align-items: center;\n  gap: 8px;\n  display: flex;\n  cursor: default;\n  outline: none;\n  border: none;\n  border-radius: 8px;\n  padding: 7px 10px;\n  white-space: nowrap;\n  color: var(--dsw-alias-label-primary);\n}\n/* The shipped theme draws divider rules under native menu rows. This menu\n   uses its own separators between groups, so foreign per-row rules read as\n   a stray underline under every entry. Kill them inside our content. */\n.composer-menu-content [role="menuitem"],\n.composer-menu-content [role="menuitemradio"],\n.composer-menu-content [role="menuitemcheckbox"] {\n  border-bottom: none;\n  box-shadow: none;\n}\n/* Radix marks the row under the pointer or the keyboard cursor. Both use the\n   same token, so mouse and keyboard read identically. */\n.composer-menu-item[data-highlighted] {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.composer-menu-item[data-disabled] {\n  color: var(--dsw-alias-label-tertiary);\n}\n/* A fixed leading icon column, present whether or not a row has an icon, so\n   labels line up in a column instead of shifting between rows. */\n.composer-menu-icon {\n  width: 16px;\n  flex: none;\n  place-items: center;\n  display: grid;\n  color: var(--dsw-alias-label-secondary);\n}\n/* A fixed trailing slot for the selection check, present whether or not the\n   row is selected, so labels line up in a column instead of shifting when\n   the check mark appears. */\n.composer-menu-mark {\n  width: 14px;\n  flex: none;\n  place-items: center;\n  display: grid;\n  color: var(--dsw-alias-label-secondary);\n}\n.composer-menu-indicator {\n  display: inline-flex;\n}\n.composer-menu-label {\n  flex: auto;\n}\n.composer-menu-chevron {\n  flex: none;\n  color: var(--dsw-alias-label-tertiary);\n  padding-left: 8px;\n}\n';
 
 // plugins/composer-menu/src/client.tsx
 var PLUGIN_NAME = "composer-menu";
@@ -6450,7 +6429,11 @@ function apply(ctx) {
       }
       return;
     }
-    injectStyle(PLUGIN_NAME, "composer-menu-collapse-modes", "." + modes + " { display: contents; }");
+    injectStyle(
+      PLUGIN_NAME,
+      "composer-menu-collapse-modes",
+      "." + modes + " { display: contents; }"
+    );
     modesDone = true;
   }
   let pickerWarned = false;
@@ -6494,17 +6477,6 @@ function apply(ctx) {
       placePickerBeforeSend();
     });
     const [open, setOpen] = react.useState(false);
-    const extraRef = react.useRef(null);
-    const [hasExtra, setHasExtra] = react.useState(false);
-    react.useEffect(() => {
-      const el = extraRef.current;
-      if (el === null) return;
-      const update = () => setHasExtra(el.childElementCount > 0);
-      update();
-      const observer = new MutationObserver(update);
-      observer.observe(el, { childList: true });
-      return () => observer.disconnect();
-    });
     const permissions = props.useProjection("permissions");
     const options2 = permissions === void 0 ? [] : permissions.options.filter((option) => option.value !== "custom");
     const SHIELD_OUTLINE = "M8.20554 0.899994L14.7901 3.36857V7.01026C14.7901 12 11.0466 14.2103 8.20554 15.3C5.36446 14.2103 1.62012 12 1.62012 7.01026V3.36857L8.20554 0.899994Z";
@@ -6665,7 +6637,11 @@ function apply(ctx) {
         SubTrigger2,
         { className: "composer-menu-item" },
         react.createElement("span", { key: "mark", className: "composer-menu-mark" }),
-        react.createElement("span", { key: "label", className: "composer-menu-label" }, "Web search"),
+        react.createElement(
+          "span",
+          { key: "label", className: "composer-menu-label" },
+          "Web search"
+        ),
         react.createElement("span", { key: "chev", className: "composer-menu-chevron" }, "\u203A")
       ),
       react.createElement(
@@ -6743,18 +6719,15 @@ function apply(ctx) {
           Content22,
           { side: "top", align: "start", sideOffset: 8, className: "composer-menu-content" },
           sandboxSub,
-          react.createElement(Separator2, { className: "composer-menu-separator" }),
           searchSub,
-          hasExtra ? react.createElement(Separator2, { className: "composer-menu-separator" }) : null,
-          // display: contents keeps this div out of layout entirely, so it is
-          // purely a measuring point for the MutationObserver above; it never
-          // shows as an empty row. The renderer only binds renderSlot when the
-          // entry declares children, so a future edit that drops the
+          // display: contents keeps this div out of layout entirely, so it
+          // never shows as an empty row. The renderer only binds renderSlot
+          // when the entry declares children, so a future edit that drops the
           // declaration would crash the menu rather than just lose the
           // contributed items. Fail soft instead.
           react.createElement(
             "div",
-            { ref: extraRef, style: { display: "contents" } },
+            { style: { display: "contents" } },
             typeof props.renderSlot === "function" ? props.renderSlot("composer.overflow.item", {}) : null
           )
         )

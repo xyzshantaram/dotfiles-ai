@@ -126,7 +126,11 @@ function apply(ctx: any) {
       }
       return;
     }
-    injectStyle(PLUGIN_NAME, "composer-menu-collapse-modes", "." + modes + " { display: contents; }");
+    injectStyle(
+      PLUGIN_NAME,
+      "composer-menu-collapse-modes",
+      "." + modes + " { display: contents; }",
+    );
     modesDone = true;
   }
 
@@ -190,21 +194,6 @@ function apply(ctx: any) {
     });
 
     const [open, setOpen] = react.useState(false);
-    // composer.overflow.item is a list slot. With no other plugin contributing
-    // to it, renderSlot still returns a (visually empty) element, so a
-    // hardcoded separator before it showed a rule with nothing under it. The
-    // extra content is measured through a ref instead of assumed present.
-    const extraRef = react.useRef(null as HTMLDivElement | null);
-    const [hasExtra, setHasExtra] = react.useState(false);
-    react.useEffect(() => {
-      const el = extraRef.current;
-      if (el === null) return;
-      const update = () => setHasExtra(el.childElementCount > 0);
-      update();
-      const observer = new MutationObserver(update);
-      observer.observe(el, { childList: true });
-      return () => observer.disconnect();
-    });
     const permissions = props.useProjection("permissions");
     const options =
       permissions === undefined
@@ -414,7 +403,11 @@ function apply(ctx: any) {
         DropdownMenu.SubTrigger,
         { className: "composer-menu-item" },
         react.createElement("span", { key: "mark", className: "composer-menu-mark" }),
-        react.createElement("span", { key: "label", className: "composer-menu-label" }, "Web search"),
+        react.createElement(
+          "span",
+          { key: "label", className: "composer-menu-label" },
+          "Web search",
+        ),
         react.createElement("span", { key: "chev", className: "composer-menu-chevron" }, "›"),
       ),
       react.createElement(
@@ -494,20 +487,15 @@ function apply(ctx: any) {
           DropdownMenu.Content,
           { side: "top", align: "start", sideOffset: 8, className: "composer-menu-content" },
           sandboxSub,
-          react.createElement(DropdownMenu.Separator, { className: "composer-menu-separator" }),
           searchSub,
-          hasExtra
-            ? react.createElement(DropdownMenu.Separator, { className: "composer-menu-separator" })
-            : null,
-          // display: contents keeps this div out of layout entirely, so it is
-          // purely a measuring point for the MutationObserver above; it never
-          // shows as an empty row. The renderer only binds renderSlot when the
-          // entry declares children, so a future edit that drops the
+          // display: contents keeps this div out of layout entirely, so it
+          // never shows as an empty row. The renderer only binds renderSlot
+          // when the entry declares children, so a future edit that drops the
           // declaration would crash the menu rather than just lose the
           // contributed items. Fail soft instead.
           react.createElement(
             "div",
-            { ref: extraRef, style: { display: "contents" } },
+            { style: { display: "contents" } },
             typeof props.renderSlot === "function"
               ? props.renderSlot("composer.overflow.item", {})
               : null,

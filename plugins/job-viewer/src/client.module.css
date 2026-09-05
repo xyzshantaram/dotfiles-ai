@@ -26,12 +26,12 @@
 .jv-chevron {
   flex: none;
   color: var(--dsw-alias-label-caption);
-  transform: rotate(-90deg);
+  transform: rotate(0deg);
   transition: transform 0.12s;
 }
 
 .jv-chevron-open {
-  transform: rotate(0deg);
+  transform: rotate(180deg);
 }
 
 .jv-menu {
@@ -50,7 +50,11 @@
   overflow-y: auto;
   padding: 0.25rem;
   position: absolute;
+  left: 0;
   right: 0;
+  width: max-content;
+  margin-left: auto;
+  margin-right: auto;
   top: 100%;
   z-index: 10;
 }

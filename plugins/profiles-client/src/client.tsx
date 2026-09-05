@@ -58,8 +58,57 @@ window.__ModuleLoader__.load({
      * require. It must stay INSIDE the factory: a top-level import becomes
      * a top-level __require that throws at bundle evaluation, before
      * __ModuleLoader__.load runs, so the bundle loads without registering. */
-    var IconChevronDownOutline14 =
-      require("@deepseek-ai/dsh-client-ui-primitives").IconChevronDownOutline14;
+    var primitivesModule = require("@deepseek-ai/dsh-client-ui-primitives");
+    var IconChevronDownOutline14 = primitivesModule.IconChevronDownOutline14;
+    /** Custom brain mark: user-supplied brain and circuit artwork, 14px render. */
+    function BrainIcon14() {
+      return (
+        <svg width={14} height={14} viewBox="0 0 480 480" fill="none" aria-hidden={true}>
+          <g transform="matrix(2.6933 0 0 2.808 -33.019 -25.795)">
+            <g
+              transform="rotate(90,100,100)"
+              fill="none"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={14}
+            >
+              <path d="m96 166v-132c0-12-12-20-23-16-9 3-15 10-16 19-12-5-25 3-27 16-1 8 2 14 6 18-14 6-21 20-18 33 3 14 15 23 28 21-8 11-6 25 4 32 6 4 14 5 21 2 5 11 15 17 25 7z" />
+              <path d="m102 100h50" />
+              <path d="m102 72h28l25-25" />
+              <path d="m102 128h28l25 25" />
+              <circle cx="161" cy="100" r="9" />
+              <circle cx="161" cy="41" r="9" />
+              <circle cx="161" cy="159" r="9" />
+              <circle cx="122" cy="30" r="9" />
+              <circle cx="122" cy="170" r="9" />
+            </g>
+          </g>
+        </svg>
+      );
+    }
+    /** Custom network mark: Lucide network artwork, 14px render. */
+    function NetworkIcon14() {
+      return (
+        <svg
+          width={14}
+          height={14}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden={true}
+        >
+          <rect x="16" y="16" width="6" height="6" rx="1" />
+          <rect x="2" y="16" width="6" height="6" rx="1" />
+          <rect x="9" y="2" width="6" height="6" rx="1" />
+          <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" />
+          <path d="M12 12V8" />
+        </svg>
+      );
+    }
     var useSyncExternalStore = react.useSyncExternalStore;
     var useCallback = react.useCallback;
     var useState = react.useState;
@@ -632,25 +681,31 @@ window.__ModuleLoader__.load({
                 load();
               }}
             >
-              {hasProfile ? (
-                <span className="profiles-client-profile-pill">
-                  {face.active}
-                  <span
-                    className={
-                      "profiles-client-pill-dot" +
-                      (matched
-                        ? " profiles-client-pill-dot-matched"
-                        : " profiles-client-pill-dot-changed")
-                    }
-                    aria-hidden={true}
-                  />
-                </span>
-              ) : null}
-              <span className="profiles-client-model-label">
-                {triggerProviderText !== null ? (
-                  <span className="profiles-client-model-provider">{triggerProviderText}</span>
+              <span className="profiles-client-badge">
+                {hasProfile ? (
+                  <span className="profiles-client-badge-segment">
+                    <span
+                      className={
+                        "profiles-client-pill-dot" +
+                        (matched
+                          ? " profiles-client-pill-dot-matched"
+                          : " profiles-client-pill-dot-changed")
+                      }
+                      aria-hidden={true}
+                    />
+                    <span className="profiles-client-profile-name">{face.active}</span>
+                  </span>
                 ) : null}
-                <span className="profiles-client-model-name">{triggerModelText}</span>
+                {triggerProviderText !== null ? (
+                  <span className="profiles-client-badge-segment">
+                    <NetworkIcon14 />
+                    <span className="profiles-client-model-provider">{triggerProviderText}</span>
+                  </span>
+                ) : null}
+                <span className="profiles-client-badge-segment profiles-client-badge-model">
+                  <BrainIcon14 />
+                  <span className="profiles-client-model-name">{triggerModelText}</span>
+                </span>
               </span>
               <IconChevronDownOutline14
                 className={
