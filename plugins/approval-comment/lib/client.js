@@ -1598,6 +1598,7 @@ var client_exports = {};
 __export(client_exports, {
   apply: () => apply,
   inject: () => inject,
+  isBashGuardReason: () => isBashGuardReason,
   name: () => name
 });
 module.exports = __toCommonJS(client_exports);
@@ -8599,6 +8600,18 @@ function parseGuardReason(reason) {
   if (typeof result.summary !== "string") return null;
   return result;
 }
+function isBashGuardReason(reason) {
+  if (typeof reason !== "string") return false;
+  if (reason.startsWith("bash-guard:")) return true;
+  var result;
+  try {
+    result = parse(reason);
+  } catch (error) {
+    return false;
+  }
+  if (result === null || typeof result !== "object" || Array.isArray(result)) return false;
+  return typeof result.summary === "string";
+}
 function buildSteerTo(sessions) {
   return function steerTo(sessionId, comment) {
     var binding = sessions.binding(sessionId);
@@ -8712,117 +8725,126 @@ function makeApprovalCommentCard(steerTo) {
       },
       [wroteText, wroteExpanded]
     );
-    return /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-root", "data-approval-key": matched.key }, /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-card", "data-source": guardReason ? "bash-guard" : void 0 }, /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-strip" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "approval-comment-dot" }), t("approval.waiting")), /* @__PURE__ */ import_react.default.createElement(
+    return /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-root", "data-approval-key": matched.key }, /* @__PURE__ */ import_react.default.createElement(
       "div",
       {
-        className: "approval-comment-body",
-        "data-approval-scroll": "",
-        tabIndex: 0,
-        role: "group",
-        "aria-label": t("approval.detail.aria")
+        className: "approval-comment-card",
+        "data-source": isBashGuardReason(matched.payload.reason) ? "bash-guard" : void 0
       },
-      guardReason ? /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-headline approval-comment-headline-one-line" }, guardReason.summary), mutating ? /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-warn" }, "changes files") : null, mutating && changes.length > 0 ? /* @__PURE__ */ import_react.default.createElement("ul", { className: "approval-comment-warn-list" }, changes.map(function(entry, index) {
-        return /* @__PURE__ */ import_react.default.createElement("li", { key: index, className: "approval-comment-warn-item" }, entry);
-      })) : null, wroteText !== null ? /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-block" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-block-label" }, "wrote"), /* @__PURE__ */ import_react.default.createElement(
-        "pre",
-        {
-          ref: wroteRef,
-          className: "approval-comment-code approval-comment-code-wrap" + (wroteExpanded ? "" : " approval-comment-code-clamp"),
-          tabIndex: 0
-        },
-        /* @__PURE__ */ import_react.default.createElement(
-          "code",
-          {
-            className: "hljs",
-            dangerouslySetInnerHTML: {
-              __html: highlightCommand(wroteText)
-            }
-          }
-        )
-      ), wroteOverflows ? /* @__PURE__ */ import_react.default.createElement(
-        "button",
-        {
-          type: "button",
-          className: "approval-comment-show-more",
-          "aria-expanded": wroteExpanded,
-          onClick: function() {
-            setWroteExpanded(!wroteExpanded);
-          }
-        },
-        wroteExpanded ? "show less" : "show more"
-      ) : null) : null, typeof guardReason.runs === "string" ? /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-block" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-block-label" }, "runs instead"), /* @__PURE__ */ import_react.default.createElement(
-        "pre",
-        {
-          className: "approval-comment-code approval-comment-code-wrap approval-comment-code-scroll",
-          tabIndex: 0
-        },
-        /* @__PURE__ */ import_react.default.createElement(
-          "code",
-          {
-            className: "hljs",
-            dangerouslySetInnerHTML: {
-              __html: highlightCommand(guardReason.runs)
-            }
-          }
-        )
-      )) : null, typeof guardReason.why === "string" ? /* @__PURE__ */ import_react.default.createElement("details", { className: "approval-comment-why" }, /* @__PURE__ */ import_react.default.createElement("summary", { className: "approval-comment-why-toggle" }, "why"), /* @__PURE__ */ import_react.default.createElement("p", { className: "approval-comment-prose" }, guardReason.why)) : null, typeof guardReason.justification === "string" ? /* @__PURE__ */ import_react.default.createElement("p", { className: "approval-comment-prose" }, guardReason.justification) : null) : /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-headline approval-comment-headline-raw" }, matched.payload.reason || t("approval.escalation", { toolName: matched.payload.toolName })), command !== void 0 ? /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-command" }, "$ ", /* @__PURE__ */ import_react.default.createElement(
-        "code",
-        {
-          className: "hljs",
-          dangerouslySetInnerHTML: { __html: highlightCommand(command) }
-        }
-      )) : null),
+      /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-strip" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "approval-comment-dot" }), t("approval.waiting")),
       /* @__PURE__ */ import_react.default.createElement(
-        "button",
+        "div",
         {
-          type: "button",
-          className: "approval-comment-comment-toggle",
+          className: "approval-comment-body",
+          "data-approval-scroll": "",
+          tabIndex: 0,
+          role: "group",
+          "aria-label": t("approval.detail.aria")
+        },
+        guardReason ? /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-headline approval-comment-headline-one-line" }, guardReason.summary), mutating ? /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-warn" }, "changes files") : null, mutating && changes.length > 0 ? /* @__PURE__ */ import_react.default.createElement("ul", { className: "approval-comment-warn-list" }, changes.map(function(entry, index) {
+          return /* @__PURE__ */ import_react.default.createElement("li", { key: index, className: "approval-comment-warn-item" }, entry);
+        })) : null, wroteText !== null ? /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-block" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-block-label" }, "wrote"), /* @__PURE__ */ import_react.default.createElement(
+          "pre",
+          {
+            ref: wroteRef,
+            className: "approval-comment-code approval-comment-code-wrap" + (wroteExpanded ? "" : " approval-comment-code-clamp"),
+            tabIndex: 0
+          },
+          /* @__PURE__ */ import_react.default.createElement(
+            "code",
+            {
+              className: "hljs",
+              dangerouslySetInnerHTML: {
+                __html: highlightCommand(wroteText)
+              }
+            }
+          )
+        ), wroteOverflows ? /* @__PURE__ */ import_react.default.createElement(
+          "button",
+          {
+            type: "button",
+            className: "approval-comment-show-more",
+            "aria-expanded": wroteExpanded,
+            onClick: function() {
+              setWroteExpanded(!wroteExpanded);
+            }
+          },
+          wroteExpanded ? "show less" : "show more"
+        ) : null) : null, typeof guardReason.runs === "string" ? /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-block" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-block-label" }, "runs instead"), /* @__PURE__ */ import_react.default.createElement(
+          "pre",
+          {
+            className: "approval-comment-code approval-comment-code-wrap approval-comment-code-scroll",
+            tabIndex: 0
+          },
+          /* @__PURE__ */ import_react.default.createElement(
+            "code",
+            {
+              className: "hljs",
+              dangerouslySetInnerHTML: {
+                __html: highlightCommand(guardReason.runs)
+              }
+            }
+          )
+        )) : null, typeof guardReason.why === "string" ? /* @__PURE__ */ import_react.default.createElement("details", { className: "approval-comment-why" }, /* @__PURE__ */ import_react.default.createElement("summary", { className: "approval-comment-why-toggle" }, "why"), /* @__PURE__ */ import_react.default.createElement("p", { className: "approval-comment-prose" }, guardReason.why)) : null, typeof guardReason.justification === "string" ? /* @__PURE__ */ import_react.default.createElement("p", { className: "approval-comment-prose" }, guardReason.justification) : null) : /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-headline approval-comment-headline-raw" }, matched.payload.reason || t("approval.escalation", { toolName: matched.payload.toolName })), command !== void 0 ? /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-command" }, "$ ", /* @__PURE__ */ import_react.default.createElement(
+          "code",
+          {
+            className: "hljs",
+            dangerouslySetInnerHTML: { __html: highlightCommand(command) }
+          }
+        )) : null),
+        /* @__PURE__ */ import_react.default.createElement(
+          "button",
+          {
+            type: "button",
+            className: "approval-comment-comment-toggle",
+            disabled: answered,
+            "aria-expanded": showComment,
+            onClick: function() {
+              setShowComment(!showComment);
+            }
+          },
+          showComment ? t("comment.hide") : t("comment.toggle")
+        ),
+        showComment ? /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-comment-field" }, /* @__PURE__ */ import_react.default.createElement(
+          "textarea",
+          {
+            className: "approval-comment-comment-input",
+            value: draft,
+            disabled: answered,
+            rows: 2,
+            autoFocus: true,
+            "aria-label": t("comment.label"),
+            placeholder: t("comment.placeholder"),
+            onChange: function(event) {
+              setDraft(event.target.value);
+            },
+            onKeyDown: onCommentKeyDown
+          }
+        ), /* @__PURE__ */ import_react.default.createElement("p", { className: "approval-comment-comment-hint" }, t("comment.hint"))) : null
+      ),
+      /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-action-row" }, /* @__PURE__ */ import_react.default.createElement(
+        Button2,
+        {
+          variant: "outline",
+          className: "approval-comment-reject",
           disabled: answered,
-          "aria-expanded": showComment,
           onClick: function() {
-            setShowComment(!showComment);
+            answer("rejected");
           }
         },
-        showComment ? t("comment.hide") : t("comment.toggle")
-      ),
-      showComment ? /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-comment-field" }, /* @__PURE__ */ import_react.default.createElement(
-        "textarea",
+        t("approval.reject")
+      ), /* @__PURE__ */ import_react.default.createElement(
+        Button2,
         {
-          className: "approval-comment-comment-input",
-          value: draft,
+          variant: "primary",
           disabled: answered,
-          rows: 2,
-          autoFocus: true,
-          "aria-label": t("comment.label"),
-          placeholder: t("comment.placeholder"),
-          onChange: function(event) {
-            setDraft(event.target.value);
-          },
-          onKeyDown: onCommentKeyDown
-        }
-      ), /* @__PURE__ */ import_react.default.createElement("p", { className: "approval-comment-comment-hint" }, t("comment.hint"))) : null
-    ), /* @__PURE__ */ import_react.default.createElement("div", { className: "approval-comment-action-row" }, /* @__PURE__ */ import_react.default.createElement(
-      Button2,
-      {
-        variant: "outline",
-        className: "approval-comment-reject",
-        disabled: answered,
-        onClick: function() {
-          answer("rejected");
-        }
-      },
-      t("approval.reject")
-    ), /* @__PURE__ */ import_react.default.createElement(
-      Button2,
-      {
-        variant: "primary",
-        disabled: answered,
-        onClick: function() {
-          answer("allowed-once");
-        }
-      },
-      t("approval.allowOnce")
-    ))));
+          onClick: function() {
+            answer("allowed-once");
+          }
+        },
+        t("approval.allowOnce")
+      ))
+    ));
   };
 }
 var name = PLUGIN_NAME;

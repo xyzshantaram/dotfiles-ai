@@ -176,6 +176,30 @@ function parseGuardReason(reason) {
 }
 
 /**
+ * Whether a reason was raised by bash-guard. This accepts both shapes: the
+ * plain text starting with "bash-guard:" that the shipped guard emits, and
+ * the YAML payload with a string `summary` that parseGuardReason accepts.
+ * This is a duplicate of plugins/tool-render/src/guard.ts's function of the
+ * same name, kept in sync manually. The two plugins are separate packages
+ * with no shared-code path between them today, so both must change together
+ * if the real bash-guard reason format ever changes again. This duplication
+ * is a known, accepted gap, not a design a future reader should copy
+ * elsewhere without noticing it.
+ */
+export function isBashGuardReason(reason) {
+  if (typeof reason !== "string") return false;
+  if (reason.startsWith("bash-guard:")) return true;
+  var result;
+  try {
+    result = parse(reason);
+  } catch (error) {
+    return false;
+  }
+  if (result === null || typeof result !== "object" || Array.isArray(result)) return false;
+  return typeof result.summary === "string";
+}
+
+/**
  * One best-effort steering send carrying the user's comment verbatim. This is
  * the same wire the composer uses for a steer (`session.prompt` with mode
  * `steer`), so the message enters the running agent at the nearest step
@@ -342,7 +366,10 @@ function makeApprovalCommentCard(steerTo) {
 
     return (
       <div className="approval-comment-root" data-approval-key={matched.key}>
-        <div className="approval-comment-card" data-source={guardReason ? "bash-guard" : undefined}>
+        <div
+          className="approval-comment-card"
+          data-source={isBashGuardReason(matched.payload.reason) ? "bash-guard" : undefined}
+        >
           <div className="approval-comment-strip">
             <span className="approval-comment-dot" />
             {t("approval.waiting")}
