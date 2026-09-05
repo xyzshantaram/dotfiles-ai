@@ -57,6 +57,7 @@ import {
   cleanReadTextForDiff,
   deIndent,
   extractHunk,
+  compactionSummaryNode,
   numberedReadRows,
   looksLikeRawHtml,
   parseAgentLines,
@@ -2947,18 +2948,36 @@ function CompactionRow(props) {
   var expandedState = useState(false);
   var expanded = expandedState[0];
   var setExpanded = expandedState[1];
-  // The toolview slot hands rows an owner object: { callId, toolName, block,
-  // openFile, cwd, home, inspect }. The compaction node arrives as
-  // props.block and is FLAT -- the session projects it as
-  // { kind: "compaction", seq, time, summary, summaryEventSeq,
-  // shadowedItemCount, shadowedTokenCount } with no .data wrapper.
-  var node = props.block;
-  var summary =
-    node !== null && node !== undefined && typeof node.summary === "string" ? node.summary : "";
+  // This row sits on conversation.chat.node, so ChatNodeSeat hands it
+  // props.node, the chat node. Two keys reach it and their data differ:
+  //
+  //   key "compaction"        node.data IS the summary node
+  //   key "manual-compaction" node.data is { command, compaction }, and
+  //                           compaction is null while the run is still going
+  //
+  // The summary node itself is flat: { kind: "compaction", seq, time,
+  // summary, summaryEventSeq, shadowedItemCount, shadowedTokenCount }. It is
+  // found by its own kind, so neither key needs a separate row.
+  var node = compactionSummaryNode(
+    props.node !== null && props.node !== undefined && typeof props.node === "object"
+      ? props.node.data
+      : null,
+  );
+  var summary = node !== null && typeof node.summary === "string" ? node.summary : "";
   var summaryEventSeq =
-    node !== null && node !== undefined && typeof node.summaryEventSeq === "number"
-      ? node.summaryEventSeq
-      : undefined;
+    node !== null && typeof node.summaryEventSeq === "number" ? node.summaryEventSeq : undefined;
+  // The shipped card leads with what the compaction actually removed, so the
+  // counts stand in for the first summary line whenever the node carries
+  // them.
+  var counts =
+    node !== null &&
+    typeof node.shadowedItemCount === "number" &&
+    typeof node.shadowedTokenCount === "number"
+      ? String(node.shadowedItemCount) +
+        " items, " +
+        String(node.shadowedTokenCount) +
+        " tokens compacted"
+      : null;
   var views = useCompactionViews(props.useSession);
   var view =
     views !== null && views !== undefined && summaryEventSeq !== undefined
@@ -2977,7 +2996,7 @@ function CompactionRow(props) {
       toolName: "Compaction",
       icon: <IconBrowseOutline16 size={14} />,
       title: "Compaction",
-      summary: summary !== "" ? firstLine(summary) : "Compaction",
+      summary: counts !== null ? counts : summary !== "" ? firstLine(summary) : "Compaction",
       expandable: fallbackBody !== null,
       expanded: expanded,
       onToggle: function () {

@@ -1737,6 +1737,15 @@ function looksLikeRawHtml(text) {
   if (head.charAt(0) !== "<") return false;
   return /^<[a-z][a-z0-9-]*(\s|>|\/>)/i.test(head);
 }
+function compactionSummaryNode(data) {
+  if (data === null || data === void 0 || typeof data !== "object") return null;
+  if (data.kind === "compaction") return data;
+  var wrapped = data.compaction;
+  if (wrapped !== null && wrapped !== void 0 && typeof wrapped === "object") {
+    if (wrapped.kind === "compaction") return wrapped;
+  }
+  return null;
+}
 var AGENT_LINE_RE = /^(\S+)\s+\[([^\]]+)\](?:\s+parent=(\S+)\s+depth=(-?\d+))?(?:\s+—\s+([\s\S]*))?$/;
 function parseAgentLines(text) {
   if (typeof text !== "string" || text === "") return [];
@@ -17386,9 +17395,12 @@ function CompactionRow(props) {
   var expandedState = useState(false);
   var expanded = expandedState[0];
   var setExpanded = expandedState[1];
-  var node = props.block;
-  var summary = node !== null && node !== void 0 && typeof node.summary === "string" ? node.summary : "";
-  var summaryEventSeq = node !== null && node !== void 0 && typeof node.summaryEventSeq === "number" ? node.summaryEventSeq : void 0;
+  var node = compactionSummaryNode(
+    props.node !== null && props.node !== void 0 && typeof props.node === "object" ? props.node.data : null
+  );
+  var summary = node !== null && typeof node.summary === "string" ? node.summary : "";
+  var summaryEventSeq = node !== null && typeof node.summaryEventSeq === "number" ? node.summaryEventSeq : void 0;
+  var counts = node !== null && typeof node.shadowedItemCount === "number" && typeof node.shadowedTokenCount === "number" ? String(node.shadowedItemCount) + " items, " + String(node.shadowedTokenCount) + " tokens compacted" : null;
   var views = useCompactionViews(props.useSession);
   var view = views !== null && views !== void 0 && summaryEventSeq !== void 0 ? views[String(summaryEventSeq)] : null;
   var rows = view !== null && view !== void 0 ? prettyRows(view) : null;
@@ -17398,7 +17410,7 @@ function CompactionRow(props) {
       toolName: "Compaction",
       icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
       title: "Compaction",
-      summary: summary !== "" ? firstLine(summary) : "Compaction",
+      summary: counts !== null ? counts : summary !== "" ? firstLine(summary) : "Compaction",
       expandable: fallbackBody !== null,
       expanded,
       onToggle: function() {

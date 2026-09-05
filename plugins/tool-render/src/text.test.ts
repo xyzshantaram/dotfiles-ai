@@ -9,6 +9,7 @@ import {
   deIndent,
   isBuiltinReadEnvelope,
   looksLikeRawHtml,
+  compactionSummaryNode,
   numberedReadRows,
   parseAgentLines,
   parseSkillContent,
@@ -355,5 +356,35 @@ describe("parseAgentLines", () => {
     expect(parseAgentLines("(no subagents)")).toEqual([]);
     expect(parseAgentLines("")).toEqual([]);
     expect(parseAgentLines("something else entirely")).toEqual([]);
+  });
+});
+
+describe("compactionSummaryNode", () => {
+  const summaryNode = {
+    kind: "compaction",
+    seq: 42,
+    time: 0,
+    summary: "text",
+    summaryEventSeq: 41,
+    shadowedItemCount: 7,
+    shadowedTokenCount: 900,
+  };
+
+  it("returns the node itself for the compaction key", () => {
+    expect(compactionSummaryNode(summaryNode as never)).toBe(summaryNode);
+  });
+
+  it("unwraps the manual-compaction pair", () => {
+    const wrapper = { command: { kind: "command" }, compaction: summaryNode };
+    expect(compactionSummaryNode(wrapper as never)).toBe(summaryNode);
+  });
+
+  it("returns null while a manual compaction is still running", () => {
+    expect(compactionSummaryNode({ command: { kind: "command" }, compaction: null } as never)).toBeNull();
+  });
+
+  it("returns null for anything else", () => {
+    expect(compactionSummaryNode(null as never)).toBeNull();
+    expect(compactionSummaryNode({ kind: "assistant-step" } as never)).toBeNull();
   });
 });
