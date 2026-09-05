@@ -126,7 +126,129 @@ var HLJS_THEME_CSS = [
 ].join("");
 
 // css-text:/home/sid/repos/dotfiles-ai/plugins/durable-todos/src/client.module.css
-var client_default = '.durable-todos-card {\n  box-sizing: border-box;\n  width: 100%;\n  max-width: var(--dsh-composer-card-max-width);\n  margin-inline: auto;\n  display: flex;\n  flex-direction: column;\n  gap: 0.375rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.625rem;\n  padding: 0.5rem 0.625rem;\n  background: var(--dsw-alias-bg-layer-1);\n}\n.durable-todos-header {\n  display: flex;\n  align-items: center;\n  gap: 0.5rem;\n  min-width: 0;\n}\n.durable-todos-toggle {\n  flex: 1;\n  display: flex;\n  align-items: center;\n  gap: 0.375rem;\n  min-width: 0;\n  background: none;\n  border: none;\n  cursor: pointer;\n  color: inherit;\n  text-align: left;\n  padding: 0;\n  font: inherit;\n}\n.durable-todos-toggle:hover {\n  opacity: 0.7;\n}\n.durable-todos-chevron {\n  flex: none;\n  color: var(--dsw-alias-label-secondary);\n  border-radius: 0.375rem;\n  transform: rotate(-90deg);\n  transition: transform 0.12s;\n}\n.durable-todos-chevron-open {\n  transform: rotate(0deg);\n}\n.durable-todos-title {\n  flex: none;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n}\n.durable-todos-summary {\n  flex: 1;\n  font-size: 0.75rem;\n  line-height: 1.25rem;\n  color: var(--dsw-alias-label-caption);\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n.durable-todos-carried {\n  flex: none;\n  font-size: 0.75rem;\n  line-height: 1.25rem;\n  color: var(--dsw-alias-label-caption);\n}\n.durable-todos-remind {\n  box-sizing: border-box;\n  flex: none;\n  white-space: nowrap;\n  font-size: 0.75rem;\n  line-height: 1.25rem;\n  font-weight: 600;\n  padding: 0.125rem 0.5rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.375rem;\n  background: var(--dsw-alias-bg-layer-1);\n  color: var(--dsw-alias-label-primary);\n  cursor: pointer;\n}\n.durable-todos-remind:hover {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.durable-todos-running-line {\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  color: var(--dsw-alias-label-secondary);\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  padding: 0.125rem 0.25rem;\n}\n/* The list scrolls, the header does not. A long plan therefore never pushes\n   the counts, the Remind button or the current-item line out of view. */\n.durable-todos-plan {\n  flex-direction: column;\n  display: flex;\n  max-height: 30vh;\n  overflow-y: auto;\n}\n/* Plan row (item, checkbox, content) is shared PLAN_ROW_CSS from\n   shared/client-util.ts, injected via the dsh-plan-row style tag. */\n.durable-todos-empty {\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  color: var(--dsw-alias-label-caption);\n}\n/* Hide shipped todo panel; replaced by this plugin. */\n[data-testid="todo-panel"] {\n  display: none !important;\n}\n';
+var client_default = `.durable-todos-card {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--dsh-composer-card-max-width);
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 0.625rem;
+  padding: 0.5rem 0.625rem;
+  background: var(--dsw-alias-bg-layer-1);
+}
+.durable-todos-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.durable-todos-toggle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  text-align: left;
+  padding: 0;
+  font: inherit;
+}
+.durable-todos-toggle:hover {
+  opacity: 0.7;
+}
+.durable-todos-chevron {
+  flex: none;
+  color: var(--dsw-alias-label-secondary);
+  border-radius: 0.375rem;
+  transform: rotate(-90deg);
+  transition: transform 0.12s;
+}
+.durable-todos-chevron-open {
+  transform: rotate(0deg);
+}
+.durable-todos-title {
+  flex: none;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+.durable-todos-summary {
+  flex: 1;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  color: var(--dsw-alias-label-caption);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* Optical correction: the counts share the title's 20px line box but are
+     1px smaller, so their glyphs sit about half a pixel high against the
+     title's. Box centering is correct; this drops the glyphs the missing
+     half pixel without moving the box. */
+  position: relative;
+  top: 0.5px;
+}
+.durable-todos-carried {
+  flex: none;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  color: var(--dsw-alias-label-caption);
+  position: relative;
+  top: 0.5px;
+}
+.durable-todos-remind {
+  box-sizing: border-box;
+  flex: none;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  font-weight: 600;
+  padding: 0.125rem 0.5rem;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 0.375rem;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+}
+.durable-todos-remind:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+.durable-todos-running-line {
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0.125rem 0.25rem;
+}
+/* The list scrolls, the header does not. A long plan therefore never pushes
+   the counts, the Remind button or the current-item line out of view. */
+.durable-todos-plan {
+  flex-direction: column;
+  display: flex;
+  max-height: 30vh;
+  overflow-y: auto;
+}
+/* Plan row (item, checkbox, content) is shared PLAN_ROW_CSS from
+   shared/client-util.ts, injected via the dsh-plan-row style tag. */
+.durable-todos-empty {
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  color: var(--dsw-alias-label-caption);
+}
+/* Hide shipped todo panel; replaced by this plugin. */
+[data-testid="todo-panel"] {
+  display: none !important;
+}
+`;
 
 // plugins/durable-todos/src/client.tsx
 var IconChevronDownOutline142 = primitives.IconChevronDownOutline14;
