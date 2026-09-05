@@ -42,7 +42,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#90b69e3724ca82855552e4aa07c49267507021bb}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#83d0ee428b7c42d1b534073c8f7a920688f9c211}"
 
 # Git-hosted specs whose build scripts pnpm must be allowed to run. pnpm 10+
 # blocks lifecycle scripts (prepare/postinstall) unless the exact resolved
@@ -242,6 +242,18 @@ step_install_plugins() {
 		pnpm_ins() {
 			plugin_specs+=("$1")
 		}
+		# Web-profile base deps: converge these to the 0.1.0 train the
+		# installed dsh expects. dsh-web-app declares
+		# @deepseek-ai/dsh-client-ui-attachment ^0.1.0-rc.8 (a cordis
+		# plugin with apply()). The stale 0.0.1 pins shadowed the host
+		# copy with pure-React atoms (no apply -> "invalid plugin") and
+		# pulled dsh-client-ui-primitives 0.0.1-rc.5, whose bare
+		# `import "katex/dist/katex.min.css"` Node ESM cannot load
+		# server-side (ERR_UNKNOWN_FILE_EXTENSION ".css"). Either
+		# failure kills `dsh web` boot, so these pins are load-bearing.
+		# Upgrade = bump both pins together, matching the dsh version.
+		pnpm_ins "@deepseek-ai/dsh-client-ui-attachment@0.1.0-rc.8"
+		pnpm_ins "@deepseek-ai/dsh-client-web-react@0.1.0-rc.7"
 		pnpm_ins "github:sunshaobei/dsh-input-history#9b5b7a494a5c"
 		pnpm_ins "github:omdsh-dev/dsh-tool-calculator#05090e946113721c5295518cc20e74f427022c55"
 		pnpm_ins "github:omdsh-dev/dsh-tool-diff#d4afd6e2de0b411151fefc60adebd0973373ec10"
