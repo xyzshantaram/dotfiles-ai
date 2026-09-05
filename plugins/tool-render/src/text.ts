@@ -207,6 +207,19 @@ export function splitSystemReminders(text) {
 // text that range covered, so a caller can render a before/after diff for
 // one edit. Returns null when the read is not hashline-anchored, or when
 // either endpoint hash is not found.
+// ---- raw-page HTML detection for the web_fetch row. ----
+// web_fetch returns the page's raw content when it truncates. A raw page
+// starts with a tag and carries at least one real element name after it, so
+// a plain "<" in prose does not count. The check reads only the first 200
+// characters and stays a heuristic: a false negative renders a page through
+// MarkdownText, which the row already tolerates.
+export function looksLikeRawHtml(text) {
+  if (typeof text !== "string") return false;
+  var head = text.replace(/^\s+/, "").slice(0, 200);
+  if (head.charAt(0) !== "<") return false;
+  return /^<[a-z][a-z0-9-]*(\s|>|\/>)/i.test(head);
+}
+
 export function extractHunk(readText, removeFrom, removeTo, replacementText, startLine) {
   if (typeof readText !== "string" || readText === "") return null;
   var rows = [];

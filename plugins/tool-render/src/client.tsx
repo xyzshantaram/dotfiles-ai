@@ -58,6 +58,7 @@ import {
   deIndent,
   extractHunk,
   numberedReadRows,
+  looksLikeRawHtml,
   parseSkillContent,
   readStartLine,
   splitSystemReminders,
@@ -2554,6 +2555,122 @@ function SeeRow(props) {
   });
 }
 
+// ---- web_search row: first query on the row, the markdown source list as
+// the body. Args are { queries: string[] }. The result is plain text -- an
+// optional summary answer, then a `- [label](url) -- snippet` source list --
+// so the body renders that text through MarkdownText with no parsing, and
+// the source links come out clickable for free. ----
+var NO_RESULTS_MARK = "No results found.";
+
+function searchQueries(args) {
+  if (args === null || typeof args !== "object" || !Array.isArray(args.queries)) return null;
+  var out = [];
+  for (var i = 0; i < args.queries.length; i++) {
+    if (typeof args.queries[i] !== "string" || args.queries[i] === "") return null;
+    out.push(args.queries[i]);
+  }
+  return out;
+}
+
+function searchSummary(queries, state, output) {
+  if (state !== "running" && output !== null && output.indexOf(NO_RESULTS_MARK) !== -1) {
+    return "No results";
+  }
+  if (queries === null || queries.length === 0) return "Web search";
+  var extra = queries.length > 1 ? " +" + (queries.length - 1) + " more" : "";
+  return queries[0] + extra;
+}
+
+function WebSearchRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var block = props.block;
+  var done = doneOf(block);
+  var args = parseArgs(argsRawOf(block));
+  var queries = searchQueries(args);
+  var output = done ? resultTextOf(block) : null;
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary =
+    state === "error" && errorText !== null && errorText !== ""
+      ? firstLineOfError(errorText)
+      : undefined;
+  var summary = searchSummary(queries, state, output);
+  var body =
+    state !== "error" && output !== null && output !== "" ? (
+      <div className="tool-render-markdown-body">
+        <MarkdownText text={output} />
+      </div>
+    ) : null;
+  return toolRenderRow({
+    toolName: "Web search",
+    icon: <IconBrowseOutline16 size={14} />,
+    title: "Web search",
+    summary: summary,
+    state: state,
+    expandable: body !== null,
+    expanded: expanded,
+    onToggle: function () {
+      setExpanded(!expanded);
+    },
+    body: body,
+    errorSummary: errorSummary,
+    errorText: errorText,
+    inspect: props.inspect,
+  });
+}
+
+// ---- web_fetch row: the URL on the row, the fetched text as the body. ----
+// Args are { url }. A truncated page arrives as the page's raw content, so
+// a text that opens with a tag is shown as escaped code text instead of
+// through MarkdownText; looksLikeRawHtml in text.ts is that check and stays
+// a simple heuristic on purpose. Everything else renders as markdown inside
+// one bounded, interior-scrolling container.
+function WebFetchRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var block = props.block;
+  var done = doneOf(block);
+  var args = parseArgs(argsRawOf(block));
+  var url = args !== null ? pickString(args, ["url"]) : undefined;
+  var output = done ? resultTextOf(block) : null;
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary =
+    state === "error" && errorText !== null && errorText !== ""
+      ? firstLineOfError(errorText)
+      : undefined;
+  var summary = url !== undefined ? firstLine(url) : "Web fetch";
+  var body = null;
+  if (state !== "error" && output !== null && output !== "") {
+    body = looksLikeRawHtml(output) ? (
+      <pre className="tool-render-fetch-body tool-render-fetch-raw">{output}</pre>
+    ) : (
+      <div className="tool-render-fetch-body">
+        <MarkdownText text={output} />
+      </div>
+    );
+  }
+  return toolRenderRow({
+    toolName: "Web fetch",
+    icon: <IconBrowseOutline16 size={14} />,
+    title: "Web fetch",
+    summary: summary,
+    state: state,
+    expandable: body !== null,
+    expanded: expanded,
+    onToggle: function () {
+      setExpanded(!expanded);
+    },
+    body: body,
+    errorSummary: errorSummary,
+    errorText: errorText,
+    inspect: props.inspect,
+  });
+}
+
 // ---- compaction checkpoint row: structured view of a compaction marker. --
 // The compaction fork stores a prettyView payload on each `compaction/summary`
 // event, and the host-side projection in projection.ts folds those payloads
@@ -2929,6 +3046,25 @@ function apply(ctx) {
         priority: -100,
       },
       SeeRow,
+    );
+    // The shipped ui-tool package registers its own web_search card at the
+    // default priority 0. Lowest priority renders, so -100 shadows it;
+    // web_fetch is additive.
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "web_search",
+        priority: -100,
+      },
+      WebSearchRow,
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "web_fetch",
+        priority: -100,
+      },
+      WebFetchRow,
     );
   });
   ctx.slots.inject("conversation.chat.node", function* () {

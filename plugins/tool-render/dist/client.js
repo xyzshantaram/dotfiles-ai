@@ -1731,6 +1731,12 @@ function splitSystemReminders(text) {
   if (lastEnd < text.length) segments.push({ reminder: false, text: text.slice(lastEnd) });
   return segments;
 }
+function looksLikeRawHtml(text) {
+  if (typeof text !== "string") return false;
+  var head = text.replace(/^\s+/, "").slice(0, 200);
+  if (head.charAt(0) !== "<") return false;
+  return /^<[a-z][a-z0-9-]*(\s|>|\/>)/i.test(head);
+}
 function extractHunk(readText, removeFrom, removeTo, replacementText, startLine) {
   if (typeof readText !== "string" || readText === "") return null;
   var rows = [];
@@ -2418,35 +2424,64 @@ var client_default = `.tool-render-row {
   overflow-y: auto;
   padding: 0.5rem 0.625rem;
 }
-.tool-render-markdown-body :where(h1, h2, h3, h4, h5, h6) {
+.tool-render-markdown-body :where(h1, h2, h3, h4, h5, h6),
+.tool-render-fetch-body :where(h1, h2, h3, h4, h5, h6) {
   font-size: 0.875rem;
   line-height: 1.25rem;
   margin: 0.5rem 0 0.25rem;
 }
-.tool-render-markdown-body :where(h1, h2, h3, h4, h5, h6):first-child {
+.tool-render-markdown-body :where(h1, h2, h3, h4, h5, h6):first-child,
+.tool-render-fetch-body :where(h1, h2, h3, h4, h5, h6):first-child {
   margin-top: 0;
 }
-.tool-render-markdown-body :where(p, ul, ol, pre, blockquote, table) {
+.tool-render-markdown-body :where(p, ul, ol, pre, blockquote, table),
+.tool-render-fetch-body :where(p, ul, ol, pre, blockquote, table) {
   font-size: 0.8125rem;
   line-height: 1.25rem;
   margin: 0.25rem 0;
 }
-.tool-render-markdown-body :where(ul, ol) {
+.tool-render-markdown-body :where(ul, ol),
+.tool-render-fetch-body :where(ul, ol) {
   padding-left: 1.125rem;
 }
-.tool-render-markdown-body :where(pre) {
+.tool-render-markdown-body :where(pre),
+.tool-render-fetch-body :where(pre) {
   background: var(--dsw-alias-bg-base);
   border-radius: 0.25rem;
   overflow-x: auto;
   padding: 0.375rem 0.5rem;
 }
-.tool-render-markdown-body :where(code) {
+.tool-render-markdown-body :where(code),
+.tool-render-fetch-body :where(code) {
   font-family: var(--ds-font-family-code);
 }
-.tool-render-markdown-body :where(code):not(:where(pre code)) {
+.tool-render-markdown-body :where(code):not(:where(pre code)),
+.tool-render-fetch-body :where(code):not(:where(pre code)) {
   background: var(--dsw-alias-bg-base);
   border-radius: 0.1875rem;
   padding: 0 0.1875rem;
+}
+
+/* web_fetch body. Same bounded-scroll shape as the markdown body but its
+   own block, so a fetched page scrolls inside the card. A raw-HTML page
+   renders as escaped code text in this container instead, never as
+   markup. */
+.tool-render-fetch-body {
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 0.375rem;
+  margin: 0.25rem 0 0.125rem 0.25rem;
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: 0.5rem 0.625rem;
+}
+.tool-render-fetch-raw {
+  font-family: var(--ds-font-family-code);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--dsw-alias-label-primary);
+  margin: 0;
 }
 /* A <system-reminder> block, framed instead of hidden: every character of
    its text still renders, just under a chip instead of literal tags. */
@@ -17032,6 +17067,89 @@ function SeeRow(props) {
     inspect: props.inspect
   });
 }
+var NO_RESULTS_MARK = "No results found.";
+function searchQueries(args) {
+  if (args === null || typeof args !== "object" || !Array.isArray(args.queries)) return null;
+  var out = [];
+  for (var i = 0; i < args.queries.length; i++) {
+    if (typeof args.queries[i] !== "string" || args.queries[i] === "") return null;
+    out.push(args.queries[i]);
+  }
+  return out;
+}
+function searchSummary(queries, state, output) {
+  if (state !== "running" && output !== null && output.indexOf(NO_RESULTS_MARK) !== -1) {
+    return "No results";
+  }
+  if (queries === null || queries.length === 0) return "Web search";
+  var extra = queries.length > 1 ? " +" + (queries.length - 1) + " more" : "";
+  return queries[0] + extra;
+}
+function WebSearchRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var block = props.block;
+  var done = doneOf(block);
+  var args = parseArgs(argsRawOf(block));
+  var queries = searchQueries(args);
+  var output = done ? resultTextOf(block) : null;
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var summary = searchSummary(queries, state, output);
+  var body = state !== "error" && output !== null && output !== "" ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: output })) : null;
+  return toolRenderRow({
+    toolName: "Web search",
+    icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
+    title: "Web search",
+    summary,
+    state,
+    expandable: body !== null,
+    expanded,
+    onToggle: function() {
+      setExpanded(!expanded);
+    },
+    body,
+    errorSummary,
+    errorText,
+    inspect: props.inspect
+  });
+}
+function WebFetchRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var block = props.block;
+  var done = doneOf(block);
+  var args = parseArgs(argsRawOf(block));
+  var url = args !== null ? pickString(args, ["url"]) : void 0;
+  var output = done ? resultTextOf(block) : null;
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var summary = url !== void 0 ? firstLine(url) : "Web fetch";
+  var body = null;
+  if (state !== "error" && output !== null && output !== "") {
+    body = looksLikeRawHtml(output) ? /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-fetch-body tool-render-fetch-raw" }, output) : /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-fetch-body" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: output }));
+  }
+  return toolRenderRow({
+    toolName: "Web fetch",
+    icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
+    title: "Web fetch",
+    summary,
+    state,
+    expandable: body !== null,
+    expanded,
+    onToggle: function() {
+      setExpanded(!expanded);
+    },
+    body,
+    errorSummary,
+    errorText,
+    inspect: props.inspect
+  });
+}
 function useCompactionViews(useSession) {
   var face = null;
   var viewsState = useState(null);
@@ -17295,6 +17413,22 @@ function apply(ctx) {
         priority: -100
       },
       SeeRow
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "web_search",
+        priority: -100
+      },
+      WebSearchRow
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "web_fetch",
+        priority: -100
+      },
+      WebFetchRow
     );
   });
   ctx.slots.inject("conversation.chat.node", function* () {

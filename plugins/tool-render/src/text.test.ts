@@ -8,6 +8,7 @@ import {
   cleanReadTextForDiff,
   deIndent,
   isBuiltinReadEnvelope,
+  looksLikeRawHtml,
   numberedReadRows,
   parseSkillContent,
   readStartLine,
@@ -300,5 +301,29 @@ describe("splitSystemReminders", () => {
   it("returns an empty list for non-string or empty input", () => {
     expect(splitSystemReminders(undefined as never)).toEqual([]);
     expect(splitSystemReminders("")).toEqual([]);
+  });
+});
+
+describe("looksLikeRawHtml", () => {
+  it("accepts a page that opens with a real element tag", () => {
+    expect(looksLikeRawHtml('<html>\n<body>hi</body>')).toBe(true);
+    expect(looksLikeRawHtml('<div class="a">text</div>')).toBe(true);
+  });
+
+  it("accepts leading whitespace before the tag", () => {
+    expect(looksLikeRawHtml("\n\n  <html>")).toBe(true);
+  });
+
+  it("rejects a bare < with no element name", () => {
+    expect(looksLikeRawHtml("< not a tag")).toBe(false);
+  });
+
+  it("rejects plain markdown and prose", () => {
+    expect(looksLikeRawHtml("# Heading\n\nSome text with a < b comparison.")).toBe(false);
+  });
+
+  it("rejects empty and non-string input", () => {
+    expect(looksLikeRawHtml("")).toBe(false);
+    expect(looksLikeRawHtml(undefined as never)).toBe(false);
   });
 });
