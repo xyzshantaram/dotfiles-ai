@@ -800,18 +800,31 @@ about six lines. Change it if it reads wrong.
 
 ### T4 — the bash card's blue mark must survive the approval
 
-Shipped in `63a9f5f`. A host projection (`tool-render/guarded-approvals`) folds
-`approval/asked` events into a callId-keyed set, and `BashRow` marks blue from
-the live pending check, that durable set, or the rewritten-command signal.
-Live verification stays in the Human review queue below.
+Shipped in `63a9f5f`, but the matcher it depended on was already wrong by
+construction and stayed wrong until 2026-09-05. `isBashGuardReason`
+(`plugins/tool-render/src/guard.ts`) required the reason to parse as YAML
+into `{ summary: string }`. Every real bash-guard ask in the whole session
+log, checked directly, starts with the plain-text prefix
+`bash-guard: the following command needs approval:` — zero asks anywhere use
+the YAML `summary:` shape. So the live check, the durable
+`guarded-approvals` projection, and the card all agreed no call was ever
+guarded, and the mark never lit at all outside the brief window a plain
+approval sat pending.
+
+Fixed 2026-09-05: the matcher now accepts the shipped plain-text prefix, and
+the projection's `stateVersion` moved to 2 so it replays the whole log
+instead of keeping its empty fold. Both fixes live in the HOST process, so
+they take effect on the next `dsh` restart, not on a page refresh. Live
+verification after that restart stays in the Human review queue below.
 
 ## Human review queue
 
 - [x] Errored tool calls — 2px red outline, no fill, no bar, enlarged red dot
       while collapsed, click expands and collapses, collapsed row reads tool
       name plus error message. Confirmed 2026-09-03.
-- [ ] After T4: confirm the blue mark is still on the bash card after
-      answering the approval, and after reloading the page.
+- [ ] After the next dsh restart: confirm a bash-guard ask turns the card
+      blue, that it survives answering the approval, and that it survives a
+      page reload.
 
 ---
 
@@ -1428,5 +1441,54 @@ This session ended here.
 items across 8 efforts, four of them from 2026-09-05. Each one is something an
 earlier session decided only the user could confirm, and none are confirmed. The
 `/checklist` skill exists for exactly this, and it deserves its own session.
+
+---
+
+# Retired — dotfiles-ai audit and fix sweep. Live notes only.
+
+`PLAN-AUDIT.md` tracked this sweep and is now merged here and deleted. All six
+tickets (D-LOG2, D-LOG3, D-HYG1, D-FEAT1, D-TEST1, D-SYNC2) shipped. These
+facts outlive it.
+
+- cordis's `LoggerService` registers no default exporter that reaches the
+  journal or console — messages land in an in-memory ring buffer nothing
+  reads unless a plugin exports them. `plugins/log-exporter.ts` is that
+  export, and it sets `levels: { default: 3 }` explicitly. Cordis's exporter
+  dispatch filters by level before calling `export()`, and an exporter
+  registered with no `levels` field defaults to threshold 1, silently
+  dropping every `warn` and `debug` call. Do not remove that field.
+- Logging level convention for this bundle: `error` = the operation failed
+  and the caller is affected; `warn` = a fallback fired or a refusal
+  happened; `info` = a state change a person would want in a normal-volume
+  log; `debug` = per-call trace and payload detail. This has not been
+  written into `~/.dsh/AGENTS.md` yet and probably should be, since it is a
+  durable convention, not an ephemeral planning note.
+- The inline Python YAML patcher in `sync.sh` preserves comments on purpose.
+  Leave it alone.
+- `node build.mjs` rebuilds every bundle and must run once, sequentially,
+  after all source edits land. Parallel subagent dispatches that each ran it
+  raced and corrupted intermediate state.
+
+## Human review queue
+
+- [ ] D-LOG3 — open each settings panel with the console at `debug`, confirm
+      the log is readable and not flooded.
+- [ ] D-HYG1 — exercise the settings panels in the browser, confirm the
+      shared `request` helper changed no behavior.
+- [ ] D-LOG2 — trigger an archived-session delete and confirm the new
+      `deleted archived session <id>` journal line; force one profile
+      failover and confirm the log names both models and the session.
+- [ ] D-FEAT1 — open the log panel from a phone over the LAN, confirm the
+      dsh-web log is readable there.
+
+# Retired — session handoff from 6e00b631. Live notes only.
+
+`handoff.md` recorded in-flight work from a session that died to a
+compaction defect since fixed. Every work item it named is already tracked
+or shipped elsewhere in this file: the `TodoDock` import finding is Effort
+2's superseded T6, the compaction fork fixes are Effort 5 (shipped), the
+tool-render `read_image`/`see` request is Effort 7 (its verbatim scope
+quote is already there), and the mcp-servers boot fix and the owed dsh-web
+restart are long past. Nothing in it needed migrating. Deleted.
 
 
