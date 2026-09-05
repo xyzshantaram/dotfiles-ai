@@ -220,6 +220,22 @@ export function looksLikeRawHtml(text) {
   return /^<[a-z][a-z0-9-]*(\s|>|\/>)/i.test(head);
 }
 
+// ---- outer code fence removal. ----
+// A compaction summary arrives wrapped in one fence, usually four backticks,
+// so the checkpoint's own triple-backtick blocks survive inside it.
+// Rendered as markdown that whole fence becomes one code block, which is why
+// the card showed a monospace wall with a copy button instead of the
+// headings and lists the checkpoint actually contains. This removes only a
+// fence that wraps the WHOLE text, and the closing fence must match the
+// opening one, so a summary that merely starts with a code block is left
+// alone.
+export function stripOuterFence(text) {
+  if (typeof text !== "string" || text === "") return text;
+  var trimmed = text.trim();
+  var match = /^(`{3,})[^\n]*\n([\s\S]*?)\n?\1$/.exec(trimmed);
+  return match === null ? text : match[2];
+}
+
 // ---- compaction chat-node shapes. ----
 // The compaction card sits on conversation.chat.node, and two keys reach it
 // with different data. Key "compaction" hands the summary node itself. Key

@@ -59,6 +59,7 @@ import {
   extractHunk,
   compactionSummaryNode,
   numberedReadRows,
+  stripOuterFence,
   looksLikeRawHtml,
   parseAgentLines,
   parseSkillContent,
@@ -2986,17 +2987,18 @@ function CompactionRow(props) {
   var rows = view !== null && view !== undefined ? prettyRows(view) : null;
   if (rows === null || rows.length === 0) {
     // Fallback: the fenced summary text, rendered as markdown.
+    var fallbackText = stripOuterFence(summary);
     var fallbackBody =
-      summary !== "" ? (
+      fallbackText !== "" ? (
         <div className="tool-render-markdown-body">
-          <MarkdownText text={summary} />
+          <MarkdownText text={fallbackText} />
         </div>
       ) : null;
     return toolRenderRow({
       toolName: "Compaction",
       icon: <IconBrowseOutline16 size={14} />,
       title: "Compaction",
-      summary: counts !== null ? counts : summary !== "" ? firstLine(summary) : "Compaction",
+      summary: counts !== null ? counts : fallbackText !== "" ? firstLine(fallbackText) : "Compaction",
       expandable: fallbackBody !== null,
       expanded: expanded,
       onToggle: function () {

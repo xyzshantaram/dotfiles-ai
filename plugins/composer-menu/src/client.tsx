@@ -82,64 +82,95 @@ function apply(ctx: any) {
         }
         continue;
       }
-      injectStyle(PLUGIN_NAME, target.id, "." + cls + " { display: none !important; }");
+      // The sandbox picker's own root is a Base-UI-style slot span, which
+      // stays flex-flowed even after its trigger button is hidden: the
+      // access-select's parent group is display: contents (so our own
+      // trigger can sit flush at the tool row's edge), and that promotes the
+      // span straight into .tools's flex context as an empty, real box. An
+      // empty box still eats one flex gap, which is exactly the phantom
+      // 16px the menu trigger sat behind. `span:has()` removes it too,
+      // without needing its own hashed class name. This is a no-op for
+      // targets with no such wrapper: the commands button's parent is
+      // `.tools` itself, a div, so the tag selector never matches it.
+      injectStyle(
+        PLUGIN_NAME,
+        target.id,
+        "." +
+          cls +
+          " { display: none !important; }\n" +
+          "span:has(> ." +
+          cls +
+          ") { display: none !important; }",
+      );
       done.add(target.id);
     }
   }
 
-  // Two composer-row corrections, both needing hashed shipped class names, so
-  // they resolve lazily beside ensureShippedHidden and are injected once.
-  //
-  // 1. The shipped `modes` group holds the access select (which this menu
-  //    hides) and the plan seat. An empty flex child still consumes one of the
-  //    tool row's gaps, which pushed the menu trigger off the composer's
-  //    bottom-left corner. `display: contents` removes the box while keeping
-  //    any plan seat visible as a sibling.
-  // 2. The attachment picker registers in conversation.input.right, and that
-  //    whole slot renders BEFORE the model seat, the context meter, and the
-  //    send/stop buttons. DOM order cannot be changed from here, so flex
-  //    `order` moves the picker past the seats while the primary buttons stay
-  //    last. The picker may be a direct flex child or wrapped by the slot, so
-  //    both shapes are matched.
-  let layoutDone = false;
-  let layoutWarned = false;
-  function ensureComposerLayout() {
-    if (layoutDone) return;
+  // The shipped `modes` group holds the access select (which this menu hides)
+  // and the plan seat. An empty flex child still consumes one of the tool
+  // row's gaps, which pushed the menu trigger off the composer's bottom-left
+  // corner. `display: contents` removes the box while keeping any plan seat
+  // visible as a sibling.
+  let modesDone = false;
+  let modesWarned = false;
+  function ensureModesCollapsed() {
+    if (modesDone) return;
     const modes = shippedClass("InputBar.module.css", "_modes");
-    const trailing = shippedClass("InputBar.module.css", "_trailing");
-    const primary = shippedClass("InputBar.module.css", "_primary");
-    if (modes === null || trailing === null || primary === null) {
-      if (attempts >= 20 && !layoutWarned) {
-        layoutWarned = true;
+    if (modes === null) {
+      if (attempts >= 20 && !modesWarned) {
+        modesWarned = true;
         console.error(
-          "composer menu: could not read the InputBar row classes, so the menu " +
-            "and the attach button keep their shipped positions.",
+          "composer menu: could not read the InputBar modes class, so the menu " +
+            "trigger keeps its shipped position.",
         );
       }
       return;
     }
-    injectStyle(
-      PLUGIN_NAME,
-      "composer-menu-row-layout",
-      "." +
-        modes +
-        " { display: contents; }\n" +
-        "." +
-        trailing +
-        " > .dsh-p2p-picker, ." +
-        trailing +
-        " > *:has(.dsh-p2p-picker) { order: 1; }\n" +
-        "." +
-        trailing +
-        " > ." +
-        primary +
-        ", ." +
-        trailing +
-        " > *:has(> ." +
-        primary +
-        ") { order: 2; }",
-    );
-    layoutDone = true;
+    injectStyle(PLUGIN_NAME, "composer-menu-collapse-modes", "." + modes + " { display: contents; }");
+    modesDone = true;
+  }
+
+  // The attachment picker registers in conversation.input.right, and that
+  // whole slot renders BEFORE the model seat and the context meter, not
+  // directly beside send/stop. A pure CSS rule cannot move it: a comma-joined
+  // selector list with an unsupported or non-matching `:has()` branch voids
+  // the WHOLE rule (see plugins/context-meter's placeAfterModelSelect for the
+  // same problem on this same row, hit first). That plugin's fix is the
+  // proven one, reused verbatim here: walk from the picker's own element up
+  // to the tool row's direct child, order every node in that chain, then bump
+  // the row's actual last child (the send button) past it.
+  //
+  // Shared tier contract with plugins/context-meter: the meter takes order 1,
+  // this picker takes order 2, and the send-button bump is 3 either plugin
+  // may assert it, since both hardcode the same literal. Changing any of
+  // these three numbers needs the matching change in the other plugin.
+  let pickerWarned = false;
+  function placePickerBeforeSend() {
+    const picker = document.querySelector(".dsh-p2p-picker");
+    if (picker === null) return;
+    const trailing = shippedClass("InputBar.module.css", "_trailing");
+    if (trailing === null) {
+      if (attempts >= 20 && !pickerWarned) {
+        pickerWarned = true;
+        console.error(
+          "composer menu: could not read the composer tool row class, so the attach " +
+            "button stays left of the model select.",
+        );
+      }
+      return;
+    }
+    const rowEl = picker.closest("." + trailing);
+    if (rowEl === null) return;
+    const chain: Element[] = [];
+    let node: Element | null = picker;
+    while (node !== null && node !== rowEl) {
+      chain.push(node);
+      node = node.parentElement;
+    }
+    if (node !== rowEl) return;
+    for (const item of chain) (item as HTMLElement).style.order = "2";
+    const last = rowEl.lastElementChild;
+    if (last !== null && chain.indexOf(last) === -1) (last as HTMLElement).style.order = "3";
   }
 
   /** Post one preset choice to the host route. */
@@ -154,7 +185,8 @@ function apply(ctx: any) {
   function Menu(props: any) {
     react.useEffect(() => {
       ensureShippedHidden();
-      ensureComposerLayout();
+      ensureModesCollapsed();
+      placePickerBeforeSend();
     });
 
     const [open, setOpen] = react.useState(false);

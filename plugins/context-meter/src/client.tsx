@@ -98,6 +98,14 @@ function apply(ctx: any) {
    * at all, so order on it is inert. Apply the order to every element from our
    * root up to the row's direct child: exactly one of them is the real flex
    * item, and the order does nothing on the others.
+   *
+   * Shared tier contract with plugins/composer-menu, which reorders the attach
+   * picker on this same row with the identical technique: this meter takes
+   * order 1, composer-menu's picker takes order 2, and whichever plugin's
+   * effect runs last bumps the row's actual last child (the send button) to
+   * order 3. Both plugins hardcode that same "3" literal, so re-asserting it
+   * on every render is a no-op collision, not a fight. Changing any of these
+   * three numbers here requires the matching change in composer-menu.
    */
   function placeAfterModelSelect(el: any) {
     if (el === null || typeof document === "undefined") return;
@@ -124,7 +132,7 @@ function apply(ctx: any) {
     if (node !== rowEl) return;
     for (const item of chain) item.style.order = "1";
     const last = rowEl.lastElementChild;
-    if (last !== null && chain.indexOf(last) === -1) last.style.order = "2";
+    if (last !== null && chain.indexOf(last) === -1) last.style.order = "3";
   }
 
   function Meter(props: any) {
