@@ -86,12 +86,73 @@ shift it exposed (B5, B6).
   run on a given machine. `set -euo pipefail` means one failing earlier step
   silently blocks every step after it. Verify a step's actual effect against
   the live install before trusting that sync.sh already applied it.
+- **Rejecting an approval cancels the running turn. That is upstream and
+  hard-coded, not our bug.** Recorded 2026-09-03 after a live test, and
+  restored here on 2026-09-05 after the PLAN.md rewrite dropped it.
+  `@deepseek-ai/dsh-user-approval/lib/index.js:215-226` calls
+  `agent.cancel({ kind: "user", reason: "approval-rejected" }, ...)` and
+  then delivers the fixed text "The user rejected your approval request.
+  Stop and explain what happened. Do not retry the rejected action." That
+  cancel plus the injected followup is why the agent appears to stop and
+  restart. There is no setting: `ApprovalPolicy` is only `'ask' | 'never'`,
+  and the early return at line 216 fires only under `'never'`, which
+  auto-rejects everything. Changing it means shadowing that row, the same
+  pattern as the compaction fork, which the owner deferred on 2026-09-03.
+  H8 must design around this, not assume an inline reject behaves better.
+- The web profile patch points STRAIGHT at `plugins/bash-guard.js`, so the
+  built artifact IS the deployed plugin. There is no separate install step
+  for it, and a `dsh` restart alone deploys whatever `node build.mjs` last
+  wrote. Run the build before the restart, not after.
 - One ticket (TypeScript and tests across the WHOLE repo, old Effort 11 T9)
   is deliberately absent: it is unscoped and needs a design pass before it
   can carry criteria. C6b's strict-mode retrofit is a DIFFERENT, narrower
   thing — scoped to one file, `plugins/tool-render/src/client.tsx` — settled
   with the owner on 2026-09-05. Do not conflate the two or treat C6b as
   having settled T9's own repo-wide question.
+- **Tooltip opt-in rules, restored 2026-09-05 from the old plan, so nobody
+  has to rediscover them.** Add `data-dsh-tip=""` to a DOM element that
+  already carries a `title`. The text always comes from `title`, so there is
+  only ever one copy of the string and nothing can drift. NEVER opt in an
+  `<option>`: a native select popup is drawn by the operating system, so a
+  page tooltip cannot appear over it and the page does not reliably receive
+  hover events while it is open. Opting in there removes the native tooltip
+  that already works and puts nothing in its place. Three of these were
+  added and reverted once. A capitalized tag is a React component, and its
+  `title` is a prop, so skip it — `SettingsSection title={...}` appears in
+  four plugins. `plugins/tooltips` has no test today.
+- **The compaction fork's install and maintenance facts, restored
+  2026-09-05.** The fork installs under the alias
+  `@deepseek-ai/dsh-compaction-basic`. A direct install under the real
+  package name activates the package's own bundle patch, which inserts rows
+  the web patch already inserts, and boot dies on a duplicate loader entry
+  id. `main` HEAD of the fork is unusable here: commit `28107e6` imports
+  `@deepseek-ai/dsh-util-values`, which dsh 0.1.0-rc.7 does not ship.
+  Revisit when dsh reaches 0.1.2. Edit the fork from the primary session —
+  the clone at `/home/sid/repos/dsh-compaction-instant` sits outside the
+  session workspace, and a dispatched coder's escalation was refused
+  outright. `scripts/unshadow-compactions.py` rewrites a stored checkpoint's
+  `surfaceOp` from `replace` to `"append"`, so a log showing that was
+  almost certainly rewritten by the script and is not evidence of a
+  compaction bug. Two hours were lost to that confusion once.
+  `@deepseek-ai/dsh-compaction-tool-result-pruner` was considered and
+  REJECTED: `compilableTokens` now does that job at the gate. Do not install
+  it without new evidence.
+- **Patch roster traps in sync.sh, both boot-breaking, restored 2026-09-05.**
+  A patch row id must be unique across every bundle layer. `dsh-base`
+  already mounts `command-compact`, and `dsh-web-app` then disables it,
+  because the web app moves the compaction backend into the preset plane. An
+  `insert:` row that reused that id killed boot with "duplicate loader entry
+  id: command-compact" and blocked login. To re-enable an existing row,
+  write a top-level override (`- id: <id>` plus `disabled: false`), never an
+  insert. The `remote` row carries the same warning. Separately,
+  `step_write_web_patch` writes an UNQUOTED heredoc, so `$var` and backticks
+  expand inside it. Never put backticks in a comment there.
+- easyeda exposes no project-list tool, and the bridge advertises no
+  `project.list` capability. Every tool reads the document EasyEDA Pro has
+  focused, so a project must be open in the editor first.
+- Public MCP tool names stay `mcp__<name>__*`. This is a hard constraint:
+  the expense-split skill names `mcp__blinkit__*`, `mcp__swiggy-food__*`,
+  and `mcp__zepto__*` directly, so a roster rename breaks that skill.
 
 ## Phase 1: Harness and guard friction — `pending`
 
@@ -101,16 +162,48 @@ shift it exposed (B5, B6).
   `guards/podman.json` and `guards/npm.json` so podman runs and npm installs
   stop paying avoidable approval friction.
 
+  Design detail restored on 2026-09-05 from the old plan, because losing it
+  would produce the wrong rule:
+
+  - The podman rule must use `warn`, NOT `deny`. A deny breaks podman
+    outright when the session already holds `danger-full-access`, because
+    the guard gates bash calls independently of the sandbox mode. The rule
+    should name `/run/user/1000` and `sandbox_permissions:
+    danger-full-access` in its note, so the model reads a usable
+    instruction instead of a bare read-only error.
+  - The npm rule covers `install` AND `ci`, not `install` alone.
+  - These criteria were written as a proposal and were never settled with
+    the owner. Grill them before dispatching this ticket.
+  - There is a measurement tool for the result:
+    `experiments/tool-call-friction/scan-sandbox-friction.mjs`, run with a
+    `SINCE=<deploy-date>` env var.
+
   **Evaluate:**
 
   - `podman ps` under the default workspace policy runs without an approval
-    prompt
-  - `npm install` and `pnpm install` without an explicit cache flag gain
-    `--cache /tmp/dsh/npm-cache`, and an explicit `--cache` call is untouched
+    prompt, and still runs under `danger-full-access`
+  - `npm install`, `npm ci`, and `pnpm install` without an explicit cache
+    flag gain `--cache /tmp/dsh/npm-cache`, and an explicit `--cache` call
+    is untouched
   - after `./sync.sh` both files exist under `~/.dsh/plugins/guards`
+  - a re-run of the friction scan shows the opaque-failure count for podman
+    and npm drop
+  - a manual check: run `podman ps` under `workspace-write` and confirm the
+    rule's note reaches the model instead of a bare read-only error
 - [ ] **Ticket H2: sync.sh applies the aidos dsh patches.** Run aidos's
   `apply-dsh-patches.sh` after aidos install and after any dsh version change,
   treating a non-zero exit as a sync failure.
+
+  Why, restored from the old plan on 2026-09-05: aidos needs one behavioral
+  patch in the INSTALLED dsh tree. The fs sandbox must exempt the aidos
+  durable scratch root (`~/.dsh/aidos/scratch/<workspace-key>/`), which the
+  harness policy already allows in every phase but the sandbox layer still
+  denies (aidos ticket #60). Without it, every scratch write that reaches the
+  sandboxed fs tools refuses with `FS_SANDBOX_DENIED`, including
+  `scratch_edit`'s delegation to `edit`. The script is idempotent and fails
+  loudly on upstream drift. A silent skip reproduces the exact
+  `FS_SANDBOX_DENIED` confusion it exists to end. Resolve the dsh package
+  root the same way the script does, from the root behind the `dsh` binary.
 
   **Evaluate:**
 
@@ -118,6 +211,11 @@ shift it exposed (B5, B6).
     dsh-sandbox package
   - a second consecutive `./sync.sh` run reports the patch as already applied
     and exits zero
+  - if upstream dsh changes the patched `writableRoots` block, `./sync.sh`
+    fails with the script's own message naming the mismatch, rather than
+    continuing
+  - a scratch write from an aidos session succeeds after sync and restart,
+    with no `FS_SANDBOX_DENIED`
 - [ ] **Ticket H3: Remove the stale mcp-manager state file.** Delete
   `~/.dsh/mcp-manager.json` and add the removal to sync.sh so old installs
   converge.
@@ -125,12 +223,23 @@ shift it exposed (B5, B6).
   **Evaluate:**
 
   - the file is gone after sync, and a second sync run does not recreate it
+  - the journal shows no `mcp-manager` row, and no tool name is registered
+    twice
 - [ ] **Ticket H4: Clear stale dsh-better-edit references.** Remove or rewrite
   comments and doc text that still name dsh-better-edit after its retirement.
+
+  Targets, restored from the old plan on 2026-09-05: the comment block in
+  `plugins/manifest-guard.ts` (~line 23), `plugins/package-tool.ts`
+  (~lines 25, 5), the `README.md` line about guidance overrides, and
+  `skills/customize-setup/SKILL.md` plus its `template.md` (both line ~55).
+  Leave `experiments/tool-call-friction/` alone. Comments only, no code
+  change. Both files hook `fs/write-intent`, which the builtin edit dispatches
+  too.
 
   **Evaluate:**
 
   - `rg better-edit` across the repo returns no hits outside git history
+  - `pnpm test` passes
 - [ ] **Ticket H5: manifest-guard documents the supported script route.** The
   deny message should name the sanctioned way to change a manifest, so the
   model stops retrying the blocked write. `DENY_MESSAGE` at
@@ -300,22 +409,73 @@ shift it exposed (B5, B6).
 - [ ] **Ticket C2: Finish the tooltip rollout.** job-viewer rows carry no
   `data-dsh-tip` tooltips yet.
 
+  `plugins/job-viewer` was skipped on purpose, because another session owned
+  it at the time. It has at least one `title`, at
+  `plugins/job-viewer/src/client.tsx:333`. Any plugin added later needs the
+  same pass.
+
   **Evaluate:**
 
   - hovering a truncated row label in the jobs panel shows the full text
-- [ ] **Ticket C3: A resume_search card.** Render resume_search results as a
-  structured card with one row per hit instead of raw text.
+- [ ] **Ticket C3a: resume_search gains presentationMeta.** The host half of
+  the resume_search card. `plugins/resume.ts:219-249` declares an
+  `output.schema` and a `render` for `resume_search`, but no
+  `presentationMeta`, so nothing structured reaches the browser. The client
+  cannot read a tool's canonical value, so adding the client card without
+  this would force it to re-parse rendered text, which is the wrong seam.
+  Project the canonical value as is, or close to it:
+  `{ hits: [{ source, seq, role, text }], total, page, hasMore }`. A page
+  holds at most 15 hits and each `text` is already a one-line teaser, so the
+  projection stays bounded. It arrives on the client snapshot as the
+  completed block's `meta` field, exactly as bash-guard's does. See `06cee1c`
+  for the working example and `guardRewriteOf` for the defensive read
+  pattern.
 
   **Evaluate:**
 
-  - a resume_search call renders the card with hit source, seq, and teaser text
+  - `plugins/resume.ts` declares `presentationMeta` for `resume_search`,
+    carrying the projected hit shape
+  - the projection stays bounded, at one page of hits per card
+- [ ] **Ticket C3b: A resume_search card.** Render resume_search results as a
+  structured card with one row per hit instead of raw text. **Blocked on
+  C3a**, which puts the structured data on the wire.
+
+  Register a `resume_search` row in `plugins/tool-render/src/client.tsx`.
+  Summary line: the header the host already builds, for example
+  `12 matches, page 1 of 2`. Body: one bullet per hit, each showing
+  `source`, `seq`, `role`, and the teaser `text`. Reuse the existing row
+  scaffolding rather than inventing a new card shape.
+
+  **Evaluate:**
+
+  - a resume_search call renders the card with hit source, seq, and teaser
+    text, not a text blob
+  - a zero-hit search still renders a readable row
+  - the card survives a page reload, because the projection is durable
 - [ ] **Ticket C4: resume_search excludes what is still in context.** Hits from
   nodes still on the live surface waste the reader's time; filter them.
+
+  The mechanism, restored from the old plan on 2026-09-05. Searching the
+  current session is the whole point of the tool (`plugins/resume.ts:17-19`),
+  so do NOT exclude the current session outright. Drop only the part the
+  agent already sees. A `compaction/summary` event carries `shadowedSeqs`
+  (`plugins/resume.ts:89-90` reads its length today). That array is the
+  authoritative set of seqs the compaction removed from the model surface.
+  For the CURRENT session only, keep a hit when its `seq` appears in the
+  union of `shadowedSeqs` across every `compaction/summary` event. Drop it
+  otherwise. Confirm this consequence is wanted: in a session that has never
+  compacted, the union is empty, so the current session contributes no hits
+  at all. Update the tool description at `plugins/resume.ts:198`, which
+  currently promises "past compactions included" and would no longer tell
+  the whole truth.
 
   **Evaluate:**
 
   - a query that matches both compacted and live text returns only compacted
     hits
+  - a search in a compacted session still finds pre-compaction content
+  - hits from other sessions are unchanged
+  - the tool description states the new behavior
 - [ ] **Ticket C5: skill-gate posts a notice when a skill loads.** After a
   skill load unmasks gated tools, inject a short notice so the model knows the
   tools land on the next step.
@@ -385,10 +545,42 @@ shift it exposed (B5, B6).
   landing path under our control. Do not reopen this on the grounds that
   the current surface works — that was already weighed.
 
+  Spec, restored from the old plan on 2026-09-05:
+
+  - Host: one route that writes under `<workspace>/.dsh/<drops-dir>/` and
+    answers the path plus real metadata. Metadata includes image dimensions
+    and a type description. Derive them the cheap way (`file`, or an
+    image-header read) rather than adding an image dependency.
+  - Client: composer paste/drop support WITH a preview card, for the human.
+    The text that actually enters the message is ONE minimal line, for
+    example `attachment: /home/sid/repos/proj/.dsh/<uuid>.png image/png
+    1920x1080`. No dock prose, no codec expansion.
+  - An exported client helper, `dropUpload(sessionId, workspace, blob) ->
+    { path, ... }`, so another plugin can use the transport directly with no
+    composer involvement at all. The owner consumes this helper.
+  - **UNRESOLVED, settle before building this ticket.** The landing
+    directory conflicts between the two sources merged here. This ticket's
+    own summary line says `/tmp/dsh`. The restored host spec says
+    `<workspace>/.dsh/<drops-dir>/`. The shipped `dsh-paste-to-path` writes
+    under `<workspace>/.dsh/pastes/images/` today, so the workspace path is
+    the current behavior, not the scratch root. Pick one and correct the
+    other line. A workspace path keeps a drop next to the project it belongs
+    to. `/tmp/dsh` keeps dropped files out of the repository and matches the
+    sanctioned scratch root.
+
   **Evaluate:**
 
   - dragging an image onto the composer attaches it and the file lands under
     `/tmp/dsh`
+  - pasting an image shows a preview card, and on send the message carries
+    exactly the one-line attachment reference
+  - a non-image file (pdf, log) works through the same path with its own
+    metadata line
+  - the exported helper uploads a Blob and returns the path with NO composer
+    side effects, proving the transport is reusable
+  - a workspace that does not exist, or a path escaping it, is refused with a
+    named error
+  - `node build.mjs`, `npx tsc --noEmit`, and `pnpm test` pass
 - [ ] **Ticket A2: Retire dsh-paste-to-path.** Remove the old plugin from
   sync.sh once the replacement covers its behavior.
 
@@ -408,9 +600,26 @@ shift it exposed (B5, B6).
 - [ ] **Ticket B4: Browse old todo lists from the composer.** The todo panel
   gains history browsing and an insert action.
 
+  Spec, restored from the old plan on 2026-09-05. Two chevron buttons in the
+  EXPANDED panel step through past lists, and stop at both ends. Each
+  historical view shows the timestamp that list was written. History rides
+  the projection, bounded to the LAST 35 WRITES, chosen over a per-turn
+  bound and over a host route. Insert takes the whole shown list, never a
+  subset: it appends every item as a markdown checkbox list to the composer
+  draft through the same append path the Remind button uses, including the
+  blank-line separator and the empty-draft case. It never submits. Nothing
+  steers and nothing can fail silently. No edit-mode toggle and no
+  per-item selection. Leaving history returns to the live current list.
+
   **Evaluate:**
 
   - an older list can be opened and inserted into the composer
+  - the chevrons walk back and forward through the retained lists, and stop
+    at both ends
+  - each historical view shows the timestamp that list was written
+  - Insert appends the shown list as a markdown checkbox list to the draft,
+    and never submits
+  - leaving history returns to the live current list
 - [ ] **Ticket B5: The todo panel header becomes two badges.** Asked for and
   fully specced with the owner on 2026-09-05. The
   `plugins/durable-todos` header replaces its title-plus-prose-summary
@@ -479,24 +688,51 @@ shift it exposed (B5, B6).
 - [ ] **Ticket G1: Derive the shot list from sync.sh.** Enumerate every UI
   surface the bundle changes so the gallery covers them.
 
+  Recipe, restored from the old plan on 2026-09-05. Walk the `pnpm_ins`
+  calls and the roster array in `sync.sh`, which together name every
+  installed plugin. Produce a table in `screenshots/README.md` with one of
+  three verdicts per plugin: has UI and needs a shot, has UI but already
+  covered by another shot, or has no UI. A no-UI verdict carries one line
+  saying why, so a later reader does not redo the check.
+
   **Evaluate:**
 
   - the shot list names one entry per bundle plugin with a visible surface
+  - every `pnpm_ins` spec in `sync.sh` appears in the table exactly once
+  - each row carries a verdict, and a no-UI verdict says why
 - [ ] **Ticket G2: Capture the shots.** Screenshot each surface on a live
   session, before and after where it matters.
+
+  Recipe, restored from the old plan on 2026-09-05. Shots are WebP scaled to
+  720p, with this verified command:
+  `magick <in>.png -resize x720 -quality 82 -define webp:method=6 <out>.webp`.
+  `-resize x720` fixes the height and keeps the aspect ratio. Do not force
+  both dimensions. Name files after the plugin id, for example
+  `context-meter.webp`. Prefer a shot showing the feature in use over an
+  empty state. Use one theme throughout so the gallery reads consistently,
+  and say in the README which theme it is.
 
   **Evaluate:**
 
   - every row marked "needs a shot" has a `.webp` file, and no file is orphaned
   - `magick identify` reports a height of 720 for every shot
   - no shot exceeds 150 KB
+  - each image is legible at the width GitHub renders it in the README
+  - the owner agrees each shot shows the feature rather than an empty panel
 - [ ] **Ticket G3: Write the gallery README.** A README section shows the
   shots with captions.
+
+  Recipe, restored from the old plan on 2026-09-05. One section per shot
+  with the image, the plugin name, and one or two sentences on what changed
+  against stock. Then pick the few that best show the bundle and add them to
+  the main `README.md`, linking through to the full gallery.
 
   **Evaluate:**
 
   - the main README links the gallery and every image renders
   - the main README carries a small selection, not the whole gallery
+  - each caption says what is different from stock, not just what the thing
+    is
 
 ## Phase 6: Fork-side fix — `pending`
 
@@ -551,3 +787,8 @@ shift it exposed (B5, B6).
       `podman` shell command first.
 - [ ] Screenshot gallery — the owner picks which shots reach the main
       README, because that is a taste call and not a checkable one.
+- [ ] Job viewer wake-up notice, verifying the shipped Effort 6 completion
+      delivery: let a background job finish while idle and confirm you get
+      woken up with a notice, without having to ask about it.
+- [ ] Job viewer modal over dsh-remote, verifying the shipped Effort 6 modal:
+      open the modal from the phone and confirm it loads and keeps polling.
