@@ -257,7 +257,7 @@ const MARKER_BEGIN_COMMENT = "# sync-models:begin";
 const MARKER_END_COMMENT = "# sync-models:end";
 const MARKER_BEGIN = "      " + MARKER_BEGIN_COMMENT;
 const MARKER_END = "      " + MARKER_END_COMMENT;
-const SEEDED_PROVIDERS = new Set(["command-code", "opencode-zen", "opencode-go", "meridian", "zai"]);
+const SEEDED_PROVIDERS = new Set(["command-code", "opencode-zen", "opencode-go", "meridian", "zai", "electronhub"]);
 // Model-listing path for a provider whose endpoint is not at `{baseURL}/models`.
 // meridian proxies the Anthropic API and serves an OpenAI-shaped list at
 // /v1/models; a GET on /models returns "Endpoint not supported".
@@ -534,6 +534,11 @@ async function main() {
       continue;
     }
     console.log(`  provider exposes ${ids.length} model id(s)`);
+    // electronhub: filter to only ids that contain :dev
+    if (p.name === 'electronhub') {
+      ids = ids.filter((id) => id.includes(':dev'));
+      console.log(`  filtering to :dev ids: ${ids.length} model id(s)`);
+    }
     // Gateway-extras: cut the catalog provider's own models so this route
     // only lists what the catalog does not ship, except chain-mentioned ids
     // the live endpoint serves: those stay seeded so chain refs never warn.
@@ -562,7 +567,9 @@ async function main() {
       // Single source: models.dev. Tier 1 is our route's own provider, tier 2
       // is the first-party vendor chosen from the model id prefix, tier 3 is
       // the union across every models.dev provider. First hit wins.
-      const hit = lookupModelsDev(id, modelsDevIndex, p.name);
+      // electronhub: strip :dev suffix for models.dev lookup only
+      const lookupId = p.name === 'electronhub' && id.endsWith(':dev') ? id.slice(0, -4) : id;
+      const hit = lookupModelsDev(lookupId, modelsDevIndex, p.name);
       tierCounts[hit ? hit.tier : "none"]++;
       const entry = hit?.entry;
       // models.dev reports vision via `modalities.input` containing "image".
