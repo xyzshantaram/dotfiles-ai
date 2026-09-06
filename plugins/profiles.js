@@ -186,6 +186,19 @@ function activeEntry(profile) {
   return (profile?.active ?? "work") === "personal" ? profile?.personal : profile?.work;
 }
 var failoverEvents = /* @__PURE__ */ new Map();
+function recordFailoverEvent(sessionId, from, to, code, rung, total) {
+  failoverEvents.set(sessionId, {
+    from,
+    to,
+    code,
+    time: Date.now(),
+    rung,
+    total
+  });
+}
+function clearFailoverEvents() {
+  failoverEvents.clear();
+}
 var ERROR_CLASSES = [
   "auth",
   "no-credits",
@@ -518,15 +531,15 @@ ${tried}`);
         `session ${sessionLabel(agent)} failing over from ${cur.provider}/${cur.model} to ${nxt.provider}/${nxt.model}`
       );
       const sessionId = sessionLabel(agent);
-      failoverEvents.set(sessionId, {
-        from: { provider: cur.provider, model: cur.model },
-        to: { provider: nxt.provider, model: nxt.model },
-        code: failure.code ?? "UNKNOWN",
-        time: Date.now(),
-        rung: s.cursor + 1,
+      recordFailoverEvent(
+        sessionId,
+        { provider: cur.provider, model: cur.model },
+        { provider: nxt.provider, model: nxt.model },
+        failure.code ?? "UNKNOWN",
+        s.cursor + 1,
         // 1-based position in chain
-        total: s.levels.length
-      });
+        s.levels.length
+      );
       const agentObj = agent;
       const deliver = typeof agentObj.steer === "function" ? (message) => agentObj.steer(message) : typeof agentObj.inject === "function" ? (message) => agentObj.inject(message) : void 0;
       if (deliver !== void 0) {
@@ -836,7 +849,7 @@ function makeFailoverStatusHandler(ctx) {
     let lastEvent = null;
     let newestTime = 0;
     for (const event of failoverEvents.values()) {
-      if (event.time > newestTime) {
+      if (event.time >= newestTime) {
         newestTime = event.time;
         lastEvent = event;
       }
@@ -912,12 +925,15 @@ export {
   advanceChain,
   apply,
   clearDownCache,
+  clearFailoverEvents,
   effectiveTtlMs,
   failoverNoticeText,
   inject,
   isCachedDown,
+  makeFailoverStatusHandler,
   markDown,
   name,
   normalizeErrorClass,
+  recordFailoverEvent,
   recordFailure
 };

@@ -234,6 +234,34 @@ interface FailoverEvent {
 }
 const failoverEvents = new Map<string, FailoverEvent>();
 
+/**
+ * Record a failover event into the failover map.
+ */
+export function recordFailoverEvent(
+  sessionId: string,
+  from: { provider: string; model: string },
+  to: { provider: string; model: string },
+  code: string,
+  rung: number,
+  total: number,
+): void {
+  failoverEvents.set(sessionId, {
+    from,
+    to,
+    code,
+    time: Date.now(),
+    rung,
+    total,
+  });
+}
+
+/**
+ * Clear all recorded failover events.
+ */
+export function clearFailoverEvents(): void {
+  failoverEvents.clear();
+}
+
 // ── Error cache (W21) ───────────────────────────────────────────────────────
 // A persistent fault marks one (provider, model, error-class) key down for
 // its class time to live. Selections skip the dead rung at proposal time and
@@ -690,14 +718,14 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
 
       // Record the failover event for the status endpoint (Ticket 3).
       const sessionId = sessionLabel(agent);
-      failoverEvents.set(sessionId, {
-        from: { provider: cur.provider, model: cur.model },
-        to: { provider: nxt.provider, model: nxt.model },
-        code: failure.code ?? "UNKNOWN",
-        time: Date.now(),
-        rung: s.cursor + 1, // 1-based position in chain
-        total: s.levels.length,
-      });
+      recordFailoverEvent(
+        sessionId,
+        { provider: cur.provider, model: cur.model },
+        { provider: nxt.provider, model: nxt.model },
+        failure.code ?? "UNKNOWN",
+        s.cursor + 1, // 1-based position in chain
+        s.levels.length,
+      );
 
       // Deliver a chat row for the failover switchover. steer, not
       // inject: inject splices into the agent inbox only (invisible context
@@ -1076,7 +1104,7 @@ function makeErrorCacheHandler(ctx: Context) {
   };
 }
 
-function makeFailoverStatusHandler(ctx: Context) {
+export function makeFailoverStatusHandler(ctx: Context) {
   return async (req: IncomingMessage, res: ServerResponse) => {
     if (req.method !== "GET") {
       sendJson(res, 405, { ok: false, error: `method ${req.method} not allowed` });
@@ -1094,7 +1122,7 @@ function makeFailoverStatusHandler(ctx: Context) {
     let lastEvent: FailoverEvent | null = null;
     let newestTime = 0;
     for (const event of failoverEvents.values()) {
-      if (event.time > newestTime) {
+      if (event.time >= newestTime) {
         newestTime = event.time;
         lastEvent = event;
       }

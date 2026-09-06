@@ -5,7 +5,16 @@
  * The tests pin the exact contract before extraction lands.
  */
 import { describe, expect, it, beforeEach, vi } from "vitest";
-import { advanceChain, recordFailure, markDown, isCachedDown, clearDownCache } from "./profiles";
+import {
+  advanceChain,
+  recordFailure,
+  markDown,
+  isCachedDown,
+  clearDownCache,
+  makeFailoverStatusHandler,
+  recordFailoverEvent,
+  clearFailoverEvents,
+} from "./profiles";
 
 describe("advanceChain", () => {
   const makeLevel = (provider: string, model: string) => ({ provider, model });
@@ -215,5 +224,215 @@ describe("down-cache", () => {
 
     vi.setSystemTime(60_001 + 60_000 + 1);
     expect(isCachedDown(level)).toBe(false);
+  });
+});
+
+describe("failover-status", () => {
+  function mockCtx(profile: unknown) {
+    const noop = () => {};
+    return {
+      logger: { debug: noop, info: noop, warn: noop, error: noop },
+      get(name: string) {
+        if (name === "settings") {
+          return {
+            get: () => profile,
+          };
+        }
+        return undefined;
+      },
+    };
+  }
+
+  function mockReq(method: string) {
+    return { method };
+  }
+
+  function mockRes() {
+    let statusCode = 0;
+    let jsonBody: unknown = null;
+    return {
+      statusCode: 0,
+      setHeader(_key: string, _value: string) {
+        // no-op for test
+      },
+      end(data: string) {
+        jsonBody = JSON.parse(data);
+      },
+      getStatus: () => statusCode,
+      getBody: () => jsonBody,
+      set statusCode(val: number) {
+        statusCode = val;
+      },
+      get statusCode() {
+        return statusCode;
+      },
+    };
+  }
+
+  beforeEach(() => {
+    clearFailoverEvents();
+  });
+
+  it("GET with no events returns ok true and the three-level active chain with head level equal to chain head and last event null", async () => {
+    const profile = {
+      active: "work",
+      work: {
+        orchestrator: {
+          routes: [
+            { provider: "p1", model: "m1" },
+            { provider: "p2", model: "m2" },
+            { provider: "p3", model: "m3" },
+          ],
+        },
+        subagent: { routes: [] },
+      },
+      personal: { orchestrator: { routes: [] }, subagent: { routes: [] } },
+    };
+    const ctx = mockCtx(profile) as any;
+    const req = mockReq("GET") as any;
+    const res = mockRes() as any;
+
+    const handler = makeFailoverStatusHandler(ctx);
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    const body = res.getBody();
+    expect(body).toEqual({
+      ok: true,
+      activeChain: [
+        { provider: "p1", model: "m1" },
+        { provider: "p2", model: "m2" },
+        { provider: "p3", model: "m3" },
+      ],
+      headLevel: { provider: "p1", model: "m1" },
+      lastEvent: null,
+    });
+  });
+
+  it("non-GET returns the exact method-not-allowed status from the handler with ok false", async () => {
+    const profile = {
+      active: "work",
+      work: { orchestrator: { routes: [] }, subagent: { routes: [] } },
+      personal: { orchestrator: { routes: [] }, subagent: { routes: [] } },
+    };
+    const ctx = mockCtx(profile) as any;
+    const req = mockReq("POST") as any;
+    const res = mockRes() as any;
+
+    const handler = makeFailoverStatusHandler(ctx);
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(405);
+    const body = res.getBody();
+    expect(body.ok).toBe(false);
+    expect(body.error).toContain("not allowed");
+  });
+
+  it("after two recorded events for two sessions the response carries the later write with its rung and total intact", async () => {
+    const profile = {
+      active: "work",
+      work: {
+        orchestrator: {
+          routes: [
+            { provider: "p1", model: "m1" },
+            { provider: "p2", model: "m2" },
+          ],
+        },
+        subagent: { routes: [] },
+      },
+      personal: { orchestrator: { routes: [] }, subagent: { routes: [] } },
+    };
+    const ctx = mockCtx(profile) as any;
+    const req = mockReq("GET") as any;
+    const res = mockRes() as any;
+
+    recordFailoverEvent(
+      "session-1",
+      { provider: "p1", model: "m1" },
+      { provider: "p2", model: "m2" },
+      "RATE_LIMIT",
+      1,
+      2,
+    );
+    recordFailoverEvent(
+      "session-2",
+      { provider: "p1", model: "m1" },
+      { provider: "p2", model: "m2" },
+      "AUTH",
+      2,
+      2,
+    );
+
+    const handler = makeFailoverStatusHandler(ctx);
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    const body = res.getBody();
+    expect(body.ok).toBe(true);
+    expect(body.lastEvent).toEqual({
+      from: { provider: "p1", model: "m1" },
+      to: { provider: "p2", model: "m2" },
+      code: "AUTH",
+      time: expect.any(Number),
+      rung: 2,
+      total: 2,
+    });
+  });
+
+  it("rung and total pass through untouched from record to response", async () => {
+    const profile = {
+      active: "work",
+      work: {
+        orchestrator: {
+          routes: [
+            { provider: "p1", model: "m1" },
+            { provider: "p2", model: "m2" },
+            { provider: "p3", model: "m3" },
+          ],
+        },
+        subagent: { routes: [] },
+      },
+      personal: { orchestrator: { routes: [] }, subagent: { routes: [] } },
+    };
+    const ctx = mockCtx(profile) as any;
+    const req = mockReq("GET") as any;
+    const res = mockRes() as any;
+
+    recordFailoverEvent(
+      "session-test",
+      { provider: "p1", model: "m1" },
+      { provider: "p2", model: "m2" },
+      "SERVER",
+      3,
+      5,
+    );
+
+    const handler = makeFailoverStatusHandler(ctx);
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    const body = res.getBody();
+    expect(body.lastEvent.rung).toBe(3);
+    expect(body.lastEvent.total).toBe(5);
+  });
+
+  it("empty chain in profile returns head level null with ok true", async () => {
+    const profile = {
+      active: "work",
+      work: { orchestrator: { routes: [] }, subagent: { routes: [] } },
+      personal: { orchestrator: { routes: [] }, subagent: { routes: [] } },
+    };
+    const ctx = mockCtx(profile) as any;
+    const req = mockReq("GET") as any;
+    const res = mockRes() as any;
+
+    const handler = makeFailoverStatusHandler(ctx);
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    const body = res.getBody();
+    expect(body.ok).toBe(true);
+    expect(body.headLevel).toBe(null);
+    expect(body.activeChain).toEqual([]);
   });
 });
