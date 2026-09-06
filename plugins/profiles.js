@@ -302,6 +302,10 @@ function isCachedDown(level) {
   }
   return false;
 }
+function clearDownCache() {
+  downCache.clear();
+  doubleStrikes.clear();
+}
 function liveDownKeys() {
   const now = Date.now();
   for (const [key, at] of downCache) {
@@ -907,8 +911,12 @@ export {
   Config,
   advanceChain,
   apply,
+  clearDownCache,
+  effectiveTtlMs,
   failoverNoticeText,
   inject,
+  isCachedDown,
+  markDown,
   name,
   normalizeErrorClass,
   recordFailure
