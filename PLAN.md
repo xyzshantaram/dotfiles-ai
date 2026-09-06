@@ -10,7 +10,6 @@ Add ElectronHub DevPass as a seeded provider, repair the orchestrator and subage
 - [ ] Ticket 2 — chain surgery: Spark levels repointed at a responses provider, DevPass glm placed, longcat plus dead spark levels dropped. Closes when the dry-run chain check reports zero warnings for every kept ref.
 - [ ] Ticket 3 — failover status endpoint plus chip segment: rung count, waterfall icon, hide rules, tooltip, middle-click reset. Closes when `node build.mjs` passes and the segment renders in a live dsh session (human check below).
 - [ ] Ticket 4 — review and commit: researcher review pass on the chip work, independent diff read, grouped commits with user approval. Closes when the tree is clean.
-- [ ] Ticket 6 — Slice 2: extract pure chain-walk state machine in `plugins/profiles.ts` with zero behavior change. Closes when new `plugins/profiles-failover.test.ts` plus full `pnpm test` are green.
 - [ ] Ticket 7 — Slice 3: export plus pin down-cache behavior. Closes when `profiles-failover.test.ts` covers doubling, fixed windows, and expiry, all green.
 - [ ] Ticket 8 — Slice 4: status endpoint tests against mock ctx. Closes when rung/total/head-serving cases are green.
 
@@ -23,6 +22,7 @@ Add ElectronHub DevPass as a seeded provider, repair the orchestrator and subage
 - `sync-models.mjs` is manual: dry-run first, review diff, commit, then `sync.sh`. It never touches `scripts/rank-chains.mjs`.
 - Uncommitted under this effort: steer fix in `plugins/profiles.ts` plus built `plugins/profiles.js` plus this file. Nothing commits without explicit approval.
 - Slice 1 done 2026-09-06: `parseRetryAfterMs` in the vendored fork plus colocated tests, 6/6 green, verified in main session. Parser is unwired until the adapter patch lands.
+- Slice 2 done 2026-09-06: `advanceChain` plus `recordFailure` extracted, 8/8 green, verified in main session. First extraction attempt used a stateful no-arg `isDown` that desynced check index from cursor in production; caught on independent diff read, fixed to level-indexed predicate. Uncommitted: `plugins/profiles.ts`, built `plugins/profiles.js`, `plugins/profiles-failover.test.ts`.
 
 ## User preferences and special rules
 

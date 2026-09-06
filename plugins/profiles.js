@@ -159,6 +159,26 @@ var Config = z.object({
   alwaysMaxRetries: z.number().step(1).min(1).default(2)
 });
 var PROFILE_NS = settingsNamespace("profile");
+function advanceChain(levels, cursor, isDown) {
+  if (levels.length === 0) {
+    return { cursor, exhausted: true };
+  }
+  while (cursor < levels.length && isDown(levels[cursor])) {
+    cursor += 1;
+  }
+  const exhausted = cursor >= levels.length;
+  if (exhausted) {
+    cursor = levels.length - 1;
+  }
+  return { cursor, exhausted };
+}
+function recordFailure(failures, level, code, message) {
+  failures.push({
+    level,
+    code,
+    message
+  });
+}
 function service(ctx, name2) {
   return ctx.get(name2);
 }
@@ -478,11 +498,7 @@ ${tried}`);
       last.code = failure.code ?? "UNKNOWN";
       last.message = failure.message ?? "";
     } else {
-      s.failures.push({
-        level: cur,
-        code: failure.code ?? "UNKNOWN",
-        message: failure.message ?? ""
-      });
+      recordFailure(s.failures, cur, failure.code ?? "UNKNOWN", failure.message ?? "");
     }
     markDown(cur, failure.code, failure.message ?? "");
     if (p.retryPolicy?.mode === "always") {
@@ -490,9 +506,9 @@ ${tried}`);
       if (s.retries <= alwaysMaxRetries) return next();
     }
     s.retries = 0;
-    s.cursor += 1;
-    while (s.cursor < s.levels.length && isCachedDown(s.levels[s.cursor])) s.cursor += 1;
-    if (s.cursor < s.levels.length) {
+    const advanced = advanceChain(s.levels, s.cursor + 1, (level) => isCachedDown(level));
+    s.cursor = advanced.cursor;
+    if (!advanced.exhausted) {
       const nxt = s.levels[s.cursor];
       ctx.logger.info(
         `session ${sessionLabel(agent)} failing over from ${cur.provider}/${cur.model} to ${nxt.provider}/${nxt.model}`
@@ -889,9 +905,11 @@ function apply(ctx, config) {
 }
 export {
   Config,
+  advanceChain,
   apply,
   failoverNoticeText,
   inject,
   name,
-  normalizeErrorClass
+  normalizeErrorClass,
+  recordFailure
 };

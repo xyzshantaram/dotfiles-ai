@@ -157,6 +157,52 @@ const PROFILE_NS = settingsNamespace("profile");
 /** One failover level. */
 type Level = RouteCandidate;
 
+/**
+ * Advance the cursor through a levels array, skipping over down levels.
+ * Calls isDown(level) for each level to check if it is down. Returns the
+ * cursor position of the first live level found, or the last valid index
+ * if all levels from cursor onward are down. Sets exhausted true if cursor
+ * runs past the end. Empty levels returns exhausted true at once.
+ */
+export function advanceChain(
+  levels: Level[],
+  cursor: number,
+  isDown: (level: Level) => boolean,
+): { cursor: number; exhausted: boolean } {
+  if (levels.length === 0) {
+    return { cursor, exhausted: true };
+  }
+
+  // Skip each cached-down level from cursor onward.
+  while (cursor < levels.length && isDown(levels[cursor])) {
+    cursor += 1;
+  }
+
+  const exhausted = cursor >= levels.length;
+  if (exhausted) {
+    cursor = levels.length - 1;
+  }
+
+  return { cursor, exhausted };
+}
+
+/**
+ * Record a failure into the failures array. Append one record with shape
+ * { level, code, message }.
+ */
+export function recordFailure(
+  failures: Array<{ level: Level; code: string; message: string }>,
+  level: Level,
+  code: string,
+  message: string,
+): void {
+  failures.push({
+    level,
+    code,
+    message,
+  });
+}
+
 /** Per-agent failover state for the current step. */
 interface StepState {
   stepKey: string;
@@ -615,11 +661,7 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
       last.code = failure.code ?? "UNKNOWN";
       last.message = failure.message ?? "";
     } else {
-      s.failures.push({
-        level: cur,
-        code: failure.code ?? "UNKNOWN",
-        message: failure.message ?? "",
-      });
+      recordFailure(s.failures, cur, failure.code ?? "UNKNOWN", failure.message ?? "");
     }
 
     markDown(cur, failure.code, failure.message ?? "");
@@ -630,10 +672,11 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
     }
     s.retries = 0;
 
-    s.cursor += 1;
-    while (s.cursor < s.levels.length && isCachedDown(s.levels[s.cursor])) s.cursor += 1;
+    // Advance cursor past the failed level and skip any cached-down levels.
+    const advanced = advanceChain(s.levels, s.cursor + 1, (level) => isCachedDown(level));
+    s.cursor = advanced.cursor;
 
-    if (s.cursor < s.levels.length) {
+    if (!advanced.exhausted) {
       const nxt = s.levels[s.cursor];
       ctx.logger.info(
         `session ${sessionLabel(agent)} failing over from ${cur.provider}/${cur.model} to ${nxt.provider}/${nxt.model}`,
