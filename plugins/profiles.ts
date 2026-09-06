@@ -271,7 +271,7 @@ function errorKey(level: Level, cls: ErrorClass): string {
 
 /** Effective down-window for one cache entry. Rate limits and server errors double per strike,
  * capped; every other class uses its fixed table value. */
-function effectiveTtlMs(key: string, cls: ErrorClass): number {
+export function effectiveTtlMs(key: string, cls: ErrorClass): number {
   if (cls !== "rate-limit" && cls !== "server-error") return ERROR_TTL_MS[cls];
   const strikes = doubleStrikes.get(key) ?? 1;
   return Math.min(ERROR_TTL_MS[cls] * 2 ** (strikes - 1), RATE_LIMIT_MAX_TTL_MS);
@@ -377,7 +377,7 @@ export function failoverNoticeText(
   return `${header}\n\n${trimmed}`;
 }
 
-function markDown(level: Level, code: string | undefined, message: string): void {
+export function markDown(level: Level, code: string | undefined, message: string): void {
   const cls = normalizeErrorClass(code, message);
   if (!cls) return;
   const key = errorKey(level, cls);
@@ -388,7 +388,7 @@ function markDown(level: Level, code: string | undefined, message: string): void
 }
 
 /** True when ANY class key of the level is inside its class window. */
-function isCachedDown(level: Level): boolean {
+export function isCachedDown(level: Level): boolean {
   const now = Date.now();
   for (const cls of ERROR_CLASSES) {
     const key = errorKey(level, cls);
@@ -399,6 +399,12 @@ function isCachedDown(level: Level): boolean {
     doubleStrikes.delete(key);
   }
   return false;
+}
+
+/** Clear both failover caches. */
+export function clearDownCache(): void {
+  downCache.clear();
+  doubleStrikes.clear();
 }
 
 /** Prune expired entries; return the down keys still inside their class window. */
