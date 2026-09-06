@@ -1050,6 +1050,30 @@ llm-pi-ai:
           low: low
           high: high
       # sync-models:end
+    electronhub:
+      displayName: ElectronHub DevPass
+      apiKeyEnv: ELECTRONHUB_DEVPASS_API_KEY
+      api: openai-completions
+      baseURL: https://api.electronhub.ai/v1/
+    opencode-go-spark:
+      displayName: OpenCode Go Spark
+      apiKeyEnv: OPENCODE_GO_API_KEY
+      api: openai-responses
+      baseURL: https://opencode.ai/zen/go/v1/
+      models:
+      - id: muse-spark-1.3-contributor
+        name: Muse Spark 1.3 Contributor
+        contextWindow: 1048576
+        maxTokens: 131072
+        input:
+        - text
+        - image
+        reasoningEfforts:
+          minimal: minimal
+          low: low
+          medium: medium
+          high: high
+          xhigh: xhigh
 agent-presets:
   default: standard
 profile:
@@ -1062,19 +1086,17 @@ profile:
     personal-orchestrator:
       - command-code/meta/muse-spark-1.3-contributor
       - zai/glm-5.3
-      - opencode-go/muse-spark-1.3-contributor
-      - opencode/longcat-2.0-free
+      - opencode-go-spark/muse-spark-1.3-contributor
+      - electronhub/glm-5.3:dev
       - opencode/muse-spark-1.3-contributor-free
-      - opencode/muse-spark-1.3
       - deepseek-official/deepseek-v4-pro
     subagent:
       - command-code/meta/muse-spark-1.3-contributor
       - command-code/z-ai/glm-5.3-flash
       - zai/glm-5.3-flash
-      - opencode-go/muse-spark-1.3-contributor
+      - opencode-go-spark/muse-spark-1.3-contributor
       - opencode-go/glm-5.3-flash
       - opencode/muse-spark-1.3-contributor-free
-      - opencode/muse-spark-1.3
       - deepseek-official/deepseek-v4-flash
     subagent-work:
       - meridian/claude-haiku-4-5
