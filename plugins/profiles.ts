@@ -174,6 +174,20 @@ function activeEntry(profile: ProfileSettings | undefined): unknown {
   return (profile?.active ?? "work") === "personal" ? profile?.personal : profile?.work;
 }
 
+// ── Failover event tracking (Ticket 3) ─────────────────────────────────────
+// In-memory map from session id to the last failover event. Records: from
+// (provider/model), to (provider/model), code, time, rung (1-based position
+// in the active chain), total (chain length).
+interface FailoverEvent {
+  from: { provider: string; model: string };
+  to: { provider: string; model: string };
+  code: string;
+  time: number;
+  rung: number;
+  total: number;
+}
+const failoverEvents = new Map<string, FailoverEvent>();
+
 // ── Error cache (W21) ───────────────────────────────────────────────────────
 // A persistent fault marks one (provider, model, error-class) key down for
 // its class time to live. Selections skip the dead rung at proposal time and
@@ -513,6 +527,11 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
               code: err?.code ?? "UNKNOWN",
               message: err?.message ?? String(error),
             });
+            // Resolve-time skips never reach request-error, so they get no
+            // failover row and no log line without this: say what died.
+            ctx.logger.info(
+              `session ${sessionLabel(agent)} skipping ${candidate.provider}/${candidate.model} at resolve: ${err?.code ?? "UNKNOWN"} — ${err?.message ?? String(error)}`,
+            );
             markDown(candidate, err?.code, err?.message ?? String(error));
             s.cursor += 1;
             continue;
@@ -620,10 +639,33 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
         `session ${sessionLabel(agent)} failing over from ${cur.provider}/${cur.model} to ${nxt.provider}/${nxt.model}`,
       );
 
-      // Deliver a chat row for the failover switchover. Call inject as a
-      // method: detaching it loses `this` and fails reading `send`.
-      const agentObj = agent as { inject?: (message: unknown) => void };
-      if (typeof agentObj.inject === "function") {
+      // Record the failover event for the status endpoint (Ticket 3).
+      const sessionId = sessionLabel(agent);
+      failoverEvents.set(sessionId, {
+        from: { provider: cur.provider, model: cur.model },
+        to: { provider: nxt.provider, model: nxt.model },
+        code: failure.code ?? "UNKNOWN",
+        time: Date.now(),
+        rung: s.cursor + 1, // 1-based position in chain
+        total: s.levels.length,
+      });
+
+      // Deliver a chat row for the failover switchover. steer, not
+      // inject: inject splices into the agent inbox only (invisible context
+      // for the next step), while steer delivers a notice-form context message
+      // that becomes a visible chat node via context.injection.view.
+      // Call it as a method: detaching it loses `this` and fails.
+      const agentObj = agent as {
+        steer?: (message: unknown) => void;
+        inject?: (message: unknown) => void;
+      };
+      const deliver =
+        typeof agentObj.steer === "function"
+          ? (message: unknown) => agentObj.steer!(message)
+          : typeof agentObj.inject === "function"
+            ? (message: unknown) => agentObj.inject!(message)
+            : undefined;
+      if (deliver !== undefined) {
         try {
           const noticeText = failoverNoticeText(
             cur.provider,
@@ -633,7 +675,7 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
             failure.code,
             failure.message ?? "",
           );
-          void agentObj.inject(
+          void deliver(
             createUserMessage({
               content: [{ type: "text", text: noticeText }],
               source: {
@@ -645,7 +687,7 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
             }),
           );
         } catch (error) {
-          ctx.logger.warn(`profiles: failed to inject failover notice: ${error}`);
+          ctx.logger.warn(`profiles: failed to deliver failover notice: ${error}`);
         }
       }
 
@@ -985,6 +1027,39 @@ function makeErrorCacheHandler(ctx: Context) {
   };
 }
 
+function makeFailoverStatusHandler(ctx: Context) {
+  return async (req: IncomingMessage, res: ServerResponse) => {
+    if (req.method !== "GET") {
+      sendJson(res, 405, { ok: false, error: `method ${req.method} not allowed` });
+      return;
+    }
+
+    const settings = service<SettingsService>(ctx, "settings");
+    const profile = settings?.get(PROFILE_NS) as ProfileSettings | undefined;
+
+    // Get the active chain (orchestrator for depth-0; status endpoint is called from browser).
+    const chain = chainOf(activeEntry(profile), "orchestrator", profile?.chains, ctx);
+    const headLevel = chain[0] ?? null;
+
+    // Return the most recent failover event across all sessions, or null if none.
+    let lastEvent: FailoverEvent | null = null;
+    let newestTime = 0;
+    for (const event of failoverEvents.values()) {
+      if (event.time > newestTime) {
+        newestTime = event.time;
+        lastEvent = event;
+      }
+    }
+
+    sendJson(res, 200, {
+      ok: true,
+      activeChain: chain,
+      headLevel: headLevel,
+      lastEvent: lastEvent,
+    });
+  };
+}
+
 export function apply(ctx: Context, config: unknown): void {
   const cfg = (config ?? {}) as ProfilesConfig;
 
@@ -1009,6 +1084,11 @@ export function apply(ctx: Context, config: unknown): void {
       kind: "exact",
       path: "/profiles/error-cache",
       handler: makeErrorCacheHandler(ctx),
+    });
+    server.register({
+      kind: "exact",
+      path: "/profiles/failover-status",
+      handler: makeFailoverStatusHandler(ctx),
     });
   });
 

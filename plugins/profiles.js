@@ -165,6 +165,7 @@ function service(ctx, name2) {
 function activeEntry(profile) {
   return (profile?.active ?? "work") === "personal" ? profile?.personal : profile?.work;
 }
+var failoverEvents = /* @__PURE__ */ new Map();
 var ERROR_CLASSES = [
   "auth",
   "no-credits",
@@ -405,6 +406,9 @@ function registerFailover(ctx, alwaysMaxRetries) {
               code: err?.code ?? "UNKNOWN",
               message: err?.message ?? String(error)
             });
+            ctx.logger.info(
+              `session ${sessionLabel(agent)} skipping ${candidate.provider}/${candidate.model} at resolve: ${err?.code ?? "UNKNOWN"} \u2014 ${err?.message ?? String(error)}`
+            );
             markDown(candidate, err?.code, err?.message ?? String(error));
             s.cursor += 1;
             continue;
@@ -493,8 +497,19 @@ ${tried}`);
       ctx.logger.info(
         `session ${sessionLabel(agent)} failing over from ${cur.provider}/${cur.model} to ${nxt.provider}/${nxt.model}`
       );
+      const sessionId = sessionLabel(agent);
+      failoverEvents.set(sessionId, {
+        from: { provider: cur.provider, model: cur.model },
+        to: { provider: nxt.provider, model: nxt.model },
+        code: failure.code ?? "UNKNOWN",
+        time: Date.now(),
+        rung: s.cursor + 1,
+        // 1-based position in chain
+        total: s.levels.length
+      });
       const agentObj = agent;
-      if (typeof agentObj.inject === "function") {
+      const deliver = typeof agentObj.steer === "function" ? (message) => agentObj.steer(message) : typeof agentObj.inject === "function" ? (message) => agentObj.inject(message) : void 0;
+      if (deliver !== void 0) {
         try {
           const noticeText = failoverNoticeText(
             cur.provider,
@@ -504,7 +519,7 @@ ${tried}`);
             failure.code,
             failure.message ?? ""
           );
-          void agentObj.inject(
+          void deliver(
             createUserMessage({
               content: [{ type: "text", text: noticeText }],
               source: {
@@ -516,7 +531,7 @@ ${tried}`);
             })
           );
         } catch (error) {
-          ctx.logger.warn(`profiles: failed to inject failover notice: ${error}`);
+          ctx.logger.warn(`profiles: failed to deliver failover notice: ${error}`);
         }
       }
       return { kind: "retry" };
@@ -788,6 +803,32 @@ function makeErrorCacheHandler(ctx) {
     return;
   };
 }
+function makeFailoverStatusHandler(ctx) {
+  return async (req, res) => {
+    if (req.method !== "GET") {
+      sendJson(res, 405, { ok: false, error: `method ${req.method} not allowed` });
+      return;
+    }
+    const settings = service(ctx, "settings");
+    const profile = settings?.get(PROFILE_NS);
+    const chain = chainOf(activeEntry(profile), "orchestrator", profile?.chains, ctx);
+    const headLevel = chain[0] ?? null;
+    let lastEvent = null;
+    let newestTime = 0;
+    for (const event of failoverEvents.values()) {
+      if (event.time > newestTime) {
+        newestTime = event.time;
+        lastEvent = event;
+      }
+    }
+    sendJson(res, 200, {
+      ok: true,
+      activeChain: chain,
+      headLevel,
+      lastEvent
+    });
+  };
+}
 function apply(ctx, config) {
   const cfg = config ?? {};
   registerFailover(ctx, cfg.alwaysMaxRetries ?? 2);
@@ -807,6 +848,11 @@ function apply(ctx, config) {
       kind: "exact",
       path: "/profiles/error-cache",
       handler: makeErrorCacheHandler(ctx)
+    });
+    server.register({
+      kind: "exact",
+      path: "/profiles/failover-status",
+      handler: makeFailoverStatusHandler(ctx)
     });
   });
   ctx.on("settings/updated", (ns, next, prev) => {

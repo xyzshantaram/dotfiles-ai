@@ -108,6 +108,17 @@
   /* Optical nudge: 11px glyphs center a hair high next to 12px model text. */
   transform: translateY(1px);
 }
+.profiles-client-badge-failover {
+  cursor: pointer;
+}
+.profiles-client-failover-rung {
+  flex: none;
+  white-space: nowrap;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1rem;
+}
 .profiles-client-chevron {
   color: var(--dsw-alias-label-caption);
   flex: none;
