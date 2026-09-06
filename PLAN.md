@@ -10,7 +10,6 @@ Add ElectronHub DevPass as a seeded provider, repair the orchestrator and subage
 - [ ] Ticket 2 — chain surgery: Spark levels repointed at a responses provider, DevPass glm placed, longcat plus dead spark levels dropped. Closes when the dry-run chain check reports zero warnings for every kept ref.
 - [ ] Ticket 3 — failover status endpoint plus chip segment: rung count, waterfall icon, hide rules, tooltip, middle-click reset. Closes when `node build.mjs` passes and the segment renders in a live dsh session (human check below).
 - [ ] Ticket 4 — review and commit: researcher review pass on the chip work, independent diff read, grouped commits with user approval. Closes when the tree is clean.
-- [ ] Ticket 8 — Slice 4: status endpoint tests against mock ctx. Closes when rung/total/head-serving cases are green.
 
 ## Critical context
 
@@ -23,6 +22,7 @@ Add ElectronHub DevPass as a seeded provider, repair the orchestrator and subage
 - Slice 1 done 2026-09-06: `parseRetryAfterMs` in the vendored fork plus colocated tests, 6/6 green, verified in main session. Parser is unwired until the adapter patch lands.
 - Slice 2 done 2026-09-06: `advanceChain` plus `recordFailure` extracted, 8/8 green, verified in main session. First extraction attempt used a stateful no-arg `isDown` that desynced check index from cursor in production; caught on independent diff read, fixed to level-indexed predicate. Uncommitted: `plugins/profiles.ts`, built `plugins/profiles.js`, `plugins/profiles-failover.test.ts`.
 - Slice 3 done 2026-09-06: down-cache exports plus `clearDownCache`, 16/16 green, verified in main session. Diff is three `export` keywords plus the reset helper; no behavior change.
+- Slice 4 done 2026-09-06: status endpoint exports plus mock-ctx tests, 21/21 green, full suite 349 passed, verified in main session. One deliberate change: newest-event scan uses `>=` so same-millisecond ties resolve to the later write. Incident: first implementation dispatch deleted the new test block from the file; caught on verification (16 tests instead of 21), block rewritten, green again.
 
 ## User preferences and special rules
 
