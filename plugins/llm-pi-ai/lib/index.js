@@ -432,8 +432,27 @@ function classifyPiAiError(message) {
 	if (/\b(?:network|connection|socket|fetch)\b|\bECONN[A-Z]+\b/i.test(message) || /\b(?:other side closed|HTTP2 request did not get a response|WebSocket closed unexpectedly)\b/i.test(message) || /\bterminated\b|premature close/i.test(message)) return "TRANSPORT";
 	return "PI_AI_ERROR";
 }
+/** Parse Retry-After header value to milliseconds. Accept whole-second delta strings or HTTP dates. */
+function parseRetryAfterMs(value, nowMs) {
+	if (value == null) return undefined;
+	const trimmed = value.trim();
+	if (/^\d+$/.test(trimmed)) {
+		const asInt = parseInt(trimmed, 10);
+		if (asInt > 0) {
+			return asInt * 1000;
+		}
+		return undefined;
+	}
+	if (/[a-zA-Z]/.test(trimmed)) {
+		const timestamp = Date.parse(trimmed);
+		if (!isNaN(timestamp) && timestamp > nowMs) {
+			return timestamp - nowMs;
+		}
+	}
+	return undefined;
+}
 /**
-* Map a terminal pi-ai event to the harness finish reason.
+ * Map a terminal pi-ai event to the harness finish reason.
 * @param message - the assistant message carried by the `done` or `error` event.
 * @param contextWindow - resolved catalog capacity for usage-based overflow detection.
 * @returns the mapped harness reason. Recognized error text, `stop` usage above
@@ -2127,4 +2146,4 @@ function apply(ctx, config) {
 	});
 }
 //#endregion
-export { Config, PiAiAdapter, apply, inject, name, supportedProtocols };
+export { Config, PiAiAdapter, apply, inject, name, parseRetryAfterMs, supportedProtocols };
