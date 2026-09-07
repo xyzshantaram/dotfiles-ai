@@ -18,6 +18,8 @@
  */
 
 import react from "react";
+import { createPortal } from "react-dom";
+import { AnsiUp } from "ansi_up";
 import primitives from "@deepseek-ai/dsh-client-ui-primitives";
 import { injectStyle, mergeCss, fetchJson, postJson } from "../../shared/client-util";
 import settingsCss from "../../shared/settings.css";
@@ -37,6 +39,33 @@ var POLL_MS = 2500;
 
 /** How long the kill confirm state waits before it reverts, in milliseconds. */
 var CONFIRM_MS = 3000;
+
+/**
+ * The output route's never-known answer. Matched verbatim: fetchJson folds
+ * every { ok: false, error } body into a bare string, so this literal is
+ * the whole contract (route.ts answers exactly it for ids with no entry).
+ */
+var UNKNOWN_JOB_ERROR = "unknown job";
+
+/** Gap between the trigger button and the open menu, in pixels. */
+var MENU_GAP = 4;
+
+/** Minimum margin between the open menu and the viewport edges, in pixels. */
+var MENU_MARGIN = 8;
+
+/**
+ * The ANSI converter factory. ansi_up escapes HTML by default (its
+ * constructor sets _escape_html = true), so its output is safe for
+ * dangerouslySetInnerHTML without a separate escape pass.
+ *
+ * The converter is also STATEFUL: a tail that leaves an SGR style open
+ * bleeds into the next conversion of the same instance, and a buffer-cap
+ * split mid-escape smears the head of the next paint. Every conversion
+ * therefore runs on a FRESH instance (code review 2026-09-07).
+ */
+var makeAnsiUp = function (): AnsiUp {
+  return new AnsiUp();
+};
 
 /** A job is live while it runs or while a stop is still in progress. */
 function isLive(job: { status: string }): boolean {
@@ -115,6 +144,15 @@ function makeJobViewerAction() {
 
     var outputWrapRef = react.useRef(null);
 
+    var triggerRef = react.useRef(null);
+    var menuRef = react.useRef(null);
+
+    // Fixed position of the portal menu, seeded on open and refined after
+    // mount measures the menu.
+    var menuPosState = react.useState(null);
+    var menuPos = menuPosState[0];
+    var setMenuPos = menuPosState[1];
+
     // Tick the row durations once a second while the menu is open and a
     // job is still live. Matches the shipped dropdown's own behavior.
     react.useEffect(
@@ -129,6 +167,72 @@ function makeJobViewerAction() {
         };
       },
       [menuOpen, liveCount],
+    );
+
+    // Place the portal menu: below the trigger, flipped above when it
+    // would overflow the viewport bottom, clamped on every side. Runs on
+    // open and whenever the row count changes the menu's measured size, and
+    // re-runs on scroll and resize while open.
+    react.useLayoutEffect(
+      function () {
+        if (!menuOpen) return;
+        var place = function () {
+          var btn = triggerRef.current;
+          var menu = menuRef.current;
+          if (btn === null || menu === null) return;
+          var rect = btn.getBoundingClientRect();
+          var left = Math.max(
+            MENU_MARGIN,
+            Math.min(rect.left, window.innerWidth - menu.offsetWidth - MENU_MARGIN),
+          );
+          var top = rect.bottom + MENU_GAP;
+          if (top + menu.offsetHeight > window.innerHeight - MENU_MARGIN) {
+            top = Math.max(MENU_MARGIN, rect.top - menu.offsetHeight - MENU_GAP);
+          }
+          // Scroll and resize fire this on every tick while open; a fresh
+          // object would force a re-render per tick even when the menu did
+          // not move, so skip the setState when the placement is unchanged.
+          setMenuPos(function (prev) {
+            if (prev !== null && prev.top === top && prev.left === left) return prev;
+            return { top: top, left: left };
+          });
+        };
+        place();
+        window.addEventListener("resize", place);
+        window.addEventListener("scroll", place, true);
+        return function () {
+          window.removeEventListener("resize", place);
+          window.removeEventListener("scroll", place, true);
+        };
+      },
+      [menuOpen, jobs.length],
+    );
+
+    // Close the portal menu on outside pointerdown and on Escape. The
+    // trigger and the menu itself are excluded, so the trigger click still
+    // toggles and row clicks still open the modal.
+    react.useEffect(
+      function () {
+        if (!menuOpen) return;
+        var onPointerDown = function (event: any) {
+          var target = event.target;
+          var btn = triggerRef.current;
+          var menu = menuRef.current;
+          if (btn !== null && btn.contains(target)) return;
+          if (menu !== null && menu.contains(target)) return;
+          setMenuOpen(false);
+        };
+        var onKeyDown = function (event: any) {
+          if (event.key === "Escape") setMenuOpen(false);
+        };
+        document.addEventListener("pointerdown", onPointerDown);
+        document.addEventListener("keydown", onKeyDown);
+        return function () {
+          document.removeEventListener("pointerdown", onPointerDown);
+          document.removeEventListener("keydown", onKeyDown);
+        };
+      },
+      [menuOpen],
     );
 
     /** Open the modal for one job and reset all per-job state. */
@@ -163,13 +267,29 @@ function makeJobViewerAction() {
             function (result) {
               if (cancelled) return;
               if (result.error) {
-                setOut({ error: result.error, text: null, truncated: false });
+                // A live job with no buffer entry yet is transient: the
+                // poller simply hasn't stored its first read. Keep the
+                // "Loading…" state and keep polling instead of showing the
+                // raw "unknown job" string. A terminal job with no entry is
+                // settled: show the friendly missing state and stop.
+                var unknown = result.error === UNKNOWN_JOB_ERROR;
+                var live = statusRef.current === "running" || statusRef.current === "stopping";
+                if (!unknown || !live) {
+                  setOut({
+                    error: unknown ? null : result.error,
+                    text: unknown ? "" : null,
+                    truncated: false,
+                    missing: unknown,
+                  });
+                }
               } else {
                 var data = result.data;
                 setOut({
                   error: null,
                   text: data && typeof data.text === "string" ? data.text : "",
                   truncated: !!(data && data.truncated === true),
+                  evicted: !!(data && data.evicted === true),
+                  job: data && data.job ? data.job : undefined,
                 });
                 if (data && data.job && data.job.status) {
                   statusRef.current = data.job.status;
@@ -214,6 +334,17 @@ function makeJobViewerAction() {
         };
       },
       [killPhase],
+    );
+
+    // Convert ANSI escapes to HTML once per output change. ansi_up escapes
+    // plain text by default, so the result is safe for inner HTML. A fresh
+    // converter per run keeps one output's dangling styles out of the next.
+    var outputHtml = react.useMemo(
+      function () {
+        if (out === null || typeof out.text !== "string" || out.text === "") return "";
+        return makeAnsiUp().ansi_to_html(out.text);
+      },
+      [out && out.text],
     );
 
     /** Two-step kill: arm the confirm, then post and refetch the output. */
@@ -296,12 +427,35 @@ function makeJobViewerAction() {
       var live = status === "running" || status === "stopping";
       var killLabel =
         killPhase === "killing" ? "Stopping…" : killPhase === "confirming" ? "Really stop?" : "Stop job";
+      // The row is the freshest label; the fetch snapshot covers rows that
+      // outlived the live list or the buffer entry (evicted/missing).
+      var shown = known !== undefined ? known : out && out.job ? out.job : null;
       var body = null;
       if (out === null) {
         body = <div className="jv-empty">Loading…</div>;
+      } else if (out.evicted) {
+        body = (
+          <>
+            {shown ? <div className="jv-command">{shown.label}</div> : null}
+            <div className="jv-empty">
+              {"Output expired — finished jobs keep their output for 10 minutes."}
+            </div>
+            <div className="jv-meta">
+              {shown ? shown.kind + " · " + status : "job status: " + status}
+            </div>
+          </>
+        );
+      } else if (out.missing) {
+        body = (
+          <>
+            {shown ? <div className="jv-command">{shown.label}</div> : null}
+            <div className="jv-empty">{"No output available for this job."}</div>
+          </>
+        );
       } else {
         body = (
           <>
+            {shown ? <div className="jv-command">{shown.label}</div> : null}
             <div className="jv-meta">
               {"status: " + status}
             </div>
@@ -316,7 +470,7 @@ function makeJobViewerAction() {
               {"Auto-scroll"}
             </label>
             <div className="jv-output-wrap" ref={outputWrapRef}>
-              <pre className="jv-output">{out.text}</pre>
+              <pre className="jv-output" dangerouslySetInnerHTML={{ __html: outputHtml }} />
             </div>
             {out.truncated ? (
               <div className="jv-note">Earlier output was dropped (buffer full).</div>
@@ -330,9 +484,11 @@ function makeJobViewerAction() {
         <ui.Modal
           open={true}
           onClose={closeJob}
-          title={known ? known.label : openJobId}
-          description={known ? known.kind + " · " + status : "job status: " + status}
+          title="Job output"
+          description={shown ? shown.kind + " · " + status : "job status: " + status}
           closeLabel="Close"
+          className="jv-modal"
+          contentClassName="jv-modal-content"
           footer={
             <>
               <ui.Button variant="outline" onClick={closeJob}>
@@ -359,8 +515,20 @@ function makeJobViewerAction() {
       <div className="jv-root">
         <button
           className="jv-trigger"
+          ref={triggerRef}
           onClick={function () {
-            setMenuOpen(!menuOpen);
+            if (menuOpen) {
+              setMenuOpen(false);
+              return;
+            }
+            // Seed the fixed position synchronously so the first paint
+            // lands under the trigger; the layout effect refines it.
+            var btn = triggerRef.current;
+            if (btn !== null) {
+              var rect = btn.getBoundingClientRect();
+              setMenuPos({ top: rect.bottom + MENU_GAP, left: rect.left });
+            }
+            setMenuOpen(true);
           }}
         >
           {triggerLabel}
@@ -369,7 +537,22 @@ function makeJobViewerAction() {
             aria-hidden={true}
           />
         </button>
-        {menuOpen ? <ul className="jv-menu">{rows}</ul> : null}
+        {menuOpen
+          ? createPortal(
+              <ul
+                ref={menuRef}
+                className="jv-menu"
+                style={
+                  menuPos !== null
+                    ? { top: menuPos.top, left: menuPos.left }
+                    : { visibility: "hidden" }
+                }
+              >
+                {rows}
+              </ul>,
+              document.body,
+            )
+          : null}
         {modal}
       </div>
     );

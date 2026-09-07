@@ -29,6 +29,13 @@ export interface BufferEntry {
   snapshot?: JobSnapshotLike;
   /** Owner Agent instance, cached for callers that cannot hold one. */
   owner?: unknown;
+  /**
+   * Set when the entry outlives the output retention window. The text is
+   * dropped but the snapshot stays, so the output route can answer "this
+   * job finished too long ago" instead of "unknown job". Tombstones
+   * themselves expire TOMBSTONE_RETENTION_MS after this stamp.
+   */
+  evictedAt?: number;
 }
 
 /**
@@ -45,6 +52,14 @@ function capToBytes(text: string, maxBytes: number): { text: string; wasTruncate
   }
   return { text, wasTruncated };
 }
+
+/**
+ * How long a tombstone survives after its output is dropped. The output
+ * retention window is minutes; a tombstone is only a snapshot plus two
+ * timestamps, so keeping it a full day bounds memory while still naming
+ * old jobs for as long as the shipped job list keeps their rows.
+ */
+const TOMBSTONE_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 export class JobBufferStore {
   private config: JobBufferConfig;
@@ -63,6 +78,9 @@ export class JobBufferStore {
       entry = { text: "", truncated: false };
       this.entries.set(jobId, entry);
     }
+    // Fresh output resurrects a tombstone: the job is producing again, so
+    // the "output expired" stamp must not shadow the new text.
+    delete entry.evictedAt;
     let text = entry.text + delta;
     if (Buffer.byteLength(text, "utf8") > this.config.maxBytes) {
       const capped = capToBytes(text, this.config.maxBytes);
@@ -114,13 +132,26 @@ export class JobBufferStore {
     return this.entries.get(jobId);
   }
 
-  /** Delete every finished entry past the retention window. */
+  /**
+   * Age finished entries past the retention window into tombstones, and
+   * drop tombstones past their own window. Returns the ids newly
+   * tombstoned in this pass. Running entries are never touched.
+   */
   sweep(nowMs?: number): string[] {
     const at = nowMs ?? this.now();
     const evicted: string[] = [];
     for (const [jobId, entry] of this.entries) {
+      // A tombstone is only a snapshot plus two timestamps: drop it a day
+      // after its output expired to keep memory bounded.
+      if (entry.evictedAt !== undefined) {
+        if (at - entry.evictedAt >= TOMBSTONE_RETENTION_MS) {
+          this.entries.delete(jobId);
+        }
+        continue;
+      }
       if (entry.finishedAt !== undefined && at - entry.finishedAt >= this.config.retentionMs) {
-        this.entries.delete(jobId);
+        entry.text = "";
+        entry.evictedAt = at;
         evicted.push(jobId);
       }
     }

@@ -19,6 +19,9 @@
  *      from /subscriptions/opencode-balance, and a weekly pace line for the
  *      subscriptions, with +/- points and a projected run-out date.
  *   5. OpenCode Zen balance from /subscriptions/opencode-zen-balance.
+ *   6. ElectronHub plan + credits from /subscriptions/electronhub-usage and
+ *      the model catalog from /subscriptions/electronhub-models (Bearer
+ *      ELECTRONHUB_API_KEY).
  *
  * The seam. This file is the package's `./client` source. build.mjs
  * bundles it with esbuild (browser, cjs, es2022): react external, wrapped
@@ -72,7 +75,14 @@ var PROVIDER_TOGGLES = [
   { key: "deepseek", label: "DeepSeek" },
   { key: "opencode", label: "OpenCode GO" },
   { key: "opencode-zen", label: "OpenCode Zen" },
+  { key: "electronhub", label: "ElectronHub" },
 ];
+
+/** ElectronHub carries a long model catalog; the panel caps the rows it renders. */
+var EH_MODEL_ROW_CAP = 30;
+
+/** ElectronHub daily history rows rendered (most recent days win). */
+var EH_HISTORY_ROWS = 14;
 
 /** Fill color by usage percent — themed alias tokens, light/dark safe. */
 function fillColor(percent) {
@@ -493,6 +503,168 @@ function renderCcSection(cc, ccUsage) {
   );
 }
 
+/**
+ * ElectronHub section. The host route already normalizes the payload
+ * defensively, but every field is still read through guards so a partial
+ * or malformed answer degrades to empty rows instead of crashing the panel.
+ */
+function renderEhSection(ehUsage, ehModels) {
+  var errorLine = null;
+  if (ehUsage && ehUsage.error) {
+    errorLine = "ElectronHub: " + ehUsage.error;
+  } else if (ehUsage && ehUsage.data && ehUsage.data.ok === false) {
+    errorLine = "ElectronHub: " + (ehUsage.data.error || "usage unavailable");
+  } else if (ehModels && ehModels.error) {
+    errorLine = "ElectronHub: " + ehModels.error;
+  } else if (ehModels && ehModels.data && ehModels.data.ok === false) {
+    errorLine = "ElectronHub: " + (ehModels.data.error || "models unavailable");
+  }
+
+  var usage = ehUsage && ehUsage.data && ehUsage.data.ok === true ? ehUsage.data : null;
+  var models =
+    ehModels && ehModels.data && ehModels.data.ok === true && Array.isArray(ehModels.data.models)
+      ? ehModels.data.models
+      : null;
+
+  // Hero: subscription tier + remaining credits headline.
+  var hero = null;
+  if (usage) {
+    var tier =
+      typeof usage.subscription === "string" && usage.subscription !== ""
+        ? usage.subscription.charAt(0).toUpperCase() + usage.subscription.slice(1) + " plan"
+        : null;
+    var credits = typeof usage.credits === "number" ? usage.credits : null;
+    var heroTotal = credits !== null ? fmtCount(credits) + " credits" : tier;
+    var heroSub = credits !== null ? tier : null;
+    if (heroTotal !== null) {
+      hero = (
+        <div className="ds-hero">
+          <div className="ds-hero-total">{heroTotal}</div>
+          <div className="ds-hero-breakdown">{heroSub || ""}</div>
+        </div>
+      );
+    }
+  }
+
+  // Token totals: input/output cards in the same grid the DeepSeek section uses.
+  var tokenCards = [];
+  if (usage) {
+    var inTok = Number(usage.usage && usage.usage.inputTokens) || 0;
+    var outTok = Number(usage.usage && usage.usage.outputTokens) || 0;
+    if (inTok > 0 || outTok > 0) {
+      tokenCards.push(
+        <div className="ds-usage-card">
+          <div className="ds-usage-label">Input tokens</div>
+          <div className="ds-usage-value">{fmtCount(inTok)}</div>
+        </div>,
+      );
+      tokenCards.push(
+        <div className="ds-usage-card">
+          <div className="ds-usage-label">Output tokens</div>
+          <div className="ds-usage-value">{fmtCount(outTok)}</div>
+        </div>,
+      );
+      tokenCards.push(
+        <div className="ds-usage-card">
+          <div className="ds-usage-label">Total tokens</div>
+          <div className="ds-usage-value">{fmtCount(inTok + outTok)}</div>
+        </div>,
+      );
+    }
+  }
+
+  // Daily request history: same track/fill bars as the window meters, but the
+  // width is relative to the busiest day, so the fill must NOT borrow the
+  // green/amber/red state colors that mean quota health elsewhere.
+  var historyRows = [];
+  if (usage && Array.isArray(usage.history)) {
+    var hist = usage.history.slice(-EH_HISTORY_ROWS);
+    var maxReq = 0;
+    for (var hi = 0; hi < hist.length; hi++) {
+      var dayReq = Number(hist[hi] && hist[hi].requests) || 0;
+      if (dayReq > maxReq) maxReq = dayReq;
+    }
+    for (var hj = 0; hj < hist.length; hj++) {
+      var day = hist[hj];
+      var req = Number(day && day.requests) || 0;
+      var pct = maxReq > 0 ? (req / maxReq) * 100 : 0;
+      historyRows.push(
+        <div className="ocgs-row" key={"eh-h-" + hj}>
+          <div className="ocgs-row-label">
+            <b>{String(day && day.date)}</b>
+            <b>{String(req)}</b>
+          </div>
+          <div className="ocgs-meta">
+            <div className="ocgs-track">
+              <div
+                className="ocgs-fill"
+                style={{
+                  width: pct.toFixed(2) + "%",
+                  background: "var(--dsw-alias-state-business-primary)",
+                }}
+              />
+            </div>
+          </div>
+        </div>,
+      );
+    }
+  }
+
+  // Endpoint breakdown: one card per endpoint path the account touched.
+  var endpointCards = [];
+  if (usage && Array.isArray(usage.endpoints)) {
+    for (var ei = 0; ei < usage.endpoints.length; ei++) {
+      var ep = usage.endpoints[ei];
+      if (!ep || typeof ep.name !== "string") continue;
+      endpointCards.push(
+        <div className="ds-usage-card" key={"eh-ep-" + ei}>
+          <div className="ds-usage-label">{ep.name}</div>
+          <div className="ds-usage-value">{fmtCount(Number(ep.requests) || 0)}</div>
+        </div>,
+      );
+    }
+  }
+
+  // Model catalog: collapsed by default, capped rows, "+N more" tail.
+  var modelList = null;
+  if (models !== null && models.length > 0) {
+    var shown = models.slice(0, EH_MODEL_ROW_CAP);
+    var more = models.length - shown.length;
+    var modelRows = shown.map(function (name, idx) {
+      return (
+        <div className="ocgs-note" key={"eh-m-" + idx}>
+          {String(name)}
+        </div>
+      );
+    });
+    if (more > 0) {
+      modelRows.push(
+        <div className="ocgs-note" key="eh-m-more">
+          {"+" + more + " more"}
+        </div>,
+      );
+    }
+    modelList = (
+      <details className="ocgs-details">
+        <summary className="ocgs-summary">{"Models (" + models.length + ")"}</summary>
+        <div className="ocgs-rows">{modelRows}</div>
+      </details>
+    );
+  }
+
+  return (
+    <div className="ocgs-section">
+      <h4 className="ocgs-section-title">ElectronHub</h4>
+      {errorLine ? <div className="dsp-err">{errorLine}</div> : null}
+      {hero}
+      {tokenCards.length > 0 ? <div className="ds-usage-grid">{tokenCards}</div> : null}
+      {historyRows.length > 0 ? <div className="ocgs-rows">{historyRows}</div> : null}
+      {endpointCards.length > 0 ? <div className="ds-usage-grid">{endpointCards}</div> : null}
+      {modelList}
+    </div>
+  );
+}
+
 function makePanel(ctx, config) {
   return function Panel() {
     var snapState = react.useState(null);
@@ -548,6 +720,8 @@ function makePanel(ctx, config) {
         fetchJson("/subscriptions/opencode-zen-balance"),
         fetchJson("/subscriptions/zai-quota"),
         fetchJson("/subscriptions/zai-usage"),
+        fetchJson("/subscriptions/electronhub-usage"),
+        fetchJson("/subscriptions/electronhub-models"),
       ]);
       var results = settled.map(function (entry) {
         if (entry.status === "fulfilled") return entry.value;
@@ -572,6 +746,8 @@ function makePanel(ctx, config) {
         "oz",
         "zaiQuota",
         "zaiUsage",
+        "ehUsage",
+        "ehModels",
       ];
       var failedKeys = [];
       for (var li = 0; li < loadKeys.length; li++) {
@@ -603,6 +779,8 @@ function makePanel(ctx, config) {
         oz: results[8],
         zaiQuota: results[9],
         zaiUsage: results[10],
+        ehUsage: results[11],
+        ehModels: results[12],
       };
       setSnap(snapData);
       setStaleTs(Date.now());
@@ -637,6 +815,8 @@ function makePanel(ctx, config) {
     var oz = snap ? snap.oz : null;
     var zaiQuota = snap ? snap.zaiQuota : null;
     var zaiUsage = snap ? snap.zaiUsage : null;
+    var ehUsage = snap ? snap.ehUsage : null;
+    var ehModels = snap ? snap.ehModels : null;
     // Firefox cookie fetch state and handlers.
     var cookieState = react.useState({ busy: false, note: null, showLogin: false });
     var cookie = cookieState[0];
@@ -907,6 +1087,8 @@ function makePanel(ctx, config) {
         "oz",
         "zaiQuota",
         "zaiUsage",
+        "ehUsage",
+        "ehModels",
       ];
       var failCount = 0;
       for (var di = 0; di < dataKeys.length; di++) {
@@ -1081,6 +1263,8 @@ function makePanel(ctx, config) {
             </div>
           </div>
         ) : null}
+
+        {providerVisible(cfg, "electronhub") ? renderEhSection(ehUsage, ehModels) : null}
       </SettingsSection>
     );
   };

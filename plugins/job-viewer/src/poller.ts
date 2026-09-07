@@ -112,6 +112,35 @@ export function mountPoller(
     active.set(id, { timer, caller });
   };
 
+  // Best-effort seeding for jobs that predate this mount. Those jobs
+  // never fire an onJobsChanged this listener sees: running ones are picked
+  // up by later events anyway, but finished ones never fire again, so
+  // without a seed their output stays out of the buffer. A callerless list
+  // only reveals unowned jobs, and read() enforces the same access, so this
+  // seeds at most what the service lets an ownerless reader see. If the
+  // service rejects a callerless list outright, event-driven polling still
+  // covers every job that changes after this mount.
+  try {
+    const visible = jobs.list();
+    const { toStart } = reconcile(visible, new Set<string>());
+    for (const id of toStart) startPoll(id, undefined);
+    for (const job of visible) {
+      if (TERMINAL.has(job.status)) {
+        try {
+          const result = jobs.read(job.id, undefined);
+          store.append(job.id, result.text);
+          store.setSnapshot(job.id, result.snapshot);
+          store.setOwner(job.id, undefined);
+          store.markFinished(job.id);
+        } catch {
+          // Gone already, or owned by someone else. That race is expected.
+        }
+      }
+    }
+  } catch {
+    // No callerless list: new and changing jobs still poll via the listener.
+  }
+
   const unregister = jobs.onJobsChanged((owner) => {
     try {
       const visible = jobs.list(owner);

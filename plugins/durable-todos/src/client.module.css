@@ -75,7 +75,15 @@
   box-sizing: border-box;
   display: inline-flex;
   align-items: stretch;
-  flex: none;
+  /* Designated shrink absorber: the toggle (flex:1, min-width:0) shrinks
+     below its content at narrow widths, and with every pill flex:none the
+     counts pill overflowed right, stranding fragments under and past the
+     opaque Remind button, detached from the To-do list pill. Letting the
+     counts pill alone shrink clips its segments inside its own intact
+     border (overflow:hidden below) instead, so the pills stay glued
+     together at every width while the name pill never clips. */
+  flex: 0 1 auto;
+  min-width: 0;
   height: 1.5rem;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 0.375rem;
@@ -125,6 +133,9 @@
 }
 .durable-todos-remind {
   box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
   flex: none;
   white-space: nowrap;
   font-size: 0.75rem;
@@ -139,6 +150,11 @@
 }
 .durable-todos-remind:hover {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+/* The glyph takes the caption hue like the other pill icons in the panel. */
+.durable-todos-remind svg {
+  flex: none;
+  color: var(--dsw-alias-label-caption);
 }
 .durable-todos-running-line {
   font-size: 0.8125rem;

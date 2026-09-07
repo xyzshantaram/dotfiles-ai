@@ -61,6 +61,19 @@ export function makeOutputHandler(
       sendJson(res, 200, { ok: false, error: "unknown job" });
       return;
     }
+    // A tombstone means the job finished past the output retention window.
+    // Answer ok with empty text so the client can name the expired job
+    // instead of showing "unknown job".
+    if (entry.evictedAt !== undefined) {
+      sendJson(res, 200, {
+        ok: true,
+        text: "",
+        truncated: false,
+        evicted: true,
+        job: entry.snapshot !== undefined ? toPublicSnapshot(entry.snapshot) : undefined,
+      });
+      return;
+    }
     sendJson(res, 200, {
       ok: true,
       text: entry.text,
