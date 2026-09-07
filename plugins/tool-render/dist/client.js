@@ -2820,11 +2820,11 @@ var client_default = `.tool-render-row {
   justify-content: flex-end;
   gap: 0.25rem;
 }
-/* The toggle keeps the left edge on its own line above the buttons; without
-   align-self it would stretch across the full column width and its hit area
-   would cover the whole row. */
+/* The toggle sits above the buttons on the card's RIGHT edge, matching the
+   actions below it \u2014 the whole comment affordance reads as one right-aligned
+   column, and only the textarea spans the full width. */
 .tool-render-approval-comment-toggle {
-  align-self: flex-start;
+  align-self: flex-end;
 }
 /* The decided badge is the strip's only child once answered, so it holds the
    same right edge the actions had rather than stretching. */
