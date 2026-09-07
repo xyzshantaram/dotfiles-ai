@@ -856,7 +856,10 @@ function ToolRenderApprovalBar(props) {
   };
   var onApprove = function () {
     if (answered) return;
-    answer("approved");
+    // The wire vocabulary is "allowed-once" | "rejected" (the host's
+    // approvalResponsePayloadSchema rejects anything else as bad-response;
+    // "approved" is our display label only).
+    answer("allowed-once");
   };
   var onCommentKeyDown = function (event) {
     if (answered) return;
@@ -884,11 +887,21 @@ function ToolRenderApprovalBar(props) {
       decidedRecord !== null && decidedRecord !== undefined
         ? decidedRecord.outcomes[props.callId]
         : undefined;
-    if (outcome !== "approved" && outcome !== "rejected") return null;
+    // The approval/decided event carries the settle vocabulary verbatim:
+    // "allowed-once" | "rejected" | "cancelled". "cancelled" is an abort,
+    // not a decision, so it renders nothing. Map "allowed-once" to the
+    // friendlier "approved" for both the label and the CSS attribute.
+    var decidedLabel =
+      outcome === "allowed-once" || outcome === "approved"
+        ? "approved"
+        : outcome === "rejected"
+          ? "rejected"
+          : null;
+    if (decidedLabel === null) return null;
     return (
       <div className="tool-render-approval-strip">
-        <span className="tool-render-decided" data-outcome={outcome}>
-          {outcome}
+        <span className="tool-render-decided" data-outcome={decidedLabel}>
+          {decidedLabel}
         </span>
       </div>
     );

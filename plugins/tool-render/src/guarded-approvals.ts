@@ -10,7 +10,14 @@
 // The same fold now also pairs `approval/decided` to `approval/asked` by id
 // and exposes a callId→outcome map for EVERY approval that carried a callId
 // (not only bash-guard's). The tool-call card reads it for the durable
-// "approved"/"rejected" badge that survives the decision and a page reload.
+// decided badge that survives the decision and a page reload.
+//
+// The outcome string is stored VERBATIM, and the real vocabulary is the
+// host's settle vocabulary -- "allowed-once" | "rejected" | "cancelled"
+// (dsh-user-approval appends `approval/decided` with whatever `decide`
+// resolved). It is NOT "approved": that value exists nowhere in the harness,
+// and sending it on the response wire is rejected as `bad-response`. The card
+// maps "allowed-once" to the friendlier "approved" LABEL at render time only.
 import type {} from "@deepseek-ai/dsh-session-projection/types";
 import type { ProjectionDefinition } from "@deepseek-ai/dsh-session-projection";
 import type { SessionEvent } from "@deepseek-ai/dsh-session";
