@@ -43,20 +43,20 @@
   border-radius: 0.5rem;
   box-shadow: 0 0.25rem 1rem rgb(0 0 0 / 20%);
   list-style: none;
-  margin: 0.25rem 0 0;
+  margin: 0;
   max-height: 60vh;
-  max-width: 26rem;
+  max-width: min(26rem, calc(100vw - 16px));
   min-width: 18rem;
   overflow-y: auto;
   padding: 0.25rem;
-  position: absolute;
-  left: 0;
-  right: 0;
+  /* Portaled into document.body, so the sidebar's overflow cannot clip it.
+     Client code anchors it to the trigger (fixed top/left, flipped above
+     when the viewport bottom would overflow). z-index matches the shipped
+     modal overlay: the menu never competes with a modal, since opening a
+     row closes the menu first. */
+  position: fixed;
   width: max-content;
-  margin-left: auto;
-  margin-right: auto;
-  top: 100%;
-  z-index: 10;
+  z-index: 1000;
 }
 
 .jv-row {
@@ -142,8 +142,12 @@
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 0.875rem;
   margin-top: 0.5rem;
-  max-height: 50vh;
-  overflow-y: auto;
+  /* The flexible middle of the fixed-size modal: one constant size with an
+     internal scrollbar. This replaces the old max-height cap, which let the
+     modal grow and shrink with the output. */
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 .jv-output {
@@ -157,6 +161,42 @@
   min-width: 100%;
   padding: 1rem;
   white-space: pre;
+}
+
+.jv-modal {
+  /* Sizing hook for primitives' Modal: className lands on the dialog box,
+     the same pattern as the shipped confirmation modal. The settings
+     panel's fixed box instead of the default narrow dialog. Plugin CSS
+     injects after the app bundle, so this wins the specificity tie with
+     the dialog rule. */
+  height: min(800px, 100vh - 48px);
+  max-width: calc(100vw - 48px);
+  width: 800px;
+}
+
+/* contentClassName hook: take the dialog's column so the output area can
+   flex to one constant size. */
+.jv-modal-content {
+  flex: 1;
+  min-height: 0;
+}
+
+/* The Modal body div is always the last child of the content box (header,
+   then the optional description, then the body), so reach it by position:
+   it must flex too, or .jv-output-wrap has nothing to fill. */
+.jv-modal-content > div:last-child {
+  flex: 1;
+  min-height: 0;
+}
+
+.jv-command {
+  /* The job's command/label on its own monospaced line under the heading. */
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--ds-font-family-code);
+  font-size: 0.8125rem;
+  line-height: 1.375rem;
+  margin: 0 0 0.5rem;
+  overflow-wrap: anywhere;
 }
 
 .jv-note {

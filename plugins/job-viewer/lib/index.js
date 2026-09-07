@@ -12,6 +12,7 @@ function capToBytes(text, maxBytes) {
   }
   return { text, wasTruncated };
 }
+var TOMBSTONE_RETENTION_MS = 24 * 60 * 60 * 1e3;
 var JobBufferStore = class {
   config;
   now;
@@ -27,6 +28,7 @@ var JobBufferStore = class {
       entry = { text: "", truncated: false };
       this.entries.set(jobId, entry);
     }
+    delete entry.evictedAt;
     let text = entry.text + delta;
     if (Buffer.byteLength(text, "utf8") > this.config.maxBytes) {
       const capped = capToBytes(text, this.config.maxBytes);
@@ -72,13 +74,24 @@ var JobBufferStore = class {
   get(jobId) {
     return this.entries.get(jobId);
   }
-  /** Delete every finished entry past the retention window. */
+  /**
+   * Age finished entries past the retention window into tombstones, and
+   * drop tombstones past their own window. Returns the ids newly
+   * tombstoned in this pass. Running entries are never touched.
+   */
   sweep(nowMs) {
     const at = nowMs ?? this.now();
     const evicted = [];
     for (const [jobId, entry] of this.entries) {
+      if (entry.evictedAt !== void 0) {
+        if (at - entry.evictedAt >= TOMBSTONE_RETENTION_MS) {
+          this.entries.delete(jobId);
+        }
+        continue;
+      }
       if (entry.finishedAt !== void 0 && at - entry.finishedAt >= this.config.retentionMs) {
-        this.entries.delete(jobId);
+        entry.text = "";
+        entry.evictedAt = at;
         evicted.push(jobId);
       }
     }
@@ -192,6 +205,24 @@ function mountPoller(jobs, store, options) {
     }, options.pollIntervalMs);
     active.set(id, { timer, caller });
   };
+  try {
+    const visible = jobs.list();
+    const { toStart } = reconcile(visible, /* @__PURE__ */ new Set());
+    for (const id of toStart) startPoll(id, void 0);
+    for (const job of visible) {
+      if (TERMINAL.has(job.status)) {
+        try {
+          const result = jobs.read(job.id, void 0);
+          store.append(job.id, result.text);
+          store.setSnapshot(job.id, result.snapshot);
+          store.setOwner(job.id, void 0);
+          store.markFinished(job.id);
+        } catch {
+        }
+      }
+    }
+  } catch {
+  }
   const unregister = jobs.onJobsChanged((owner) => {
     try {
       const visible = jobs.list(owner);
@@ -266,6 +297,16 @@ function makeOutputHandler(store) {
     const entry = store.get(jobId);
     if (entry === void 0) {
       sendJson(res, 200, { ok: false, error: "unknown job" });
+      return;
+    }
+    if (entry.evictedAt !== void 0) {
+      sendJson(res, 200, {
+        ok: true,
+        text: "",
+        truncated: false,
+        evicted: true,
+        job: entry.snapshot !== void 0 ? toPublicSnapshot(entry.snapshot) : void 0
+      });
       return;
     }
     sendJson(res, 200, {

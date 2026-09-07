@@ -27,5 +27,8 @@
       ]
     }
   },
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "ansi_up": "6.0.6"
+  }
 }

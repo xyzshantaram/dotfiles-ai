@@ -151,8 +151,11 @@ var PROVIDER_TOGGLES = [
   { key: "claude", label: "Claude (meridian)" },
   { key: "deepseek", label: "DeepSeek" },
   { key: "opencode", label: "OpenCode GO" },
-  { key: "opencode-zen", label: "OpenCode Zen" }
+  { key: "opencode-zen", label: "OpenCode Zen" },
+  { key: "electronhub", label: "ElectronHub" }
 ];
+var EH_MODEL_ROW_CAP = 30;
+var EH_HISTORY_ROWS = 14;
 function fillColor(percent) {
   if (percent >= 90) return "var(--dsw-alias-state-error-primary)";
   if (percent >= 70) return "var(--dsw-alias-state-warn-primary)";
@@ -428,6 +431,97 @@ function renderCcSection(cc, ccUsage) {
   }
   return /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "Command Code"), errorLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, errorLine) : null, hero, meters.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, meters) : null, costCard ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, costCard) : null);
 }
+function renderEhSection(ehUsage, ehModels) {
+  var errorLine = null;
+  if (ehUsage && ehUsage.error) {
+    errorLine = "ElectronHub: " + ehUsage.error;
+  } else if (ehUsage && ehUsage.data && ehUsage.data.ok === false) {
+    errorLine = "ElectronHub: " + (ehUsage.data.error || "usage unavailable");
+  } else if (ehModels && ehModels.error) {
+    errorLine = "ElectronHub: " + ehModels.error;
+  } else if (ehModels && ehModels.data && ehModels.data.ok === false) {
+    errorLine = "ElectronHub: " + (ehModels.data.error || "models unavailable");
+  }
+  var usage = ehUsage && ehUsage.data && ehUsage.data.ok === true ? ehUsage.data : null;
+  var models = ehModels && ehModels.data && ehModels.data.ok === true && Array.isArray(ehModels.data.models) ? ehModels.data.models : null;
+  var hero = null;
+  if (usage) {
+    var tier = typeof usage.subscription === "string" && usage.subscription !== "" ? usage.subscription.charAt(0).toUpperCase() + usage.subscription.slice(1) + " plan" : null;
+    var credits = typeof usage.credits === "number" ? usage.credits : null;
+    var heroTotal = credits !== null ? fmtCount(credits) + " credits" : tier;
+    var heroSub = credits !== null ? tier : null;
+    if (heroTotal !== null) {
+      hero = /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-hero" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-hero-total" }, heroTotal), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-hero-breakdown" }, heroSub || ""));
+    }
+  }
+  var tokenCards = [];
+  if (usage) {
+    var inTok = Number(usage.usage && usage.usage.inputTokens) || 0;
+    var outTok = Number(usage.usage && usage.usage.outputTokens) || 0;
+    if (inTok > 0 || outTok > 0) {
+      tokenCards.push(
+        /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-card" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-label" }, "Input tokens"), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-value" }, fmtCount(inTok)))
+      );
+      tokenCards.push(
+        /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-card" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-label" }, "Output tokens"), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-value" }, fmtCount(outTok)))
+      );
+      tokenCards.push(
+        /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-card" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-label" }, "Total tokens"), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-value" }, fmtCount(inTok + outTok)))
+      );
+    }
+  }
+  var historyRows = [];
+  if (usage && Array.isArray(usage.history)) {
+    var hist = usage.history.slice(-EH_HISTORY_ROWS);
+    var maxReq = 0;
+    for (var hi = 0; hi < hist.length; hi++) {
+      var dayReq = Number(hist[hi] && hist[hi].requests) || 0;
+      if (dayReq > maxReq) maxReq = dayReq;
+    }
+    for (var hj = 0; hj < hist.length; hj++) {
+      var day = hist[hj];
+      var req = Number(day && day.requests) || 0;
+      var pct = maxReq > 0 ? req / maxReq * 100 : 0;
+      historyRows.push(
+        /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-row", key: "eh-h-" + hj }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-row-label" }, /* @__PURE__ */ import_react2.default.createElement("b", null, String(day && day.date)), /* @__PURE__ */ import_react2.default.createElement("b", null, String(req))), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-meta" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-track" }, /* @__PURE__ */ import_react2.default.createElement(
+          "div",
+          {
+            className: "ocgs-fill",
+            style: {
+              width: pct.toFixed(2) + "%",
+              background: "var(--dsw-alias-state-business-primary)"
+            }
+          }
+        ))))
+      );
+    }
+  }
+  var endpointCards = [];
+  if (usage && Array.isArray(usage.endpoints)) {
+    for (var ei = 0; ei < usage.endpoints.length; ei++) {
+      var ep = usage.endpoints[ei];
+      if (!ep || typeof ep.name !== "string") continue;
+      endpointCards.push(
+        /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-card", key: "eh-ep-" + ei }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-label" }, ep.name), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-value" }, fmtCount(Number(ep.requests) || 0)))
+      );
+    }
+  }
+  var modelList = null;
+  if (models !== null && models.length > 0) {
+    var shown = models.slice(0, EH_MODEL_ROW_CAP);
+    var more = models.length - shown.length;
+    var modelRows = shown.map(function(name2, idx) {
+      return /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note", key: "eh-m-" + idx }, String(name2));
+    });
+    if (more > 0) {
+      modelRows.push(
+        /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note", key: "eh-m-more" }, "+" + more + " more")
+      );
+    }
+    modelList = /* @__PURE__ */ import_react2.default.createElement("details", { className: "ocgs-details" }, /* @__PURE__ */ import_react2.default.createElement("summary", { className: "ocgs-summary" }, "Models (" + models.length + ")"), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, modelRows));
+  }
+  return /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "ElectronHub"), errorLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, errorLine) : null, hero, tokenCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, tokenCards) : null, historyRows.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, historyRows) : null, endpointCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, endpointCards) : null, modelList);
+}
 function makePanel(ctx, config) {
   return function Panel() {
     var snapState = import_react2.default.useState(null);
@@ -472,7 +566,9 @@ function makePanel(ctx, config) {
         fetchJson("/subscriptions/commandcode-usage"),
         fetchJson("/subscriptions/opencode-zen-balance"),
         fetchJson("/subscriptions/zai-quota"),
-        fetchJson("/subscriptions/zai-usage")
+        fetchJson("/subscriptions/zai-usage"),
+        fetchJson("/subscriptions/electronhub-usage"),
+        fetchJson("/subscriptions/electronhub-models")
       ]);
       var results = settled.map(function(entry2) {
         if (entry2.status === "fulfilled") return entry2.value;
@@ -496,7 +592,9 @@ function makePanel(ctx, config) {
         "ccUsage",
         "oz",
         "zaiQuota",
-        "zaiUsage"
+        "zaiUsage",
+        "ehUsage",
+        "ehModels"
       ];
       var failedKeys = [];
       for (var li = 0; li < loadKeys.length; li++) {
@@ -523,7 +621,9 @@ function makePanel(ctx, config) {
         ccUsage: results[7],
         oz: results[8],
         zaiQuota: results[9],
-        zaiUsage: results[10]
+        zaiUsage: results[10],
+        ehUsage: results[11],
+        ehModels: results[12]
       };
       setSnap(snapData);
       setStaleTs(Date.now());
@@ -556,6 +656,8 @@ function makePanel(ctx, config) {
     var oz = snap ? snap.oz : null;
     var zaiQuota = snap ? snap.zaiQuota : null;
     var zaiUsage = snap ? snap.zaiUsage : null;
+    var ehUsage = snap ? snap.ehUsage : null;
+    var ehModels = snap ? snap.ehModels : null;
     var cookieState = import_react2.default.useState({ busy: false, note: null, showLogin: false });
     var cookie = cookieState[0];
     var setCookie = cookieState[1];
@@ -778,7 +880,9 @@ function makePanel(ctx, config) {
         "ccUsage",
         "oz",
         "zaiQuota",
-        "zaiUsage"
+        "zaiUsage",
+        "ehUsage",
+        "ehModels"
       ];
       var failCount = 0;
       for (var di = 0; di < dataKeys.length; di++) {
@@ -811,7 +915,7 @@ function makePanel(ctx, config) {
       ds && ds.data && Array.isArray(ds.data.balance_infos) && ds.data.balance_infos.length > 0 ? ds.data.balance_infos[0] : null,
       dsUsageAmount,
       dsUsageCost
-    ) : null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-cookie" }, /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", disabled: dsToken.busy, onClick: fetchDsToken }, dsToken.busy ? "Fetching\u2026" : "Fetch token from Firefox"), dsToken.showLogin ? /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", onClick: openDsLogin }, "Open platform.deepseek.com") : null, dsToken.note ? /* @__PURE__ */ import_react2.default.createElement("span", { className: "ocgs-cookie-note" }, dsToken.note) : null)) : null, providerVisible(cfg, "opencode") ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "OpenCode GO"), balanceLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-balance" }, balanceLine) : null, go && go.error ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, "OpenCode GO: " + go.error) : null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, buildRows(GO_WINDOWS, goUsage)), goPaceLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-pace" }, goPaceLine) : null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-cookie" }, /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", disabled: cookie.busy, onClick: fetchCookie }, cookie.busy ? "Fetching\u2026" : "Fetch cookie from Firefox"), cookie.showLogin ? /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", onClick: openLogin }, "Open login page") : null, cookie.note ? /* @__PURE__ */ import_react2.default.createElement("span", { className: "ocgs-cookie-note" }, cookie.note) : null)) : null, providerVisible(cfg, "opencode-zen") ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-head" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "OpenCode Zen"), /* @__PURE__ */ import_react2.default.createElement("button", { className: "dsp-refresh", onClick: refreshOz }, "Refresh")), ozBalanceLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-balance" }, ozBalanceLine) : null, oz && oz.error ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, "OpenCode Zen: " + oz.error) : null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-cookie" }, /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", disabled: cookie.busy, onClick: fetchCookie }, cookie.busy ? "Fetching\u2026" : "Fetch cookie from Firefox"), cookie.showLogin ? /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", onClick: openLogin }, "Open opencode.ai") : null, cookie.note ? /* @__PURE__ */ import_react2.default.createElement("span", { className: "ocgs-cookie-note" }, cookie.note) : null)) : null);
+    ) : null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-cookie" }, /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", disabled: dsToken.busy, onClick: fetchDsToken }, dsToken.busy ? "Fetching\u2026" : "Fetch token from Firefox"), dsToken.showLogin ? /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", onClick: openDsLogin }, "Open platform.deepseek.com") : null, dsToken.note ? /* @__PURE__ */ import_react2.default.createElement("span", { className: "ocgs-cookie-note" }, dsToken.note) : null)) : null, providerVisible(cfg, "opencode") ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "OpenCode GO"), balanceLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-balance" }, balanceLine) : null, go && go.error ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, "OpenCode GO: " + go.error) : null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, buildRows(GO_WINDOWS, goUsage)), goPaceLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-pace" }, goPaceLine) : null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-cookie" }, /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", disabled: cookie.busy, onClick: fetchCookie }, cookie.busy ? "Fetching\u2026" : "Fetch cookie from Firefox"), cookie.showLogin ? /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", onClick: openLogin }, "Open login page") : null, cookie.note ? /* @__PURE__ */ import_react2.default.createElement("span", { className: "ocgs-cookie-note" }, cookie.note) : null)) : null, providerVisible(cfg, "opencode-zen") ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-head" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "OpenCode Zen"), /* @__PURE__ */ import_react2.default.createElement("button", { className: "dsp-refresh", onClick: refreshOz }, "Refresh")), ozBalanceLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-balance" }, ozBalanceLine) : null, oz && oz.error ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, "OpenCode Zen: " + oz.error) : null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-cookie" }, /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", disabled: cookie.busy, onClick: fetchCookie }, cookie.busy ? "Fetching\u2026" : "Fetch cookie from Firefox"), cookie.showLogin ? /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", onClick: openLogin }, "Open opencode.ai") : null, cookie.note ? /* @__PURE__ */ import_react2.default.createElement("span", { className: "ocgs-cookie-note" }, cookie.note) : null)) : null, providerVisible(cfg, "electronhub") ? renderEhSection(ehUsage, ehModels) : null);
   };
 }
 var name = PLUGIN_NAME;

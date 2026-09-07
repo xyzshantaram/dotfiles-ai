@@ -71,6 +71,52 @@ describe("makeOutputHandler", () => {
     });
   });
 
+  it("answers a tombstoned job with the evicted shape", () => {
+    const store = new JobBufferStore({ maxBytes: 1000, retentionMs: 60_000 });
+    store.append("j1", "old output");
+    store.setSnapshot("j1", {
+      id: "j1",
+      kind: "bash",
+      label: "build",
+      status: "completed",
+      startedAt: 100,
+      finishedAt: 200,
+    });
+    store.markFinished("j1", 100);
+    expect(store.sweep(100 + 60_000)).toEqual(["j1"]);
+    const handler = makeOutputHandler(store);
+    const res = makeRes();
+    handler({ url: "/job-viewer/output?job_id=j1" } as any, res as any);
+    const parsed = JSON.parse(res.body ?? "null");
+    expect(parsed).toEqual({
+      ok: true,
+      text: "",
+      truncated: false,
+      evicted: true,
+      job: {
+        id: "j1",
+        kind: "bash",
+        label: "build",
+        status: "completed",
+        startedAt: 100,
+        finishedAt: 200,
+      },
+    });
+  });
+
+  it("answers an evicted-then-expired job as unknown again", () => {
+    const store = new JobBufferStore({ maxBytes: 1000, retentionMs: 60_000 });
+    store.append("j1", "old output");
+    store.markFinished("j1", 100);
+    store.sweep(100 + 60_000);
+    store.sweep(100 + 60_000 + 24 * 60 * 60 * 1000);
+    const handler = makeOutputHandler(store);
+    const res = makeRes();
+    handler({ url: "/job-viewer/output?job_id=j1" } as any, res as any);
+    const parsed = JSON.parse(res.body ?? "null");
+    expect(parsed).toEqual({ ok: false, error: "unknown job" });
+  });
+
   it("serves job: undefined when no snapshot is cached yet", () => {
     const store = new JobBufferStore({ maxBytes: 1000, retentionMs: 60_000 });
     store.append("j1", "partial");

@@ -11,6 +11,11 @@ var IconChecklistOutline14 = primitives.IconChecklistOutline14;
 var IconPlayOutline16 = primitives.IconPlayOutline16;
 var IconQueueOutline14 = primitives.IconQueueOutline14;
 var IconCheckOutline14 = primitives.IconCheckOutline14;
+// IconRefreshOutline14 ships in the runtime primitives bundle but has no
+// line in the shared shim, which this change may not touch, so it is read
+// through `any`: tsc sees `any` and esbuild emits the same property read
+// as the aliases above. (A one-line shim addition could replace the cast.)
+var IconRefreshOutline14 = (primitives as any).IconRefreshOutline14;
 
 var PLUGIN_NAME = "durable-todos";
 var STYLE_TAG_ID = "durable-todos-style";
@@ -204,7 +209,8 @@ function makePanel() {
           </button>
           {unfinished.length > 0 ? (
             <button type="button" className="durable-todos-remind" onClick={onRemind}>
-              Remind
+              <IconRefreshOutline14 size={14} />
+              <span>Remind</span>
             </button>
           ) : null}
         </div>

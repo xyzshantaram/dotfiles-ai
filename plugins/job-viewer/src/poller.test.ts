@@ -140,10 +140,13 @@ describe("mountPoller", () => {
     expect(jobs.readCalls.length).toBe(readsAfterTerminal);
     expect(readsAfterTerminal).toBeGreaterThan(readsAfterTwo);
 
-    // markFinished ran, so the retention window applies.
+    // markFinished ran, so the retention window applies. The sweep
+    // tombstones instead of deleting: text dropped, snapshot kept.
     vi.advanceTimersByTime(6000);
     expect(store.sweep()).toContain("j1");
-    expect(store.get("j1")).toBeUndefined();
+    expect(store.get("j1")?.text).toBe("");
+    expect(store.get("j1")?.snapshot).toEqual(snap("j1", "completed"));
+    expect(store.get("j1")?.evictedAt).toBeDefined();
 
     teardown();
   });
@@ -163,6 +166,56 @@ describe("mountPoller", () => {
     teardown();
     vi.advanceTimersByTime(10_000);
     expect(jobs.readCalls.length).toBe(readsAtStart);
+  });
+
+  it("backfills a finished job that predates the mount", () => {
+    jobs.setSnapshot("j1", snap("j1", "completed"));
+    jobs.queueRead("j1", { text: "old output", snapshot: snap("j1", "completed") });
+    const teardown = mountPoller(jobs, store, {
+      pollIntervalMs: 100,
+      setInterval,
+      clearInterval,
+    });
+
+    // The mount seed read the terminal output once, without arming a timer.
+    expect(store.get("j1")?.text).toBe("old output");
+    expect(store.get("j1")?.snapshot).toEqual(snap("j1", "completed"));
+    vi.advanceTimersByTime(10_000);
+    expect(jobs.readCalls.length).toBe(1);
+
+    // markFinished ran, so the retention window applies to the backfill too.
+    vi.advanceTimersByTime(6000);
+    expect(store.sweep()).toContain("j1");
+    teardown();
+  });
+
+  it("mounts cleanly when the service rejects a callerless list", () => {
+    const snapshots = new Map<string, JobSnapshotLike>();
+    const listeners: Array<(owner: unknown | undefined) => void> = [];
+    const strict: JobsServiceLike = {
+      list(caller?: unknown) {
+        if (caller === undefined) throw new Error("caller required");
+        return [...snapshots.values()];
+      },
+      read(id: string) {
+        return { text: "hi", snapshot: snapshots.get(id)! };
+      },
+      onJobsChanged(listener: (owner: unknown | undefined) => void) {
+        listeners.push(listener);
+        return () => {};
+      },
+    };
+    // The mount seed must swallow the rejection, not throw.
+    const teardown = mountPoller(strict, store, {
+      pollIntervalMs: 100,
+      setInterval,
+      clearInterval,
+    });
+    // Event-driven polling still works for jobs that change after the mount.
+    snapshots.set("j1", snap("j1", "running"));
+    for (const listener of [...listeners]) listener("owner-1");
+    expect(store.get("j1")?.text).toBe("hi");
+    teardown();
   });
 
   it("swallows a read error from a job removed mid-flight", () => {

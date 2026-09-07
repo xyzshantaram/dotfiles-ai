@@ -32,7 +32,7 @@ describe("JobBufferStore", () => {
     expect(store.get("j1")?.truncated).toBe(true);
   });
 
-  it("keeps a finished job until retention passes, then evicts it", () => {
+  it("keeps a finished job until retention passes, then tombstones it", () => {
     let t = 0;
     const store = new JobBufferStore({ maxBytes: 100, retentionMs: 5000 }, () => t);
     store.append("j1", "hello");
@@ -41,7 +41,14 @@ describe("JobBufferStore", () => {
     expect(store.get("j1")?.text).toBe("hello");
     const evicted = store.sweep(6000);
     expect(evicted).toContain("j1");
-    expect(store.get("j1")).toBeUndefined();
+    // The sweep tombstones instead of deleting: text dropped, finish time
+    // and eviction time kept.
+    expect(store.get("j1")).toEqual({
+      text: "",
+      truncated: false,
+      finishedAt: 1000,
+      evictedAt: 6000,
+    });
   });
 
   it("markFinished defaults to the injected clock", () => {
@@ -65,7 +72,12 @@ describe("JobBufferStore", () => {
     store.markFinished("j1", 2000);
     const evicted = store.sweep(1600);
     expect(evicted).toContain("j1");
-    expect(store.get("j1")).toBeUndefined();
+    expect(store.get("j1")).toEqual({
+      text: "",
+      truncated: false,
+      finishedAt: 1000,
+      evictedAt: 1600,
+    });
   });
 
   it("markFinished creates an entry when none exists", () => {
@@ -136,6 +148,50 @@ describe("JobBufferStore", () => {
   it("getOwner returns undefined for a job with no entry", () => {
     const store = new JobBufferStore({ maxBytes: 100, retentionMs: 1000 });
     expect(store.getOwner("nope")).toBeUndefined();
+  });
+
+  it("tombstones keep the snapshot, drop the text, and sweep only once", () => {
+    const store = new JobBufferStore({ maxBytes: 100, retentionMs: 5000 });
+    store.append("j1", "hello");
+    store.setSnapshot("j1", {
+      id: "j1",
+      kind: "bash",
+      label: "build",
+      status: "completed",
+      startedAt: 1,
+      finishedAt: 2,
+    });
+    store.markFinished("j1", 1000);
+    expect(store.sweep(6000)).toEqual(["j1"]);
+    const tombstone = store.get("j1");
+    expect(tombstone?.text).toBe("");
+    expect(tombstone?.evictedAt).toBe(6000);
+    expect(tombstone?.snapshot?.label).toBe("build");
+    // A second sweep reports nothing new: the tombstone is stable.
+    expect(store.sweep(6001)).toEqual([]);
+    expect(store.get("j1")).toBe(tombstone);
+  });
+
+  it("tombstones expire a day after eviction, bounding memory", () => {
+    const store = new JobBufferStore({ maxBytes: 100, retentionMs: 5000 });
+    store.append("j1", "hello");
+    store.markFinished("j1", 1000);
+    expect(store.sweep(6000)).toEqual(["j1"]);
+    const dayMs = 24 * 60 * 60 * 1000;
+    expect(store.sweep(6000 + dayMs - 1)).toEqual([]);
+    expect(store.get("j1")?.evictedAt).toBe(6000);
+    expect(store.sweep(6000 + dayMs)).toEqual([]);
+    expect(store.get("j1")).toBeUndefined();
+  });
+
+  it("fresh output resurrects a tombstone", () => {
+    const store = new JobBufferStore({ maxBytes: 100, retentionMs: 5000 });
+    store.append("j1", "hello");
+    store.markFinished("j1", 1000);
+    expect(store.sweep(6000)).toEqual(["j1"]);
+    store.append("j1", "more");
+    expect(store.get("j1")?.evictedAt).toBeUndefined();
+    expect(store.get("j1")?.text).toBe("more");
   });
 
   it("get never mutates or consumes the entry", () => {

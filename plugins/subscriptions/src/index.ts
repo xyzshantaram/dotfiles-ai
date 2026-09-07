@@ -15,6 +15,9 @@
  *   - GET /subscriptions/deepseek-balance    — DeepSeek platform balance
  *   - GET /subscriptions/zai-quota         — Z.ai Coding Plan quota windows (cached 30s)
  *   - GET /subscriptions/zai-usage         — Z.ai 7-day model usage (cached 60s)
+ *   - GET /subscriptions/electronhub-usage — ElectronHub account usage (cached 60s;
+ *     the endpoint's own guidance allows usage checks at most once a minute)
+ *   - GET /subscriptions/electronhub-models — ElectronHub model list (cached 5min)
  *   - POST /subscriptions/opencode-cookie/extract — pull the opencode.ai
  *     session cookie out of a local Firefox profile, validate it against the
  *     `_server` RPC, and save it as the OPENCODE_SESSION_COOKIE credential
@@ -388,6 +391,13 @@ export function parseCommandCodeUsage(subJson, usageJson) {
 const ZAI_MONITOR_BASE = "https://api.z.ai";
 const ZAI_TIMEOUT_MS = 15_000;
 
+const ELECTRONHUB_API_BASE = "https://api.electronhub.ai/v1";
+const ELECTRONHUB_TIMEOUT_MS = 15_000;
+/** Upstream rate guidance: usage is checkable at most once per minute. */
+const ELECTRONHUB_USAGE_CACHE_MS = 60_000;
+/** The model catalog changes slowly, so a five-minute cache is plenty. */
+const ELECTRONHUB_MODELS_CACHE_MS = 300_000;
+
 /** One Z.ai quota window, mapped for the panel's window-meter rows. */
 export interface ZaiWindow {
   used: number;
@@ -498,6 +508,115 @@ async function zaiMonitorGet(path: string, key: string): Promise<unknown> {
     );
   }
   return (body as { data: unknown }).data;
+}
+
+/**
+ * ElectronHub (api.electronhub.ai) — account usage and model list.
+ * The OpenAPI documents integers, but the panel must survive numbers
+ * arriving as strings and partial payloads, so every numeric field goes
+ * through ehNumber and every missing field degrades instead of throwing.
+ */
+
+/** Number or numeric string -> number; anything else -> null. */
+function ehNumber(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+/** One daily history row; null when the entry carries no usable date. */
+function ehHistoryEntry(item: unknown): { date: string; requests: number } | null {
+  if (item === null || typeof item !== "object") return null;
+  const entry = item as Record<string, unknown>;
+  if (typeof entry.date !== "string" || entry.date === "") return null;
+  return { date: entry.date, requests: ehNumber(entry.requests) ?? 0 };
+}
+
+/** /v1/user/me payload -> the panel shape; missing fields degrade to null/empty. */
+export function parseElectronHubUsage(data: unknown): {
+  subscription: string | null;
+  credits: number | null;
+  usage: { inputTokens: number; outputTokens: number };
+  history: { date: string; requests: number }[];
+  endpoints: { name: string; requests: number }[];
+} {
+  const source: Record<string, unknown> =
+    data !== null && typeof data === "object" ? (data as Record<string, unknown>) : {};
+  const usageSrc: Record<string, unknown> =
+    source.usage !== null && typeof source.usage === "object"
+      ? (source.usage as Record<string, unknown>)
+      : {};
+  const history: { date: string; requests: number }[] = [];
+  if (Array.isArray(source.history)) {
+    for (const item of source.history) {
+      const entry = ehHistoryEntry(item);
+      if (entry !== null) history.push(entry);
+    }
+  }
+  // `endpoints` is documented as an object keyed by endpoint path. The value
+  // semantics are unverified, so accept counts (number or numeric string) and
+  // treat a boolean as present(1)/absent(0) in case the field is a set.
+  const endpoints: { name: string; requests: number }[] = [];
+  const endpointsSrc: Record<string, unknown> =
+    source.endpoints !== null &&
+    typeof source.endpoints === "object" &&
+    !Array.isArray(source.endpoints)
+      ? (source.endpoints as Record<string, unknown>)
+      : {};
+  for (const name of Object.keys(endpointsSrc)) {
+    const value = endpointsSrc[name];
+    const requests = ehNumber(value) ?? (value === true ? 1 : 0);
+    endpoints.push({ name, requests });
+  }
+  return {
+    subscription:
+      typeof source.subscription === "string" && source.subscription !== ""
+        ? source.subscription
+        : null,
+    credits: ehNumber(source.credits),
+    usage: {
+      inputTokens: ehNumber(usageSrc.input_tokens) ?? 0,
+      outputTokens: ehNumber(usageSrc.output_tokens) ?? 0,
+    },
+    history,
+    endpoints,
+  };
+}
+
+/**
+ * /v1/user/models payload -> model names. The endpoint's shape is
+ * UNVERIFIED (no docs, no key to probe it), so accept the three shapes a
+ * catalog endpoint plausibly answers with: a bare array, a `{data: [...]}`
+ * envelope, or a `{models: [...]}` wrapper. Each item may be a string or an
+ * object carrying an id/name/slug/model-ish string field; items that carry
+ * none of those are dropped rather than guessed at.
+ */
+export function parseElectronHubModels(data: unknown): string[] {
+  let items: unknown = data;
+  if (items !== null && typeof items === "object" && !Array.isArray(items)) {
+    const wrapper = items as Record<string, unknown>;
+    if (Array.isArray(wrapper.data)) items = wrapper.data;
+    else if (Array.isArray(wrapper.models)) items = wrapper.models;
+    else return [];
+  }
+  if (!Array.isArray(items)) return [];
+  const models: string[] = [];
+  for (const item of items) {
+    if (typeof item === "string") {
+      if (item !== "") models.push(item);
+      continue;
+    }
+    if (item === null || typeof item !== "object") continue;
+    const entry = item as Record<string, unknown>;
+    const name = [entry.id, entry.name, entry.slug, entry.model].find(
+      (candidate) => typeof candidate === "string" && candidate !== "",
+    );
+    if (typeof name === "string") models.push(name);
+  }
+  return models;
 }
 
 export function apply(ctx, config) {
@@ -900,6 +1019,63 @@ export function apply(ctx, config) {
     }
   };
 
+  // ── ElectronHub usage + models (api.electronhub.ai, Bearer ELECTRONHUB_API_KEY) ──
+  const resolveElectronHubKey = async () =>
+    credentials === undefined ? null : (await credentials.resolve("ELECTRONHUB_API_KEY"))?.value;
+
+  const electronhubUsageOnce = cachedOnce(async (key) => {
+    const res = await fetch(`${ELECTRONHUB_API_BASE}/user/me`, {
+      headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
+      signal: AbortSignal.timeout(ELECTRONHUB_TIMEOUT_MS),
+    });
+    if (!res.ok) throw new Error(`electronhub usage HTTP ${res.status}`);
+    return parseElectronHubUsage(await res.json());
+  }, ELECTRONHUB_USAGE_CACHE_MS);
+
+  const electronhubModelsOnce = cachedOnce(async (key) => {
+    const res = await fetch(`${ELECTRONHUB_API_BASE}/user/models`, {
+      headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
+      signal: AbortSignal.timeout(ELECTRONHUB_TIMEOUT_MS),
+    });
+    if (!res.ok) throw new Error(`electronhub models HTTP ${res.status}`);
+    return parseElectronHubModels(await res.json());
+  }, ELECTRONHUB_MODELS_CACHE_MS);
+
+  const handleElectronhubUsage = async (_req, res) => {
+    try {
+      const key = await resolveElectronHubKey();
+      if (!key) {
+        sendJson(res, 200, { ok: false, error: "ELECTRONHUB_API_KEY credential not configured" });
+        return;
+      }
+      sendJson(res, 200, { ok: true, ...(await electronhubUsageOnce(key)) });
+    } catch (error) {
+      sendJson(res, 200, {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
+  const handleElectronhubModels = async (_req, res) => {
+    try {
+      const key = await resolveElectronHubKey();
+      if (!key) {
+        sendJson(res, 200, { ok: false, error: "ELECTRONHUB_API_KEY credential not configured" });
+        return;
+      }
+      sendJson(res, 200, {
+        ok: true,
+        models: await electronhubModelsOnce(key),
+      });
+    } catch (error) {
+      sendJson(res, 200, {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
   // Firefox platform.deepseek.com localStorage userToken extraction ──────────
   const firefoxProfileDirs = () => {
     const root = join(homedir(), ".mozilla", "firefox");
@@ -1183,6 +1359,16 @@ export function apply(ctx, config) {
     kind: "exact",
     path: "/subscriptions/zai-usage",
     handler: handleZaiUsage,
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/electronhub-usage",
+    handler: handleElectronhubUsage,
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/electronhub-models",
+    handler: handleElectronhubModels,
   });
   // ── Command Code (api.commandcode.ai) balance + usage ─────────────────────
   const CMD_API_BASE = "https://api.commandcode.ai/alpha";

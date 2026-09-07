@@ -728,6 +728,10 @@ function parseCommandCodeUsage(subJson, usageJson) {
 }
 var ZAI_MONITOR_BASE = "https://api.z.ai";
 var ZAI_TIMEOUT_MS = 15e3;
+var ELECTRONHUB_API_BASE = "https://api.electronhub.ai/v1";
+var ELECTRONHUB_TIMEOUT_MS = 15e3;
+var ELECTRONHUB_USAGE_CACHE_MS = 6e4;
+var ELECTRONHUB_MODELS_CACHE_MS = 3e5;
 function parseZaiQuota(data) {
   const source = data !== null && typeof data === "object" ? data : {};
   const limits = Array.isArray(source.limits) ? source.limits : [];
@@ -793,6 +797,72 @@ async function zaiMonitorGet(path, key) {
     );
   }
   return body.data;
+}
+function ehNumber(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+function ehHistoryEntry(item) {
+  if (item === null || typeof item !== "object") return null;
+  const entry = item;
+  if (typeof entry.date !== "string" || entry.date === "") return null;
+  return { date: entry.date, requests: ehNumber(entry.requests) ?? 0 };
+}
+function parseElectronHubUsage(data) {
+  const source = data !== null && typeof data === "object" ? data : {};
+  const usageSrc = source.usage !== null && typeof source.usage === "object" ? source.usage : {};
+  const history = [];
+  if (Array.isArray(source.history)) {
+    for (const item of source.history) {
+      const entry = ehHistoryEntry(item);
+      if (entry !== null) history.push(entry);
+    }
+  }
+  const endpoints = [];
+  const endpointsSrc = source.endpoints !== null && typeof source.endpoints === "object" && !Array.isArray(source.endpoints) ? source.endpoints : {};
+  for (const name2 of Object.keys(endpointsSrc)) {
+    const value = endpointsSrc[name2];
+    const requests = ehNumber(value) ?? (value === true ? 1 : 0);
+    endpoints.push({ name: name2, requests });
+  }
+  return {
+    subscription: typeof source.subscription === "string" && source.subscription !== "" ? source.subscription : null,
+    credits: ehNumber(source.credits),
+    usage: {
+      inputTokens: ehNumber(usageSrc.input_tokens) ?? 0,
+      outputTokens: ehNumber(usageSrc.output_tokens) ?? 0
+    },
+    history,
+    endpoints
+  };
+}
+function parseElectronHubModels(data) {
+  let items = data;
+  if (items !== null && typeof items === "object" && !Array.isArray(items)) {
+    const wrapper = items;
+    if (Array.isArray(wrapper.data)) items = wrapper.data;
+    else if (Array.isArray(wrapper.models)) items = wrapper.models;
+    else return [];
+  }
+  if (!Array.isArray(items)) return [];
+  const models = [];
+  for (const item of items) {
+    if (typeof item === "string") {
+      if (item !== "") models.push(item);
+      continue;
+    }
+    if (item === null || typeof item !== "object") continue;
+    const entry = item;
+    const name2 = [entry.id, entry.name, entry.slug, entry.model].find(
+      (candidate) => typeof candidate === "string" && candidate !== ""
+    );
+    if (typeof name2 === "string") models.push(name2);
+  }
+  return models;
 }
 function apply(ctx, config) {
   const credentials = ctx.get("credentials");
@@ -1117,6 +1187,56 @@ function apply(ctx, config) {
       });
     }
   };
+  const resolveElectronHubKey = async () => credentials === void 0 ? null : (await credentials.resolve("ELECTRONHUB_API_KEY"))?.value;
+  const electronhubUsageOnce = cachedOnce(async (key) => {
+    const res = await fetch(`${ELECTRONHUB_API_BASE}/user/me`, {
+      headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
+      signal: AbortSignal.timeout(ELECTRONHUB_TIMEOUT_MS)
+    });
+    if (!res.ok) throw new Error(`electronhub usage HTTP ${res.status}`);
+    return parseElectronHubUsage(await res.json());
+  }, ELECTRONHUB_USAGE_CACHE_MS);
+  const electronhubModelsOnce = cachedOnce(async (key) => {
+    const res = await fetch(`${ELECTRONHUB_API_BASE}/user/models`, {
+      headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
+      signal: AbortSignal.timeout(ELECTRONHUB_TIMEOUT_MS)
+    });
+    if (!res.ok) throw new Error(`electronhub models HTTP ${res.status}`);
+    return parseElectronHubModels(await res.json());
+  }, ELECTRONHUB_MODELS_CACHE_MS);
+  const handleElectronhubUsage = async (_req, res) => {
+    try {
+      const key = await resolveElectronHubKey();
+      if (!key) {
+        sendJson(res, 200, { ok: false, error: "ELECTRONHUB_API_KEY credential not configured" });
+        return;
+      }
+      sendJson(res, 200, { ok: true, ...await electronhubUsageOnce(key) });
+    } catch (error) {
+      sendJson(res, 200, {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  };
+  const handleElectronhubModels = async (_req, res) => {
+    try {
+      const key = await resolveElectronHubKey();
+      if (!key) {
+        sendJson(res, 200, { ok: false, error: "ELECTRONHUB_API_KEY credential not configured" });
+        return;
+      }
+      sendJson(res, 200, {
+        ok: true,
+        models: await electronhubModelsOnce(key)
+      });
+    } catch (error) {
+      sendJson(res, 200, {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  };
   const firefoxProfileDirs = () => {
     const root = join(homedir(), ".mozilla", "firefox");
     if (!existsSync(root)) return [];
@@ -1371,6 +1491,16 @@ function apply(ctx, config) {
     path: "/subscriptions/zai-usage",
     handler: handleZaiUsage
   });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/electronhub-usage",
+    handler: handleElectronhubUsage
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/electronhub-models",
+    handler: handleElectronhubModels
+  });
   const CMD_API_BASE = "https://api.commandcode.ai/alpha";
   const commandCodeOrgOnce = cachedOnce(async (key) => {
     const whoami = await commandCodeGet(key, CMD_API_BASE, "/whoami", null);
@@ -1532,6 +1662,8 @@ export {
   name,
   parseCommandCodeCredits,
   parseCommandCodeUsage,
+  parseElectronHubModels,
+  parseElectronHubUsage,
   parseZaiQuota,
   parseZaiUsage
 };
