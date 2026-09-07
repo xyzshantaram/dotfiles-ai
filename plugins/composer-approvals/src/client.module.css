@@ -38,10 +38,11 @@
   text-align: center;
 }
 .composer-approvals-list {
+  /* No scroller here: the shared modal's body owns scrolling, and the
+     compact panel caps itself at the mask safe box. */
   list-style: none;
   margin: 0;
   padding: 0;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 8px;

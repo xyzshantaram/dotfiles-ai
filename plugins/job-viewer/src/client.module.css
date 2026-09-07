@@ -144,7 +144,10 @@
   margin-top: 0.5rem;
   /* The flexible middle of the fixed-size modal: one constant size with an
      internal scrollbar. This replaces the old max-height cap, which let the
-     modal grow and shrink with the output. */
+     modal grow and shrink with the output. The `flex: 1` is honoured because
+     the shared modal's body (.plugin-modal-body) is a flex column and the
+     panel is the full standard size, so this box takes whatever height the
+     heading, meta line and note leave. */
   flex: 1;
   min-height: 0;
   overflow: auto;
