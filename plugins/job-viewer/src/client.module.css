@@ -163,32 +163,6 @@
   white-space: pre;
 }
 
-.jv-modal {
-  /* Sizing hook for primitives' Modal: className lands on the dialog box,
-     the same pattern as the shipped confirmation modal. The settings
-     panel's fixed box instead of the default narrow dialog. Plugin CSS
-     injects after the app bundle, so this wins the specificity tie with
-     the dialog rule. */
-  height: min(800px, 100vh - 48px);
-  max-width: calc(100vw - 48px);
-  width: 800px;
-}
-
-/* contentClassName hook: take the dialog's column so the output area can
-   flex to one constant size. */
-.jv-modal-content {
-  flex: 1;
-  min-height: 0;
-}
-
-/* The Modal body div is always the last child of the content box (header,
-   then the optional description, then the body), so reach it by position:
-   it must flex too, or .jv-output-wrap has nothing to fill. */
-.jv-modal-content > div:last-child {
-  flex: 1;
-  min-height: 0;
-}
-
 .jv-command {
   /* The job's command/label on its own monospaced line under the heading. */
   color: var(--dsw-alias-label-primary);

@@ -40,7 +40,7 @@ __export(client_exports, {
   name: () => name
 });
 module.exports = __toCommonJS(client_exports);
-var import_react = __toESM(require("react"), 1);
+var import_react2 = __toESM(require("react"), 1);
 var import_react_dom = require("react-dom");
 
 // plugins/job-viewer/node_modules/ansi_up.js
@@ -546,11 +546,173 @@ function postJson(url, body) {
   return request("POST", url, body);
 }
 
+// plugins/shared/plugin-modal.tsx
+var import_react = __toESM(require("react"));
+
+// css-text:/home/sid/repos/dotfiles-ai/plugins/shared/plugin-modal.module.css
+var plugin_modal_default = `/* Shared modal component styles. Class names are kebab-case only. */
+
+.plugin-modal-mask {
+  /* Full-screen overlay with mask blur and semi-transparent background. */
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  background: var(--dsw-alias-bg-mask-1);
+  backdrop-filter: var(--dsw-mask-blur);
+}
+
+.plugin-modal-panel {
+  /* Dialog panel, centered by the overlay's grid layout. */
+  display: flex;
+  flex-direction: column;
+  border-radius: 24px;
+  background: var(--dsw-alias-bg-layer-2);
+  box-shadow: var(--dsw-shadow-lv3);
+  color: var(--dsw-alias-label-primary);
+  padding: 20px;
+  box-sizing: border-box;
+  /* Default size: the settings-panel recipe (#35). */
+  width: 800px;
+  max-width: calc(100vw - 48px);
+  height: min(800px, 100vh - 48px);
+}
+
+.plugin-modal-panel[data-size="compact"] {
+  /* Compact variant for smaller modals. */
+  width: 30rem;
+  max-width: calc(100vw - 3rem);
+  max-height: 60vh;
+  height: auto;
+}
+
+.plugin-modal-header {
+  /* Header row: title on the left, close button on the right. */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex: none;
+}
+
+.plugin-modal-title {
+  /* Header title text. */
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.375rem;
+  margin: 0;
+  flex: 1;
+}
+
+.plugin-modal-close {
+  /* Close button in the header. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  padding: 0;
+  border-radius: 4px;
+  transition: background-color 0.12s;
+}
+
+.plugin-modal-close:hover {
+  background: var(--dsw-alias-bg-tertiary);
+}
+
+.plugin-modal-body {
+  /* Scrollable body content. Fills the remaining space in the panel. */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.plugin-modal-footer {
+  /* Optional footer row, typically for buttons. Stays fixed at the bottom. */
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+  flex: none;
+  padding-top: 12px;
+  border-top: 1px solid var(--dsw-alias-border-l3);
+}
+`;
+
+// plugins/shared/plugin-modal.tsx
+function CloseIcon() {
+  return /* @__PURE__ */ import_react.default.createElement(
+    "svg",
+    {
+      viewBox: "0 0 24 24",
+      width: "16",
+      height: "16",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round",
+      strokeLinejoin: "round"
+    },
+    /* @__PURE__ */ import_react.default.createElement("line", { x1: "18", y1: "6", x2: "6", y2: "18" }),
+    /* @__PURE__ */ import_react.default.createElement("line", { x1: "6", y1: "6", x2: "18", y2: "18" })
+  );
+}
+function PluginModal(props) {
+  var size = props.size || "default";
+  import_react.default.useEffect(
+    function() {
+      var onKeyDown = function(event) {
+        if (event.key === "Escape") {
+          props.onClose();
+        }
+      };
+      document.addEventListener("keydown", onKeyDown);
+      return function() {
+        document.removeEventListener("keydown", onKeyDown);
+      };
+    },
+    [props.onClose]
+  );
+  return /* @__PURE__ */ import_react.default.createElement("div", { className: plugin_modal_default["plugin-modal-mask"], onClick: props.onClose }, /* @__PURE__ */ import_react.default.createElement(
+    "div",
+    {
+      className: plugin_modal_default["plugin-modal-panel"],
+      "data-size": size,
+      role: "dialog",
+      "aria-labelledby": "plugin-modal-title",
+      onClick: function(event) {
+        event.stopPropagation();
+      }
+    },
+    /* @__PURE__ */ import_react.default.createElement("div", { className: plugin_modal_default["plugin-modal-header"] }, /* @__PURE__ */ import_react.default.createElement("h2", { id: "plugin-modal-title", className: plugin_modal_default["plugin-modal-title"] }, props.title), /* @__PURE__ */ import_react.default.createElement(
+      "button",
+      {
+        className: plugin_modal_default["plugin-modal-close"],
+        onClick: props.onClose,
+        "aria-label": "Close",
+        type: "button"
+      },
+      /* @__PURE__ */ import_react.default.createElement(CloseIcon, null)
+    )),
+    /* @__PURE__ */ import_react.default.createElement("div", { className: plugin_modal_default["plugin-modal-body"] }, props.children),
+    props.footer ? /* @__PURE__ */ import_react.default.createElement("div", { className: plugin_modal_default["plugin-modal-footer"] }, props.footer) : null
+  ));
+}
+
 // css-text:/home/sid/repos/dotfiles-ai/plugins/shared/settings.css
 var settings_default = "/* Shared settings-page vocabulary, normalized from the session-archive,\n * subscriptions, and profiles settings panels. One rule set in one file so\n * the three panels cannot drift. Radius and padding disagreements are\n * normalized to the session-archive (or median) value; the var(--dsw-...)\n * aliases the current rules use are kept as-is. */\n\n/* Page-level container:airy vertical rhythm, no own box. */\n.dsp-root {\n  box-sizing: border-box;\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n  padding: 0;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Header row (title + refresh). */\n.dsp-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 0.75rem;\n}\n\n.dsp-title {\n  font-size: 1.5rem;\n  font-weight: 650;\n  margin: 0;\n  line-height: 1.2;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Refresh:session-archive/profiles form (no box, color shift only).\n * subscriptions pads and rounds the hit area; normalized away. */\n.dsp-refresh {\n  cursor: pointer;\n  border: none;\n  background: none;\n  padding: 0;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n}\n.dsp-refresh:hover {\n  color: var(--dsw-alias-label-primary);\n}\n\n.dsp-err {\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-state-error-primary);\n}\n\n/* Large setting card. Padding is the median of 16/20/24 (session-archive\n * 20px); the radius is the two-agreeing 20px, not profiles' 12px. */\n.dsp-section {\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.875rem;\n  padding: 1.25rem;\n  background: var(--dsw-alias-bg-tertiary);\n}\n\n/* Card title:subscriptions' 1.5rem/700 matches the page-title vocabulary;\n * profiles' smaller 16px/600 card title normalized up. */\n.dsp-section-title {\n  font-size: 1.125rem;\n  font-weight: 600;\n  margin: 0;\n  line-height: 1.2;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Setting row:horizontal in session-archive and profiles (subscriptions\n * stacks its label and meta vertically; normalized to the horizontal form). */\n.dsp-row {\n  display: flex;\n  align-items: center;\n  gap: 0.75rem;\n  min-width: 0;\n}\n\n/* Row label:only subscriptions defines one; ported verbatim, with its\n * emphasized <b> children. */\n.dsp-row-label {\n  display: flex;\n  align-items: baseline;\n  gap: 0.625rem;\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.dsp-row-label b {\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n  font-size: 0.9375rem;\n}\n.dsp-row-label b:last-child {\n  margin-left: auto;\n}\n";
 
 // css-text:/home/sid/repos/dotfiles-ai/plugins/job-viewer/src/client.module.css
-var client_default = "/* job-viewer dropdown and output modal styles. Class names are kebab-case only. */\n\n.jv-root {\n  position: relative;\n  display: inline-block;\n}\n\n.jv-trigger {\n  align-items: center;\n  background: transparent;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  color: var(--dsw-alias-label-primary);\n  cursor: pointer;\n  display: flex;\n  font-size: 0.8125rem;\n  gap: 0.375rem;\n  line-height: 1.375rem;\n  padding: 0.125rem 0.5rem;\n}\n\n.jv-trigger:hover {\n  background: var(--dsw-alias-bg-tertiary);\n}\n\n.jv-chevron {\n  flex: none;\n  color: var(--dsw-alias-label-caption);\n  transform: rotate(0deg);\n  transition: transform 0.12s;\n}\n\n.jv-chevron-open {\n  transform: rotate(180deg);\n}\n\n.jv-menu {\n  /* The popover needs the MENU token, not the generic page background: the\n     generic one is translucent in this theme, so the conversation showed\n     through the dropdown. This is the token the shipped jobs dropdown used. */\n  background: var(--dsw-specific-menu);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  box-shadow: 0 0.25rem 1rem rgb(0 0 0 / 20%);\n  list-style: none;\n  margin: 0;\n  max-height: 60vh;\n  max-width: min(26rem, calc(100vw - 16px));\n  min-width: 18rem;\n  overflow-y: auto;\n  padding: 0.25rem;\n  /* Portaled into document.body, so the sidebar's overflow cannot clip it.\n     Client code anchors it to the trigger (fixed top/left, flipped above\n     when the viewport bottom would overflow). z-index matches the shipped\n     modal overlay: the menu never competes with a modal, since opening a\n     row closes the menu first. */\n  position: fixed;\n  width: max-content;\n  z-index: 1000;\n}\n\n.jv-row {\n  align-items: center;\n  border-radius: 0.375rem;\n  cursor: pointer;\n  display: flex;\n  font-size: 0.8125rem;\n  gap: 0.5rem;\n  line-height: 1.375rem;\n  padding: 0.25rem 0.5rem;\n}\n\n.jv-row:hover {\n  background: var(--dsw-alias-bg-tertiary);\n}\n\n.jv-dot {\n  border-radius: 50%;\n  flex: none;\n  height: 0.5rem;\n  width: 0.5rem;\n  background: var(--dsw-alias-label-tertiary);\n}\n\n.jv-dot[data-live] {\n  background: var(--dsw-alias-state-success-primary);\n}\n\n.jv-kind {\n  background: var(--dsw-alias-bg-tertiary);\n  border-radius: 0.25rem;\n  color: var(--dsw-alias-label-secondary);\n  flex: none;\n  font-size: 0.6875rem;\n  line-height: 1.125rem;\n  padding: 0 0.375rem;\n}\n\n.jv-label {\n  color: var(--dsw-alias-label-primary);\n  flex: 1 1 auto;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.jv-status {\n  color: var(--dsw-alias-label-secondary);\n  flex: none;\n}\n\n.jv-duration {\n  color: var(--dsw-alias-label-tertiary);\n  flex: none;\n  font-variant-numeric: tabular-nums;\n  text-align: right;\n}\n\n.jv-empty {\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.875rem;\n  font-style: italic;\n  line-height: 1.375rem;\n}\n\n.jv-meta {\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n}\n\n.jv-autoscroll {\n  align-items: center;\n  color: var(--dsw-alias-label-secondary);\n  display: flex;\n  font-size: 0.8125rem;\n  gap: 0.375rem;\n  line-height: 1.375rem;\n}\n\n.jv-output-wrap {\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.875rem;\n  margin-top: 0.5rem;\n  /* The flexible middle of the fixed-size modal: one constant size with an\n     internal scrollbar. This replaces the old max-height cap, which let the\n     modal grow and shrink with the output. */\n  flex: 1;\n  min-height: 0;\n  overflow: auto;\n}\n\n.jv-output {\n  background: var(--dsw-alias-bg-tertiary);\n  box-sizing: border-box;\n  color: var(--dsw-alias-label-primary);\n  font-family: var(--ds-font-family-code);\n  font-size: 0.8125rem;\n  line-height: 1.5;\n  margin: 0;\n  min-width: 100%;\n  padding: 1rem;\n  white-space: pre;\n}\n\n.jv-modal {\n  /* Sizing hook for primitives' Modal: className lands on the dialog box,\n     the same pattern as the shipped confirmation modal. The settings\n     panel's fixed box instead of the default narrow dialog. Plugin CSS\n     injects after the app bundle, so this wins the specificity tie with\n     the dialog rule. */\n  height: min(800px, 100vh - 48px);\n  max-width: calc(100vw - 48px);\n  width: 800px;\n}\n\n/* contentClassName hook: take the dialog's column so the output area can\n   flex to one constant size. */\n.jv-modal-content {\n  flex: 1;\n  min-height: 0;\n}\n\n/* The Modal body div is always the last child of the content box (header,\n   then the optional description, then the body), so reach it by position:\n   it must flex too, or .jv-output-wrap has nothing to fill. */\n.jv-modal-content > div:last-child {\n  flex: 1;\n  min-height: 0;\n}\n\n.jv-command {\n  /* The job's command/label on its own monospaced line under the heading. */\n  color: var(--dsw-alias-label-primary);\n  font-family: var(--ds-font-family-code);\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  margin: 0 0 0.5rem;\n  overflow-wrap: anywhere;\n}\n\n.jv-note {\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  margin-top: 0.5rem;\n}\n";
+var client_default = "/* job-viewer dropdown and output modal styles. Class names are kebab-case only. */\n\n.jv-root {\n  position: relative;\n  display: inline-block;\n}\n\n.jv-trigger {\n  align-items: center;\n  background: transparent;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  color: var(--dsw-alias-label-primary);\n  cursor: pointer;\n  display: flex;\n  font-size: 0.8125rem;\n  gap: 0.375rem;\n  line-height: 1.375rem;\n  padding: 0.125rem 0.5rem;\n}\n\n.jv-trigger:hover {\n  background: var(--dsw-alias-bg-tertiary);\n}\n\n.jv-chevron {\n  flex: none;\n  color: var(--dsw-alias-label-caption);\n  transform: rotate(0deg);\n  transition: transform 0.12s;\n}\n\n.jv-chevron-open {\n  transform: rotate(180deg);\n}\n\n.jv-menu {\n  /* The popover needs the MENU token, not the generic page background: the\n     generic one is translucent in this theme, so the conversation showed\n     through the dropdown. This is the token the shipped jobs dropdown used. */\n  background: var(--dsw-specific-menu);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  box-shadow: 0 0.25rem 1rem rgb(0 0 0 / 20%);\n  list-style: none;\n  margin: 0;\n  max-height: 60vh;\n  max-width: min(26rem, calc(100vw - 16px));\n  min-width: 18rem;\n  overflow-y: auto;\n  padding: 0.25rem;\n  /* Portaled into document.body, so the sidebar's overflow cannot clip it.\n     Client code anchors it to the trigger (fixed top/left, flipped above\n     when the viewport bottom would overflow). z-index matches the shipped\n     modal overlay: the menu never competes with a modal, since opening a\n     row closes the menu first. */\n  position: fixed;\n  width: max-content;\n  z-index: 1000;\n}\n\n.jv-row {\n  align-items: center;\n  border-radius: 0.375rem;\n  cursor: pointer;\n  display: flex;\n  font-size: 0.8125rem;\n  gap: 0.5rem;\n  line-height: 1.375rem;\n  padding: 0.25rem 0.5rem;\n}\n\n.jv-row:hover {\n  background: var(--dsw-alias-bg-tertiary);\n}\n\n.jv-dot {\n  border-radius: 50%;\n  flex: none;\n  height: 0.5rem;\n  width: 0.5rem;\n  background: var(--dsw-alias-label-tertiary);\n}\n\n.jv-dot[data-live] {\n  background: var(--dsw-alias-state-success-primary);\n}\n\n.jv-kind {\n  background: var(--dsw-alias-bg-tertiary);\n  border-radius: 0.25rem;\n  color: var(--dsw-alias-label-secondary);\n  flex: none;\n  font-size: 0.6875rem;\n  line-height: 1.125rem;\n  padding: 0 0.375rem;\n}\n\n.jv-label {\n  color: var(--dsw-alias-label-primary);\n  flex: 1 1 auto;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.jv-status {\n  color: var(--dsw-alias-label-secondary);\n  flex: none;\n}\n\n.jv-duration {\n  color: var(--dsw-alias-label-tertiary);\n  flex: none;\n  font-variant-numeric: tabular-nums;\n  text-align: right;\n}\n\n.jv-empty {\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.875rem;\n  font-style: italic;\n  line-height: 1.375rem;\n}\n\n.jv-meta {\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n}\n\n.jv-autoscroll {\n  align-items: center;\n  color: var(--dsw-alias-label-secondary);\n  display: flex;\n  font-size: 0.8125rem;\n  gap: 0.375rem;\n  line-height: 1.375rem;\n}\n\n.jv-output-wrap {\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.875rem;\n  margin-top: 0.5rem;\n  /* The flexible middle of the fixed-size modal: one constant size with an\n     internal scrollbar. This replaces the old max-height cap, which let the\n     modal grow and shrink with the output. */\n  flex: 1;\n  min-height: 0;\n  overflow: auto;\n}\n\n.jv-output {\n  background: var(--dsw-alias-bg-tertiary);\n  box-sizing: border-box;\n  color: var(--dsw-alias-label-primary);\n  font-family: var(--ds-font-family-code);\n  font-size: 0.8125rem;\n  line-height: 1.5;\n  margin: 0;\n  min-width: 100%;\n  padding: 1rem;\n  white-space: pre;\n}\n\n.jv-command {\n  /* The job's command/label on its own monospaced line under the heading. */\n  color: var(--dsw-alias-label-primary);\n  font-family: var(--ds-font-family-code);\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  margin: 0 0 0.5rem;\n  overflow-wrap: anywhere;\n}\n\n.jv-note {\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  margin-top: 0.5rem;\n}\n";
 
 // plugins/job-viewer/src/client.tsx
 var ui = import_dsh_client_ui_primitives.default;
@@ -593,40 +755,40 @@ function makeJobViewerAction() {
       return state.jobsBySession[sessionId] || [];
     });
     var liveCount = jobs.filter(isLive).length;
-    var menuOpenState = import_react.default.useState(false);
+    var menuOpenState = import_react2.default.useState(false);
     var menuOpen = menuOpenState[0];
     var setMenuOpen = menuOpenState[1];
-    var nowState = import_react.default.useState(function() {
+    var nowState = import_react2.default.useState(function() {
       return Date.now();
     });
     var now = nowState[0];
     var setNow = nowState[1];
-    var openJobState = import_react.default.useState(null);
+    var openJobState = import_react2.default.useState(null);
     var openJobId = openJobState[0];
     var setOpenJobId = openJobState[1];
-    var outState = import_react.default.useState(null);
+    var outState = import_react2.default.useState(null);
     var out = outState[0];
     var setOut = outState[1];
-    var statusState = import_react.default.useState(null);
+    var statusState = import_react2.default.useState(null);
     var status = statusState[0];
     var setStatus = statusState[1];
-    var statusRef = import_react.default.useRef(null);
-    var autoscrollState = import_react.default.useState(true);
+    var statusRef = import_react2.default.useRef(null);
+    var autoscrollState = import_react2.default.useState(true);
     var autoscroll = autoscrollState[0];
     var setAutoscroll = autoscrollState[1];
-    var killPhaseState = import_react.default.useState("idle");
+    var killPhaseState = import_react2.default.useState("idle");
     var killPhase = killPhaseState[0];
     var setKillPhase = killPhaseState[1];
-    var killErrorState = import_react.default.useState(null);
+    var killErrorState = import_react2.default.useState(null);
     var killError = killErrorState[0];
     var setKillError = killErrorState[1];
-    var outputWrapRef = import_react.default.useRef(null);
-    var triggerRef = import_react.default.useRef(null);
-    var menuRef = import_react.default.useRef(null);
-    var menuPosState = import_react.default.useState(null);
+    var outputWrapRef = import_react2.default.useRef(null);
+    var triggerRef = import_react2.default.useRef(null);
+    var menuRef = import_react2.default.useRef(null);
+    var menuPosState = import_react2.default.useState(null);
     var menuPos = menuPosState[0];
     var setMenuPos = menuPosState[1];
-    import_react.default.useEffect(
+    import_react2.default.useEffect(
       function() {
         if (!menuOpen || liveCount === 0) return;
         setNow(Date.now());
@@ -639,7 +801,7 @@ function makeJobViewerAction() {
       },
       [menuOpen, liveCount]
     );
-    import_react.default.useLayoutEffect(
+    import_react2.default.useLayoutEffect(
       function() {
         if (!menuOpen) return;
         var place = function() {
@@ -670,7 +832,7 @@ function makeJobViewerAction() {
       },
       [menuOpen, jobs.length]
     );
-    import_react.default.useEffect(
+    import_react2.default.useEffect(
       function() {
         if (!menuOpen) return;
         var onPointerDown = function(event) {
@@ -708,7 +870,7 @@ function makeJobViewerAction() {
       setKillPhase("idle");
       setKillError(null);
     };
-    import_react.default.useEffect(
+    import_react2.default.useEffect(
       function() {
         if (openJobId === null) return;
         var cancelled = false;
@@ -756,7 +918,7 @@ function makeJobViewerAction() {
       },
       [openJobId]
     );
-    import_react.default.useEffect(
+    import_react2.default.useEffect(
       function() {
         if (!autoscroll) return;
         var wrap = outputWrapRef.current;
@@ -764,7 +926,7 @@ function makeJobViewerAction() {
       },
       [out && out.text, autoscroll]
     );
-    import_react.default.useEffect(
+    import_react2.default.useEffect(
       function() {
         if (killPhase !== "confirming") return;
         var timer = setTimeout(function() {
@@ -776,7 +938,7 @@ function makeJobViewerAction() {
       },
       [killPhase]
     );
-    var outputHtml = import_react.default.useMemo(
+    var outputHtml = import_react2.default.useMemo(
       function() {
         if (out === null || typeof out.text !== "string" || out.text === "") return "";
         return makeAnsiUp().ansi_to_html(out.text);
@@ -827,7 +989,7 @@ function makeJobViewerAction() {
     var sorted = ordered(jobs);
     var triggerLabel = liveCount > 0 ? liveCount + " running" : jobs.length + " background jobs";
     var rows = sorted.map(function(job) {
-      return /* @__PURE__ */ import_react.default.createElement(
+      return /* @__PURE__ */ import_react2.default.createElement(
         "li",
         {
           key: job.id,
@@ -836,11 +998,11 @@ function makeJobViewerAction() {
             openJob(job);
           }
         },
-        /* @__PURE__ */ import_react.default.createElement("span", { className: "jv-dot", "data-live": isLive(job) ? "" : void 0 }),
-        /* @__PURE__ */ import_react.default.createElement("span", { className: "jv-kind" }, job.kind),
-        /* @__PURE__ */ import_react.default.createElement("span", { className: "jv-label" }, job.label),
-        /* @__PURE__ */ import_react.default.createElement("span", { className: "jv-status" }, job.status),
-        /* @__PURE__ */ import_react.default.createElement("span", { className: "jv-duration" }, formatDuration(
+        /* @__PURE__ */ import_react2.default.createElement("span", { className: "jv-dot", "data-live": isLive(job) ? "" : void 0 }),
+        /* @__PURE__ */ import_react2.default.createElement("span", { className: "jv-kind" }, job.kind),
+        /* @__PURE__ */ import_react2.default.createElement("span", { className: "jv-label" }, job.label),
+        /* @__PURE__ */ import_react2.default.createElement("span", { className: "jv-status" }, job.status),
+        /* @__PURE__ */ import_react2.default.createElement("span", { className: "jv-duration" }, formatDuration(
           (isLive(job) ? now : job.finishedAt ?? job.startedAt) - job.startedAt
         ))
       );
@@ -855,13 +1017,13 @@ function makeJobViewerAction() {
       var shown = known !== void 0 ? known : out && out.job ? out.job : null;
       var body = null;
       if (out === null) {
-        body = /* @__PURE__ */ import_react.default.createElement("div", { className: "jv-empty" }, "Loading\u2026");
+        body = /* @__PURE__ */ import_react2.default.createElement("div", { className: "jv-empty" }, "Loading\u2026");
       } else if (out.evicted) {
-        body = /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, shown ? /* @__PURE__ */ import_react.default.createElement("div", { className: "jv-command" }, shown.label) : null, /* @__PURE__ */ import_react.default.createElement("div", { className: "jv-empty" }, "Output expired \u2014 finished jobs keep their output for 10 minutes."), /* @__PURE__ */ import_react.default.createElement("div", { className: "jv-meta" }, shown ? shown.kind + " \xB7 " + status : "job status: " + status));
+        body = /* @__PURE__ */ import_react2.default.createElement(import_react2.default.Fragment, null, shown ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "jv-command" }, shown.label) : null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "jv-empty" }, "Output expired \u2014 finished jobs keep their output for 10 minutes."), /* @__PURE__ */ import_react2.default.createElement("div", { className: "jv-meta" }, shown ? shown.kind + " \xB7 " + status : "job status: " + status));
       } else if (out.missing) {
-        body = /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, shown ? /* @__PURE__ */ import_react.default.createElement("div", { className: "jv-command" }, shown.label) : null, /* @__PURE__ */ import_react.default.createElement("div", { className: "jv-empty" }, "No output available for this job."));
+        body = /* @__PURE__ */ import_react2.default.createElement(import_react2.default.Fragment, null, shown ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "jv-command" }, shown.label) : null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "jv-empty" }, "No output available for this job."));
       } else {
-        body = /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, shown ? /* @__PURE__ */ import_react.default.createElement("div", { className: "jv-command" }, shown.label) : null, /* @__PURE__ */ import_react.default.createElement("div", { className: "jv-meta" }, "status: " + status), /* @__PURE__ */ import_react.default.createElement("label", { className: "jv-autoscroll" }, /* @__PURE__ */ import_react.default.createElement(
+        body = /* @__PURE__ */ import_react2.default.createElement(import_react2.default.Fragment, null, shown ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "jv-command" }, shown.label) : null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "jv-meta" }, "status: " + status), /* @__PURE__ */ import_react2.default.createElement("label", { className: "jv-autoscroll" }, /* @__PURE__ */ import_react2.default.createElement(
           "input",
           {
             type: "checkbox",
@@ -870,19 +1032,14 @@ function makeJobViewerAction() {
               setAutoscroll(event.target.checked);
             }
           }
-        ), "Auto-scroll"), /* @__PURE__ */ import_react.default.createElement("div", { className: "jv-output-wrap", ref: outputWrapRef }, /* @__PURE__ */ import_react.default.createElement("pre", { className: "jv-output", dangerouslySetInnerHTML: { __html: outputHtml } })), out.truncated ? /* @__PURE__ */ import_react.default.createElement("div", { className: "jv-note" }, "Earlier output was dropped (buffer full).") : null, out.error ? /* @__PURE__ */ import_react.default.createElement("div", { className: "dsp-err" }, out.error) : null, killError ? /* @__PURE__ */ import_react.default.createElement("div", { className: "dsp-err" }, killError) : null);
+        ), "Auto-scroll"), /* @__PURE__ */ import_react2.default.createElement("div", { className: "jv-output-wrap", ref: outputWrapRef }, /* @__PURE__ */ import_react2.default.createElement("pre", { className: "jv-output", dangerouslySetInnerHTML: { __html: outputHtml } })), out.truncated ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "jv-note" }, "Earlier output was dropped (buffer full).") : null, out.error ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, out.error) : null, killError ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, killError) : null);
       }
-      modal = /* @__PURE__ */ import_react.default.createElement(
-        ui.Modal,
+      modal = /* @__PURE__ */ import_react2.default.createElement(
+        PluginModal,
         {
-          open: true,
-          onClose: closeJob,
           title: "Job output",
-          description: shown ? shown.kind + " \xB7 " + status : "job status: " + status,
-          closeLabel: "Close",
-          className: "jv-modal",
-          contentClassName: "jv-modal-content",
-          footer: /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement(ui.Button, { variant: "outline", onClick: closeJob }, "Close"), live ? /* @__PURE__ */ import_react.default.createElement(
+          onClose: closeJob,
+          footer: /* @__PURE__ */ import_react2.default.createElement(import_react2.default.Fragment, null, /* @__PURE__ */ import_react2.default.createElement(ui.Button, { variant: "outline", onClick: closeJob }, "Close"), live ? /* @__PURE__ */ import_react2.default.createElement(
             ui.Button,
             {
               variant: "outline",
@@ -895,7 +1052,7 @@ function makeJobViewerAction() {
         body
       );
     }
-    return /* @__PURE__ */ import_react.default.createElement("div", { className: "jv-root" }, /* @__PURE__ */ import_react.default.createElement(
+    return /* @__PURE__ */ import_react2.default.createElement("div", { className: "jv-root" }, /* @__PURE__ */ import_react2.default.createElement(
       "button",
       {
         className: "jv-trigger",
@@ -914,7 +1071,7 @@ function makeJobViewerAction() {
         }
       },
       triggerLabel,
-      /* @__PURE__ */ import_react.default.createElement(
+      /* @__PURE__ */ import_react2.default.createElement(
         ui.IconChevronDownOutline14,
         {
           className: menuOpen ? "jv-chevron jv-chevron-open" : "jv-chevron",
@@ -922,7 +1079,7 @@ function makeJobViewerAction() {
         }
       )
     ), menuOpen ? (0, import_react_dom.createPortal)(
-      /* @__PURE__ */ import_react.default.createElement(
+      /* @__PURE__ */ import_react2.default.createElement(
         "ul",
         {
           ref: menuRef,

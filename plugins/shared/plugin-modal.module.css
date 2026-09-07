@@ -1,0 +1,96 @@
+/* Shared modal component styles. Class names are kebab-case only. */
+
+.plugin-modal-mask {
+  /* Full-screen overlay with mask blur and semi-transparent background. */
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  background: var(--dsw-alias-bg-mask-1);
+  backdrop-filter: var(--dsw-mask-blur);
+}
+
+.plugin-modal-panel {
+  /* Dialog panel, centered by the overlay's grid layout. */
+  display: flex;
+  flex-direction: column;
+  border-radius: 24px;
+  background: var(--dsw-alias-bg-layer-2);
+  box-shadow: var(--dsw-shadow-lv3);
+  color: var(--dsw-alias-label-primary);
+  padding: 20px;
+  box-sizing: border-box;
+  /* Default size: the settings-panel recipe (#35). */
+  width: 800px;
+  max-width: calc(100vw - 48px);
+  height: min(800px, 100vh - 48px);
+}
+
+.plugin-modal-panel[data-size="compact"] {
+  /* Compact variant for smaller modals. */
+  width: 30rem;
+  max-width: calc(100vw - 3rem);
+  max-height: 60vh;
+  height: auto;
+}
+
+.plugin-modal-header {
+  /* Header row: title on the left, close button on the right. */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex: none;
+}
+
+.plugin-modal-title {
+  /* Header title text. */
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.375rem;
+  margin: 0;
+  flex: 1;
+}
+
+.plugin-modal-close {
+  /* Close button in the header. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  padding: 0;
+  border-radius: 4px;
+  transition: background-color 0.12s;
+}
+
+.plugin-modal-close:hover {
+  background: var(--dsw-alias-bg-tertiary);
+}
+
+.plugin-modal-body {
+  /* Scrollable body content. Fills the remaining space in the panel. */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.plugin-modal-footer {
+  /* Optional footer row, typically for buttons. Stays fixed at the bottom. */
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+  flex: none;
+  padding-top: 12px;
+  border-top: 1px solid var(--dsw-alias-border-l3);
+}

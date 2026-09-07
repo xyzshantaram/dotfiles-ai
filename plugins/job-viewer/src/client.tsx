@@ -22,6 +22,7 @@ import { createPortal } from "react-dom";
 import { AnsiUp } from "ansi_up";
 import primitives from "@deepseek-ai/dsh-client-ui-primitives";
 import { injectStyle, mergeCss, fetchJson, postJson } from "../../shared/client-util";
+import { PluginModal } from "../../shared/plugin-modal";
 import settingsCss from "../../shared/settings.css";
 import localCss from "./client.module.css";
 
@@ -481,14 +482,9 @@ function makeJobViewerAction() {
         );
       }
       modal = (
-        <ui.Modal
-          open={true}
-          onClose={closeJob}
+        <PluginModal
           title="Job output"
-          description={shown ? shown.kind + " · " + status : "job status: " + status}
-          closeLabel="Close"
-          className="jv-modal"
-          contentClassName="jv-modal-content"
+          onClose={closeJob}
           footer={
             <>
               <ui.Button variant="outline" onClick={closeJob}>
@@ -507,7 +503,7 @@ function makeJobViewerAction() {
           }
         >
           {body}
-        </ui.Modal>
+        </PluginModal>
       );
     }
 
