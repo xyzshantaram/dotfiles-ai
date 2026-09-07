@@ -343,12 +343,15 @@ function makeIndicator() {
           ) : null}
         </button>
         {open ? (
+          // The compact standard size (420px): a short list of one-line rows
+          // that answer inline, not a full settings-panel footprint. Rows
+          // carry their own actions, so there is no actions row here.
           <PluginModal
             title="Pending approvals"
+            size="compact"
             onClose={function () {
               setOpen(false);
             }}
-            size="compact"
           >
             <ul className="composer-approvals-list">{list}</ul>
           </PluginModal>

@@ -1,4 +1,10 @@
-/* Shared modal component styles. Class names are kebab-case only. */
+/* Shared modal component styles. Class names are kebab-case only.
+ *
+ * This stylesheet is the modal's ONLY sizing surface. The component injects
+ * it once (plugin-modal.tsx) and picks between exactly two standard sizes
+ * through the panel's `data-size` attribute, so a caller cannot invent a
+ * third size, and cannot re-align the action row, from its own stylesheet.
+ */
 
 .plugin-modal-mask {
   /* Full-screen overlay with mask blur and semi-transparent background. */
@@ -7,12 +13,21 @@
   z-index: 200;
   display: grid;
   place-items: center;
+  /* The SAFE BOX: 24px of inset on every side. Both standard sizes measure
+     their caps against this box, which is what makes the compact size's
+     `max-width: 100%` / `max-height: 100%` mean "the safe box" rather than
+     "the raw viewport". It is also exactly the 48px total that the full
+     size's calc()/min() expressions subtract, so the two sizes agree. */
+  padding: 24px;
+  box-sizing: border-box;
   background: var(--dsw-alias-bg-mask-1);
   backdrop-filter: var(--dsw-mask-blur);
 }
 
 .plugin-modal-panel {
-  /* Dialog panel, centered by the overlay's grid layout. */
+  /* Dialog panel, centered by the overlay's grid layout. Mask, radius and
+     elevation are the settings-panel family's; only the sizing below
+     differs between the two standard sizes. */
   display: flex;
   flex-direction: column;
   border-radius: 24px;
@@ -21,17 +36,26 @@
   color: var(--dsw-alias-label-primary);
   padding: 20px;
   box-sizing: border-box;
-  /* Default size: the settings-panel recipe (#35). */
+  /* The PANEL never scrolls -- the body is the modal's single scroller. */
+  overflow: hidden;
+  min-height: 0;
+
+  /* SIZE 1 of 2, FULL (the default): the settings-panel spec (#35). This is
+     also the base rule, so markup that somehow loses its data-size still
+     lands on a standard size instead of an unsized panel. */
   width: 800px;
   max-width: calc(100vw - 48px);
   height: min(800px, 100vh - 48px);
 }
 
 .plugin-modal-panel[data-size="compact"] {
-  /* Compact variant for smaller modals. */
-  width: 30rem;
-  max-width: calc(100vw - 3rem);
-  max-height: 60vh;
+  /* SIZE 2 of 2, COMPACT: the aidos modal spec. Fixed 420px wide, capped by
+     the mask safe box on both axes, and auto-height so a short modal stays
+     short. When the cap bites the panel still does not scroll: the body
+     does. */
+  width: 420px;
+  max-width: 100%;
+  max-height: 100%;
   height: auto;
 }
 
@@ -76,15 +100,25 @@
 }
 
 .plugin-modal-body {
-  /* Scrollable body content. Fills the remaining space in the panel. */
+  /* The modal's single scroller, filling whatever the header and the action
+     row leave. A flex column on purpose: it lets a caller mark one region as
+     the flexible one (job-viewer's output box is `flex: 1`) so that region
+     keeps a CONSTANT height and scrolls internally instead of growing the
+     panel with its content. */
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
 }
 
+.plugin-modal-actions,
 .plugin-modal-footer {
-  /* Optional footer row, typically for buttons. Stays fixed at the bottom. */
+  /* Action buttons are ALWAYS right-aligned. The shared component wraps
+     whatever the caller passes as `actions` in this row, so the alignment is
+     structural: no caller has to ask for it and no caller can opt out of it.
+     Stays fixed at the bottom while the body scrolls. */
   display: flex;
   align-items: center;
   justify-content: flex-end;

@@ -481,11 +481,16 @@ function makeJobViewerAction() {
           </>
         );
       }
+      // The full standard size: this modal holds a constant-height output
+      // box, so it wants the settings-panel footprint, not the compact one.
+      // The buttons go through the shared actions row, which right-aligns
+      // them; this file never states an alignment of its own.
       modal = (
         <PluginModal
           title="Job output"
+          size="full"
           onClose={closeJob}
-          footer={
+          actions={
             <>
               <ui.Button variant="outline" onClick={closeJob}>
                 {"Close"}

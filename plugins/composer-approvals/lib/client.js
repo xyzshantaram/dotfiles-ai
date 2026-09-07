@@ -76,106 +76,13 @@ var HLJS_THEME_CSS = [
 // plugins/shared/plugin-modal.tsx
 var import_react = __toESM(require("react"));
 
-// css-text:/home/sid/repos/dotfiles-ai/plugins/shared/plugin-modal.module.css
-var plugin_modal_default = `/* Shared modal component styles. Class names are kebab-case only. */
-
-.plugin-modal-mask {
-  /* Full-screen overlay with mask blur and semi-transparent background. */
-  position: fixed;
-  inset: 0;
-  z-index: 200;
-  display: grid;
-  place-items: center;
-  background: var(--dsw-alias-bg-mask-1);
-  backdrop-filter: var(--dsw-mask-blur);
-}
-
-.plugin-modal-panel {
-  /* Dialog panel, centered by the overlay's grid layout. */
-  display: flex;
-  flex-direction: column;
-  border-radius: 24px;
-  background: var(--dsw-alias-bg-layer-2);
-  box-shadow: var(--dsw-shadow-lv3);
-  color: var(--dsw-alias-label-primary);
-  padding: 20px;
-  box-sizing: border-box;
-  /* Default size: the settings-panel recipe (#35). */
-  width: 800px;
-  max-width: calc(100vw - 48px);
-  height: min(800px, 100vh - 48px);
-}
-
-.plugin-modal-panel[data-size="compact"] {
-  /* Compact variant for smaller modals. */
-  width: 30rem;
-  max-width: calc(100vw - 3rem);
-  max-height: 60vh;
-  height: auto;
-}
-
-.plugin-modal-header {
-  /* Header row: title on the left, close button on the right. */
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
-  flex: none;
-}
-
-.plugin-modal-title {
-  /* Header title text. */
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.375rem;
-  margin: 0;
-  flex: 1;
-}
-
-.plugin-modal-close {
-  /* Close button in the header. */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 24px;
-  height: 24px;
-  border: none;
-  background: transparent;
-  color: var(--dsw-alias-label-primary);
-  cursor: pointer;
-  padding: 0;
-  border-radius: 4px;
-  transition: background-color 0.12s;
-}
-
-.plugin-modal-close:hover {
-  background: var(--dsw-alias-bg-tertiary);
-}
-
-.plugin-modal-body {
-  /* Scrollable body content. Fills the remaining space in the panel. */
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-.plugin-modal-footer {
-  /* Optional footer row, typically for buttons. Stays fixed at the bottom. */
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 16px;
-  flex: none;
-  padding-top: 12px;
-  border-top: 1px solid var(--dsw-alias-border-l3);
-}
-`;
+// css-text:/tmp/dsh/aidos/--home-sid-repos-dotfiles-ai--/64/plugins/shared/plugin-modal.module.css
+var plugin_modal_default = "/* Shared modal component styles. Class names are kebab-case only.\n *\n * This stylesheet is the modal's ONLY sizing surface. The component injects\n * it once (plugin-modal.tsx) and picks between exactly two standard sizes\n * through the panel's `data-size` attribute, so a caller cannot invent a\n * third size, and cannot re-align the action row, from its own stylesheet.\n */\n\n.plugin-modal-mask {\n  /* Full-screen overlay with mask blur and semi-transparent background. */\n  position: fixed;\n  inset: 0;\n  z-index: 200;\n  display: grid;\n  place-items: center;\n  /* The SAFE BOX: 24px of inset on every side. Both standard sizes measure\n     their caps against this box, which is what makes the compact size's\n     `max-width: 100%` / `max-height: 100%` mean \"the safe box\" rather than\n     \"the raw viewport\". It is also exactly the 48px total that the full\n     size's calc()/min() expressions subtract, so the two sizes agree. */\n  padding: 24px;\n  box-sizing: border-box;\n  background: var(--dsw-alias-bg-mask-1);\n  backdrop-filter: var(--dsw-mask-blur);\n}\n\n.plugin-modal-panel {\n  /* Dialog panel, centered by the overlay's grid layout. Mask, radius and\n     elevation are the settings-panel family's; only the sizing below\n     differs between the two standard sizes. */\n  display: flex;\n  flex-direction: column;\n  border-radius: 24px;\n  background: var(--dsw-alias-bg-layer-2);\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-primary);\n  padding: 20px;\n  box-sizing: border-box;\n  /* The PANEL never scrolls -- the body is the modal's single scroller. */\n  overflow: hidden;\n  min-height: 0;\n\n  /* SIZE 1 of 2, FULL (the default): the settings-panel spec (#35). This is\n     also the base rule, so markup that somehow loses its data-size still\n     lands on a standard size instead of an unsized panel. */\n  width: 800px;\n  max-width: calc(100vw - 48px);\n  height: min(800px, 100vh - 48px);\n}\n\n.plugin-modal-panel[data-size=\"compact\"] {\n  /* SIZE 2 of 2, COMPACT: the aidos modal spec. Fixed 420px wide, capped by\n     the mask safe box on both axes, and auto-height so a short modal stays\n     short. When the cap bites the panel still does not scroll: the body\n     does. */\n  width: 420px;\n  max-width: 100%;\n  max-height: 100%;\n  height: auto;\n}\n\n.plugin-modal-header {\n  /* Header row: title on the left, close button on the right. */\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 12px;\n  margin-bottom: 16px;\n  flex: none;\n}\n\n.plugin-modal-title {\n  /* Header title text. */\n  font-size: 16px;\n  font-weight: 600;\n  line-height: 1.375rem;\n  margin: 0;\n  flex: 1;\n}\n\n.plugin-modal-close {\n  /* Close button in the header. */\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  flex: none;\n  width: 24px;\n  height: 24px;\n  border: none;\n  background: transparent;\n  color: var(--dsw-alias-label-primary);\n  cursor: pointer;\n  padding: 0;\n  border-radius: 4px;\n  transition: background-color 0.12s;\n}\n\n.plugin-modal-close:hover {\n  background: var(--dsw-alias-bg-tertiary);\n}\n\n.plugin-modal-body {\n  /* The modal's single scroller, filling whatever the header and the action\n     row leave. A flex column on purpose: it lets a caller mark one region as\n     the flexible one (job-viewer's output box is `flex: 1`) so that region\n     keeps a CONSTANT height and scrolls internally instead of growing the\n     panel with its content. */\n  display: flex;\n  flex-direction: column;\n  flex: 1;\n  min-height: 0;\n  overflow-y: auto;\n  overflow-x: hidden;\n}\n\n.plugin-modal-actions,\n.plugin-modal-footer {\n  /* Action buttons are ALWAYS right-aligned. The shared component wraps\n     whatever the caller passes as `actions` in this row, so the alignment is\n     structural: no caller has to ask for it and no caller can opt out of it.\n     Stays fixed at the bottom while the body scrolls. */\n  display: flex;\n  align-items: center;\n  justify-content: flex-end;\n  gap: 8px;\n  margin-top: 16px;\n  flex: none;\n  padding-top: 12px;\n  border-top: 1px solid var(--dsw-alias-border-l3);\n}\n";
 
 // plugins/shared/plugin-modal.tsx
+var STYLE_OWNER = "shared";
+var STYLE_ID = "shared/plugin-modal.css";
+injectStyle(STYLE_OWNER, STYLE_ID, plugin_modal_default);
 function CloseIcon() {
   return /* @__PURE__ */ import_react.default.createElement(
     "svg",
@@ -193,8 +100,12 @@ function CloseIcon() {
     /* @__PURE__ */ import_react.default.createElement("line", { x1: "6", y1: "6", x2: "18", y2: "18" })
   );
 }
+function standardSize(size) {
+  return size === "compact" ? "compact" : "full";
+}
 function PluginModal(props) {
-  var size = props.size || "default";
+  var size = standardSize(props.size);
+  var actions = props.actions !== void 0 && props.actions !== null ? props.actions : props.footer;
   import_react.default.useEffect(
     function() {
       var onKeyDown = function(event) {
@@ -209,10 +120,10 @@ function PluginModal(props) {
     },
     [props.onClose]
   );
-  return /* @__PURE__ */ import_react.default.createElement("div", { className: plugin_modal_default["plugin-modal-mask"], onClick: props.onClose }, /* @__PURE__ */ import_react.default.createElement(
+  return /* @__PURE__ */ import_react.default.createElement("div", { className: "plugin-modal-mask", onClick: props.onClose }, /* @__PURE__ */ import_react.default.createElement(
     "div",
     {
-      className: plugin_modal_default["plugin-modal-panel"],
+      className: "plugin-modal-panel",
       "data-size": size,
       role: "dialog",
       "aria-labelledby": "plugin-modal-title",
@@ -220,23 +131,23 @@ function PluginModal(props) {
         event.stopPropagation();
       }
     },
-    /* @__PURE__ */ import_react.default.createElement("div", { className: plugin_modal_default["plugin-modal-header"] }, /* @__PURE__ */ import_react.default.createElement("h2", { id: "plugin-modal-title", className: plugin_modal_default["plugin-modal-title"] }, props.title), /* @__PURE__ */ import_react.default.createElement(
+    /* @__PURE__ */ import_react.default.createElement("div", { className: "plugin-modal-header" }, /* @__PURE__ */ import_react.default.createElement("h2", { id: "plugin-modal-title", className: "plugin-modal-title" }, props.title), /* @__PURE__ */ import_react.default.createElement(
       "button",
       {
-        className: plugin_modal_default["plugin-modal-close"],
+        className: "plugin-modal-close",
         onClick: props.onClose,
         "aria-label": "Close",
         type: "button"
       },
       /* @__PURE__ */ import_react.default.createElement(CloseIcon, null)
     )),
-    /* @__PURE__ */ import_react.default.createElement("div", { className: plugin_modal_default["plugin-modal-body"] }, props.children),
-    props.footer ? /* @__PURE__ */ import_react.default.createElement("div", { className: plugin_modal_default["plugin-modal-footer"] }, props.footer) : null
+    /* @__PURE__ */ import_react.default.createElement("div", { className: "plugin-modal-body" }, props.children),
+    actions ? /* @__PURE__ */ import_react.default.createElement("div", { className: "plugin-modal-actions" }, actions) : null
   ));
 }
 
-// css-text:/home/sid/repos/dotfiles-ai/plugins/composer-approvals/src/client.module.css
-var client_default = "/* Pending-approval indicator at the composer. */\n.composer-approvals-indicator {\n  position: relative;\n  width: 20px;\n  height: 20px;\n  flex: none;\n  display: grid;\n  place-items: center;\n  border: none;\n  border-radius: 999px;\n  padding: 0;\n  cursor: pointer;\n  background: var(--dsw-alias-state-warn-primary, #d97706);\n  color: #fff;\n}\n.composer-approvals-indicator:hover {\n  filter: brightness(1.08);\n}\n.composer-approvals-glyph {\n  font-size: 13px;\n  font-weight: 700;\n  line-height: 1;\n}\n.composer-approvals-count {\n  position: absolute;\n  top: -5px;\n  right: -7px;\n  min-width: 14px;\n  height: 14px;\n  box-sizing: border-box;\n  padding: 0 3px;\n  border-radius: 999px;\n  background: var(--dsw-alias-state-danger-primary, #dc2626);\n  color: #fff;\n  font-size: 9px;\n  font-weight: 600;\n  line-height: 14px;\n  text-align: center;\n}\n.composer-approvals-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n  overflow-y: auto;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n.composer-approvals-row {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n.composer-approvals-label {\n  flex: 1 1 auto;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 13px;\n  font-family: var(--dsw-alias-font-mono, monospace);\n}\n.composer-approvals-jump {\n  flex: none;\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 999px;\n  background: 0 0;\n  color: var(--dsw-alias-label-primary);\n  font-size: 12px;\n  padding: 3px 10px;\n  cursor: pointer;\n}\n.composer-approvals-jump:hover:enabled {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.composer-approvals-jump:disabled {\n  opacity: 0.45;\n  cursor: default;\n}\n.composer-approvals-no-call {\n  flex: none;\n  font-size: 12px;\n  color: var(--dsw-alias-label-tertiary);\n}\n/* Inline answer buttons for a no-callId row: the card answer bar is the\n   single answer surface for callId approvals, so those rows keep only\n   their jump button. Reject arms first; the armed fill marks the confirm\n   step. */\n.composer-approvals-approve,\n.composer-approvals-reject {\n  flex: none;\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 999px;\n  background: 0 0;\n  font-size: 12px;\n  padding: 3px 10px;\n  cursor: pointer;\n}\n.composer-approvals-approve {\n  color: var(--dsw-alias-state-business-primary, #2563eb);\n  border-color: var(--dsw-alias-state-business-primary, #2563eb);\n}\n.composer-approvals-reject {\n  color: var(--dsw-alias-state-danger-primary, #dc2626);\n  border-color: var(--dsw-alias-state-danger-primary, #dc2626);\n}\n.composer-approvals-approve:hover:enabled,\n.composer-approvals-reject:hover:enabled {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.composer-approvals-approve:disabled,\n.composer-approvals-reject:disabled {\n  opacity: 0.45;\n  cursor: default;\n}\n.composer-approvals-reject[data-armed] {\n  background: var(--dsw-alias-state-danger-primary, #dc2626);\n  border-color: var(--dsw-alias-state-danger-primary, #dc2626);\n  color: #fff;\n}\n";
+// css-text:/tmp/dsh/aidos/--home-sid-repos-dotfiles-ai--/64/plugins/composer-approvals/src/client.module.css
+var client_default = "/* Pending-approval indicator at the composer. */\n.composer-approvals-indicator {\n  position: relative;\n  width: 20px;\n  height: 20px;\n  flex: none;\n  display: grid;\n  place-items: center;\n  border: none;\n  border-radius: 999px;\n  padding: 0;\n  cursor: pointer;\n  background: var(--dsw-alias-state-warn-primary, #d97706);\n  color: #fff;\n}\n.composer-approvals-indicator:hover {\n  filter: brightness(1.08);\n}\n.composer-approvals-glyph {\n  font-size: 13px;\n  font-weight: 700;\n  line-height: 1;\n}\n.composer-approvals-count {\n  position: absolute;\n  top: -5px;\n  right: -7px;\n  min-width: 14px;\n  height: 14px;\n  box-sizing: border-box;\n  padding: 0 3px;\n  border-radius: 999px;\n  background: var(--dsw-alias-state-danger-primary, #dc2626);\n  color: #fff;\n  font-size: 9px;\n  font-weight: 600;\n  line-height: 14px;\n  text-align: center;\n}\n.composer-approvals-list {\n  /* No scroller here: the shared modal's body owns scrolling, and the\n     compact panel caps itself at the mask safe box. */\n  list-style: none;\n  margin: 0;\n  padding: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n.composer-approvals-row {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n.composer-approvals-label {\n  flex: 1 1 auto;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 13px;\n  font-family: var(--dsw-alias-font-mono, monospace);\n}\n.composer-approvals-jump {\n  flex: none;\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 999px;\n  background: 0 0;\n  color: var(--dsw-alias-label-primary);\n  font-size: 12px;\n  padding: 3px 10px;\n  cursor: pointer;\n}\n.composer-approvals-jump:hover:enabled {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.composer-approvals-jump:disabled {\n  opacity: 0.45;\n  cursor: default;\n}\n.composer-approvals-no-call {\n  flex: none;\n  font-size: 12px;\n  color: var(--dsw-alias-label-tertiary);\n}\n/* Inline answer buttons for a no-callId row: the card answer bar is the\n   single answer surface for callId approvals, so those rows keep only\n   their jump button. Reject arms first; the armed fill marks the confirm\n   step. */\n.composer-approvals-approve,\n.composer-approvals-reject {\n  flex: none;\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 999px;\n  background: 0 0;\n  font-size: 12px;\n  padding: 3px 10px;\n  cursor: pointer;\n}\n.composer-approvals-approve {\n  color: var(--dsw-alias-state-business-primary, #2563eb);\n  border-color: var(--dsw-alias-state-business-primary, #2563eb);\n}\n.composer-approvals-reject {\n  color: var(--dsw-alias-state-danger-primary, #dc2626);\n  border-color: var(--dsw-alias-state-danger-primary, #dc2626);\n}\n.composer-approvals-approve:hover:enabled,\n.composer-approvals-reject:hover:enabled {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.composer-approvals-approve:disabled,\n.composer-approvals-reject:disabled {\n  opacity: 0.45;\n  cursor: default;\n}\n.composer-approvals-reject[data-armed] {\n  background: var(--dsw-alias-state-danger-primary, #dc2626);\n  border-color: var(--dsw-alias-state-danger-primary, #dc2626);\n  color: #fff;\n}\n";
 
 // plugins/composer-approvals/src/client.tsx
 var conversationContextKey2 = runtime.conversationContextKey;
@@ -473,16 +384,21 @@ function makeIndicator() {
       },
       /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-glyph", "aria-hidden": true }, "!"),
       rows.length > 1 ? /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-count", "aria-hidden": true }, rows.length) : null
-    ), open ? /* @__PURE__ */ react2.createElement(
-      PluginModal,
-      {
-        title: "Pending approvals",
-        onClose: function() {
-          setOpen(false);
+    ), open ? (
+      // The compact standard size (420px): a short list of one-line rows
+      // that answer inline, not a full settings-panel footprint. Rows
+      // carry their own actions, so there is no actions row here.
+      /* @__PURE__ */ react2.createElement(
+        PluginModal,
+        {
+          title: "Pending approvals",
+          size: "compact",
+          onClose: function() {
+            setOpen(false);
+          }
         },
-        size: "compact"
-      },
-      /* @__PURE__ */ react2.createElement("ul", { className: "composer-approvals-list" }, list)
+        /* @__PURE__ */ react2.createElement("ul", { className: "composer-approvals-list" }, list)
+      )
     ) : null);
   };
 }
