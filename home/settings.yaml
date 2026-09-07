@@ -897,6 +897,24 @@ llm-pi-ai:
       apiKeyEnv: OPENCODE_ZEN_API_KEY
       api: openai-completions
       baseURL: https://opencode.ai/zen/v1/
+      # Hand-seeded: the installed pi-ai catalog does not describe this id,
+      # so sync-models cuts it and the fork reports "not in catalog". Values
+      # from models.dev opencode catalog 2026-09-07. No sync markers here on
+      # purpose: keep sync-models from cutting it again.
+      models:
+      - id: muse-spark-1.3-contributor-free
+        name: Muse Spark 1.3 Contributor Free
+        contextWindow: 1048576
+        maxTokens: 131072
+        input:
+        - text
+        - image
+        reasoningEfforts:
+          minimal: minimal
+          low: low
+          medium: medium
+          high: high
+          xhigh: xhigh
     opencode-go:
       displayName: OpenCode Go
       apiKeyEnv: OPENCODE_GO_API_KEY
@@ -1055,6 +1073,58 @@ llm-pi-ai:
       apiKeyEnv: ELECTRONHUB_DEVPASS_API_KEY
       api: openai-completions
       baseURL: https://api.electronhub.ai/v1/
+      # Hand-seeded: models.dev has no electronhub provider, so sync-models
+      # cannot seed this block (see dry-run "creating markers" note). Values
+      # below are authoritative from GET /v1/models 2026-09-07. No sync
+      # markers here on purpose: keep sync-models from overwriting with
+      # cross-vendor guesses. maxTokens is conservative (no upstream data).
+      models:
+      - id: glm-5.3:dev
+        name: GLM 5.3 (DevPass)
+        contextWindow: 262000
+        maxTokens: 65536
+        input:
+        - text
+        reasoningEfforts:
+          low: low
+          high: high
+          max: max
+      - id: glm-5.3-flash:dev
+        name: GLM 5.3 Flash (DevPass)
+        contextWindow: 1000000
+        maxTokens: 131072
+        input:
+        - text
+        - image
+        reasoningEfforts:
+          low: low
+          high: high
+          max: max
+      - id: deepseek-v4-flash:dev
+        name: DeepSeek V4 Flash (DevPass)
+        contextWindow: 1000000
+        maxTokens: 131072
+        input:
+        - text
+      - id: deepseek-v4-flash-0731:dev
+        name: DeepSeek V4 Flash 0731 (DevPass)
+        contextWindow: 400000
+        maxTokens: 65536
+        input:
+        - text
+      - id: mimo-v2.5:dev
+        name: Mimo V2.5 (DevPass)
+        contextWindow: 1000000
+        maxTokens: 131072
+        input:
+        - text
+        - image
+      - id: minimax-m2.7:dev
+        name: MiniMax M2.7 (DevPass)
+        contextWindow: 180000
+        maxTokens: 65536
+        input:
+        - text
     opencode-go-spark:
       displayName: OpenCode Go Spark
       apiKeyEnv: OPENCODE_GO_API_KEY
@@ -1084,10 +1154,10 @@ profile:
       - meridian/claude-sonnet-5
       - chain:personal-orchestrator
     personal-orchestrator:
+      - electronhub/glm-5.3:dev
       - command-code/meta/muse-spark-1.3-contributor
       - zai/glm-5.3
       - opencode-go-spark/muse-spark-1.3-contributor
-      - electronhub/glm-5.3:dev
       - opencode/muse-spark-1.3-contributor-free
       - deepseek-official/deepseek-v4-pro
     subagent:
@@ -1101,6 +1171,23 @@ profile:
     subagent-work:
       - meridian/claude-haiku-4-5
       - chain:subagent
+    # SECURITY BOUNDARY - the partner review chain.
+    #
+    # The aidos gate accepts a review_pass only when its provenance stamp
+    # shows a partner-chain run (SPEC-batch-review.md, Gate rule). That
+    # makes THIS list the boundary: editing a cheap model into it weakens
+    # the review gate silently - no gate error, no warning, just reviews
+    # that look partner-grade while running on a cheap tier. Do not add
+    # rungs below meridian quality here without an explicit owner decision.
+    #
+    # Two meridian rungs and deliberately NO cheap fallback: when meridian
+    # is unreachable the partner run fails, tickets sit in
+    # awaiting_verification, and no degraded review path exists. That is
+    # the spec's accepted trade ("reviewer unavailability must never
+    # auto-pass"), not an oversight.
+    partner:
+      - meridian/
+      - meridian/
     see:
       - command-code/Qwen/Qwen3.7-Flash
       - opencode/qwen3.6-plus
