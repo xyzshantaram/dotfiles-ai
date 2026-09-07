@@ -42,7 +42,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#6655f648acbc178632174d3b1a2171ccad766809}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#4cbcb8d679dff1f6c06c6bb1276d8c10a6c2e313}"
 
 # Git-hosted specs whose build scripts pnpm must be allowed to run. pnpm 10+
 # blocks lifecycle scripts (prepare/postinstall) unless the exact resolved
@@ -361,6 +361,7 @@ step_install_plugins() {
 		pnpm_ins "@deepseek-ai/dsh-compaction-basic@github:xyzshantaram/dsh-compaction-instant#9525c7233d0f92651bd850ff7d49bb2d149d099f"
 
 		pnpm_ins "$HERE/plugins/session-archive"
+		pnpm_ins "$HERE/plugins/restart-pause"
 		pnpm_ins "$HERE/plugins/subscriptions"
 		pnpm_ins "$HERE/plugins/tool-render"
 		pnpm_ins "$HERE/plugins/profiles-client"

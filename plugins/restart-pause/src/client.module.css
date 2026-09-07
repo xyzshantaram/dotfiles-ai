@@ -1,0 +1,63 @@
+.rpRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.rpNote {
+  opacity: 0.75;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 6px 0;
+}
+
+.rpSessions {
+  margin: 6px 0 10px;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.rpCheck {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 12px;
+  padding: 4px 0;
+  border-top: 1px solid var(--dsh-border, rgba(128, 128, 128, 0.25));
+}
+
+.rpCheckMark {
+  flex: none;
+  font-family: var(--dsh-font-mono, monospace);
+}
+
+.rpCheckBody {
+  min-width: 0;
+}
+
+.rpCheckCmd {
+  font-family: var(--dsh-font-mono, monospace);
+  word-break: break-all;
+}
+
+.rpCheckOut {
+  white-space: pre-wrap;
+  word-break: break-word;
+  opacity: 0.75;
+  margin-top: 2px;
+  max-height: 140px;
+  overflow: auto;
+}
+
+.rpFail {
+  color: var(--dsh-danger, #e06c75);
+}
+
+.rpVerdict {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+}

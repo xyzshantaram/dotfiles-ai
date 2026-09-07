@@ -271,7 +271,7 @@ await build({
   bundle: true,
   platform: "node",
   format: "esm",
-  external: ["-ai/*", "node:*"],
+  external: ["@deepseek-ai/*", "node:*"],
   outfile: join(here, "plugins/composer-approvals/lib/index.js"),
   logLevel: "info",
 });
@@ -279,6 +279,24 @@ await wrapClientBundle(
   join(here, "plugins/composer-approvals/src/client.tsx"),
   join(here, "plugins/composer-approvals/lib/client.js"),
   "composer-approvals",
+);
+
+// restart-pause: the Debug settings panel. The host half tracks agents
+// mid-turn and owns the /restart-pause/* routes; the client half is the
+// panel. Same esbuild/wrapClientBundle split as session-archive.
+await build({
+  entryPoints: [join(here, "plugins/restart-pause/src/index.ts")],
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  external: ["@deepseek-ai/*", "node:*"],
+  outfile: join(here, "plugins/restart-pause/lib/index.js"),
+  logLevel: "info",
+});
+await wrapClientBundle(
+  join(here, "plugins/restart-pause/src/client.tsx"),
+  join(here, "plugins/restart-pause/lib/client.js"),
+  "restart-pause",
 );
 
 // W18: combined subscription panel (OpenCode GO + Claude/meridian) CLIENT
