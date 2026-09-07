@@ -208,8 +208,32 @@ step_write_web_patch() {
       maxAttempts: 5
       windowMs: 900000
     files:
+      # Display roots for the remote file panel (#53). The route that serves
+      # them (GET /files in the fork's lib/index.js) runs requireAuth() BEFORE
+      # checkFilePath(), so an unauthenticated request gets 401 and never
+      # reaches a roots decision: widening this list relaxes DISPLAY for
+      # authed users only. It has no bearing on the agent write sandbox,
+      # which is a separate subsystem (DSH file policy, not this plugin).
+      #
+      # Why not a single "/": checkFilePathAgainst matches with
+      # `real === root || real.startsWith(root + sep)`, so a root of "/"
+      # becomes the prefix "//" and matches nothing but "/" itself (verified
+      # 2026-09-07: roots=["/"] rejects /etc/hostname as outside-roots).
+      # Enumerating the top-level directories is the config-only equivalent;
+      # a true allow-all needs a flag in our fork, not this file.
+      # /proc and /sys are deliberately absent — synthetic files, no value in
+      # a file panel. fileRootsFor() always prepends DSH home and cwd.
       roots:
-        - /tmp/dsh
+        - /home/sid
+        - /tmp
+        - /etc
+        - /usr
+        - /opt
+        - /var
+        - /srv
+        - /mnt
+        - /media
+        - /run
 
 # The spill store's default root is a private mkdtemp directory under the OS
 # tmpdir (dsh-spill-local/lib/index.js). That path sits outside the sandbox's
