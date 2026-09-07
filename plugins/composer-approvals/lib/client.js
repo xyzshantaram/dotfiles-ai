@@ -74,12 +74,13 @@ var HLJS_THEME_CSS = [
 ].join("");
 
 // css-text:/home/sid/repos/dotfiles-ai/plugins/composer-approvals/src/client.module.css
-var client_default = "/* Pending-approval indicator and modal at the composer. */\n.composer-approvals-indicator {\n  position: relative;\n  width: 20px;\n  height: 20px;\n  flex: none;\n  display: grid;\n  place-items: center;\n  border: none;\n  border-radius: 999px;\n  padding: 0;\n  cursor: pointer;\n  background: var(--dsw-alias-state-warn-primary, #d97706);\n  color: #fff;\n}\n.composer-approvals-indicator:hover {\n  filter: brightness(1.08);\n}\n.composer-approvals-glyph {\n  font-size: 13px;\n  font-weight: 700;\n  line-height: 1;\n}\n.composer-approvals-count {\n  position: absolute;\n  top: -5px;\n  right: -7px;\n  min-width: 14px;\n  height: 14px;\n  box-sizing: border-box;\n  padding: 0 3px;\n  border-radius: 999px;\n  background: var(--dsw-alias-state-danger-primary, #dc2626);\n  color: #fff;\n  font-size: 9px;\n  font-weight: 600;\n  line-height: 14px;\n  text-align: center;\n}\n.composer-approvals-overlay {\n  position: fixed;\n  inset: 0;\n  z-index: 200;\n  display: grid;\n  place-items: center;\n  background: var(--dsw-alias-bg-mask-1);\n  backdrop-filter: var(--dsw-mask-blur);\n}\n.composer-approvals-panel {\n  width: 30rem;\n  max-width: calc(100vw - 3rem);\n  max-height: 60vh;\n  box-sizing: border-box;\n  display: flex;\n  flex-direction: column;\n  border-radius: 24px;\n  background: var(--dsw-alias-bg-layer-2);\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-primary);\n  padding: 20px;\n}\n.composer-approvals-title {\n  font-size: 15px;\n  font-weight: 600;\n  margin-bottom: 12px;\n}\n.composer-approvals-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n  overflow-y: auto;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n.composer-approvals-row {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n.composer-approvals-label {\n  flex: 1 1 auto;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 13px;\n  font-family: var(--dsw-alias-font-mono, monospace);\n}\n.composer-approvals-jump {\n  flex: none;\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 999px;\n  background: 0 0;\n  color: var(--dsw-alias-label-primary);\n  font-size: 12px;\n  padding: 3px 10px;\n  cursor: pointer;\n}\n.composer-approvals-jump:hover:enabled {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.composer-approvals-jump:disabled {\n  opacity: 0.45;\n  cursor: default;\n}\n.composer-approvals-no-call {\n  flex: none;\n  font-size: 12px;\n  color: var(--dsw-alias-label-tertiary);\n}\n";
+var client_default = "/* Pending-approval indicator and modal at the composer. */\n.composer-approvals-indicator {\n  position: relative;\n  width: 20px;\n  height: 20px;\n  flex: none;\n  display: grid;\n  place-items: center;\n  border: none;\n  border-radius: 999px;\n  padding: 0;\n  cursor: pointer;\n  background: var(--dsw-alias-state-warn-primary, #d97706);\n  color: #fff;\n}\n.composer-approvals-indicator:hover {\n  filter: brightness(1.08);\n}\n.composer-approvals-glyph {\n  font-size: 13px;\n  font-weight: 700;\n  line-height: 1;\n}\n.composer-approvals-count {\n  position: absolute;\n  top: -5px;\n  right: -7px;\n  min-width: 14px;\n  height: 14px;\n  box-sizing: border-box;\n  padding: 0 3px;\n  border-radius: 999px;\n  background: var(--dsw-alias-state-danger-primary, #dc2626);\n  color: #fff;\n  font-size: 9px;\n  font-weight: 600;\n  line-height: 14px;\n  text-align: center;\n}\n.composer-approvals-overlay {\n  position: fixed;\n  inset: 0;\n  z-index: 200;\n  display: grid;\n  place-items: center;\n  background: var(--dsw-alias-bg-mask-1);\n  backdrop-filter: var(--dsw-mask-blur);\n}\n.composer-approvals-panel {\n  width: 30rem;\n  max-width: calc(100vw - 3rem);\n  max-height: 60vh;\n  box-sizing: border-box;\n  display: flex;\n  flex-direction: column;\n  border-radius: 24px;\n  background: var(--dsw-alias-bg-layer-2);\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-primary);\n  padding: 20px;\n}\n.composer-approvals-title {\n  font-size: 15px;\n  font-weight: 600;\n  margin-bottom: 12px;\n}\n.composer-approvals-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n  overflow-y: auto;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n.composer-approvals-row {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n.composer-approvals-label {\n  flex: 1 1 auto;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 13px;\n  font-family: var(--dsw-alias-font-mono, monospace);\n}\n.composer-approvals-jump {\n  flex: none;\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 999px;\n  background: 0 0;\n  color: var(--dsw-alias-label-primary);\n  font-size: 12px;\n  padding: 3px 10px;\n  cursor: pointer;\n}\n.composer-approvals-jump:hover:enabled {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.composer-approvals-jump:disabled {\n  opacity: 0.45;\n  cursor: default;\n}\n.composer-approvals-no-call {\n  flex: none;\n  font-size: 12px;\n  color: var(--dsw-alias-label-tertiary);\n}\n/* Inline answer buttons for a no-callId row: the card answer bar is the\n   single answer surface for callId approvals, so those rows keep only\n   their jump button. Reject arms first; the armed fill marks the confirm\n   step. */\n.composer-approvals-approve,\n.composer-approvals-reject {\n  flex: none;\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 999px;\n  background: 0 0;\n  font-size: 12px;\n  padding: 3px 10px;\n  cursor: pointer;\n}\n.composer-approvals-approve {\n  color: var(--dsw-alias-state-business-primary, #2563eb);\n  border-color: var(--dsw-alias-state-business-primary, #2563eb);\n}\n.composer-approvals-reject {\n  color: var(--dsw-alias-state-danger-primary, #dc2626);\n  border-color: var(--dsw-alias-state-danger-primary, #dc2626);\n}\n.composer-approvals-approve:hover:enabled,\n.composer-approvals-reject:hover:enabled {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.composer-approvals-approve:disabled,\n.composer-approvals-reject:disabled {\n  opacity: 0.45;\n  cursor: default;\n}\n.composer-approvals-reject[data-armed] {\n  background: var(--dsw-alias-state-danger-primary, #dc2626);\n  border-color: var(--dsw-alias-state-danger-primary, #dc2626);\n  color: #fff;\n}\n";
 
 // plugins/composer-approvals/src/client.tsx
 var conversationContextKey2 = runtime.conversationContextKey;
 var PLUGIN_NAME = "composer-approvals";
 var EMPTY = [];
+var REJECT_ARM_RESET_MS = 4e3;
 function rootToolCall(snapshot, callId) {
   var node = snapshot.chat && snapshot.chat.nodes.get(conversationContextKey2("tool-call", callId));
   if (node === void 0 || node === null) return void 0;
@@ -104,10 +105,12 @@ function firstLineOf(text) {
 function makeSelector() {
   var lastSig = "\0";
   var lastRows = EMPTY;
-  return function selectApprovals(snapshot) {
+  var pendingByKey = /* @__PURE__ */ new Map();
+  var selectApprovals = function(snapshot) {
     var pending = snapshot !== null && snapshot !== void 0 && Array.isArray(snapshot.pending) ? snapshot.pending : EMPTY;
     var parts = [];
     var rows = [];
+    var live = /* @__PURE__ */ new Set();
     for (var i = 0; i < pending.length; i++) {
       var item = pending[i];
       if (item === null || item === void 0 || item.kind !== "approval") continue;
@@ -118,13 +121,19 @@ function makeSelector() {
         label = commandOf(rootToolCall(snapshot, callId)) ?? null;
       }
       if (label === null) label = firstLineOf(payload.reason);
-      parts.push(String(item.key) + "\0" + (callId === null ? "" : callId) + "\0" + label);
+      var key = String(item.key);
+      parts.push(key + "\0" + (callId === null ? "" : callId) + "\0" + label);
+      live.add(key);
+      pendingByKey.set(key, item);
       rows.push({
-        key: String(item.key),
+        key,
         callId,
         approvalId: payload.approvalId,
         label: label === null ? "Approval" : label
       });
+    }
+    for (var key of Array.from(pendingByKey.keys())) {
+      if (!live.has(key)) pendingByKey.delete(key);
     }
     var sig = parts.join("");
     if (sig === lastSig) return lastRows;
@@ -132,14 +141,126 @@ function makeSelector() {
     lastRows = rows;
     return rows;
   };
+  return {
+    selectApprovals,
+    pendingOf: function(key) {
+      return pendingByKey.get(key);
+    }
+  };
 }
 function cardOf(callId) {
   return document.querySelector('.tool-render-card[data-call-id="' + CSS.escape(callId) + '"]');
 }
+function ComposerApprovalsRow(props) {
+  var row = props.row;
+  var armedState = react.useState(false);
+  var armed = armedState[0];
+  var setArmed = armedState[1];
+  var answeredState = react.useState(false);
+  var answered = answeredState[0];
+  var setAnswered = answeredState[1];
+  var armTimer = react.useRef(0);
+  react.useEffect(function() {
+    return function() {
+      if (armTimer.current !== 0) window.clearTimeout(armTimer.current);
+    };
+  }, []);
+  var answer = function(outcome) {
+    if (answered) return;
+    var pending = props.pendingOf(row.key);
+    if (pending === void 0 || pending === null) {
+      console.warn("[composer-approvals] answer skipped, pending is gone", row.key);
+      return;
+    }
+    console.debug("[composer-approvals] answer:", outcome, row.key);
+    setAnswered(true);
+    try {
+      Promise.resolve(
+        pending.respond({
+          ok: true,
+          value: {
+            sessionId: pending.sessionId,
+            approvalId: pending.payload.approvalId,
+            outcome
+          }
+        })
+      ).then(function(receipt) {
+        if (receipt === void 0 || receipt === null || !receipt.accepted) {
+          throw new Error(
+            "approval response rejected: " + (receipt === void 0 || receipt === null || receipt.reason === void 0 ? "unknown" : receipt.reason)
+          );
+        }
+      }).catch(function(error) {
+        console.warn("[composer-approvals] answer failed", row.key, outcome, error);
+        setAnswered(false);
+      });
+    } catch (error) {
+      console.warn("[composer-approvals] answer failed", row.key, outcome, error);
+      setAnswered(false);
+    }
+  };
+  var clearArm = function() {
+    if (armTimer.current !== 0) {
+      window.clearTimeout(armTimer.current);
+      armTimer.current = 0;
+    }
+  };
+  var onReject = function() {
+    if (answered) return;
+    if (armed) {
+      clearArm();
+      setArmed(false);
+      answer("rejected");
+      return;
+    }
+    setArmed(true);
+    clearArm();
+    armTimer.current = window.setTimeout(function() {
+      armTimer.current = 0;
+      setArmed(false);
+    }, REJECT_ARM_RESET_MS);
+  };
+  if (row.callId !== null) {
+    return /* @__PURE__ */ react.createElement("li", { className: "composer-approvals-row" }, /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-label", title: row.label }, row.label), /* @__PURE__ */ react.createElement(
+      "button",
+      {
+        type: "button",
+        className: "composer-approvals-jump",
+        disabled: !props.jumpable,
+        onClick: function() {
+          props.onJump(row);
+        }
+      },
+      "Jump to call"
+    ));
+  }
+  return /* @__PURE__ */ react.createElement("li", { className: "composer-approvals-row" }, /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-label", title: row.label }, row.label), /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-no-call" }, "no tool call"), /* @__PURE__ */ react.createElement(
+    "button",
+    {
+      type: "button",
+      className: "composer-approvals-approve",
+      disabled: answered,
+      onClick: function() {
+        answer("approved");
+      }
+    },
+    "\u2713 Approve"
+  ), /* @__PURE__ */ react.createElement(
+    "button",
+    {
+      type: "button",
+      className: "composer-approvals-reject",
+      "data-armed": armed || void 0,
+      disabled: answered,
+      onClick: onReject
+    },
+    armed ? "? Confirm reject" : "\u2717 Reject"
+  ));
+}
 function makeIndicator() {
   return function Indicator(props) {
-    var selectApprovals = react.useMemo(makeSelector, []);
-    var rows = props.useSession(selectApprovals);
+    var selectorTools = react.useMemo(makeSelector, []);
+    var rows = props.useSession(selectorTools.selectApprovals);
     var openState = react.useState(false);
     var open = openState[0];
     var setOpen = openState[1];
@@ -178,18 +299,16 @@ function makeIndicator() {
     };
     var list = rows.map(function(row) {
       var jumpable = row.callId !== null && !missing.has(row.key);
-      return /* @__PURE__ */ react.createElement("li", { key: row.key, className: "composer-approvals-row" }, /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-label", title: row.label }, row.label), row.callId !== null ? /* @__PURE__ */ react.createElement(
-        "button",
+      return /* @__PURE__ */ react.createElement(
+        ComposerApprovalsRow,
         {
-          type: "button",
-          className: "composer-approvals-jump",
-          disabled: !jumpable,
-          onClick: function() {
-            jump(row);
-          }
-        },
-        "Jump to call"
-      ) : /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-no-call" }, "no tool call"));
+          key: row.key,
+          row,
+          jumpable,
+          onJump: jump,
+          pendingOf: selectorTools.pendingOf
+        }
+      );
     });
     return /* @__PURE__ */ react.createElement(react.Fragment, null, /* @__PURE__ */ react.createElement(
       "button",

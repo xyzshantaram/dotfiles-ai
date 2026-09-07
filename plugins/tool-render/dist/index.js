@@ -26344,43 +26344,80 @@ function isBashGuardReason(reason) {
 // plugins/tool-render/src/guarded-approvals.ts
 var GUARDED_APPROVALS_KEY = "tool-render/guarded-approvals";
 var GUARDED_APPROVALS_CAP = 200;
-var viewSchema2 = external_exports.record(external_exports.string(), external_exports.literal(true)).nullable();
+var viewSchema2 = external_exports.object({
+  guarded: external_exports.record(external_exports.string(), external_exports.literal(true)),
+  outcomes: external_exports.record(external_exports.string(), external_exports.string())
+}).nullable();
 var guardedApprovalsProjection = {
   key: GUARDED_APPROVALS_KEY,
-  // Version 2: the reason matcher learned the shipped guard's plain-text
-  // "bash-guard:" format, so the previously folded (empty) state is stale
-  // and the log must be replayed.
-  stateVersion: 2,
+  // Version 3: entries now pair `approval/asked` to `approval/decided` by id
+  // and carry the outcome for the decided badge, so the version-2 state
+  // (callId-only) is stale and the log must be replayed.
+  stateVersion: 3,
   schema: viewSchema2,
   init() {
     return { entries: [] };
   },
-  // `approval/asked` sits outside this build's SessionEventMap (the
-  // user-approval plugin extends the vocabulary out of repo), so the event
-  // is read through a structural cast. An event whose reason is not a
-  // bash-guard payload, or whose callId is missing or empty, stores nothing.
+  // `approval/asked` and `approval/decided` sit outside this build's
+  // SessionEventMap (the user-approval plugin extends the vocabulary out of
+  // repo), so the events are read through a structural cast. An asked event
+  // whose callId is missing or empty stores nothing; a decided event whose
+  // id never paired with an asked entry (no callId, or aged out of the cap)
+  // stores nothing.
   apply(state, event) {
     const e = event;
+    if (e.type === "approval/decided") {
+      const decided = e.data;
+      if (decided === void 0 || decided === null) return state;
+      if (typeof decided.id !== "string" || decided.id === "") return state;
+      if (typeof decided.outcome !== "string" || decided.outcome === "") return state;
+      for (let i = 0; i < state.entries.length; i++) {
+        const entry = state.entries[i];
+        if (entry.id !== decided.id) continue;
+        if (entry.outcome !== void 0) return state;
+        const entries2 = state.entries.slice();
+        entries2[i] = { ...entry, outcome: decided.outcome };
+        return { entries: entries2 };
+      }
+      return state;
+    }
     if (e.type !== "approval/asked") return state;
     const data = e.data;
     if (data === void 0 || data === null) return state;
     if (typeof data.callId !== "string" || data.callId === "") return state;
-    if (!isBashGuardReason(data.reason)) return state;
-    for (const entry of state.entries) {
-      if (entry.callId === data.callId) return state;
+    const id = typeof data.id === "string" ? data.id : void 0;
+    const guardedNow = isBashGuardReason(data.reason);
+    const entries = state.entries.slice();
+    let updated = false;
+    for (let i = 0; i < entries.length; i++) {
+      if (entries[i].callId !== data.callId) continue;
+      entries[i] = {
+        seq: e.seq,
+        callId: data.callId,
+        id,
+        guarded: entries[i].guarded === true || guardedNow || void 0
+      };
+      updated = true;
+      break;
     }
-    const kept = state.entries.concat([{ seq: e.seq, callId: data.callId }]);
-    kept.sort(function(a, b) {
+    if (!updated) {
+      entries.push({ seq: e.seq, callId: data.callId, id, guarded: guardedNow || void 0 });
+    }
+    entries.sort(function(a, b) {
       return a.seq - b.seq;
     });
-    while (kept.length > GUARDED_APPROVALS_CAP) kept.shift();
-    return { entries: kept };
+    while (entries.length > GUARDED_APPROVALS_CAP) entries.shift();
+    return { entries };
   },
   view(state) {
     if (state.entries.length === 0) return null;
-    const out = {};
-    for (const entry of state.entries) out[entry.callId] = true;
-    return out;
+    const guarded = {};
+    const outcomes = {};
+    for (const entry of state.entries) {
+      if (entry.guarded === true) guarded[entry.callId] = true;
+      if (entry.outcome !== void 0) outcomes[entry.callId] = entry.outcome;
+    }
+    return { guarded, outcomes };
   }
 };
 

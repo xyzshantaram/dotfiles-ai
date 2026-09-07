@@ -8,8 +8,8 @@ import { parse } from "yaml";
  * - The one the shipped guard actually emits (every `approval/asked` event
  *   in the real session log): plain text starting with "bash-guard:", then
  *   the command and the matched rules.
- * - The YAML payload (a plain object with a string `summary`) that
- *   approval-comment's parseGuardReason also accepts, kept for forward
+ * - The YAML payload (a plain object with a string `summary`) that the
+ *   retired approval-comment card also accepted, kept for forward
  *   compatibility.
  *
  * A YAML parse alone is not a test: the plain text parses as YAML just

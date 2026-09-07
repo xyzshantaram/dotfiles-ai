@@ -818,3 +818,106 @@
   margin-top: 0.25rem;
   padding: 0.25rem 0 0 0.25rem;
 }
+
+/* ---- Approval answer bar and decided badge. While an approval that
+   carries this card's callId is pending, the card answers it inline; once
+   decided, a durable badge keeps the outcome. The strip is additive: the
+   card keeps rendering its normal content above it. */
+.tool-render-approval-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0.125rem 0 0.125rem 0.25rem;
+}
+.tool-render-approval-btn {
+  border: 1px solid var(--dsw-alias-border-l3);
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+  padding: 0.0625rem 0.5rem;
+}
+.tool-render-approval-btn:hover:enabled {
+  background: var(--dsw-alias-interactive-bg-hover-solid);
+}
+.tool-render-approval-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.tool-render-approval-reject {
+  color: var(--dsw-alias-state-error-primary);
+  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 55%, var(--dsw-alias-border-l3));
+}
+/* First click arms ("? Confirm reject"), second click rejects; the armed
+   fill makes the confirm step read unmistakably. */
+.tool-render-approval-reject[data-armed] {
+  background: var(--dsw-alias-state-error-primary);
+  border-color: var(--dsw-alias-state-error-primary);
+  color: #fff;
+}
+.tool-render-approval-approve {
+  color: var(--dsw-alias-state-business-primary);
+  border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 55%, var(--dsw-alias-border-l3));
+}
+/* A comment draft relabels the action "Approve + send", so it reads warn:
+   the click now also steers the comment to the running agent. */
+.tool-render-approval-approve[data-with-comment] {
+  color: var(--dsw-alias-state-warn-primary);
+  border-color: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 55%, var(--dsw-alias-border-l3));
+}
+.tool-render-approval-comment-toggle {
+  border: none;
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  padding: 0.0625rem 0.25rem;
+  text-decoration: underline dotted;
+}
+.tool-render-approval-comment-toggle:hover:enabled {
+  color: var(--dsw-alias-label-primary);
+}
+.tool-render-approval-comment-toggle:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.tool-render-approval-comment {
+  box-sizing: border-box;
+  flex-basis: 100%;
+  resize: vertical;
+  min-height: 2.5rem;
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: 0.4375rem;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  padding: 0.25rem 0.5rem;
+}
+.tool-render-approval-comment:focus {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -1px;
+}
+/* The durable decided badge: neutral/positive tint for approved, error
+   tint for rejected. Sourced from the guarded-approvals fold, so it
+   survives a page reload. */
+.tool-render-decided {
+  border-radius: 999px;
+  border: 1px solid;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  padding: 0.0625rem 0.375rem;
+}
+.tool-render-decided[data-outcome="approved"] {
+  color: var(--dsw-alias-state-business-primary);
+  border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 55%, var(--dsw-alias-border-l3));
+}
+.tool-render-decided[data-outcome="rejected"] {
+  color: var(--dsw-alias-state-error-primary);
+  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 55%, var(--dsw-alias-border-l3));
+}

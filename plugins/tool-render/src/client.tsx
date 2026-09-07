@@ -168,6 +168,7 @@ import { isBashGuardReason } from "./guard";
 import * as primitives from "@deepseek-ai/dsh-client-ui-primitives";
 var useState = react.useState;
 var useEffect = react.useEffect;
+var useRef = react.useRef;
 var IconBrowseOutline16 = primitives.IconBrowseOutline16;
 var IconEditOutline16 = primitives.IconEditOutline16;
 var IconApiOutline14 = primitives.IconApiOutline14;
@@ -184,7 +185,7 @@ var PLUGIN_NAME = "tool-render";
 
 /** The projection key the host half registers for compaction prettyView payloads. */
 var COMPACTION_VIEWS_KEY = "tool-render/compaction-views";
-/** The projection key the host half registers for durable bash-guard approval callIds. */
+/** The projection key the host half registers for durable bash-guard approval callIds and decided outcomes. */
 var GUARDED_APPROVALS_KEY = "tool-render/guarded-approvals";
 
 // ---- One stylesheet for this bundle (house pattern: data-plugin-css guard). ----
@@ -201,7 +202,7 @@ var HLJS_BOX_CSS = [
 ].join("");
 
 injectStyle(PLUGIN_NAME, STYLE_TAG_ID, mergeCss(localCss, HLJS_BOX_CSS));
-/** Shared highlight.js token colors. The id matches approval-comment's injector, so only one tag exists. */
+/** Shared highlight.js token colors. The shared tag id dedupes with any other injector of the same tokens, so only one tag exists. */
 injectStyle(PLUGIN_NAME, "dsh-hljs-theme", HLJS_THEME_CSS);
 /** Shared permission outline tokens. The id matches the other injectors, so only one tag exists. */
 injectStyle(PLUGIN_NAME, "dsh-permission-outline", PERMISSION_OUTLINE_CSS);
@@ -620,6 +621,9 @@ function toolRenderRow(options) {
         <span className="tool-render-sep" aria-hidden={true} />
         {summary}
       </div>
+      {options.callId !== undefined && options.callId !== null && typeof options.useSession === "function" ? (
+        <ToolRenderApprovalBar callId={options.callId} useSession={options.useSession} />
+      ) : null}
       {open === true ? (
         <div className="tool-render-body">
           {/* A failed call whose result carried no text still shows its error.
@@ -642,6 +646,299 @@ function toolRenderRow(options) {
             </button>
           ) : null}
         </div>
+      ) : null}
+    </div>
+  );
+}
+
+// ---- Approval answer bar: the card answers its own approval. ------------
+// Any tool call card whose callId matches a pending approval -- every
+// approval that carries a callId, not only bash-guard's -- shows
+// [✗ Reject] [✓ Approve] plus an optional inline comment while the
+// approval is open. Once decided, the durable guarded-approvals outcome
+// keeps a small "approved"/"rejected" badge on the card across reloads.
+// Approvals without a callId are answered in the composer-approvals modal.
+
+/** The live pending approval for one callId, or null. Mirrors BashRow's
+ * guardApproval selection but without the bash-guard reason filter: the
+ * answer bar serves every approval with a callId. */
+function pendingApprovalOf(snapshot, callId) {
+  var pending = snapshot !== null && snapshot !== undefined ? snapshot.pending : undefined;
+  if (!Array.isArray(pending)) return null;
+  for (var p = 0; p < pending.length; p++) {
+    var item = pending[p];
+    if (item === null || item === undefined || item.kind !== "approval") continue;
+    var payload = item.payload;
+    if (payload === null || payload === undefined) continue;
+    if (payload.callId !== callId) continue;
+    return item;
+  }
+  return null;
+}
+
+/**
+ * One best-effort steering send carrying the user's comment verbatim, the
+ * same wire the composer uses for a steer (`session.prompt` with mode
+ * `steer`), so the message enters the running agent at the nearest step
+ * boundary. Ported from the retired approval-comment card. Nothing is
+ * added around the comment: the agent reads what the user wrote. The
+ * result is observed, never trusted, and the promise always resolves, so
+ * the caller can fire it and forget it.
+ */
+function buildApprovalSteer(sessions) {
+  return function steerTo(sessionId, comment) {
+    if (sessions === undefined || sessions === null) {
+      console.warn("[tool-render] steering skipped, sessions service is unavailable");
+      return Promise.resolve(false);
+    }
+    var binding = sessions.binding(sessionId);
+    if (binding === undefined || binding.session === undefined) {
+      console.warn("[tool-render] steering skipped, session binding is gone", sessionId);
+      return Promise.resolve(false);
+    }
+    return binding.session.prompt([{ type: "text", text: comment }], "steer").then(
+      function (result) {
+        if (!result.ok)
+          console.warn(
+            "[tool-render] steering failed",
+            result.error && result.error.code,
+            result.error && result.error.message,
+          );
+        return result.ok === true;
+      },
+      function (error) {
+        console.warn("[tool-render] steering threw", error);
+        return false;
+      },
+    );
+  };
+}
+
+/** Set once in apply(); null only before apply ran or without sessions. */
+var approvalSteerTo = null;
+
+/** How long an armed reject stays confirmable before it resets itself. */
+var REJECT_ARM_RESET_MS = 4000;
+
+/**
+ * The answer bar for one card. Renders nothing unless this callId has an
+ * open approval (the action bar) or a durable decided outcome (the badge).
+ * `respond` throws once the wait is settled, so every answer runs through
+ * the local `answered` guard and a synchronous try/catch.
+ */
+function ToolRenderApprovalBar(props) {
+  var decidedRecord = useGuardedApprovals(props.useSession);
+  // The selector's RESULT is the stable approvalId (a string), so the
+  // subscription only re-renders this card when the pending approval for
+  // its callId appears, changes, or clears. The live pending object is
+  // parked in a ref for click time and never enters React state.
+  var pendingRef = useRef(null);
+  var approvalId = props.useSession(function (snapshot) {
+    var found = pendingApprovalOf(snapshot, props.callId);
+    pendingRef.current = found;
+    return found === null ? null : String(found.payload.approvalId);
+  });
+  var answeredState = useState(false);
+  var answered = answeredState[0];
+  var setAnswered = answeredState[1];
+  var commentOpenState = useState(false);
+  var commentOpen = commentOpenState[0];
+  var setCommentOpen = commentOpenState[1];
+  var draftState = useState("");
+  var draft = draftState[0];
+  var setDraft = draftState[1];
+  var armedState = useState(false);
+  var armed = armedState[0];
+  var setArmed = armedState[1];
+  var armTimerRef = useRef(0);
+  useEffect(function () {
+    return function () {
+      if (armTimerRef.current !== 0) clearTimeout(armTimerRef.current);
+    };
+  }, []);
+  // A NEW approval id on this callId means the previous approval settled and
+  // this is a re-ask: reset every answer control so the bar is answerable
+  // again. Without this, one answered approval disables the bar forever
+  // (the v3 fold models same-callId re-asks; the card must agree with it).
+  // The null and first-mount transitions also fire, harmlessly: they just
+  // re-write the defaults. A stale draft cannot re-steer a future answer,
+  // and a stale armed state cannot show "Confirm reject" on a fresh ask.
+  useEffect(
+    function () {
+      setAnswered(false);
+      setArmed(false);
+      setDraft("");
+      setCommentOpen(false);
+    },
+    [approvalId],
+  );
+
+  var answer = function (outcome) {
+    if (answered) return;
+    var current = pendingRef.current;
+    if (current === null || current === undefined) return;
+    console.debug("[tool-render] approval answer:", outcome, props.callId);
+    setAnswered(true);
+    var commentText = draft.trim();
+    // The steer goes out BEFORE the approval is answered, while the turn is
+    // still running, so it rides the same step boundary it did when the
+    // retired approval-comment card owned this wire. Sending it after the
+    // answer resolved let the turn end first, and the steer then started a
+    // fresh turn, so the agent appeared to stop and then restart.
+    if (commentText !== "") {
+      if (approvalSteerTo !== null) {
+        approvalSteerTo(current.sessionId, commentText);
+      } else {
+        console.warn("[tool-render] comment dropped, steering wire is unavailable");
+      }
+    }
+    try {
+      Promise.resolve(
+        current.respond({
+          ok: true,
+          value: {
+            sessionId: current.sessionId,
+            approvalId: current.payload.approvalId,
+            outcome: outcome,
+          },
+        }),
+      )
+        .then(function (receipt) {
+          if (receipt === undefined || receipt === null || !receipt.accepted) {
+            throw new Error(
+              "approval response rejected: " +
+                (receipt === undefined || receipt === null || receipt.reason === undefined
+                  ? "unknown"
+                  : receipt.reason),
+            );
+          }
+          console.debug("[tool-render] approval answered", props.callId, outcome);
+        })
+        .catch(function (error) {
+          console.warn("[tool-render] approval answer failed", props.callId, outcome, error);
+          setAnswered(false);
+        });
+    } catch (error) {
+      // respond throws synchronously once the wait was settled elsewhere.
+      console.warn("[tool-render] approval answer failed", props.callId, outcome, error);
+      setAnswered(false);
+    }
+  };
+
+  var clearArm = function () {
+    if (armTimerRef.current !== 0) {
+      clearTimeout(armTimerRef.current);
+      armTimerRef.current = 0;
+    }
+  };
+  var onReject = function () {
+    if (answered) return;
+    // A non-empty comment draft is its own deliberate act: reject is ONE
+    // click, the typing replaced the arming step.
+    if (draft.trim() !== "") {
+      clearArm();
+      setArmed(false);
+      answer("rejected");
+      return;
+    }
+    if (armed) {
+      clearArm();
+      setArmed(false);
+      answer("rejected");
+      return;
+    }
+    setArmed(true);
+    clearArm();
+    armTimerRef.current = setTimeout(function () {
+      armTimerRef.current = 0;
+      setArmed(false);
+    }, REJECT_ARM_RESET_MS);
+  };
+  var onApprove = function () {
+    if (answered) return;
+    answer("approved");
+  };
+  var onCommentKeyDown = function (event) {
+    if (answered) return;
+    if (event.key === "Escape") {
+      setCommentOpen(false);
+      return;
+    }
+    // Enter mirrors the reject button's own flow (arm first without a
+    // draft, reject with one); a bare Enter never bypasses the arming.
+    if (
+      event.key === "Enter" &&
+      !event.shiftKey &&
+      !(event.nativeEvent && event.nativeEvent.isComposing)
+    ) {
+      event.preventDefault();
+      onReject();
+    }
+  };
+
+  var pending = approvalId === null ? null : pendingRef.current;
+  if (pending === null || pending === undefined) {
+    // Not pending: show the durable decided badge when this callId's
+    // approval was answered, on this load or any earlier one.
+    var outcome =
+      decidedRecord !== null && decidedRecord !== undefined
+        ? decidedRecord.outcomes[props.callId]
+        : undefined;
+    if (outcome !== "approved" && outcome !== "rejected") return null;
+    return (
+      <div className="tool-render-approval-strip">
+        <span className="tool-render-decided" data-outcome={outcome}>
+          {outcome}
+        </span>
+      </div>
+    );
+  }
+  var hasDraft = draft.trim() !== "";
+  return (
+    <div className="tool-render-approval-strip">
+      <button
+        type="button"
+        className="tool-render-approval-btn tool-render-approval-reject"
+        data-armed={armed && !hasDraft ? true : undefined}
+        disabled={answered}
+        onClick={onReject}
+      >
+        {armed && !hasDraft ? "? Confirm reject" : "✗ Reject"}
+      </button>
+      <button
+        type="button"
+        className="tool-render-approval-btn tool-render-approval-approve"
+        data-with-comment={hasDraft || undefined}
+        disabled={answered}
+        onClick={onApprove}
+      >
+        {hasDraft ? "Approve + send" : "✓ Approve"}
+      </button>
+      <button
+        type="button"
+        className="tool-render-approval-comment-toggle"
+        disabled={answered}
+        aria-expanded={commentOpen}
+        onClick={function () {
+          setCommentOpen(!commentOpen);
+        }}
+      >
+        {commentOpen ? "hide comment" : "add comment"}
+      </button>
+      {commentOpen ? (
+        <textarea
+          className="tool-render-approval-comment"
+          rows={2}
+          value={draft}
+          disabled={answered}
+          autoFocus={true}
+          aria-label="Comment for the agent"
+          placeholder="Optional comment for the agent"
+          onChange={function (event) {
+            setDraft(event.target.value);
+          }}
+          onKeyDown={onCommentKeyDown}
+        />
       ) : null}
     </div>
   );
@@ -680,6 +977,7 @@ function ReadRow(props) {
   }
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Read file",
     icon: <IconBrowseOutline16 size={14} />,
     title: "Read",
@@ -748,7 +1046,7 @@ function BashRow(props) {
   if (
     durableGuardApproval !== null &&
     durableGuardApproval !== undefined &&
-    durableGuardApproval[props.callId] === true
+    durableGuardApproval.guarded[props.callId] === true
   ) {
     guardApproval = true;
   }
@@ -796,6 +1094,7 @@ function BashRow(props) {
   }
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Run bash",
     icon: <IconApiOutline14 size={14} />,
     title: "Bash",
@@ -1178,6 +1477,7 @@ function makeEditRow(toolTitle) {
     if (block === null || typeof block !== "object") {
       return toolRenderRow({
         callId: props.callId,
+        useSession: props.useSession,
         toolName: editBadgeLabel(callNameOf(block), toolTitle),
         icon: <IconEditOutline16 size={14} />,
         title: toolTitle,
@@ -1233,6 +1533,7 @@ function makeEditRow(toolTitle) {
     }
     return toolRenderRow({
       callId: props.callId,
+      useSession: props.useSession,
       // One component serves the `edit`, `undo_edit`, and `undo_last_edit`
       // registrations. The block carries the real call name, so the badge
       // shows the right human-readable label for the exact call being rendered.
@@ -1576,6 +1877,7 @@ function WriteRow(props) {
   }
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Write file",
     icon: <IconEditOutline16 size={14} />,
     title: "Write",
@@ -1682,6 +1984,7 @@ function TodoRow(props) {
   }
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "To-do list",
     icon: <IconChecklistOutline14 size={14} />,
     title: "To-do list",
@@ -1868,6 +2171,7 @@ function AskRow(props) {
   }
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Ask user",
     icon: <IconQuestionOutline14 size={14} />,
     title: "Ask user",
@@ -1926,6 +2230,7 @@ function SubagentRow(props) {
   }
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Dispatch",
     icon: <IconAgentPresetOutline16 size={14} />,
     title: title,
@@ -1984,6 +2289,7 @@ function JobOutputRow(props) {
     ) : null;
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Job output",
     icon: <IconApiOutline14 />,
     title: "Job output",
@@ -2041,6 +2347,7 @@ function PackageRow(props) {
     ) : null;
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Manage package",
     icon: <IconApiOutline14 />,
     title: title,
@@ -2080,6 +2387,7 @@ function SendMessageRow(props) {
     ) : null;
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Message",
     icon: <IconAgentPresetOutline16 size={14} />,
     title: "Message",
@@ -2117,6 +2425,7 @@ function InterruptAgentRow(props) {
       : undefined;
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Interrupt agent",
     icon: <IconStopFill16 size={14} />,
     title: "Interrupt agent",
@@ -2192,6 +2501,7 @@ function ListAgentsRow(props) {
     ) : null;
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "List agents",
     icon: <IconAgentPresetOutline16 size={14} />,
     title: "List agents",
@@ -2253,8 +2563,11 @@ function FailoverRow(props) {
   var setExpanded = expandedState[1];
   var text = contextText(props.content);
   var lines = text.split("\n");
-  var firstLine = lines.length > 0 ? lines[0] : "";
-  var match = FAILOVER_LINE_RE.exec(firstLine);
+  // Named headerLine, NOT firstLine: a local `firstLine` here would shadow
+  // the module-level firstLine() helper and turn the firstLine(detail) call
+  // below into a runtime crash (and a tsc TS2349 error).
+  var headerLine = lines.length > 0 ? lines[0] : "";
+  var match = FAILOVER_LINE_RE.exec(headerLine);
 
   if (match === null) {
     // Parsing failed. Fall back to generic card.
@@ -2366,6 +2679,7 @@ function SkillContentCard(props) {
   );
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Skill",
     icon: <IconChecklistOutline14 />,
     title: "Skill",
@@ -2416,6 +2730,7 @@ function GenericContextCard(props) {
     ) : null;
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: title,
     icon: <IconBrowseOutline16 size={14} />,
     title: title,
@@ -2491,6 +2806,7 @@ function SkillRow(props) {
   var skillName = args !== null ? pickString(args, ["name"]) : undefined;
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Load skill",
     icon: <IconChecklistOutline14 />,
     title: "Skill",
@@ -2633,6 +2949,7 @@ function ReadImageRow(props) {
   }
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Read image",
     icon: <IconBrowseOutline16 size={14} />,
     title: "Read image",
@@ -2719,6 +3036,7 @@ function SeeRow(props) {
   }
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "See image",
     icon: <IconQuestionOutline14 size={14} />,
     title: "See",
@@ -2786,6 +3104,7 @@ function WebSearchRow(props) {
     ) : null;
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Web search",
     icon: <IconBrowseOutline16 size={14} />,
     title: "Web search",
@@ -2837,6 +3156,7 @@ function WebFetchRow(props) {
   }
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Web fetch",
     icon: <IconBrowseOutline16 size={14} />,
     title: "Web fetch",
@@ -2912,11 +3232,12 @@ function useCompactionViews(useSession) {
   return views;
 }
 
-// ---- guarded approvals: durable set of bash-guard approval callIds. -----
+// ---- guarded approvals: durable bash-guard callIds + decided outcomes. --
 // Same shape as useCompactionViews with a different key: the host-side
-// projection in guarded-approvals.ts folds `approval/asked` events into a
-// record keyed by callId, so the BashRow outline survives the approval
-// decision and a page reload. A session without projections (an older
+// projection in guarded-approvals.ts folds `approval/asked` and
+// `approval/decided` events into { guarded, outcomes } maps keyed by
+// callId, so the BashRow outline and the card's decided badge survive
+// the approval decision and a page reload. A session without projections (an older
 // seat) leaves the record null and the row falls back to the live
 // snapshot.pending check. Deliberately not a rewrite of
 // useCompactionViews, so the compaction code stays untouched.
@@ -3091,6 +3412,7 @@ function CompactionRow(props) {
       ) : null;
     return toolRenderRow({
       callId: props.callId,
+      useSession: props.useSession,
       toolName: "Compaction",
       icon: <IconBrowseOutline16 size={14} />,
       title: "Compaction",
@@ -3116,6 +3438,7 @@ function CompactionRow(props) {
   var pretty = view;
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Compaction",
     icon: <IconBrowseOutline16 size={14} />,
     title: "Compaction",
@@ -3134,6 +3457,13 @@ var inject = ["slots"];
 var name = PLUGIN_NAME;
 
 function apply(ctx) {
+  // The comment steer wire the answer bar uses (ported from the retired
+  // approval-comment card). `sessions` is read optionally: without it the
+  // bar still answers approvals, it just cannot send a comment, and the
+  // attempt warns when it happens.
+  approvalSteerTo = buildApprovalSteer(
+    typeof ctx.get === "function" ? ctx.get("sessions") : undefined,
+  );
   ctx.slots.inject("context.injection.view", function* () {
     yield ctx.slots.register(
       {

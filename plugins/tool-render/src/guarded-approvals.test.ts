@@ -7,13 +7,17 @@ function askedEvent(seq: number, data: unknown) {
   return { type: "approval/asked", seq: seq, time: 0, data: data };
 }
 
+function decidedEvent(seq: number, data: unknown) {
+  return { type: "approval/decided", seq: seq, time: 0, data: data };
+}
+
 const GUARD_REASON = "summary: block rm -rf outside the workspace\ncommand: rm -rf /tmp/x\n";
 
 describe("guardedApprovalsProjection.apply", () => {
   it("records a callId whose reason passes the bash-guard test", () => {
     var state = guardedApprovalsProjection.init();
     state = guardedApprovalsProjection.apply(state, askedEvent(4, { id: "a1", callId: "call-1", reason: GUARD_REASON }) as never);
-    expect(guardedApprovalsProjection.view(state)).toEqual({ "call-1": true });
+    expect(guardedApprovalsProjection.view(state)).toEqual({ guarded: { "call-1": true }, outcomes: {} });
   });
 
   it("records a callId from the shipped guard's plain-text reason", () => {
@@ -23,13 +27,18 @@ describe("guardedApprovalsProjection.apply", () => {
     var reason = 'bash-guard: the following command needs approval:\n\n  git push\n\nMatched rule(s):\n  • git (push): denied.\n';
     var state = guardedApprovalsProjection.init();
     state = guardedApprovalsProjection.apply(state, askedEvent(4, { id: "a1", callId: "call-2", reason }) as never);
-    expect(guardedApprovalsProjection.view(state)).toEqual({ "call-2": true });
+    expect(guardedApprovalsProjection.view(state)).toEqual({ guarded: { "call-2": true }, outcomes: {} });
   });
 
-  it("skips a reason that is not a bash-guard payload", () => {
+  it("records a non-guard asked callId without guarding it", () => {
+    // Every approval with a callId is folded (the decided badge serves all
+    // of them); only the outline set stays bash-guard-only.
     var state = guardedApprovalsProjection.init();
     state = guardedApprovalsProjection.apply(state, askedEvent(4, { id: "a1", callId: "call-1", reason: "please approve" }) as never);
-    expect(guardedApprovalsProjection.view(state)).toBeNull();
+    var view = guardedApprovalsProjection.view(state);
+    expect(view).not.toBeNull();
+    expect((view as { guarded: Record<string, boolean> }).guarded).toEqual({});
+    expect((view as { outcomes: Record<string, string> }).outcomes).toEqual({});
   });
 
   it("skips an event with a missing or empty callId", () => {
@@ -39,11 +48,70 @@ describe("guardedApprovalsProjection.apply", () => {
     expect(guardedApprovalsProjection.view(state)).toBeNull();
   });
 
-  it("ignores approval/decided: the mark is for the life of the call", () => {
+  it("pairs a decision to its asked entry by id and keeps the guard mark", () => {
     var state = guardedApprovalsProjection.init();
     state = guardedApprovalsProjection.apply(state, askedEvent(4, { id: "a1", callId: "call-1", reason: GUARD_REASON }) as never);
-    state = guardedApprovalsProjection.apply(state, { type: "approval/decided", seq: 5, time: 0, data: { id: "a1", outcome: "approved" } } as never);
-    expect(guardedApprovalsProjection.view(state)).toEqual({ "call-1": true });
+    state = guardedApprovalsProjection.apply(state, decidedEvent(5, { id: "a1", outcome: "approved" }) as never);
+    expect(guardedApprovalsProjection.view(state)).toEqual({
+      guarded: { "call-1": true },
+      outcomes: { "call-1": "approved" },
+    });
+  });
+
+  it("pairs a rejected decision for a non-guard approval", () => {
+    var state = guardedApprovalsProjection.init();
+    state = guardedApprovalsProjection.apply(state, askedEvent(4, { id: "a9", callId: "call-3", reason: "please approve" }) as never);
+    state = guardedApprovalsProjection.apply(state, decidedEvent(5, { id: "a9", outcome: "rejected" }) as never);
+    expect(guardedApprovalsProjection.view(state)).toEqual({
+      guarded: {},
+      outcomes: { "call-3": "rejected" },
+    });
+  });
+
+  it("ignores a decision whose id never paired with an asked entry", () => {
+    var state = guardedApprovalsProjection.init();
+    state = guardedApprovalsProjection.apply(state, askedEvent(4, { id: "a1", callId: "call-1", reason: GUARD_REASON }) as never);
+    state = guardedApprovalsProjection.apply(state, decidedEvent(5, { id: "unknown", outcome: "approved" }) as never);
+    expect(guardedApprovalsProjection.view(state)).toEqual({ guarded: { "call-1": true }, outcomes: {} });
+  });
+
+  it("ignores a second decision for an already-paired entry", () => {
+    var state = guardedApprovalsProjection.init();
+    state = guardedApprovalsProjection.apply(state, askedEvent(4, { id: "a1", callId: "call-1", reason: GUARD_REASON }) as never);
+    state = guardedApprovalsProjection.apply(state, decidedEvent(5, { id: "a1", outcome: "approved" }) as never);
+    state = guardedApprovalsProjection.apply(state, decidedEvent(6, { id: "a1", outcome: "rejected" }) as never);
+    expect(guardedApprovalsProjection.view(state)).toEqual({
+      guarded: { "call-1": true },
+      outcomes: { "call-1": "approved" },
+    });
+  });
+
+  it("a re-ask of the same callId keeps the guard mark sticky and takes the latest decision", () => {
+    // The exact sequence a same-callId re-ask produces: a guarded ask is
+    // decided, then a NON-guard approval re-asks the same callId, then that
+    // one is decided too. Guarded must stay true (a later non-guard ask
+    // never un-guards), and outcomes must reflect the LATEST decision, not
+    // the first — the re-ask cleared the stale outcome.
+    var state = guardedApprovalsProjection.init();
+    state = guardedApprovalsProjection.apply(state, askedEvent(4, { id: "a1", callId: "call-1", reason: GUARD_REASON }) as never);
+    state = guardedApprovalsProjection.apply(state, decidedEvent(5, { id: "a1", outcome: "rejected" }) as never);
+    state = guardedApprovalsProjection.apply(state, askedEvent(6, { id: "a2", callId: "call-1", reason: "please approve" }) as never);
+    state = guardedApprovalsProjection.apply(state, decidedEvent(7, { id: "a2", outcome: "approved" }) as never);
+    expect(guardedApprovalsProjection.view(state)).toEqual({
+      guarded: { "call-1": true },
+      outcomes: { "call-1": "approved" },
+    });
+  });
+
+  it("a re-ask clears a stale outcome when the re-ask itself is never decided", () => {
+    var state = guardedApprovalsProjection.init();
+    state = guardedApprovalsProjection.apply(state, askedEvent(4, { id: "a1", callId: "call-1", reason: "please approve" }) as never);
+    state = guardedApprovalsProjection.apply(state, decidedEvent(5, { id: "a1", outcome: "rejected" }) as never);
+    state = guardedApprovalsProjection.apply(state, askedEvent(6, { id: "a2", callId: "call-1", reason: "please approve" }) as never);
+    expect(guardedApprovalsProjection.view(state)).toEqual({
+      guarded: {},
+      outcomes: {},
+    });
   });
 
   it("caps the map at the most recent entries by seq", async () => {
@@ -53,8 +121,21 @@ describe("guardedApprovalsProjection.apply", () => {
     }
     var view = guardedApprovalsProjection.view(state);
     expect(view).not.toBeNull();
-    expect(Object.keys(view as object)).toHaveLength(200);
-    expect(view["call-9"]).toBeUndefined();
-    expect(view["call-209"]).toBe(true);
+    var typed = view as { guarded: Record<string, boolean>; outcomes: Record<string, string> };
+    expect(Object.keys(typed.guarded)).toHaveLength(200);
+    expect(typed.guarded["call-9"]).toBeUndefined();
+    expect(typed.guarded["call-209"]).toBe(true);
+    // A decision for an entry the cap already evicted cannot pair.
+    state = guardedApprovalsProjection.apply(state, decidedEvent(300, { id: "a5", outcome: "approved" }) as never);
+    view = guardedApprovalsProjection.view(state);
+    expect((view as { outcomes: Record<string, string> }).outcomes["call-5"]).toBeUndefined();
+    // A decision for a live entry pairs.
+    state = guardedApprovalsProjection.apply(state, decidedEvent(301, { id: "a209", outcome: "rejected" }) as never);
+    view = guardedApprovalsProjection.view(state);
+    expect((view as { outcomes: Record<string, string> }).outcomes["call-209"]).toBe("rejected");
+  });
+
+  it("is at state version 3 so the callId-only state is replayed", () => {
+    expect(guardedApprovalsProjection.stateVersion).toBe(3);
   });
 });
