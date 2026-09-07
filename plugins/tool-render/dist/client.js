@@ -2796,6 +2796,109 @@ var client_default = `.tool-render-row {
   margin-top: 0.25rem;
   padding: 0.25rem 0 0 0.25rem;
 }
+
+/* ---- Approval answer bar and decided badge. While an approval that
+   carries this card's callId is pending, the card answers it inline; once
+   decided, a durable badge keeps the outcome. The strip is additive: the
+   card keeps rendering its normal content above it. */
+.tool-render-approval-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0.125rem 0 0.125rem 0.25rem;
+}
+.tool-render-approval-btn {
+  border: 1px solid var(--dsw-alias-border-l3);
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+  padding: 0.0625rem 0.5rem;
+}
+.tool-render-approval-btn:hover:enabled {
+  background: var(--dsw-alias-interactive-bg-hover-solid);
+}
+.tool-render-approval-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.tool-render-approval-reject {
+  color: var(--dsw-alias-state-error-primary);
+  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 55%, var(--dsw-alias-border-l3));
+}
+/* First click arms ("? Confirm reject"), second click rejects; the armed
+   fill makes the confirm step read unmistakably. */
+.tool-render-approval-reject[data-armed] {
+  background: var(--dsw-alias-state-error-primary);
+  border-color: var(--dsw-alias-state-error-primary);
+  color: #fff;
+}
+.tool-render-approval-approve {
+  color: var(--dsw-alias-state-business-primary);
+  border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 55%, var(--dsw-alias-border-l3));
+}
+/* A comment draft relabels the action "Approve + send", so it reads warn:
+   the click now also steers the comment to the running agent. */
+.tool-render-approval-approve[data-with-comment] {
+  color: var(--dsw-alias-state-warn-primary);
+  border-color: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 55%, var(--dsw-alias-border-l3));
+}
+.tool-render-approval-comment-toggle {
+  border: none;
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  padding: 0.0625rem 0.25rem;
+  text-decoration: underline dotted;
+}
+.tool-render-approval-comment-toggle:hover:enabled {
+  color: var(--dsw-alias-label-primary);
+}
+.tool-render-approval-comment-toggle:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.tool-render-approval-comment {
+  box-sizing: border-box;
+  flex-basis: 100%;
+  resize: vertical;
+  min-height: 2.5rem;
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: 0.4375rem;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  padding: 0.25rem 0.5rem;
+}
+.tool-render-approval-comment:focus {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -1px;
+}
+/* The durable decided badge: neutral/positive tint for approved, error
+   tint for rejected. Sourced from the guarded-approvals fold, so it
+   survives a page reload. */
+.tool-render-decided {
+  border-radius: 999px;
+  border: 1px solid;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  padding: 0.0625rem 0.375rem;
+}
+.tool-render-decided[data-outcome="approved"] {
+  color: var(--dsw-alias-state-business-primary);
+  border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 55%, var(--dsw-alias-border-l3));
+}
+.tool-render-decided[data-outcome="rejected"] {
+  color: var(--dsw-alias-state-error-primary);
+  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 55%, var(--dsw-alias-border-l3));
+}
 `;
 
 // node_modules/.pnpm/highlight.js@11.12.0/node_modules/highlight.js/es/languages/javascript.js
@@ -15507,6 +15610,7 @@ var EXTENSION_LANGUAGE = {
 };
 var useState = import_react.default.useState;
 var useEffect = import_react.default.useEffect;
+var useRef = import_react.default.useRef;
 var IconBrowseOutline162 = primitives.IconBrowseOutline16;
 var IconEditOutline162 = primitives.IconEditOutline16;
 var IconApiOutline142 = primitives.IconApiOutline14;
@@ -15818,8 +15922,225 @@ function toolRenderRow(options) {
       /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-sep", "aria-hidden": true }),
       summary
     ),
+    options.callId !== void 0 && options.callId !== null && typeof options.useSession === "function" ? /* @__PURE__ */ import_react.default.createElement(ToolRenderApprovalBar, { callId: options.callId, useSession: options.useSession }) : null,
     open === true ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-body" }, options.body !== null && options.body !== void 0 ? options.body : options.state === "error" && options.errorText !== null && options.errorText !== void 0 && options.errorText !== "" ? /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output", "tool-render-error": true }, options.errorText) : null, options.inspect !== void 0 ? /* @__PURE__ */ import_react.default.createElement("button", { type: "button", className: "tool-render-inspect", onClick: options.inspect }, /* @__PURE__ */ import_react.default.createElement(IconInspectOutline122, null), " Inspect") : null) : null
   );
+}
+function pendingApprovalOf(snapshot, callId) {
+  var pending = snapshot !== null && snapshot !== void 0 ? snapshot.pending : void 0;
+  if (!Array.isArray(pending)) return null;
+  for (var p = 0; p < pending.length; p++) {
+    var item = pending[p];
+    if (item === null || item === void 0 || item.kind !== "approval") continue;
+    var payload = item.payload;
+    if (payload === null || payload === void 0) continue;
+    if (payload.callId !== callId) continue;
+    return item;
+  }
+  return null;
+}
+function buildApprovalSteer(sessions) {
+  return function steerTo(sessionId, comment) {
+    if (sessions === void 0 || sessions === null) {
+      console.warn("[tool-render] steering skipped, sessions service is unavailable");
+      return Promise.resolve(false);
+    }
+    var binding = sessions.binding(sessionId);
+    if (binding === void 0 || binding.session === void 0) {
+      console.warn("[tool-render] steering skipped, session binding is gone", sessionId);
+      return Promise.resolve(false);
+    }
+    return binding.session.prompt([{ type: "text", text: comment }], "steer").then(
+      function(result) {
+        if (!result.ok)
+          console.warn(
+            "[tool-render] steering failed",
+            result.error && result.error.code,
+            result.error && result.error.message
+          );
+        return result.ok === true;
+      },
+      function(error) {
+        console.warn("[tool-render] steering threw", error);
+        return false;
+      }
+    );
+  };
+}
+var approvalSteerTo = null;
+var REJECT_ARM_RESET_MS = 4e3;
+function ToolRenderApprovalBar(props) {
+  var decidedRecord = useGuardedApprovals(props.useSession);
+  var pendingRef = useRef(null);
+  var approvalId = props.useSession(function(snapshot) {
+    var found = pendingApprovalOf(snapshot, props.callId);
+    pendingRef.current = found;
+    return found === null ? null : String(found.payload.approvalId);
+  });
+  var answeredState = useState(false);
+  var answered = answeredState[0];
+  var setAnswered = answeredState[1];
+  var commentOpenState = useState(false);
+  var commentOpen = commentOpenState[0];
+  var setCommentOpen = commentOpenState[1];
+  var draftState = useState("");
+  var draft = draftState[0];
+  var setDraft = draftState[1];
+  var armedState = useState(false);
+  var armed = armedState[0];
+  var setArmed = armedState[1];
+  var armTimerRef = useRef(0);
+  useEffect(function() {
+    return function() {
+      if (armTimerRef.current !== 0) clearTimeout(armTimerRef.current);
+    };
+  }, []);
+  useEffect(
+    function() {
+      setAnswered(false);
+      setArmed(false);
+      setDraft("");
+      setCommentOpen(false);
+    },
+    [approvalId]
+  );
+  var answer = function(outcome2) {
+    if (answered) return;
+    var current = pendingRef.current;
+    if (current === null || current === void 0) return;
+    console.debug("[tool-render] approval answer:", outcome2, props.callId);
+    setAnswered(true);
+    var commentText = draft.trim();
+    if (commentText !== "") {
+      if (approvalSteerTo !== null) {
+        approvalSteerTo(current.sessionId, commentText);
+      } else {
+        console.warn("[tool-render] comment dropped, steering wire is unavailable");
+      }
+    }
+    try {
+      Promise.resolve(
+        current.respond({
+          ok: true,
+          value: {
+            sessionId: current.sessionId,
+            approvalId: current.payload.approvalId,
+            outcome: outcome2
+          }
+        })
+      ).then(function(receipt) {
+        if (receipt === void 0 || receipt === null || !receipt.accepted) {
+          throw new Error(
+            "approval response rejected: " + (receipt === void 0 || receipt === null || receipt.reason === void 0 ? "unknown" : receipt.reason)
+          );
+        }
+        console.debug("[tool-render] approval answered", props.callId, outcome2);
+      }).catch(function(error) {
+        console.warn("[tool-render] approval answer failed", props.callId, outcome2, error);
+        setAnswered(false);
+      });
+    } catch (error) {
+      console.warn("[tool-render] approval answer failed", props.callId, outcome2, error);
+      setAnswered(false);
+    }
+  };
+  var clearArm = function() {
+    if (armTimerRef.current !== 0) {
+      clearTimeout(armTimerRef.current);
+      armTimerRef.current = 0;
+    }
+  };
+  var onReject = function() {
+    if (answered) return;
+    if (draft.trim() !== "") {
+      clearArm();
+      setArmed(false);
+      answer("rejected");
+      return;
+    }
+    if (armed) {
+      clearArm();
+      setArmed(false);
+      answer("rejected");
+      return;
+    }
+    setArmed(true);
+    clearArm();
+    armTimerRef.current = setTimeout(function() {
+      armTimerRef.current = 0;
+      setArmed(false);
+    }, REJECT_ARM_RESET_MS);
+  };
+  var onApprove = function() {
+    if (answered) return;
+    answer("approved");
+  };
+  var onCommentKeyDown = function(event) {
+    if (answered) return;
+    if (event.key === "Escape") {
+      setCommentOpen(false);
+      return;
+    }
+    if (event.key === "Enter" && !event.shiftKey && !(event.nativeEvent && event.nativeEvent.isComposing)) {
+      event.preventDefault();
+      onReject();
+    }
+  };
+  var pending = approvalId === null ? null : pendingRef.current;
+  if (pending === null || pending === void 0) {
+    var outcome = decidedRecord !== null && decidedRecord !== void 0 ? decidedRecord.outcomes[props.callId] : void 0;
+    if (outcome !== "approved" && outcome !== "rejected") return null;
+    return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-approval-strip" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-decided", "data-outcome": outcome }, outcome));
+  }
+  var hasDraft = draft.trim() !== "";
+  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-approval-strip" }, /* @__PURE__ */ import_react.default.createElement(
+    "button",
+    {
+      type: "button",
+      className: "tool-render-approval-btn tool-render-approval-reject",
+      "data-armed": armed && !hasDraft ? true : void 0,
+      disabled: answered,
+      onClick: onReject
+    },
+    armed && !hasDraft ? "? Confirm reject" : "\u2717 Reject"
+  ), /* @__PURE__ */ import_react.default.createElement(
+    "button",
+    {
+      type: "button",
+      className: "tool-render-approval-btn tool-render-approval-approve",
+      "data-with-comment": hasDraft || void 0,
+      disabled: answered,
+      onClick: onApprove
+    },
+    hasDraft ? "Approve + send" : "\u2713 Approve"
+  ), /* @__PURE__ */ import_react.default.createElement(
+    "button",
+    {
+      type: "button",
+      className: "tool-render-approval-comment-toggle",
+      disabled: answered,
+      "aria-expanded": commentOpen,
+      onClick: function() {
+        setCommentOpen(!commentOpen);
+      }
+    },
+    commentOpen ? "hide comment" : "add comment"
+  ), commentOpen ? /* @__PURE__ */ import_react.default.createElement(
+    "textarea",
+    {
+      className: "tool-render-approval-comment",
+      rows: 2,
+      value: draft,
+      disabled: answered,
+      autoFocus: true,
+      "aria-label": "Comment for the agent",
+      placeholder: "Optional comment for the agent",
+      onChange: function(event) {
+        setDraft(event.target.value);
+      },
+      onKeyDown: onCommentKeyDown
+    }
+  ) : null);
 }
 function ReadRow(props) {
   var expandedState = useState(false);
@@ -15846,6 +16167,7 @@ function ReadRow(props) {
   }
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Read file",
     icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
     title: "Read",
@@ -15894,7 +16216,7 @@ function BashRow(props) {
     }
     return false;
   }) === true;
-  if (durableGuardApproval !== null && durableGuardApproval !== void 0 && durableGuardApproval[props.callId] === true) {
+  if (durableGuardApproval !== null && durableGuardApproval !== void 0 && durableGuardApproval.guarded[props.callId] === true) {
     guardApproval = true;
   }
   var guardRewrite = guardRewriteOf(block);
@@ -15939,6 +16261,7 @@ function BashRow(props) {
   }
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Run bash",
     icon: /* @__PURE__ */ import_react.default.createElement(IconApiOutline142, { size: 14 }),
     title: "Bash",
@@ -16219,6 +16542,7 @@ function makeEditRow(toolTitle) {
     if (block === null || typeof block !== "object") {
       return toolRenderRow({
         callId: props.callId,
+        useSession: props.useSession,
         toolName: editBadgeLabel(callNameOf(block), toolTitle),
         icon: /* @__PURE__ */ import_react.default.createElement(IconEditOutline162, { size: 14 }),
         title: toolTitle,
@@ -16267,6 +16591,7 @@ function makeEditRow(toolTitle) {
     }
     return toolRenderRow({
       callId: props.callId,
+      useSession: props.useSession,
       // One component serves the `edit`, `undo_edit`, and `undo_last_edit`
       // registrations. The block carries the real call name, so the badge
       // shows the right human-readable label for the exact call being rendered.
@@ -16519,6 +16844,7 @@ function WriteRow(props) {
   }
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Write file",
     icon: /* @__PURE__ */ import_react.default.createElement(IconEditOutline162, { size: 14 }),
     title: "Write",
@@ -16603,6 +16929,7 @@ function TodoRow(props) {
   }
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "To-do list",
     icon: /* @__PURE__ */ import_react.default.createElement(IconChecklistOutline142, { size: 14 }),
     title: "To-do list",
@@ -16744,6 +17071,7 @@ function AskRow(props) {
   }
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Ask user",
     icon: /* @__PURE__ */ import_react.default.createElement(IconQuestionOutline142, { size: 14 }),
     title: "Ask user",
@@ -16787,6 +17115,7 @@ function SubagentRow(props) {
   }
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Dispatch",
     icon: /* @__PURE__ */ import_react.default.createElement(IconAgentPresetOutline162, { size: 14 }),
     title,
@@ -16827,6 +17156,7 @@ function JobOutputRow(props) {
   var body = state !== "error" && output !== null && output !== "" ? /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output" }, stripAnsi(output)) : null;
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Job output",
     icon: /* @__PURE__ */ import_react.default.createElement(IconApiOutline142, null),
     title: "Job output",
@@ -16870,6 +17200,7 @@ function PackageRow(props) {
   var body = state !== "error" && output !== null && output !== "" ? /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output" }, stripAnsi(output)) : null;
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Manage package",
     icon: /* @__PURE__ */ import_react.default.createElement(IconApiOutline142, null),
     title,
@@ -16900,6 +17231,7 @@ function SendMessageRow(props) {
   var body = state !== "error" && args !== null ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: args.message })) : null;
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Message",
     icon: /* @__PURE__ */ import_react.default.createElement(IconAgentPresetOutline162, { size: 14 }),
     title: "Message",
@@ -16927,6 +17259,7 @@ function InterruptAgentRow(props) {
   var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Interrupt agent",
     icon: /* @__PURE__ */ import_react.default.createElement(IconStopFill162, { size: 14 }),
     title: "Interrupt agent",
@@ -16985,6 +17318,7 @@ function ListAgentsRow(props) {
   })) : null;
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "List agents",
     icon: /* @__PURE__ */ import_react.default.createElement(IconAgentPresetOutline162, { size: 14 }),
     title: "List agents",
@@ -17019,8 +17353,8 @@ function FailoverRow(props) {
   var setExpanded = expandedState[1];
   var text = contextText(props.content);
   var lines = text.split("\n");
-  var firstLine2 = lines.length > 0 ? lines[0] : "";
-  var match = FAILOVER_LINE_RE.exec(firstLine2);
+  var headerLine = lines.length > 0 ? lines[0] : "";
+  var match = FAILOVER_LINE_RE.exec(headerLine);
   if (match === null) {
     return GenericContextCard({
       content: props.content,
@@ -17036,7 +17370,7 @@ function FailoverRow(props) {
   var code = match[5];
   var detailStart = text.indexOf("\n\n");
   var detail = detailStart !== -1 ? text.slice(detailStart + 2) : "";
-  var detailFirstLine = detail.length > 0 ? firstLine2(detail) : "";
+  var detailFirstLine = detail.length > 0 ? firstLine(detail) : "";
   var summary = `${fromProv}/${fromModel} -> ${toProv}/${toModel}`;
   var errorSummary = code + (detailFirstLine ? " \xB7 " + detailFirstLine : "");
   var errorText = detail !== "" ? detail : void 0;
@@ -17079,6 +17413,7 @@ function SkillContentCard(props) {
   var body = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement("table", { className: "tool-render-skill-table" }, /* @__PURE__ */ import_react.default.createElement("tbody", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", null, "Name"), /* @__PURE__ */ import_react.default.createElement("td", null, props.name)), /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", null, "Resources"), /* @__PURE__ */ import_react.default.createElement("td", null, props.resourceHint)))), markdownWithReminders(props.instructions));
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Skill",
     icon: /* @__PURE__ */ import_react.default.createElement(IconChecklistOutline142, null),
     title: "Skill",
@@ -17115,6 +17450,7 @@ function GenericContextCard(props) {
   var body = text !== "" ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, markdownWithReminders(text)) : null;
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: title,
     icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
     title,
@@ -17168,6 +17504,7 @@ function SkillRow(props) {
   var skillName = args !== null ? pickString(args, ["name"]) : void 0;
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Load skill",
     icon: /* @__PURE__ */ import_react.default.createElement(IconChecklistOutline142, null),
     title: "Skill",
@@ -17257,6 +17594,7 @@ function ReadImageRow(props) {
   }
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Read image",
     icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
     title: "Read image",
@@ -17316,6 +17654,7 @@ function SeeRow(props) {
   }
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "See image",
     icon: /* @__PURE__ */ import_react.default.createElement(IconQuestionOutline142, { size: 14 }),
     title: "See",
@@ -17366,6 +17705,7 @@ function WebSearchRow(props) {
   var body = state !== "error" && output !== null && output !== "" ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: output })) : null;
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Web search",
     icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
     title: "Web search",
@@ -17401,6 +17741,7 @@ function WebFetchRow(props) {
   }
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Web fetch",
     icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
     title: "Web fetch",
@@ -17528,6 +17869,7 @@ function CompactionRow(props) {
     var fallbackBody = fallbackText !== "" ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: fallbackText })) : null;
     return toolRenderRow({
       callId: props.callId,
+      useSession: props.useSession,
       toolName: "Compaction",
       icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
       title: "Compaction",
@@ -17546,6 +17888,7 @@ function CompactionRow(props) {
   var pretty = view;
   return toolRenderRow({
     callId: props.callId,
+    useSession: props.useSession,
     toolName: "Compaction",
     icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
     title: "Compaction",
@@ -17561,6 +17904,9 @@ function CompactionRow(props) {
 var inject = ["slots"];
 var name = PLUGIN_NAME;
 function apply(ctx) {
+  approvalSteerTo = buildApprovalSteer(
+    typeof ctx.get === "function" ? ctx.get("sessions") : void 0
+  );
   ctx.slots.inject("context.injection.view", function* () {
     yield ctx.slots.register(
       {

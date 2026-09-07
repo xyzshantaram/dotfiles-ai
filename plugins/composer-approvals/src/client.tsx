@@ -4,9 +4,10 @@
 // trigger whenever the session has at least one pending approval. Clicking
 // it opens a modal listing every pending approval; rows that carry a callId
 // get a jump action that scrolls the conversation to that tool call's card
-// (found through tool-render's data-call-id attribute), and rows without a
-// callId say so instead. The indicator disappears once every pending is
-// answered.
+// (found through tool-render's data-call-id attribute), which is the single
+// answer surface for those approvals; rows WITHOUT a callId answer inline
+// here with approve/reject buttons (reject arms first). The indicator
+// disappears once every pending is answered.
 import * as react from "react";
 import * as runtime from "@deepseek-ai/dsh-client-runtime/client";
 import { injectStyle } from "../../shared/client-util";
@@ -18,11 +19,13 @@ var PLUGIN_NAME = "composer-approvals";
 
 var EMPTY: ReadonlyArray<any> = [];
 
+/** How long an armed reject stays confirmable before it resets itself. */
+var REJECT_ARM_RESET_MS = 4000;
+
 /**
  * Read one root Tool lifecycle through the conversation snapshot index.
- * Mirrors approval-comment's helper of the same name: a callId may point at
- * a subcall, so resolve to the root before asking it for a label. Always
- * returns `undefined` for "not present".
+ * A callId may point at a subcall, so resolve to the root before asking it
+ * for a label. Always returns `undefined` for "not present".
  */
 function rootToolCall(snapshot: any, callId: string) {
   var node = snapshot.chat && snapshot.chat.nodes.get(conversationContextKey("tool-call", callId));
@@ -33,8 +36,8 @@ function rootToolCall(snapshot: any, callId: string) {
 }
 
 /**
- * Extract the shell command from an approval's paired running call, the
- * same shape approval-comment reads. Never throws.
+ * Extract the shell command from an approval's paired running call.
+ * Never throws.
  */
 function commandOf(call: any): string | undefined {
   if (call === undefined) return undefined;
@@ -70,17 +73,23 @@ interface ApprovalRow {
  * across sessions. The selector returns a STABLE array: it is rebuilt only
  * when the key+callId signature changes, which keeps the
  * useSyncExternalStoreWithSelector-based useSession from looping.
+ *
+ * The selector also refreshes a key→pending map of the live objects. The
+ * rows never carry them (session-owned), but a click needs the current
+ * pending's `respond`, so the map is the click-time lookup.
  */
 function makeSelector() {
   var lastSig = "\u0000";
   var lastRows: ApprovalRow[] = EMPTY as ApprovalRow[];
-  return function selectApprovals(snapshot: any): ApprovalRow[] {
+  var pendingByKey = new Map<string, any>();
+  var selectApprovals = function (snapshot: any): ApprovalRow[] {
     var pending =
       snapshot !== null && snapshot !== undefined && Array.isArray(snapshot.pending)
         ? snapshot.pending
         : EMPTY;
     var parts: string[] = [];
     var rows: ApprovalRow[] = [];
+    var live = new Set<string>();
     for (var i = 0; i < pending.length; i++) {
       var item = pending[i];
       if (item === null || item === undefined || item.kind !== "approval") continue;
@@ -91,21 +100,33 @@ function makeSelector() {
         label = commandOf(rootToolCall(snapshot, callId)) ?? null;
       }
       if (label === null) label = firstLineOf(payload.reason);
+      var key = String(item.key);
       // The label rides the signature too: argsRaw can stream in after the
       // approval frame, so a key+callId-only memo would freeze a stale label.
-      parts.push(String(item.key) + "\u0000" + (callId === null ? "" : callId) + "\u0000" + label);
+      parts.push(key + "\u0000" + (callId === null ? "" : callId) + "\u0000" + label);
+      live.add(key);
+      pendingByKey.set(key, item);
       rows.push({
-        key: String(item.key),
+        key: key,
         callId: callId,
         approvalId: payload.approvalId,
         label: label === null ? "Approval" : label,
       });
+    }
+    for (var key of Array.from(pendingByKey.keys())) {
+      if (!live.has(key)) pendingByKey.delete(key);
     }
     var sig = parts.join("\u0001");
     if (sig === lastSig) return lastRows;
     lastSig = sig;
     lastRows = rows;
     return rows;
+  };
+  return {
+    selectApprovals: selectApprovals,
+    pendingOf: function (key: string): any {
+      return pendingByKey.get(key);
+    },
   };
 }
 
@@ -114,10 +135,147 @@ function cardOf(callId: string): HTMLElement | null {
   return document.querySelector('.tool-render-card[data-call-id="' + CSS.escape(callId) + '"]');
 }
 
+/**
+ * One modal row. With a callId the only action is the jump to the card:
+ * the card's answer bar is the single answer surface for callId approvals.
+ * WITHOUT a callId the row answers inline -- approve is one click, reject
+ * is arm-then-confirm with a ~4s auto-reset. There is deliberately NO
+ * comment field here (settled default): commenting lives on the card's
+ * answer bar, and no-callId approvals answer without one.
+ *
+ * Props: { row: ApprovalRow, jumpable: boolean, onJump: (row) => void,
+ * pendingOf: (key) => live pending or undefined }.
+ */
+function ComposerApprovalsRow(props: any) {
+  var row = props.row;
+  var armedState = react.useState(false);
+  var armed = armedState[0];
+  var setArmed = armedState[1];
+  var answeredState = react.useState(false);
+  var answered = answeredState[0];
+  var setAnswered = answeredState[1];
+  var armTimer = react.useRef(0);
+  react.useEffect(function () {
+    return function () {
+      if (armTimer.current !== 0) window.clearTimeout(armTimer.current);
+    };
+  }, []);
+
+  var answer = function (outcome: string) {
+    if (answered) return;
+    var pending = props.pendingOf(row.key);
+    if (pending === undefined || pending === null) {
+      console.warn("[composer-approvals] answer skipped, pending is gone", row.key);
+      return;
+    }
+    console.debug("[composer-approvals] answer:", outcome, row.key);
+    setAnswered(true);
+    try {
+      Promise.resolve(
+        pending.respond({
+          ok: true,
+          value: {
+            sessionId: pending.sessionId,
+            approvalId: pending.payload.approvalId,
+            outcome: outcome,
+          },
+        }),
+      )
+        .then(function (receipt: any) {
+          if (receipt === undefined || receipt === null || !receipt.accepted) {
+            throw new Error(
+              "approval response rejected: " +
+                (receipt === undefined || receipt === null || receipt.reason === undefined
+                  ? "unknown"
+                  : receipt.reason),
+            );
+          }
+        })
+        .catch(function (error: unknown) {
+          console.warn("[composer-approvals] answer failed", row.key, outcome, error);
+          setAnswered(false);
+        });
+    } catch (error) {
+      // respond throws synchronously once the wait was settled elsewhere.
+      console.warn("[composer-approvals] answer failed", row.key, outcome, error);
+      setAnswered(false);
+    }
+  };
+
+  var clearArm = function () {
+    if (armTimer.current !== 0) {
+      window.clearTimeout(armTimer.current);
+      armTimer.current = 0;
+    }
+  };
+  var onReject = function () {
+    if (answered) return;
+    if (armed) {
+      clearArm();
+      setArmed(false);
+      answer("rejected");
+      return;
+    }
+    setArmed(true);
+    clearArm();
+    armTimer.current = window.setTimeout(function () {
+      armTimer.current = 0;
+      setArmed(false);
+    }, REJECT_ARM_RESET_MS);
+  };
+
+  if (row.callId !== null) {
+    return (
+      <li className="composer-approvals-row">
+        <span className="composer-approvals-label" title={row.label}>
+          {row.label}
+        </span>
+        <button
+          type="button"
+          className="composer-approvals-jump"
+          disabled={!props.jumpable}
+          onClick={function () {
+            props.onJump(row);
+          }}
+        >
+          Jump to call
+        </button>
+      </li>
+    );
+  }
+  return (
+    <li className="composer-approvals-row">
+      <span className="composer-approvals-label" title={row.label}>
+        {row.label}
+      </span>
+      <span className="composer-approvals-no-call">no tool call</span>
+      <button
+        type="button"
+        className="composer-approvals-approve"
+        disabled={answered}
+        onClick={function () {
+          answer("approved");
+        }}
+      >
+        ✓ Approve
+      </button>
+      <button
+        type="button"
+        className="composer-approvals-reject"
+        data-armed={armed || undefined}
+        disabled={answered}
+        onClick={onReject}
+      >
+        {armed ? "? Confirm reject" : "✗ Reject"}
+      </button>
+    </li>
+  );
+}
+
 function makeIndicator() {
   return function Indicator(props: any) {
-    var selectApprovals = react.useMemo(makeSelector, []);
-    var rows = props.useSession(selectApprovals);
+    var selectorTools = react.useMemo(makeSelector, []);
+    var rows = props.useSession(selectorTools.selectApprovals);
     var openState = react.useState(false);
     var open = openState[0];
     var setOpen = openState[1];
@@ -165,25 +323,13 @@ function makeIndicator() {
     var list = rows.map(function (row) {
       var jumpable = row.callId !== null && !missing.has(row.key);
       return (
-        <li key={row.key} className="composer-approvals-row">
-          <span className="composer-approvals-label" title={row.label}>
-            {row.label}
-          </span>
-          {row.callId !== null ? (
-            <button
-              type="button"
-              className="composer-approvals-jump"
-              disabled={!jumpable}
-              onClick={function () {
-                jump(row);
-              }}
-            >
-              Jump to call
-            </button>
-          ) : (
-            <span className="composer-approvals-no-call">no tool call</span>
-          )}
-        </li>
+        <ComposerApprovalsRow
+          key={row.key}
+          row={row}
+          jumpable={jumpable}
+          onJump={jump}
+          pendingOf={selectorTools.pendingOf}
+        />
       );
     });
 

@@ -110,3 +110,39 @@
   font-size: 12px;
   color: var(--dsw-alias-label-tertiary);
 }
+/* Inline answer buttons for a no-callId row: the card answer bar is the
+   single answer surface for callId approvals, so those rows keep only
+   their jump button. Reject arms first; the armed fill marks the confirm
+   step. */
+.composer-approvals-approve,
+.composer-approvals-reject {
+  flex: none;
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: 999px;
+  background: 0 0;
+  font-size: 12px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+.composer-approvals-approve {
+  color: var(--dsw-alias-state-business-primary, #2563eb);
+  border-color: var(--dsw-alias-state-business-primary, #2563eb);
+}
+.composer-approvals-reject {
+  color: var(--dsw-alias-state-danger-primary, #dc2626);
+  border-color: var(--dsw-alias-state-danger-primary, #dc2626);
+}
+.composer-approvals-approve:hover:enabled,
+.composer-approvals-reject:hover:enabled {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+.composer-approvals-approve:disabled,
+.composer-approvals-reject:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.composer-approvals-reject[data-armed] {
+  background: var(--dsw-alias-state-danger-primary, #dc2626);
+  border-color: var(--dsw-alias-state-danger-primary, #dc2626);
+  color: #fff;
+}
