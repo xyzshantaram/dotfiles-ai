@@ -42,7 +42,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#c09c8b2376157c6eba75c55f735afd4e1f133312}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#f452c31223d9a6826b8539f4db5a0448b8309b8d}"
 
 # Git-hosted specs whose build scripts pnpm must be allowed to run. pnpm 10+
 # blocks lifecycle scripts (prepare/postinstall) unless the exact resolved
@@ -223,6 +223,19 @@ step_write_web_patch() {
   name: '@deepseek-ai/dsh-spill-local'
   config:
     root: /tmp/dsh/spill
+
+# Per-message Like/Dislike feedback, dropped 2026-09-05. Both halves of one
+# feature: message-feedback is the host row (storage sidecar + the
+# messageFeedback Remote) that dsh-web-app inserts, ui-message-feedback is the
+# client row (the Like/Dislike pair in the assistant action strip). A later
+# patch layer overrides an earlier row by id, so these disables hold across
+# dsh reinstalls - unlike an in-place patch of dsh-web-app's own file, which a
+# reinstall silently reverts. command-feedback (the /feedback slash command,
+# dsh-base) is a different feature and stays.
+- id: message-feedback
+  disabled: true
+- id: ui-message-feedback
+  disabled: true
 
 PATCH
 }
@@ -1303,6 +1316,18 @@ M18PY
 # ── step table ────────────────────────────────────────────────────────────────
 # Each entry: "Human title|function_name". Numbers derive from the array, so
 # adding, removing, or reordering steps needs NO manual renumbering.
+
+step_check_preset_drift() {
+	# #122 (aidos board): the aidos preset is a hand-maintained mirror of
+	# standard's tool rows. This step compares the PATCHED standard preset
+	# with the SYNCED aidos preset and fails on any divergence that
+	# guards/preset-drift.json does not name — and on any allowlisted
+	# divergence that no longer diverges, so the list cannot rot.
+	# A red run is the check working: fix the aidos preset (drift) or
+	# update the allowlist (deliberate), never absorb silently.
+	node "$HERE/scripts/check-preset-drift.mjs"
+}
+
 STEPS=(
 	"Install repo dev deps (esbuild for the build step)|step_install_deps"
 	"Build the personal plugins|step_build_plugins"
@@ -1323,6 +1348,7 @@ STEPS=(
 	"Relocate the attach button to the send/steer edge|step_relocate_attach_button"
 	"Stop the web-tools search-button background poll|step_stop_web_tools_search_poll"
 	"Register the aidos agent preset|step_register_aidos_preset"
+	"Check preset drift (standard vs aidos)|step_check_preset_drift"
 	"Verify builtin tool rows are disabled|step_verify_preset_tool_disabled"
 	"Regenerate settings.yaml from the repo template|step_set_defaults"
 )

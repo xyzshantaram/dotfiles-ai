@@ -1,0 +1,58 @@
+[
+  {
+    "row": "./aidos-loader.js",
+    "reason": "aidos-only loader row: sync.sh rewrites it to the absolute-path loader for the aidos plugin"
+  },
+  {
+    "row": "agent-instructions",
+    "reason": "aidos composes its own instructions (board prompt sections injected by the plugin); the standard row would fight them"
+  },
+  {
+    "row": "compaction",
+    "reason": "aidos relies on harness-level compaction, not preset compaction rows"
+  },
+  {
+    "row": "compaction/command-compact",
+    "reason": "child of the compaction group aidos does not mount"
+  },
+  {
+    "row": "compaction/compaction-basic",
+    "reason": "child of the compaction group aidos does not mount"
+  },
+  {
+    "row": "compaction/tool-result-pruner",
+    "reason": "child of the compaction group aidos does not mount"
+  },
+  {
+    "row": "delegation/tool-subagent-claude-code",
+    "reason": "standard-only one-shot provider row; aidos ships exactly one subagent surface (spawn) plus fork"
+  },
+  {
+    "row": "delegation/tool-subagent-codex",
+    "reason": "standard-only one-shot provider row; aidos ships exactly one subagent surface (spawn) plus fork"
+  },
+  {
+    "row": "persona",
+    "reason": "aidos ships its own system prompt persona; the standard persona row is not mounted"
+  },
+  {
+    "row": "planning",
+    "reason": "aidos replaces the planner with its own board/plan tools"
+  },
+  {
+    "row": "planning/plan-mode",
+    "reason": "child of the planning group aidos replaces with its own board/plan tools"
+  },
+  {
+    "row": "tool-goal",
+    "reason": "aidos tracks work in tickets, not harness goals; the row is deliberately absent"
+  },
+  {
+    "row": "tool-presentation",
+    "reason": "aidos's client renders its own tool rows; the standard presentation pin does not apply"
+  },
+  {
+    "row": "tool-pwsh",
+    "reason": "linux-only workstation; the powershell tool is not shipped in aidos"
+  }
+]
