@@ -46,6 +46,39 @@ interface CheckResult {
   output: string;
 }
 
+/**
+ * `request()` (and therefore fetchJson/postJson) resolves to an ENVELOPE,
+ * `{ data, error }`, never the raw JSON body. Treating the envelope as the
+ * body is what crashed this panel on first mount: `status.runningLabels` was
+ * undefined, because `status` was the envelope. One helper, so the mistake
+ * cannot be made once per call site.
+ */
+function unwrap<T>(result: unknown): T | null {
+  const envelope = result as { data?: unknown; error?: unknown } | null;
+  if (envelope === null || typeof envelope !== "object") return null;
+  if (envelope.error) {
+    console.error("[restart-pause] request failed:", envelope.error);
+    return null;
+  }
+  return (envelope.data ?? null) as T | null;
+}
+
+/**
+ * Accept a status only if it carries the fields the panel renders. A response
+ * that half-arrives should show "unavailable", never crash a settings page it
+ * shares with every other plugin.
+ */
+function isStatus(value: unknown): value is Status {
+  const s = value as Partial<Status> | null;
+  return (
+    s !== null &&
+    typeof s === "object" &&
+    typeof s.running === "number" &&
+    Array.isArray(s.runningLabels) &&
+    Array.isArray(s.checks)
+  );
+}
+
 interface Status {
   startedAt: number;
   running: number;
@@ -83,8 +116,9 @@ function makePanel() {
 
     const refresh = react.useCallback(() => {
       fetchJson("/restart-pause/status").then((result: unknown) => {
-        const r = result as Status & { ok?: boolean };
-        if (r && r.ok !== false) setStatus(r);
+        const r = unwrap<Status>(result);
+        if (isStatus(r)) setStatus(r);
+        else console.error("[restart-pause] status response was not usable:", r);
       });
     }, []);
 
@@ -130,8 +164,8 @@ function makePanel() {
       setMessage(null);
       postJson("/restart-pause/checks", {})
         .then((result: unknown) => {
-          const r = result as { results?: CheckResult[] };
-          setChecks(r.results ?? []);
+          const r = unwrap<{ results?: CheckResult[] }>(result);
+          setChecks(Array.isArray(r?.results) ? r.results : []);
         })
         .finally(() => setBusy(false));
     }, []);
@@ -152,13 +186,14 @@ function makePanel() {
         writeFlash(window.localStorage, { requestedAt: Date.now(), armed: false });
         postJson("/restart-pause/restart", { force })
           .then((result: unknown) => {
-            const r = result as {
-              ok?: boolean;
-              reason?: string;
-              results?: CheckResult[];
-              stillRunning?: string[];
-              waitedMs?: number;
-            };
+            const r =
+              unwrap<{
+                ok?: boolean;
+                reason?: string;
+                results?: CheckResult[];
+                stillRunning?: string[];
+                waitedMs?: number;
+              }>(result) ?? {};
             if (r.ok) {
               setMessage("Restart requested. Waiting for dsh to go down...");
               watch(status.healthPath, status.settleMs);
@@ -225,7 +260,7 @@ function makePanel() {
               {status.running} session{status.running === 1 ? "" : "s"} still working:
             </div>
             <ul className="rpSessions">
-              {status.runningLabels.map((label) => (
+              {(status.runningLabels ?? []).map((label) => (
                 <li key={label}>{label}</li>
               ))}
             </ul>
@@ -297,8 +332,8 @@ function apply(ctx) {
   // an armed restart that has not fired yet says nothing.
   fetchJson("/restart-pause/status")
     .then(function (result: unknown) {
-      const status = result as { startedAt?: number };
-      if (typeof status.startedAt !== "number") return;
+      const status = unwrap<{ startedAt?: number }>(result);
+      if (status === null || typeof status.startedAt !== "number") return;
       const outcome = takeFlash(window.localStorage, status.startedAt, Date.now());
       if (outcome.kind !== "restarted") return;
       toast(outcome.armed ? "dsh restarted (armed restart fired)" : "dsh restarted", "success");

@@ -256,6 +256,19 @@ var STYLE_TAG_ID = "restart-pause-styles";
 var PROBE_INTERVAL_MS = 1e3;
 var PROBE_TIMEOUT_MS = 4e3;
 var PROBE_WINDOW_MS = 18e4;
+function unwrap(result) {
+  const envelope = result;
+  if (envelope === null || typeof envelope !== "object") return null;
+  if (envelope.error) {
+    console.error("[restart-pause] request failed:", envelope.error);
+    return null;
+  }
+  return envelope.data ?? null;
+}
+function isStatus(value) {
+  const s = value;
+  return s !== null && typeof s === "object" && typeof s.running === "number" && Array.isArray(s.runningLabels) && Array.isArray(s.checks);
+}
 async function probeOnce(path) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
@@ -278,8 +291,9 @@ function makePanel() {
     const probing = import_react2.default.useRef(false);
     const refresh = import_react2.default.useCallback(() => {
       fetchJson("/restart-pause/status").then((result) => {
-        const r = result;
-        if (r && r.ok !== false) setStatus(r);
+        const r = unwrap(result);
+        if (isStatus(r)) setStatus(r);
+        else console.error("[restart-pause] status response was not usable:", r);
       });
     }, []);
     import_react2.default.useEffect(() => {
@@ -316,8 +330,8 @@ function makePanel() {
       setBusy(true);
       setMessage(null);
       postJson("/restart-pause/checks", {}).then((result) => {
-        const r = result;
-        setChecks(r.results ?? []);
+        const r = unwrap(result);
+        setChecks(Array.isArray(r?.results) ? r.results : []);
       }).finally(() => setBusy(false));
     }, []);
     const restart = import_react2.default.useCallback(
@@ -330,7 +344,7 @@ function makePanel() {
         setVerdict(null);
         writeFlash(window.localStorage, { requestedAt: Date.now(), armed: false });
         postJson("/restart-pause/restart", { force }).then((result) => {
-          const r = result;
+          const r = unwrap(result) ?? {};
           if (r.ok) {
             setMessage("Restart requested. Waiting for dsh to go down...");
             watch(status.healthPath, status.settleMs);
@@ -367,7 +381,7 @@ function makePanel() {
       return /* @__PURE__ */ import_react2.default.createElement(SettingsSection, { title: "Debug" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "rpNote" }, "Loading..."));
     }
     const idle = status.running === 0;
-    return /* @__PURE__ */ import_react2.default.createElement(SettingsSection, { title: "Debug", onRefresh: refresh }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "rpNote" }, "Restart dsh to apply composition or plugin changes. Running turns are allowed to finish first; nothing is cancelled."), /* @__PURE__ */ import_react2.default.createElement("div", { className: "rpNote" }, /* @__PURE__ */ import_react2.default.createElement("code", { className: "rpCheckCmd" }, status.command)), idle ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "rpNote" }, "No sessions are working.") : /* @__PURE__ */ import_react2.default.createElement("div", null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "rpNote" }, status.running, " session", status.running === 1 ? "" : "s", " still working:"), /* @__PURE__ */ import_react2.default.createElement("ul", { className: "rpSessions" }, status.runningLabels.map((label) => /* @__PURE__ */ import_react2.default.createElement("li", { key: label }, label)))), /* @__PURE__ */ import_react2.default.createElement("div", { className: "rpRow" }, /* @__PURE__ */ import_react2.default.createElement("button", { disabled: busy, onClick: () => restart(false) }, "Restart dsh"), /* @__PURE__ */ import_react2.default.createElement("button", { disabled: busy, onClick: () => restart(true) }, "Restart anyway"), status.checks.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("button", { disabled: busy, onClick: runChecks }, "Run checks") : null, /* @__PURE__ */ import_react2.default.createElement("label", null, /* @__PURE__ */ import_react2.default.createElement("input", { type: "checkbox", checked: status.armed, onChange: toggleArm }), " Restart when idle and checks pass")), status.armed ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "rpNote" }, "Armed. dsh will restart the next time nothing is working and every check passes.") : null, message === null ? null : /* @__PURE__ */ import_react2.default.createElement("div", { className: "rpVerdict" }, message), verdict === null ? null : /* @__PURE__ */ import_react2.default.createElement("div", { className: "rpVerdict" }, verdict), checks === null ? null : checks.map((check) => /* @__PURE__ */ import_react2.default.createElement("div", { className: "rpCheck", key: check.command }, /* @__PURE__ */ import_react2.default.createElement("span", { className: check.ok ? "rpCheckMark" : "rpCheckMark rpFail" }, check.ok ? "ok" : "!!"), /* @__PURE__ */ import_react2.default.createElement("span", { className: "rpCheckBody" }, /* @__PURE__ */ import_react2.default.createElement("span", { className: "rpCheckCmd" }, check.command), /* @__PURE__ */ import_react2.default.createElement("div", { className: "rpCheckOut" }, check.output)))), status.checks.length === 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "rpNote" }, "No preflight checks configured. Add commands to this plugin's `checks` list to block a restart while, for example, a worktree is dirty.") : null);
+    return /* @__PURE__ */ import_react2.default.createElement(SettingsSection, { title: "Debug", onRefresh: refresh }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "rpNote" }, "Restart dsh to apply composition or plugin changes. Running turns are allowed to finish first; nothing is cancelled."), /* @__PURE__ */ import_react2.default.createElement("div", { className: "rpNote" }, /* @__PURE__ */ import_react2.default.createElement("code", { className: "rpCheckCmd" }, status.command)), idle ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "rpNote" }, "No sessions are working.") : /* @__PURE__ */ import_react2.default.createElement("div", null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "rpNote" }, status.running, " session", status.running === 1 ? "" : "s", " still working:"), /* @__PURE__ */ import_react2.default.createElement("ul", { className: "rpSessions" }, (status.runningLabels ?? []).map((label) => /* @__PURE__ */ import_react2.default.createElement("li", { key: label }, label)))), /* @__PURE__ */ import_react2.default.createElement("div", { className: "rpRow" }, /* @__PURE__ */ import_react2.default.createElement("button", { disabled: busy, onClick: () => restart(false) }, "Restart dsh"), /* @__PURE__ */ import_react2.default.createElement("button", { disabled: busy, onClick: () => restart(true) }, "Restart anyway"), status.checks.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("button", { disabled: busy, onClick: runChecks }, "Run checks") : null, /* @__PURE__ */ import_react2.default.createElement("label", null, /* @__PURE__ */ import_react2.default.createElement("input", { type: "checkbox", checked: status.armed, onChange: toggleArm }), " Restart when idle and checks pass")), status.armed ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "rpNote" }, "Armed. dsh will restart the next time nothing is working and every check passes.") : null, message === null ? null : /* @__PURE__ */ import_react2.default.createElement("div", { className: "rpVerdict" }, message), verdict === null ? null : /* @__PURE__ */ import_react2.default.createElement("div", { className: "rpVerdict" }, verdict), checks === null ? null : checks.map((check) => /* @__PURE__ */ import_react2.default.createElement("div", { className: "rpCheck", key: check.command }, /* @__PURE__ */ import_react2.default.createElement("span", { className: check.ok ? "rpCheckMark" : "rpCheckMark rpFail" }, check.ok ? "ok" : "!!"), /* @__PURE__ */ import_react2.default.createElement("span", { className: "rpCheckBody" }, /* @__PURE__ */ import_react2.default.createElement("span", { className: "rpCheckCmd" }, check.command), /* @__PURE__ */ import_react2.default.createElement("div", { className: "rpCheckOut" }, check.output)))), status.checks.length === 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "rpNote" }, "No preflight checks configured. Add commands to this plugin's `checks` list to block a restart while, for example, a worktree is dirty.") : null);
   };
 }
 var name = PLUGIN_NAME;
@@ -377,8 +391,8 @@ function apply(ctx) {
     injectStyle(PLUGIN_NAME, STYLE_TAG_ID, mergeCss(settings_default, client_default));
   }, "restart-pause: styles");
   fetchJson("/restart-pause/status").then(function(result) {
-    const status = result;
-    if (typeof status.startedAt !== "number") return;
+    const status = unwrap(result);
+    if (status === null || typeof status.startedAt !== "number") return;
     const outcome = takeFlash(window.localStorage, status.startedAt, Date.now());
     if (outcome.kind !== "restarted") return;
     toast(outcome.armed ? "dsh restarted (armed restart fired)" : "dsh restarted", "success");
