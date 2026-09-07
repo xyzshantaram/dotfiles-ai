@@ -42,7 +42,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#f452c31223d9a6826b8539f4db5a0448b8309b8d}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#6655f648acbc178632174d3b1a2171ccad766809}"
 
 # Git-hosted specs whose build scripts pnpm must be allowed to run. pnpm 10+
 # blocks lifecycle scripts (prepare/postinstall) unless the exact resolved
@@ -1328,6 +1328,18 @@ step_check_preset_drift() {
 	node "$HERE/scripts/check-preset-drift.mjs"
 }
 
+step_check_chain_disjointness() {
+	# #50 (aidos board): the partner review chain in home/settings.yaml is
+	# the boundary the aidos review gate trusts (a review_pass counts only
+	# when its provenance stamp shows a partner-chain run). A cheap rung
+	# edited into that chain weakens the gate silently. This step asserts
+	# the invariants: partner is disjoint from the orchestrator and
+	# subagent chains and carries only owner-approved rungs.
+	# A red run is the check working: fix the chain (drift) or record an
+	# explicit owner decision in the script's ALLOWED_PARTNER_RUNGS.
+	node "$HERE/scripts/check-chain-disjointness.mjs"
+}
+
 STEPS=(
 	"Install repo dev deps (esbuild for the build step)|step_install_deps"
 	"Build the personal plugins|step_build_plugins"
@@ -1349,6 +1361,7 @@ STEPS=(
 	"Stop the web-tools search-button background poll|step_stop_web_tools_search_poll"
 	"Register the aidos agent preset|step_register_aidos_preset"
 	"Check preset drift (standard vs aidos)|step_check_preset_drift"
+	"Check partner-chain invariants (disjoint, owner-approved rungs)|step_check_chain_disjointness"
 	"Verify builtin tool rows are disabled|step_verify_preset_tool_disabled"
 	"Regenerate settings.yaml from the repo template|step_set_defaults"
 )
