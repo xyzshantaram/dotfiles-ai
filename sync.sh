@@ -216,7 +216,7 @@ step_write_web_patch() {
       # which is a separate subsystem (DSH file policy, not this plugin).
       #
       # Why not a single "/": checkFilePathAgainst matches with
-      # `real === root || real.startsWith(root + sep)`, so a root of "/"
+      # "real === root || real.startsWith(root + sep)", so a root of "/"
       # becomes the prefix "//" and matches nothing but "/" itself (verified
       # 2026-09-07: roots=["/"] rejects /etc/hostname as outside-roots).
       # Enumerating the top-level directories is the config-only equivalent;
