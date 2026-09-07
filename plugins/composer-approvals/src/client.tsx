@@ -11,6 +11,7 @@
 import * as react from "react";
 import * as runtime from "@deepseek-ai/dsh-client-runtime/client";
 import { injectStyle } from "../../shared/client-util";
+import { PluginModal } from "../../shared/plugin-modal";
 import localCss from "./client.module.css";
 
 var conversationContextKey = runtime.conversationContextKey;
@@ -288,21 +289,6 @@ function makeIndicator() {
     var missing = missingState[0];
     var setMissing = missingState[1];
 
-    // Escape closes the modal, matching the mask click.
-    react.useEffect(
-      function () {
-        if (!open) return;
-        var onKey = function (event: KeyboardEvent) {
-          if (event.key === "Escape") setOpen(false);
-        };
-        window.addEventListener("keydown", onKey);
-        return function () {
-          window.removeEventListener("keydown", onKey);
-        };
-      },
-      [open],
-    );
-
     if (rows.length === 0) return null;
 
     var jump = function (row: ApprovalRow) {
@@ -357,24 +343,15 @@ function makeIndicator() {
           ) : null}
         </button>
         {open ? (
-          <div
-            className="composer-approvals-overlay"
-            onClick={function () {
+          <PluginModal
+            title="Pending approvals"
+            onClose={function () {
               setOpen(false);
             }}
+            size="compact"
           >
-            <div
-              className="composer-approvals-panel"
-              role="dialog"
-              aria-label="Pending approvals"
-              onClick={function (event) {
-                event.stopPropagation();
-              }}
-            >
-              <div className="composer-approvals-title">Pending approvals</div>
-              <ul className="composer-approvals-list">{list}</ul>
-            </div>
-          </div>
+            <ul className="composer-approvals-list">{list}</ul>
+          </PluginModal>
         ) : null}
       </>
     );
