@@ -243,15 +243,14 @@ describe("failover-status", () => {
     };
   }
 
-  function mockReq(method: string) {
-    return { method };
+  function mockReq(method: string, url = "/") {
+    return { method, url };
   }
 
   function mockRes() {
     let statusCode = 0;
     let jsonBody: unknown = null;
     return {
-      statusCode: 0,
       setHeader(_key: string, _value: string) {
         // no-op for test
       },
@@ -328,7 +327,7 @@ describe("failover-status", () => {
     expect(body.error).toContain("not allowed");
   });
 
-  it("after two recorded events for two sessions the response carries the later write with its rung and total intact", async () => {
+  it("two sessions' events stay isolated: the session param selects its own event, and a bare request gets null even with events present", async () => {
     const profile = {
       active: "work",
       work: {
@@ -343,8 +342,6 @@ describe("failover-status", () => {
       personal: { orchestrator: { routes: [] }, subagent: { routes: [] } },
     };
     const ctx = mockCtx(profile) as any;
-    const req = mockReq("GET") as any;
-    const res = mockRes() as any;
 
     recordFailoverEvent(
       "session-1",
@@ -364,19 +361,41 @@ describe("failover-status", () => {
     );
 
     const handler = makeFailoverStatusHandler(ctx);
-    await handler(req, res);
 
-    expect(res.statusCode).toBe(200);
-    const body = res.getBody();
-    expect(body.ok).toBe(true);
-    expect(body.lastEvent).toEqual({
+    // The param selects that session's event even though session-2 wrote later.
+    const res1 = mockRes() as any;
+    await handler(mockReq("GET", "/?session=session-1") as any, res1);
+    expect(res1.statusCode).toBe(200);
+    expect((res1.getBody() as any).lastEvent).toEqual({
+      from: { provider: "p1", model: "m1" },
+      to: { provider: "p2", model: "m2" },
+      code: "RATE_LIMIT",
+      time: expect.any(Number),
+      rung: 1,
+      total: 2,
+      tried: [],
+    });
+
+    const res2 = mockRes() as any;
+    await handler(mockReq("GET", "/?session=session-2") as any, res2);
+    expect(res2.statusCode).toBe(200);
+    expect((res2.getBody() as any).lastEvent).toEqual({
       from: { provider: "p1", model: "m1" },
       to: { provider: "p2", model: "m2" },
       code: "AUTH",
       time: expect.any(Number),
       rung: 2,
       total: 2,
+      tried: [],
     });
+
+    // A bare request returns null even with events present: the previous
+    // cross-session "newest event" scan painted every badge with whichever
+    // session failed over most recently.
+    const resBare = mockRes() as any;
+    await handler(mockReq("GET") as any, resBare);
+    expect(resBare.statusCode).toBe(200);
+    expect((resBare.getBody() as any).lastEvent).toBe(null);
   });
 
   it("rung and total pass through untouched from record to response", async () => {
@@ -395,7 +414,7 @@ describe("failover-status", () => {
       personal: { orchestrator: { routes: [] }, subagent: { routes: [] } },
     };
     const ctx = mockCtx(profile) as any;
-    const req = mockReq("GET") as any;
+    const req = mockReq("GET", "/?session=session-test") as any;
     const res = mockRes() as any;
 
     recordFailoverEvent(
@@ -434,5 +453,79 @@ describe("failover-status", () => {
     expect(body.ok).toBe(true);
     expect(body.headLevel).toBe(null);
     expect(body.activeChain).toEqual([]);
+  });
+
+  it("tried entries pass through from record to response untouched", async () => {
+    const profile = {
+      active: "work",
+      work: {
+        orchestrator: {
+          routes: [
+            { provider: "p1", model: "m1" },
+            { provider: "p2", model: "m2" },
+          ],
+        },
+        subagent: { routes: [] },
+      },
+      personal: { orchestrator: { routes: [] }, subagent: { routes: [] } },
+    };
+    const ctx = mockCtx(profile) as any;
+    const req = mockReq("GET", "/?session=session-tried") as any;
+    const res = mockRes() as any;
+
+    const tried = [
+      { provider: "p1", model: "m1", code: "RATE_LIMIT" },
+      { provider: "p2", model: "m2", code: "AUTH" },
+    ];
+    recordFailoverEvent(
+      "session-tried",
+      { provider: "p1", model: "m1" },
+      { provider: "p2", model: "m2" },
+      "SERVER",
+      2,
+      2,
+      tried,
+    );
+
+    const handler = makeFailoverStatusHandler(ctx);
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    const body = res.getBody();
+    expect(body.ok).toBe(true);
+    expect(body.lastEvent.tried).toEqual(tried);
+  });
+
+  it("omitted seventh arg responds with empty tried list", async () => {
+    const profile = {
+      active: "work",
+      work: {
+        orchestrator: {
+          routes: [{ provider: "p1", model: "m1" }],
+        },
+        subagent: { routes: [] },
+      },
+      personal: { orchestrator: { routes: [] }, subagent: { routes: [] } },
+    };
+    const ctx = mockCtx(profile) as any;
+    const req = mockReq("GET", "/?session=session-no-tried") as any;
+    const res = mockRes() as any;
+
+    recordFailoverEvent(
+      "session-no-tried",
+      { provider: "p1", model: "m1" },
+      { provider: "p2", model: "m2" },
+      "UNKNOWN",
+      1,
+      1,
+    );
+
+    const handler = makeFailoverStatusHandler(ctx);
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    const body = res.getBody();
+    expect(body.ok).toBe(true);
+    expect(body.lastEvent.tried).toEqual([]);
   });
 });
