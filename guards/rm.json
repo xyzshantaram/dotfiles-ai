@@ -1,0 +1,6 @@
+{
+  "//": "DESTRUCTIVE removal asks in EVERY phase (user, 2026-09-05: an agent rm'd the imported PLAN-AIDOS.md without asking). The rule must live at BASE level: lookup is `rules.get(name) ?? rules.get(\"*\")`, the * wildcard exists only in profile-planning/_default.json, and the implementation and subagent-${provider} profiles have no overlay dir at all -- per-profile files can never cover them, because subagent profile names are dynamic. Scratch is unaffected: the scratch escape short-circuits before rule resolution, so rm under /tmp/dsh or the aidos durable scratch still runs without asking in every phase. Deliberately NOT added here: mv (clobbers, but routine during implementation), chmod/chown/truncate/shred, git clean, > redirection -- each is a separate policy decision.",
+  "commands": ["rm"],
+  "verdict": "ask",
+  "reason": "rm is irreversible deletion, so it asks in every phase. Deletions under a scratch root (/tmp/dsh, the aidos durable scratch) still run without asking. If the removal is part of a ticket, approve it here rather than working around the prompt."
+}
