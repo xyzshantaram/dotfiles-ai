@@ -720,6 +720,29 @@ var approvalSteerTo = null;
 /** How long an armed reject stays confirmable before it resets itself. */
 var REJECT_ARM_RESET_MS = 4000;
 
+/** Extract the first token (command name) from a bash command string. */
+function firstTokenOf(cmdStr) {
+  if (typeof cmdStr !== "string" || cmdStr === "") return "";
+  var trimmed = cmdStr.trim();
+  var match = /^[^\s]+/.exec(trimmed);
+  return match ? match[0] : "";
+}
+
+/**
+ * Label for the guard rewrite block pair by comparing commands. meta carries
+ * only {rewritten: true, ran} — no reason field — so precision must be
+ * derived: same first token means an argument-level rewrite; a swapped
+ * first token means the binary itself changed; anything unreadable keeps
+ * the generic label.
+ */
+function guardRewriteLabel(originalCmd, rewrittenCmd) {
+  var origToken = firstTokenOf(originalCmd);
+  var rewriteToken = firstTokenOf(rewrittenCmd);
+  if (origToken === "" || rewriteToken === "") return "ran instead";
+  if (origToken === rewriteToken) return "rewrote arguments to";
+  return "translated to " + rewriteToken;
+}
+
 /**
  * The answer bar for one card. Renders nothing unless this callId has an
  * open approval (the action bar) or a durable decided outcome (the badge).
@@ -911,24 +934,6 @@ function ToolRenderApprovalBar(props) {
     <div className="tool-render-approval-strip">
       <button
         type="button"
-        className="tool-render-approval-btn tool-render-approval-reject"
-        data-armed={armed && !hasDraft ? true : undefined}
-        disabled={answered}
-        onClick={onReject}
-      >
-        {armed && !hasDraft ? "? Confirm reject" : "✗ Reject"}
-      </button>
-      <button
-        type="button"
-        className="tool-render-approval-btn tool-render-approval-approve"
-        data-with-comment={hasDraft || undefined}
-        disabled={answered}
-        onClick={onApprove}
-      >
-        {hasDraft ? "Approve + send" : "✓ Approve"}
-      </button>
-      <button
-        type="button"
         className="tool-render-approval-comment-toggle"
         disabled={answered}
         aria-expanded={commentOpen}
@@ -953,6 +958,26 @@ function ToolRenderApprovalBar(props) {
           onKeyDown={onCommentKeyDown}
         />
       ) : null}
+      <div className="tool-render-approval-actions">
+        <button
+          type="button"
+          className="tool-render-approval-btn tool-render-approval-reject"
+          data-armed={armed && !hasDraft ? true : undefined}
+          disabled={answered}
+          onClick={onReject}
+        >
+          {armed && !hasDraft ? "? Confirm reject" : "✗ Reject"}
+        </button>
+        <button
+          type="button"
+          className="tool-render-approval-btn tool-render-approval-approve"
+          data-with-comment={hasDraft || undefined}
+          disabled={answered}
+          onClick={onApprove}
+        >
+          {hasDraft ? "Approve + send" : "✓ Approve"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -1090,7 +1115,9 @@ function BashRow(props) {
       if (guardRewrite !== null && guardRewrite.ran !== command) {
         inner.push.apply(
           inner,
-          commandBlock("wrote", command).concat(commandBlock("ran instead", guardRewrite.ran)),
+          commandBlock("wrote", command).concat(
+            commandBlock(guardRewriteLabel(command, guardRewrite.ran), guardRewrite.ran),
+          ),
         );
       } else {
         inner.push.apply(inner, commandBlock(null, command));
@@ -1104,6 +1131,36 @@ function BashRow(props) {
       );
     }
     body = <div className="tool-render-io">{inner}</div>;
+  }
+  // In-body approval verdict (#48): when a bash call that carried an inline
+  // approval is expanded, the body opens with the durable verdict. Sourced
+  // from the guarded-approvals fold already fetched above (durableGuardApproval)
+  // — never a second hook call, which would break hook order. Wire vocabulary
+  // is "allowed-once"/"rejected"/"cancelled"; display vocabulary maps
+  // allowed-once to "approved" and hides cancelled.
+  var callOutcome =
+    durableGuardApproval !== null && durableGuardApproval !== undefined
+      ? durableGuardApproval.outcomes[props.callId]
+      : undefined;
+  if (callOutcome !== undefined && callOutcome !== null && callOutcome !== "cancelled") {
+    var verdictDisplay = callOutcome === "allowed-once" ? "approved" : callOutcome;
+    var verdictElement = (
+      <div className="tool-render-approval-verdict">
+        <span className="tool-render-approval-verdict-label">Approval</span>
+        <span className="tool-render-approval-verdict-outcome" data-outcome={verdictDisplay}>
+          {verdictDisplay}
+        </span>
+      </div>
+    );
+    body =
+      body !== null ? (
+        <div>
+          {verdictElement}
+          {body}
+        </div>
+      ) : (
+        verdictElement
+      );
   }
   return toolRenderRow({
     callId: props.callId,
