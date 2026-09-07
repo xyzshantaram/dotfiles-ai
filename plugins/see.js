@@ -89,7 +89,9 @@ function chainOf(entry, chainName, chains, ctx) {
         ctx
       );
       if (own.length > 0) {
-        ctx?.logger?.info(`chain resolved: ${chainName} -> ${own[0].provider}/${own[0].model}`);
+        ctx?.logger?.debug(
+          `chain ${chainName} resolved ${own.length} rungs, head ${own[0].provider}/${own[0].model}: ${own.map((r) => `${r.provider}/${r.model}`).join(", ")}`
+        );
         return own;
       }
       const otherName = chainName === "orchestrator" ? "subagent" : "orchestrator";
@@ -109,8 +111,8 @@ function chainOf(entry, chainName, chains, ctx) {
   }
   const resolved = normalizeEntry(entry, chains, void 0, ctx);
   if (resolved.length > 0) {
-    ctx?.logger?.info(
-      `chain resolved: ${chainName} -> ${resolved[0].provider}/${resolved[0].model}`
+    ctx?.logger?.debug(
+      `chain ${chainName} resolved ${resolved.length} rungs, head ${resolved[0].provider}/${resolved[0].model}: ${resolved.map((r) => `${r.provider}/${r.model}`).join(", ")}`
     );
   } else {
     ctx?.logger?.debug(`no routes for ${chainName} chain`);

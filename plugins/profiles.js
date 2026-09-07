@@ -1,6 +1,5 @@
 // plugins/profiles.ts
 import z from "@deepseek-ai/schemastery";
-import { createUserMessage } from "@deepseek-ai/dsh-llm";
 import { settingsNamespace } from "@deepseek-ai/dsh-settings";
 
 // plugins/profile-routes.ts
@@ -88,7 +87,9 @@ function chainOf(entry, chainName, chains, ctx) {
         ctx
       );
       if (own.length > 0) {
-        ctx?.logger?.info(`chain resolved: ${chainName} -> ${own[0].provider}/${own[0].model}`);
+        ctx?.logger?.debug(
+          `chain ${chainName} resolved ${own.length} rungs, head ${own[0].provider}/${own[0].model}: ${own.map((r) => `${r.provider}/${r.model}`).join(", ")}`
+        );
         return own;
       }
       const otherName = chainName === "orchestrator" ? "subagent" : "orchestrator";
@@ -108,8 +109,8 @@ function chainOf(entry, chainName, chains, ctx) {
   }
   const resolved = normalizeEntry(entry, chains, void 0, ctx);
   if (resolved.length > 0) {
-    ctx?.logger?.info(
-      `chain resolved: ${chainName} -> ${resolved[0].provider}/${resolved[0].model}`
+    ctx?.logger?.debug(
+      `chain ${chainName} resolved ${resolved.length} rungs, head ${resolved[0].provider}/${resolved[0].model}: ${resolved.map((r) => `${r.provider}/${r.model}`).join(", ")}`
     );
   } else {
     ctx?.logger?.debug(`no routes for ${chainName} chain`);
@@ -186,14 +187,15 @@ function activeEntry(profile) {
   return (profile?.active ?? "work") === "personal" ? profile?.personal : profile?.work;
 }
 var failoverEvents = /* @__PURE__ */ new Map();
-function recordFailoverEvent(sessionId, from, to, code, rung, total) {
+function recordFailoverEvent(sessionId, from, to, code, rung, total, tried = []) {
   failoverEvents.set(sessionId, {
     from,
     to,
     code,
     time: Date.now(),
     rung,
-    total
+    total,
+    tried
   });
 }
 function clearFailoverEvents() {
@@ -482,6 +484,41 @@ function registerFailover(ctx, alwaysMaxRetries) {
 ${tried}`);
     }
     const level = s.levels[s.cursor];
+    if (s.cursor > 0) {
+      const from = s.levels[0];
+      const code = s.failures.length > 0 ? s.failures[s.failures.length - 1].code : "CACHED_DOWN";
+      const sessionId = sessionLabel(agent);
+      recordFailoverEvent(
+        sessionId,
+        { provider: from.provider, model: from.model },
+        { provider: level.provider, model: level.model },
+        code,
+        s.cursor + 1,
+        s.levels.length,
+        s.failures.map((f) => ({
+          provider: f.level.provider,
+          model: f.level.model,
+          code: f.code
+        }))
+      );
+    }
+    if (s.cursor === 0) {
+      const code = s.failures.length > 0 ? s.failures[s.failures.length - 1].code : "HEAD";
+      const sessionId = sessionLabel(agent);
+      recordFailoverEvent(
+        sessionId,
+        { provider: level.provider, model: level.model },
+        { provider: level.provider, model: level.model },
+        code,
+        1,
+        s.levels.length,
+        s.failures.map((f) => ({
+          provider: f.level.provider,
+          model: f.level.model,
+          code: f.code
+        }))
+      );
+    }
     const selectionMark = `${level.provider}/${level.model}`;
     if (lastSelected.get(agent) !== selectionMark) {
       lastSelected.set(agent, selectionMark);
@@ -538,35 +575,13 @@ ${tried}`);
         failure.code ?? "UNKNOWN",
         s.cursor + 1,
         // 1-based position in chain
-        s.levels.length
+        s.levels.length,
+        s.failures.map((f) => ({
+          provider: f.level.provider,
+          model: f.level.model,
+          code: f.code
+        }))
       );
-      const agentObj = agent;
-      const deliver = typeof agentObj.steer === "function" ? (message) => agentObj.steer(message) : typeof agentObj.inject === "function" ? (message) => agentObj.inject(message) : void 0;
-      if (deliver !== void 0) {
-        try {
-          const noticeText = failoverNoticeText(
-            cur.provider,
-            cur.model,
-            nxt.provider,
-            nxt.model,
-            failure.code,
-            failure.message ?? ""
-          );
-          void deliver(
-            createUserMessage({
-              content: [{ type: "text", text: noticeText }],
-              source: {
-                kind: "plugin",
-                plugin: "profiles",
-                form: "notice",
-                summary: "llm failover"
-              }
-            })
-          );
-        } catch (error) {
-          ctx.logger.warn(`profiles: failed to deliver failover notice: ${error}`);
-        }
-      }
       return { kind: "retry" };
     }
     ctx.logger.warn(
@@ -846,14 +861,9 @@ function makeFailoverStatusHandler(ctx) {
     const profile = settings?.get(PROFILE_NS);
     const chain = chainOf(activeEntry(profile), "orchestrator", profile?.chains, ctx);
     const headLevel = chain[0] ?? null;
-    let lastEvent = null;
-    let newestTime = 0;
-    for (const event of failoverEvents.values()) {
-      if (event.time >= newestTime) {
-        newestTime = event.time;
-        lastEvent = event;
-      }
-    }
+    const url = new URL(req.url ?? "/", "http://profile.local");
+    const sessionParam = url.searchParams.get("session");
+    const lastEvent = sessionParam !== null && sessionParam !== "" ? failoverEvents.get(sessionParam) ?? null : null;
     sendJson(res, 200, {
       ok: true,
       activeChain: chain,
@@ -864,6 +874,9 @@ function makeFailoverStatusHandler(ctx) {
 }
 function apply(ctx, config) {
   const cfg = config ?? {};
+  clearFailoverEvents();
+  clearDownCache();
+  ctx.logger.info("failover state clears on boot");
   registerFailover(ctx, cfg.alwaysMaxRetries ?? 2);
   ctx.inject(["webServer"], (scope) => {
     const server = scope.webServer;

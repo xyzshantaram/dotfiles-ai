@@ -111,7 +111,6 @@
 import type { Context } from "@deepseek-ai/cordis";
 import z from "@deepseek-ai/schemastery";
 import type { LlmCallConfig } from "@deepseek-ai/dsh-llm";
-import { createUserMessage } from "@deepseek-ai/dsh-llm";
 import { settingsNamespace } from "@deepseek-ai/dsh-settings";
 import type { RequestErrorAction } from "@deepseek-ai/dsh-agent";
 import { chainOf, type RouteCandidate } from "./profile-routes";
@@ -231,6 +230,7 @@ interface FailoverEvent {
   time: number;
   rung: number;
   total: number;
+  tried: Array<{ provider: string; model: string; code: string }>;
 }
 const failoverEvents = new Map<string, FailoverEvent>();
 
@@ -244,6 +244,7 @@ export function recordFailoverEvent(
   code: string,
   rung: number,
   total: number,
+  tried: Array<{ provider: string; model: string; code: string }> = [],
 ): void {
   failoverEvents.set(sessionId, {
     from,
@@ -252,6 +253,7 @@ export function recordFailoverEvent(
     time: Date.now(),
     rung,
     total,
+    tried,
   });
 }
 
@@ -651,6 +653,46 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
     }
 
     const level = s.levels[s.cursor];
+
+    // Record failover event when serving below the head (Ticket 3).
+    if (s.cursor > 0) {
+      const from = s.levels[0];
+      const code = s.failures.length > 0 ? s.failures[s.failures.length - 1].code : "CACHED_DOWN";
+      const sessionId = sessionLabel(agent);
+      recordFailoverEvent(
+        sessionId,
+        { provider: from.provider, model: from.model },
+        { provider: level.provider, model: level.model },
+        code,
+        s.cursor + 1,
+        s.levels.length,
+        s.failures.map((f) => ({
+          provider: f.level.provider,
+          model: f.level.model,
+          code: f.code,
+        })),
+      );
+    }
+
+    // Record failover event when serving the head (Ticket 3).
+    if (s.cursor === 0) {
+      const code = s.failures.length > 0 ? s.failures[s.failures.length - 1].code : "HEAD";
+      const sessionId = sessionLabel(agent);
+      recordFailoverEvent(
+        sessionId,
+        { provider: level.provider, model: level.model },
+        { provider: level.provider, model: level.model },
+        code,
+        1,
+        s.levels.length,
+        s.failures.map((f) => ({
+          provider: f.level.provider,
+          model: f.level.model,
+          code: f.code,
+        })),
+      );
+    }
+
     const selectionMark = `${level.provider}/${level.model}`;
     if (lastSelected.get(agent) !== selectionMark) {
       lastSelected.set(agent, selectionMark);
@@ -725,48 +767,12 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
         failure.code ?? "UNKNOWN",
         s.cursor + 1, // 1-based position in chain
         s.levels.length,
+        s.failures.map((f) => ({
+          provider: f.level.provider,
+          model: f.level.model,
+          code: f.code,
+        })),
       );
-
-      // Deliver a chat row for the failover switchover. steer, not
-      // inject: inject splices into the agent inbox only (invisible context
-      // for the next step), while steer delivers a notice-form context message
-      // that becomes a visible chat node via context.injection.view.
-      // Call it as a method: detaching it loses `this` and fails.
-      const agentObj = agent as {
-        steer?: (message: unknown) => void;
-        inject?: (message: unknown) => void;
-      };
-      const deliver =
-        typeof agentObj.steer === "function"
-          ? (message: unknown) => agentObj.steer!(message)
-          : typeof agentObj.inject === "function"
-            ? (message: unknown) => agentObj.inject!(message)
-            : undefined;
-      if (deliver !== undefined) {
-        try {
-          const noticeText = failoverNoticeText(
-            cur.provider,
-            cur.model,
-            nxt.provider,
-            nxt.model,
-            failure.code,
-            failure.message ?? "",
-          );
-          void deliver(
-            createUserMessage({
-              content: [{ type: "text", text: noticeText }],
-              source: {
-                kind: "plugin",
-                plugin: "profiles",
-                form: "notice",
-                summary: "llm failover",
-              },
-            }),
-          );
-        } catch (error) {
-          ctx.logger.warn(`profiles: failed to deliver failover notice: ${error}`);
-        }
-      }
 
       return { kind: "retry" } as unknown as Promise<RequestErrorAction>;
     }
@@ -1118,15 +1124,18 @@ export function makeFailoverStatusHandler(ctx: Context) {
     const chain = chainOf(activeEntry(profile), "orchestrator", profile?.chains, ctx);
     const headLevel = chain[0] ?? null;
 
-    // Return the most recent failover event across all sessions, or null if none.
-    let lastEvent: FailoverEvent | null = null;
-    let newestTime = 0;
-    for (const event of failoverEvents.values()) {
-      if (event.time >= newestTime) {
-        newestTime = event.time;
-        lastEvent = event;
-      }
-    }
+    // One badge asks for ONE session's failover state. The store is keyed
+    // by session, so a ?session=<id> param makes the lookup direct. Without
+    // it there is no meaningful answer: the previous cross-session "newest
+    // event" scan painted every badge with whichever session failed over
+    // most recently, so a matched default showed another session's stale
+    // rung state.
+    const url = new URL(req.url ?? "/", "http://profile.local");
+    const sessionParam = url.searchParams.get("session");
+    const lastEvent: FailoverEvent | null =
+      sessionParam !== null && sessionParam !== ""
+        ? (failoverEvents.get(sessionParam) ?? null)
+        : null;
 
     sendJson(res, 200, {
       ok: true,
@@ -1139,6 +1148,10 @@ export function makeFailoverStatusHandler(ctx: Context) {
 
 export function apply(ctx: Context, config: unknown): void {
   const cfg = (config ?? {}) as ProfilesConfig;
+
+  clearFailoverEvents();
+  clearDownCache();
+  ctx.logger.info("failover state clears on boot");
 
   registerFailover(ctx, cfg.alwaysMaxRetries ?? 2);
 

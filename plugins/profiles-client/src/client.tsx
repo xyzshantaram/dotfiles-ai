@@ -109,26 +109,6 @@ window.__ModuleLoader__.load({
         </svg>
       );
     }
-    /** Waterfall icon: three parallel vertical lines with curves. */
-    function WaterfallIcon14() {
-      return (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width={14}
-          height={14}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2.75}
-          strokeLinecap="round"
-          aria-hidden={true}
-        >
-          <path d="M2 3.25c2.4 0 3 1.35 3 3.75v10c0 2.4 .6 3.75 3 3.75" />
-          <path d="M9 3.25c2.4 0 3 1.35 3 3.75v10c0 2.4 .6 3.75 3 3.75" />
-          <path d="M16 3.25c2.4 0 3 1.35 3 3.75v10c0 2.4 .6 3.75 3 3.75" />
-        </svg>
-      );
-    }
     var useSyncExternalStore = react.useSyncExternalStore;
     var useCallback = react.useCallback;
     var useState = react.useState;
@@ -359,9 +339,6 @@ window.__ModuleLoader__.load({
         var effortRowRef = useRef(null);
         var menuRef = useRef(null);
         var effortPanelRef = useRef(null);
-        var failoverStatusState = useState(null);
-        var failoverStatus = failoverStatusState[0];
-        var setFailoverStatus = failoverStatusState[1];
 
         useEffect(
           function () {
@@ -463,33 +440,9 @@ window.__ModuleLoader__.load({
             fetchProfiles();
           });
         };
-        var fetchFailoverStatus = function () {
-          fetchJson("/profiles/failover-status").then(function (result) {
-            if (result.error) return;
-            if (
-              result.data !== null &&
-              result.data !== void 0 &&
-              typeof result.data.ok === "boolean" &&
-              result.data.ok
-            ) {
-              setFailoverStatus(result.data);
-            }
-          });
-        };
         useEffect(
           function () {
             if (available) fetchProfiles();
-          },
-          [available],
-        );
-        useEffect(
-          function () {
-            if (!available) return;
-            fetchFailoverStatus();
-            var interval = setInterval(fetchFailoverStatus, 5000);
-            return function () {
-              clearInterval(interval);
-            };
           },
           [available],
         );
@@ -619,6 +572,20 @@ window.__ModuleLoader__.load({
             : face.head !== void 0 && face.head !== null
               ? prettyOf(face.head.provider, face.head.model).provider
               : null;
+        // Raw identifiers for the segment tooltips: the badge text shows the
+        // pretty catalog labels, the tooltip shows the exact provider/model.
+        var triggerModelRaw =
+          current !== void 0 && current !== null
+            ? current.provider + "/" + current.model
+            : face.head !== void 0 && face.head !== null
+              ? face.head.provider + "/" + face.head.model
+              : triggerModelText;
+        var triggerProviderRaw =
+          current !== void 0 && current !== null
+            ? current.provider
+            : face.head !== void 0 && face.head !== null
+              ? face.head.provider
+              : "";
         /** Current directory selection's catalog entry and advertised efforts. */
         var seatCurrentCat = null;
         if (current !== void 0 && current !== null) {
@@ -730,7 +697,17 @@ window.__ModuleLoader__.load({
             >
               <span className="profiles-client-badge">
                 {hasProfile ? (
-                  <span className="profiles-client-badge-segment">
+                  <span
+                    className="profiles-client-badge-segment"
+                    title={
+                      "profile " +
+                      face.active +
+                      (matched
+                        ? ""
+                        : " (serving off the profile head; the dot is orange)")
+                    }
+                    data-dsh-tip=""
+                  >
                     <span
                       className={
                         "profiles-client-pill-dot" +
@@ -744,24 +721,28 @@ window.__ModuleLoader__.load({
                   </span>
                 ) : null}
                 {triggerProviderText !== null ? (
-                  <span className="profiles-client-badge-segment">
+                  <span
+                    className="profiles-client-badge-segment"
+                    title={"provider " + triggerProviderRaw}
+                    data-dsh-tip=""
+                  >
                     <NetworkIcon14 />
                     <span className="profiles-client-model-provider">{triggerProviderText}</span>
                   </span>
                 ) : null}
-                <span className="profiles-client-badge-segment profiles-client-badge-model">
+                <span
+                  className="profiles-client-badge-segment profiles-client-badge-model"
+                  title={"model " + triggerModelRaw}
+                  data-dsh-tip=""
+                >
                   <BrainIcon14 />
                   <span className="profiles-client-model-name">{triggerModelText}</span>
                 </span>
-                {matched &&
-                failoverStatus &&
-                failoverStatus.lastEvent &&
-                failoverStatus.lastEvent.rung > 1 ? (
+                {!matched && current !== void 0 && current !== null ? (
                   <span
-                    className="profiles-client-badge-segment profiles-client-badge-failover"
-                    title={
-                      failoverStatus.lastEvent.to.provider + "/" + failoverStatus.lastEvent.to.model
-                    }
+                    className="profiles-client-badge-segment"
+                    title={"override: " + current.provider + "/" + current.model}
+                    data-dsh-tip=""
                     onAuxClick={function (event) {
                       if (event.button === 1) {
                         event.preventDefault();
@@ -770,10 +751,7 @@ window.__ModuleLoader__.load({
                       }
                     }}
                   >
-                    <WaterfallIcon14 />
-                    <span className="profiles-client-failover-rung">
-                      {failoverStatus.lastEvent.rung + "/" + failoverStatus.lastEvent.total}
-                    </span>
+                    <span className="profiles-client-model-name">~</span>
                   </span>
                 ) : null}
               </span>
