@@ -41,8 +41,9 @@ import { parse } from "yaml";
 const jsTags = ["tag:yaml.org,2002:js/function", "tag:yaml.org,2002:js/eval", "tag:yaml.org,2002:js"];
 const customTags = jsTags.map((tag) => ({
   tag,
-  resolve(node) {
-    return `${node.tag} ${String(node.value)}`;
+  // yaml v2 scalar-tag contract: resolve receives the raw source string.
+  resolve(source) {
+    return `${tag} ${String(source)}`;
   },
 }));
 
