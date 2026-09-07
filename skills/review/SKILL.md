@@ -53,3 +53,7 @@ If policy blocks a worktree or checkout-based baseline, say so and use in-place 
 - Report pass or request-changes, with concrete `file:line` references for every finding. Never say "looks fine" or "some issues" without details.
 - Do not edit the code yourself. Findings go back to the orchestrator, which either re-dispatches to `coder` for fixes or accepts the diff and proceeds with its own final verification step.
 - If you could not actually exercise the changed behavior, say so explicitly. Do not imply the review covers correctness it did not check.
+
+## After the report: what would have caught this?
+
+When the review found a defect that got past the author's own checks, run Phase 7 of the `diagnosing-bugs` skill before closing: the menu (test / build or CI step / guard rule / wizard / skill guidance), the deterministic preference stated with its why, the earliest-detector tiebreak, the created-artifact requirement. You hold the freshest context on the defect and are best placed to name the mechanism — and least likely to be asked later. Per the rules above you do not edit the code yourself: name the candidate artifact and the reason, and the orchestrator creates it. Skip the step when an existing mechanism caught the defect correctly.

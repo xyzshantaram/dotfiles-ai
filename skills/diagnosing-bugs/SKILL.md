@@ -136,3 +136,22 @@ Required before declaring done:
 - [ ] All `[DEBUG-...]` instrumentation removed (`grep` the prefix)
 - [ ] Throwaway prototypes deleted (or moved to a clearly-marked debug location)
 - [ ] The hypothesis that turned out correct is stated in the commit / PR message, so the next debugger learns
+
+## Phase 7: What would have caught this?
+
+Runs after Phase 6, on every defect that got through a check that should have caught it. Skip the phase only when an existing mechanism caught the defect correctly — that is the system working.
+
+The output is an **artifact**, not a resolution to be more careful.
+
+1. Offer the menu explicitly, and require a choice:
+   1. **a test** — code that was wrong and could have been asserted
+   2. **a build or CI step** — a wrong artifact was committed
+   3. **a guard rule** — a wrong command an agent ran
+   4. **a wizard** — a tedious manual procedure was done wrong
+   5. **skill guidance** — the miss needed genuine judgment
+2. Prefer the deterministic answer, and say why rather than only asserting the order: a test cannot forget; a guard rule cannot be skipped under pressure. Skill guidance can, so it goes last.
+3. When two candidates are available, ask which detects **earliest**. The earlier one wins even if it catches less.
+4. "No protection is warranted" is an accepted outcome. Record it with its reason.
+5. Before the retrospective closes, **create** the artifact: a named test that exists, a named step wired into the build, a named rule in the guard config. An intention is not an artifact.
+
+This phase is the canonical form of the step; the `review` and `verification` skills reference it rather than restating the menu.
