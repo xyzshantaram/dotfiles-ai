@@ -2808,21 +2808,33 @@ var client_default = `.tool-render-row {
   gap: 0.25rem;
   margin: 0.125rem 0 0.125rem 0.25rem;
 }
+/* Reject/approve pack to the right edge (aidos queue recipe: actions sit at
+   the row's end); the comment toggle and textarea keep their left flow. */
+.tool-render-approval-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+/* Aidios review-queue button recipe, mapped onto dsw-alias tokens: 1px
+   border, surface bg, secondary text, 4px radius, 12px/20px, 5px 12px
+   padding, hover raises surface + primary text, disabled 0.45. */
 .tool-render-approval-btn {
   border: 1px solid var(--dsw-alias-border-l3);
   background: var(--dsw-alias-bg-base);
-  color: var(--dsw-alias-label-primary);
-  border-radius: 999px;
+  color: var(--dsw-alias-label-secondary);
+  border-radius: 4px;
   cursor: pointer;
-  font-size: 0.75rem;
-  line-height: 1.125rem;
-  padding: 0.0625rem 0.5rem;
+  font-size: 12px;
+  line-height: 20px;
+  padding: 5px 12px;
 }
 .tool-render-approval-btn:hover:enabled {
   background: var(--dsw-alias-interactive-bg-hover-solid);
+  color: var(--dsw-alias-label-primary);
 }
 .tool-render-approval-btn:disabled {
-  opacity: 0.55;
+  opacity: 0.45;
   cursor: default;
 }
 .tool-render-approval-reject {
@@ -2835,16 +2847,30 @@ var client_default = `.tool-render-row {
   background: var(--dsw-alias-state-error-primary);
   border-color: var(--dsw-alias-state-error-primary);
   color: #fff;
+  font-weight: 600;
 }
+/* Primary/confirm button of the recipe: filled secondary-label bg with
+   surface text, weight 600, no border. */
 .tool-render-approval-approve {
-  color: var(--dsw-alias-state-business-primary);
-  border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 55%, var(--dsw-alias-border-l3));
+  border-color: transparent;
+  background: var(--dsw-alias-label-secondary);
+  color: var(--dsw-alias-bg-base);
+  font-weight: 600;
+}
+.tool-render-approval-approve:hover:enabled {
+  background: var(--dsw-alias-label-secondary);
+  color: var(--dsw-alias-bg-base);
+  filter: brightness(1.15);
 }
 /* A comment draft relabels the action "Approve + send", so it reads warn:
    the click now also steers the comment to the running agent. */
 .tool-render-approval-approve[data-with-comment] {
   color: var(--dsw-alias-state-warn-primary);
-  border-color: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 55%, var(--dsw-alias-border-l3));
+}
+.tool-render-approval-approve[data-with-comment]:hover:enabled {
+  background: var(--dsw-alias-label-secondary);
+  color: var(--dsw-alias-state-warn-primary);
+  filter: brightness(1.15);
 }
 .tool-render-approval-comment-toggle {
   border: none;
@@ -2898,6 +2924,32 @@ var client_default = `.tool-render-row {
 .tool-render-decided[data-outcome="rejected"] {
   color: var(--dsw-alias-state-error-primary);
   border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 55%, var(--dsw-alias-border-l3));
+}
+/* In-body approval verdict (#48): the expanded card opens with the durable
+   outcome of the approval it carried. Sourced from the guarded-approvals
+   fold, so it survives reloads. */
+.tool-render-approval-verdict {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0 0 0.25rem 0.25rem;
+  padding: 0.25rem 0.5rem;
+  background: var(--dsw-alias-bg-base);
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+}
+.tool-render-approval-verdict-label {
+  color: var(--dsw-alias-label-tertiary);
+}
+.tool-render-approval-verdict-outcome[data-outcome="approved"] {
+  color: var(--dsw-alias-state-business-primary);
+  font-weight: 500;
+}
+.tool-render-approval-verdict-outcome[data-outcome="rejected"] {
+  color: var(--dsw-alias-state-error-primary);
+  font-weight: 500;
 }
 `;
 
@@ -15969,6 +16021,19 @@ function buildApprovalSteer(sessions) {
 }
 var approvalSteerTo = null;
 var REJECT_ARM_RESET_MS = 4e3;
+function firstTokenOf(cmdStr) {
+  if (typeof cmdStr !== "string" || cmdStr === "") return "";
+  var trimmed = cmdStr.trim();
+  var match = /^[^\s]+/.exec(trimmed);
+  return match ? match[0] : "";
+}
+function guardRewriteLabel(originalCmd, rewrittenCmd) {
+  var origToken = firstTokenOf(originalCmd);
+  var rewriteToken = firstTokenOf(rewrittenCmd);
+  if (origToken === "" || rewriteToken === "") return "ran instead";
+  if (origToken === rewriteToken) return "rewrote arguments to";
+  return "translated to " + rewriteToken;
+}
 function ToolRenderApprovalBar(props) {
   var decidedRecord = useGuardedApprovals(props.useSession);
   var pendingRef = useRef(null);
@@ -16098,26 +16163,6 @@ function ToolRenderApprovalBar(props) {
     "button",
     {
       type: "button",
-      className: "tool-render-approval-btn tool-render-approval-reject",
-      "data-armed": armed && !hasDraft ? true : void 0,
-      disabled: answered,
-      onClick: onReject
-    },
-    armed && !hasDraft ? "? Confirm reject" : "\u2717 Reject"
-  ), /* @__PURE__ */ import_react.default.createElement(
-    "button",
-    {
-      type: "button",
-      className: "tool-render-approval-btn tool-render-approval-approve",
-      "data-with-comment": hasDraft || void 0,
-      disabled: answered,
-      onClick: onApprove
-    },
-    hasDraft ? "Approve + send" : "\u2713 Approve"
-  ), /* @__PURE__ */ import_react.default.createElement(
-    "button",
-    {
-      type: "button",
       className: "tool-render-approval-comment-toggle",
       disabled: answered,
       "aria-expanded": commentOpen,
@@ -16141,7 +16186,27 @@ function ToolRenderApprovalBar(props) {
       },
       onKeyDown: onCommentKeyDown
     }
-  ) : null);
+  ) : null, /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-approval-actions" }, /* @__PURE__ */ import_react.default.createElement(
+    "button",
+    {
+      type: "button",
+      className: "tool-render-approval-btn tool-render-approval-reject",
+      "data-armed": armed && !hasDraft ? true : void 0,
+      disabled: answered,
+      onClick: onReject
+    },
+    armed && !hasDraft ? "? Confirm reject" : "\u2717 Reject"
+  ), /* @__PURE__ */ import_react.default.createElement(
+    "button",
+    {
+      type: "button",
+      className: "tool-render-approval-btn tool-render-approval-approve",
+      "data-with-comment": hasDraft || void 0,
+      disabled: answered,
+      onClick: onApprove
+    },
+    hasDraft ? "Approve + send" : "\u2713 Approve"
+  )));
 }
 function ReadRow(props) {
   var expandedState = useState(false);
@@ -16247,7 +16312,9 @@ function BashRow(props) {
       if (guardRewrite !== null && guardRewrite.ran !== command) {
         inner.push.apply(
           inner,
-          commandBlock("wrote", command).concat(commandBlock("ran instead", guardRewrite.ran))
+          commandBlock("wrote", command).concat(
+            commandBlock(guardRewriteLabel(command, guardRewrite.ran), guardRewrite.ran)
+          )
         );
       } else {
         inner.push.apply(inner, commandBlock(null, command));
@@ -16259,6 +16326,12 @@ function BashRow(props) {
       );
     }
     body = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-io" }, inner);
+  }
+  var callOutcome = durableGuardApproval !== null && durableGuardApproval !== void 0 ? durableGuardApproval.outcomes[props.callId] : void 0;
+  if (callOutcome !== void 0 && callOutcome !== null && callOutcome !== "cancelled") {
+    var verdictDisplay = callOutcome === "allowed-once" ? "approved" : callOutcome;
+    var verdictElement = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-approval-verdict" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-approval-verdict-label" }, "Approval"), /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-approval-verdict-outcome", "data-outcome": verdictDisplay }, verdictDisplay));
+    body = body !== null ? /* @__PURE__ */ import_react.default.createElement("div", null, verdictElement, body) : verdictElement;
   }
   return toolRenderRow({
     callId: props.callId,
