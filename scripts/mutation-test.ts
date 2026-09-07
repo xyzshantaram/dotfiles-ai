@@ -47,7 +47,26 @@
  *     --test "npx vitest run plugins/foo" \
  *     --patch /tmp/dsh/mut-1.patch --patch /tmp/dsh/mut-2.patch \
  *     [--commit HEAD] [--json /tmp/dsh/mutations.json] [--allow-survivors] \
- *     [--filter '(FAIL|AssertionError)']
+ *     [--filter '(FAIL|AssertionError)'] [--nonce <token>]
+ *
+ * THE NONCE proves the report came from a run someone actually initiated.
+ * An orchestrator dispatching this work generates a fresh random token, passes
+ * it here, and checks that the report it gets back carries it verbatim. A
+ * report without the current token was invented, or is an older report shown
+ * again -- both of which have happened. Verification is an exact equality
+ * check on a random string, with no normalisation and no judgment: comparing
+ * TEST COMMANDS for equivalence is fuzzy (whitespace, argument order, an
+ * equivalent invocation, an absolute path where a relative one was given), and
+ * a judgment call in an enforcement path is decoration.
+ *
+ * The nonce and the recorded facts defend against DIFFERENT attacks and
+ * neither replaces the other. The nonce defeats fabrication and replay; it
+ * says nothing about what the run did. The recorded command, commit and patch
+ * digests defeat SUBSTITUTION -- a child can hold a valid nonce and still run
+ * a weaker command. Those are read as evidence, not checked mechanically.
+ *
+ * It is optional here on purpose, so a person iterating locally is not taxed
+ * by machinery that exists for delegated work.
  *
  * Generate each patch mechanically rather than writing one by hand: make the
  * edit, `git diff > /tmp/dsh/mut-1.patch`, then `git checkout -- .`. A
@@ -110,6 +129,7 @@ interface Args {
   json: string | null;
   allowSurvivors: boolean;
   filter: string | null;
+  nonce: string | null;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -120,6 +140,7 @@ function parseArgs(argv: string[]): Args {
     json: null,
     allowSurvivors: false,
     filter: null,
+    nonce: null,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -133,11 +154,13 @@ function parseArgs(argv: string[]): Args {
     else if (arg === "--commit") args.commit = next();
     else if (arg === "--json") args.json = next();
     else if (arg === "--filter") args.filter = next();
+    else if (arg === "--nonce") args.nonce = next();
     else if (arg === "--allow-survivors") args.allowSurvivors = true;
     else if (arg === "--help" || arg === "-h") {
       console.log("usage: mutation-test.ts --test <cmd> --patch <file> [--patch <file>...]");
       console.log("       [--commit <ref>] [--json <file>] [--allow-survivors]");
       console.log("       [--filter <regex>]   display only; never affects the verdict");
+      console.log("       [--nonce <token>]    echoed verbatim, proving the run happened");
       Deno.exit(0);
     } else fail("unknown argument: " + arg);
   }
@@ -171,6 +194,16 @@ function fileExists(path: string): boolean {
   }
 }
 
+/** Short content digest of a patch, so a swapped patch set is visible. */
+async function digest(path: string): Promise<string> {
+  const bytes = await Deno.readFile(path);
+  const hash = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(hash))
+    .slice(0, 8)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 interface MutationRecord {
   patch: string;
   applied: boolean;
@@ -178,6 +211,7 @@ interface MutationRecord {
   note: string;
   output: string;
   changed?: string;
+  digest?: string;
 }
 
 const args = parseArgs(Deno.args);
@@ -212,7 +246,9 @@ if (args.commit !== null) {
   if (wanted.code !== 0) fail("cannot resolve --commit " + args.commit);
   if (wanted.stdout.trim() !== head) {
     fail(
-      "HEAD is " + head.slice(0, 12) + " but --commit resolves to " +
+      "HEAD is " +
+        head.slice(0, 12) +
+        " but --commit resolves to " +
         wanted.stdout.trim().slice(0, 12) +
         ".\nCheck out that commit yourself; this script will not move your HEAD.",
     );
@@ -267,6 +303,7 @@ for (const patchPath of args.patches) {
     continue;
   }
   record.changed = changed;
+  record.digest = await digest(patchPath);
 
   const mutated = shell(args.test as string, root);
   record.killed = mutated.code !== 0;
@@ -278,7 +315,9 @@ for (const patchPath of args.patches) {
   if (reverted.code !== 0 || stillDirty !== "") {
     results.push(record);
     fail(
-      "REVERT FAILED after " + patchPath + ".\nThe tree is not back to " +
+      "REVERT FAILED after " +
+        patchPath +
+        ".\nThe tree is not back to " +
         head.slice(0, 12) +
         " and later results would be meaningless, so the run stops here.\n" +
         "Restore it yourself after inspecting: git checkout -- .\n" +
@@ -298,6 +337,7 @@ for (const patchPath of args.patches) {
 }
 
 const summary = {
+  nonce: args.nonce,
   commit: head,
   test: args.test,
   total: results.length,
@@ -308,9 +348,21 @@ const summary = {
 };
 
 console.log(
-  "\n" + summary.killed + " killed, " + summary.survived + " survived, " +
-    summary.skipped + " not run, of " + summary.total,
+  "\n" +
+    summary.killed +
+    " killed, " +
+    summary.survived +
+    " survived, " +
+    summary.skipped +
+    " not run, of " +
+    summary.total,
 );
+
+if (args.nonce !== null) {
+  // Printed as well as written, so a pasted terminal transcript carries the
+  // proof too, not only the JSON file.
+  console.log("nonce: " + args.nonce);
+}
 
 if (args.json !== null) {
   Deno.writeTextFileSync(args.json, JSON.stringify(summary, null, 2) + "\n");
