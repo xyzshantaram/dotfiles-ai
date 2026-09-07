@@ -93,6 +93,26 @@ mode this skill exists to catch. If you are the one compressing a longer report
 into a summary, grep your own summary for the hedge's substance before you send
 it. If it is gone, put it back.
 
+## When quantitative coverage is the claim
+
+When the claim under review is "the tests cover this change" (or a report leans on test coverage for its pass), reading the tests is not enough: a test that cannot fail buys false confidence. Demand mutation evidence, at the floor the `tester` skill defines: the full candidate list (including candidates not executed), the executed picks meeting one mutation per twenty-five changed implementation lines — minimum three for anything touching a predicate, guard, comparison, or boundary, capped at ten — and each executed mutation reported killed or survived. The runner is `scripts/mutation-test.ts` (read its header comment for its guarantees: clean tree, pinned HEAD, green baseline, verified reverts; exit 0 = all killed, 1 = survived, 2 = untrusted). A run that reports no surviving mutation AND no candidate list is a claim, not evidence. A surviving mutation reported honestly is a coverage gap, not a failed verification — treat it as a finding about the tests, and weight the verdict accordingly.
+
+## When a defect got through
+
+When the review finds a defect that got through (the change did not do what it claimed, or a claim you struck as false turned out to be load-bearing), do not stop at "request changes." Answer, before the verdict is written: **what would have caught this, and what protects against the class of it?**
+
+Offer the menu explicitly and require a choice:
+
+1. **a test** — code that was wrong and could have been asserted
+2. **a build or CI step** — a wrong artifact was committed
+3. **a guard rule** — a wrong command an agent ran
+4. **a wizard** — a tedious manual procedure done wrong
+5. **skill guidance** — the failure needed genuine judgment
+
+Prefer the deterministic answer, and say why rather than only asserting the order: a test cannot forget, a guard rule cannot be skipped under pressure. When two candidates are available, ask which detects earliest — the earlier one wins even if it catches less. "No protection is warranted" is an accepted outcome, recorded with its reason.
+
+The artifact chosen must actually be created before the retrospective closes: a named test, a named step, a named rule — not an intention. If an existing mechanism caught the defect correctly, skip this step entirely; that is the system working, not a defect that got through.
+
 ## Applying this to a merge request review
 
 1. Pull the actual diff. Read the changed lines, not a description of them.

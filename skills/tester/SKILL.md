@@ -29,6 +29,51 @@ When the orchestrator asks whether a change is covered, do this instead:
 
 Report the test as **discriminating** only if you watched it fail at step 3. If it passed with the change reverted, report it as **cannot fail** and say so plainly. That is a finding, not a pass.
 
+## When the scope is mutation testing
+
+"Mutation-test this" is not a judgment call; it is this procedure. Walk it in order.
+
+### 1. Load the picture first
+
+Before mutating anything, write down: what the change does, its happy path, and the criteria the work is graded on. A tester that starts mutating before it can state the happy path mutates whatever is nearest.
+
+### 2. Enumerate candidates from the catalogue
+
+Walk this catalogue along the happy path. Do not invent candidates outside it:
+
+1. conditional boundary — a `<` that could be `<=`
+2. negation — flip a condition
+3. constant replacement — swap a number or string for another value
+4. computed-value-to-constant — replace an expression with its current value
+5. statement deletion — remove a line
+6. branch removal — force a branch always or never taken
+7. order swap — exchange two statements or operands
+8. dispatch reorder — reorder routes, cases, or handlers
+9. error-path suppression — swallow or skip a thrown error
+10. degenerate input — empty, zero, one, null, huge
+11. oracle substitution — replace the expected value in a test with the actual
+
+Eight to fifteen candidates. For each, name what it breaks and which existing test ought to catch it.
+
+### 3. Pick to meet the floor
+
+Count the changed implementation lines: total diff minus comments, tests, and formatting. The floor is one executed mutation per twenty-five changed implementation lines, minimum three when the change touches a predicate, guard, comparison, or boundary, capped at ten executed mutations per run (a thousand-line change does not demand forty). Bias the picks toward the graded criteria.
+
+### 4. Execute with the runner
+
+Generate each mutation as a patch mechanically: make the edit, `git diff > /tmp/dsh/mut-1.patch`, `git checkout -- .` (never on a file that holds uncommitted work — copy it aside first). Then run the runner once with all patches:
+
+    deno run --allow-run --allow-read --allow-write scripts/mutation-test.ts \
+      --test "npx vitest run plugins/foo" \
+      --patch /tmp/dsh/mut-1.patch --patch /tmp/dsh/mut-2.patch \
+      --json /tmp/dsh/mutations.json
+
+Read the runner's header comment before relying on these guarantees. It refuses a dirty tree, a HEAD that is not the commit you named, and a red baseline; it applies one patch at a time and verifies each revert by `git status` being empty. Exit 0 = every mutation killed, 1 = something survived, 2 = the run could not be trusted. `--filter` trims which output lines are recorded and is cosmetic only: the verdict is the exit code, never a grep of the output.
+
+### Report
+
+The report carries the full candidate list from step 2, including the candidates not executed and why each was skipped. Per executed mutation: killed or survived. A surviving mutation is the most valuable result the run produces — it is a coverage gap. Report it; never swap it for a mutation that dies. What does not count as a mutation, all seen in real reports: editing a comment; changing a value no test reads; mutating a copy of the source that never executes; describing what a mutation would do.
+
 ## Report format
 
 Give pass or fail per target, then failure details grouped by file. No file dumps, and no speculation about the fix. Fixes are the orchestrator's or the coder's job.
