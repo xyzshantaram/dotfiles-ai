@@ -263,6 +263,25 @@ await wrapClientBundle(
   "composer-menu",
 );
 
+// toast: the shared toast stack. Mounts one container into shell.overlay and
+// publishes window.__dshToast__ so other bundles (and aidos) can raise a
+// notification without importing anything. It needs no host logic, so the
+// host half stays a stub.
+await build({
+  entryPoints: [join(here, "plugins/toast/src/index.ts")],
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  external: ["@deepseek-ai/*", "node:*"],
+  outfile: join(here, "plugins/toast/lib/index.js"),
+  logLevel: "info",
+});
+await wrapClientBundle(
+  join(here, "plugins/toast/src/client.tsx"),
+  join(here, "plugins/toast/lib/client.js"),
+  "toast",
+);
+
 // composer-approvals: the pending-approval indicator beside the overflow
 // trigger, with a modal listing every pending approval. Plain client plugin:
 // host half bundles via esbuild, client half via the module-loader facade.

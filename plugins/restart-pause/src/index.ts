@@ -3,7 +3,7 @@
  *
  * Host half. Owns the same-origin routes the Debug settings panel uses:
  *
- *   - GET  /restart-pause/status   -> { ok, running, runningLabels, armed,
+ *   - GET  /restart-pause/status   -> { ok, startedAt, running, runningLabels, armed,
  *       command, checks, healthPath, settleMs, quiesceTimeoutMs }
  *   - POST /restart-pause/checks   -> { ok, results: [{ command, ok, output }] }
  *   - POST /restart-pause/arm      (body { armed }) -> { ok, armed }
@@ -162,6 +162,11 @@ export function apply(ctx: Context, rawConfig: RestartPauseConfig): void {
   const tracker = new QuiesceTracker();
 
   /** Armed = restart as soon as the machine is quiet and every check passes. */
+  // When THIS process began. The client compares it against the moment a
+  // restart was requested: a process older than the request means the restart
+  // has not happened yet, so nothing is announced.
+  const startedAt = Date.now();
+
   let armed = false;
   let armTimer: ReturnType<typeof setTimeout> | undefined;
   let restarting = false;
@@ -253,6 +258,7 @@ export function apply(ctx: Context, rawConfig: RestartPauseConfig): void {
         const snap = tracker.snapshot();
         sendJson(res, 200, {
           ok: true,
+          startedAt,
           running: snap.running,
           runningLabels: snap.runningLabels,
           armed,

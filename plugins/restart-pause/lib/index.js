@@ -138,6 +138,7 @@ function labelFor(agent) {
 function apply(ctx, rawConfig) {
   const config = rawConfig;
   const tracker = new QuiesceTracker();
+  const startedAt = Date.now();
   let armed = false;
   let armTimer;
   let restarting = false;
@@ -204,6 +205,7 @@ function apply(ctx, rawConfig) {
         const snap = tracker.snapshot();
         sendJson(res, 200, {
           ok: true,
+          startedAt,
           running: snap.running,
           runningLabels: snap.runningLabels,
           armed,
