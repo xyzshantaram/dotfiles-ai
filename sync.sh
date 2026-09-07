@@ -425,6 +425,8 @@ step_install_plugins() {
 			# re-add forces the reconcile and converges. Keep this list in
 			# step with plugins whose client halves declare an inject list.
 			local readd
+			# shellcheck disable=SC2043  # one entry today; the loop is the shape
+			# this list has had more than one member and will again.
 			for readd in dsh-paste-to-path; do
 				dsh_plugin_add "$readd" || true
 			done
