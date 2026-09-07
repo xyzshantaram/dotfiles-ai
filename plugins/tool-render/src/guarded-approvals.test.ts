@@ -58,6 +58,25 @@ describe("guardedApprovalsProjection.apply", () => {
     });
   });
 
+  it("stores the host's real settle vocabulary verbatim", () => {
+    // REGRESSION (owner report: "approval response rejected: bad-response").
+    // The harness never writes "approved": dsh-user-approval appends
+    // `approval/decided` with the value `decide` resolved, which on the web
+    // path is the api-proxy settle vocabulary "allowed-once" | "rejected" |
+    // "cancelled". The fold must pass those through untouched so the card can
+    // map "allowed-once" to its "approved" label; the other tests' "approved"
+    // string only exercises pass-through, it is not a real outcome.
+    var state = guardedApprovalsProjection.init();
+    state = guardedApprovalsProjection.apply(state, askedEvent(4, { id: "a1", callId: "call-1", reason: GUARD_REASON }) as never);
+    state = guardedApprovalsProjection.apply(state, askedEvent(6, { id: "a2", callId: "call-2", reason: GUARD_REASON }) as never);
+    state = guardedApprovalsProjection.apply(state, decidedEvent(5, { id: "a1", outcome: "allowed-once" }) as never);
+    state = guardedApprovalsProjection.apply(state, decidedEvent(7, { id: "a2", outcome: "cancelled" }) as never);
+    expect(guardedApprovalsProjection.view(state)).toEqual({
+      guarded: { "call-1": true, "call-2": true },
+      outcomes: { "call-1": "allowed-once", "call-2": "cancelled" },
+    });
+  });
+
   it("pairs a rejected decision for a non-guard approval", () => {
     var state = guardedApprovalsProjection.init();
     state = guardedApprovalsProjection.apply(state, askedEvent(4, { id: "a9", callId: "call-3", reason: "please approve" }) as never);

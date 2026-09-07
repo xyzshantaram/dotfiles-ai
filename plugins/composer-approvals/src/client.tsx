@@ -254,7 +254,9 @@ function ComposerApprovalsRow(props: any) {
         className="composer-approvals-approve"
         disabled={answered}
         onClick={function () {
-          answer("approved");
+          // Wire vocabulary: the host schema accepts "allowed-once" |
+          // "rejected"; "approved" would be rejected as bad-response.
+          answer("allowed-once");
         }}
       >
         ✓ Approve

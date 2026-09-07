@@ -241,7 +241,7 @@ function ComposerApprovalsRow(props) {
       className: "composer-approvals-approve",
       disabled: answered,
       onClick: function() {
-        answer("approved");
+        answer("allowed-once");
       }
     },
     "\u2713 Approve"

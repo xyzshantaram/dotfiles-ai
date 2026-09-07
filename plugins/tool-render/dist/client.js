@@ -16073,7 +16073,7 @@ function ToolRenderApprovalBar(props) {
   };
   var onApprove = function() {
     if (answered) return;
-    answer("approved");
+    answer("allowed-once");
   };
   var onCommentKeyDown = function(event) {
     if (answered) return;
@@ -16089,8 +16089,9 @@ function ToolRenderApprovalBar(props) {
   var pending = approvalId === null ? null : pendingRef.current;
   if (pending === null || pending === void 0) {
     var outcome = decidedRecord !== null && decidedRecord !== void 0 ? decidedRecord.outcomes[props.callId] : void 0;
-    if (outcome !== "approved" && outcome !== "rejected") return null;
-    return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-approval-strip" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-decided", "data-outcome": outcome }, outcome));
+    var decidedLabel = outcome === "allowed-once" || outcome === "approved" ? "approved" : outcome === "rejected" ? "rejected" : null;
+    if (decidedLabel === null) return null;
+    return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-approval-strip" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-decided", "data-outcome": decidedLabel }, decidedLabel));
   }
   var hasDraft = draft.trim() !== "";
   return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-approval-strip" }, /* @__PURE__ */ import_react.default.createElement(
