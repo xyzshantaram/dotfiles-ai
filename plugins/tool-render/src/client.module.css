@@ -823,20 +823,35 @@
    carries this card's callId is pending, the card answers it inline; once
    decided, a durable badge keeps the outcome. The strip is additive: the
    card keeps rendering its normal content above it. */
+/* A COLUMN, not a row: the comment affordance is a precondition of the
+   decision, so it reads above the buttons rather than beside them. Order is
+   "add comment" (left) -> optional textarea (full width) -> the decision
+   pair (right), which is also the order the user moves through them. */
 .tool-render-approval-strip {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: stretch;
   gap: 0.25rem;
-  margin: 0.125rem 0 0.125rem 0.25rem;
+  margin: 0.25rem 0 0.125rem 0.25rem;
 }
-/* Reject/approve pack to the right edge (aidos queue recipe: actions sit at
-   the row's end); the comment toggle and textarea keep their left flow. */
+/* Reject/approve pack to the card's bottom-right corner (aidos queue recipe:
+   actions sit at the end of their container). */
 .tool-render-approval-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.25rem;
-  margin-left: auto;
+}
+/* The toggle keeps the left edge on its own line above the buttons; without
+   align-self it would stretch across the full column width and its hit area
+   would cover the whole row. */
+.tool-render-approval-comment-toggle {
+  align-self: flex-start;
+}
+/* The decided badge is the strip's only child once answered, so it holds the
+   same right edge the actions had rather than stretching. */
+.tool-render-decided {
+  align-self: flex-end;
 }
 /* Aidios review-queue button recipe, mapped onto dsw-alias tokens: 1px
    border, surface bg, secondary text, 4px radius, 12px/20px, 5px 12px
