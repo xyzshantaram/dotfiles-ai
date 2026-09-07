@@ -30,7 +30,9 @@ import { injectStyle, mergeCss, fetchJson, postJson } from "../../shared/client-
 import { SettingsSection } from "../../shared/settings-panel";
 import settingsCss from "../../shared/settings.css";
 import localCss from "./client.module.css";
+import { toast } from "../../shared/toast-client";
 import { describeVerdict, verdictFrom, type Probe } from "./reload-check";
+import { clearFlash, takeFlash, writeFlash } from "./flash";
 
 const PLUGIN_NAME = "restart-pause";
 const STYLE_TAG_ID = "restart-pause-styles";
@@ -45,6 +47,7 @@ interface CheckResult {
 }
 
 interface Status {
+  startedAt: number;
   running: number;
   runningLabels: string[];
   armed: boolean;
@@ -143,6 +146,10 @@ function makePanel() {
             : "Running checks, then waiting for sessions to finish...",
         );
         setVerdict(null);
+        // Written BEFORE the request, because a successful restart may kill the
+        // process before its response is written. A restart that then does not
+        // happen leaves a flash that resolves to "nothing to announce".
+        writeFlash(window.localStorage, { requestedAt: Date.now(), armed: false });
         postJson("/restart-pause/restart", { force })
           .then((result: unknown) => {
             const r = result as {
@@ -181,7 +188,12 @@ function makePanel() {
 
     const toggleArm = react.useCallback(() => {
       if (status === null) return;
-      postJson("/restart-pause/arm", { armed: !status.armed }).then(() => refresh());
+      const next = !status.armed;
+      // Arming is the case the flash exists for: the restart fires later, at
+      // idle, possibly with this tab closed.
+      if (next) writeFlash(window.localStorage, { requestedAt: Date.now(), armed: true });
+      else clearFlash(window.localStorage);
+      postJson("/restart-pause/arm", { armed: next }).then(() => refresh());
     }, [status, refresh]);
 
     if (status === null) {
@@ -279,6 +291,21 @@ function apply(ctx) {
   ctx.effect(function () {
     injectStyle(PLUGIN_NAME, STYLE_TAG_ID, mergeCss(settingsCss, localCss));
   }, "restart-pause: styles");
+
+  // Announce a restart that finished while nobody was watching. The claim is
+  // checked against the host's own process start time rather than assumed, so
+  // an armed restart that has not fired yet says nothing.
+  fetchJson("/restart-pause/status")
+    .then(function (result: unknown) {
+      const status = result as { startedAt?: number };
+      if (typeof status.startedAt !== "number") return;
+      const outcome = takeFlash(window.localStorage, status.startedAt, Date.now());
+      if (outcome.kind !== "restarted") return;
+      toast(outcome.armed ? "dsh restarted (armed restart fired)" : "dsh restarted", "success");
+    })
+    .catch(function () {
+      // No status, nothing to announce. The flash stays for the next boot.
+    });
 
   // Created once so the component identity is stable across slot re-renders
   // and React keeps its state between them.

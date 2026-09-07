@@ -125,6 +125,27 @@ var settings_default = "/* Shared settings-page vocabulary, normalized from the 
 // css-text:/home/sid/repos/dotfiles-ai/plugins/restart-pause/src/client.module.css
 var client_default = ".rpRow {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  flex-wrap: wrap;\n  margin-bottom: 10px;\n}\n\n.rpNote {\n  opacity: 0.75;\n  font-size: 12px;\n  line-height: 1.5;\n  margin: 6px 0;\n}\n\n.rpSessions {\n  margin: 6px 0 10px;\n  padding-left: 18px;\n  font-size: 12px;\n  line-height: 1.6;\n}\n\n.rpCheck {\n  display: flex;\n  gap: 8px;\n  align-items: baseline;\n  font-size: 12px;\n  padding: 4px 0;\n  border-top: 1px solid var(--dsh-border, rgba(128, 128, 128, 0.25));\n}\n\n.rpCheckMark {\n  flex: none;\n  font-family: var(--dsh-font-mono, monospace);\n}\n\n.rpCheckBody {\n  min-width: 0;\n}\n\n.rpCheckCmd {\n  font-family: var(--dsh-font-mono, monospace);\n  word-break: break-all;\n}\n\n.rpCheckOut {\n  white-space: pre-wrap;\n  word-break: break-word;\n  opacity: 0.75;\n  margin-top: 2px;\n  max-height: 140px;\n  overflow: auto;\n}\n\n.rpFail {\n  color: var(--dsh-danger, #e06c75);\n}\n\n.rpVerdict {\n  margin-top: 10px;\n  font-size: 13px;\n  line-height: 1.5;\n}\n";
 
+// plugins/shared/toast-client.ts
+var SUPPORTED_VERSION = 1;
+function api() {
+  const found = globalThis.__dshToast__;
+  if (found === null || typeof found !== "object") return null;
+  const candidate = found;
+  if (candidate.version !== SUPPORTED_VERSION) return null;
+  if (typeof candidate.show !== "function" || typeof candidate.dismiss !== "function") return null;
+  return candidate;
+}
+function toast(text, kind = "info", durationMs) {
+  const found = api();
+  if (found === null) return null;
+  try {
+    return found.show(text, kind, durationMs);
+  } catch (error) {
+    console.error("[toast-client] show threw:", error);
+    return null;
+  }
+}
+
 // plugins/restart-pause/src/reload-check.ts
 function verdictFrom(probes, opts) {
   if (probes.length === 0) return { kind: "waiting", sawDown: false };
@@ -169,6 +190,64 @@ function describeVerdict(verdict) {
     case "waiting":
       return verdict.sawDown ? "dsh is down, waiting for it to come back..." : "Waiting for dsh to go down...";
   }
+}
+
+// plugins/restart-pause/src/flash.ts
+var FLASH_KEY = "restart-pause.flash";
+var FLASH_TTL_MS = 24 * 60 * 60 * 1e3;
+function writeFlash(store, flash) {
+  try {
+    store.setItem(FLASH_KEY, JSON.stringify(flash));
+  } catch {
+  }
+}
+function clearFlash(store) {
+  try {
+    store.removeItem(FLASH_KEY);
+  } catch {
+  }
+}
+function readFlash(store) {
+  let raw;
+  try {
+    raw = store.getItem(FLASH_KEY);
+  } catch {
+    return null;
+  }
+  if (raw === null) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed === null || typeof parsed !== "object") {
+      clearFlash(store);
+      return null;
+    }
+    const candidate = parsed;
+    if (typeof candidate.requestedAt !== "number" || !Number.isFinite(candidate.requestedAt)) {
+      clearFlash(store);
+      return null;
+    }
+    return { requestedAt: candidate.requestedAt, armed: candidate.armed === true };
+  } catch {
+    clearFlash(store);
+    return null;
+  }
+}
+function takeFlash(store, processStartedAt, now) {
+  const flash = readFlash(store);
+  if (flash === null) return { kind: "none" };
+  if (now - flash.requestedAt > FLASH_TTL_MS) {
+    clearFlash(store);
+    return { kind: "none" };
+  }
+  if (processStartedAt > flash.requestedAt) {
+    clearFlash(store);
+    return { kind: "restarted", armed: flash.armed };
+  }
+  if (!flash.armed) {
+    clearFlash(store);
+    return { kind: "none" };
+  }
+  return { kind: "pending", armed: true };
 }
 
 // plugins/restart-pause/src/client.tsx
@@ -249,6 +328,7 @@ function makePanel() {
           force ? "Restarting without checks..." : "Running checks, then waiting for sessions to finish..."
         );
         setVerdict(null);
+        writeFlash(window.localStorage, { requestedAt: Date.now(), armed: false });
         postJson("/restart-pause/restart", { force }).then((result) => {
           const r = result;
           if (r.ok) {
@@ -278,7 +358,10 @@ function makePanel() {
     );
     const toggleArm = import_react2.default.useCallback(() => {
       if (status === null) return;
-      postJson("/restart-pause/arm", { armed: !status.armed }).then(() => refresh());
+      const next = !status.armed;
+      if (next) writeFlash(window.localStorage, { requestedAt: Date.now(), armed: true });
+      else clearFlash(window.localStorage);
+      postJson("/restart-pause/arm", { armed: next }).then(() => refresh());
     }, [status, refresh]);
     if (status === null) {
       return /* @__PURE__ */ import_react2.default.createElement(SettingsSection, { title: "Debug" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "rpNote" }, "Loading..."));
@@ -293,6 +376,14 @@ function apply(ctx) {
   ctx.effect(function() {
     injectStyle(PLUGIN_NAME, STYLE_TAG_ID, mergeCss(settings_default, client_default));
   }, "restart-pause: styles");
+  fetchJson("/restart-pause/status").then(function(result) {
+    const status = result;
+    if (typeof status.startedAt !== "number") return;
+    const outcome = takeFlash(window.localStorage, status.startedAt, Date.now());
+    if (outcome.kind !== "restarted") return;
+    toast(outcome.armed ? "dsh restarted (armed restart fired)" : "dsh restarted", "success");
+  }).catch(function() {
+  });
   var Panel = makePanel();
   ctx.slots.inject("settings.section", function() {
     return ctx.slots.register(

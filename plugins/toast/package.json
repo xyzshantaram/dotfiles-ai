@@ -1,0 +1,28 @@
+{
+  "name": "toast",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "One app-wide toast stack in shell.overlay, published as window.__dshToast__ so any plugin or bundle can raise a notification.",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime"
+      ]
+    }
+  },
+  "license": "MIT"
+}

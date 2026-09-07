@@ -1,0 +1,7 @@
+# toast — the shared toast stack (client plugin).
+# The stack lives in the ./client bundle and mounts into shell.overlay. The
+# host row exists so the client-module registry mounts this package in the web
+# profile and serves that bundle in the boot graph.
+- insert:
+    - id: toast
+      name: toast

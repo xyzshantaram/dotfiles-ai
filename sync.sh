@@ -42,7 +42,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#4cbcb8d679dff1f6c06c6bb1276d8c10a6c2e313}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#9c7a97b9c7212ea54db3c355d8d8c8fab7d54558}"
 
 # Git-hosted specs whose build scripts pnpm must be allowed to run. pnpm 10+
 # blocks lifecycle scripts (prepare/postinstall) unless the exact resolved
@@ -360,6 +360,9 @@ step_install_plugins() {
 		# Upgrade = bump the pin.
 		pnpm_ins "@deepseek-ai/dsh-compaction-basic@github:xyzshantaram/dsh-compaction-instant#9525c7233d0f92651bd850ff7d49bb2d149d099f"
 
+		# The shared toast stack. Other packages reach it through the global it
+		# publishes, so it must be installed before anything that raises a toast.
+		pnpm_ins "$HERE/plugins/toast"
 		pnpm_ins "$HERE/plugins/session-archive"
 		pnpm_ins "$HERE/plugins/restart-pause"
 		pnpm_ins "$HERE/plugins/subscriptions"

@@ -1,0 +1,62 @@
+/* The stack itself never eats clicks: it spans a strip of the viewport and
+   most of it is empty. Only the toast rows opt back in. */
+.dsh-toast-stack {
+  position: fixed;
+  left: 50%;
+  bottom: 32px;
+  transform: translateX(-50%);
+  z-index: 2147483000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.dsh-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 8px 14px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-1);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-left-width: 3px;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.4);
+}
+
+.dsh-toast-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Kind shows as a left edge rather than a coloured background, so long text
+   stays as readable as the rest of the UI. */
+.dsh-toast-refusal {
+  border-left-color: var(--dsw-alias-state-error-primary);
+}
+.dsh-toast-info {
+  border-left-color: var(--dsw-alias-state-business-primary);
+}
+.dsh-toast-success {
+  border-left-color: var(--dsw-alias-state-success-primary);
+}
+
+.dsh-toast-dismiss {
+  cursor: pointer;
+  flex: none;
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 16px;
+  line-height: 16px;
+}
+.dsh-toast-dismiss:hover {
+  color: var(--dsw-alias-label-primary);
+}
