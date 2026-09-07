@@ -520,11 +520,45 @@ function toolNameBadge(toolName, icon, state) {
 
 // ---- Row chrome (shared look, mirrors the shipped ToolRow seating). ----
 function toolRenderRow(options) {
+  // Two shells rather than one shell with a conditional hook: the pending
+  // subscription below IS a hook, and a card without a callId has no session
+  // to subscribe to. Branching on the element TYPE fixes each instance's hook
+  // order for its whole life, which `if (answerable) useSession(...)` inside a
+  // single shared component would not.
+  var answerable =
+    options.callId !== undefined &&
+    options.callId !== null &&
+    typeof options.useSession === "function";
+  return answerable ? (
+    <ToolRenderAnswerableCard options={options} />
+  ) : (
+    renderToolRenderCard(options, false)
+  );
+}
+
+/**
+ * A card whose callId can carry an approval. It subscribes to the live
+ * pending set for one reason: an OPEN approval pins the card open. The user
+ * is being asked to judge a command and its context, and a collapsed card
+ * hides exactly the evidence the decision needs.
+ */
+function ToolRenderAnswerableCard(props) {
+  var options = props.options;
+  var approvalOpen =
+    options.useSession(function (snapshot) {
+      return pendingApprovalOf(snapshot, options.callId) !== null;
+    }) === true;
+  return renderToolRenderCard(options, approvalOpen);
+}
+
+function renderToolRenderCard(options, approvalOpen) {
   // Every expandable row toggles, errored ones included. An errored row starts
   // collapsed like any other and reports its tool name and error message on the
   // row, so the failure reads at a glance without opening the card.
   var interactive = options.expandable === true;
-  var open = options.expanded === true && interactive;
+  // A pending approval pins the card open; the user's own toggle takes back
+  // control the moment that approval settles.
+  var open = (options.expanded === true || approvalOpen === true) && interactive;
   // The leading area is the chevron when open, then the tool-name badge.
   // The old state dots are gone: a stopped card carries an outline instead,
   // and the badge replaces the bare icon as the row's leading mark.
@@ -621,9 +655,6 @@ function toolRenderRow(options) {
         <span className="tool-render-sep" aria-hidden={true} />
         {summary}
       </div>
-      {options.callId !== undefined && options.callId !== null && typeof options.useSession === "function" ? (
-        <ToolRenderApprovalBar callId={options.callId} useSession={options.useSession} />
-      ) : null}
       {open === true ? (
         <div className="tool-render-body">
           {/* A failed call whose result carried no text still shows its error.
@@ -646,6 +677,15 @@ function toolRenderRow(options) {
             </button>
           ) : null}
         </div>
+      ) : null}
+      {/* The answer bar sits at the BOTTOM of the card, under the body: the
+          decision is the last thing in reading order, after the command and
+          output it is a judgement about. It also keeps the durable decided
+          badge in the same place the actions were. */}
+      {options.callId !== undefined &&
+      options.callId !== null &&
+      typeof options.useSession === "function" ? (
+        <ToolRenderApprovalBar callId={options.callId} useSession={options.useSession} />
       ) : null}
     </div>
   );

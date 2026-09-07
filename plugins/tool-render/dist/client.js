@@ -2801,20 +2801,35 @@ var client_default = `.tool-render-row {
    carries this card's callId is pending, the card answers it inline; once
    decided, a durable badge keeps the outcome. The strip is additive: the
    card keeps rendering its normal content above it. */
+/* A COLUMN, not a row: the comment affordance is a precondition of the
+   decision, so it reads above the buttons rather than beside them. Order is
+   "add comment" (left) -> optional textarea (full width) -> the decision
+   pair (right), which is also the order the user moves through them. */
 .tool-render-approval-strip {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: stretch;
   gap: 0.25rem;
-  margin: 0.125rem 0 0.125rem 0.25rem;
+  margin: 0.25rem 0 0.125rem 0.25rem;
 }
-/* Reject/approve pack to the right edge (aidos queue recipe: actions sit at
-   the row's end); the comment toggle and textarea keep their left flow. */
+/* Reject/approve pack to the card's bottom-right corner (aidos queue recipe:
+   actions sit at the end of their container). */
 .tool-render-approval-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.25rem;
-  margin-left: auto;
+}
+/* The toggle keeps the left edge on its own line above the buttons; without
+   align-self it would stretch across the full column width and its hit area
+   would cover the whole row. */
+.tool-render-approval-comment-toggle {
+  align-self: flex-start;
+}
+/* The decided badge is the strip's only child once answered, so it holds the
+   same right edge the actions had rather than stretching. */
+.tool-render-decided {
+  align-self: flex-end;
 }
 /* Aidios review-queue button recipe, mapped onto dsw-alias tokens: 1px
    border, surface bg, secondary text, 4px radius, 12px/20px, 5px 12px
@@ -15891,8 +15906,19 @@ function toolNameBadge(toolName, icon, state) {
   );
 }
 function toolRenderRow(options) {
+  var answerable = options.callId !== void 0 && options.callId !== null && typeof options.useSession === "function";
+  return answerable ? /* @__PURE__ */ import_react.default.createElement(ToolRenderAnswerableCard, { options }) : renderToolRenderCard(options, false);
+}
+function ToolRenderAnswerableCard(props) {
+  var options = props.options;
+  var approvalOpen = options.useSession(function(snapshot) {
+    return pendingApprovalOf(snapshot, options.callId) !== null;
+  }) === true;
+  return renderToolRenderCard(options, approvalOpen);
+}
+function renderToolRenderCard(options, approvalOpen) {
   var interactive = options.expandable === true;
-  var open = options.expanded === true && interactive;
+  var open = (options.expanded === true || approvalOpen === true) && interactive;
   var leading = toolNameBadge(options.toolName, options.icon, options.state);
   var summary;
   var showsError = options.state === "error" && options.errorSummary !== void 0;
@@ -15974,8 +16000,8 @@ function toolRenderRow(options) {
       /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-sep", "aria-hidden": true }),
       summary
     ),
-    options.callId !== void 0 && options.callId !== null && typeof options.useSession === "function" ? /* @__PURE__ */ import_react.default.createElement(ToolRenderApprovalBar, { callId: options.callId, useSession: options.useSession }) : null,
-    open === true ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-body" }, options.body !== null && options.body !== void 0 ? options.body : options.state === "error" && options.errorText !== null && options.errorText !== void 0 && options.errorText !== "" ? /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output", "tool-render-error": true }, options.errorText) : null, options.inspect !== void 0 ? /* @__PURE__ */ import_react.default.createElement("button", { type: "button", className: "tool-render-inspect", onClick: options.inspect }, /* @__PURE__ */ import_react.default.createElement(IconInspectOutline122, null), " Inspect") : null) : null
+    open === true ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-body" }, options.body !== null && options.body !== void 0 ? options.body : options.state === "error" && options.errorText !== null && options.errorText !== void 0 && options.errorText !== "" ? /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output", "tool-render-error": true }, options.errorText) : null, options.inspect !== void 0 ? /* @__PURE__ */ import_react.default.createElement("button", { type: "button", className: "tool-render-inspect", onClick: options.inspect }, /* @__PURE__ */ import_react.default.createElement(IconInspectOutline122, null), " Inspect") : null) : null,
+    options.callId !== void 0 && options.callId !== null && typeof options.useSession === "function" ? /* @__PURE__ */ import_react.default.createElement(ToolRenderApprovalBar, { callId: options.callId, useSession: options.useSession }) : null
   );
 }
 function pendingApprovalOf(snapshot, callId) {
