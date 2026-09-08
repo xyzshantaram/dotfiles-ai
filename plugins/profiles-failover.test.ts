@@ -11,6 +11,10 @@ import {
   markDown,
   isCachedDown,
   clearDownCache,
+  normalizeErrorClass,
+  sequenceKeyOf,
+  recordSequenceFailure,
+  isSequenceFailed,
   makeFailoverStatusHandler,
   recordFailoverEvent,
   clearFailoverEvents,
@@ -186,13 +190,22 @@ describe("down-cache", () => {
     expect(isCachedDown(level)).toBe(false);
   });
 
-  it("unclassified failure marks nothing and does not go down", () => {
+  it("unclassified failure falls back to the short transient window (ticket #96)", () => {
     const level = makeLevel("openai", "gpt-4");
 
-    // Use code and message that normalizeErrorClass maps to undefined.
+    // The regressed case: bodyless/transport failures classify as nothing.
+    expect(normalizeErrorClass("UNKNOWN_CODE", "some transient error")).toBe(undefined);
+
     markDown(level, "UNKNOWN_CODE", "some transient error");
 
+    // Inside the 30s transient window the rung reads down ...
     vi.setSystemTime(1);
+    expect(isCachedDown(level)).toBe(true);
+    vi.setSystemTime(29_999);
+    expect(isCachedDown(level)).toBe(true);
+
+    // ... and clears just past it, so a blip never blacklists a rung for minutes.
+    vi.setSystemTime(30_001);
     expect(isCachedDown(level)).toBe(false);
   });
 
@@ -224,6 +237,99 @@ describe("down-cache", () => {
 
     vi.setSystemTime(60_001 + 60_000 + 1);
     expect(isCachedDown(level)).toBe(false);
+  });
+});
+
+describe("ticket #96: middle rung always fails", () => {
+  const makeLevel = (provider: string, model: string) => ({ provider, model });
+
+  beforeEach(() => {
+    clearDownCache();
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+  });
+
+  it("walk terminates at the first working rung without revisiting a failed rung", () => {
+    const head = makeLevel("cmd-code", "rung-1");
+    const deadMiddle = makeLevel("opencode-go", "rung-2");
+    const tail = makeLevel("zai", "rung-3");
+    const levels = [head, deadMiddle, tail];
+    // Walk memory for one request sequence, as registerFailover holds per turn.
+    const seqKeys = new Set<string>();
+    const isDown = (lvl: { provider: string; model: string }) =>
+      isCachedDown(lvl) || isSequenceFailed(seqKeys, lvl);
+
+    // The regressed case: these transport/bodyless failures classify as
+    // nothing, so the old markDown early-return cached nothing.
+    expect(normalizeErrorClass(undefined, "500 status code (no body)")).toBe(undefined);
+    expect(normalizeErrorClass(undefined, "fetch failed")).toBe(undefined);
+
+    const visited: string[] = [];
+    // Every step resets the cursor to 0 (profiles.ts per-step reset); the
+    // walk moves forward only via the down-cache plus sequence memory.
+    const selectFromZero = () => advanceChain(levels, 0, isDown);
+
+    // Step 1 lands on the head; it fails unclassifiably.
+    let now = 0;
+    vi.setSystemTime(now);
+    let r = selectFromZero();
+    expect(r.exhausted).toBe(false);
+    expect(levels[r.cursor]).toEqual(head);
+    visited.push(sequenceKeyOf(levels[r.cursor]));
+    markDown(levels[r.cursor], undefined, "500 status code (no body)");
+    recordSequenceFailure(seqKeys, levels[r.cursor]);
+
+    // Step 2 resets to 0 and must skip the head without revisiting it.
+    now += 2_000;
+    vi.setSystemTime(now);
+    r = selectFromZero();
+    expect(r.exhausted).toBe(false);
+    expect(levels[r.cursor]).toEqual(deadMiddle);
+    expect(visited).not.toContain(sequenceKeyOf(levels[r.cursor]));
+    visited.push(sequenceKeyOf(levels[r.cursor]));
+    // The middle rung ALWAYS fails, again unclassifiably.
+    markDown(levels[r.cursor], undefined, "fetch failed");
+    recordSequenceFailure(seqKeys, levels[r.cursor]);
+
+    // Step 3 resets to 0 and must skip both failed rungs, landing on tail.
+    now += 2_000;
+    vi.setSystemTime(now);
+    r = selectFromZero();
+    expect(r.exhausted).toBe(false);
+    expect(levels[r.cursor]).toEqual(tail);
+    expect(visited).not.toContain(sequenceKeyOf(levels[r.cursor]));
+    visited.push(sequenceKeyOf(levels[r.cursor]));
+
+    // One log line per rung: each rung selected exactly once, monotonically.
+    expect(visited).toEqual([
+      sequenceKeyOf(head),
+      sequenceKeyOf(deadMiddle),
+      sequenceKeyOf(tail),
+    ]);
+  });
+
+  it("sequence memory skips a failed rung after its transient entry lapses", () => {
+    const head = makeLevel("cmd-code", "rung-1");
+    const next = makeLevel("opencode-go", "rung-2");
+    const levels = [head, next];
+    const seqKeys = new Set<string>();
+
+    vi.setSystemTime(0);
+    markDown(head, undefined, "fetch failed");
+    recordSequenceFailure(seqKeys, head);
+
+    // Past the 30s transient window the cache lapses ...
+    vi.setSystemTime(30_001);
+    expect(isCachedDown(head)).toBe(false);
+
+    // ... but the walk still must not re-pick the rung this sequence.
+    const r = advanceChain(
+      levels,
+      0,
+      (lvl) => isCachedDown(lvl) || isSequenceFailed(seqKeys, lvl),
+    );
+    expect(r.exhausted).toBe(false);
+    expect(levels[r.cursor]).toEqual(next);
   });
 });
 
