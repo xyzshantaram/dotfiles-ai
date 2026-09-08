@@ -11,6 +11,8 @@ import {
   looksLikeRawHtml,
   compactionCommandError,
   compactionSummaryNode,
+  guardRewriteFromText,
+  GUARD_REWRITE_MARKER,
   numberedReadRows,
   parseAgentLines,
   parseSkillContent,
@@ -420,5 +422,45 @@ describe("compactionCommandError", () => {
   it("returns null for the bare compaction key, which has no command wrapper", () => {
     expect(compactionCommandError({ kind: "compaction", summary: "x" } as never)).toBeNull();
     expect(compactionCommandError(null as never)).toBeNull();
+  });
+});
+
+describe("guardRewriteFromText", () => {
+  it("parses the real emitter shape: marker, blank line, indented command, Why block", () => {
+    const text = "some output\n" + GUARD_REWRITE_MARKER + "\n\n  rg -n foo bar\n\nWhy: rule 3 (grep becomes rg)";
+    expect(guardRewriteFromText(text)).toEqual({ ran: "rg -n foo bar" });
+  });
+
+  it("takes the LAST banner when the command's own output embeds the marker mid-text", () => {
+    const embedded = GUARD_REWRITE_MARKER + "\n\n  echo quoted-from-transcript";
+    const real = GUARD_REWRITE_MARKER + "\n\n  rg -n real\n\nWhy: rule";
+    expect(guardRewriteFromText("head\n" + embedded + "\nmiddle output\n" + real)).toEqual({
+      ran: "rg -n real",
+    });
+  });
+
+  it("joins a multi-line command from its indented lines", () => {
+    const text = GUARD_REWRITE_MARKER + "\n\n  rg -n a\n  rg -n b\n\nWhy: rule";
+    expect(guardRewriteFromText(text)).toEqual({ ran: "rg -n a\nrg -n b" });
+  });
+
+  it("accepts a banner that runs to end-of-text with no Why block", () => {
+    const text = "out\n" + GUARD_REWRITE_MARKER + "\n\n  rg eof";
+    expect(guardRewriteFromText(text)).toEqual({ ran: "rg eof" });
+  });
+
+  it("returns null for plain non-rewritten output", () => {
+    expect(guardRewriteFromText("just output\nno banner here")).toBeNull();
+  });
+
+  it("returns null when the marker is followed by no indented command", () => {
+    expect(guardRewriteFromText("done\n" + GUARD_REWRITE_MARKER)).toBeNull();
+    expect(guardRewriteFromText("done\n" + GUARD_REWRITE_MARKER + "\n\nWhy: nothing ran")).toBeNull();
+  });
+
+  it("returns null for non-string input", () => {
+    expect(guardRewriteFromText(undefined)).toBeNull();
+    expect(guardRewriteFromText(null)).toBeNull();
+    expect(guardRewriteFromText(42)).toBeNull();
   });
 });

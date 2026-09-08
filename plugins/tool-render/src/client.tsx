@@ -59,6 +59,7 @@ import {
   extractHunk,
   compactionCommandError,
   compactionSummaryNode,
+  guardRewriteFromText,
   numberedReadRows,
   stripOuterFence,
   looksLikeRawHtml,
@@ -333,8 +334,11 @@ function rowStateOf(block) {
 // subagent or a nested dispatch — never get presentationMeta (the harness
 // computes it only for parentless execs, and the conversation projection's
 // childResult sets no meta field), so the only durable marker there is
-// bash-guard's banner in the result text. guardRewriteFromText parses that
-// banner; meta stays authoritative whenever it exists at all.
+// bash-guard's banner in the result text. meta is authoritative whenever it
+// is a plain object at all — including one whose rewritten is not true,
+// which reads as "definitely not a rewrite" rather than "unknown". Only a
+// non-object meta (absent, array, or primitive) falls through to the text
+// banner: the nested-call path.
 function guardRewriteOf(block, resultText) {
   if (!doneOf(block)) return null;
   var meta = block.meta;
@@ -344,34 +348,6 @@ function guardRewriteOf(block, resultText) {
     return { ran: meta.ran };
   }
   return guardRewriteFromText(resultText);
-}
-
-// The banner bash-guard prints once it has ALREADY run a replacement
-// (bash-guard.ts ranMessage): the marker, a blank separator line, then
-// two-space-indented command lines, ended by the first unindented
-// non-empty line ("Why:"). Only BashRow reaches the fallback, so output
-// that merely quotes the phrase from other tools cannot false-positive.
-var GUARD_REWRITE_MARKER = "bash-guard: ran this instead:";
-
-function guardRewriteFromText(text) {
-  if (typeof text !== "string") return null;
-  var at = text.indexOf(GUARD_REWRITE_MARKER);
-  if (at === -1) return null;
-  var lines = text.slice(at + GUARD_REWRITE_MARKER.length).split("\n");
-  var ran = [];
-  for (var i = 0; i < lines.length; i++) {
-    var line = lines[i];
-    if (line === "") continue; // the banner's blank separator lines
-    if (line.slice(0, 2) === "  ") {
-      ran.push(line.slice(2));
-      continue;
-    }
-    break; // "Why:" — the first unindented non-empty line ends the block
-  }
-  if (ran.length === 0) return null;
-  var command = ran.join("\n").trim();
-  if (command.length === 0) return null;
-  return { ran: command };
 }
 
 function resultTextOf(block) {
