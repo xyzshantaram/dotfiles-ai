@@ -41,6 +41,15 @@
  * swapped for one that fails, and by default it makes the exit code non-zero so
  * it cannot be scrolled past.
  *
+ *   THE --allow-survivors CAVEAT ON EXIT 0. The flag exists for the honest
+ *   case: the gap is real, recorded on the ticket, and verification must
+ *   proceed anyway. But an exit 0 run WITH the flag is not a clean bill of
+ *   health — it means "survivors were allowed", and how many is in the
+ *   report. Any claim quoting this script's exit 0 must also state that
+ *   --allow-survivors was passed and how many mutations survived; an exit 0
+ *   presented as "all mutations killed" while the flag was set is exactly
+ *   the fake this script exists to make impossible.
+ *
  * USAGE
  *
  *   deno run --allow-run --allow-read --allow-write scripts/mutation-test.ts \
