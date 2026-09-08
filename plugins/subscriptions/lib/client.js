@@ -452,7 +452,8 @@ function ehUsageHasContent(usage) {
   if (usage.usage && (Number(usage.usage.inputTokens) > 0 || Number(usage.usage.outputTokens) > 0))
     return true;
   if (Array.isArray(usage.history) && usage.history.length > 0) return true;
-  if (Array.isArray(usage.endpoints) && usage.endpoints.length > 0) return true;
+  if (Array.isArray(usage.endpoints) && usage.endpoints.some((ep) => ep && typeof ep.name === "string"))
+    return true;
   return false;
 }
 function ehSectionModel(ehUsage, ehModels) {

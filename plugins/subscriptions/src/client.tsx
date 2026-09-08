@@ -532,7 +532,16 @@ function ehUsageHasContent(usage) {
   if (usage.usage && (Number(usage.usage.inputTokens) > 0 || Number(usage.usage.outputTokens) > 0))
     return true;
   if (Array.isArray(usage.history) && usage.history.length > 0) return true;
-  if (Array.isArray(usage.endpoints) && usage.endpoints.length > 0) return true;
+  // Count only endpoints that will actually RENDER. endpointCards skips any
+  // entry whose `name` is not a string, so testing raw array length let a
+  // hand-shaped legacy payload report "has content" and then draw a bare
+  // heading with no cards beneath it. This predicate and that filter must
+  // agree; if one changes, change both.
+  if (
+    Array.isArray(usage.endpoints) &&
+    usage.endpoints.some((ep) => ep && typeof ep.name === "string")
+  )
+    return true;
   return false;
 }
 
