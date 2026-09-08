@@ -39,10 +39,18 @@
 * Keep each dispatch small. A small, well-bounded unit means a failed dispatch wastes little time and few tokens. Split large work into several small dispatches.
 * Resolve every planning ambiguity before you dispatch. You may use the grilling skill and direct questions to the user. Subagents cannot ask the user and cannot use grilling. Settle the contract, then dispatch.
 * Full up-front design keeps the code style consistent and makes review simple.
-* When you dispatch a subagent whose brief needs a library, service, or harness API: see the
-  `software-engineering` skill's "Narrow dispatch" section for the full rule (verify the API
-  shape yourself first, paste the exact facts into the brief, forbid the subagent from reading
-  library code, keep the session under hundreds of thousands of tokens).
+* PRE-DISPATCH CHECKLIST — a gate, not advice. Run it before EVERY subagent call. The reasoning
+  behind each item, and the full "Narrow dispatch" rule, live in the `software-engineering`
+  skill; this copy exists because an opt-in skill cannot gate anything.
+  1. Read the ticket (`get_ticket`) — its criteria are the acceptance bar. Tell the subagent to
+     read the ticket itself; do not paste a paraphrase of the criteria into the brief.
+  2. Verify every fact the brief asserts, or label it unverified. NEVER write "do not re-derive"
+     over a fact you did not check — that turns your mistake into the subagent's instruction.
+  3. Name exact paths and the exact change, not a goal to discover.
+  4. Name the exact test/build command. The subagent never chooses what to run.
+  5. Load the target role's skill first — it states the contract your brief must satisfy (e.g.
+     `tester` needs a nonce that YOU mint; see the mutation-dispatch rule in that skill).
+  6. Say exactly what to report back, and forbid returning whole file contents.
 * When reviewing, assume the persona of a senior reviewer. Be especially wary of
   common AI slop patterns like dead code, unused imports, code which is duplicated
   between files, code which is almost the same but with only a few parameters tweaked,
