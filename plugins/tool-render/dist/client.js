@@ -2860,11 +2860,9 @@ var client_default = `.tool-render-row {
 .tool-render-approval-comment-toggle {
   align-self: flex-end;
 }
-/* The decided badge is the strip's only child once answered, so it holds the
-   same right edge the actions had rather than stretching. */
-.tool-render-decided {
-  align-self: flex-end;
-}
+/* (The decided badge that used to live here was retired on 2026-09-08: the
+   durable verdict is now a badge on the collapsed row, .tool-render-verdict,
+   and the answer bar renders nothing once a decision has settled.) */
 /* Aidios review-queue button recipe, mapped onto dsw-alias tokens: 1px
    border, surface bg, secondary text, 4px radius, 12px/20px, 5px 12px
    padding, hover raises surface + primary text, disabled 0.45. */
@@ -2956,29 +2954,36 @@ var client_default = `.tool-render-row {
   outline: 2px solid var(--dsw-alias-state-business-primary);
   outline-offset: -1px;
 }
-/* The durable decided badge (owner, 2026-09-08): it should read as THE BUTTON
-   THAT WAS PRESSED, left disabled \u2014 not as a separate coloured pill. So it
-   inherits .tool-render-approval-btn's exact recipe (1px border, surface bg,
-   secondary text, 4px radius, 12px/20px, 5px 12px padding) plus that button's
-   own :disabled treatment (opacity 0.45, default cursor). Approved therefore
-   carries NO accent colour at all: the neutral disabled button IS the "you
-   pressed approve" signal. Only rejected keeps a tint, because a refusal that
-   looks identical to an approval is worth one colour.
+/* The durable approval verdict on the COLLAPSED row (owner, 2026-09-08):
+   [shield | APPROVED], sitting immediately after the tool-call label badge.
+   It reads as a small status stamp \u2014 uppercase, tight, nowrap \u2014 so the row
+   still scans as one line and the verdict is legible without expanding.
+   Approved carries no accent: at row scale a coloured pill competes with the
+   tool name for attention, and "it was approved" is the unremarkable case.
+   Rejected keeps the error tint, because a refusal that looks identical to an
+   approval is worth exactly one colour.
    Sourced from the guarded-approvals fold, so it survives a page reload. */
-.tool-render-decided {
+.tool-render-verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
   border: 1px solid var(--dsw-alias-border-l3);
-  background: var(--dsw-alias-bg-base);
-  color: var(--dsw-alias-label-secondary);
   border-radius: 4px;
-  font-size: 12px;
-  line-height: 20px;
-  padding: 5px 12px;
-  opacity: 0.45;
-  cursor: default;
+  padding: 0 6px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 18px;
+  white-space: nowrap;
 }
-.tool-render-decided[data-outcome="rejected"] {
+.tool-render-verdict[data-outcome="rejected"] {
   color: var(--dsw-alias-state-error-primary);
   border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 55%, var(--dsw-alias-border-l3));
+}
+.tool-render-verdict-shield {
+  flex: none;
 }
 /* The pending ask's reason (owner, 2026-09-08): while an approval is open the
    card must say WHY it is being asked. Tertiary label, wrapping, sitting above
@@ -16025,6 +16030,14 @@ function renderToolRenderCard(options, approvalOpen) {
       leading,
       leading === null ? /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-title" }, options.title) : null,
       options.badge !== void 0 && options.badge !== null && options.badge !== "" ? /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-badge" }, options.badge) : null,
+      options.callId !== void 0 && options.callId !== null && typeof options.useSession === "function" ? /* @__PURE__ */ import_react.default.createElement(
+        ToolRenderApprovalVerdict,
+        {
+          callId: options.callId,
+          useSession: options.useSession,
+          useProjection: options.useProjection
+        }
+      ) : null,
       /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-sep", "aria-hidden": true }),
       summary
     ),
@@ -16038,6 +16051,33 @@ function renderToolRenderCard(options, approvalOpen) {
       }
     ) : null
   );
+}
+function ToolRenderApprovalVerdict(props) {
+  var decidedRecord = useGuardedApprovals(props.useSession, props.useProjection);
+  var outcome = decidedRecord !== null && decidedRecord !== void 0 ? decidedRecord.outcomes[props.callId] : void 0;
+  var label = outcome === "allowed-once" || outcome === "approved" ? "approved" : outcome === "rejected" ? "rejected" : null;
+  if (label === null) return null;
+  return /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-verdict", "data-outcome": label }, /* @__PURE__ */ import_react.default.createElement(
+    "svg",
+    {
+      className: "tool-render-verdict-shield",
+      viewBox: "0 0 16 16",
+      width: "11",
+      height: "11",
+      "aria-hidden": true,
+      focusable: "false"
+    },
+    /* @__PURE__ */ import_react.default.createElement(
+      "path",
+      {
+        d: "M8 1.5 3 3.4v4.2c0 3.1 2.1 5.9 5 6.9 2.9-1 5-3.8 5-6.9V3.4L8 1.5Z",
+        fill: "none",
+        stroke: "currentColor",
+        strokeWidth: "1.3",
+        strokeLinejoin: "round"
+      }
+    )
+  ), /* @__PURE__ */ import_react.default.createElement("span", null, label === "approved" ? "APPROVED" : "REJECTED"));
 }
 function pendingApprovalOf(snapshot, callId) {
   var pending = snapshot !== null && snapshot !== void 0 ? snapshot.pending : void 0;
@@ -16096,7 +16136,6 @@ function guardRewriteLabel(originalCmd, rewrittenCmd) {
   return "translated to " + rewriteToken;
 }
 function ToolRenderApprovalBar(props) {
-  var decidedRecord = useGuardedApprovals(props.useSession, props.useProjection);
   var pendingRef = useRef(null);
   var approvalId = props.useSession(function(snapshot) {
     var found = pendingApprovalOf(snapshot, props.callId);
@@ -16130,11 +16169,11 @@ function ToolRenderApprovalBar(props) {
     },
     [approvalId]
   );
-  var answer = function(outcome2) {
+  var answer = function(outcome) {
     if (answered) return;
     var current = pendingRef.current;
     if (current === null || current === void 0) return;
-    console.debug("[tool-render] approval answer:", outcome2, props.callId);
+    console.debug("[tool-render] approval answer:", outcome, props.callId);
     setAnswered(true);
     var commentText = draft.trim();
     if (commentText !== "") {
@@ -16151,7 +16190,7 @@ function ToolRenderApprovalBar(props) {
           value: {
             sessionId: current.sessionId,
             approvalId: current.payload.approvalId,
-            outcome: outcome2
+            outcome
           }
         })
       ).then(function(receipt) {
@@ -16160,13 +16199,13 @@ function ToolRenderApprovalBar(props) {
             "approval response rejected: " + (receipt === void 0 || receipt === null || receipt.reason === void 0 ? "unknown" : receipt.reason)
           );
         }
-        console.debug("[tool-render] approval answered", props.callId, outcome2);
+        console.debug("[tool-render] approval answered", props.callId, outcome);
       }).catch(function(error) {
-        console.warn("[tool-render] approval answer failed", props.callId, outcome2, error);
+        console.warn("[tool-render] approval answer failed", props.callId, outcome, error);
         setAnswered(false);
       });
     } catch (error) {
-      console.warn("[tool-render] approval answer failed", props.callId, outcome2, error);
+      console.warn("[tool-render] approval answer failed", props.callId, outcome, error);
       setAnswered(false);
     }
   };
@@ -16214,10 +16253,7 @@ function ToolRenderApprovalBar(props) {
   };
   var pending = approvalId === null ? null : pendingRef.current;
   if (pending === null || pending === void 0) {
-    var outcome = decidedRecord !== null && decidedRecord !== void 0 ? decidedRecord.outcomes[props.callId] : void 0;
-    var decidedLabel = outcome === "allowed-once" || outcome === "approved" ? "approved" : outcome === "rejected" ? "rejected" : null;
-    if (decidedLabel === null) return null;
-    return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-approval-strip" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-decided", "data-outcome": decidedLabel }, decidedLabel));
+    return null;
   }
   var hasDraft = draft.trim() !== "";
   var pendingPayload = pending !== null && pending !== void 0 ? pending.payload : void 0;

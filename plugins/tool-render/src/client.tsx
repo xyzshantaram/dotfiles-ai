@@ -665,6 +665,19 @@ function renderToolRenderCard(options, approvalOpen) {
         {options.badge !== undefined && options.badge !== null && options.badge !== "" ? (
           <span className="tool-render-badge">{options.badge}</span>
         ) : null}
+        {/* The approval verdict sits immediately after the label badge, so a
+            decided call announces its outcome without being expanded. Gated on
+            the same callId + useSession pair the answer bar is, because both
+            read the same fold. */}
+        {options.callId !== undefined &&
+        options.callId !== null &&
+        typeof options.useSession === "function" ? (
+          <ToolRenderApprovalVerdict
+            callId={options.callId}
+            useSession={options.useSession}
+            useProjection={options.useProjection}
+          />
+        ) : null}
         <span className="tool-render-sep" aria-hidden={true} />
         {summary}
       </div>
@@ -705,6 +718,57 @@ function renderToolRenderCard(options, approvalOpen) {
         />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The durable approval verdict, as a badge on the COLLAPSED row beside the
+ * tool-call label badge (owner, 2026-09-08): [shield | APPROVED].
+ *
+ * It reads the same guarded-approvals fold the answer bar does, so it survives
+ * a page reload, and it renders nothing until an approval for this callId has
+ * actually settled. The wire vocabulary is "allowed-once"/"rejected"/
+ * "cancelled"; "cancelled" is an abort rather than a decision, so it shows
+ * nothing at all.
+ *
+ * The shield is an inline SVG rather than a primitives icon on purpose: the
+ * repo's hand-maintained shim (plugins/shared/shims.d.ts) declares no shield
+ * export, and the primitives package is not resolvable from this repo, so
+ * adding a declaration would be inventing an export we cannot verify exists.
+ */
+function ToolRenderApprovalVerdict(props) {
+  var decidedRecord = useGuardedApprovals(props.useSession, props.useProjection);
+  var outcome =
+    decidedRecord !== null && decidedRecord !== undefined
+      ? decidedRecord.outcomes[props.callId]
+      : undefined;
+  var label =
+    outcome === "allowed-once" || outcome === "approved"
+      ? "approved"
+      : outcome === "rejected"
+        ? "rejected"
+        : null;
+  if (label === null) return null;
+  return (
+    <span className="tool-render-verdict" data-outcome={label}>
+      <svg
+        className="tool-render-verdict-shield"
+        viewBox="0 0 16 16"
+        width="11"
+        height="11"
+        aria-hidden={true}
+        focusable="false"
+      >
+        <path
+          d="M8 1.5 3 3.4v4.2c0 3.1 2.1 5.9 5 6.9 2.9-1 5-3.8 5-6.9V3.4L8 1.5Z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.3"
+          strokeLinejoin="round"
+        />
+      </svg>
+      <span>{label === "approved" ? "APPROVED" : "REJECTED"}</span>
+    </span>
   );
 }
 
@@ -807,7 +871,6 @@ function guardRewriteLabel(originalCmd, rewrittenCmd) {
  * the local `answered` guard and a synchronous try/catch.
  */
 function ToolRenderApprovalBar(props) {
-  var decidedRecord = useGuardedApprovals(props.useSession, props.useProjection);
   // The selector's RESULT is the stable approvalId (a string), so the
   // subscription only re-renders this card when the pending approval for
   // its callId appears, changes, or clears. The live pending object is
@@ -961,30 +1024,11 @@ function ToolRenderApprovalBar(props) {
 
   var pending = approvalId === null ? null : pendingRef.current;
   if (pending === null || pending === undefined) {
-    // Not pending: show the durable decided badge when this callId's
-    // approval was answered, on this load or any earlier one.
-    var outcome =
-      decidedRecord !== null && decidedRecord !== undefined
-        ? decidedRecord.outcomes[props.callId]
-        : undefined;
-    // The approval/decided event carries the settle vocabulary verbatim:
-    // "allowed-once" | "rejected" | "cancelled". "cancelled" is an abort,
-    // not a decision, so it renders nothing. Map "allowed-once" to the
-    // friendlier "approved" for both the label and the CSS attribute.
-    var decidedLabel =
-      outcome === "allowed-once" || outcome === "approved"
-        ? "approved"
-        : outcome === "rejected"
-          ? "rejected"
-          : null;
-    if (decidedLabel === null) return null;
-    return (
-      <div className="tool-render-approval-strip">
-        <span className="tool-render-decided" data-outcome={decidedLabel}>
-          {decidedLabel}
-        </span>
-      </div>
-    );
+    // Not pending: the bar renders NOTHING at all. The durable verdict moved
+    // to a badge on the collapsed row (ToolRenderApprovalVerdict), so a
+    // decided call carries no bottom bar — which is also what #71 asked for
+    // ("no button row"). The bar now exists only while a decision is open.
+    return null;
   }
   var hasDraft = draft.trim() !== "";
   // The ask's own reason, shown while the approval is still open (owner,
@@ -1213,11 +1257,12 @@ function BashRow(props) {
     body = <div className="tool-render-io">{inner}</div>;
   }
   // The in-body approval verdict (#48) was REMOVED (owner, 2026-09-08). It
-  // restated inside the expanded body what the decided badge already says in
-  // the header, so an approved call carried the word twice. The single decided
-  // badge is now the whole durable verdict surface; see .tool-render-decided,
-  // which is styled as the pressed-and-disabled form of the button that
-  // produced it rather than as a separate coloured pill.
+  // restated inside the expanded body a verdict the card already showed, so an
+  // approved call carried the word twice. The whole durable verdict surface is
+  // now ToolRenderApprovalVerdict — a [shield | APPROVED] badge on the
+  // COLLAPSED row, beside the tool-call label badge — so the outcome is
+  // visible without expanding anything, and the answer bar disappears once a
+  // decision has settled.
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession, useProjection: props.useProjection,
