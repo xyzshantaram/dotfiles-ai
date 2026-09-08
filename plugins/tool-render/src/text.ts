@@ -347,3 +347,40 @@ export function extractHunk(readText, removeFrom, removeTo, replacementText, sta
     oldStart: base + from,
   };
 }
+
+// ---- bash-guard rewrite banner (the nested-call fallback marker). ----
+// The banner bash-guard's ranMessage prints once it has ALREADY run a
+// replacement: the marker, a blank separator line, then two-space-indented
+// command lines, ended by the first unindented non-empty line ("Why:").
+// The real banner is ALWAYS the last thing in the output — bash-guard
+// appends it after the tool runs — so the search starts from the END: a
+// command whose own output embeds the marker mid-text (a transcript, a grep
+// over session logs) must not shadow the trailing real banner, and a
+// first-occurrence search did exactly that.
+// False positives remain possible and are undecidable from text alone: a
+// BashRow whose output reproduces a VERBATIM banner block (cat over a
+// session log) parses as a rewrite. presentationMeta, when the call has it,
+// is authoritative and never reaches this parser; the text path exists for
+// nested calls, which never get meta.
+export const GUARD_REWRITE_MARKER = "bash-guard: ran this instead:";
+
+export function guardRewriteFromText(text) {
+  if (typeof text !== "string") return null;
+  var at = text.lastIndexOf(GUARD_REWRITE_MARKER);
+  if (at === -1) return null;
+  var lines = text.slice(at + GUARD_REWRITE_MARKER.length).split("\n");
+  var ran = [];
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    if (line === "") continue; // the banner's blank separator lines
+    if (line.slice(0, 2) === "  ") {
+      ran.push(line.slice(2));
+      continue;
+    }
+    break; // "Why:" — the first unindented non-empty line ends the block
+  }
+  if (ran.length === 0) return null;
+  var command = ran.join("\n").trim();
+  if (command.length === 0) return null;
+  return { ran: command };
+}

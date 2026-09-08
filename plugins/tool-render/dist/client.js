@@ -1821,6 +1821,27 @@ function extractHunk(readText, removeFrom, removeTo, replacementText, startLine)
     oldStart: base + from
   };
 }
+var GUARD_REWRITE_MARKER = "bash-guard: ran this instead:";
+function guardRewriteFromText(text) {
+  if (typeof text !== "string") return null;
+  var at = text.lastIndexOf(GUARD_REWRITE_MARKER);
+  if (at === -1) return null;
+  var lines = text.slice(at + GUARD_REWRITE_MARKER.length).split("\n");
+  var ran = [];
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    if (line === "") continue;
+    if (line.slice(0, 2) === "  ") {
+      ran.push(line.slice(2));
+      continue;
+    }
+    break;
+  }
+  if (ran.length === 0) return null;
+  var command = ran.join("\n").trim();
+  if (command.length === 0) return null;
+  return { ran: command };
+}
 
 // plugins/tool-render/src/pretty.ts
 function isPrettyView(value) {
@@ -15808,27 +15829,6 @@ function guardRewriteOf(block, resultText) {
     return { ran: meta.ran };
   }
   return guardRewriteFromText(resultText);
-}
-var GUARD_REWRITE_MARKER = "bash-guard: ran this instead:";
-function guardRewriteFromText(text) {
-  if (typeof text !== "string") return null;
-  var at = text.indexOf(GUARD_REWRITE_MARKER);
-  if (at === -1) return null;
-  var lines = text.slice(at + GUARD_REWRITE_MARKER.length).split("\n");
-  var ran = [];
-  for (var i = 0; i < lines.length; i++) {
-    var line = lines[i];
-    if (line === "") continue;
-    if (line.slice(0, 2) === "  ") {
-      ran.push(line.slice(2));
-      continue;
-    }
-    break;
-  }
-  if (ran.length === 0) return null;
-  var command = ran.join("\n").trim();
-  if (command.length === 0) return null;
-  return { ran: command };
 }
 function resultTextOf(block) {
   if (!doneOf(block)) return null;
