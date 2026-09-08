@@ -141,6 +141,9 @@ step_write_web_patch() {
     - id: ask-interrupt
       name: $HERE/plugins/ask-interrupt.js
 
+    - id: approval-interrupt
+      name: $HERE/plugins/approval-interrupt.js
+
 
     - id: profiles
       name: $HERE/plugins/profiles.js
