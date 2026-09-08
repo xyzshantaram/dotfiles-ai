@@ -61,14 +61,15 @@ Count the changed implementation lines: total diff minus comments, tests, and fo
 
 ### 4. Execute with the runner
 
-Generate each mutation as a patch mechanically: make the edit, `git diff > /tmp/dsh/mut-1.patch`, `git checkout -- .` (never on a file that holds uncommitted work — copy it aside first). Then run the runner once with all patches:
+Generate each mutation as a patch mechanically: make the edit, `git diff > /tmp/dsh/mut-1.patch`, `git checkout -- .` (never on a file that holds uncommitted work — copy it aside first). Then run the runner once with all patches, naming the commit under test and the nonce your dispatcher gave you:
 
     deno run --allow-run --allow-read --allow-write scripts/mutation-test.ts \
+      --commit <the-sha-being-tested> --nonce <token-from-your-dispatcher> \
       --test "npx vitest run plugins/foo" \
       --patch /tmp/dsh/mut-1.patch --patch /tmp/dsh/mut-2.patch \
       --json /tmp/dsh/mutations.json
 
-Read the runner's header comment before relying on these guarantees. It refuses a dirty tree, a HEAD that is not the commit you named, and a red baseline; it applies one patch at a time and verifies each revert by `git status` being empty. Exit 0 = every mutation killed, 1 = something survived, 2 = the run could not be trusted. `--filter` trims which output lines are recorded and is cosmetic only: the verdict is the exit code, never a grep of the output.
+Read the runner's header comment before relying on these guarantees. It refuses a dirty tree, a HEAD that is not the commit you named, a red baseline, and any patch that changes no tracked source (the mechanical catch for "mutating a copy of the source that never executes"); it applies one patch at a time and verifies each revert by `git status` being empty. Exit 0 = every mutation killed, 1 = something survived, 2 = the run could not be trusted. `--filter` trims which output lines are recorded and is cosmetic only: the verdict is the exit code, never a grep of the output. Echo the nonce verbatim in your report — a report without the current token reads as invented or stale, and the dispatcher will treat it as no report.
 
 ### Report
 

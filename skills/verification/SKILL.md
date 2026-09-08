@@ -95,23 +95,7 @@ it. If it is gone, put it back.
 
 ## When quantitative coverage is the claim
 
-When the claim under review is "the tests cover this change" (or a report leans on test coverage for its pass), reading the tests is not enough: a test that cannot fail buys false confidence. Demand mutation evidence, at the floor the `tester` skill defines: the full candidate list (including candidates not executed), the executed picks meeting one mutation per twenty-five changed implementation lines — minimum three for anything touching a predicate, guard, comparison, or boundary, capped at ten — and each executed mutation reported killed or survived. The runner is `scripts/mutation-test.ts` (read its header comment for its guarantees: clean tree, pinned HEAD, green baseline, verified reverts; exit 0 = all killed, 1 = survived, 2 = untrusted). A run that reports no surviving mutation AND no candidate list is a claim, not evidence. A surviving mutation reported honestly is a coverage gap, not a failed verification — treat it as a finding about the tests, and weight the verdict accordingly.
-
-## When a defect got through
-
-When the review finds a defect that got through (the change did not do what it claimed, or a claim you struck as false turned out to be load-bearing), do not stop at "request changes." Answer, before the verdict is written: **what would have caught this, and what protects against the class of it?**
-
-Offer the menu explicitly and require a choice:
-
-1. **a test** — code that was wrong and could have been asserted
-2. **a build or CI step** — a wrong artifact was committed
-3. **a guard rule** — a wrong command an agent ran
-4. **a wizard** — a tedious manual procedure done wrong
-5. **skill guidance** — the failure needed genuine judgment
-
-Prefer the deterministic answer, and say why rather than only asserting the order: a test cannot forget, a guard rule cannot be skipped under pressure. When two candidates are available, ask which detects earliest — the earlier one wins even if it catches less. "No protection is warranted" is an accepted outcome, recorded with its reason.
-
-The artifact chosen must actually be created before the retrospective closes: a named test, a named step, a named rule — not an intention. If an existing mechanism caught the defect correctly, skip this step entirely; that is the system working, not a defect that got through.
+When the claim under review is "the tests cover this change" (or a report leans on test coverage for its pass), reading the tests is not enough: a test that cannot fail buys false confidence. Demand mutation evidence, at the floor the `tester` skill defines: the full candidate list (including candidates not executed), the executed picks meeting one mutation per twenty-five changed implementation lines — minimum three for anything touching a predicate, guard, comparison, or boundary, capped at ten — and each executed mutation reported killed or survived. The runner is `scripts/mutation-test.ts` (read its header comment for its guarantees: clean tree, pinned HEAD, red baseline refused, verified reverts, patches that change no tracked source refused; exit 0 = all killed, 1 = survived, 2 = untrusted). Exit 0 is only meaningful together with the invocation as run: with `--allow-survivors` passed, the runner also exits 0 with survivors, so a delegated report must show its command line, not just its exit code. For delegated runs, require the nonce: the dispatcher generates a fresh random token, passes it to the runner, and the report must echo it verbatim — a report without the current token was invented, or is an older report shown again; both have happened. A run that reports no surviving mutation AND no candidate list is a claim, not evidence. A surviving mutation reported honestly is a coverage gap, not a failed verification — treat it as a finding about the tests, and weight the verdict accordingly.
 
 ## Applying this to a merge request review
 
@@ -126,7 +110,9 @@ The artifact chosen must actually be created before the retrospective closes: a 
    would catch if it reverted.
 5. Write the verdict. Every TRUE or PASS line carries its evidence line right
    next to it. Every claim with no evidence is marked unproven and excluded
-   from the verdict, not silently assumed.
+   from the verdict, not silently assumed. If the verdict fails because a
+   defect got through the author's own checks, run the "When a defect got
+   through" step at the end of this skill before you close.
 
 ## Relationship to the review skill
 
@@ -135,3 +121,7 @@ This skill covers whether the change and its claims are actually true. Run both
 when they apply. Neither replaces the other. A diff can pass code review and
 still be a no-op, and a diff can follow every convention while resting on a
 false claim about what problem it solves.
+
+## When a defect got through
+
+When the review finds a defect that got through (the change did not do what it claimed, or a claim you struck as false turned out to be load-bearing), do not stop at "request changes." Before the verdict is written, run Phase 7 of the `diagnosing-bugs` skill — "What would have caught this?" — and answer it there: the menu, the deterministic preference with its why, the earliest-detector tiebreak, the no-protection-is-warranted option, and the created-artifact requirement. That phase is the canonical form; do not restate its menu here. You are verifying a claim that turned out wrong — what would have caught it is more urgent here, not less. If an existing mechanism caught the defect correctly, skip the step entirely; that is the system working, not a defect that got through.
