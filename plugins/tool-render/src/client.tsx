@@ -328,13 +328,50 @@ function rowStateOf(block) {
   return block.isError === true ? "error" : "ok";
 }
 
-function guardRewriteOf(block) {
+// bash-guard reports a rewrite through presentationMeta (`meta.rewritten` +
+// `meta.ran`) on top-level calls. Nested calls — a bash call inside a
+// subagent or a nested dispatch — never get presentationMeta (the harness
+// computes it only for parentless execs, and the conversation projection's
+// childResult sets no meta field), so the only durable marker there is
+// bash-guard's banner in the result text. guardRewriteFromText parses that
+// banner; meta stays authoritative whenever it exists at all.
+function guardRewriteOf(block, resultText) {
   if (!doneOf(block)) return null;
   var meta = block.meta;
-  if (meta === null || typeof meta !== "object" || Array.isArray(meta)) return null;
-  if (meta.rewritten !== true) return null;
-  if (typeof meta.ran !== "string" || meta.ran.length === 0) return null;
-  return { ran: meta.ran };
+  if (meta !== null && typeof meta === "object" && !Array.isArray(meta)) {
+    if (meta.rewritten !== true) return null;
+    if (typeof meta.ran !== "string" || meta.ran.length === 0) return null;
+    return { ran: meta.ran };
+  }
+  return guardRewriteFromText(resultText);
+}
+
+// The banner bash-guard prints once it has ALREADY run a replacement
+// (bash-guard.ts ranMessage): the marker, a blank separator line, then
+// two-space-indented command lines, ended by the first unindented
+// non-empty line ("Why:"). Only BashRow reaches the fallback, so output
+// that merely quotes the phrase from other tools cannot false-positive.
+var GUARD_REWRITE_MARKER = "bash-guard: ran this instead:";
+
+function guardRewriteFromText(text) {
+  if (typeof text !== "string") return null;
+  var at = text.indexOf(GUARD_REWRITE_MARKER);
+  if (at === -1) return null;
+  var lines = text.slice(at + GUARD_REWRITE_MARKER.length).split("\n");
+  var ran = [];
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    if (line === "") continue; // the banner's blank separator lines
+    if (line.slice(0, 2) === "  ") {
+      ran.push(line.slice(2));
+      continue;
+    }
+    break; // "Why:" — the first unindented non-empty line ends the block
+  }
+  if (ran.length === 0) return null;
+  var command = ran.join("\n").trim();
+  if (command.length === 0) return null;
+  return { ran: command };
 }
 
 function resultTextOf(block) {
@@ -685,7 +722,11 @@ function renderToolRenderCard(options, approvalOpen) {
       {options.callId !== undefined &&
       options.callId !== null &&
       typeof options.useSession === "function" ? (
-        <ToolRenderApprovalBar callId={options.callId} useSession={options.useSession} />
+        <ToolRenderApprovalBar
+          callId={options.callId}
+          useSession={options.useSession}
+          useProjection={options.useProjection}
+        />
       ) : null}
     </div>
   );
@@ -790,7 +831,7 @@ function guardRewriteLabel(originalCmd, rewrittenCmd) {
  * the local `answered` guard and a synchronous try/catch.
  */
 function ToolRenderApprovalBar(props) {
-  var decidedRecord = useGuardedApprovals(props.useSession);
+  var decidedRecord = useGuardedApprovals(props.useSession, props.useProjection);
   // The selector's RESULT is the stable approvalId (a string), so the
   // subscription only re-renders this card when the pending approval for
   // its callId appears, changes, or clears. The live pending object is
@@ -1055,7 +1096,7 @@ function ReadRow(props) {
   }
   return toolRenderRow({
     callId: props.callId,
-    useSession: props.useSession,
+    useSession: props.useSession, useProjection: props.useProjection,
     toolName: "Read file",
     icon: <IconBrowseOutline16 size={14} />,
     title: "Read",
@@ -1106,7 +1147,7 @@ function BashRow(props) {
   // projection, which folds the session log's `approval/asked` events and
   // so survives both the decision and a page reload; and a rewritten
   // command, whose `meta.rewritten` is durable on the completed block.
-  var durableGuardApproval = useGuardedApprovals(props.useSession);
+  var durableGuardApproval = useGuardedApprovals(props.useSession, props.useProjection);
   var guardApproval =
     props.useSession(function (snapshot) {
       var pending = snapshot !== null && snapshot !== undefined ? snapshot.pending : undefined;
@@ -1128,7 +1169,7 @@ function BashRow(props) {
   ) {
     guardApproval = true;
   }
-  var guardRewrite = guardRewriteOf(block);
+  var guardRewrite = guardRewriteOf(block, output);
   if (guardRewrite !== null) guardApproval = true;
   var body = null;
   if (command !== undefined || (output !== null && output !== "")) {
@@ -1204,7 +1245,7 @@ function BashRow(props) {
   }
   return toolRenderRow({
     callId: props.callId,
-    useSession: props.useSession,
+    useSession: props.useSession, useProjection: props.useProjection,
     toolName: "Run bash",
     icon: <IconApiOutline14 size={14} />,
     title: "Bash",
@@ -1587,7 +1628,7 @@ function makeEditRow(toolTitle) {
     if (block === null || typeof block !== "object") {
       return toolRenderRow({
         callId: props.callId,
-        useSession: props.useSession,
+        useSession: props.useSession, useProjection: props.useProjection,
         toolName: editBadgeLabel(callNameOf(block), toolTitle),
         icon: <IconEditOutline16 size={14} />,
         title: toolTitle,
@@ -1643,7 +1684,7 @@ function makeEditRow(toolTitle) {
     }
     return toolRenderRow({
       callId: props.callId,
-      useSession: props.useSession,
+      useSession: props.useSession, useProjection: props.useProjection,
       // One component serves the `edit`, `undo_edit`, and `undo_last_edit`
       // registrations. The block carries the real call name, so the badge
       // shows the right human-readable label for the exact call being rendered.
@@ -1987,7 +2028,7 @@ function WriteRow(props) {
   }
   return toolRenderRow({
     callId: props.callId,
-    useSession: props.useSession,
+    useSession: props.useSession, useProjection: props.useProjection,
     toolName: "Write file",
     icon: <IconEditOutline16 size={14} />,
     title: "Write",
@@ -2094,7 +2135,7 @@ function TodoRow(props) {
   }
   return toolRenderRow({
     callId: props.callId,
-    useSession: props.useSession,
+    useSession: props.useSession, useProjection: props.useProjection,
     toolName: "To-do list",
     icon: <IconChecklistOutline14 size={14} />,
     title: "To-do list",
@@ -2281,7 +2322,7 @@ function AskRow(props) {
   }
   return toolRenderRow({
     callId: props.callId,
-    useSession: props.useSession,
+    useSession: props.useSession, useProjection: props.useProjection,
     toolName: "Ask user",
     icon: <IconQuestionOutline14 size={14} />,
     title: "Ask user",
@@ -2340,7 +2381,7 @@ function SubagentRow(props) {
   }
   return toolRenderRow({
     callId: props.callId,
-    useSession: props.useSession,
+    useSession: props.useSession, useProjection: props.useProjection,
     toolName: "Dispatch",
     icon: <IconAgentPresetOutline16 size={14} />,
     title: title,
@@ -2399,7 +2440,7 @@ function JobOutputRow(props) {
     ) : null;
   return toolRenderRow({
     callId: props.callId,
-    useSession: props.useSession,
+    useSession: props.useSession, useProjection: props.useProjection,
     toolName: "Job output",
     icon: <IconApiOutline14 />,
     title: "Job output",
@@ -2457,7 +2498,7 @@ function PackageRow(props) {
     ) : null;
   return toolRenderRow({
     callId: props.callId,
-    useSession: props.useSession,
+    useSession: props.useSession, useProjection: props.useProjection,
     toolName: "Manage package",
     icon: <IconApiOutline14 />,
     title: title,
@@ -2497,7 +2538,7 @@ function SendMessageRow(props) {
     ) : null;
   return toolRenderRow({
     callId: props.callId,
-    useSession: props.useSession,
+    useSession: props.useSession, useProjection: props.useProjection,
     toolName: "Message",
     icon: <IconAgentPresetOutline16 size={14} />,
     title: "Message",
@@ -2535,7 +2576,7 @@ function InterruptAgentRow(props) {
       : undefined;
   return toolRenderRow({
     callId: props.callId,
-    useSession: props.useSession,
+    useSession: props.useSession, useProjection: props.useProjection,
     toolName: "Interrupt agent",
     icon: <IconStopFill16 size={14} />,
     title: "Interrupt agent",
@@ -2611,7 +2652,7 @@ function ListAgentsRow(props) {
     ) : null;
   return toolRenderRow({
     callId: props.callId,
-    useSession: props.useSession,
+    useSession: props.useSession, useProjection: props.useProjection,
     toolName: "List agents",
     icon: <IconAgentPresetOutline16 size={14} />,
     title: "List agents",
@@ -2789,7 +2830,7 @@ function SkillContentCard(props) {
   );
   return toolRenderRow({
     callId: props.callId,
-    useSession: props.useSession,
+    useSession: props.useSession, useProjection: props.useProjection,
     toolName: "Skill",
     icon: <IconChecklistOutline14 />,
     title: "Skill",
@@ -2840,7 +2881,7 @@ function GenericContextCard(props) {
     ) : null;
   return toolRenderRow({
     callId: props.callId,
-    useSession: props.useSession,
+    useSession: props.useSession, useProjection: props.useProjection,
     toolName: title,
     icon: <IconBrowseOutline16 size={14} />,
     title: title,
@@ -2916,7 +2957,7 @@ function SkillRow(props) {
   var skillName = args !== null ? pickString(args, ["name"]) : undefined;
   return toolRenderRow({
     callId: props.callId,
-    useSession: props.useSession,
+    useSession: props.useSession, useProjection: props.useProjection,
     toolName: "Load skill",
     icon: <IconChecklistOutline14 />,
     title: "Skill",
@@ -3059,7 +3100,7 @@ function ReadImageRow(props) {
   }
   return toolRenderRow({
     callId: props.callId,
-    useSession: props.useSession,
+    useSession: props.useSession, useProjection: props.useProjection,
     toolName: "Read image",
     icon: <IconBrowseOutline16 size={14} />,
     title: "Read image",
@@ -3146,7 +3187,7 @@ function SeeRow(props) {
   }
   return toolRenderRow({
     callId: props.callId,
-    useSession: props.useSession,
+    useSession: props.useSession, useProjection: props.useProjection,
     toolName: "See image",
     icon: <IconQuestionOutline14 size={14} />,
     title: "See",
@@ -3214,7 +3255,7 @@ function WebSearchRow(props) {
     ) : null;
   return toolRenderRow({
     callId: props.callId,
-    useSession: props.useSession,
+    useSession: props.useSession, useProjection: props.useProjection,
     toolName: "Web search",
     icon: <IconBrowseOutline16 size={14} />,
     title: "Web search",
@@ -3266,7 +3307,7 @@ function WebFetchRow(props) {
   }
   return toolRenderRow({
     callId: props.callId,
-    useSession: props.useSession,
+    useSession: props.useSession, useProjection: props.useProjection,
     toolName: "Web fetch",
     icon: <IconBrowseOutline16 size={14} />,
     title: "Web fetch",
@@ -3351,15 +3392,26 @@ function useCompactionViews(useSession) {
 // seat) leaves the record null and the row falls back to the live
 // snapshot.pending check. Deliberately not a rewrite of
 // useCompactionViews, so the compaction code stays untouched.
-function useGuardedApprovals(useSession) {
-  var face = null;
+function useGuardedApprovals(useSession, useProjection) {
   var recordState = useState(null);
   var record = recordState[0];
   var setRecord = recordState[1];
+  // The projection's real seat is the renderer's useProjection standard
+  // prop, which reads the binding's provide-info — where projections
+  // actually live — and returns the face's snapshot directly (undefined
+  // reads capability absence, keeping the hook order constant). useSession
+  // yields a ConversationSnapshot, which has NO projections field, so the
+  // identity-selector read below never found a face on current seats; it
+  // survives only as an older-seat fallback. Both typeof checks are
+  // stable for the life of a mount, so the hook order is fixed.
+  var projected =
+    typeof useProjection === "function"
+      ? useProjection(GUARDED_APPROVALS_KEY)
+      : undefined;
+  var face = null;
   // The selector hook passes its selector straight into
   // useSyncExternalStoreWithSelector, so a bare useSession() crashes with
-  // "l is not a function". The session source's snapshot IS the session
-  // face, so the identity selector returns it.
+  // "l is not a function". The identity selector returns the snapshot.
   var session =
     typeof useSession === "function"
       ? useSession(function (value) {
@@ -3367,6 +3419,7 @@ function useGuardedApprovals(useSession) {
         })
       : undefined;
   if (
+    projected === undefined &&
     session !== null &&
     session !== undefined &&
     session.projections !== undefined &&
@@ -3392,7 +3445,7 @@ function useGuardedApprovals(useSession) {
     },
     [face],
   );
-  return record;
+  return projected !== undefined && projected !== null ? projected : record;
 }
 
 function compactionSummaryText(rows, span) {
@@ -3522,7 +3575,7 @@ function CompactionRow(props) {
       ) : null;
     return toolRenderRow({
       callId: props.callId,
-      useSession: props.useSession,
+      useSession: props.useSession, useProjection: props.useProjection,
       toolName: "Compaction",
       icon: <IconBrowseOutline16 size={14} />,
       title: "Compaction",
@@ -3548,7 +3601,7 @@ function CompactionRow(props) {
   var pretty = view;
   return toolRenderRow({
     callId: props.callId,
-    useSession: props.useSession,
+    useSession: props.useSession, useProjection: props.useProjection,
     toolName: "Compaction",
     icon: <IconBrowseOutline16 size={14} />,
     title: "Compaction",
