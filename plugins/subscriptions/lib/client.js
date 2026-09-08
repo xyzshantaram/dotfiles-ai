@@ -431,19 +431,66 @@ function renderCcSection(cc, ccUsage) {
   }
   return /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "Command Code"), errorLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, errorLine) : null, hero, meters.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, meters) : null, costCard ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, costCard) : null);
 }
-function renderEhSection(ehUsage, ehModels) {
-  var errorLine = null;
-  if (ehUsage && ehUsage.error) {
-    errorLine = "ElectronHub: " + ehUsage.error;
-  } else if (ehUsage && ehUsage.data && ehUsage.data.ok === false) {
-    errorLine = "ElectronHub: " + (ehUsage.data.error || "usage unavailable");
-  } else if (ehModels && ehModels.error) {
-    errorLine = "ElectronHub: " + ehModels.error;
-  } else if (ehModels && ehModels.data && ehModels.data.ok === false) {
-    errorLine = "ElectronHub: " + (ehModels.data.error || "models unavailable");
+function ehResultError(result, fallback) {
+  if (!result) return null;
+  if (typeof result.error === "string" && result.error !== "") return result.error;
+  var body = result.data;
+  if (body && typeof body === "object" && body.ok === false) {
+    return typeof body.error === "string" && body.error !== "" ? body.error : fallback;
   }
-  var usage = ehUsage && ehUsage.data && ehUsage.data.ok === true ? ehUsage.data : null;
-  var models = ehModels && ehModels.data && ehModels.data.ok === true && Array.isArray(ehModels.data.models) ? ehModels.data.models : null;
+  return null;
+}
+function ehResultBody(result) {
+  if (!result) return null;
+  var body = result.data;
+  return body && typeof body === "object" && body.ok === true ? body : null;
+}
+function ehUsageHasContent(usage) {
+  if (!usage) return false;
+  if (typeof usage.subscription === "string" && usage.subscription !== "") return true;
+  if (typeof usage.credits === "number") return true;
+  if (usage.usage && (Number(usage.usage.inputTokens) > 0 || Number(usage.usage.outputTokens) > 0))
+    return true;
+  if (Array.isArray(usage.history) && usage.history.length > 0) return true;
+  if (Array.isArray(usage.endpoints) && usage.endpoints.length > 0) return true;
+  return false;
+}
+function ehSectionModel(ehUsage, ehModels) {
+  var errorLine = ehResultError(ehUsage, "usage unavailable") || ehResultError(ehModels, "models unavailable");
+  var usage = ehResultBody(ehUsage);
+  var modelsBody = ehResultBody(ehModels);
+  var models = modelsBody && Array.isArray(modelsBody.models) ? modelsBody.models : null;
+  var notes = [];
+  if (usage && typeof usage.note === "string" && usage.note !== "") notes.push(usage.note);
+  if (modelsBody) {
+    if (typeof modelsBody.note === "string" && modelsBody.note !== "") notes.push(modelsBody.note);
+    if (modelsBody.source === "catalog" && models !== null && models.length > 0) {
+      notes.push("model list is ElectronHub's public catalog, not an account-scoped list");
+    }
+  }
+  var hasContent = ehUsageHasContent(usage) || models !== null && models.length > 0;
+  var status;
+  if (errorLine) status = "error";
+  else if (usage === null && modelsBody === null) status = "pending";
+  else if (!hasContent) status = "empty";
+  else status = "ready";
+  var emptyLine = null;
+  if (status === "pending") emptyLine = "Loading ElectronHub usage\u2026";
+  else if (status === "empty") emptyLine = "ElectronHub reported no usage data for this key.";
+  return {
+    status,
+    errorLine: errorLine ? "ElectronHub: " + errorLine : null,
+    notes,
+    usage,
+    models,
+    emptyLine
+  };
+}
+function renderEhSection(ehUsage, ehModels) {
+  var model = ehSectionModel(ehUsage, ehModels);
+  var errorLine = model.errorLine;
+  var usage = model.usage;
+  var models = model.models;
   var hero = null;
   if (usage) {
     var tier = typeof usage.subscription === "string" && usage.subscription !== "" ? usage.subscription.charAt(0).toUpperCase() + usage.subscription.slice(1) + " plan" : null;
@@ -520,7 +567,9 @@ function renderEhSection(ehUsage, ehModels) {
     }
     modelList = /* @__PURE__ */ import_react2.default.createElement("details", { className: "ocgs-details" }, /* @__PURE__ */ import_react2.default.createElement("summary", { className: "ocgs-summary" }, "Models (" + models.length + ")"), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, modelRows));
   }
-  return /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "ElectronHub"), errorLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, errorLine) : null, hero, tokenCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, tokenCards) : null, historyRows.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, historyRows) : null, endpointCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, endpointCards) : null, modelList);
+  return /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "ElectronHub"), errorLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, errorLine) : null, model.emptyLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note" }, model.emptyLine) : null, model.notes.map(function(note, ni) {
+    return /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note", key: "eh-n-" + ni }, note);
+  }), hero, tokenCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, tokenCards) : null, historyRows.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, historyRows) : null, endpointCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, endpointCards) : null, modelList);
 }
 function makePanel(ctx, config) {
   return function Panel() {

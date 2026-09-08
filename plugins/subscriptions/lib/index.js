@@ -732,6 +732,8 @@ var ELECTRONHUB_API_BASE = "https://api.electronhub.ai/v1";
 var ELECTRONHUB_TIMEOUT_MS = 15e3;
 var ELECTRONHUB_USAGE_CACHE_MS = 6e4;
 var ELECTRONHUB_MODELS_CACHE_MS = 3e5;
+var ELECTRONHUB_KEY_NAMES = ["ELECTRONHUB_API_KEY", "ELECTRONHUB_DEVPASS_API_KEY"];
+var ELECTRONHUB_KEY_MISSING = `${ELECTRONHUB_KEY_NAMES.join(" or ")} credential not configured`;
 function parseZaiQuota(data) {
   const source = data !== null && typeof data === "object" ? data : {};
   const limits = Array.isArray(source.limits) ? source.limits : [];
@@ -1187,28 +1189,52 @@ function apply(ctx, config) {
       });
     }
   };
-  const resolveElectronHubKey = async () => credentials === void 0 ? null : (await credentials.resolve("ELECTRONHUB_API_KEY"))?.value;
+  const resolveElectronHubKey = async () => {
+    if (credentials === void 0) return null;
+    for (const name2 of ELECTRONHUB_KEY_NAMES) {
+      try {
+        const value = (await credentials.resolve(name2))?.value;
+        if (typeof value === "string" && value !== "") return value;
+      } catch {
+      }
+    }
+    return null;
+  };
+  const electronhubGet = (path, key) => fetch(`${ELECTRONHUB_API_BASE}${path}`, {
+    headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
+    signal: AbortSignal.timeout(ELECTRONHUB_TIMEOUT_MS)
+  });
   const electronhubUsageOnce = cachedOnce(async (key) => {
-    const res = await fetch(`${ELECTRONHUB_API_BASE}/user/me`, {
-      headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
-      signal: AbortSignal.timeout(ELECTRONHUB_TIMEOUT_MS)
-    });
+    const res = await electronhubGet("/user/me", key);
+    if (res.status === 401 || res.status === 403) {
+      return {
+        ...parseElectronHubUsage(null),
+        note: `account usage is not available for this API key (HTTP ${res.status})`
+      };
+    }
     if (!res.ok) throw new Error(`electronhub usage HTTP ${res.status}`);
     return parseElectronHubUsage(await res.json());
   }, ELECTRONHUB_USAGE_CACHE_MS);
   const electronhubModelsOnce = cachedOnce(async (key) => {
-    const res = await fetch(`${ELECTRONHUB_API_BASE}/user/models`, {
-      headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
-      signal: AbortSignal.timeout(ELECTRONHUB_TIMEOUT_MS)
-    });
-    if (!res.ok) throw new Error(`electronhub models HTTP ${res.status}`);
-    return parseElectronHubModels(await res.json());
+    const attempt = async (path) => {
+      const res = await electronhubGet(path, key);
+      if (!res.ok) return { ok: false, status: res.status, models: [] };
+      return { ok: true, status: res.status, models: parseElectronHubModels(await res.json()) };
+    };
+    const scoped = await attempt("/user/models");
+    if (scoped.ok === true && scoped.models.length > 0) {
+      return { models: scoped.models, source: "account" };
+    }
+    const catalog = await attempt("/models");
+    if (catalog.ok === true) return { models: catalog.models, source: "catalog" };
+    if (scoped.ok === true) return { models: scoped.models, source: "account" };
+    throw new Error(`electronhub models HTTP ${catalog.status}`);
   }, ELECTRONHUB_MODELS_CACHE_MS);
   const handleElectronhubUsage = async (_req, res) => {
     try {
       const key = await resolveElectronHubKey();
       if (!key) {
-        sendJson(res, 200, { ok: false, error: "ELECTRONHUB_API_KEY credential not configured" });
+        sendJson(res, 200, { ok: false, error: ELECTRONHUB_KEY_MISSING });
         return;
       }
       sendJson(res, 200, { ok: true, ...await electronhubUsageOnce(key) });
@@ -1223,13 +1249,10 @@ function apply(ctx, config) {
     try {
       const key = await resolveElectronHubKey();
       if (!key) {
-        sendJson(res, 200, { ok: false, error: "ELECTRONHUB_API_KEY credential not configured" });
+        sendJson(res, 200, { ok: false, error: ELECTRONHUB_KEY_MISSING });
         return;
       }
-      sendJson(res, 200, {
-        ok: true,
-        models: await electronhubModelsOnce(key)
-      });
+      sendJson(res, 200, { ok: true, ...await electronhubModelsOnce(key) });
     } catch (error) {
       sendJson(res, 200, {
         ok: false,

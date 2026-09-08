@@ -17,7 +17,8 @@
  *   - GET /subscriptions/zai-usage         — Z.ai 7-day model usage (cached 60s)
  *   - GET /subscriptions/electronhub-usage — ElectronHub account usage (cached 60s;
  *     the endpoint's own guidance allows usage checks at most once a minute)
- *   - GET /subscriptions/electronhub-models — ElectronHub model list (cached 5min)
+ *   - GET /subscriptions/electronhub-models — ElectronHub model list (cached 5min;
+ *     the account-scoped list when the key may read it, else the public catalog)
  *   - POST /subscriptions/opencode-cookie/extract — pull the opencode.ai
  *     session cookie out of a local Firefox profile, validate it against the
  *     `_server` RPC, and save it as the OPENCODE_SESSION_COOKIE credential
@@ -397,6 +398,20 @@ const ELECTRONHUB_TIMEOUT_MS = 15_000;
 const ELECTRONHUB_USAGE_CACHE_MS = 60_000;
 /** The model catalog changes slowly, so a five-minute cache is plenty. */
 const ELECTRONHUB_MODELS_CACHE_MS = 300_000;
+/**
+ * Credential names accepted for ElectronHub, in priority order.
+ *
+ * The panel only ever asked for ELECTRONHUB_API_KEY, but this repo's own
+ * ElectronHub model provider (settings.yaml `electronhub.apiKeyEnv`) stores
+ * the key as ELECTRONHUB_DEVPASS_API_KEY, and that is the name actually
+ * present in the credential store. So a machine with a working ElectronHub
+ * key still took the "no credential" branch on every request and the section
+ * could never populate. Accept either name instead of asking the owner to
+ * store one key under two names.
+ */
+const ELECTRONHUB_KEY_NAMES = ["ELECTRONHUB_API_KEY", "ELECTRONHUB_DEVPASS_API_KEY"];
+/** The affordance text the panel shows when no accepted name is stored. */
+const ELECTRONHUB_KEY_MISSING = `${ELECTRONHUB_KEY_NAMES.join(" or ")} credential not configured`;
 
 /** One Z.ai quota window, mapped for the panel's window-meter rows. */
 export interface ZaiWindow {
@@ -1019,33 +1034,69 @@ export function apply(ctx, config) {
     }
   };
 
-  // ── ElectronHub usage + models (api.electronhub.ai, Bearer ELECTRONHUB_API_KEY) ──
-  const resolveElectronHubKey = async () =>
-    credentials === undefined ? null : (await credentials.resolve("ELECTRONHUB_API_KEY"))?.value;
+  // ── ElectronHub usage + models (api.electronhub.ai, Bearer key) ───────────
+  const resolveElectronHubKey = async () => {
+    if (credentials === undefined) return null;
+    for (const name of ELECTRONHUB_KEY_NAMES) {
+      try {
+        const value = (await credentials.resolve(name))?.value;
+        if (typeof value === "string" && value !== "") return value;
+      } catch {
+        // An unknown name must not abort the search: try the next one.
+      }
+    }
+    return null;
+  };
 
-  const electronhubUsageOnce = cachedOnce(async (key) => {
-    const res = await fetch(`${ELECTRONHUB_API_BASE}/user/me`, {
+  /** GET one ElectronHub path with the account key. */
+  const electronhubGet = (path, key) =>
+    fetch(`${ELECTRONHUB_API_BASE}${path}`, {
       headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
       signal: AbortSignal.timeout(ELECTRONHUB_TIMEOUT_MS),
     });
+
+  const electronhubUsageOnce = cachedOnce(async (key) => {
+    const res = await electronhubGet("/user/me", key);
+    // Verified live 2026-09-08: the stored DevPass key answers 200 on
+    // /v1/models and 401 on /v1/user/me. The account surface is out of scope
+    // for that key class — a capability limit, not a failure — so answer with
+    // a valid empty payload plus a note. Throwing here would paint a red
+    // error line over a section that can still show its model catalog.
+    if (res.status === 401 || res.status === 403) {
+      return {
+        ...parseElectronHubUsage(null),
+        note: `account usage is not available for this API key (HTTP ${res.status})`,
+      };
+    }
     if (!res.ok) throw new Error(`electronhub usage HTTP ${res.status}`);
     return parseElectronHubUsage(await res.json());
   }, ELECTRONHUB_USAGE_CACHE_MS);
 
   const electronhubModelsOnce = cachedOnce(async (key) => {
-    const res = await fetch(`${ELECTRONHUB_API_BASE}/user/models`, {
-      headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
-      signal: AbortSignal.timeout(ELECTRONHUB_TIMEOUT_MS),
-    });
-    if (!res.ok) throw new Error(`electronhub models HTTP ${res.status}`);
-    return parseElectronHubModels(await res.json());
+    // /v1/user/models is the account-scoped list and rejects key classes that
+    // still work for inference; /v1/models is the public catalog and answers
+    // for any valid key. Fall back to it so the section shows a real model
+    // list instead of nothing.
+    const attempt = async (path) => {
+      const res = await electronhubGet(path, key);
+      if (!res.ok) return { ok: false, status: res.status, models: [] };
+      return { ok: true, status: res.status, models: parseElectronHubModels(await res.json()) };
+    };
+    const scoped = await attempt("/user/models");
+    if (scoped.ok === true && scoped.models.length > 0) {
+      return { models: scoped.models, source: "account" };
+    }
+    const catalog = await attempt("/models");
+    if (catalog.ok === true) return { models: catalog.models, source: "catalog" };
+    if (scoped.ok === true) return { models: scoped.models, source: "account" };
+    throw new Error(`electronhub models HTTP ${catalog.status}`);
   }, ELECTRONHUB_MODELS_CACHE_MS);
 
   const handleElectronhubUsage = async (_req, res) => {
     try {
       const key = await resolveElectronHubKey();
       if (!key) {
-        sendJson(res, 200, { ok: false, error: "ELECTRONHUB_API_KEY credential not configured" });
+        sendJson(res, 200, { ok: false, error: ELECTRONHUB_KEY_MISSING });
         return;
       }
       sendJson(res, 200, { ok: true, ...(await electronhubUsageOnce(key)) });
@@ -1061,13 +1112,10 @@ export function apply(ctx, config) {
     try {
       const key = await resolveElectronHubKey();
       if (!key) {
-        sendJson(res, 200, { ok: false, error: "ELECTRONHUB_API_KEY credential not configured" });
+        sendJson(res, 200, { ok: false, error: ELECTRONHUB_KEY_MISSING });
         return;
       }
-      sendJson(res, 200, {
-        ok: true,
-        models: await electronhubModelsOnce(key),
-      });
+      sendJson(res, 200, { ok: true, ...(await electronhubModelsOnce(key)) });
     } catch (error) {
       sendJson(res, 200, {
         ok: false,
