@@ -3,6 +3,16 @@
 * `/tmp/dsh` is the sanctioned scratch space. The sandbox allows writes there
   without approval, and the dsh-remote `files.roots` config exposes it to the
   file panel. Use it for temporary files instead of asking for wider access.
+  BARE `/tmp` IS NOT SHARED BETWEEN BASH CALLS: each call sees its own, so a
+  file written to `/tmp/foo` in one invocation is simply absent in the next.
+  Nothing errors at either end — that silence is the trap. It surfaces later as
+  a missing file, an empty directory, or a `cannot create ...: No such file or
+  directory` from a `cp`, none of which mention the sandbox, so it reads as a
+  broken machine. `/tmp/dsh` persists and is shared; escalating to
+  `danger-full-access` also works but is the wrong tool for scratch files.
+  DIAGNOSTIC: a path you just wrote that is missing on the next call, starting
+  with `/tmp` but not `/tmp/dsh`, is THIS RULE — not a flaky job runner, not a
+  broken environment. Do not report it as one.
 * Escalate to the next mode UP, never to the mode you already hold. The runtime
   context states the current file policy. If it says `workspace-write` and an
   operation is denied, the only wider mode is `danger-full-access`. Asking for
