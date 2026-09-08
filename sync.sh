@@ -42,7 +42,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#05ad9829041a8ea26a55396835ebc7fdb0b39509}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#ccdad1b762eee848c3245e47346e8386e5197fcc}"
 
 # Git-hosted specs whose build scripts pnpm must be allowed to run. pnpm 10+
 # blocks lifecycle scripts (prepare/postinstall) unless the exact resolved
@@ -1449,6 +1449,177 @@ for rid, misplaced in bad:
 PY
 }
 
+step_check_pi_ai_drift() {
+	# #92: warn when the installed pi-ai model catalog has drifted behind the
+	# registry, and — more importantly — when a model this repo hand-declares
+	# is one the catalog already describes, especially under a DIFFERENT wire
+	# protocol than the route forces.
+	#
+	# Why this check exists. pi-ai ships the model catalog, and DSH pins it
+	# (dsh-llm-pi-ai depends on `^0.82.1`, which for a 0.x version pins the
+	# MINOR, so >=0.82.1 <0.83.0). When a provider ships models newer than the
+	# pinned catalog, the only way to reach them is to hand-declare them in
+	# settings.yaml — and a hand-declared model inherits the ROUTE's `api:`,
+	# because DSH has no per-model protocol (PiAiModelProfile has no `api`
+	# field; only RouteCatalogRequest.api exists). For a mixed-API provider
+	# like OpenCode Zen, which pi-ai's own README says "dispatches per model",
+	# that silently forces one protocol onto models that do not speak it.
+	#
+	# That is not hypothetical: it is exactly how muse-spark-1.3-contributor
+	# came to sit on a completions route while answering only over /responses,
+	# 500ing every subagent dispatch at the head of the flash chain, with no
+	# error anywhere that named a protocol. The failure is invisible without a
+	# check, which is why one exists.
+	#
+	# Warns, never fails, in the shape of step_check_aidos_subagent_pin above:
+	# the version pin lives in another package, so sync cannot fix it and a red
+	# run on every sync would be noise. The offline half needs no network; the
+	# online half is best-effort and skips quietly when the registry is
+	# unreachable.
+	local dsh_bin dsh_pkg pi_pkg
+	dsh_bin="$(command -v dsh 2>/dev/null || true)"
+	if [ -z "$dsh_bin" ]; then
+		echo "  WARNING: dsh not on PATH; skipping pi-ai drift check."
+		return 0
+	fi
+	dsh_pkg="$(dirname "$(dirname "$(realpath "$dsh_bin")")")"
+	pi_pkg="$dsh_pkg/node_modules/@earendil-works/pi-ai"
+	if [ ! -d "$pi_pkg" ]; then
+		echo "  WARNING: pi-ai not installed at $(short_path "$pi_pkg"); skipping drift check."
+		return 0
+	fi
+
+	local latest=""
+	latest="$(curl -fsS -m 10 https://registry.npmjs.org/@earendil-works%2Fpi-ai 2>/dev/null |
+		python3 -c 'import json,sys; print(json.load(sys.stdin)["dist-tags"]["latest"])' 2>/dev/null || true)"
+
+	PI_PKG="$pi_pkg" DSH_PKG="$dsh_pkg" SETTINGS="$HERE/home/settings.yaml" \
+		PI_LATEST="$latest" python3 - <<'PY'
+import json, os, sys
+
+pi = os.environ['PI_PKG']
+dsh = os.environ['DSH_PKG']
+settings_path = os.environ['SETTINGS']
+latest = os.environ.get('PI_LATEST') or ''
+
+def read_json(path):
+    try:
+        with open(path) as fh:
+            return json.load(fh)
+    except Exception:
+        return None
+
+pkg = read_json(os.path.join(pi, 'package.json')) or {}
+installed = pkg.get('version') or '?'
+
+# --- online half: version drift -------------------------------------------
+if not latest:
+    print("  note: registry unreachable; version drift not checked "
+          f"(installed pi-ai {installed}).")
+else:
+    def parts(v):
+        out = []
+        for chunk in v.split('-')[0].split('.'):
+            try:
+                out.append(int(chunk))
+            except ValueError:
+                out.append(0)
+        return tuple(out)
+    if parts(installed) < parts(latest):
+        rng = ((read_json(os.path.join(
+            dsh, 'node_modules/@deepseek-ai/dsh-llm-pi-ai/package.json')) or {})
+            .get('dependencies', {}).get('@earendil-works/pi-ai', '?'))
+        print(f"  WARNING: pi-ai catalog is STALE: installed {installed}, registry latest {latest}.")
+        print(f"           dsh-llm-pi-ai depends on \"{rng}\"; for a 0.x version a caret pins the")
+        print( "           MINOR, so a newer minor is OUTSIDE the range and sync CANNOT install it.")
+        print( "           The bump belongs to DSH. Until it lands, models newer than the pinned")
+        print( "           catalog must stay hand-declared in home/settings.yaml.")
+    else:
+        print(f"  ok: pi-ai {installed} is current.")
+
+# --- offline half: hand-declared models the catalog already describes ------
+try:
+    import yaml
+except Exception as exc:
+    print(f"  note: PyYAML unavailable ({exc}); skipping the hand-declared model audit.")
+    sys.exit(0)
+
+try:
+    with open(settings_path) as fh:
+        doc = yaml.safe_load(fh) or {}
+except Exception as exc:
+    print(f"  WARNING: could not parse {settings_path}: {exc}")
+    sys.exit(0)
+
+routes = ((doc.get('llm-pi-ai') or {}).get('providers') or {})
+data_dir = os.path.join(pi, 'dist', 'providers', 'data')
+
+def catalog_for(route):
+    """The catalog file backing a route.
+
+    A route key is normally the catalog provider id. This repo also declares
+    protocol-split routes (`opencode-go-responses`) onto the same endpoint,
+    which no catalog file is named after, so a trailing protocol suffix is
+    stripped before giving up.
+    """
+    for candidate in (route,
+                      route.rsplit('-', 1)[0] if '-' in route else route):
+        found = read_json(os.path.join(data_dir, f'{candidate}.json'))
+        if found is not None:
+            return candidate, found
+    return None, None
+
+contradictions = []
+unseedable = []
+
+for route, cfg in routes.items():
+    if not isinstance(cfg, dict):
+        continue
+    models = cfg.get('models')
+    if not isinstance(models, list) or not models:
+        continue                      # route defers to the catalog already
+    route_api = cfg.get('api')
+    name, catalog = catalog_for(route)
+    if catalog is None:
+        continue                      # provider pi-ai has never shipped
+    for entry in models:
+        if not isinstance(entry, dict):
+            continue
+        mid = entry.get('id')
+        if not mid:
+            continue
+        apis = [api for api, ids in catalog.items()
+                if isinstance(ids, dict) and mid in ids]
+        if not apis:
+            continue                  # genuinely newer than the catalog
+        if route_api and route_api not in apis:
+            contradictions.append((route, mid, route_api, apis, name))
+        else:
+            unseedable.append((route, mid, name))
+
+for route, mid, route_api, apis, name in contradictions:
+    print(f"  WARNING: {route}/{mid} is forced onto `{route_api}`, but the installed")
+    print(f"           catalog ({name}.json) files it under {', '.join(apis)}.")
+    print( "           This is a DISAGREEMENT TO CHECK, not a proven breakage: a gateway may")
+    print( "           serve a model over both protocols, and this exact warning fired for")
+    print( "           opencode-go/qwen3.7-max, which then answered HTTP 200 over completions.")
+    print( "           But the same disagreement WAS the #92 defect for muse-spark-1.3-")
+    print( "           contributor, which 500s on completions and only answers over")
+    print( "           /responses. So probe the endpoint before acting. If the route's")
+    print( "           protocol fails, split the route by protocol (DSH has no per-model")
+    print( "           `api:`), or drop the hand-declared entry and let the catalog dispatch.")
+
+if unseedable:
+    print(f"  note: {len(unseedable)} hand-declared model(s) are now IN the installed catalog")
+    print( "        and can be un-seeded (delete the entry; let the catalog describe it):")
+    for route, mid, name in unseedable:
+        print(f"          {route}/{mid}  (catalog: {name}.json)")
+
+if not contradictions and not unseedable:
+    print("  ok: no hand-declared model is described by the installed catalog.")
+PY
+}
+
 step_check_preset_drift() {
 	# #122 (aidos board): the aidos preset is a hand-maintained mirror of
 	# standard's tool rows. This step compares the PATCHED standard preset
@@ -1494,6 +1665,7 @@ STEPS=(
 	"Stop the web-tools search-button background poll|step_stop_web_tools_search_poll"
 	"Register the aidos agent preset|step_register_aidos_preset"
 	"Check the aidos subagent pin is effective|step_check_aidos_subagent_pin"
+	"Check the pi-ai catalog for drift and mis-forced protocols|step_check_pi_ai_drift"
 	"Check preset drift (standard vs aidos)|step_check_preset_drift"
 	"Verify builtin tool rows are disabled|step_verify_preset_tool_disabled"
 	"Regenerate settings.yaml from the repo template|step_set_defaults"

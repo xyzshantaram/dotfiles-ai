@@ -897,6 +897,19 @@ llm-pi-ai:
       apiKeyEnv: OPENCODE_ZEN_API_KEY
       api: openai-completions
       baseURL: https://opencode.ai/zen/v1/
+      # #92. WITHOUT this header EVERY request to a zen route is refused, for
+      # every model, with 400 MissingSessionID: "Request is missing
+      # x-opencode-session and cannot be routed efficiently." Nothing supplies
+      # it on our behalf — not DSH, not this repo, and not pi-ai, whose
+      # session-affinity switches (sendSessionAffinityHeaders,
+      # sessionAffinityFormat) send `user`/`prompt_cache_key` in the BODY and
+      # are withheld from profiles by DSH's compat gate anyway. Route-level
+      # `headers` is the only seam (dsh-llm-pi-ai config.d.ts:109-110).
+      # The value is an affinity bucket, not a credential: one stable string
+      # per install is exactly what "routed efficiently" asks for. Verified
+      # 2026-09-08: with it, glm-5.3-flash on the go route returns HTTP 200.
+      headers:
+        x-opencode-session: dsh-aidos
       # Hand-seeded: the installed pi-ai catalog does not describe this id,
       # so sync-models cuts it and the fork reports "not in catalog". Values
       # from models.dev opencode catalog 2026-09-07. No sync markers here on
@@ -920,6 +933,17 @@ llm-pi-ai:
       apiKeyEnv: OPENCODE_GO_API_KEY
       api: openai-completions
       baseURL: https://opencode.ai/zen/go/v1/
+      # See the `opencode` route above for why this header is mandatory (#92).
+      headers:
+        x-opencode-session: dsh-aidos
+      # NOTE (#92): the sync-models block below is regenerated from this route's
+      # live GET /models, which lists the muse ids too — so they will keep
+      # reappearing here under `openai-completions` even though they only answer
+      # over /responses. That is harmless for CHAINS, which point at the
+      # `opencode-go-responses` route below, but a muse model picked by hand
+      # from THIS route will 500. Do not "fix" it by deleting the entries; they
+      # come back on the next sync. The real fix is a pi-ai bump (see the drift
+      # check in sync.sh), after which the catalog dispatches per model.
       models:
       # sync-models:begin
       - id: longcat-2.0
@@ -1068,6 +1092,51 @@ llm-pi-ai:
           low: low
           high: high
       # sync-models:end
+    # #92. A SECOND route onto the same endpoint, differing only in protocol.
+    #
+    # OpenCode Zen is a mixed-API provider: pi-ai's own README says such
+    # providers "dispatch per model", and its 0.85.1 catalog indeed files
+    # muse-spark-1.3-contributor under `openai-responses` while the glm/qwen
+    # ids on the same host stay `openai-completions`. DSH cannot express that
+    # in one route: `api` exists only at route level (RouteCatalogRequest.api,
+    # catalog.d.ts:296) and `PiAiModelProfile` has no `api` field at all, so a
+    # single route forces one protocol on every model it serves. Splitting the
+    # route is the only representable answer.
+    #
+    # Deferring to the catalog is not available either: the INSTALLED pi-ai is
+    # 0.82.1 (2026-07-25), which predates every muse id, so there is nothing to
+    # defer to. When DSH bumps past 0.82.x this whole route should be deleted
+    # and the models un-seeded — that is exactly what the sync.sh drift check
+    # watches for.
+    #
+    # Verified 2026-09-08 against the live endpoint:
+    #   POST /chat/completions muse -> 500 Internal server error
+    #   POST /responses        muse -> 200, real response object
+    #   CONTROL glm-5.3-flash /chat/completions -> 200
+    # i.e. the same key and host serve completions fine for other models and
+    # 500 for this one. No sync markers here on purpose: sync-models must not
+    # rewrite this list.
+    opencode-go-responses:
+      displayName: OpenCode Go (Responses)
+      apiKeyEnv: OPENCODE_GO_API_KEY
+      api: openai-responses
+      baseURL: https://opencode.ai/zen/go/v1/
+      headers:
+        x-opencode-session: dsh-aidos
+      models:
+      - id: muse-spark-1.3-contributor
+        name: Muse Spark 1.3 Contributor
+        contextWindow: 1048576
+        maxTokens: 131072
+        input:
+        - text
+        - image
+        reasoningEfforts:
+          minimal: minimal
+          low: low
+          medium: medium
+          high: high
+          xhigh: xhigh
     electronhub:
       displayName: ElectronHub DevPass
       apiKeyEnv: ELECTRONHUB_DEVPASS_API_KEY
@@ -1136,11 +1205,15 @@ profile:
     # to use") and NO ElectronHub: the dev key has only 5 concurrent slots, so
     # it stays pinned to the personal orchestrator head where usage is bounded
     # rather than reachable from every chain that falls back here.
+    # #92: the opencode-go muse rung moved to the `-responses` route (that model
+    # only answers over /responses; completions 500s), and the
+    # `opencode/muse-spark-1.3-contributor-free` rung was REMOVED — the free
+    # tier refuses non-OpenCode clients outright ("OpenCode's free tier can only
+    # be used in OpenCode"), so it was a rung that could never answer.
     frontier:
       - zai/glm-5.3
       - command-code/meta/muse-spark-1.3-contributor
-      - opencode-go/muse-spark-1.3-contributor
-      - opencode/muse-spark-1.3-contributor-free
+      - opencode-go-responses/muse-spark-1.3-contributor
       - deepseek-official/deepseek-v4-pro
     # ── flash ────────────────────────────────────────────────────────────────
     # The subagent tier, renamed from `subagent` (owner, 2026-09-08). Muse Spark
@@ -1152,9 +1225,8 @@ profile:
       - command-code/meta/muse-spark-1.3-contributor
       - command-code/z-ai/glm-5.3-flash
       - zai/glm-5.3-flash
-      - opencode-go/muse-spark-1.3-contributor
+      - opencode-go-responses/muse-spark-1.3-contributor
       - opencode-go/glm-5.3-flash
-      - opencode/muse-spark-1.3-contributor-free
       - deepseek-official/deepseek-v4-flash
     orchestrator-personal:
       - electronhub/glm-5.3:dev
