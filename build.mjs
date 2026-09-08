@@ -33,6 +33,7 @@ const entries = [
   ["plugins/profiles.ts", "plugins/profiles.js"],
   ["plugins/resume.ts", "plugins/resume.js"],
   ["plugins/ask-interrupt.ts", "plugins/ask-interrupt.js"],
+  ["plugins/approval-interrupt.ts", "plugins/approval-interrupt.js"],
   ["plugins/tmp-dsh-shared.ts", "plugins/tmp-dsh-shared.js"],
   ["plugins/grant.ts", "plugins/grant.js"],
 ];
