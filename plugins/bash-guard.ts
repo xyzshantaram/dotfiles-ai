@@ -397,6 +397,15 @@ interface MatchLine {
   name: string;
   subcommand?: string;
   reason: string;
+  /**
+   * A path argument of THIS command that failed the safe-root test, when one
+   * exists. Set only for rules with no per-subcommand map (rm and friends,
+   * where arguments are targets rather than verbs); a git-style rule keeps
+   * naming its subcommand instead. Reported in preference to the first
+   * argument, because naming an argument that PASSED sends the reader after
+   * the wrong path — the failure this field exists to prevent.
+   */
+  blockedPath?: string;
 }
 interface MessageContext {
   command: string;
@@ -409,6 +418,11 @@ interface MessageContext {
  * back to the reason's first sentence.
  */
 function shortDetail(match: MatchLine): string {
+  // A path that actually failed beats the first argument. The first argument
+  // is only the culprit by luck: `rm -rf <scratch> <outside>` would otherwise
+  // report the scratch path as "blocked" while the disqualifying one is never
+  // shown.
+  if (match.blockedPath) return `${match.blockedPath} is outside every scratch root`;
   if (match.subcommand) return `${match.subcommand} is blocked`;
   const first = match.reason.split(/(?<=[.!?])\s/u)[0] ?? match.reason;
   const trimmed = first.trim().replace(/[.]$/u, "");
@@ -443,14 +457,26 @@ function formatMessage(template: string, ctx: MessageContext): string {
 }
 
 /** Build the match lines for a set of hits, deduplicated by (name, subcommand, reason). */
-function matchLines(hits: { name: string; rule: GuardEntry; ref: CommandRef }[]): MatchLine[] {
+function matchLines(
+  hits: { name: string; rule: GuardEntry; ref: CommandRef }[],
+  safePaths: string[] = [],
+  workspaceRoot?: string,
+): MatchLine[] {
   const seen = new Set<string>();
   const out: MatchLine[] = [];
   for (const h of hits) {
+    // Only for rules whose arguments are TARGETS rather than verbs. A rule
+    // with a subcommands map (git) is better described by its subcommand, so
+    // naming a path there would be a regression.
+    const blockedPath =
+      safePaths.length > 0 && h.rule.subcommands === undefined
+        ? firstNonScratchPath(h.ref, safePaths, workspaceRoot)
+        : undefined;
     const line: MatchLine = {
       name: h.name,
       subcommand: firstSubcommand(getCommandArgs(h.ref)),
       reason: h.rule.reason ?? "(no reason supplied by the rule)",
+      ...(blockedPath === undefined ? {} : { blockedPath }),
     };
     const key = `${line.name}\0${line.subcommand ?? ""}\0${line.reason}`;
     if (seen.has(key)) continue;
@@ -540,6 +566,27 @@ function scratchAllowed(refs: CommandRef[], safePaths: string[], workspaceRoot?:
     const n = normalizeScratchPath(p, workspaceRoot);
     return safePaths.some((sp) => isUnderScratch(n, sp));
   });
+}
+/**
+ * The first path argument of ONE command that does not land under a safe
+ * scratch root, or undefined when every path does (or there are none).
+ *
+ * Exists so a refusal can name the argument that actually disqualified the
+ * command. Reporting the first argument instead is wrong whenever the offender
+ * is not first, and it cost two people a false investigation: a cleanup whose
+ * every rm target was scratch was refused with a SCRATCH path named, while the
+ * real disqualifiers sat in neighbouring commands.
+ */
+function firstNonScratchPath(
+  ref: CommandRef,
+  safePaths: string[],
+  workspaceRoot?: string,
+): string | undefined {
+  for (const p of pathLikeArgs([ref])) {
+    const n = normalizeScratchPath(p, workspaceRoot);
+    if (!safePaths.some((sp) => isUnderScratch(n, sp))) return p;
+  }
+  return undefined;
 }
 
 /** Characters the shell expands itself when a word reaches it unquoted. */
@@ -788,11 +835,23 @@ export async function evaluate(
   const all = [...refs, ...commands];
   ctx.logger.debug(`bash-guard: extracted ${all.length} command(s) from: ${command}`);
 
-  // Scratch escape: a command whose LAST path-like argument lands under a
-  // safe scratch root is always allowed, in every phase. Scratch writes are
+  // Scratch escape: a command whose path-like arguments all land under a safe
+  // scratch root is always allowed, in every phase. Scratch writes are
   // ephemeral and sandbox-bounded, so bash-guard never gates them — the agent
   // (and especially a subagent) can spool to /tmp/dsh or the aidos durable
   // scratch at any time.
+  //
+  // The exemption is scoped PER COMMAND, not across the chain. It used to be
+  // chain-wide, which meant a neighbour that merely READ a path outside
+  // scratch revoked it: `rm -rf /tmp/dsh/a /tmp/dsh/b; du -sh <repo>/.git/x;
+  // cd <repo> && git log` prompted for the rm even though every rm target was
+  // scratch, contradicting guards/rm.json's own promise that scratch
+  // deletions never ask. A `du` and a `cd` are not deletions and must not
+  // decide whether a deletion is exempt.
+  //
+  // Per-command scoping keeps the safety property intact: in
+  // `rm /tmp/dsh/x && rm /etc/y` the second rm is judged on its own targets
+  // and still asks. Only the command that is wholly inside scratch goes free.
   if (safePaths.length > 0 && scratchAllowed(all, safePaths, workspaceRoot)) {
     ctx.logger.info(`bash-guard: scratch write allowed: ${command}`);
     return { action: "run", command, rewritten: false };
@@ -803,6 +862,14 @@ export async function evaluate(
       const name = getBasename(ref);
       const rule = rules.get(name) ?? rules.get("*");
       if (rule === undefined) return undefined;
+      // Per-command scratch exemption: this command touches only scratch, so
+      // it carries no hit regardless of what its neighbours do. Commands with
+      // no path arguments are unaffected (scratchAllowed is false for them)
+      // and fall through to their own rule as before.
+      if (safePaths.length > 0 && scratchAllowed([ref], safePaths, workspaceRoot)) {
+        ctx.logger.info(`bash-guard: scratch-only command exempt: ${name}`);
+        return undefined;
+      }
       return { name, rule, ref, verdict: verdictFor(rule, ref) };
     })
     .filter(
@@ -1037,7 +1104,7 @@ export async function evaluate(
       const denying = hits.filter((h) => h.verdict === "deny");
       const reason = formatMessage(templates.deny ?? DEFAULT_DENY_TEMPLATE, {
         command,
-        matches: matchLines(denying),
+        matches: matchLines(denying, safePaths, workspaceRoot),
       });
       const ruleNames = [...new Set(denying.map((h) => h.name))].join(", ");
       ctx.logger.warn(`bash-guard: command denied by rules [${ruleNames}]: ${command}`);
@@ -1047,7 +1114,7 @@ export async function evaluate(
       const asking = hits.filter((h) => h.verdict === "ask");
       const reason = formatMessage(templates.ask ?? DEFAULT_ASK_TEMPLATE, {
         command,
-        matches: matchLines(asking),
+        matches: matchLines(asking, safePaths, workspaceRoot),
       });
       const ruleNames = [...new Set(asking.map((h) => h.name))].join(", ");
       ctx.logger.warn(`bash-guard: command asks for approval by rules [${ruleNames}]: ${command}`);
