@@ -1314,10 +1314,20 @@ step_verify_preset_tool_disabled() {
 
 step_set_defaults() {
 	# Regenerate $DSH_HOME/settings.yaml from the known-good repo template
-	# ($HERE/home/settings.yaml). The local file is stateless: it holds no
-	# secrets, so sync may overwrite it freely. profile.active is the one
-	# runtime decision (the profiles tool flips it), so preserve the current
-	# value; every other section comes from the template.
+	# ($HERE/home/settings.yaml). The local file holds no secrets, so sync may
+	# overwrite it — but it is NOT stateless, and the old comment here claiming
+	# it was is what made this step destroy per-instance config for months.
+	#
+	# TWO pieces of runtime state survive a sync:
+	#   1. profile.active — the profiles tool flips it; patched back with sed
+	#      below (byte-preserving, see the note on the YAML 1.1 `off:` hazard).
+	#   2. profile.chains — chain config is PER-INSTANCE (#77): different DSH
+	#      instances legitimately route to different models. Preserved by
+	#      scripts/preserve-chains.mjs, which splices the previous block back as
+	#      raw text and warns about invalid rungs without ever rewriting them.
+	#      SYNC_ADOPT_CHAINS=1 takes the template's chains instead, which is how
+	#      a template change (e.g. the #82 overhaul) reaches an existing
+	#      instance.
 	local active
 	active="$(python3 - "$DSH_HOME/settings.yaml" <<'PY'
 import sys, yaml
@@ -1329,6 +1339,13 @@ print(d.get('profile', {}).get('active', 'personal'))
 PY
 )"
   echo "  regenerating settings.yaml -> $DSH_HOME/settings.yaml"
+	# Snapshot the outgoing file BEFORE the copy: it is the only source of this
+	# instance's chains, and the cp is about to destroy it.
+	local prev_settings=""
+	if [ -f "$DSH_HOME/settings.yaml" ]; then
+		prev_settings="$(mktemp)"
+		cp "$DSH_HOME/settings.yaml" "$prev_settings"
+	fi
 	cp "$HERE/home/settings.yaml" "$DSH_HOME/settings.yaml"
 	# Strip build-time modelSync timestamp: it is local state, not template (M18)
 	if rg -q "^modelSync:" "$DSH_HOME/settings.yaml"; then
@@ -1340,6 +1357,12 @@ text = re.sub(r"\nmodelSync:\n(?:  .*\n?)*", "\n", text)
 p.write_text(text)
 M18PY
 	fi
+	# Splice this instance's chains back over the template's (#77). Runs even
+	# when there is no previous file, so the "seeded from the template" and
+	# validation lines always appear in the report. Warnings never fail sync.
+	node "$HERE/scripts/preserve-chains.mjs" "${prev_settings:-/nonexistent}" "$DSH_HOME/settings.yaml" || true
+	if [ -n "$prev_settings" ]; then rm -f "$prev_settings"; fi
+
 	# Byte-preserving patch of the single runtime line. A full YAML round-trip
 	# would let PyYAML (YAML 1.1) rewrite the file, mangling e.g. the
 	# reasoningEfforts key `off:` into `false: null` (YAML 1.1 treats `off` as
