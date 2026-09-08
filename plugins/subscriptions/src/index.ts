@@ -1041,8 +1041,15 @@ export function apply(ctx, config) {
       try {
         const value = (await credentials.resolve(name))?.value;
         if (typeof value === "string" && value !== "") return value;
-      } catch {
-        // An unknown name must not abort the search: try the next one.
+      } catch (error) {
+        // An unknown name must not abort the search: try the next one. But
+        // credentials.resolve returns undefined for an unknown name rather
+        // than throwing, so anything landing here is a GENUINE provider
+        // failure (locked store, decrypt error) that this loop would otherwise
+        // swallow into an indistinguishable "no key found".
+        ctx.logger.warn(
+          `electronhub credential "${name}" failed to resolve: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
     }
     return null;
@@ -1057,15 +1064,40 @@ export function apply(ctx, config) {
 
   const electronhubUsageOnce = cachedOnce(async (key) => {
     const res = await electronhubGet("/user/me", key);
-    // Verified live 2026-09-08: the stored DevPass key answers 200 on
-    // /v1/models and 401 on /v1/user/me. The account surface is out of scope
-    // for that key class — a capability limit, not a failure — so answer with
-    // a valid empty payload plus a note. Throwing here would paint a red
-    // error line over a section that can still show its model catalog.
-    if (res.status === 401 || res.status === 403) {
+    // 403 is a CAPABILITY limit: the key is accepted, this surface is not in
+    // its class. Empty payload plus a note; the section still shows its models.
+    if (res.status === 403) {
       return {
         ...parseElectronHubUsage(null),
-        note: `account usage is not available for this API key (HTTP ${res.status})`,
+        note: "account usage is not available for this API key (HTTP 403)",
+      };
+    }
+    // 401 is AMBIGUOUS and must not be reported as either healthy or broken.
+    //
+    // The #68 review asked for 401 to become a hard error ("bad key") while 403
+    // stayed a note. That split is not implementable here, and probing decided
+    // it (live, 2026-09-08):
+    //   Bearer <garbage>  -> /v1/user/me  401
+    //   no Authorization  -> /v1/user/me  401
+    //   the stored DevPass key (valid for inference) -> /v1/user/me  401
+    //   no Authorization  -> /v1/models   200
+    // An invalid key, a missing key and a working-but-capability-limited key
+    // are INDISTINGUISHABLE at this endpoint, and /v1/models is a public
+    // catalog that validates nothing. Throwing would paint a red error over a
+    // key that works fine for inference; staying silent is what made an
+    // invalid key look healthy in the first place.
+    //
+    // So: say exactly what is known. The note names the ambiguity, and
+    // `unverified` marks the payload so the client can stop the model list
+    // from reading as proof the key works.
+    if (res.status === 401) {
+      return {
+        ...parseElectronHubUsage(null),
+        unverified: true,
+        note:
+          "this API key could not be verified (HTTP 401 on /user/me) — it may be " +
+          "capability-limited or invalid; any model list below is the PUBLIC catalog, " +
+          "which answers without a key",
       };
     }
     if (!res.ok) throw new Error(`electronhub usage HTTP ${res.status}`);
@@ -1089,7 +1121,12 @@ export function apply(ctx, config) {
     const catalog = await attempt("/models");
     if (catalog.ok === true) return { models: catalog.models, source: "catalog" };
     if (scoped.ok === true) return { models: scoped.models, source: "account" };
-    throw new Error(`electronhub models HTTP ${catalog.status}`);
+    // Both paths failed: report BOTH statuses. Reporting only the catalog's
+    // discards the scoped attempt entirely, and the pair is what distinguishes
+    // "key rejected everywhere" (401/401) from "endpoint down" (5xx).
+    throw new Error(
+      `electronhub models unavailable: /user/models HTTP ${scoped.status}, /models HTTP ${catalog.status}`,
+    );
   }, ELECTRONHUB_MODELS_CACHE_MS);
 
   const handleElectronhubUsage = async (_req, res) => {

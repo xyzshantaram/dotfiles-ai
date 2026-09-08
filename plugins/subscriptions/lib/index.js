@@ -1195,7 +1195,10 @@ function apply(ctx, config) {
       try {
         const value = (await credentials.resolve(name2))?.value;
         if (typeof value === "string" && value !== "") return value;
-      } catch {
+      } catch (error) {
+        ctx.logger.warn(
+          `electronhub credential "${name2}" failed to resolve: ${error instanceof Error ? error.message : String(error)}`
+        );
       }
     }
     return null;
@@ -1206,10 +1209,17 @@ function apply(ctx, config) {
   });
   const electronhubUsageOnce = cachedOnce(async (key) => {
     const res = await electronhubGet("/user/me", key);
-    if (res.status === 401 || res.status === 403) {
+    if (res.status === 403) {
       return {
         ...parseElectronHubUsage(null),
-        note: `account usage is not available for this API key (HTTP ${res.status})`
+        note: "account usage is not available for this API key (HTTP 403)"
+      };
+    }
+    if (res.status === 401) {
+      return {
+        ...parseElectronHubUsage(null),
+        unverified: true,
+        note: "this API key could not be verified (HTTP 401 on /user/me) \u2014 it may be capability-limited or invalid; any model list below is the PUBLIC catalog, which answers without a key"
       };
     }
     if (!res.ok) throw new Error(`electronhub usage HTTP ${res.status}`);
@@ -1228,7 +1238,9 @@ function apply(ctx, config) {
     const catalog = await attempt("/models");
     if (catalog.ok === true) return { models: catalog.models, source: "catalog" };
     if (scoped.ok === true) return { models: scoped.models, source: "account" };
-    throw new Error(`electronhub models HTTP ${catalog.status}`);
+    throw new Error(
+      `electronhub models unavailable: /user/models HTTP ${scoped.status}, /models HTTP ${catalog.status}`
+    );
   }, ELECTRONHUB_MODELS_CACHE_MS);
   const handleElectronhubUsage = async (_req, res) => {
     try {
