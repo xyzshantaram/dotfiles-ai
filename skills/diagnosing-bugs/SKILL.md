@@ -139,7 +139,7 @@ Required before declaring done (Phase 7 then closes the loop):
 
 ## Phase 7: What would have caught this?
 
-Runs after Phase 6, on every defect that got through a check that should have caught it. Skip the phase only when an existing mechanism caught the defect correctly — that is the system working.
+Runs after Phase 6, on every defect that got through a check that should have caught it — asking what would have caught it, and what protects against the class of it. Skip the phase only when an existing mechanism caught the defect correctly — that is the system working.
 
 The output is an **artifact**, not a resolution to be more careful.
 
