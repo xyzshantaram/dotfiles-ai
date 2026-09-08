@@ -1125,69 +1125,49 @@ llm-pi-ai:
         maxTokens: 65536
         input:
         - text
-    opencode-go-spark:
-      displayName: OpenCode Go Spark
-      apiKeyEnv: OPENCODE_GO_API_KEY
-      api: openai-responses
-      baseURL: https://opencode.ai/zen/go/v1/
-      models:
-      - id: muse-spark-1.3-contributor
-        name: Muse Spark 1.3 Contributor
-        contextWindow: 1048576
-        maxTokens: 131072
-        input:
-        - text
-        - image
-        reasoningEfforts:
-          minimal: minimal
-          low: low
-          medium: medium
-          high: high
-          xhigh: xhigh
 agent-presets:
   default: standard
 profile:
   active: personal
   chains:
-    work-orchestrator:
-      - meridian/claude-opus-5
-      - meridian/claude-sonnet-5
-      - chain:personal-orchestrator
-    personal-orchestrator:
-      - electronhub/glm-5.3:dev
-      - command-code/meta/muse-spark-1.3-contributor
+    # ── frontier ─────────────────────────────────────────────────────────────
+    # GLM-5.3-class and above. Deliberately NO flash rungs (owner, 2026-09-08:
+    # "GLM 5.3 and above are frontier models, it's only flash ones i don't want
+    # to use") and NO ElectronHub: the dev key has only 5 concurrent slots, so
+    # it stays pinned to the personal orchestrator head where usage is bounded
+    # rather than reachable from every chain that falls back here.
+    frontier:
       - zai/glm-5.3
-      - opencode-go-spark/muse-spark-1.3-contributor
+      - command-code/meta/muse-spark-1.3-contributor
+      - opencode-go/muse-spark-1.3-contributor
       - opencode/muse-spark-1.3-contributor-free
       - deepseek-official/deepseek-v4-pro
-    subagent:
+    # ── flash ────────────────────────────────────────────────────────────────
+    # The subagent tier, renamed from `subagent` (owner, 2026-09-08). Muse Spark
+    # stays at the head deliberately: it is the model the preset pin names, so a
+    # pinned child starts ON a rung of its own chain and failover can walk from
+    # there. Break that alignment and pinned children fall outside the chain,
+    # which is the bug #81 documents.
+    flash:
       - command-code/meta/muse-spark-1.3-contributor
       - command-code/z-ai/glm-5.3-flash
       - zai/glm-5.3-flash
-      - opencode-go-spark/muse-spark-1.3-contributor
+      - opencode-go/muse-spark-1.3-contributor
       - opencode-go/glm-5.3-flash
       - opencode/muse-spark-1.3-contributor-free
       - deepseek-official/deepseek-v4-flash
-    subagent-work:
-      - meridian/claude-haiku-4-5
-      - chain:subagent
-    # SECURITY BOUNDARY - the partner review chain.
-    #
-    # The aidos gate accepts a review_pass only when its provenance stamp
-    # shows a partner-chain run (SPEC-batch-review.md, Gate rule). That
-    # makes THIS list the boundary: editing a cheap model into it weakens
-    # the review gate silently - no gate error, no warning, just reviews
-    # that look partner-grade while running on a cheap tier. Do not add
-    # rungs below meridian quality here without an explicit owner decision.
-    #
-    # Two meridian rungs and deliberately NO cheap fallback: when meridian
-    # is unreachable the partner run fails, tickets sit in
-    # awaiting_verification, and no degraded review path exists. That is
-    # the spec's accepted trade ("reviewer unavailability must never
-    # auto-pass"), not an oversight.
-    partner:
-      - meridian/
-      - meridian/
+    orchestrator-personal:
+      - electronhub/glm-5.3:dev
+      - chain:frontier
+    orchestrator-work:
+      - meridian/claude-opus-5
+      - meridian/claude-sonnet-5
+      - chain:frontier
+    # `see` / `see-work` are TOOL routing, not orchestrator chains: see.ts picks
+    # a vision chain BY NAME (`see`, else `see-<profile>`), and sync-models.mjs
+    # validates that only these must resolve to a vision-capable model. They are
+    # kept for that reason, not by oversight — deleting them without changing
+    # see.ts would leave the vision tool with no route.
     see:
       - command-code/Qwen/Qwen3.7-Flash
       - opencode/qwen3.6-plus
@@ -1195,11 +1175,11 @@ profile:
       - meridian/claude-haiku-4-5
       - chain:see
   work:
-    orchestrator: work-orchestrator
-    subagent: subagent-work
+    orchestrator: orchestrator-work
+    subagent: flash
   personal:
-    orchestrator: personal-orchestrator
-    subagent: subagent
+    orchestrator: orchestrator-personal
+    subagent: flash
 
 
 modelSync:
