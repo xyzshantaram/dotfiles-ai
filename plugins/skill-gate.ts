@@ -29,9 +29,12 @@
  *   - On a successful `skill` tool call (`tools/post-execute`), this plugin
  *     adds the loaded skill's gated tools to that agent's active set; the next
  *     step's reconciliation unmasks them.
- *   - On `compaction/start`, active state for every agent is cleared and the
- *     masks are lifted; the next pre-step re-applies the full deny, so gated
- *     tools return to hidden after a compaction instead of leaking open.
+ *   - On `compaction/start`, only the applied masks and their disposers are
+ *     dropped; each agent's active (skill-unlocked) set SURVIVES, and the
+ *     next pre-step re-applies the deny from the preserved actives — so a
+ *     skill loaded before compaction keeps its tools, while an agent that
+ *     never loaded one still gets the full deny. (#89: activations are
+ *     intent, not context; wiping them silently revoked capabilities.)
  *   - SUBAGENT LOCKDOWN: agents with delegation depth > 0 are hard-denied a
  *     configurable tool list (`subagentDeny`, default the cordis mutation
  *     set) regardless of loaded skills. Children keep read-only inspection

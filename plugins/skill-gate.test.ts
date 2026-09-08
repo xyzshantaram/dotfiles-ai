@@ -188,3 +188,93 @@ describe("skill-gate slash-command invocation", () => {
     expect(restrictCalls.at(-1)).toContain("foo");
   });
 });
+
+describe("skill-gate compaction survival (#89 follow-up)", () => {
+  /**
+   * Fake agent that tracks its LIVE deny state, not just restrict() calls.
+   * When a skill unmasks a tool, enforce() disposes the old mask WITHOUT
+   * recording a new restrict() call — so the call log alone still shows the
+   * earlier deny and cannot tell denied from unmasked.
+   */
+  function fakeLiveAgent(id: string, tools: string[] = ["foo", "bar"]) {
+    const restrictCalls: string[][] = [];
+    let denied = new Set<string>();
+    const agent = {
+      id,
+      ctx: {
+        tools: {
+          schemas: () => tools.map((name) => ({ name })),
+          restrict({ deny }: { deny: string[] }) {
+            restrictCalls.push(deny);
+            denied = new Set(deny);
+            return () => {
+              denied = new Set();
+            };
+          },
+        },
+      },
+    };
+    return {
+      agent: agent as never,
+      restrictCalls,
+      isDenied: (tool: string) => denied.has(tool),
+    };
+  }
+
+  it("a skill's gated tools survive compaction, and a skill never loaded stays denied", async () => {
+    const dir = writeGatedSkill(tmpRoot, "keeper", ["foo"]);
+    const ctx = fakeCtx();
+    apply(ctx as never, { skillDirs: [dir] });
+    // gatesCache is module-level: invalidate so this test's own skill dir
+    // is discovered, not an earlier test's.
+    ctx.handlers.get("skills/change")![0]!();
+    const preStep = ctx.handlers.get("agent/pre-step")![0]!;
+    const postExecute = ctx.handlers.get("tools/post-execute")![0]!;
+    const assemble = ctx.handlers.get("system-prompt/assemble")![0]!;
+    const compact = ctx.handlers.get("compaction/start")![0]!;
+    // Module-level active/applied/disposer maps are keyed by agent id, so
+    // these ids must be unique across the file.
+    const loaded = fakeLiveAgent("compact-loaded");
+    const stranger = fakeLiveAgent("compact-stranger");
+
+    // Before the load, the gate denies the tool to both agents.
+    await preStep({ agent: loaded.agent }, () => undefined);
+    await preStep({ agent: stranger.agent }, () => undefined);
+    expect(loaded.isDenied("foo")).toBe(true);
+    expect(stranger.isDenied("foo")).toBe(true);
+
+    // Load the skill on ONE agent via the `skill` tool path. The claim runs
+    // after next() resolves, so the post-execute MUST be awaited — without
+    // the await the activation has not landed when the next step runs.
+    // (The slash path shares activateSkill/activeById below this seam.)
+    await postExecute(
+      { name: "skill", agent: loaded.agent, arguments: { name: "keeper" } },
+      {},
+      async () => ({}),
+    );
+    await preStep({ agent: loaded.agent }, () => undefined);
+    expect(loaded.isDenied("foo")).toBe(false);
+
+    // Compaction drops the applied masks; the next pre-step reconciles each
+    // agent from its preserved active set.
+    compact();
+    await preStep({ agent: loaded.agent }, () => undefined);
+    await preStep({ agent: stranger.agent }, () => undefined);
+
+    // SURVIVAL half: the loader keeps its tool. Against the old clearAll(),
+    // which wiped activeById, this denies again and the test fails here.
+    expect(loaded.isDenied("foo")).toBe(false);
+    // LEAK half (security-relevant): an agent that never loaded the skill
+    // still gets the full deny. A test that only checked survival would pass
+    // even if the gate leaked wide open.
+    expect(stranger.isDenied("foo")).toBe(true);
+
+    // Same story at the prompt-assembly surface, which reads activeById live.
+    const asmLoaded = { tools: [{ name: "foo" }, { name: "bar" }] };
+    assemble(asmLoaded, { agent: loaded.agent }, () => {});
+    expect(asmLoaded.tools.map((t) => t.name)).toEqual(["foo", "bar"]);
+    const asmStranger = { tools: [{ name: "foo" }, { name: "bar" }] };
+    assemble(asmStranger, { agent: stranger.agent }, () => {});
+    expect(asmStranger.tools.map((t) => t.name)).toEqual(["bar"]);
+  });
+});
