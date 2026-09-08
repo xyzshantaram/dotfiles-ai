@@ -861,11 +861,9 @@
 .tool-render-approval-comment-toggle {
   align-self: flex-end;
 }
-/* The decided badge is the strip's only child once answered, so it holds the
-   same right edge the actions had rather than stretching. */
-.tool-render-decided {
-  align-self: flex-end;
-}
+/* (The decided badge that used to live here was retired on 2026-09-08: the
+   durable verdict is now a badge on the collapsed row, .tool-render-verdict,
+   and the answer bar renders nothing once a decision has settled.) */
 /* Aidios review-queue button recipe, mapped onto dsw-alias tokens: 1px
    border, surface bg, secondary text, 4px radius, 12px/20px, 5px 12px
    padding, hover raises surface + primary text, disabled 0.45. */
@@ -957,29 +955,36 @@
   outline: 2px solid var(--dsw-alias-state-business-primary);
   outline-offset: -1px;
 }
-/* The durable decided badge (owner, 2026-09-08): it should read as THE BUTTON
-   THAT WAS PRESSED, left disabled — not as a separate coloured pill. So it
-   inherits .tool-render-approval-btn's exact recipe (1px border, surface bg,
-   secondary text, 4px radius, 12px/20px, 5px 12px padding) plus that button's
-   own :disabled treatment (opacity 0.45, default cursor). Approved therefore
-   carries NO accent colour at all: the neutral disabled button IS the "you
-   pressed approve" signal. Only rejected keeps a tint, because a refusal that
-   looks identical to an approval is worth one colour.
+/* The durable approval verdict on the COLLAPSED row (owner, 2026-09-08):
+   [shield | APPROVED], sitting immediately after the tool-call label badge.
+   It reads as a small status stamp — uppercase, tight, nowrap — so the row
+   still scans as one line and the verdict is legible without expanding.
+   Approved carries no accent: at row scale a coloured pill competes with the
+   tool name for attention, and "it was approved" is the unremarkable case.
+   Rejected keeps the error tint, because a refusal that looks identical to an
+   approval is worth exactly one colour.
    Sourced from the guarded-approvals fold, so it survives a page reload. */
-.tool-render-decided {
+.tool-render-verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
   border: 1px solid var(--dsw-alias-border-l3);
-  background: var(--dsw-alias-bg-base);
-  color: var(--dsw-alias-label-secondary);
   border-radius: 4px;
-  font-size: 12px;
-  line-height: 20px;
-  padding: 5px 12px;
-  opacity: 0.45;
-  cursor: default;
+  padding: 0 6px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 18px;
+  white-space: nowrap;
 }
-.tool-render-decided[data-outcome="rejected"] {
+.tool-render-verdict[data-outcome="rejected"] {
   color: var(--dsw-alias-state-error-primary);
   border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 55%, var(--dsw-alias-border-l3));
+}
+.tool-render-verdict-shield {
+  flex: none;
 }
 /* The pending ask's reason (owner, 2026-09-08): while an approval is open the
    card must say WHY it is being asked. Tertiary label, wrapping, sitting above
