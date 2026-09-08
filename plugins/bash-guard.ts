@@ -547,9 +547,18 @@ function pathLikeArgs(refs: CommandRef[]): string[] {
 }
 
 /**
- * True when the LAST path-like argument of the command lands under one of the
+ * True when EVERY path-like argument of the command lands under one of the
  * safe scratch roots. Used to always allow writes that target scratch, in any
  * phase, while still gating commands whose target is outside scratch.
+ *
+ * #90 (relative-path item, CLOSED with a reason — no defect). When
+ * workspaceRoot is undefined (aidos.bashContext threw), a relative path is
+ * returned unchanged and therefore matches no safe root, so the command
+ * ASKS. That fail-closed fallback is correct: there is nothing sound to
+ * resolve against — the server's own cwd is not the agent's workspace — and
+ * guessing risks exempting a deletion that is not scratch. The only cost is
+ * a prompt, never a silent run; with a root available the same relative
+ * path resolves and is exempt. Pinned in bash-guard-rm.test.ts.
  */
 function normalizeScratchPath(p: string, workspaceRoot?: string): string {
   if (isAbsolute(p)) return resolve(p);
@@ -559,6 +568,17 @@ function normalizeScratchPath(p: string, workspaceRoot?: string): string {
 function isUnderScratch(target: string, root: string): boolean {
   return target === root || target.startsWith(root + sep);
 }
+/**
+ * #90 (glob item, CLOSED with a reason — no defect). An unquoted absolute
+ * glob such as `/tmp/dsh/aidos/*.index` is matched LITERALLY here: the `*`
+ * is never expanded, and the fixed prefix decides. That is sound because
+ * expansion can only produce paths under the fixed prefix, so a glob rooted
+ * in scratch can never delete outside it, while a glob rooted outside
+ * scratch still fails — and firstNonScratchPath skips scratch-covered globs,
+ * so a refusal never names one as the offender. `..` inside the pattern is
+ * normalized by resolve() before the prefix test, so `/tmp/dsh/../etc/*`
+ * still asks. Pinned in bash-guard-rm.test.ts.
+ */
 function scratchAllowed(refs: CommandRef[], safePaths: string[], workspaceRoot?: string): boolean {
   const paths = pathLikeArgs(refs);
   if (paths.length === 0) return false;

@@ -139,3 +139,48 @@ describe("unrelated commands are unchanged", () => {
     expect(outcome.action).toBe("run");
   });
 });
+
+/**
+ * #90 follow-up: the two secondary items, each CLOSED with a reason rather
+ * than a fix. Both were verified to fail in the safe direction (ask, never
+ * run), so there is nothing to repair; these tests pin the verified
+ * behaviour so a future refactor cannot silently change it.
+ */
+describe("glob and relative-path items (#90 follow-up, closed with reasons)", () => {
+  const scratch = (command: string) => run([GUARDS_DIR], command, ["/tmp/dsh"]);
+  const runWithRoot = (command: string, root: string | undefined) =>
+    evaluate(fakeCtx() as never, [GUARDS_DIR], command, ["/tmp/dsh"], root, {});
+
+  it("an unquoted glob rooted in scratch stays exempt", async () => {
+    // Command A carried `/tmp/dsh/aidos/*.index` unquoted. The exemption
+    // matches the literal text by fixed prefix; expansion can only produce
+    // paths under that prefix, so the glob can never escape scratch.
+    const outcome = await scratch("rm -rf /tmp/dsh/aidos/final.index /tmp/dsh/aidos/*.index");
+    expect(outcome.action).toBe("run");
+  });
+
+  it("a refusal beside a scratch glob names the real offender, not the glob", async () => {
+    // Command A's exact shape: the .git target disqualifies, the glob does
+    // not, so the message must name the .git path.
+    const outcome = await scratch(
+      "rm -rf /home/sid/repos/aidos/.git/aidos-tmp /tmp/dsh/aidos/*.index",
+    );
+    expect(outcome.action).toBe("ask");
+    const reason = "reason" in outcome ? String(outcome.reason) : "";
+    expect(reason).toContain(".git/aidos-tmp is outside every scratch root");
+    expect(reason).not.toContain("*.index");
+  });
+
+  it("a relative scratch path resolves when the workspace root is known", async () => {
+    const outcome = await runWithRoot("rm -rf aidos/spool.txt", "/tmp/dsh");
+    expect(outcome.action).toBe("run");
+  });
+
+  it("a relative path asks when the workspace root is unavailable -- fail-closed", async () => {
+    // Without a root there is nothing to resolve against (the server's own
+    // cwd is not the agent's workspace), so the path matches no safe root
+    // and the command asks. The cost is a prompt, never a silent run.
+    const outcome = await scratch("rm -rf aidos/spool.txt");
+    expect(outcome.action).toBe("ask");
+  });
+});
