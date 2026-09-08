@@ -2374,6 +2374,16 @@ var client_default = `.tool-render-row {
 .tool-render-card[data-stopped] {
   outline: 2px solid color-mix(in srgb, var(--dsw-alias-state-error-primary) 55%, transparent);
 }
+/* The guard outline outranks error and stopped, not just escalated. A
+   rewritten command often exits non-zero (rg exits 1 on no match, and
+   bashErrorState promotes any [exit code: N>=1] result to error), which
+   used to hand blue's 3px to the later red 2px rules at equal (0,2,0)
+   specificity. The doubled attribute selector (0,3,0) wins over all
+   three without !important, so the durable "this call was guarded" mark
+   survives a failing exit. */
+.tool-render-card[data-guard-approval][data-guard-approval] {
+  outline: 3px solid var(--dsh-outline-guard);
+}
 .tool-render-card:hover {
   border-color: var(--dsw-alias-border-l3);
 }
@@ -15786,13 +15796,36 @@ function rowStateOf(block) {
   if (block.error && block.error.code === "interrupted") return "stopped";
   return block.isError === true ? "error" : "ok";
 }
-function guardRewriteOf(block) {
+function guardRewriteOf(block, resultText) {
   if (!doneOf(block)) return null;
   var meta = block.meta;
-  if (meta === null || typeof meta !== "object" || Array.isArray(meta)) return null;
-  if (meta.rewritten !== true) return null;
-  if (typeof meta.ran !== "string" || meta.ran.length === 0) return null;
-  return { ran: meta.ran };
+  if (meta !== null && typeof meta === "object" && !Array.isArray(meta)) {
+    if (meta.rewritten !== true) return null;
+    if (typeof meta.ran !== "string" || meta.ran.length === 0) return null;
+    return { ran: meta.ran };
+  }
+  return guardRewriteFromText(resultText);
+}
+var GUARD_REWRITE_MARKER = "bash-guard: ran this instead:";
+function guardRewriteFromText(text) {
+  if (typeof text !== "string") return null;
+  var at = text.indexOf(GUARD_REWRITE_MARKER);
+  if (at === -1) return null;
+  var lines = text.slice(at + GUARD_REWRITE_MARKER.length).split("\n");
+  var ran = [];
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    if (line === "") continue;
+    if (line.slice(0, 2) === "  ") {
+      ran.push(line.slice(2));
+      continue;
+    }
+    break;
+  }
+  if (ran.length === 0) return null;
+  var command = ran.join("\n").trim();
+  if (command.length === 0) return null;
+  return { ran: command };
 }
 function resultTextOf(block) {
   if (!doneOf(block)) return null;
@@ -16001,7 +16034,14 @@ function renderToolRenderCard(options, approvalOpen) {
       summary
     ),
     open === true ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-body" }, options.body !== null && options.body !== void 0 ? options.body : options.state === "error" && options.errorText !== null && options.errorText !== void 0 && options.errorText !== "" ? /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output", "tool-render-error": true }, options.errorText) : null, options.inspect !== void 0 ? /* @__PURE__ */ import_react.default.createElement("button", { type: "button", className: "tool-render-inspect", onClick: options.inspect }, /* @__PURE__ */ import_react.default.createElement(IconInspectOutline122, null), " Inspect") : null) : null,
-    options.callId !== void 0 && options.callId !== null && typeof options.useSession === "function" ? /* @__PURE__ */ import_react.default.createElement(ToolRenderApprovalBar, { callId: options.callId, useSession: options.useSession }) : null
+    options.callId !== void 0 && options.callId !== null && typeof options.useSession === "function" ? /* @__PURE__ */ import_react.default.createElement(
+      ToolRenderApprovalBar,
+      {
+        callId: options.callId,
+        useSession: options.useSession,
+        useProjection: options.useProjection
+      }
+    ) : null
   );
 }
 function pendingApprovalOf(snapshot, callId) {
@@ -16061,7 +16101,7 @@ function guardRewriteLabel(originalCmd, rewrittenCmd) {
   return "translated to " + rewriteToken;
 }
 function ToolRenderApprovalBar(props) {
-  var decidedRecord = useGuardedApprovals(props.useSession);
+  var decidedRecord = useGuardedApprovals(props.useSession, props.useProjection);
   var pendingRef = useRef(null);
   var approvalId = props.useSession(function(snapshot) {
     var found = pendingApprovalOf(snapshot, props.callId);
@@ -16260,6 +16300,7 @@ function ReadRow(props) {
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
+    useProjection: props.useProjection,
     toolName: "Read file",
     icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
     title: "Read",
@@ -16294,7 +16335,7 @@ function BashRow(props) {
   var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
   var summary = description !== void 0 && description !== "" ? firstLine(description) : command !== void 0 ? firstLine(command) : "Bash";
   var escalated = escalatedOf(argsObj);
-  var durableGuardApproval = useGuardedApprovals(props.useSession);
+  var durableGuardApproval = useGuardedApprovals(props.useSession, props.useProjection);
   var guardApproval = props.useSession(function(snapshot) {
     var pending = snapshot !== null && snapshot !== void 0 ? snapshot.pending : void 0;
     if (!Array.isArray(pending)) return false;
@@ -16311,7 +16352,7 @@ function BashRow(props) {
   if (durableGuardApproval !== null && durableGuardApproval !== void 0 && durableGuardApproval.guarded[props.callId] === true) {
     guardApproval = true;
   }
-  var guardRewrite = guardRewriteOf(block);
+  var guardRewrite = guardRewriteOf(block, output);
   if (guardRewrite !== null) guardApproval = true;
   var body = null;
   if (command !== void 0 || output !== null && output !== "") {
@@ -16362,6 +16403,7 @@ function BashRow(props) {
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
+    useProjection: props.useProjection,
     toolName: "Run bash",
     icon: /* @__PURE__ */ import_react.default.createElement(IconApiOutline142, { size: 14 }),
     title: "Bash",
@@ -16643,6 +16685,7 @@ function makeEditRow(toolTitle) {
       return toolRenderRow({
         callId: props.callId,
         useSession: props.useSession,
+        useProjection: props.useProjection,
         toolName: editBadgeLabel(callNameOf(block), toolTitle),
         icon: /* @__PURE__ */ import_react.default.createElement(IconEditOutline162, { size: 14 }),
         title: toolTitle,
@@ -16692,6 +16735,7 @@ function makeEditRow(toolTitle) {
     return toolRenderRow({
       callId: props.callId,
       useSession: props.useSession,
+      useProjection: props.useProjection,
       // One component serves the `edit`, `undo_edit`, and `undo_last_edit`
       // registrations. The block carries the real call name, so the badge
       // shows the right human-readable label for the exact call being rendered.
@@ -16945,6 +16989,7 @@ function WriteRow(props) {
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
+    useProjection: props.useProjection,
     toolName: "Write file",
     icon: /* @__PURE__ */ import_react.default.createElement(IconEditOutline162, { size: 14 }),
     title: "Write",
@@ -17030,6 +17075,7 @@ function TodoRow(props) {
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
+    useProjection: props.useProjection,
     toolName: "To-do list",
     icon: /* @__PURE__ */ import_react.default.createElement(IconChecklistOutline142, { size: 14 }),
     title: "To-do list",
@@ -17172,6 +17218,7 @@ function AskRow(props) {
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
+    useProjection: props.useProjection,
     toolName: "Ask user",
     icon: /* @__PURE__ */ import_react.default.createElement(IconQuestionOutline142, { size: 14 }),
     title: "Ask user",
@@ -17216,6 +17263,7 @@ function SubagentRow(props) {
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
+    useProjection: props.useProjection,
     toolName: "Dispatch",
     icon: /* @__PURE__ */ import_react.default.createElement(IconAgentPresetOutline162, { size: 14 }),
     title,
@@ -17257,6 +17305,7 @@ function JobOutputRow(props) {
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
+    useProjection: props.useProjection,
     toolName: "Job output",
     icon: /* @__PURE__ */ import_react.default.createElement(IconApiOutline142, null),
     title: "Job output",
@@ -17301,6 +17350,7 @@ function PackageRow(props) {
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
+    useProjection: props.useProjection,
     toolName: "Manage package",
     icon: /* @__PURE__ */ import_react.default.createElement(IconApiOutline142, null),
     title,
@@ -17332,6 +17382,7 @@ function SendMessageRow(props) {
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
+    useProjection: props.useProjection,
     toolName: "Message",
     icon: /* @__PURE__ */ import_react.default.createElement(IconAgentPresetOutline162, { size: 14 }),
     title: "Message",
@@ -17360,6 +17411,7 @@ function InterruptAgentRow(props) {
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
+    useProjection: props.useProjection,
     toolName: "Interrupt agent",
     icon: /* @__PURE__ */ import_react.default.createElement(IconStopFill162, { size: 14 }),
     title: "Interrupt agent",
@@ -17419,6 +17471,7 @@ function ListAgentsRow(props) {
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
+    useProjection: props.useProjection,
     toolName: "List agents",
     icon: /* @__PURE__ */ import_react.default.createElement(IconAgentPresetOutline162, { size: 14 }),
     title: "List agents",
@@ -17514,6 +17567,7 @@ function SkillContentCard(props) {
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
+    useProjection: props.useProjection,
     toolName: "Skill",
     icon: /* @__PURE__ */ import_react.default.createElement(IconChecklistOutline142, null),
     title: "Skill",
@@ -17551,6 +17605,7 @@ function GenericContextCard(props) {
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
+    useProjection: props.useProjection,
     toolName: title,
     icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
     title,
@@ -17605,6 +17660,7 @@ function SkillRow(props) {
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
+    useProjection: props.useProjection,
     toolName: "Load skill",
     icon: /* @__PURE__ */ import_react.default.createElement(IconChecklistOutline142, null),
     title: "Skill",
@@ -17695,6 +17751,7 @@ function ReadImageRow(props) {
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
+    useProjection: props.useProjection,
     toolName: "Read image",
     icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
     title: "Read image",
@@ -17755,6 +17812,7 @@ function SeeRow(props) {
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
+    useProjection: props.useProjection,
     toolName: "See image",
     icon: /* @__PURE__ */ import_react.default.createElement(IconQuestionOutline142, { size: 14 }),
     title: "See",
@@ -17806,6 +17864,7 @@ function WebSearchRow(props) {
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
+    useProjection: props.useProjection,
     toolName: "Web search",
     icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
     title: "Web search",
@@ -17842,6 +17901,7 @@ function WebFetchRow(props) {
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
+    useProjection: props.useProjection,
     toolName: "Web fetch",
     icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
     title: "Web fetch",
@@ -17886,15 +17946,16 @@ function useCompactionViews(useSession) {
   );
   return views;
 }
-function useGuardedApprovals(useSession) {
-  var face = null;
+function useGuardedApprovals(useSession, useProjection) {
   var recordState = useState(null);
   var record = recordState[0];
   var setRecord = recordState[1];
+  var projected = typeof useProjection === "function" ? useProjection(GUARDED_APPROVALS_KEY) : void 0;
+  var face = null;
   var session = typeof useSession === "function" ? useSession(function(value) {
     return value;
   }) : void 0;
-  if (session !== null && session !== void 0 && session.projections !== void 0 && session.projections !== null && typeof session.projections.faceOf === "function") {
+  if (projected === void 0 && session !== null && session !== void 0 && session.projections !== void 0 && session.projections !== null && typeof session.projections.faceOf === "function") {
     try {
       face = session.projections.faceOf(GUARDED_APPROVALS_KEY);
     } catch (error) {
@@ -17912,7 +17973,7 @@ function useGuardedApprovals(useSession) {
     },
     [face]
   );
-  return record;
+  return projected !== void 0 && projected !== null ? projected : record;
 }
 function compactionSummaryText(rows, span) {
   return "Compacted " + countMessageRows(rows) + " messages \xB7 seqs " + span.minSeq + "\u2013" + span.maxSeq;
@@ -17970,6 +18031,7 @@ function CompactionRow(props) {
     return toolRenderRow({
       callId: props.callId,
       useSession: props.useSession,
+      useProjection: props.useProjection,
       toolName: "Compaction",
       icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
       title: "Compaction",
@@ -17989,6 +18051,7 @@ function CompactionRow(props) {
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
+    useProjection: props.useProjection,
     toolName: "Compaction",
     icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
     title: "Compaction",

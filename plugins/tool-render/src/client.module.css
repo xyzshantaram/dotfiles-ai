@@ -396,6 +396,16 @@
 .tool-render-card[data-stopped] {
   outline: 2px solid color-mix(in srgb, var(--dsw-alias-state-error-primary) 55%, transparent);
 }
+/* The guard outline outranks error and stopped, not just escalated. A
+   rewritten command often exits non-zero (rg exits 1 on no match, and
+   bashErrorState promotes any [exit code: N>=1] result to error), which
+   used to hand blue's 3px to the later red 2px rules at equal (0,2,0)
+   specificity. The doubled attribute selector (0,3,0) wins over all
+   three without !important, so the durable "this call was guarded" mark
+   survives a failing exit. */
+.tool-render-card[data-guard-approval][data-guard-approval] {
+  outline: 3px solid var(--dsh-outline-guard);
+}
 .tool-render-card:hover {
   border-color: var(--dsw-alias-border-l3);
 }
