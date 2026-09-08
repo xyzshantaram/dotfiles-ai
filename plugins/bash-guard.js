@@ -12400,6 +12400,7 @@ async function loadRulesMulti(ctx, dirs) {
 var DEFAULT_DENY_TEMPLATE = "bash-guard: {name} denied by {count} ({detail})\n\n  {command}\n\nMatched rule(s):\n{matches}";
 var DEFAULT_ASK_TEMPLATE = "bash-guard: {name} blocked by {count} ({detail}) \u2014 needs your approval";
 function shortDetail(match) {
+  if (match.blockedPath) return `${match.blockedPath} is outside every scratch root`;
   if (match.subcommand) return `${match.subcommand} is blocked`;
   const first = match.reason.split(/(?<=[.!?])\s/u)[0] ?? match.reason;
   const trimmed = first.trim().replace(/[.]$/u, "");
@@ -12426,14 +12427,16 @@ function formatMessage(template, ctx) {
     }
   );
 }
-function matchLines(hits) {
+function matchLines(hits, safePaths = [], workspaceRoot) {
   const seen = /* @__PURE__ */ new Set();
   const out = [];
   for (const h of hits) {
+    const blockedPath = safePaths.length > 0 && h.rule.subcommands === void 0 ? firstNonScratchPath(h.ref, safePaths, workspaceRoot) : void 0;
     const line = {
       name: h.name,
       subcommand: firstSubcommand(getCommandArgs(h.ref)),
-      reason: h.rule.reason ?? "(no reason supplied by the rule)"
+      reason: h.rule.reason ?? "(no reason supplied by the rule)",
+      ...blockedPath === void 0 ? {} : { blockedPath }
     };
     const key = `${line.name}\0${line.subcommand ?? ""}\0${line.reason}`;
     if (seen.has(key)) continue;
@@ -12495,6 +12498,13 @@ function scratchAllowed(refs, safePaths, workspaceRoot) {
     const n = normalizeScratchPath(p, workspaceRoot);
     return safePaths.some((sp) => isUnderScratch(n, sp));
   });
+}
+function firstNonScratchPath(ref, safePaths, workspaceRoot) {
+  for (const p of pathLikeArgs([ref])) {
+    const n = normalizeScratchPath(p, workspaceRoot);
+    if (!safePaths.some((sp) => isUnderScratch(n, sp))) return p;
+  }
+  return void 0;
 }
 var GLOB_CHARS = ["*", "?", "[", "]", "{", "}", "~"];
 var LITERAL_WORDS = /* @__PURE__ */ new Set(["{}"]);
@@ -12621,6 +12631,10 @@ async function evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates)
     const name2 = getBasename(ref);
     const rule = rules.get(name2) ?? rules.get("*");
     if (rule === void 0) return void 0;
+    if (safePaths.length > 0 && scratchAllowed([ref], safePaths, workspaceRoot)) {
+      ctx.logger.info(`bash-guard: scratch-only command exempt: ${name2}`);
+      return void 0;
+    }
     return { name: name2, rule, ref, verdict: verdictFor(rule, ref) };
   }).filter(
     (h) => h !== void 0
@@ -12784,7 +12798,7 @@ async function evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates)
       const denying = hits.filter((h) => h.verdict === "deny");
       const reason = formatMessage(templates.deny ?? DEFAULT_DENY_TEMPLATE, {
         command,
-        matches: matchLines(denying)
+        matches: matchLines(denying, safePaths, workspaceRoot)
       });
       const ruleNames = [...new Set(denying.map((h) => h.name))].join(", ");
       ctx.logger.warn(`bash-guard: command denied by rules [${ruleNames}]: ${command}`);
@@ -12794,7 +12808,7 @@ async function evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates)
       const asking = hits.filter((h) => h.verdict === "ask");
       const reason = formatMessage(templates.ask ?? DEFAULT_ASK_TEMPLATE, {
         command,
-        matches: matchLines(asking)
+        matches: matchLines(asking, safePaths, workspaceRoot)
       });
       const ruleNames = [...new Set(asking.map((h) => h.name))].join(", ");
       ctx.logger.warn(`bash-guard: command asks for approval by rules [${ruleNames}]: ${command}`);
