@@ -21,7 +21,14 @@
 .approval-comment-shadow {
   display: none;
 }
-[data-chain-overlay-fallback="conversation.composer"]:has(~ .approval-comment-shadow) {
+/* Self-healing (review nit, 3cd6cf67): a chain entry does NOT abdicate on
+   crash — a crashing ComposerShadow renders
+   <div data-slot-error="conversation.composer"> as the elected sibling and
+   the composer would stay hidden forever. Matching that error node in the
+   same override hands the composer back even then, so the failure mode of a
+   marker loss is a working composer instead of a dead one. */
+[data-chain-overlay-fallback="conversation.composer"]:has(~ .approval-comment-shadow),
+[data-chain-overlay-fallback="conversation.composer"]:has(~ [data-slot-error="conversation.composer"]) {
   display: contents !important;
 }
 
