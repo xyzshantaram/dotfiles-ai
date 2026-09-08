@@ -128,6 +128,64 @@ var settings_default = "/* Shared settings-page vocabulary, normalized from the 
 // css-text:/home/sid/repos/dotfiles-ai/plugins/subscriptions/src/client.module.css
 var client_default = ".ocgs-stale {\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  color: var(--dsw-alias-label-secondary);\n  white-space: nowrap;\n}\n.ocgs-section {\n  display: flex;\n  flex-direction: column;\n  gap: 0.8125rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.875rem;\n  padding: 1.25rem;\n  background: var(--dsw-alias-bg-tertiary);\n}\n.ocgs-section-title {\n  font-size: 1.125rem;\n  font-weight: 600;\n  margin: 0;\n  line-height: 1.2;\n  color: var(--dsw-alias-label-primary);\n}\n.ocgs-balance {\n  font-size: 1.125rem;\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n}\n.ocgs-rows {\n  display: flex;\n  flex-direction: column;\n  gap: 0.8125rem;\n}\n.ocgs-row {\n  display: flex;\n  flex-direction: column;\n  gap: 0.3125rem;\n  min-width: 0;\n}\n.ocgs-row-label {\n  display: flex;\n  align-items: baseline;\n  gap: 0.625rem;\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.ocgs-row-label b {\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n  font-size: 0.9375rem;\n}\n.ocgs-row-label b:last-child {\n  margin-left: auto;\n}\n.ocgs-meta {\n  display: flex;\n  align-items: center;\n  gap: 0.625rem;\n  min-width: 0;\n}\n.ocgs-meta > span {\n  font-size: 0.8125rem;\n  line-height: 1.125rem;\n  color: var(--dsw-alias-label-secondary);\n  white-space: nowrap;\n  flex: none;\n}\n.ocgs-track {\n  box-sizing: border-box;\n  flex: 1;\n  min-width: 0;\n  height: 0.5rem;\n  border-radius: 0.4375rem;\n  background: var(--dsw-alias-border-l2);\n  overflow: hidden;\n}\n.ocgs-fill {\n  height: 100%;\n  border-radius: 0.4375rem;\n  transition: width 0.4s ease;\n}\n.ocgs-pace {\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.ocgs-cookie {\n  display: flex;\n  align-items: center;\n  gap: 0.625rem;\n  flex-wrap: wrap;\n  margin: 0.1875rem 0 0.375rem;\n}\n.ocgs-btn {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 62.4375rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n  padding: 0.4375rem 0.9375rem;\n  cursor: pointer;\n  min-height: 2.25rem;\n}\n.ocgs-btn:hover {\n  color: var(--dsw-alias-label-primary);\n  border-color: var(--dsw-alias-border-l3);\n}\n.ocgs-btn:disabled {\n  opacity: 0.5;\n  cursor: default;\n}\n.ocgs-cookie-note {\n  font-size: 0.875rem;\n  line-height: 1.125rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.ocgs-toggles {\n  display: flex;\n  flex-direction: column;\n  gap: 0.625rem;\n}\n.ocgs-toggle {\n  display: flex;\n  align-items: center;\n  gap: 0.625rem;\n  min-width: 0;\n  cursor: pointer;\n}\n.ocgs-toggle-label {\n  flex: 1;\n  min-width: 0;\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.ocgs-toggle input {\n  flex: none;\n  width: 1.5rem;\n  height: 1.5rem;\n  cursor: pointer;\n  accent-color: var(--dsw-alias-state-business-primary);\n}\n.ocgs-details {\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.75rem;\n  background: var(--dsw-alias-bg-tertiary);\n  padding: 0.8125rem;\n  margin-top: 0.25rem;\n}\n.ocgs-summary {\n  cursor: pointer;\n  font-size: 0.9375rem;\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n  list-style: none;\n}\n.ocgs-summary::-webkit-details-marker {\n  display: none;\n}\n.ocgs-details[open] .ocgs-toggles {\n  padding-top: 0.625rem;\n}\n.ds-dashboard {\n  display: flex;\n  flex-direction: column;\n  gap: 0.8125rem;\n}\n.ds-hero {\n  display: flex;\n  flex-direction: column;\n  gap: 0.3125rem;\n  padding: 0.8125rem;\n  background: var(--dsw-alias-bg-tertiary);\n  border-radius: 0.75rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n}\n.ds-hero-total {\n  font-size: 2rem;\n  font-weight: 700;\n  color: var(--dsw-alias-label-primary);\n  line-height: 1.2;\n}\n.ds-hero-breakdown {\n  font-size: 0.9375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.ds-usage-grid {\n  display: grid;\n  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));\n  gap: 0.625rem;\n}\n.ds-usage-card {\n  padding: 0.8125rem;\n  background: var(--dsw-alias-bg-tertiary);\n  border-radius: 0.75rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n}\n.ds-usage-label {\n  font-size: 0.75rem;\n  color: var(--dsw-alias-label-secondary);\n  text-transform: uppercase;\n  letter-spacing: 0.0313rem;\n}\n.ds-usage-value {\n  font-size: 1.25rem;\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n  margin-top: 0.375rem;\n}\n.ds-usage-sub {\n  font-size: 0.875rem;\n  color: var(--dsw-alias-label-secondary);\n  margin-top: 0.25rem;\n}\n.ds-token-row {\n  display: flex;\n  gap: 0.625rem;\n  flex-wrap: wrap;\n}\n.ds-token-card {\n  flex: 1;\n  min-width: 8.75rem;\n  padding: 0.6875rem;\n  background: var(--dsw-alias-bg-tertiary);\n  border-radius: 0.75rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n}\n.ds-token-label {\n  font-size: 0.75rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.ds-token-value {\n  font-size: 1.125rem;\n  font-weight: 600;\n  color: var(--dsw-alias-state-success-primary);\n}\n.ds-token-value.out {\n  color: var(--dsw-alias-state-error-primary);\n}\n.ds-empty {\n  font-size: 0.875rem;\n  color: var(--dsw-alias-label-secondary);\n  font-style: italic;\n}\n.ocgs-note {\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n:focus-visible {\n  outline: 2px solid var(--dsw-alias-state-business-primary);\n  outline-offset: -0.125rem;\n}\n";
 
+// plugins/subscriptions/src/eh-section-model.ts
+function ehResultError(result, fallback) {
+  if (!result) return null;
+  if (typeof result.error === "string" && result.error !== "") return result.error;
+  var body = result.data;
+  if (body && typeof body === "object" && body.ok === false) {
+    return typeof body.error === "string" && body.error !== "" ? body.error : fallback;
+  }
+  return null;
+}
+function ehResultBody(result) {
+  if (!result) return null;
+  var body = result.data;
+  return body && typeof body === "object" && body.ok === true ? body : null;
+}
+function ehUsageHasContent(usage) {
+  if (!usage) return false;
+  if (typeof usage.subscription === "string" && usage.subscription !== "") return true;
+  if (typeof usage.credits === "number") return true;
+  if (usage.usage && (Number(usage.usage.inputTokens) > 0 || Number(usage.usage.outputTokens) > 0))
+    return true;
+  if (Array.isArray(usage.history) && usage.history.length > 0) return true;
+  if (Array.isArray(usage.endpoints) && usage.endpoints.some((ep) => ep && typeof ep.name === "string"))
+    return true;
+  return false;
+}
+function ehSectionModel(ehUsage, ehModels) {
+  var errorLine = ehResultError(ehUsage, "usage unavailable") || ehResultError(ehModels, "models unavailable");
+  var usage = ehResultBody(ehUsage);
+  var modelsBody = ehResultBody(ehModels);
+  var models = modelsBody && Array.isArray(modelsBody.models) ? modelsBody.models : null;
+  var notes = [];
+  if (usage && typeof usage.note === "string" && usage.note !== "") notes.push(usage.note);
+  if (modelsBody) {
+    if (typeof modelsBody.note === "string" && modelsBody.note !== "") notes.push(modelsBody.note);
+    if (modelsBody.source === "catalog" && models !== null && models.length > 0) {
+      notes.push("model list is ElectronHub's public catalog, not an account-scoped list");
+    }
+  }
+  var hasContent = ehUsageHasContent(usage) || models !== null && models.length > 0;
+  var status;
+  if (errorLine) status = "error";
+  else if (usage === null && modelsBody === null) status = "pending";
+  else if (!hasContent) status = "empty";
+  else status = "ready";
+  var emptyLine = null;
+  if (status === "pending") emptyLine = "Loading ElectronHub usage\u2026";
+  else if (status === "empty") emptyLine = "ElectronHub reported no usage data for this key.";
+  return {
+    status,
+    errorLine: errorLine ? "ElectronHub: " + errorLine : null,
+    notes,
+    usage,
+    models,
+    emptyLine
+  };
+}
+
 // plugins/subscriptions/src/client.tsx
 var PLUGIN_NAME = "subscriptions";
 var STYLE_TAG_ID = "subscriptions/client.css";
@@ -430,62 +488,6 @@ function renderCcSection(cc, ccUsage) {
     costCard = /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-card" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-label" }, "Monthly cost"), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-value" }, "$" + usage.totalCost.toFixed(2)), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-sub" }, period));
   }
   return /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "Command Code"), errorLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, errorLine) : null, hero, meters.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, meters) : null, costCard ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, costCard) : null);
-}
-function ehResultError(result, fallback) {
-  if (!result) return null;
-  if (typeof result.error === "string" && result.error !== "") return result.error;
-  var body = result.data;
-  if (body && typeof body === "object" && body.ok === false) {
-    return typeof body.error === "string" && body.error !== "" ? body.error : fallback;
-  }
-  return null;
-}
-function ehResultBody(result) {
-  if (!result) return null;
-  var body = result.data;
-  return body && typeof body === "object" && body.ok === true ? body : null;
-}
-function ehUsageHasContent(usage) {
-  if (!usage) return false;
-  if (typeof usage.subscription === "string" && usage.subscription !== "") return true;
-  if (typeof usage.credits === "number") return true;
-  if (usage.usage && (Number(usage.usage.inputTokens) > 0 || Number(usage.usage.outputTokens) > 0))
-    return true;
-  if (Array.isArray(usage.history) && usage.history.length > 0) return true;
-  if (Array.isArray(usage.endpoints) && usage.endpoints.some((ep) => ep && typeof ep.name === "string"))
-    return true;
-  return false;
-}
-function ehSectionModel(ehUsage, ehModels) {
-  var errorLine = ehResultError(ehUsage, "usage unavailable") || ehResultError(ehModels, "models unavailable");
-  var usage = ehResultBody(ehUsage);
-  var modelsBody = ehResultBody(ehModels);
-  var models = modelsBody && Array.isArray(modelsBody.models) ? modelsBody.models : null;
-  var notes = [];
-  if (usage && typeof usage.note === "string" && usage.note !== "") notes.push(usage.note);
-  if (modelsBody) {
-    if (typeof modelsBody.note === "string" && modelsBody.note !== "") notes.push(modelsBody.note);
-    if (modelsBody.source === "catalog" && models !== null && models.length > 0) {
-      notes.push("model list is ElectronHub's public catalog, not an account-scoped list");
-    }
-  }
-  var hasContent = ehUsageHasContent(usage) || models !== null && models.length > 0;
-  var status;
-  if (errorLine) status = "error";
-  else if (usage === null && modelsBody === null) status = "pending";
-  else if (!hasContent) status = "empty";
-  else status = "ready";
-  var emptyLine = null;
-  if (status === "pending") emptyLine = "Loading ElectronHub usage\u2026";
-  else if (status === "empty") emptyLine = "ElectronHub reported no usage data for this key.";
-  return {
-    status,
-    errorLine: errorLine ? "ElectronHub: " + errorLine : null,
-    notes,
-    usage,
-    models,
-    emptyLine
-  };
 }
 function renderEhSection(ehUsage, ehModels) {
   var model = ehSectionModel(ehUsage, ehModels);

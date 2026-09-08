@@ -206,7 +206,8 @@ var ERROR_CLASSES = [
   "no-credits",
   "model-unavailable",
   "rate-limit",
-  "server-error"
+  "server-error",
+  "transient"
 ];
 var ERROR_TTL_MS = {
   auth: 6e5,
@@ -218,7 +219,12 @@ var ERROR_TTL_MS = {
   // pays the full retry cost again. The window therefore doubles per
   // consecutive strike instead.
   "rate-limit": 6e4,
-  "server-error": 6e4
+  "server-error": 6e4,
+  // Unclassified failures (transport blips, bodyless 500s, dropped streams)
+  // fall back to this short window via markDown: long enough to stop the
+  // per-step cursor reset re-picking the dead rung, short enough not to
+  // blacklist a good rung for ten minutes on a single blip.
+  transient: 3e4
 };
 var RATE_LIMIT_MAX_TTL_MS = 9e5;
 var downCache = /* @__PURE__ */ new Map();
@@ -297,8 +303,7 @@ function failoverNoticeText(fromProvider, fromModel, toProvider, toModel, code, 
 ${trimmed}`;
 }
 function markDown(level, code, message) {
-  const cls = normalizeErrorClass(code, message);
-  if (!cls) return;
+  const cls = normalizeErrorClass(code, message) ?? "transient";
   const key = errorKey(level, cls);
   downCache.set(key, Date.now());
   if (cls === "rate-limit" || cls === "server-error") {
@@ -332,6 +337,15 @@ function liveDownKeys() {
   }
   return [...downCache.keys()];
 }
+function sequenceKeyOf(level) {
+  return `${level.provider}:${level.model}`;
+}
+function recordSequenceFailure(keys, level) {
+  keys.add(sequenceKeyOf(level));
+}
+function isSequenceFailed(keys, level) {
+  return keys.has(sequenceKeyOf(level));
+}
 function depthOf(agent) {
   const a = agent;
   const header = a?.session?.header?.delegationDepth ?? 0;
@@ -356,6 +370,14 @@ function chainForDepth(ctx, depth) {
 function registerFailover(ctx, alwaysMaxRetries) {
   const state = /* @__PURE__ */ new WeakMap();
   const lastSelected = /* @__PURE__ */ new WeakMap();
+  const sequenceFailed = /* @__PURE__ */ new WeakMap();
+  function sequenceKeysFor(agent, turn) {
+    const prev = sequenceFailed.get(agent);
+    if (prev && prev.turn === turn) return prev.keys;
+    const keys = /* @__PURE__ */ new Set();
+    sequenceFailed.set(agent, { turn, keys });
+    return keys;
+  }
   function getAgentState(agent) {
     let m = state.get(agent);
     if (!m) {
@@ -425,11 +447,12 @@ function registerFailover(ctx, alwaysMaxRetries) {
       if (s.cursor >= s.levels.length) s.cursor = 0;
     }
     const llm = service(ctx, "llm");
+    const seqKeys = sequenceKeysFor(agent, p.turn);
     let ignoredCache = false;
     for (let attempt = 0; attempt < 2; attempt++) {
       while (s.cursor < s.levels.length) {
         const candidate = s.levels[s.cursor];
-        if (!ignoredCache && isCachedDown(candidate)) {
+        if (!ignoredCache && (isCachedDown(candidate) || isSequenceFailed(seqKeys, candidate))) {
           s.cursor += 1;
           continue;
         }
@@ -449,6 +472,7 @@ function registerFailover(ctx, alwaysMaxRetries) {
               `session ${sessionLabel(agent)} skipping ${candidate.provider}/${candidate.model} at resolve: ${err?.code ?? "UNKNOWN"} \u2014 ${err?.message ?? String(error)}`
             );
             markDown(candidate, err?.code, err?.message ?? String(error));
+            recordSequenceFailure(seqKeys, candidate);
             s.cursor += 1;
             continue;
           }
@@ -555,12 +579,18 @@ ${tried}`);
       recordFailure(s.failures, cur, failure.code ?? "UNKNOWN", failure.message ?? "");
     }
     markDown(cur, failure.code, failure.message ?? "");
+    recordSequenceFailure(sequenceKeysFor(agent, p.turn), cur);
     if (p.retryPolicy?.mode === "always") {
       s.retries += 1;
       if (s.retries <= alwaysMaxRetries) return next();
     }
     s.retries = 0;
-    const advanced = advanceChain(s.levels, s.cursor + 1, (level) => isCachedDown(level));
+    const seqKeys = sequenceKeysFor(agent, p.turn);
+    const advanced = advanceChain(
+      s.levels,
+      s.cursor + 1,
+      (level) => isCachedDown(level) || isSequenceFailed(seqKeys, level)
+    );
     s.cursor = advanced.cursor;
     if (!advanced.exhausted) {
       const nxt = s.levels[s.cursor];
@@ -943,10 +973,13 @@ export {
   failoverNoticeText,
   inject,
   isCachedDown,
+  isSequenceFailed,
   makeFailoverStatusHandler,
   markDown,
   name,
   normalizeErrorClass,
   recordFailoverEvent,
-  recordFailure
+  recordFailure,
+  recordSequenceFailure,
+  sequenceKeyOf
 };
