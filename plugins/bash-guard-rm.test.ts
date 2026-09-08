@@ -81,6 +81,54 @@ describe("the scratch escape still short-circuits BEFORE the rm rule", () => {
   });
 });
 
+/**
+ * #90. Both commands below were real refusals from one cleanup session, and
+ * only one of them was correct. The exemption used to be evaluated across the
+ * WHOLE chain, so a neighbour that merely READ a path outside scratch revoked
+ * it for a deletion that never left scratch.
+ */
+describe("the scratch exemption is scoped per command, not across the chain", () => {
+  const scratch = (command: string) => run([GUARDS_DIR], command, ["/tmp/dsh"]);
+
+  it("a scratch-only rm runs even when later commands touch non-scratch paths", async () => {
+    // Every rm target is under /tmp/dsh, but a `du` measuring a repo path and
+    // a `cd` into that repo used to revoke the exemption -- contradicting
+    // guards/rm.json's own promise that scratch deletions never prompt.
+    const outcome = await scratch(
+      "rm -rf /tmp/dsh/aidos/hooks-scratch /tmp/dsh/aidos/final.index 2>&1; " +
+        "echo done; du -sh /home/sid/repos/aidos/.git/aidos-tmp 2>/dev/null; " +
+        "cd /home/sid/repos/aidos && git log --oneline -1",
+    );
+    expect(outcome.action).toBe("run");
+  });
+
+  it("an rm targeting anything outside scratch still asks", async () => {
+    // The other refusal from the same session, and it was right: a recursive
+    // delete inside git internals must never be exempt.
+    const outcome = await scratch(
+      "rm -rf /home/sid/repos/aidos/.git/aidos-tmp /tmp/dsh/aidos/hooks-scratch",
+    );
+    expect(outcome.action).toBe("ask");
+  });
+
+  it("per-command scoping does not excuse a second, non-scratch rm", async () => {
+    // The safety property the old chain-wide rule was defending. Per-command
+    // scoping keeps it: the second rm is judged on its own targets.
+    expect((await scratch("rm /tmp/dsh/x && rm /etc/y")).action).toBe("ask");
+  });
+
+  it("names a path that actually failed, never one that passed", async () => {
+    // The message used to name the FIRST argument, which is the culprit only
+    // by luck. Naming a scratch path as "blocked" sent two readers after the
+    // wrong path.
+    const outcome = await scratch("rm -rf /tmp/dsh/aidos/hooks-scratch /etc/nonexistent-probe");
+    expect(outcome.action).toBe("ask");
+    const reason = "reason" in outcome ? String(outcome.reason) : "";
+    expect(reason).toContain("/etc/nonexistent-probe");
+    expect(reason).not.toContain("hooks-scratch is blocked");
+  });
+});
+
 describe("unrelated commands are unchanged", () => {
   it("ls still runs with base rules only", async () => {
     expect((await base("ls -la")).action).toBe("run");
