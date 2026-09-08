@@ -1356,6 +1356,73 @@ M18PY
 # Each entry: "Human title|function_name". Numbers derive from the array, so
 # adding, removing, or reordering steps needs NO manual renumbering.
 
+step_check_aidos_subagent_pin() {
+	# #81: assert the aidos preset's subagent model pin is EFFECTIVE, i.e. that
+	# `agentOptions` sits INSIDE `config` on every dsh-tool-subagent row.
+	#
+	# Why a check and not a patch: the aidos preset is copied verbatim from the
+	# aidos package (step_register_aidos_preset), so the fix belongs upstream in
+	# that repo — this bundle does not rewrite it. But the failure is invisible
+	# without a check: `agentOptions` at ROW level is simply not read
+	# (@deepseek-ai/dsh-tool-subagent declares it in its Config schema and reads
+	# config.agentOptions when building the start request), so the pin silently
+	# does nothing, every subagent inherits the PARENT's provider/model, and the
+	# subagent chain is never walked. Observed 2026-09-08: subagents running the
+	# work orchestrator head (meridian/claude-opus-5) with no failover, because
+	# an inherited orchestrator model matches no rung of the subagent chain.
+	#
+	# Warns rather than fails: the fix lives in another repo, so a red run on
+	# every sync until that lands would be noise. The message names the file,
+	# the row and the exact correction.
+	local preset="$DSH_HOME/.agent-presets/aidos/agent.cordis.yml"
+	if [ ! -f "$preset" ]; then
+		echo "  WARNING: aidos preset not found at $(short_path "$preset"); skipping pin check."
+		return 0
+	fi
+	AIDOS_PRESET="$preset" python3 - <<'PY'
+import os, sys, yaml
+path = os.environ['AIDOS_PRESET']
+try:
+    doc = yaml.safe_load(open(path)) or []
+except Exception as e:
+    print(f"  WARNING: could not parse {path}: {e}")
+    sys.exit(0)
+
+TOOL = '@deepseek-ai/dsh-tool-subagent'
+rows = []
+def walk(node):
+    if isinstance(node, list):
+        for item in node: walk(item)
+    elif isinstance(node, dict):
+        if node.get('name') == TOOL: rows.append(node)
+        for value in node.values(): walk(value)
+walk(doc)
+
+if not rows:
+    print("  WARNING: no dsh-tool-subagent rows in the aidos preset; nothing pinned.")
+    sys.exit(0)
+
+bad = []
+for row in rows:
+    rid = row.get('id', '<unnamed>')
+    cfg = row.get('config') or {}
+    pinned = (cfg.get('agentOptions') or {}) if isinstance(cfg, dict) else {}
+    if pinned.get('provider') and pinned.get('model'):
+        print(f"  ok: {rid} pinned to {pinned['provider']}/{pinned['model']}")
+        continue
+    misplaced = row.get('agentOptions')
+    bad.append((rid, misplaced))
+
+for rid, misplaced in bad:
+    if misplaced is not None:
+        print(f"  WARNING: {rid}: `agentOptions` is a SIBLING of `config`, so it is never read.")
+        print(f"           Indent it two spaces to sit INSIDE `config` (fix upstream in the aidos repo).")
+        print(f"           Until then every subagent inherits the parent agent's model and gets no failover.")
+    else:
+        print(f"  WARNING: {rid}: no config.agentOptions pin at all; subagents inherit the parent's model.")
+PY
+}
+
 step_check_preset_drift() {
 	# #122 (aidos board): the aidos preset is a hand-maintained mirror of
 	# standard's tool rows. This step compares the PATCHED standard preset
@@ -1400,6 +1467,7 @@ STEPS=(
 	"Relocate the attach button to the send/steer edge|step_relocate_attach_button"
 	"Stop the web-tools search-button background poll|step_stop_web_tools_search_poll"
 	"Register the aidos agent preset|step_register_aidos_preset"
+	"Check the aidos subagent pin is effective|step_check_aidos_subagent_pin"
 	"Check preset drift (standard vs aidos)|step_check_preset_drift"
 	"Verify builtin tool rows are disabled|step_verify_preset_tool_disabled"
 	"Regenerate settings.yaml from the repo template|step_set_defaults"
