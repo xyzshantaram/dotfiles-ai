@@ -2820,7 +2820,9 @@ var client_default = `.tool-render-row {
   flex-direction: column;
   align-items: stretch;
   gap: 0.25rem;
-  margin: 0.25rem 0 0.125rem 0.25rem;
+  /* Bottom margin matches .tool-render-output's own 0.25rem, so the
+     strip's last row does not kiss the card's bottom border. */
+  margin: 0.25rem 0 0.25rem 0.25rem;
 }
 /* Reject/approve pack to the card's bottom-right corner (aidos queue recipe:
    actions sit at the end of their container). */
@@ -2829,6 +2831,7 @@ var client_default = `.tool-render-row {
   align-items: center;
   justify-content: flex-end;
   gap: 0.25rem;
+  padding-bottom: 0.25rem;
 }
 /* The toggle sits above the buttons on the card's RIGHT edge, matching the
    actions below it \u2014 the whole comment affordance reads as one right-aligned
