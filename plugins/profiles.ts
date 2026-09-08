@@ -37,8 +37,12 @@
  * (depth >= 1) rides the subagent chain. The chains are ordered failover
  * lists. A persistent fault (no-credits / model-unavailable / auth /
  * bad-request) marks the rung down in a host-side cache for >= 10 minutes;
- * selections inside the window skip the dead rung. Any `profile` namespace
- * update clears the cache: a manual switch or save allows immediate retry.
+ * unclassified failures (transport blips, bodyless 500s) use a short 30s
+ * transient window instead; selections inside the window skip the dead rung.
+ * A rung that failed earlier in the same turn is additionally skipped via
+ * walk memory, so the per-step cursor reset cannot re-pick it. Any `profile`
+ * namespace update clears the cache: a manual switch or save allows
+ * immediate retry.
  *
  * There is NO second config surface: the chains ARE the `profile` namespace
  * entries (see.ts owns the namespace; this plugin reads it live). Flipping
@@ -50,7 +54,8 @@
  *   stable; advance only when the current level fails.
  * - Each NEW step starts back at the matched level. During a hard outage
  *   every step pays one failed attempt before failing over; the error cache
- *   skips the dead rung on later selections.
+ *   skips the dead rung on later selections, and walk memory skips rungs
+ *   that failed earlier in the same turn even if their cache entry lapsed.
  * - Before proposing a level, probe it with ctx.llm.resolveCallConfig and
  *   skip levels that would fail before streaming (unregistered route,
  *   unknown model). An abort during the probe surfaces as an abort.
@@ -275,6 +280,7 @@ const ERROR_CLASSES = [
   "model-unavailable",
   "rate-limit",
   "server-error",
+  "transient",
 ] as const;
 type ErrorClass = (typeof ERROR_CLASSES)[number];
 const ERROR_TTL_MS: Record<ErrorClass, number> = {
@@ -288,6 +294,11 @@ const ERROR_TTL_MS: Record<ErrorClass, number> = {
   // consecutive strike instead.
   "rate-limit": 60_000,
   "server-error": 60_000,
+  // Unclassified failures (transport blips, bodyless 500s, dropped streams)
+  // fall back to this short window via markDown: long enough to stop the
+  // per-step cursor reset re-picking the dead rung, short enough not to
+  // blacklist a good rung for ten minutes on a single blip.
+  transient: 30_000,
 };
 /** Ceiling for the doubling rate-limit and server-error window. */
 const RATE_LIMIT_MAX_TTL_MS = 900_000;
@@ -345,7 +356,8 @@ const ERROR_CODE_CLASS: Record<string, ErrorClass> = {
 /**
  * Classify a provider failure into a cacheable class. The no-credits message
  * test runs first, then the structured code table, then the remaining message
- * tests. Anything else is transient and is NOT cached.
+ * tests. Anything else returns undefined: the caller (markDown) records those
+ * under the short transient window instead of dropping them.
  */
 export function normalizeErrorClass(
   code: string | undefined,
@@ -407,9 +419,16 @@ export function failoverNoticeText(
   return `${header}\n\n${trimmed}`;
 }
 
+/**
+ * Mark one level down under its error class. Every failure is recorded:
+ * failures that classify land under their class, and unclassified failures
+ * (transport blips, bodyless 500s, dropped streams) fall back to the short
+ * transient window so the per-step cursor reset cannot re-pick a rung that
+ * just failed. Aborts never reach here: both waterfall handlers return early
+ * on p.signal?.aborted, since a user cancellation is not a rung failure.
+ */
 export function markDown(level: Level, code: string | undefined, message: string): void {
-  const cls = normalizeErrorClass(code, message);
-  if (!cls) return;
+  const cls: ErrorClass = normalizeErrorClass(code, message) ?? "transient";
   const key = errorKey(level, cls);
   downCache.set(key, Date.now());
   if (cls === "rate-limit" || cls === "server-error") {
@@ -448,6 +467,35 @@ function liveDownKeys(): string[] {
     }
   }
   return [...downCache.keys()];
+}
+
+// ── Walk memory across steps (ticket #96) ────────────────────────────────────
+// The per-step cursor resets to 0 on every fresh stepKey, so the down-cache
+// is the only thing stopping the reset re-picking a rung that just failed.
+// This set is the structural backstop: rungs that failed in the current
+// request sequence (one agent's current turn) are skipped on the next step
+// even if their cache entry lapsed. Scoped to turn — a new turn starts a
+// fresh sequence — and aborts never record here, same rule as markDown.
+
+/** Stable key for one rung inside a request sequence. */
+export function sequenceKeyOf(level: { provider: string; model: string }): string {
+  return `${level.provider}:${level.model}`;
+}
+
+/** Remember one rung as failed in the current request sequence. */
+export function recordSequenceFailure(
+  keys: Set<string>,
+  level: { provider: string; model: string },
+): void {
+  keys.add(sequenceKeyOf(level));
+}
+
+/** True when the rung already failed in the current request sequence. */
+export function isSequenceFailed(
+  keys: Set<string>,
+  level: { provider: string; model: string },
+): boolean {
+  return keys.has(sequenceKeyOf(level));
 }
 
 // ── Depth resolution (W21) ─────────────────────────────────────────────────
@@ -507,6 +555,20 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
   // instead, matching this bundle's convention: info is a state change a
   // person would want in a normal-volume log, debug is per-call trace.
   const lastSelected = new WeakMap<object, string>();
+  // Walk memory across steps within one request sequence (ticket #96). The
+  // per-step cursor resets to 0 on every fresh stepKey, so without this the
+  // next step re-proposes whatever the caller proposes even when that rung
+  // just failed. Scoped to turn: a new turn starts a fresh sequence. Aborts
+  // never record here — a user cancellation is not a rung failure.
+  const sequenceFailed = new WeakMap<object, { turn: unknown; keys: Set<string> }>();
+
+  function sequenceKeysFor(agent: object, turn: unknown): Set<string> {
+    const prev = sequenceFailed.get(agent);
+    if (prev && prev.turn === turn) return prev.keys;
+    const keys = new Set<string>();
+    sequenceFailed.set(agent, { turn, keys });
+    return keys;
+  }
 
   function getAgentState(agent: object): Map<string, StepState> {
     let m = state.get(agent);
@@ -588,12 +650,15 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
     }
 
     const llm = service<LlmService>(ctx, "llm");
+    // Rungs that failed earlier in this turn's sequence stay skipped after
+    // the per-step cursor reset below, even if their cache entry lapsed.
+    const seqKeys = sequenceKeysFor(agent, p.turn);
 
     let ignoredCache = false;
     for (let attempt = 0; attempt < 2; attempt++) {
       while (s.cursor < s.levels.length) {
         const candidate = s.levels[s.cursor];
-        if (!ignoredCache && isCachedDown(candidate)) {
+        if (!ignoredCache && (isCachedDown(candidate) || isSequenceFailed(seqKeys, candidate))) {
           s.cursor += 1;
           continue;
         }
@@ -615,6 +680,7 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
               `session ${sessionLabel(agent)} skipping ${candidate.provider}/${candidate.model} at resolve: ${err?.code ?? "UNKNOWN"} — ${err?.message ?? String(error)}`,
             );
             markDown(candidate, err?.code, err?.message ?? String(error));
+            recordSequenceFailure(seqKeys, candidate);
             s.cursor += 1;
             continue;
           }
@@ -741,6 +807,9 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
     }
 
     markDown(cur, failure.code, failure.message ?? "");
+    // Abort already returned above, so reaching here means a real rung
+    // failure: remember it for the rest of this turn's sequence.
+    recordSequenceFailure(sequenceKeysFor(agent, p.turn), cur);
 
     if (p.retryPolicy?.mode === "always") {
       s.retries += 1;
@@ -748,8 +817,14 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
     }
     s.retries = 0;
 
-    // Advance cursor past the failed level and skip any cached-down levels.
-    const advanced = advanceChain(s.levels, s.cursor + 1, (level) => isCachedDown(level));
+    // Advance cursor past the failed level and skip any cached-down or
+    // sequence-failed levels.
+    const seqKeys = sequenceKeysFor(agent, p.turn);
+    const advanced = advanceChain(
+      s.levels,
+      s.cursor + 1,
+      (level) => isCachedDown(level) || isSequenceFailed(seqKeys, level),
+    );
     s.cursor = advanced.cursor;
 
     if (!advanced.exhausted) {
