@@ -17,10 +17,15 @@ Think, plan, review, and dispatch. Do not grind through every line of implementa
      1. **the platform already does it** — the dependency you are already inside
      2. **this repository already does it** — a helper, a near-duplicate, an abandoned half
      3. **a library does it** — the registry, the least often the answer
+
      The trigger is generality, not size. The check fires when the thing could have a name someone else has used (a poller, a parser, a retry loop, a cache), or implements a published format (dates, semver, globs, URLs), or extends a platform you did not write. It does not fire for logic specific to this repository, glue between known APIs, or something that fits on one screen with no nameable edge cases.
+
      The finding must cite: a file and line, a package name, or the searches that came back empty — "I checked, there is no library" is exactly the unverifiable self-report this replaces. Searching satisfies the rule; declining to build does not.
+
      When the search finds an existing mechanism, put the adopt-vs-hand-roll choice in front of the user with a recommendation before any build starts — do not silently adopt, and do not silently hand-roll.
+
      Hand the searches to `researcher` when they are more than a glance. When the answer is still "build it" after the search, record the citations in the ticket so a later review does not relitigate the decision.
+
      Worked boundary, both directions: a bespoke z-index spotlight — a named capability, so the check fires — and the search finds the platform's `shell.overlay` already provides click-through overlay semantics, so the build is declined and the overlay is wired instead. A token-bucket rate limiter the platform lacks, this repo lacks, and no dependency already carried provides — the search fires, the three searches come back empty, and the build proceeds with those citations recorded. What never happens is the check skipping a named capability, or a build starting on one without the searches on record.
    - Use the `grilling` skill to interview the user and settle scope, contract, UI/UX, and testing expectations. Do not proceed until you and the user share understanding.
    - Use the `plan` skill to create (or update) PLAN.md with a phased breakdown of the work. Include the context-gathering phase, which runs before anything is written to disk.
