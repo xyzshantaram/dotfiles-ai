@@ -343,12 +343,13 @@ function makeIndicator() {
           ) : null}
         </button>
         {open ? (
-          // The compact standard size (420px): a short list of one-line rows
-          // that answer inline, not a full settings-panel footprint. Rows
-          // carry their own actions, so there is no actions row here.
+          // The full standard size (#75): the settings-panel footprint every
+          // other plugin modal uses. Rows carry their own actions, so there is
+          // no actions row here — but the panel matches its siblings rather
+          // than being the one odd 420px popover in the set.
           <PluginModal
             title="Pending approvals"
-            size="compact"
+            size="full"
             onClose={function () {
               setOpen(false);
             }}
