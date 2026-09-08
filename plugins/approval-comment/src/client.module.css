@@ -1,12 +1,19 @@
+/* #65 — this card sits in `conversation.input.dock`, the additive row the host
+   stacks directly above the composer card, instead of replacing the composer
+   through the takeover chain. The dock is a flex column that already supplies
+   the gap and the width column, so the seat padding that used to clear the
+   composer edges is gone, and the card aligns to the composer card's own width
+   the way the other dock entries do. */
 .approval-comment-root {
-  padding: 0.5rem calc(var(--dsh-composer-side-clearance) + 1rem) 0.75rem;
+  box-sizing: border-box;
+  width: 100%;
   flex-direction: column;
   align-items: center;
   display: flex;
 }
 .approval-comment-card {
   width: 100%;
-  max-width: var(--dsh-chat-content-width);
+  max-width: var(--dsh-composer-card-max-width);
   outline: 3px solid var(--dsh-outline-escalated);
   background: var(--dsw-specific-input-major);
   box-shadow: var(--dsw-shadow-lv2);
@@ -245,4 +252,26 @@
   font-size: 0.75rem;
   line-height: 1rem;
   margin: 0;
+}
+/* #65 — hand the composer back while this bundle holds the takeover chain.
+   `conversation.composer` is the host's composer TAKEOVER chain: whenever any
+   entry is elected, ConversationRoot renders the whole default composer (input
+   bar, tool row, and the input dock itself) inside
+   `<div data-chain-overlay-fallback="conversation.composer" style="display:none">`
+   and mounts the winner beside it. This bundle must keep winning that election,
+   because winning is the only way to stop the shipped `ApprovalPanel` from
+   mounting and taking the composer over itself — so the winner is the empty
+   `ComposerShadow` marker and this rule restores the composer's own
+   `display: contents`, which is exactly what the host sets when nothing is
+   elected. An author `!important` declaration outranks the host's non-important
+   inline style, so no DOM is touched to undo it.
+
+   The `:has()` guard is what keeps this honest: the override applies only when
+   OUR marker is the elected sibling, so another takeover kind (a pending user
+   question) still hides the composer exactly as the host intends. */
+.approval-comment-shadow {
+  display: none;
+}
+[data-chain-overlay-fallback="conversation.composer"]:has(~ .approval-comment-shadow) {
+  display: contents !important;
 }

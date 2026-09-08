@@ -1,11 +1,28 @@
 /**
  * W8 — approval reject-with-comment.
  *
- * The card. The shipped `ApprovalPanel` is a chain entry on the
- * `conversation.composer` slot at priority 1. Chain entries are tried in
- * ascending priority order and the first non-null `select` result wins.
- * This bundle registers the same slot at priority 0 with the same select,
- * so this card wins the election and the shipped card never mounts.
+ * The seats, and why there are two of them. `conversation.composer` is the
+ * host's composer TAKEOVER chain: the shipped `ApprovalPanel` is an entry on
+ * it at priority 1, entries are tried in ascending priority order, and the
+ * first non-null `select` result wins. Winning that election REPLACES the
+ * composer -- ConversationRoot renders the default input bar into a
+ * `data-chain-overlay-fallback` div and sets `display: none` on that div for
+ * as long as any entry is elected. The takeover is the seat, not the
+ * component: a card registered there cannot leave the composer usable no
+ * matter what it draws (#65).
+ *
+ * So the election and the card are split apart. `ComposerShadow` takes the
+ * chain seat and renders one empty marker. Winning is still the only way to
+ * stop the shipped `ApprovalPanel` from mounting and taking the composer over
+ * itself, so this bundle must keep winning; client.module.css then hands the
+ * composer back by overriding that inline `display: none`, scoped through
+ * `:has()` to OUR marker so other takeover kinds (a user question) still hide
+ * the composer exactly as the host intends. The real card renders in
+ * `conversation.input.dock` -- the additive full-width row the host stacks
+ * directly above the composer card -- and reads the same pending approval off
+ * the conversation snapshot that the chain currency carries. The composer
+ * stays mounted, visible, editable, and keeps its draft through every
+ * approval state.
  *
  * The behavior. Rejecting without a comment answers the approval as
  * `'rejected'`, exactly as before. Rejecting with a comment also answers
@@ -96,11 +113,35 @@ var ZH = {
   "comment.hint": "该评论将指导下一步行动。",
 };
 
-/** Chain routing: claim the composer while an approval wait is pending. */
+/**
+ * Chain routing: claim the composer takeover chain while an approval wait is
+ * pending. The claim exists to SHADOW the shipped `ApprovalPanel` out of the
+ * election, not to draw anything -- see `ComposerShadow`.
+ */
 function selectApproval(owner) {
   return (
     owner.interactions.find(function (interaction) {
       return interaction.kind === "approval";
+    }) || null
+  );
+}
+
+/**
+ * The same election, read from the conversation snapshot instead of the chain
+ * currency. The dock seat is handed `session` (a point-in-time
+ * `ConversationSnapshot`) rather than the chain's `interactions`, and
+ * `snapshot.pending` is the very array ConversationRoot forwards into the
+ * chain, so both seats always elect the same approval. Returns `null` for
+ * "no approval pending", which is also what an absent or malformed snapshot
+ * yields -- the caller renders nothing either way.
+ */
+function findApproval(session) {
+  if (session === undefined || session === null) return null;
+  var pending = session.pending;
+  if (!Array.isArray(pending)) return null;
+  return (
+    pending.find(function (interaction) {
+      return interaction !== null && interaction !== undefined && interaction.kind === "approval";
     }) || null
   );
 }
@@ -530,19 +571,65 @@ function makeApprovalCommentCard(steerTo) {
   };
 }
 
+/**
+ * The composer-chain occupant: an empty marker, and deliberately nothing else.
+ *
+ * Its whole job is to WIN the takeover election so the shipped `ApprovalPanel`
+ * never mounts, while drawing no UI of its own. The marker is a real DOM node
+ * because the stylesheet keys the composer-restoring override off it
+ * (`[data-chain-overlay-fallback]:has(~ .approval-comment-shadow)`), which is
+ * what scopes that override to this bundle's elections. `display: none` on the
+ * marker itself does not affect selector matching, so the node costs no layout.
+ *
+ * Keeping this component free of state, hooks, and props is load-bearing: the
+ * host wraps each elected entry in an error boundary, and a crash here would
+ * drop the marker and hide the composer again. The card, which has all the
+ * logic, lives in a separate seat behind its own boundary.
+ */
+function ComposerShadow() {
+  return <div className="approval-comment-shadow" data-approval-shadow="" aria-hidden={true} />;
+}
+
+/**
+ * The dock occupant: elects the pending approval off the snapshot and mounts
+ * the card for it.
+ *
+ * The `key` is the approval's own key, so a new approval REMOUNTS the card and
+ * gets fresh `answered`/`draft` state. That matters here in a way it did not
+ * in the chain seat: a chain entry unmounted the moment its select stopped
+ * matching, whereas this dock entry stays mounted across approvals and would
+ * otherwise carry a stale `answered` latch (and a stale comment draft) into
+ * the next one.
+ */
+function makeApprovalCommentDock(steerTo) {
+  var Card = makeApprovalCommentCard(steerTo);
+  return function ApprovalCommentDock(props) {
+    var matched = findApproval(props.session);
+    if (matched === null) return null;
+    return <Card key={matched.key} matched={matched} t={props.t} useSession={props.useSession} />;
+  };
+}
+
 /** Stable Cordis plugin name. */
 var name = PLUGIN_NAME;
 /** Services this bundle reaches through the plugin context. */
 var inject = ["slots", "sessions", "locale"];
 
 /**
- * Plugin body: register the chain entry after the composer slot is
- * declared, and register the dictionary for this card's locale seat.
+ * Plugin body: register the dictionary, the chain shadow that keeps the
+ * shipped panel from taking the composer over, and the dock card that does
+ * the actual work. Both seat registrations go through `slots.inject`, so each
+ * waits for its own slot to be declared.
+ *
+ * The dock order puts this card LAST in the dock (the shipped todo dock is 0,
+ * durable-todos is 10, the shipped queue dock is 20), so a pending approval
+ * sits directly above the composer card -- nearest the action, where the
+ * takeover panel used to be.
  */
 function apply(ctx) {
-  console.debug("[approval-comment] apply: registering composer slot");
+  console.debug("[approval-comment] apply: registering composer shadow and dock card");
   var steerTo = buildSteerTo(ctx.sessions);
-  var card = makeApprovalCommentCard(steerTo);
+  var dock = makeApprovalCommentDock(steerTo);
   ctx.effect(function () {
     return registerLocale(ctx, LOCALE_NS, EN, ZH);
   }, "approval-comment: dictionaries");
@@ -552,10 +639,21 @@ function apply(ctx) {
         name: "conversation.composer",
         select: selectApproval,
         priority: 0,
+        registrant: PLUGIN_NAME,
+      },
+      ComposerShadow,
+    );
+  });
+  ctx.slots.inject("conversation.input.dock", function () {
+    return ctx.slots.register(
+      {
+        name: "conversation.input.dock",
+        id: "approval-comment",
+        order: 30,
         locale: LOCALE_NS,
         registrant: PLUGIN_NAME,
       },
-      card,
+      dock,
     );
   });
 }
