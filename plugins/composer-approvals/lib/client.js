@@ -385,14 +385,15 @@ function makeIndicator() {
       /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-glyph", "aria-hidden": true }, "!"),
       rows.length > 1 ? /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-count", "aria-hidden": true }, rows.length) : null
     ), open ? (
-      // The compact standard size (420px): a short list of one-line rows
-      // that answer inline, not a full settings-panel footprint. Rows
-      // carry their own actions, so there is no actions row here.
+      // The full standard size (#75): the settings-panel footprint every
+      // other plugin modal uses. Rows carry their own actions, so there is
+      // no actions row here — but the panel matches its siblings rather
+      // than being the one odd 420px popover in the set.
       /* @__PURE__ */ react2.createElement(
         PluginModal,
         {
           title: "Pending approvals",
-          size: "compact",
+          size: "full",
           onClose: function() {
             setOpen(false);
           }
