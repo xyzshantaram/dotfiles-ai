@@ -2956,49 +2956,41 @@ var client_default = `.tool-render-row {
   outline: 2px solid var(--dsw-alias-state-business-primary);
   outline-offset: -1px;
 }
-/* The durable decided badge: neutral/positive tint for approved, error
-   tint for rejected. Sourced from the guarded-approvals fold, so it
-   survives a page reload. */
+/* The durable decided badge (owner, 2026-09-08): it should read as THE BUTTON
+   THAT WAS PRESSED, left disabled \u2014 not as a separate coloured pill. So it
+   inherits .tool-render-approval-btn's exact recipe (1px border, surface bg,
+   secondary text, 4px radius, 12px/20px, 5px 12px padding) plus that button's
+   own :disabled treatment (opacity 0.45, default cursor). Approved therefore
+   carries NO accent colour at all: the neutral disabled button IS the "you
+   pressed approve" signal. Only rejected keeps a tint, because a refusal that
+   looks identical to an approval is worth one colour.
+   Sourced from the guarded-approvals fold, so it survives a page reload. */
 .tool-render-decided {
-  border-radius: 999px;
-  border: 1px solid;
-  font-size: 0.6875rem;
-  line-height: 1rem;
-  padding: 0.0625rem 0.375rem;
-}
-.tool-render-decided[data-outcome="approved"] {
-  color: var(--dsw-alias-state-business-primary);
-  border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 55%, var(--dsw-alias-border-l3));
+  border: 1px solid var(--dsw-alias-border-l3);
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-secondary);
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 20px;
+  padding: 5px 12px;
+  opacity: 0.45;
+  cursor: default;
 }
 .tool-render-decided[data-outcome="rejected"] {
   color: var(--dsw-alias-state-error-primary);
   border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 55%, var(--dsw-alias-border-l3));
 }
-/* In-body approval verdict (#48): the expanded card opens with the durable
-   outcome of the approval it carried. Sourced from the guarded-approvals
-   fold, so it survives reloads. */
-.tool-render-approval-verdict {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  margin: 0 0 0.25rem 0.25rem;
-  padding: 0.25rem 0.5rem;
-  background: var(--dsw-alias-bg-base);
-  border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: 0.375rem;
-  font-size: 0.75rem;
-  line-height: 1.125rem;
-}
-.tool-render-approval-verdict-label {
+/* The pending ask's reason (owner, 2026-09-08): while an approval is open the
+   card must say WHY it is being asked. Tertiary label, wrapping, sitting above
+   the actions so the question reads before the answer. */
+.tool-render-approval-reason {
+  align-self: stretch;
   color: var(--dsw-alias-label-tertiary);
-}
-.tool-render-approval-verdict-outcome[data-outcome="approved"] {
-  color: var(--dsw-alias-state-business-primary);
-  font-weight: 500;
-}
-.tool-render-approval-verdict-outcome[data-outcome="rejected"] {
-  color: var(--dsw-alias-state-error-primary);
-  font-weight: 500;
+  font-size: 12px;
+  line-height: 18px;
+  margin-bottom: 4px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 `;
 
@@ -16228,7 +16220,10 @@ function ToolRenderApprovalBar(props) {
     return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-approval-strip" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-decided", "data-outcome": decidedLabel }, decidedLabel));
   }
   var hasDraft = draft.trim() !== "";
-  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-approval-strip" }, /* @__PURE__ */ import_react.default.createElement(
+  var pendingPayload = pending !== null && pending !== void 0 ? pending.payload : void 0;
+  var pendingReason = pendingPayload !== null && pendingPayload !== void 0 ? pendingPayload.reason : void 0;
+  var reasonText = typeof pendingReason === "string" && pendingReason.trim() !== "" && !isBashGuardReason(pendingReason) ? pendingReason : null;
+  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-approval-strip" }, reasonText === null ? null : /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-approval-reason" }, reasonText), /* @__PURE__ */ import_react.default.createElement(
     "button",
     {
       type: "button",
@@ -16396,12 +16391,6 @@ function BashRow(props) {
       );
     }
     body = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-io" }, inner);
-  }
-  var callOutcome = durableGuardApproval !== null && durableGuardApproval !== void 0 ? durableGuardApproval.outcomes[props.callId] : void 0;
-  if (callOutcome !== void 0 && callOutcome !== null && callOutcome !== "cancelled") {
-    var verdictDisplay = callOutcome === "allowed-once" ? "approved" : callOutcome;
-    var verdictElement = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-approval-verdict" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-approval-verdict-label" }, "Approval"), /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-approval-verdict-outcome", "data-outcome": verdictDisplay }, verdictDisplay));
-    body = body !== null ? /* @__PURE__ */ import_react.default.createElement("div", null, verdictElement, body) : verdictElement;
   }
   return toolRenderRow({
     callId: props.callId,

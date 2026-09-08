@@ -987,8 +987,31 @@ function ToolRenderApprovalBar(props) {
     );
   }
   var hasDraft = draft.trim() !== "";
+  // The ask's own reason, shown while the approval is still open (owner,
+  // 2026-09-08): "why am I being asked this" must be answerable from the card
+  // itself. The host carries it on the pending payload — for a sandbox
+  // escalation it is `escalate sandbox to <mode>: <justification>`, i.e. the
+  // model's own stated justification, which is exactly what the human needs
+  // in order to decide.
+  //
+  // A bash-guard reason is deliberately EXCLUDED: it is a YAML payload, and
+  // the guard banner already renders it in readable form on the same card, so
+  // echoing the raw blob here would show the same fact twice — once as noise.
+  var pendingPayload =
+    pending !== null && pending !== undefined ? pending.payload : undefined;
+  var pendingReason =
+    pendingPayload !== null && pendingPayload !== undefined ? pendingPayload.reason : undefined;
+  var reasonText =
+    typeof pendingReason === "string" &&
+    pendingReason.trim() !== "" &&
+    !isBashGuardReason(pendingReason)
+      ? pendingReason
+      : null;
   return (
     <div className="tool-render-approval-strip">
+      {reasonText === null ? null : (
+        <div className="tool-render-approval-reason">{reasonText}</div>
+      )}
       <button
         type="button"
         className="tool-render-approval-comment-toggle"
@@ -1189,36 +1212,12 @@ function BashRow(props) {
     }
     body = <div className="tool-render-io">{inner}</div>;
   }
-  // In-body approval verdict (#48): when a bash call that carried an inline
-  // approval is expanded, the body opens with the durable verdict. Sourced
-  // from the guarded-approvals fold already fetched above (durableGuardApproval)
-  // — never a second hook call, which would break hook order. Wire vocabulary
-  // is "allowed-once"/"rejected"/"cancelled"; display vocabulary maps
-  // allowed-once to "approved" and hides cancelled.
-  var callOutcome =
-    durableGuardApproval !== null && durableGuardApproval !== undefined
-      ? durableGuardApproval.outcomes[props.callId]
-      : undefined;
-  if (callOutcome !== undefined && callOutcome !== null && callOutcome !== "cancelled") {
-    var verdictDisplay = callOutcome === "allowed-once" ? "approved" : callOutcome;
-    var verdictElement = (
-      <div className="tool-render-approval-verdict">
-        <span className="tool-render-approval-verdict-label">Approval</span>
-        <span className="tool-render-approval-verdict-outcome" data-outcome={verdictDisplay}>
-          {verdictDisplay}
-        </span>
-      </div>
-    );
-    body =
-      body !== null ? (
-        <div>
-          {verdictElement}
-          {body}
-        </div>
-      ) : (
-        verdictElement
-      );
-  }
+  // The in-body approval verdict (#48) was REMOVED (owner, 2026-09-08). It
+  // restated inside the expanded body what the decided badge already says in
+  // the header, so an approved call carried the word twice. The single decided
+  // badge is now the whole durable verdict surface; see .tool-render-decided,
+  // which is styled as the pressed-and-disabled form of the button that
+  // produced it rather than as a separate coloured pill.
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession, useProjection: props.useProjection,
