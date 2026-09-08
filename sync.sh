@@ -42,7 +42,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#9c7a97b9c7212ea54db3c355d8d8c8fab7d54558}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#05ad9829041a8ea26a55396835ebc7fdb0b39509}"
 
 # Git-hosted specs whose build scripts pnpm must be allowed to run. pnpm 10+
 # blocks lifecycle scripts (prepare/postinstall) unless the exact resolved
@@ -880,9 +880,16 @@ def normalize_entry(entry, chains, seen=None):
 
 d = yaml.safe_load(open(os.environ['SUBAGENT_YAML'])) or {}
 chains = (d.get('profile') or {}).get('chains') or {}
-routes = normalize_entry(chains.get('subagent'), chains)
+# The subagent tier is `flash` (renamed from `subagent`, #82). This lookup is
+# deliberately by NAME rather than through the active profile entry: the pin it
+# feeds is written statically into the preset file at sync time, so resolving it
+# per-profile would only be honest if sync re-ran on every profile switch. Both
+# profile entries currently name `flash`, so the two agree. If they ever
+# diverge, this must become profile-aware (or the pin must go away entirely,
+# which is what #84's declared-chain dispatch does).
+routes = normalize_entry(chains.get('flash'), chains)
 if not routes:
-    sys.exit('no subagent chain routes in home/settings.yaml')
+    sys.exit('no flash chain routes in home/settings.yaml')
 r = routes[0]
 print(f"{r['provider']} {r['model']}")
 PY
@@ -1360,17 +1367,18 @@ step_check_preset_drift() {
 	node "$HERE/scripts/check-preset-drift.mjs"
 }
 
-step_check_chain_disjointness() {
-	# #50 (aidos board): the partner review chain in home/settings.yaml is
-	# the boundary the aidos review gate trusts (a review_pass counts only
-	# when its provenance stamp shows a partner-chain run). A cheap rung
-	# edited into that chain weakens the gate silently. This step asserts
-	# the invariants: partner is disjoint from the orchestrator and
-	# subagent chains and carries only owner-approved rungs.
-	# A red run is the check working: fix the chain (drift) or record an
-	# explicit owner decision in the script's ALLOWED_PARTNER_RUNGS.
-	node "$HERE/scripts/check-chain-disjointness.mjs"
-}
+# step_check_chain_disjointness was REMOVED with the `partner` chain (#82).
+#
+# It existed solely to assert that partner stayed disjoint from the orchestrator
+# and subagent chains, because the aidos review gate treated a partner-chain run
+# as a security boundary. Both halves of that premise are gone: the chain was
+# deleted, and the replacement is explicitly a RELIABILITY AID rather than a
+# boundary (owner, 2026-09-08) — aidos records which chain a review actually ran
+# on and invalidates only that result, never blocking a session.
+#
+# It is deleted rather than repurposed on purpose: a check that polices a chain
+# which no longer exists would pass vacuously forever, which is worse than no
+# check. The replacement lives in #84's chain-provenance service.
 
 STEPS=(
 	"Install repo dev deps (esbuild for the build step)|step_install_deps"
@@ -1393,7 +1401,6 @@ STEPS=(
 	"Stop the web-tools search-button background poll|step_stop_web_tools_search_poll"
 	"Register the aidos agent preset|step_register_aidos_preset"
 	"Check preset drift (standard vs aidos)|step_check_preset_drift"
-	"Check partner-chain invariants (disjoint, owner-approved rungs)|step_check_chain_disjointness"
 	"Verify builtin tool rows are disabled|step_verify_preset_tool_disabled"
 	"Regenerate settings.yaml from the repo template|step_set_defaults"
 )
