@@ -134,8 +134,15 @@ describe("shared modal: callers and their built bundles", () => {
     expect(client).toContain('className="jv-command"');
   });
 
-  it("composer-approvals takes the compact size", () => {
-    expect(read("composer-approvals/src/client.tsx")).toContain('size="compact"');
+  // #75 made this modal FULL, matching job-viewer, so the bundle presents one
+  // modal size rather than two arbitrary ones. This test asserted "compact"
+  // until then and was not updated with the source change (source d6f1ecd,
+  // test last touched by 8d002fa), so the suite carried a red test. The name
+  // states the REQUIREMENT rather than the current value, so a future flip of
+  // the source has to argue with the ticket instead of quietly editing a
+  // string here.
+  it("composer-approvals takes the full size, like every other modal", () => {
+    expect(read("composer-approvals/src/client.tsx")).toContain('size="full"');
   });
 
   it("the built client bundles mirror the shared source", () => {
