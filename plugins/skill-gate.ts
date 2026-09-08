@@ -430,11 +430,27 @@ export function apply(ctx: Context, config: unknown): void {
   }
 
   function clearAll(): void {
-    // Compaction wipes which skills each conversation had loaded. Drop the
-    // active sets and lift the masks; the next pre-step reconciles every
-    // agent back to the full deny, so gated tools return to hidden instead
-    // of leaking open into post-compaction prompts.
-    activeById.clear();
+    // #89. This used to clear activeById as well, on the reasoning that
+    // "compaction wipes which skills each conversation had loaded ... so gated
+    // tools return to hidden instead of leaking open into post-compaction
+    // prompts". That silently REVOKED capabilities: load a skill, compact, and
+    // its tools vanish mid-task with nothing said to the model — which is
+    // exactly the reported symptom, "the agent loads the skill but the tools
+    // never come". In a long session compaction fires repeatedly, so the
+    // window is not narrow.
+    //
+    // An activation is INTENT, not context. The user or the model deliberately
+    // loaded that skill; compaction is an implementation detail of context
+    // management and has no business withdrawing a granted capability. The
+    // original worry does not survive contact either: the tools are
+    // self-describing through their own schemas, so a post-compaction prompt
+    // carrying them is not "leaking" anything the agent had not already been
+    // given.
+    //
+    // So activeById SURVIVES compaction. Only the applied masks and their
+    // disposers are dropped, because those are bound to pre-compaction tool
+    // registrations; the next pre-step reconciles each agent from its
+    // preserved active set.
     appliedById.clear();
     for (const dispose of disposerById.values()) {
       try {

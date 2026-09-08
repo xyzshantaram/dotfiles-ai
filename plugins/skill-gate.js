@@ -265,7 +265,6 @@ function apply(ctx, config) {
     disposerById.set(agent.id, disposer);
   }
   function clearAll() {
-    activeById.clear();
     appliedById.clear();
     for (const dispose of disposerById.values()) {
       try {
