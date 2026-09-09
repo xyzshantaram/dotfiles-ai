@@ -57,14 +57,22 @@ from tkinter.font import Font
 # ---------------------------------------------------------------------------
 
 def parse_date(iso_str):
-    """Parse an ISO-8601 date string. Returns a datetime object or None."""
+    """Parse an ISO-8601 or 'YYYY-MM-DD h:mm AM/PM' date string.
+
+    Returns a datetime object or None.
+    """
     if not iso_str:
         return None
+    s = iso_str.strip()
     try:
-        s = iso_str.strip()
         if s.endswith("Z"):
             s = s[:-1] + "+00:00"
         return datetime.fromisoformat(s)
+    except (ValueError, TypeError):
+        pass
+    # Fall back to the display format used by the export pipeline
+    try:
+        return datetime.strptime(s, "%Y-%m-%d %I:%M %p")
     except (ValueError, TypeError):
         return None
 
@@ -170,9 +178,10 @@ class NameDialog(Toplevel):
 class PayerDialog(Toplevel):
     """Modal dialog to select who originally paid for all orders."""
 
-    def __init__(self, parent, people_names, default=None):
+    def __init__(self, parent, people_names, default=None, title="Who Paid?",
+                 prompt="Who originally paid for these orders?"):
         super().__init__(parent)
-        self.title("Who Paid?")
+        self.title(title)
         self.result = None
         self.transient(parent)
         self.grab_set()
@@ -183,7 +192,7 @@ class PayerDialog(Toplevel):
 
         Label(
             self,
-            text="Who originally paid for these orders?",
+            text=prompt,
             font=("", 10, "bold"),
         ).grid(row=0, column=0, columnspan=2, padx=15, pady=(15, 10))
 
@@ -322,21 +331,25 @@ class ExpenseSplitApp:
         # Load or initialise cache
         self.cache = self._load_cache()
 
+        # Internal state (must exist before _resolve_people_names reads it)
+        self._current_index = self.cache.get("current_index", 0)
+        self._assignments = self.cache.get("assignments", {})
+        self._skipped = self.cache.get("skipped", {})
+
         # People names from cache (or ask)
         self.people_names = self._resolve_people_names()
 
         # Payer from cache (who fronted all the orders)
         self.payer = self.cache.get("payer")
 
+        # Who the current user is (for the Me button)
+        self.me = self.cache.get("me")
+
         # Root window
         self.root = Tk()
         self.root.title("Expense Split Dashboard")
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
-        # Internal state
-        self._current_index = self.cache.get("current_index", 0)
-        self._assignments = self.cache.get("assignments", {})
-        self._skipped = self.cache.get("skipped", {})
         self._updating_ui = False  # guard against recursive UI updates
         self._suppress_autosave = False  # guard during bulk loading
 
@@ -354,6 +367,11 @@ class ExpenseSplitApp:
         # If no payer was set (or names changed), ask now
         if not self.payer or self.payer not in self.people_names:
             self._ask_payer_dialog()
+
+        # If no identity was set (or names changed), ask who the user is
+        if not self.me or self.me not in self.people_names:
+            self._ask_me_dialog()
+        self._refresh_me_button()
 
         self.root.mainloop()
 
@@ -474,6 +492,7 @@ class ExpenseSplitApp:
             "skipped": self._skipped,
             "people_names": self.people_names,
             "payer": self.payer,
+            "me": self.me,
         }
         with open(self.CACHE_FILE, "w", encoding="utf-8") as f:
             json.dump(cache_data, f, indent=2, ensure_ascii=False)
@@ -536,6 +555,55 @@ class ExpenseSplitApp:
         self.cache["payer"] = self.payer
         self._save_cache()
 
+    def _ask_me_dialog(self):
+        """Ask who the current user is (for the Me button)."""
+        dialog = PayerDialog(
+            self.root,
+            self.people_names,
+            default=self.me,
+            title="Who Are You?",
+            prompt="Which of these people are you?",
+        )
+        self.me = dialog.result
+        self.cache["me"] = self.me
+        self._save_cache()
+        self._refresh_me_button()
+
+    def _edit_people_dialog(self):
+        """Replace the people list, remapping saved assignments by position."""
+        dialog = NameDialog(self.root, defaults=self.people_names)
+        if not dialog.result or dialog.result == self.people_names:
+            return
+
+        old_names = list(self.people_names)
+        self.people_names = dialog.result
+        self.cache["people_names"] = self.people_names
+
+        # Remap saved assignment amounts from old names to new names.
+        # Rebuild the dict so a swap (A <-> B) cannot overwrite amounts.
+        rename = {
+            old: new
+            for old, new in zip(old_names, self.people_names)
+            if old != new
+        }
+        if rename:
+            for assignment in self._assignments.values():
+                amounts = assignment.get("assignments")
+                if not amounts:
+                    continue
+                assignment["assignments"] = {
+                    rename.get(name, name): amt for name, amt in amounts.items()
+                }
+
+        # Payer and me must still name a real person
+        if self.payer not in self.people_names:
+            self._ask_payer_dialog()
+        if self.me not in self.people_names:
+            self._ask_me_dialog()
+
+        self._save_cache()
+        self._refresh_ui()
+
     # ------------------------------------------------------------------
     # UI construction
     # ------------------------------------------------------------------
@@ -543,8 +611,6 @@ class ExpenseSplitApp:
     def _build_ui(self):
         """Create all the widgets."""
         root = self.root
-        root.geometry("680x580")
-        root.minsize(600, 500)
 
         # Row 0 — Title
         self._title_var = StringVar()
@@ -662,6 +728,44 @@ class ExpenseSplitApp:
             self._radio_single,
         ]
 
+        # Select All / None quick toggles for the person checkboxes.
+        # Meaningful in equal, percentage and custom modes; disabled in
+        # single-payer mode, which enforces exactly one selection.
+        self._select_all_btn = Button(
+            radio_frame,
+            text="Select All",
+            command=self._select_all_people,
+            font=("", 9),
+        )
+        self._select_all_btn.pack(side=RIGHT, padx=(4, 12))
+
+        self._select_none_btn = Button(
+            radio_frame,
+            text="Select None",
+            command=self._select_none_people,
+            font=("", 9),
+        )
+        self._select_none_btn.pack(side=RIGHT, padx=(4, 0))
+
+        # Me button: select only the current user (identity asked at
+        # startup, cached in ~/.cache/ordersplit/cache.json as "me").
+        self._me_btn = Button(
+            radio_frame,
+            text="Me",
+            command=self._select_me,
+            font=("", 9),
+        )
+        self._me_btn.pack(side=RIGHT, padx=(4, 12))
+
+        # People button: replace the people list (remaps saved assignments)
+        self._people_btn = Button(
+            radio_frame,
+            text="People\u2026",
+            command=self._edit_people_dialog,
+            font=("", 9),
+        )
+        self._people_btn.pack(side=RIGHT, padx=(4, 12))
+
         ttk.Separator(root, orient=HORIZONTAL).grid(
             row=8, column=0, columnspan=2, sticky=W + E, padx=10, pady=(8, 0)
         )
@@ -755,7 +859,12 @@ class ExpenseSplitApp:
 
         btn_frame = Frame(root)
         btn_frame.grid(row=13, column=0, columnspan=2, sticky=W + E, padx=15, pady=(8, 15))
-        btn_frame.columnconfigure(3, weight=1)
+        btn_frame.columnconfigure(7, weight=1)
+
+        # Muted key hint: a stock Tk Button paints its whole label in one
+        # color, so shortcuts render as a small gray label beside the button.
+        def key_hint(parent, text):
+            return Label(parent, text=text, font=("", 8), fg="#888888")
 
         self._prev_btn = Button(
             btn_frame,
@@ -764,6 +873,7 @@ class ExpenseSplitApp:
             width=12,
         )
         self._prev_btn.grid(row=0, column=0, padx=(0, 4))
+        key_hint(btn_frame, "Esc").grid(row=0, column=1, padx=(0, 8), sticky=S)
 
         self._skip_btn = Button(
             btn_frame,
@@ -771,7 +881,7 @@ class ExpenseSplitApp:
             command=self._toggle_skip_item,
             width=13,
         )
-        self._skip_btn.grid(row=0, column=1, padx=4)
+        self._skip_btn.grid(row=0, column=2, padx=4)
 
         self._next_btn = Button(
             btn_frame,
@@ -779,10 +889,20 @@ class ExpenseSplitApp:
             command=self._next_item,
             width=12,
         )
-        self._next_btn.grid(row=0, column=2, padx=4)
+        self._next_btn.grid(row=0, column=3, padx=4)
+        key_hint(btn_frame, "\u2192").grid(row=0, column=4, padx=(0, 8), sticky=S)
+
+        self._repeat_btn = Button(
+            btn_frame,
+            text="Repeat Last",
+            command=self._repeat_last,
+            width=12,
+        )
+        self._repeat_btn.grid(row=0, column=5, padx=4)
+        key_hint(btn_frame, "R").grid(row=0, column=6, padx=(0, 8), sticky=S)
 
         # Spacer
-        Label(btn_frame, text="").grid(row=0, column=3, sticky=W + E)
+        Label(btn_frame, text="").grid(row=0, column=7, sticky=W + E)
 
         self._save_btn = Button(
             btn_frame,
@@ -790,7 +910,8 @@ class ExpenseSplitApp:
             command=self._save_and_quit,
             width=12,
         )
-        self._save_btn.grid(row=0, column=4, padx=4)
+        self._save_btn.grid(row=0, column=8, padx=4)
+        key_hint(btn_frame, "Ctrl+Q").grid(row=0, column=9, padx=(0, 8), sticky=S)
 
         self._finish_btn = Button(
             btn_frame,
@@ -801,7 +922,7 @@ class ExpenseSplitApp:
             fg="white",
             font=("", 10, "bold"),
         )
-        self._finish_btn.grid(row=0, column=5, padx=(4, 0))
+        self._finish_btn.grid(row=0, column=10, padx=(4, 0))
 
         # Trace value vars for auto-save
         for var in self._value_vars:
@@ -811,6 +932,13 @@ class ExpenseSplitApp:
             var.trace_add("write", lambda *_: self._schedule_autosave())
 
         self._autosave_after_id = None
+
+        # Size the window to fit its contents
+        root.update_idletasks()
+        fit_w = root.winfo_reqwidth()
+        fit_h = root.winfo_reqheight()
+        root.geometry(f"{fit_w}x{fit_h}")
+        root.minsize(fit_w, fit_h)
 
     # ------------------------------------------------------------------
     # Key bindings
@@ -823,6 +951,26 @@ class ExpenseSplitApp:
         root.bind("<Escape>", lambda _e: self._prev_item())
         root.bind("<Control-n>", lambda _e: self._next_item())
         root.bind("<Control-p>", lambda _e: self._prev_item())
+        root.bind("<a>", lambda _e: self._shortcut(self._select_all_people))
+        root.bind("<A>", lambda _e: self._shortcut(self._select_all_people))
+        root.bind("<m>", lambda _e: self._shortcut(self._select_me))
+        root.bind("<M>", lambda _e: self._shortcut(self._select_me))
+        root.bind("<r>", lambda _e: self._shortcut(self._repeat_last))
+        root.bind("<R>", lambda _e: self._shortcut(self._repeat_last))
+        root.bind("<Left>", lambda _e: self._shortcut(self._prev_item))
+        root.bind("<Right>", lambda _e: self._shortcut(self._next_item))
+
+    def _shortcut(self, fn):
+        """Run fn unless a widget that owns the keyboard has focus.
+
+        Entries take letters; radio buttons and checkboxes take arrow
+        keys. With any of those focused, the shortcut must not fire.
+        """
+        widget = self.root.focus_get()
+        if isinstance(widget, (Entry, Radiobutton, Checkbutton)):
+            return None
+        fn()
+        return "break"
 
     # ------------------------------------------------------------------
     # UI refresh
@@ -978,6 +1126,11 @@ class ExpenseSplitApp:
         mode = self._split_type_var.get()
         item_price = self.flat_items[self._current_index]["price"]
         checked = [v.get() for v in self._checked_vars]
+
+        # Select All / None only make sense in multi-select modes
+        select_state = DISABLED if mode == "single" else NORMAL
+        self._select_all_btn.configure(state=select_state)
+        self._select_none_btn.configure(state=select_state)
 
         for i in range(3):
             entry = self._value_entries[i]
@@ -1255,6 +1408,37 @@ class ExpenseSplitApp:
             return
         self._apply_mode()
 
+    def _select_all_people(self):
+        """Check every person checkbox (equal/percentage/custom modes)."""
+        if self._split_type_var.get() == "single":
+            return
+        for var in self._checked_vars:
+            var.set(True)
+        self._on_checkbox_change()
+
+    def _select_none_people(self):
+        """Clear every person checkbox."""
+        for var in self._checked_vars:
+            var.set(False)
+        self._on_checkbox_change()
+
+    def _select_me(self):
+        """Select only the current user's checkbox (all split modes)."""
+        if not self.me or self.me not in self.people_names:
+            self._ask_me_dialog()
+        if not self.me or self.me not in self.people_names:
+            return
+        idx = self.people_names.index(self.me)
+        for i, var in enumerate(self._checked_vars):
+            var.set(i == idx)
+        self._on_checkbox_change()
+
+    def _refresh_me_button(self):
+        """Update the Me button label with the current identity."""
+        if hasattr(self, "_me_btn"):
+            label = f"Me ({self.me})" if self.me in self.people_names else "Me"
+            self._me_btn.configure(text=label)
+
     # ------------------------------------------------------------------
     # Navigation
     # ------------------------------------------------------------------
@@ -1267,6 +1451,22 @@ class ExpenseSplitApp:
     def _next_item(self):
         if self._current_index < len(self.flat_items) - 1:
             self._navigate_to(self._current_index + 1, save_current=True)
+
+    def _repeat_last(self):
+        """Apply the previous item's split (people + type) to this item.
+
+        Amounts are recomputed for the current item's price, so this works
+        even when prices differ.
+        """
+        last = self._assignments.get(str(self._current_index - 1))
+        if not last:
+            return
+        self._split_type_var.set(last.get("split_type", "equal"))
+        selected = set(last.get("people", []))
+        for i, name in enumerate(self.people_names):
+            self._checked_vars[i].set(name in selected)
+        self._apply_mode()
+        self._schedule_autosave()
 
     def _toggle_skip_item(self):
         """Toggle the skip state for the current item."""
@@ -1342,6 +1542,7 @@ class ExpenseSplitApp:
             split_entry = {
                 "item": item["name"],
                 "platform": item["platform"],
+                "order_id": item.get("order_id", ""),
                 "date": date_out,
                 "price": item["price"],
                 "split_type": assignment["split_type"],
@@ -1364,8 +1565,15 @@ class ExpenseSplitApp:
         }
 
         self.CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        timestamp = int(datetime.now(timezone.utc).timestamp())
+        stamped = self.OUTPUT_FILE.with_name(f"output-{timestamp}.json")
+        with open(stamped, "w", encoding="utf-8") as f:
+            json.dump(output, f, indent=2, ensure_ascii=False)
+        # Keep the canonical path pointing at the latest export
         with open(self.OUTPUT_FILE, "w", encoding="utf-8") as f:
             json.dump(output, f, indent=2, ensure_ascii=False)
+        print(f"Wrote {stamped}")
+        print(f"Wrote {self.OUTPUT_FILE}")
 
         # Show summary
         SummaryDialog(self.root, self.people_names, totals, settlements, payer=self.payer)

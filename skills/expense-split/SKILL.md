@@ -175,7 +175,17 @@ python dashboard.py ~/ai-scratch/orders.json
 #### Dashboard features
 
 - **People setup**: On first launch asks for 3 names and who originally paid.
-  Stores both in the cache so it only asks once.
+  Stores both in the cache so it only asks once. The "People…" button replaces
+  the people list mid-session; saved assignments are remapped by position, so
+  a rename or swap keeps the amounts with the right person.
+- **Identity**: On first launch asks which person the current user is, for the
+  "Me" button. Cached as `me` in the cache file.
+- **Quick select**: "Select All" and "Select None" buttons check or clear
+  every person checkbox (equal, percentage, and custom modes; disabled in
+  single-payer mode). The "Me" button selects only the current user, in any
+  mode. Button shortcuts render as small muted key hints beside each button.
+- **Repeat Last**: applies the previous item's split type and people to the
+  current item, with amounts recomputed for the current price.
 - **Item-by-item**: Shows each line item with order context. Items with
   quantity > 1 are expanded to individual rows. Delivery and packaging
   fees appear as separate line items (for non-Zepto platforms).
@@ -207,6 +217,15 @@ python dashboard.py ~/ai-scratch/orders.json
 | `Ctrl+N` | Next item                |
 | `Ctrl+P` | Previous item            |
 | `Escape` | Go back to previous item |
+| `A`      | Select all people        |
+| `M`      | Select only me           |
+| `R`      | Repeat last split        |
+| `Right`  | Next item                |
+| `Left`   | Previous item            |
+
+Single-letter and arrow shortcuts are disabled while an entry, radio
+button, or checkbox has keyboard focus, so typing percentages and custom
+amounts keeps working.
 
 ### Step 4: Review the output
 
