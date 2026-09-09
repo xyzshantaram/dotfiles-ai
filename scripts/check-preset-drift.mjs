@@ -224,7 +224,7 @@ function printHuman(result) {
     for (const f of result.failures) {
       console.error(`  DRIFT ${f.key}${f.field ? ` [${f.field}]` : ""}: ${f.detail}`);
     }
-    console.error("\nFix the aidos preset (drift) or name the divergence in guards/preset-drift.json (deliberate).");
+    console.error("\nFix the aidos preset (drift) or name the divergence in scripts/preset-drift.json (deliberate).");
   }
   if (result.stale.length > 0) {
     console.error(`\nFAIL preset drift: ${result.stale.length} stale allowlist entries (no such divergence today — remove them):`);
@@ -252,8 +252,14 @@ function main(argv) {
   const opts = {
     standardPath: args.standardPath ?? defaultStandardPath(),
     aidosPath: args.aidosPath ?? defaultAidosPath(),
+    // Beside this script, NOT in guards/. That directory is bash-guard's
+    // rule dir: sync.sh copies all of it to $DSH_HOME/plugins/guards and
+    // bash-guard parses every *.json there as a rule file, so this
+    // differently-shaped file was reported as "malformed" on every bash call
+    // (#128). Nothing at runtime reads it -- this script and its test are the
+    // only consumers -- so it belongs next to them.
     allowlistPath:
-      args.allowlistPath ?? join(dirname(fileURLToPath(import.meta.url)), "..", "guards", "preset-drift.json"),
+      args.allowlistPath ?? join(dirname(fileURLToPath(import.meta.url)), "preset-drift.json"),
   };
   const result = runCheck(opts);
   if (args.json) {
