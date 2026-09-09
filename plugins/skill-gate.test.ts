@@ -436,3 +436,60 @@ describe("skill-gate compaction survival (#89 follow-up)", () => {
     expect(asmStranger.sdk).toEqual(["bar"]);
   });
 });
+
+describe("skill-gate first post-compaction prompt (#102)", () => {
+  it("hides gated tools on BOTH surfaces when assembly follows compaction with NO intervening pre-step", async () => {
+    // The window #98's sequencing leaves behind: clearAll() on
+    // compaction/start lifts every mask, and each step assembles BEFORE its
+    // pre-step waterfall (see the pre-step comment in skill-gate.ts), so the
+    // first post-compaction assembly renders with no mask in force. Against
+    // the current code this assembly ships the gated tools on both surfaces.
+    const reg = makeRegistry(["secret_exact", "mcp__acme__one", "plain"]);
+    const dir = join(tmpRoot, "window");
+    writeGatedSkill(dir, "exactskill", ["secret_exact"]);
+    writeGatedSkill(dir, "prefixskill", ["mcp__acme__*"]);
+    const ctx = fakeCtx();
+    apply(ctx as never, { skillDirs: [dir] });
+    invalidate(ctx);
+    const { agent } = fakeAgent("compact-window-stranger", reg);
+
+    fireSessionStart(ctx, agent);
+    expect(assemble(reg, agent as { id: string }).sdk).toEqual(["plain"]);
+
+    // Compaction lifts the masks; the very next assembly — with NO pre-step
+    // reconcile in between — must still be clean on both surfaces.
+    ctx.handlers.get("compaction/start")![0]!();
+    const asm = assemble(reg, agent as { id: string });
+    expect(asm.tools).toEqual(["plain"]);
+    expect(asm.sdk).toEqual(["plain"]);
+
+    // The following reconcile must keep the deny in force, not just the
+    // window assembly.
+    await firePreStep(ctx, agent);
+    const after = assemble(reg, agent as { id: string });
+    expect(after.tools).toEqual(["plain"]);
+    expect(after.sdk).toEqual(["plain"]);
+  });
+
+  it("a loaded skill's tools stay visible across compaction with NO intervening pre-step", async () => {
+    // Guard against the over-correction (wiping actives, pre-#89): the loader
+    // must see its tool immediately after compaction, not only once a
+    // pre-step has re-applied it.
+    const reg = makeRegistry(["foo", "bar"]);
+    const dir = writeGatedSkill(join(tmpRoot, "window-keeper"), "windowkeeper", ["foo"]);
+    const ctx = fakeCtx();
+    apply(ctx as never, { skillDirs: [dir] });
+    invalidate(ctx);
+    const { agent } = fakeAgent("compact-window-loaded", reg);
+
+    fireSessionStart(ctx, agent);
+    await fireSkillLoad(ctx, agent, "windowkeeper");
+    await firePreStep(ctx, agent);
+    expect(assemble(reg, agent as { id: string }).sdk).toEqual(["bar", "foo"]);
+
+    ctx.handlers.get("compaction/start")![0]!();
+    const asm = assemble(reg, agent as { id: string });
+    expect(asm.tools).toEqual(["bar", "foo"]);
+    expect(asm.sdk).toEqual(["bar", "foo"]);
+  });
+});

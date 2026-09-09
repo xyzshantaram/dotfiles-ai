@@ -183,7 +183,7 @@ function apply(ctx, config) {
     return proceed();
   });
   ctx.on("compaction/start", () => {
-    clearAll();
+    dropReconcileSnapshots();
   });
   function gatedPatterns() {
     if (!gatesCache) gatesCache = discoverGates(skillDirs, ctx);
@@ -272,16 +272,9 @@ function apply(ctx, config) {
     fingerprintById.set(agent.id, fingerprint);
     disposerById.set(agent.id, disposer);
   }
-  function clearAll() {
+  function dropReconcileSnapshots() {
     appliedById.clear();
     fingerprintById.clear();
-    for (const dispose of disposerById.values()) {
-      try {
-        dispose();
-      } catch {
-      }
-    }
-    disposerById.clear();
   }
   function notifySkillLoaded(exec, result) {
     const agent = exec.agent;
