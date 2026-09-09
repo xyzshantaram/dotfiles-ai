@@ -26335,6 +26335,14 @@ function isHostEscalationReason(reason) {
 function isRetiredEscalationPrompt(reason) {
   return typeof reason === "string" && reason.startsWith("bash-guard: escalate this bash command from ");
 }
+var LEGACY_ESCALATION_SUMMARY_PREFIX = 'bash-guard: escalate from "';
+function isLegacyGuardReasonRecord(record2) {
+  if ("kind" in record2) return false;
+  if (typeof record2.summary !== "string") return false;
+  if (typeof record2.runs !== "string") return false;
+  if ("justification" in record2) return false;
+  return !record2.summary.startsWith(LEGACY_ESCALATION_SUMMARY_PREFIX);
+}
 function isBashGuardReason(reason) {
   if (typeof reason !== "string") return false;
   if (isHostEscalationReason(reason)) return false;
@@ -26348,7 +26356,8 @@ function isBashGuardReason(reason) {
   }
   if (result === null || typeof result !== "object" || Array.isArray(result)) return false;
   const record2 = result;
-  return record2.kind === GUARD_APPROVAL_KIND;
+  if (record2.kind === GUARD_APPROVAL_KIND) return true;
+  return isLegacyGuardReasonRecord(record2);
 }
 
 // plugins/tool-render/src/guarded-approvals.ts

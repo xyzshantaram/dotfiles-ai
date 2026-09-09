@@ -16140,6 +16140,14 @@ function isHostEscalationReason(reason) {
 function isRetiredEscalationPrompt(reason) {
   return typeof reason === "string" && reason.startsWith("bash-guard: escalate this bash command from ");
 }
+var LEGACY_ESCALATION_SUMMARY_PREFIX = 'bash-guard: escalate from "';
+function isLegacyGuardReasonRecord(record) {
+  if ("kind" in record) return false;
+  if (typeof record.summary !== "string") return false;
+  if (typeof record.runs !== "string") return false;
+  if ("justification" in record) return false;
+  return !record.summary.startsWith(LEGACY_ESCALATION_SUMMARY_PREFIX);
+}
 function isBashGuardReason(reason) {
   if (typeof reason !== "string") return false;
   if (isHostEscalationReason(reason)) return false;
@@ -16153,7 +16161,8 @@ function isBashGuardReason(reason) {
   }
   if (result === null || typeof result !== "object" || Array.isArray(result)) return false;
   const record = result;
-  return record.kind === GUARD_APPROVAL_KIND;
+  if (record.kind === GUARD_APPROVAL_KIND) return true;
+  return isLegacyGuardReasonRecord(record);
 }
 
 // plugins/tool-render/src/escalation.ts
