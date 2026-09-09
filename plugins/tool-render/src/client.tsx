@@ -179,7 +179,7 @@ var EXTENSION_LANGUAGE = {
 // ---- Platform modules: resolved by the shell loader seed at runtime. ----
 import react from "react";
 import { isBashGuardReason } from "./guard";
-import { ESCALATION_LABEL, escalationDetailOf } from "./escalation";
+import { escalationDetailOf, escalationLabel, escalationReasonClassName } from "./escalation";
 import * as primitives from "@deepseek-ai/dsh-client-ui-primitives";
 var useState = react.useState;
 var useEffect = react.useEffect;
@@ -1207,11 +1207,19 @@ function ReadRow(props) {
 // justification below is prose, never the raw `escalate sandbox to <mode>:`
 // machine string. One helper serves the expanded body (settled, durable)
 // and the open approval strip, so the text cannot differ between states.
-function escalationBanner(detail) {
+//
+// Tense follows state: `settled` is the ask's settledness — no open
+// approval for this callId — and it picks BOTH the label tense and the
+// justification prominence, so the two can never disagree. Settled covers
+// approved and rejected alike: a decided ask is history either way, and a
+// rejection at full prominence would read as though it still needed an
+// answer. The outcome itself stays distinguishable elsewhere (the
+// collapsed-row verdict badge, the error outline); this quiets the ask.
+function escalationBanner(detail, settled) {
   return (
     <div className="tool-render-escalation">
       <div className="tool-render-cmd-label">
-        {ESCALATION_LABEL}
+        {escalationLabel(settled)}
         <code
           className="tool-render-escalation-mode"
           title={"requested sandbox mode: " + detail.mode}
@@ -1219,7 +1227,7 @@ function escalationBanner(detail) {
           {detail.mode}
         </code>
       </div>
-      <div className="tool-render-escalation-reason">{detail.justification}</div>
+      <div className={escalationReasonClassName(settled)}>{detail.justification}</div>
     </div>
   );
 }
@@ -1250,6 +1258,15 @@ function BashRow(props) {
   // own args, so the banner survives settling and a page reload. The mode
   // gate matches escalatedOf, so the banner and the card outline agree.
   var escalation = escalationDetailOf(argsObj);
+  // THE settled/open signal for this card's ask: whether any approval for
+  // this callId is still open in the live snapshot — the same pending set
+  // the answer bar's own existence is gated on. Absent means settled
+  // (approved or rejected alike; the trigger is settledness, not approval),
+  // and this ONE boolean drives both the banner's tense and its prominence.
+  var escalationSettled =
+    props.useSession(function (snapshot) {
+      return pendingApprovalOf(snapshot, props.callId) === null;
+    }) === true;
   // An approval raised by bash-guard marks the card in a different colour
   // from a sandbox escalation. Three sources, ORed together: an OPEN
   // approval in the live snapshot; the durable guarded-approvals
@@ -1285,9 +1302,10 @@ function BashRow(props) {
     var inner = [];
     // The escalation banner leads the body: WHY before WHAT before RESULT.
     // It is args-sourced, so this same block renders while the approval is
-    // open (the card pins open) and after it settles — one code path.
+    // open (the card pins open) and after it settles — one code path — with
+    // tense and prominence following the one settled/open signal.
     if (escalation !== null) {
-      inner.push(escalationBanner(escalation));
+      inner.push(escalationBanner(escalation, escalationSettled));
     }
     if (command !== undefined) {
       var commandBlock = function (label, text) {

@@ -3,11 +3,40 @@
  * cover string parsing only: no React render, no DOM, no snapshots.
  */
 import { describe, expect, it } from "vitest";
-import { ESCALATION_LABEL, escalationDetailOf, splitEscalationReason } from "./escalation";
+import {
+  ESCALATION_LABEL,
+  ESCALATION_LABEL_SETTLED,
+  escalationDetailOf,
+  escalationLabel,
+  escalationReasonClassName,
+  splitEscalationReason,
+} from "./escalation";
 
 describe("ESCALATION_LABEL", () => {
   it("reads exactly as the ticket criteria require", () => {
     expect(ESCALATION_LABEL).toBe("agent requests sandbox access escalation");
+  });
+
+  it("settles into the past tense", () => {
+    expect(ESCALATION_LABEL_SETTLED).toBe("agent requested sandbox access escalation");
+  });
+});
+
+describe("escalationLabel / escalationReasonClassName", () => {
+  it("drives tense and prominence from the SAME settled/open signal", () => {
+    // One boolean in, both out — so they can never disagree.
+    expect(escalationLabel(false)).toBe(ESCALATION_LABEL);
+    expect(escalationLabel(true)).toBe(ESCALATION_LABEL_SETTLED);
+    expect(escalationReasonClassName(false)).toBe("tool-render-escalation-reason");
+    expect(escalationReasonClassName(true)).toBe(
+      "tool-render-escalation-reason tool-render-escalation-reason-muted",
+    );
+  });
+
+  it("settles approved and rejected alike — the trigger is settledness", () => {
+    // No outcome parameter exists: settled is settled, either way it went.
+    expect(escalationLabel.length).toBe(1);
+    expect(escalationReasonClassName.length).toBe(1);
   });
 });
 
