@@ -60,15 +60,13 @@ export function singleLineTipText(text: string): string {
  * reasons have their own surfaces (the escalation banner, the approval
  * strip), and echoing them here would show the same fact twice.
  *
- * NOTE (#105, latent): isBashGuardReason currently classifies this repo's
- * escalation YAML (a mapping carrying a string `summary`) as a guard
- * reason. That branch is dead in practice — the live escalation reason is
- * the plain string `escalate sandbox to <mode>: <justification>`, which
- * carries no `summary` key and classifies false — but the day it fires, a
- * stored escalation reason reaches this function as guard-shaped and its
- * summary line renders as the Prompt line. That is the classifier's defect,
- * not this summariser's: this function trusts isBashGuardReason the same
- * way the card outline and the approval bar do.
+ * NOTE (#105, fixed 2026-09-09): isBashGuardReason used to classify this
+ * repo's escalation YAML (a mapping carrying a string `summary`) as a guard
+ * reason, which would have rendered an escalation summary as the Prompt
+ * line here. The classifier now keys on the explicit `kind` discriminator,
+ * so the escalation prompt (`kind: escalation`) classifies false and this
+ * function returns null for it. This function trusts isBashGuardReason the
+ * same way the card outline and the approval bar do.
  */
 export function summariseGuardPromptReason(reason: unknown): string | null {
   if (typeof reason !== "string" || !isBashGuardReason(reason)) return null;
@@ -86,10 +84,11 @@ export function summariseGuardPromptReason(reason: unknown): string | null {
     }
   }
   // Plain-text guard reason ("bash-guard: ..."): its first non-empty line.
-  // (A YAML payload that parses always carries a string `summary` — the
-  // classifier guarantees it — so reaching this fallback with YAML-shaped
-  // input means the blob was cut mid-scalar by the projection cap and no
-  // longer classifies; that case fails silent above by returning null.)
+  // (A YAML payload that parses and classifies always carries a string
+  // `summary` alongside its `kind` — the builder writes both — so reaching
+  // this fallback with YAML-shaped input means the blob was cut mid-scalar
+  // by the projection cap and no longer classifies; that case fails silent
+  // above by returning null.)
   var lines = reason.split("\n");
   for (var i = 0; i < lines.length; i++) {
     var line = singleLineTipText(lines[i]);

@@ -416,3 +416,79 @@ export function guardRewriteFromText(text) {
   if (command.length === 0) return null;
   return { ran: command };
 }
+
+// ---- Bash error state: data first, anchored text only as a fallback. ----
+// The rule this section applies, stated once so every reader sees it:
+// derive state from DATA, never from a rendering of that data. A bracketed
+// marker (`[exit code: 1]`, `[sandbox: ...]`) is prose the harness prints;
+// the exit code and the sandbox denial flag on the result are the facts the
+// marker was rendered FROM. Scanning the whole output for marker prose
+// misreads any command whose output merely QUOTES it (grepping the
+// harness's own source, catting a log), painting successful calls as
+// failures. The structured facts decide whenever they are present; the text
+// scan below serves only rows whose facts are genuinely absent (nested calls
+// never get presentationMeta, old sessions predate the fields), and even
+// then it reads only the trailing marker block the renderers append — never
+// the middle of a dump.
+export var ERROR_TOKEN_RE = /\[(?:E_|exit code:|sandbox:)/;
+
+// One harness marker line: a bracketed token at the START of the line. The
+// renderers append these as trailing notices, so the upward scan below
+// stops at the first body line. `exit codes:` (the named pipe-stage list)
+// is a marker line but never a headline: ERROR_TOKEN_RE does not match it,
+// so a failed pipe is still headlined by its `[exit code: N]` line.
+export var TRAILING_MARKER_LINE_RE = /^\[(?:E_|exit code:|exit codes:|sandbox:|timed out|killed by signal:)/;
+
+function trailingMarkerLines(text) {
+  var lines = text.split("\n");
+  var out = [];
+  for (var i = lines.length - 1; i >= 0; i--) {
+    if (!TRAILING_MARKER_LINE_RE.test(lines[i])) break;
+    out.unshift(lines[i]);
+  }
+  return out;
+}
+
+// Error summaries prefer a line that names the failure over the first line,
+// which may be an unhelpful wrapper such as "Error: ". Only the trailing
+// marker block is consulted: a matching line in the middle of a dump is
+// quoted data, not the reason the call failed.
+export function firstLineOfError(text) {
+  if (typeof text !== "string" || text === "") return text;
+  var markers = trailingMarkerLines(text);
+  for (var i = 0; i < markers.length; i++) {
+    if (ERROR_TOKEN_RE.test(markers[i])) return markers[i];
+  }
+  var at = text.indexOf("\n");
+  return at === -1 ? text : text.slice(0, at);
+}
+
+// Markers that still fail a row through the text fallback. Anchored by the
+// caller: each candidate line is one of the trailing marker lines, so a
+// quoted marker in the middle of the output can never match.
+export var BASH_ERROR_MARKERS = /\[sandbox: file access denied under|\[exit code: [1-9]/;
+
+// Elevate a settled bash row to the error state. The structured facts
+// (presentationMeta: exitCode, denied) decide whenever they are present: a
+// clean fact set keeps the row settled even when its output quotes marker
+// prose. Without facts, the anchored trailing markers decide — the same
+// notices the renderers append, read back only where they are appended.
+export function bashErrorState(state, output, meta) {
+  if (state === "running") return state;
+  if (meta !== null && typeof meta === "object" && !Array.isArray(meta)) {
+    if (meta.denied === true) return "error";
+    if (typeof meta.exitCode === "number" && meta.exitCode !== 0) return "error";
+    if (typeof meta.exitCode === "number" || typeof meta.denied === "boolean") {
+      return state;
+    }
+    // Meta exists but carries no facts (old sessions, background starts):
+    // fall through to the anchored text check below.
+  }
+  if (typeof output !== "string" || output === "") return state;
+  var lines = output.split("\n");
+  for (var i = lines.length - 1; i >= 0; i--) {
+    if (!TRAILING_MARKER_LINE_RE.test(lines[i])) break;
+    if (BASH_ERROR_MARKERS.test(lines[i])) return "error";
+  }
+  return state;
+}

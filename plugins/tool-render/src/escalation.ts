@@ -14,7 +14,7 @@
 // of the sentence; the mode stays discoverable as its own chip on the
 // label line (it decides how far the sandbox widens) rather than jammed
 // into the justification prose.
-import { isBashGuardReason } from "./guard";
+import { HOST_ESCALATION_PREFIX, isBashGuardReason } from "./guard";
 
 /**
  * The label line above a sandbox-escalation justification, in the guard
@@ -80,7 +80,7 @@ function pickString(value: Record<string, unknown>, keys: string[]): string | un
  */
 export function splitEscalationReason(reason: unknown): EscalationDetail | null {
   if (typeof reason !== "string") return null;
-  const prefix = "escalate sandbox to ";
+  const prefix = HOST_ESCALATION_PREFIX;
   if (reason.indexOf(prefix) !== 0) return null;
   const rest = reason.slice(prefix.length);
   const colon = rest.indexOf(":");

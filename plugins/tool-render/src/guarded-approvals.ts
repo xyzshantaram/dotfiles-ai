@@ -90,10 +90,12 @@ export const guardedApprovalsProjection: ProjectionDefinition<
   GuardedApprovalsState
 > = {
   key: GUARDED_APPROVALS_KEY,
-  // Version 4: entries now keep the guard approval's raw reason for the
-  // verdict-badge tooltip, so the version-3 state (no reasons) is stale and
-  // the log must be replayed.
-  stateVersion: 4,
+  // Version 5: the guard test now keys on the explicit `kind`
+  // discriminator instead of the incidental `summary` shape, so the
+  // version-4 state still carries escalation callIds poisoned by the old
+  // shape match and the log must be replayed. Entries keep the guard
+  // approval's raw reason for the verdict-badge tooltip.
+  stateVersion: 5,
   schema: viewSchema,
   init(): GuardedApprovalsState {
     return { entries: [] };

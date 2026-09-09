@@ -68,6 +68,8 @@ import {
   parseSkillContent,
   readStartLine,
   splitSystemReminders,
+  firstLineOfError,
+  bashErrorState,
 } from "./text";
 import {
   answerMessage,
@@ -405,31 +407,6 @@ function errorTextOf(block) {
 function firstLine(text) {
   var at = text.indexOf("\n");
   return at === -1 ? text : text.slice(0, at);
-}
-
-// Error summaries prefer a line that names the failure (a bracketed token
-// like [E_RANGE_STALE] or [sandbox: ...]) over the first line, which may
-// be an unhelpful wrapper such as "Error: ".
-var ERROR_TOKEN_RE = /\[(?:E_|exit code:|sandbox:)/;
-function firstLineOfError(text) {
-  if (typeof text !== "string" || text === "") return text;
-  var lines = text.split("\n");
-  for (var i = 0; i < lines.length; i++) {
-    if (ERROR_TOKEN_RE.test(lines[i])) return lines[i];
-  }
-  return firstLine(text);
-}
-
-// Bash sandbox denials and failed commands surface as SUCCESSFUL blocks
-// (isError false): the text body carries "[sandbox: file access denied
-// under <mode> mode]" and/or "[exit code: N]". Elevate those settled rows
-// to the error state so the error tint, dot, and uncondensed body apply.
-// Running rows keep their own state.
-var BASH_ERROR_MARKERS = /\[sandbox: file access denied under|\[exit code: [1-9]/;
-function bashErrorState(state, output) {
-  if (state === "running") return state;
-  if (typeof output !== "string" || output === "") return state;
-  return BASH_ERROR_MARKERS.test(output) ? "error" : state;
 }
 
 function relativizeToCwd(text, cwd) {
@@ -1241,7 +1218,7 @@ function BashRow(props) {
   var description = argsObj !== null ? pickString(argsObj, ["description"]) : undefined;
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
-  var state = bashErrorState(rowStateOf(block), output);
+  var state = bashErrorState(rowStateOf(block), output, block.meta);
   var errorSummary =
     state === "error" && errorText !== null && errorText !== ""
       ? firstLineOfError(errorText)

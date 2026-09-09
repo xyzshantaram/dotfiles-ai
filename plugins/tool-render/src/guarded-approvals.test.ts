@@ -11,7 +11,8 @@ function decidedEvent(seq: number, data: unknown) {
   return { type: "approval/decided", seq: seq, time: 0, data: data };
 }
 
-const GUARD_REASON = "summary: block rm -rf outside the workspace\ncommand: rm -rf /tmp/x\n";
+const GUARD_REASON =
+  "kind: bash-guard\nsummary: block rm -rf outside the workspace\ncommand: rm -rf /tmp/x\n";
 
 describe("guardedApprovalsProjection.apply", () => {
   it("records a callId whose reason passes the bash-guard test", () => {
@@ -157,8 +158,8 @@ describe("guardedApprovalsProjection.apply", () => {
   });
 
   it("refreshes the stored reason when a guard approval re-asks the same callId", () => {
-    var first = "summary: first ask\nruns: ls\n";
-    var second = "summary: second ask\nruns: ls\n";
+    var first = "kind: bash-guard\nsummary: first ask\nruns: ls\n";
+    var second = "kind: bash-guard\nsummary: second ask\nruns: ls\n";
     var state = guardedApprovalsProjection.init();
     state = guardedApprovalsProjection.apply(state, askedEvent(4, { id: "a1", callId: "call-1", reason: first }) as never);
     state = guardedApprovalsProjection.apply(state, askedEvent(6, { id: "a2", callId: "call-1", reason: second }) as never);
@@ -170,7 +171,7 @@ describe("guardedApprovalsProjection.apply", () => {
   });
 
   it("caps a stored guard reason so a rule dump cannot live in state unbounded", () => {
-    var long = "summary: " + "x".repeat(3000) + "\nruns: ls\n";
+    var long = "kind: bash-guard\nsummary: " + "x".repeat(3000) + "\nruns: ls\n";
     var state = guardedApprovalsProjection.init();
     state = guardedApprovalsProjection.apply(state, askedEvent(4, { id: "a1", callId: "call-1", reason: long }) as never);
     var view = guardedApprovalsProjection.view(state);
@@ -200,7 +201,54 @@ describe("guardedApprovalsProjection.apply", () => {
     expect((view as { outcomes: Record<string, string> }).outcomes["call-209"]).toBe("rejected");
   });
 
-  it("is at state version 4 so the reason-less state is replayed", () => {
-    expect(guardedApprovalsProjection.stateVersion).toBe(4);
+  it("is at state version 5 so the shape-poisoned sticky marks are replayed", () => {
+    // Fixing the classifier does not clean sessions that already rendered an
+    // escalation: their guarded[callId] is sticky-durable. The bump forces a
+    // replay under the kind-keyed test, clearing the poisoned marks.
+    expect(guardedApprovalsProjection.stateVersion).toBe(5);
+  });
+
+  it("never marks an escalation approval, however it decides", () => {
+    // The #105 acceptance shape: the YAML our own wrapper sends for a
+    // sandbox escalation must not enter the guarded set — approved or
+    // rejected alike. The decision still pairs for the decided badge.
+    var escalation =
+      "kind: escalation\nsummary: 'bash-guard: escalate from \"workspace-write\" to \"danger-full-access\"'\njustification: write the probe file\nruns: echo probe > ~/probe.txt\n";
+    var state = guardedApprovalsProjection.init();
+    state = guardedApprovalsProjection.apply(state, askedEvent(4, { id: "e1", callId: "call-esc", reason: escalation }) as never);
+    expect(guardedApprovalsProjection.view(state)).toEqual({
+      guarded: {},
+      outcomes: {},
+      reasons: {},
+    });
+    state = guardedApprovalsProjection.apply(state, decidedEvent(5, { id: "e1", outcome: "rejected" }) as never);
+    expect(guardedApprovalsProjection.view(state)).toEqual({
+      guarded: {},
+      outcomes: { "call-esc": "rejected" },
+      reasons: {},
+    });
+  });
+
+  it("never marks the host's plain-string escalation approval", () => {
+    var state = guardedApprovalsProjection.init();
+    state = guardedApprovalsProjection.apply(state, askedEvent(4, { id: "h1", callId: "call-host", reason: "escalate sandbox to danger-full-access: install the bundles" }) as never);
+    expect(guardedApprovalsProjection.view(state)).toEqual({
+      guarded: {},
+      outcomes: {},
+      reasons: {},
+    });
+  });
+
+  it("stays un-guarded when a call's only guard-shaped past is an old kind-less escalation", () => {
+    // The pre-kind escalation YAML from real logs: summary-shaped, but an
+    // escalation. The strict test refuses it, so the replay heals it.
+    var old = "summary: 'bash-guard: escalate from \"workspace-write\" to \"danger-full-access\"'\njustification: write the probe file\nruns: echo probe > ~/probe.txt\n";
+    var state = guardedApprovalsProjection.init();
+    state = guardedApprovalsProjection.apply(state, askedEvent(4, { id: "o1", callId: "call-old", reason: old }) as never);
+    expect(guardedApprovalsProjection.view(state)).toEqual({
+      guarded: {},
+      outcomes: {},
+      reasons: {},
+    });
   });
 });
