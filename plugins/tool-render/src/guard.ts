@@ -42,11 +42,50 @@ export function isRetiredEscalationPrompt(reason: unknown): boolean {
 }
 
 /**
+ * The summary this repo's escalation YAML carried BEFORE `kind` existed:
+ * `bash-guard: escalate from "<mode>" to "<mode>"` (buildEscalationApprovalReason
+ * in plugins/bash-guard.ts still emits this exact summary, now alongside a
+ * `kind`). Legacy escalation YAML is the one shape that must NOT be adopted
+ * by the legacy carve-out below, because classifying it as a guard reason is
+ * precisely the #105 bug — it is what painted escalations blue.
+ */
+export const LEGACY_ESCALATION_SUMMARY_PREFIX = 'bash-guard: escalate from "';
+
+/**
+ * The guard YAML this repo emitted before the `kind` discriminator shipped
+ * (commit b0c4747). Every approval recorded until then carries no `kind`, so
+ * a strict `kind === "bash-guard"` test silently reclassifies ALL history as
+ * not-a-guard-reason: old cards lose their banner and dump raw YAML, and the
+ * guarded-approvals projection — whose stateVersion bump forces a replay from
+ * those very log events — faithfully re-derives the wrong answer.
+ *
+ * Recognised STRUCTURALLY, because there is no marker to read: a mapping with
+ * a string `summary` and a string `runs`, carrying no `kind`. Escalations are
+ * excluded twice over, deliberately belt-and-braces since a false positive
+ * here reintroduces #105 for historical rows: legacy escalation YAML is the
+ * only shape carrying `justification` (a guard reason has never had that
+ * field — see GuardApprovalReasonFields), and its summary is a fixed literal.
+ *
+ * DELETABLE: once sessions predating b0c4747 have aged out of the logs, this
+ * carve-out and its tests can go, and the classifier returns to reading only
+ * the stamp.
+ */
+export function isLegacyGuardReasonRecord(record: Record<string, unknown>): boolean {
+  if ("kind" in record) return false;
+  if (typeof record.summary !== "string") return false;
+  if (typeof record.runs !== "string") return false;
+  if ("justification" in record) return false;
+  return !record.summary.startsWith(LEGACY_ESCALATION_SUMMARY_PREFIX);
+}
+
+/**
  * Whether an approval's reason was raised by bash-guard. A reason counts
  * when it declares itself one:
  *
  * - the YAML payloads this repo owns, carrying `kind: "bash-guard"`,
- * - the legacy plain-text rewrite prompts opening with "bash-guard:".
+ * - the legacy plain-text rewrite prompts opening with "bash-guard:",
+ * - the legacy guard YAML that predates the stamp, matched structurally by
+ *   isLegacyGuardReasonRecord so that history keeps its classification.
  *
  * Escalations are excluded on every path: the current YAML escalation
  * carries `kind: "escalation"`, the host's plain-string escalation matches
@@ -67,5 +106,6 @@ export function isBashGuardReason(reason: unknown): boolean {
   }
   if (result === null || typeof result !== "object" || Array.isArray(result)) return false;
   const record = result as Record<string, unknown>;
-  return record.kind === GUARD_APPROVAL_KIND;
+  if (record.kind === GUARD_APPROVAL_KIND) return true;
+  return isLegacyGuardReasonRecord(record);
 }

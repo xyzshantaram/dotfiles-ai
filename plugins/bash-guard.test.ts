@@ -473,6 +473,58 @@ describe("approval reason kinds", () => {
     expect(isBashGuardReason(reason)).toBe(true);
   });
 
+  it("keeps PRE-STAMP guard YAML guarded, so history does not lose its banner", () => {
+    // Every approval recorded before the `kind` stamp shipped carries no
+    // discriminator. A strict kind check reclassified ALL of it as
+    // not-a-guard-reason: old cards dumped raw YAML instead of a banner, and
+    // the guarded-approvals replay re-derived the wrong answer from the log.
+    // Written as the literal text a real log holds, not via the builder --
+    // the builder can no longer produce this shape.
+    const legacy = [
+      'summary: "bash-guard: git blocked by 1 filter (commit is blocked)"',
+      "wrote: git commit -m x",
+      "runs: git commit -m x",
+      "why: commit is blocked",
+      "",
+    ].join("\n");
+    expect(legacy).not.toContain("kind:");
+    expect(isBashGuardReason(legacy)).toBe(true);
+  });
+
+  it("does NOT adopt pre-stamp ESCALATION YAML as a guard reason", () => {
+    // The whole of #105: classifying escalation YAML as a guard reason is
+    // what painted escalations blue. The legacy carve-out must not undo the
+    // fix for historical rows, so escalations are excluded twice over.
+    const legacyEscalation = [
+      `summary: 'bash-guard: escalate from "workspace-write" to "danger-full-access"'`,
+      "justification: write the probe file outside the workspace",
+      "runs: echo probe > ~/probe.txt",
+      "",
+    ].join("\n");
+    expect(legacyEscalation).not.toContain("kind:");
+    expect(isBashGuardReason(legacyEscalation)).toBe(false);
+  });
+
+  it("excludes pre-stamp escalation YAML on EITHER tell alone", () => {
+    // Pinned separately because a false positive here reintroduces #105:
+    // neither exclusion may quietly stop working. `justification` is a field
+    // a guard reason has never carried (GuardApprovalReasonFields), and the
+    // summary prefix is a fixed literal.
+    const summaryOnly = [
+      `summary: 'bash-guard: escalate from "read-only" to "workspace-write"'`,
+      "runs: 'true'",
+      "",
+    ].join("\n");
+    const justificationOnly = [
+      'summary: "bash-guard: something else entirely"',
+      "justification: j",
+      "runs: 'true'",
+      "",
+    ].join("\n");
+    expect(isBashGuardReason(summaryOnly)).toBe(false);
+    expect(isBashGuardReason(justificationOnly)).toBe(false);
+  });
+
   it("matches the host's plain-string escalation with one narrow matcher", () => {
     const reason =
       "escalate sandbox to danger-full-access: sync.sh installs plugins into ~/.dsh";
