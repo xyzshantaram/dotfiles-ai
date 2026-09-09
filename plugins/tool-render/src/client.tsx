@@ -179,6 +179,7 @@ var EXTENSION_LANGUAGE = {
 // ---- Platform modules: resolved by the shell loader seed at runtime. ----
 import react from "react";
 import { isBashGuardReason } from "./guard";
+import { ESCALATION_LABEL, escalationDetailOf } from "./escalation";
 import * as primitives from "@deepseek-ai/dsh-client-ui-primitives";
 var useState = react.useState;
 var useEffect = react.useEffect;
@@ -643,6 +644,11 @@ function renderToolRenderCard(options, approvalOpen) {
       // row type has no callId in scope, which simply marks it not jumpable.
       data-call-id={options.callId ?? undefined}
       data-escalated={options.escalated || undefined}
+      data-escalation-mode={
+        options.escalation !== null && options.escalation !== undefined
+          ? options.escalation.mode
+          : undefined
+      }
       data-guard-approval={options.guardApproval || undefined}
       data-question-pending={options.questionState === "pending" || undefined}
       data-question-answered={options.questionState === "answered" || undefined}
@@ -735,6 +741,7 @@ function renderToolRenderCard(options, approvalOpen) {
           callId={options.callId}
           useSession={options.useSession}
           useProjection={options.useProjection}
+          escalation={options.escalation}
         />
       ) : null}
     </div>
@@ -1061,16 +1068,26 @@ function ToolRenderApprovalBar(props) {
   // A bash-guard reason is deliberately EXCLUDED: it is a YAML payload, and
   // the guard banner already renders it in readable form on the same card, so
   // echoing the raw blob here would show the same fact twice — once as noise.
+  //
+  // When the row already carries the durable args-sourced escalation detail
+  // (props.escalation, BashRow), the strip renders NO reason of its own: an
+  // open approval pins the card open, so the expanded body above is already
+  // showing the same banner from the same helper. One rendering site means
+  // the open and settled states cannot differ — and cannot duplicate.
+  var argsEscalation =
+    props.escalation !== null && props.escalation !== undefined ? props.escalation : null;
   var pendingPayload =
     pending !== null && pending !== undefined ? pending.payload : undefined;
   var pendingReason =
     pendingPayload !== null && pendingPayload !== undefined ? pendingPayload.reason : undefined;
   var reasonText =
-    typeof pendingReason === "string" &&
-    pendingReason.trim() !== "" &&
-    !isBashGuardReason(pendingReason)
-      ? pendingReason
-      : null;
+    argsEscalation !== null
+      ? null
+      : typeof pendingReason === "string" &&
+          pendingReason.trim() !== "" &&
+          !isBashGuardReason(pendingReason)
+        ? pendingReason
+        : null;
   return (
     <div className="tool-render-approval-strip">
       {reasonText === null ? null : (
@@ -1181,6 +1198,31 @@ function ReadRow(props) {
 }
 
 // ---- Bash row (R3): highlighted command line, plain text output block. ----
+// The sandbox-escalation banner (owner, 2026-09-09): the label line reuses
+// the guard rewrite banner's label styling (`tool-render-cmd-label`, via
+// commandBlock's family) so the two "something happened to this call"
+// annotations read as one family. The mode rides the label line as its own
+// chip — it decides how far the sandbox widens, so it stays discoverable
+// without being jammed into the justification sentence — and the
+// justification below is prose, never the raw `escalate sandbox to <mode>:`
+// machine string. One helper serves the expanded body (settled, durable)
+// and the open approval strip, so the text cannot differ between states.
+function escalationBanner(detail) {
+  return (
+    <div className="tool-render-escalation">
+      <div className="tool-render-cmd-label">
+        {ESCALATION_LABEL}
+        <code
+          className="tool-render-escalation-mode"
+          title={"requested sandbox mode: " + detail.mode}
+        >
+          {detail.mode}
+        </code>
+      </div>
+      <div className="tool-render-escalation-reason">{detail.justification}</div>
+    </div>
+  );
+}
 function BashRow(props) {
   var expandedState = useState(false);
   var expanded = expandedState[0];
@@ -1204,6 +1246,10 @@ function BashRow(props) {
         ? firstLine(command)
         : "Bash";
   var escalated = escalatedOf(argsObj);
+  // The durable escalation detail: mode + justification read from the call's
+  // own args, so the banner survives settling and a page reload. The mode
+  // gate matches escalatedOf, so the banner and the card outline agree.
+  var escalation = escalationDetailOf(argsObj);
   // An approval raised by bash-guard marks the card in a different colour
   // from a sandbox escalation. Three sources, ORed together: an OPEN
   // approval in the live snapshot; the durable guarded-approvals
@@ -1235,8 +1281,14 @@ function BashRow(props) {
   var guardRewrite = guardRewriteOf(block, output);
   if (guardRewrite !== null) guardApproval = true;
   var body = null;
-  if (command !== undefined || (output !== null && output !== "")) {
+  if (escalation !== null || command !== undefined || (output !== null && output !== "")) {
     var inner = [];
+    // The escalation banner leads the body: WHY before WHAT before RESULT.
+    // It is args-sourced, so this same block renders while the approval is
+    // open (the card pins open) and after it settles — one code path.
+    if (escalation !== null) {
+      inner.push(escalationBanner(escalation));
+    }
     if (command !== undefined) {
       var commandBlock = function (label, text) {
         var commandHtml = highlightCode(text, "bash");
@@ -1291,6 +1343,7 @@ function BashRow(props) {
     title: "Bash",
     summary: summary,
     escalated: escalated,
+    escalation: escalation,
     guardApproval: guardApproval,
     state: state,
     expandable: body !== null,

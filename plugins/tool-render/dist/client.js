@@ -3406,6 +3406,30 @@ var client_default = `.tool-render-row {
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
+/* The sandbox-escalation banner (owner, 2026-09-09). The label line reuses
+   the guard rewrite banner's .tool-render-cmd-label styling, so the two
+   "something happened to this call" annotations read as one family. The
+   mode rides the label line as its own chip \u2014 it decides how far the
+   sandbox widens, so it stays discoverable without being jammed into the
+   justification sentence. The justification below is prose in the same
+   tertiary 12px/18px voice as the approval reason, never code. */
+.tool-render-escalation-mode {
+  font: inherit;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 0.25rem;
+  margin-left: 0.375rem;
+  padding: 0 0.25rem;
+}
+.tool-render-escalation-reason {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  margin: 0.125rem 0 0.25rem 0.25rem;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
 `;
 
 // node_modules/.pnpm/highlight.js@11.12.0/node_modules/highlight.js/es/languages/javascript.js
@@ -16048,6 +16072,41 @@ function isBashGuardReason(reason) {
   return typeof record.summary === "string";
 }
 
+// plugins/tool-render/src/escalation.ts
+var ESCALATION_LABEL = "agent requests sandbox access escalation";
+function pickString(value, keys) {
+  for (let i = 0; i < keys.length; i++) {
+    const v = value[keys[i]];
+    if (typeof v === "string" && v !== "") return v;
+  }
+  return void 0;
+}
+function splitEscalationReason(reason) {
+  if (typeof reason !== "string") return null;
+  const prefix = "escalate sandbox to ";
+  if (reason.indexOf(prefix) !== 0) return null;
+  const rest = reason.slice(prefix.length);
+  const colon = rest.indexOf(":");
+  if (colon === -1) return null;
+  const mode = rest.slice(0, colon).trim();
+  const justification = rest.slice(colon + 1).replace(/^\s+/, "");
+  if (mode === "" || /[\s:]/.test(mode)) return null;
+  if (justification === "") return null;
+  return { mode, justification };
+}
+function escalationDetailOf(args) {
+  if (args === null || typeof args !== "object" || Array.isArray(args)) return null;
+  const record = args;
+  const mode = pickString(record, ["sandbox_permissions"]);
+  if (mode !== "workspace-write" && mode !== "danger-full-access") return null;
+  const justification = pickString(record, ["justification"]);
+  if (justification === void 0 || justification.trim() === "") return null;
+  if (isBashGuardReason(justification)) return null;
+  const prefixed = splitEscalationReason(justification);
+  if (prefixed !== null && prefixed.mode === mode) return { mode, justification: prefixed.justification };
+  return { mode, justification };
+}
+
 // plugins/tool-render/src/client.tsx
 var primitives = __toESM(require("@deepseek-ai/dsh-client-ui-primitives"), 1);
 var languageModules = {
@@ -16288,10 +16347,10 @@ function relativizeToCwd(text, cwd) {
   return text;
 }
 function escalatedOf(args) {
-  var mode = args !== null && args !== void 0 ? pickString(args, ["sandbox_permissions"]) : void 0;
+  var mode = args !== null && args !== void 0 ? pickString2(args, ["sandbox_permissions"]) : void 0;
   return mode === "workspace-write" || mode === "danger-full-access";
 }
-function pickString(value, keys) {
+function pickString2(value, keys) {
   for (var i = 0; i < keys.length; i++) {
     var v = value[keys[i]];
     if (typeof v === "string" && v !== "") return v;
@@ -16403,6 +16462,7 @@ function renderToolRenderCard(options, approvalOpen) {
       className: "tool-render-card",
       "data-call-id": options.callId ?? void 0,
       "data-escalated": options.escalated || void 0,
+      "data-escalation-mode": options.escalation !== null && options.escalation !== void 0 ? options.escalation.mode : void 0,
       "data-guard-approval": options.guardApproval || void 0,
       "data-question-pending": options.questionState === "pending" || void 0,
       "data-question-answered": options.questionState === "answered" || void 0,
@@ -16458,7 +16518,8 @@ function renderToolRenderCard(options, approvalOpen) {
       {
         callId: options.callId,
         useSession: options.useSession,
-        useProjection: options.useProjection
+        useProjection: options.useProjection,
+        escalation: options.escalation
       }
     ) : null
   );
@@ -16667,9 +16728,10 @@ function ToolRenderApprovalBar(props) {
     return null;
   }
   var hasDraft = draft.trim() !== "";
+  var argsEscalation = props.escalation !== null && props.escalation !== void 0 ? props.escalation : null;
   var pendingPayload = pending !== null && pending !== void 0 ? pending.payload : void 0;
   var pendingReason = pendingPayload !== null && pendingPayload !== void 0 ? pendingPayload.reason : void 0;
-  var reasonText = typeof pendingReason === "string" && pendingReason.trim() !== "" && !isBashGuardReason(pendingReason) ? pendingReason : null;
+  var reasonText = argsEscalation !== null ? null : typeof pendingReason === "string" && pendingReason.trim() !== "" && !isBashGuardReason(pendingReason) ? pendingReason : null;
   return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-approval-strip" }, reasonText === null ? null : /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-approval-reason" }, reasonText), /* @__PURE__ */ import_react.default.createElement(
     "button",
     {
@@ -16726,7 +16788,7 @@ function ReadRow(props) {
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs(argsRawOf(block));
-  var path = args !== null ? pickString(args, ["path", "file_path"]) : void 0;
+  var path = args !== null ? pickString2(args, ["path", "file_path"]) : void 0;
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
@@ -16765,6 +16827,16 @@ function ReadRow(props) {
     inspect: props.inspect
   });
 }
+function escalationBanner(detail) {
+  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-escalation" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-cmd-label" }, ESCALATION_LABEL, /* @__PURE__ */ import_react.default.createElement(
+    "code",
+    {
+      className: "tool-render-escalation-mode",
+      title: "requested sandbox mode: " + detail.mode
+    },
+    detail.mode
+  )), /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-escalation-reason" }, detail.justification));
+}
 function BashRow(props) {
   var expandedState = useState(false);
   var expanded = expandedState[0];
@@ -16772,14 +16844,15 @@ function BashRow(props) {
   var block = props.block;
   var done = doneOf(block);
   var argsObj = parseArgs(argsRawOf(block));
-  var command = argsObj !== null ? pickString(argsObj, ["command"]) : void 0;
-  var description = argsObj !== null ? pickString(argsObj, ["description"]) : void 0;
+  var command = argsObj !== null ? pickString2(argsObj, ["command"]) : void 0;
+  var description = argsObj !== null ? pickString2(argsObj, ["description"]) : void 0;
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = bashErrorState(rowStateOf(block), output);
   var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
   var summary = description !== void 0 && description !== "" ? firstLine(description) : command !== void 0 ? firstLine(command) : "Bash";
   var escalated = escalatedOf(argsObj);
+  var escalation = escalationDetailOf(argsObj);
   var durableGuardApproval = useGuardedApprovals(props.useSession, props.useProjection);
   var guardApproval = props.useSession(function(snapshot) {
     var pending = snapshot !== null && snapshot !== void 0 ? snapshot.pending : void 0;
@@ -16800,8 +16873,11 @@ function BashRow(props) {
   var guardRewrite = guardRewriteOf(block, output);
   if (guardRewrite !== null) guardApproval = true;
   var body = null;
-  if (command !== void 0 || output !== null && output !== "") {
+  if (escalation !== null || command !== void 0 || output !== null && output !== "") {
     var inner = [];
+    if (escalation !== null) {
+      inner.push(escalationBanner(escalation));
+    }
     if (command !== void 0) {
       var commandBlock = function(label, text) {
         var commandHtml = highlightCode(text, "bash");
@@ -16848,6 +16924,7 @@ function BashRow(props) {
     title: "Bash",
     summary,
     escalated,
+    escalation,
     guardApproval,
     state,
     expandable: body !== null,
@@ -16926,7 +17003,7 @@ function readsOf(snapshot, path, beforeTime, cwd) {
     if (typeof beforeTime === "number" && time >= beforeTime) continue;
     var args = parseArgs(argsRawOf(block));
     if (args === null) continue;
-    var readPath = pickString(args, ["path", "file_path"]);
+    var readPath = pickString2(args, ["path", "file_path"]);
     if (readPath === void 0 || !matchesPath(readPath, path, cwd)) continue;
     var text = resultTextOf(block);
     if (text === null || text === "") continue;
@@ -17159,7 +17236,7 @@ function makeEditRow(toolTitle) {
     var errorText = done ? errorTextOf(block) : null;
     var state = rowStateOf(block);
     var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
-    var summaryPath = pickString(argsObject, ["path", "file_path"]);
+    var summaryPath = pickString2(argsObject, ["path", "file_path"]);
     var summary = summaryPath !== void 0 ? relativizeToCwd(firstLine(summaryPath), effectiveCwd) : toolTitle;
     var body = null;
     if (state !== "error" && diffs !== null && diffs.length > 0) {
@@ -17406,7 +17483,7 @@ function WriteRow(props) {
   var args = parseArgs(argsRawOf(block));
   var argsObject = args !== null ? args : {};
   var effectiveCwd = resolveEffectiveCwd(props);
-  var path = pickString(argsObject, ["file_path", "path"]);
+  var path = pickString2(argsObject, ["file_path", "path"]);
   var newText = typeof argsObject.content === "string" ? argsObject.content : "";
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
@@ -17944,7 +18021,7 @@ function SubagentRow(props) {
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs(argsRawOf(block));
-  var description = args !== null ? pickString(args, ["description"]) : void 0;
+  var description = args !== null ? pickString2(args, ["description"]) : void 0;
   var prompt = subagentPrompt(args);
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
@@ -17991,7 +18068,7 @@ function JobOutputRow(props) {
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs(argsRawOf(block));
-  var jobId = args !== null ? pickString(args, ["job_id"]) : void 0;
+  var jobId = args !== null ? pickString2(args, ["job_id"]) : void 0;
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
@@ -18034,9 +18111,9 @@ function PackageRow(props) {
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs(argsRawOf(block));
-  var action = args !== null ? pickString(args, ["action"]) : void 0;
-  var ecosystem = args !== null ? pickString(args, ["ecosystem"]) : void 0;
-  var target = args !== null ? pickString(args, ["packageName", "taskName"]) : void 0;
+  var action = args !== null ? pickString2(args, ["action"]) : void 0;
+  var ecosystem = args !== null ? pickString2(args, ["ecosystem"]) : void 0;
+  var target = args !== null ? pickString2(args, ["packageName", "taskName"]) : void 0;
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
@@ -18101,7 +18178,7 @@ function InterruptAgentRow(props) {
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs(argsRawOf(block));
-  var agentId = args !== null ? pickString(args, ["agent_id"]) : void 0;
+  var agentId = args !== null ? pickString2(args, ["agent_id"]) : void 0;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
   var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
@@ -18353,7 +18430,7 @@ function SkillRow(props) {
     );
   }
   var args = parseArgs(argsRawOf(block));
-  var skillName = args !== null ? pickString(args, ["name"]) : void 0;
+  var skillName = args !== null ? pickString2(args, ["name"]) : void 0;
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
@@ -18434,7 +18511,7 @@ function ReadImageRow(props) {
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs(argsRawOf(block));
-  var path = args !== null ? pickString(args, ["file_path"]) : void 0;
+  var path = args !== null ? pickString2(args, ["file_path"]) : void 0;
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
@@ -18477,8 +18554,8 @@ function SeeRow(props) {
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs(argsRawOf(block));
-  var question = args !== null ? pickString(args, ["question"]) : void 0;
-  var imagePath = args !== null ? pickString(args, ["image"]) : void 0;
+  var question = args !== null ? pickString2(args, ["question"]) : void 0;
+  var imagePath = args !== null ? pickString2(args, ["image"]) : void 0;
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
@@ -18585,7 +18662,7 @@ function WebFetchRow(props) {
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs(argsRawOf(block));
-  var url = args !== null ? pickString(args, ["url"]) : void 0;
+  var url = args !== null ? pickString2(args, ["url"]) : void 0;
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
