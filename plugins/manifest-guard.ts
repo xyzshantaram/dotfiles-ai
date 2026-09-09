@@ -78,10 +78,30 @@ const MANIFEST_NAMES = new Set([
   "bun.lockb",
 ]);
 
+// The message must leave a LEGAL MOVE, or it is a dead end that invites the
+// guard to be routed around. Two facts made the old ending unusable: the
+// package tool changes dependencies in an EXISTING manifest but cannot
+// scaffold a new one, and a subagent has no channel through which to ask a
+// user at all. An agent that had to create a manifest was left with nothing
+// legal to do, and on 2026-09-05 one routed around the guard with a heredoc.
+//
+// The script route restores a legal move: an agent can always write a file and
+// name it, which turns "please do this for me" into one reviewable, runnable
+// artifact. "Ask the user to run the change" named an action without producing
+// anything to act on, leaving the human to reconstruct the edit themselves
+// (owner, 2026-09-09: one of those is ambiguous).
+//
+// The limit rides in the SAME sentence as the route, deliberately. Stated
+// apart, an agent carries away the permission and drops the constraint, and
+// the acknowledged risk here is exactly that: hand-editing dependency versions
+// under cover of a carve-out meant for structural edits.
 const DENY_MESSAGE = (name: string): string =>
   `Direct edits to ${name} are denied. ` +
-  "Use the package tool for dependency changes. " +
-  "Ask the user to run the change when the tool cannot.";
+  "Use the package tool for dependency changes: it resolves the version for you. " +
+  "For a STRUCTURAL change the package tool cannot make — scaffolding a new " +
+  "manifest, or setting a field that is not a dependency — write a script that " +
+  "performs the edit and tell the user to run it. Do not ask the user to work " +
+  "out the edit themselves, and do not hand-edit dependency versions under this route.";
 
 function isManifestPath(displayPath: string): boolean {
   const name = basename(displayPath);

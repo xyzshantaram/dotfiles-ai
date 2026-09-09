@@ -73,6 +73,13 @@
   told to do the new task first.
 * NEVER EVER install dependencies manually by editing Cargo.toml/package.json/other package
   manager configuration files. ALWAYS use the relevant command (cargo add / (p)npm add) instead.
+  This prohibition covers dependency VERSIONS and has no exception: a version you typed by hand
+  is a version nothing resolved. For a STRUCTURAL change no such command can make — scaffolding
+  a new manifest, or setting a field that is not a dependency — write a script that performs the
+  edit and tell the user to run it. Do not ask the user to work out the edit themselves: a
+  request they have to reconstruct is not a handoff, and a subagent cannot ask anyone at all.
+  The script route exists for structure only; reaching for it to set a dependency version is
+  the misreading it must not become.
 * When writing CSS, unless the project already uses them, NEVER use camelCase class and id names.
   kebab-case only.
 * If a linter like cargo clippy or pnpm lint is available and you are doing any long-running or
