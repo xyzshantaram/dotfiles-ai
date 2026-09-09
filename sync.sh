@@ -264,6 +264,19 @@ step_write_web_patch() {
 - id: ui-message-feedback
   disabled: true
 
+# ask_user_question answers inline on its tool call card (#38). The shipped
+# ui-user-questions row is the composer takeover (dsh-web-app inserts it);
+# tool-render shadows the ask_user_question toolview and answers there, so
+# the takeover must not also claim the composer seat. A later patch layer
+# overrides an earlier row by id, so this disable holds across dsh
+# reinstalls. This MUST be a top-level override row, NOT a child of the
+# insert list: dsh-web-app already owns that id, and a second one kills
+# boot with "duplicate loader entry id: ui-user-questions". Plan review
+# dies with it and is already dead anyway: dsh-web-app's own patch disables
+# plan-mode, so nothing emits plan-review intents in this GUI.
+- id: ui-user-questions
+  disabled: true
+
 PATCH
 }
 

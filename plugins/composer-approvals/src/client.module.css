@@ -120,3 +120,20 @@
   border-color: var(--dsw-alias-state-danger-primary, #dc2626);
   color: #fff;
 }
+/* Pending-question rings around the composer card (#38). While a question
+   waits, the composer card carries a white band; answered batches leave a
+   duller band instead of the mark vanishing. One band step per question
+   (widths set inline as --dsh-q-bright/--dsh-q-dull, capped at four steps
+   each), so the session's active-questions state reads at a glance. An
+   outline cannot stack, hence box-shadow: the bright band paints inside
+   the dull one, and the card's own shadow rides underneath so disabling
+   the rings (attribute absent) changes nothing. The doubled attribute
+   outranks the card's own single-class shadow rule regardless of style
+   tag order. The composer stays a normal editable input; these are
+   additive styling only. */
+[data-composer-card][data-dsh-qrings] {
+  box-shadow:
+    0 0 0 var(--dsh-q-bright, 0px) #fff,
+    0 0 0 calc(var(--dsh-q-bright, 0px) + var(--dsh-q-dull, 0px)) color-mix(in srgb, #fff 45%, transparent),
+    var(--dsh-shadow-lv2, 0 0 0 #0000);
+}
