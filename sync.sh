@@ -42,7 +42,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#243e67e9a0c2c39e06122b2e953ab92cdf40cc66}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#a00cfe9b68a475770c8c3f5b4e4d113f7fddd970}"
 
 # Git-hosted specs whose build scripts pnpm must be allowed to run. pnpm 10+
 # blocks lifecycle scripts (prepare/postinstall) unless the exact resolved
@@ -93,6 +93,22 @@ step_sync_agents_md() {
 }
 
 step_sync_guard_rules() {
+	# MIRROR, not copy (#128). bash-guard reads EVERY *.json in this directory
+	# as a rule file, and re-reads the directory on every evaluation, so a file
+	# the repo has stopped shipping keeps producing "skipping malformed rule
+	# file" on every bash call -- 868 warnings in six hours, drowning the
+	# journal where a real defect was hiding. `cp -r` never deletes, so moving
+	# preset-drift.json out of guards/ did NOT stop the warning by itself: the
+	# stale runtime copy survived every subsequent sync.
+	#
+	# Deleting first is safe because nothing writes here at runtime: bash-guard
+	# only resolves guardsDir and reads it (plugins/bash-guard.ts:1408). If that
+	# ever changes, this must become a targeted prune instead of a wipe.
+	if [ -z "${DSH_HOME:-}" ]; then
+		echo "  ERROR: DSH_HOME is unset; refusing to mirror guards." >&2
+		return 1
+	fi
+	rm -rf "$DSH_HOME/plugins/guards"
 	mkdir -p "$DSH_HOME/plugins/guards"
 	cp -r "$HERE/guards/." "$DSH_HOME/plugins/guards/"
 }
@@ -122,8 +138,8 @@ step_write_web_patch() {
       name: $HERE/plugins/manifest-guard.js
     - id: package-tool
       name: $HERE/plugins/package-tool.js
-    - id: skill-gate
-      name: $HERE/plugins/skill-gate.js
+    - id: context-guard
+      name: $HERE/plugins/context-guard.js
       config:
         # search/recall (dsh-compaction-basic, the dsh-compaction-instant
         # fork below) are superseded by resume_search/resume_read
@@ -149,7 +165,7 @@ step_write_web_patch() {
       name: $HERE/plugins/profiles.js
     - id: resume-command
       name: $HERE/plugins/resume.js
-    # The cordis_* tools, gated behind the two cordis skills via skill-gate.
+    # The cordis_* tools, gated behind the two cordis skills via context-guard.
     - id: tool-cordis
       name: '@deepseek-ai/dsh-tool-cordis'
     - id: compaction-instant
@@ -276,6 +292,31 @@ step_write_web_patch() {
 # plan-mode, so nothing emits plan-review intents in this GUI.
 - id: ui-user-questions
   disabled: true
+
+# Code Mode for every agent in this process (#120). The dsh-tools row owns
+# the process-wide presentation default; "mode: both" here registers the
+# shipped tools:sdk section GLOBALLY — native schemas stay, and run_code
+# plus the generated SDK are added for every agent, aidos included.
+#
+# This default MUST live here, NOT as a tool-presentation row on any agent
+# preset: presentAs() registers its sdkSection() on the AGENT scope, and the
+# context-guard plugin shadows tools:sdk on that same scope with the
+# compact view — a preset row plus that shadow puts two same-named sections
+# in ONE layer, which throws at mount. The preset-row path is dead for this
+# design; do not "fix" this by adding the preset row.
+#
+# This wholesale-replaces dsh-web-app's "mode: !!js
+# process.env.DSH_TOOLS_MODE" seam for the web profile: the env override no
+# longer has an effect here. run_code becomes available to every agent in
+# the process, including subagents — acceptable because its bindings are
+# built from each agent's own scoped view, so a masked tool stays uncallable
+# inside a program. This MUST be a top-level override row, NOT a child of the
+# insert list: dsh-base already owns that id, and a second one kills boot
+# with "duplicate loader entry id: tools".
+- id: tools
+  name: '@deepseek-ai/dsh-tools'
+  config:
+    mode: both
 
 PATCH
 }
