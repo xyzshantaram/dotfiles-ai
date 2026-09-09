@@ -24,7 +24,7 @@ var MANIFEST_NAMES = /* @__PURE__ */ new Set([
   "gemfile.lock",
   "bun.lockb"
 ]);
-var DENY_MESSAGE = (name2) => `Direct edits to ${name2} are denied. Use the package tool for dependency changes. Ask the user to run the change when the tool cannot.`;
+var DENY_MESSAGE = (name2) => `Direct edits to ${name2} are denied. Use the package tool for dependency changes: it resolves the version for you. For a STRUCTURAL change the package tool cannot make \u2014 scaffolding a new manifest, or setting a field that is not a dependency \u2014 write a script that performs the edit and tell the user to run it. Do not ask the user to work out the edit themselves, and do not hand-edit dependency versions under this route.`;
 function isManifestPath(displayPath) {
   const name2 = basename(displayPath);
   return MANIFEST_NAMES.has(name2.toLowerCase());

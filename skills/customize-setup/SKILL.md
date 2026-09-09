@@ -91,5 +91,12 @@ These are three different things. Do not mix them.
 3. Wire the new piece into the bundle: add the skill under `skills/`, the
    plugin source under `plugins/` plus its `build.mjs` entry, the guard under
    `guards/`, or the preset under the agent-presets tree.
+   A new plugin usually needs a `package.json`, and manifest-guard denies
+   writing one with the fs tools. The package tool cannot help either — it
+   changes dependencies in an existing manifest and cannot scaffold a new one.
+   So write a short script that creates the manifest and tell the user to run
+   it; that is the supported route, and it is the only one available to a
+   subagent, which cannot ask a user anything. Dependency VERSIONS are not
+   covered by this: they go through the package tool, which resolves them.
 4. Re-run `sync.sh` so the live `$DSH_HOME` matches the bundle, then restart
    `dsh web` for host-plane changes.
