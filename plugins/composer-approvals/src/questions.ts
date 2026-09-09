@@ -77,6 +77,24 @@ export interface ComposerRingFade {
 /** The pristine fade state: nothing answered, nothing dropped. */
 export const INITIAL_RING_FADE: ComposerRingFade = { faded: 0, zeroed: null };
 
+/**
+ * The fade state a freshly mounted composer must start from.
+ *
+ * Seeding matters because the fade means "your answer registered". Anything
+ * answered before this mount was confirmed in the session that answered it,
+ * so replaying its band on open is a confirmation of nothing. Starting from
+ * INITIAL_RING_FADE did exactly that: opening a session with answered
+ * questions in scrollback painted a band that had never been on screen and
+ * animated it away (owner, 2026-09-09).
+ *
+ * Only the ANSWERED backlog is pre-faded. A question still pending at mount
+ * is untouched — bright width reads the live pending count, so a question
+ * waiting on the user is still marked the instant the session opens.
+ */
+export function initialRingFade(answeredAtMount: number): ComposerRingFade {
+  return { faded: Math.max(0, answeredAtMount), zeroed: null };
+}
+
 /** What the client half should paint and which timer to arm, if any. */
 export interface ComposerRingPaint {
   /** Bright width: a pure function of the LIVE pending count — never faded. */

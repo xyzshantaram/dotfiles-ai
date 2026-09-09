@@ -25,7 +25,7 @@ import * as runtime from "@deepseek-ai/dsh-client-runtime/client";
 import { injectStyle } from "../../shared/client-util";
 import { PluginModal } from "../../shared/plugin-modal";
 import { composerRingPaint, questionModalRowsOf, ringInputsOf } from "./questions";
-import { INITIAL_RING_FADE, RING_FADE_HOLD_MS, RING_FADE_MS } from "./questions";
+import { initialRingFade, RING_FADE_HOLD_MS, RING_FADE_MS } from "./questions";
 import type { QuestionModalRow } from "./questions";
 import localCss from "./client.module.css";
 
@@ -366,7 +366,20 @@ function makeIndicator() {
     // zero while the CSS transition animates it out. Pending counts never
     // enter this state — the bright width below is a pure function of the
     // live pending set, so no timer can ever touch a waiting question.
-    var fadeState = react.useState(INITIAL_RING_FADE);
+    //
+    // SEEDED FROM THE FIRST SNAPSHOT, not from a constant. Questions answered
+    // before this mount are history: their bands were already shown and faded
+    // in whatever session answered them. Starting at faded: 0 would treat the
+    // whole backlog as freshly answered, so merely OPENING a session painted a
+    // band nobody had seen and animated it away — the fade replaying history
+    // instead of confirming an answer (owner, 2026-09-09). Seeding marks that
+    // backlog already faded, so the animation can only ever be caused by an
+    // answer given while the composer is mounted. A question still PENDING at
+    // mount is untouched by this: bright width reads the live pending set, so
+    // an unanswered question is still marked the moment the session opens.
+    var fadeState = react.useState(function () {
+      return initialRingFade(questionInputs.answered);
+    });
     var fade = fadeState[0];
     var setFade = fadeState[1];
     var paint = composerRingPaint(questionInputs.pending, questionInputs.answered, fade);

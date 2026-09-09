@@ -6,6 +6,7 @@ import { pendingQuestionForCall, ringWidths } from "../../tool-render/src/questi
 import {
   INITIAL_RING_FADE,
   composerRingPaint,
+  initialRingFade,
   questionModalRowsOf,
   ringInputsOf,
   ringWidthsOf,
@@ -83,6 +84,33 @@ describe("ringInputsOf / ringWidthsOf", () => {
       answered: 0,
     });
     expect(ringWidthsOf(snapshot([], []))).toEqual({ bright: 0, dull: 0 });
+  });
+});
+
+describe("initialRingFade (#106: opening a session must not replay history)", () => {
+  it("pre-fades the answered backlog, so a fresh mount arms no timer and paints no band", () => {
+    // The reported symptom: the animation played on every session open. A
+    // composer mounting into scrollback with three already-answered questions
+    // must be indistinguishable from one with none — no dull band, no timer.
+    const paint = composerRingPaint(0, 3, initialRingFade(3));
+    expect(paint).toEqual({ bright: 0, dull: 0, ornament: false, next: null });
+  });
+
+  it("still marks questions that are PENDING at mount", () => {
+    // Seeding must not silence a live ask. Two waiting, five already answered:
+    // the bright ring is painted immediately and nothing fades.
+    const paint = composerRingPaint(2, 5, initialRingFade(5));
+    expect(paint.bright).toBe(5);
+    expect(paint.dull).toBe(0);
+    expect(paint.next).toBeNull();
+  });
+
+  it("animates an answer given AFTER mount, which is the only thing that should animate", () => {
+    // Mounted with two answered; a third is answered live. Exactly one
+    // contribution is outstanding, so the hold-then-fade cycle arms.
+    const paint = composerRingPaint(0, 3, initialRingFade(2));
+    expect(paint.next).toBe("hold");
+    expect(paint.dull).toBeGreaterThan(0);
   });
 });
 
