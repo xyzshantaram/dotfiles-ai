@@ -10,7 +10,7 @@ tools-gated: [agent_session_search, agent_session_read]
 This skill gates two host tools from the `dsh-session-search` plugin
 (`github:Tieboyh/dsh-session-search`): `agent_session_search` and
 `agent_session_read`. Both stay hidden from the model until this skill
-loads. See `plugins/skill-gate.ts` for the gating mechanism.
+loads. See `plugins/context-guard.ts` for the gating mechanism.
 
 ## What the tools do
 

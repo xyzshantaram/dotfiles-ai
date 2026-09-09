@@ -9,7 +9,7 @@ tools-gated:
 # nostr
 
 This skill gates the nostrbook MCP server (`@nostrbook/mcp`). Its tools stay
-hidden from the model until this skill loads. See `plugins/skill-gate.ts` for
+hidden from the model until this skill loads. See `plugins/context-guard.ts` for
 the gating mechanism.
 
 ## What the tools do

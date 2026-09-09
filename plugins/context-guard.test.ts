@@ -1,5 +1,5 @@
 /**
- * Tests for skill-gate's single-seam enforcement (#98).
+ * Tests for context-guard's single-seam enforcement (#98).
  *
  * The plugin hides gated tools with ONE mechanism — the agent-scoped
  * `tools.restrict({ deny })` mask, applied at `agent/session-start` (before
@@ -24,26 +24,39 @@
  * fake an `Agent` as a plain object with an id and a scope-faithful tools
  * handle, and call the exported `apply(ctx, config)` directly.
  */
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { apply, Config } from "./skill-gate";
+import { apply, Config, name, renderCompactSdk } from "./context-guard";
 
 type Handler = (...args: unknown[]) => unknown;
 
 /** Minimal fake cordis context: records handlers, no-ops the logger. */
-function fakeCtx() {
+function fakeCtx(tools?: unknown) {
   const handlers = new Map<string, Handler[]>();
+  const errors: string[] = [];
   return {
     handlers,
+    errors,
     logger: {
       warn: () => {},
-      error: () => {},
+      error: (message?: unknown) => {
+        errors.push(String(message));
+      },
     },
     on(event: string, handler: Handler) {
       const list = handlers.get(event) ?? [];
       list.push(handler);
       handlers.set(event, list);
+    },
+    // The lookup tool registers at mount; tests that do not care capture
+    // into the void, tests that do pass their own handle.
+    tools: tools ?? {
+      register: () => () => {},
+      schemas: () => [],
+      restrict: () => () => {},
+      get: () => undefined,
     },
   };
 }
@@ -146,7 +159,7 @@ function invalidate(ctx: ReturnType<typeof fakeCtx>) {
   ctx.handlers.get("skills/change")![0]!();
 }
 
-const tmpRoot = join("/tmp", "dsh", "skill-gate-test");
+const tmpRoot = join("/tmp", "dsh", "context-guard-test");
 
 afterEach(() => {
   rmSync(tmpRoot, { recursive: true, force: true });
@@ -174,7 +187,7 @@ function writeGatedSkillBlock(dir: string, skillName: string, tools: string[]): 
   return dir;
 }
 
-describe("skill-gate alwaysDeny", () => {
+describe("context-guard alwaysDeny", () => {
   it("denies a fresh depth-0 agent even when no skill gates the tool", () => {
     const reg = makeRegistry(["foo", "bar"]);
     const ctx = fakeCtx();
@@ -239,7 +252,7 @@ describe("skill-gate alwaysDeny", () => {
   });
 });
 
-describe("skill-gate first prompt (#98)", () => {
+describe("context-guard first prompt (#98)", () => {
   it("hides a gated exact name AND a gated prefix pattern from both surfaces before any pre-step", () => {
     const reg = makeRegistry(["secret_exact", "mcp__acme__one", "mcp__acme__two", "plain"]);
     const dir = join(tmpRoot, "first");
@@ -327,7 +340,7 @@ describe("skill-gate first prompt (#98)", () => {
   });
 });
 
-describe("skill-gate slash-command invocation", () => {
+describe("context-guard slash-command invocation", () => {
   /** One pre-step decision carrying a slash-invoked skill body, shaped the
    * way dsh-tool-skill stamps it. */
   function slashDecision(skillName: string) {
@@ -384,7 +397,7 @@ describe("skill-gate slash-command invocation", () => {
   });
 });
 
-describe("skill-gate compaction survival (#89 follow-up)", () => {
+describe("context-guard compaction survival (#89 follow-up)", () => {
   it("a skill's gated tools survive compaction, and a skill never loaded stays denied", async () => {
     const reg = makeRegistry(["foo", "bar"]);
     const dir = writeGatedSkill(join(tmpRoot, "keeper"), "keeper", ["foo"]);
@@ -437,11 +450,11 @@ describe("skill-gate compaction survival (#89 follow-up)", () => {
   });
 });
 
-describe("skill-gate first post-compaction prompt (#102)", () => {
+describe("context-guard first post-compaction prompt (#102)", () => {
   it("hides gated tools on BOTH surfaces when assembly follows compaction with NO intervening pre-step", async () => {
     // The window #98's sequencing leaves behind: clearAll() on
     // compaction/start lifts every mask, and each step assembles BEFORE its
-    // pre-step waterfall (see the pre-step comment in skill-gate.ts), so the
+    // pre-step waterfall (see the pre-step comment in context-guard.ts), so the
     // first post-compaction assembly renders with no mask in force. Against
     // the current code this assembly ships the gated tools on both surfaces.
     const reg = makeRegistry(["secret_exact", "mcp__acme__one", "plain"]);
@@ -491,5 +504,393 @@ describe("skill-gate first post-compaction prompt (#102)", () => {
     const asm = assemble(reg, agent as { id: string });
     expect(asm.tools).toEqual(["bar", "foo"]);
     expect(asm.sdk).toEqual(["bar", "foo"]);
+  });
+});
+
+describe("context-guard rename parity: every shipped gate still masks", () => {
+  // The rename (skill-gate -> context-guard) is mechanical and
+  // behaviour-identical; its main risk is silently dropping a gate. This
+  // block proves otherwise with the REAL shipped frontmatter, not synthetic
+  // skills: it copies the six gating SKILL.md files out of the repo's own
+  // skills/ directory (covering all three tools-gated forms — inline array,
+  // bare block list, and the multi-line flow array the
+  // cordis-plugin-development skill uses) and asserts each gate hides its
+  // tools before its skill loads and restores them after.
+  const repoSkills = join(fileURLToPath(new URL(".", import.meta.url)), "..", "skills");
+  const gatedSkills = [
+    "util",
+    "session-search",
+    "resume",
+    "nostr",
+    "easyeda",
+    "editing-cordis-compositions",
+    "cordis-plugin-development",
+  ];
+  const expectedHidden: Record<string, string[]> = {
+    util: ["time", "regex", "markdown", "encoding"],
+    "session-search": ["agent_session_search", "agent_session_read"],
+    resume: ["resume_search", "resume_read"],
+    nostr: ["mcp__nostrbook__read_nip", "mcp__nostrbook__read_kind"],
+    easyeda: ["mcp__easyeda__get_board", "mcp__easyeda__list_layers"],
+    "editing-cordis-compositions": [
+      "cordis_inspect_list",
+      "cordis_inspect_query",
+      "cordis_inspect_self",
+    ],
+    "cordis-plugin-development": [
+      "cordis_inspect_list",
+      "cordis_inspect_query",
+      "cordis_inspect_self",
+      "cordis_define",
+      "cordis_run",
+      "cordis_stop",
+      "cordis_undefine",
+    ],
+  };
+
+  function copyRealSkills(dir: string): string {
+    for (const skillName of gatedSkills) {
+      const bundle = join(dir, skillName);
+      mkdirSync(bundle, { recursive: true });
+      copyFileSync(join(repoSkills, skillName, "SKILL.md"), join(bundle, "SKILL.md"));
+    }
+    return dir;
+  }
+
+  it("hides every shipped gate's tools on both surfaces before any skill loads", () => {
+    const allGated = [...new Set(Object.values(expectedHidden).flat())];
+    const reg = makeRegistry([...allGated, "plain"]);
+    const dir = copyRealSkills(join(tmpRoot, "parity-real"));
+    const ctx = fakeCtx();
+    apply(ctx as never, { skillDirs: [dir] });
+    invalidate(ctx);
+    const { agent } = fakeAgent("parity-stranger", reg);
+    fireSessionStart(ctx, agent);
+    const asm = assemble(reg, agent as { id: string });
+    expect(asm.tools).toEqual(["plain"]);
+    expect(asm.sdk).toEqual(["plain"]);
+  });
+
+  it("restores each gate's tools after its own skill loads, and only those", async () => {
+    const allGated = [...new Set(Object.values(expectedHidden).flat())];
+    const reg = makeRegistry([...allGated, "plain"]);
+    const dir = copyRealSkills(join(tmpRoot, "parity-unlock"));
+    const ctx = fakeCtx();
+    apply(ctx as never, { skillDirs: [dir] });
+    invalidate(ctx);
+    const { agent } = fakeAgent("parity-loader", reg);
+    fireSessionStart(ctx, agent);
+
+    // Each skill unlocks exactly its own tools; everything else stays masked.
+    for (const skillName of gatedSkills) {
+      await fireSkillLoad(ctx, agent, skillName);
+      await firePreStep(ctx, agent);
+      const visible = reg.visible((agent as { id: string }).id);
+      for (const tool of expectedHidden[skillName]!) {
+        expect(visible).toContain(tool);
+      }
+    }
+    expect(reg.visible((agent as { id: string }).id).sort()).toEqual(
+      [...allGated, "plain"].sort(),
+    );
+  });
+});
+
+type SdkSchema = { name: string; description: string; parameters: unknown; output: unknown };
+
+/**
+ * Fake agent carrying the SDK surface the compact section reads: scoped
+ * sdkSchemas/modeFor/get plus a per-agent systemPrompt section table that
+ * throws the upstream duplicate error verbatim.
+ */
+function makeSdkAgent(
+  id: string,
+  opts: {
+    schemas: SdkSchema[];
+    mode?: string;
+    depth?: number;
+    preseed?: Array<{ name: string; order: number; text: unknown }>;
+  },
+) {
+  const sections: Array<{ name: string; order: number; text: unknown }> = [...(opts.preseed ?? [])];
+  const tools = {
+    register: () => () => {},
+    schemas: () => [],
+    restrict: () => () => {},
+    get: () => undefined,
+    sdkSchemas: (_scope?: unknown) => opts.schemas.map((s) => ({ ...s })),
+    modeFor: (_scope?: unknown) => opts.mode ?? "both",
+  };
+  const agent = {
+    id,
+    ...(opts.depth ? { options: { subagentDepth: opts.depth } } : {}),
+    ctx: {
+      tools,
+      systemPrompt: {
+        section: (s: { name: string; order: number; text: unknown }) => {
+          if (sections.some((e) => e.name === s.name)) {
+            throw new Error(`prompt section "${s.name}" is already registered in this scope`);
+          }
+          sections.push(s);
+          return () => {};
+        },
+      },
+    },
+  };
+  return { agent: agent as never, sections, tools };
+}
+
+/** Fake host tools handle for the lookup tests: global sees all, scoped hides masked. */
+function makeLookupTools(defs: SdkSchema[], visibleNames: Set<string>) {
+  const registered: unknown[] = [];
+  // Production get() returns full definitions (output wrapped in {schema});
+  // sdkSchemas() returns bare schemas. The fakes store bare schemas and wrap
+  // on the get() path, exactly like the two upstream projections.
+  const toDefinition = (def: SdkSchema) => ({ ...def, output: { schema: def.output } });
+  const tools = {
+    registered,
+    register: (def: unknown) => {
+      registered.push(def);
+      return () => {};
+    },
+    schemas: () => [],
+    restrict: () => () => {},
+    get: (name: string, scope?: unknown) => {
+      const def = defs.find((d) => d.name === name);
+      if (!def) return undefined;
+      if (scope === undefined) return toDefinition(def);
+      return visibleNames.has(name) ? toDefinition(def) : undefined;
+    },
+  };
+  return tools;
+}
+
+type LookupDef = {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+  output: { schema: unknown };
+  execute: (args: { name: string }, exec: { agent?: unknown }) => Promise<string>;
+};
+
+function lookupDef(tools: { registered: unknown[] }): LookupDef {
+  const def = (tools.registered as LookupDef[]).find((d) => d.name === "schema_lookup");
+  if (!def) throw new Error("schema_lookup was not registered at apply");
+  return def;
+}
+
+describe("context-guard compact tools:sdk section", () => {
+  const deep: SdkSchema = {
+    name: "deep_tool",
+    description: "A tool with a deep output.",
+    parameters: { type: "object", properties: {} },
+    output: { type: "object", properties: { item: { type: "object", properties: { id: { type: "string" } } } } },
+  };
+  const shallow: SdkSchema = {
+    name: "shallow_tool",
+    description: "A tool with a shallow output.",
+    parameters: { type: "object", properties: {} },
+    output: { type: "string" },
+  };
+
+  it("registers an agent-scoped tools:sdk shadow rendering the compact view", () => {
+    const ctx = fakeCtx();
+    apply(ctx as never, {});
+    const { agent, sections } = makeSdkAgent("compact-one", { schemas: [deep, shallow] });
+    fireSessionStart(ctx, agent);
+    expect(sections.length).toBe(1);
+    expect(sections[0]!.name).toBe("tools:sdk");
+    expect(sections[0]!.order).toBe(150);
+    const text = (sections[0]!.text as (scope: unknown) => string)({});
+    // Calling convention opens the section, verbatim from the shipped SDK.
+    expect(text.startsWith("## Writing code for run_code")).toBe(true);
+    // Deep shapes collapse to a named reference the lookup expands...
+    expect(text).toContain("deep_tool: DeepToolOutput;");
+    expect(text).toContain('type DeepToolOutput = unknown; // full shape: schema_lookup({ name: "deep_tool" })');
+    // ...shallow shapes stay inline, and the full args map is gone.
+    expect(text).toContain("shallow_tool: string;");
+    expect(text).not.toContain("interface ToolArgsMap");
+    // The derivation rule states the exotic-name case explicitly.
+    expect(text).toContain('`tools["my-tool"](args)`');
+    expect(text).toContain("the argument type IS the native");
+    expect(text).toContain("schema_lookup");
+  });
+
+  it("matches the shipped calling convention verbatim", async () => {
+    const { renderToolsSdk } = await import("@deepseek-ai/dsh-tools");
+    const shipped = renderToolsSdk([]);
+    const instructions = shipped.slice(0, shipped.indexOf("```ts")).trimEnd();
+    const ctx = fakeCtx();
+    apply(ctx as never, {});
+    const { agent, sections } = makeSdkAgent("compact-verbatim", { schemas: [shallow] });
+    fireSessionStart(ctx, agent);
+    const text = (sections[0]!.text as (scope: unknown) => string)({});
+    expect(text.startsWith(instructions)).toBe(true);
+  });
+
+  it("renders empty when the effective mode is not both", () => {
+    const ctx = fakeCtx();
+    apply(ctx as never, {});
+    const { agent, sections } = makeSdkAgent("compact-native", { schemas: [shallow], mode: "native" });
+    fireSessionStart(ctx, agent);
+    expect(sections.length).toBe(1);
+    expect((sections[0]!.text as (scope: unknown) => string)({})).toBe("");
+  });
+
+  it("defers to a preset-owned section on duplicate instead of throwing", () => {
+    const ctx = fakeCtx();
+    apply(ctx as never, {});
+    const preset = { name: "tools:sdk", order: 150, text: "preset-full-sdk" };
+    const { agent, sections } = makeSdkAgent("compact-dupe", { schemas: [shallow], preseed: [preset] });
+    fireSessionStart(ctx, agent);
+    // No throw, and the preset's section stands untouched.
+    expect(sections.length).toBe(1);
+    expect(sections[0]!.text).toBe("preset-full-sdk");
+    // The deferral is silent: a duplicate is the expected preset-owned case,
+    // not a fault worth journaling every session start.
+    expect(ctx.errors).toEqual([]);
+  });
+
+  it("mounts under the context-guard name", () => {
+    // The composition row addresses the file, but the registry name is what
+    // the loader reports: a stale "skill-gate" here would mount a ghost row.
+    expect(name).toBe("context-guard");
+  });
+
+  it("registers once per agent across session start and pre-steps", async () => {
+    const ctx = fakeCtx();
+    apply(ctx as never, {});
+    const { agent, sections } = makeSdkAgent("compact-once", { schemas: [shallow] });
+    fireSessionStart(ctx, agent);
+    await firePreStep(ctx, agent);
+    await firePreStep(ctx, agent);
+    expect(sections.length).toBe(1);
+  });
+
+  it("adds no system-prompt/assemble listener", () => {
+    const ctx = fakeCtx();
+    apply(ctx as never, {});
+    expect(ctx.handlers.has("system-prompt/assemble")).toBe(false);
+  });
+
+  it("renderCompactSdk sorts members by name", () => {
+    const out = renderCompactSdk([
+      { name: "zeta", output: { type: "string" } },
+      { name: "alpha", output: { type: "string" } },
+    ]);
+    expect(out.indexOf("alpha: string;")).toBeLessThan(out.indexOf("zeta: string;"));
+    expect(out).toContain("type ToolName = keyof ToolOutputMap");
+    expect(out).toContain("declare class ToolCallError extends Error");
+  });
+});
+
+describe("context-guard schema lookup", () => {
+  const tiny: SdkSchema = {
+    name: "tiny",
+    description: "Does a tiny thing.",
+    parameters: { type: "object", properties: { q: { type: "string" } } },
+    output: { type: "string" },
+  };
+  const exotic: SdkSchema = {
+    name: "my-tool",
+    description: "Exotic name.",
+    parameters: { type: "object", properties: {} },
+    output: { type: "string" },
+  };
+  const sealed: SdkSchema = {
+    name: "sealed_tool",
+    description: "Sealed tool line one.\nSecond line stays hidden.",
+    parameters: { type: "object", properties: {} },
+    output: { type: "object", properties: { deepSecret: { type: "string" } } },
+  };
+
+  function setup(visible: string[], skillDirs: string[] = [], config: Record<string, unknown> = {}) {
+    const tools = makeLookupTools([tiny, exotic, sealed], new Set(visible));
+    const ctx = fakeCtx(tools);
+    apply(ctx as never, { skillDirs, ...config });
+    invalidate(ctx);
+    return { ctx, def: lookupDef(tools) };
+  }
+
+  it("resolves a visible tool to its full declaration", async () => {
+    const { agent } = makeSdkAgent("lookup-visible", { schemas: [] });
+    const { def } = setup(["tiny", "my-tool", "sealed_tool"]);
+    const { jsonSchemaToTs } = await import("@deepseek-ai/dsh-tools");
+    const out = await def.execute({ name: "tiny" }, { agent });
+    const expected = [
+      "// Does a tiny thing.",
+      `type TinyOutput = ${jsonSchemaToTs(tiny.output, 1)};`,
+      `declare const tools: { tiny: (args: ${jsonSchemaToTs(tiny.parameters, 1)}) => Promise<TinyOutput>; };`,
+    ].join("\n");
+    expect(out).toBe(expected);
+  });
+
+  it("quotes exotic names in the declaration", async () => {
+    const { agent } = makeSdkAgent("lookup-exotic", { schemas: [] });
+    const { def } = setup(["tiny", "my-tool", "sealed_tool"]);
+    const out = await def.execute({ name: "my-tool" }, { agent });
+    expect(out).toContain('{ "my-tool": (args:');
+  });
+
+  it("returns name, one-line description and unlocking skill for a masked tool", async () => {
+    const dir = writeGatedSkill(join(tmpRoot, "lookup-locker"), "locker", ["sealed_tool"]);
+    const { agent } = makeSdkAgent("lookup-masked", { schemas: [] });
+    const { def } = setup(["tiny"], [dir]);
+    const out = await def.execute({ name: "sealed_tool" }, { agent });
+    expect(out).toBe(
+      [
+        "// Sealed tool line one.",
+        '// Tool "sealed_tool" is gated behind skill "locker".',
+        "// Load that skill first for argument and output types.",
+      ].join("\n"),
+    );
+    // The output shape must not leak through the masked path.
+    expect(out).not.toContain("deepSecret");
+  });
+
+  it("resolves unknown names to a short note", async () => {
+    const { agent } = makeSdkAgent("lookup-unknown", { schemas: [] });
+    const { def } = setup(["tiny"]);
+    expect(await def.execute({ name: "nope" }, { agent })).toBe(
+      'Unknown tool "nope": no global tool by that name is registered.',
+    );
+  });
+
+  it("names the configuration lock instead of a skill that cannot unlock", async () => {
+    const dir = writeGatedSkill(join(tmpRoot, "lookup-locked"), "locker", ["sealed_tool"]);
+    const { agent } = makeSdkAgent("lookup-locked", { schemas: [] });
+    const { def } = setup(["tiny"], [dir], { alwaysDeny: ["sealed_tool"] });
+    const out = await def.execute({ name: "sealed_tool" }, { agent });
+    expect(out).toContain("locked by configuration");
+    expect(out).not.toContain('"locker"');
+  });
+
+  it("applies the subagent lockdown for a child caller", async () => {
+    const dir = writeGatedSkill(join(tmpRoot, "lookup-sub"), "locker", ["sealed_tool"]);
+    const { agent } = makeSdkAgent("lookup-sub", { schemas: [], depth: 1 });
+    const { def } = setup(["tiny"], [dir], { subagentDeny: ["sealed_tool"] });
+    const out = await def.execute({ name: "sealed_tool" }, { agent });
+    expect(out).toContain("locked by configuration");
+  });
+
+  it("points run_code at the calling convention", async () => {
+    const { agent } = makeSdkAgent("lookup-runcode", { schemas: [] });
+    const { def } = setup(["tiny"]);
+    const out = await def.execute({ name: "run_code" }, { agent });
+    expect(out).toContain("batching transport");
+  });
+
+  it("keeps its own schema small", () => {
+    const tools = makeLookupTools([tiny], new Set(["tiny"]));
+    const ctx = fakeCtx(tools);
+    apply(ctx as never, {});
+    const def = lookupDef(tools);
+    // defineTool compiles the parameter spec to a JSON schema: exactly one
+    // property, one required entry. One string in, one string out.
+    const params = def.parameters as { properties: Record<string, unknown>; required: string[] };
+    expect(Object.keys(params.properties)).toEqual(["name"]);
+    expect(params.required).toEqual(["name"]);
+    expect(def.description.length).toBeLessThan(240);
+    expect(def.output.schema).toEqual({ type: "string" });
   });
 });

@@ -1,5 +1,5 @@
 /**
- * The `skill-gate` plugin: gate a set of tools behind skills.
+ * The `context-guard` plugin: gate a set of tools behind skills.
  *
  * The model sees a gated tool only while the skill that declares it is loaded.
  * The skill's `SKILL.md` frontmatter is the single source of truth: it carries
@@ -75,9 +75,10 @@ import { join } from "node:path";
 import { resolveDshHome } from "@deepseek-ai/dsh-home-paths";
 import type { Context, Events } from "@deepseek-ai/cordis";
 import type { Agent } from "@deepseek-ai/dsh-agent";
+import { defineTool, jsonSchemaToTs, RUN_CODE_NAME } from "@deepseek-ai/dsh-tools";
 import z from "@deepseek-ai/schemastery";
 
-export const name = "skill-gate";
+export const name = "context-guard";
 
 export const inject = ["tools"] as const;
 /**
@@ -111,6 +112,169 @@ export const Config = z.object({
    */
   alwaysDeny: z.array(z.string()).default([]),
 });
+
+/**
+ * The compact `tools:sdk` view and the schema-lookup tool (ticket #120).
+ *
+ * The deployment runs Code Mode everywhere (`mode: both` on the dsh-tools
+ * row), so the shipped `tools:sdk` section registers GLOBALLY with the full
+ * `ToolArgsMap` + `ToolOutputMap` rendering. That block is ~44KB against the
+ * aidos tool set, and the args half (~35KB of it) restates the native schemas
+ * already in the prompt verbatim. This plugin registers a same-named section
+ * on each AGENT scope, which shadows the global one (a scoped section shadows
+ * a global section with the same name; duplicates within one layer throw).
+ * The shadow renders from the calling scope's `sdkSchemas()`, so a masked
+ * tool is absent here with no code that knows about gates — the same single
+ * seam the mask itself uses.
+ *
+ * Two deliberate non-goals, matching the gating design above: no
+ * `system-prompt/assemble` listener (order-sensitive, runs every assembly),
+ * and no `tool-presentation` preset row (presentAs() registers its sdkSection
+ * on the AGENT scope, so a preset row plus this shadow puts two same-named
+ * sections in ONE layer and the mount throws — that path is dead, and the
+ * process-wide `mode: both` default is the seam instead). An agent whose
+ * preset already declares a presentation (standard/code) keeps its own
+ * scoped section: the duplicate registration throws, this plugin defers to
+ * it, and that agent keeps the full rendering.
+ */
+
+/** Name and order mirror the shipped section so the shadow holds its place. */
+const SDK_SECTION_NAME = "tools:sdk";
+const SDK_SECTION_ORDER = 150;
+
+/** The on-demand schema lookup every compact section points at. */
+const LOOKUP_TOOL_NAME = "schema_lookup";
+
+/**
+ * The fixed model-facing usage contract, VERBATIM from dsh-tools'
+ * SDK_INSTRUCTIONS (lib/index.js:1592-1601). Copied rather than imported:
+ * the constant is module-private upstream. If upstream rewords it, this copy
+ * drifts — the section still works, but diff the two when touching this file.
+ */
+const SDK_CALLING_CONVENTION = `## Writing code for run_code
+
+\`run_code\` takes two required arguments: \`code\` — the body of an async TypeScript function (erasable syntax only — no \`enum\` or namespaces; type annotations are advisory, the code runs type-stripped) — and \`description\`, a short summary of what the program does. Inside the program:
+
+- Call tools as \`await tools.name(args)\` — quoted access for exotic names: \`tools["my-tool"](args)\`. Every call resolves to the tool's typed canonical JSON value. Tool arguments must be lossless JSON.
+- A FAILED tool call rejects with \`ToolCallError\`, whose \`toolName\` identifies the failed tool and whose \`message\` is human-readable — \`try/catch\` it to handle and continue.
+- Independent read-only calls MAY overlap under \`Promise.all\` (safe calls run concurrently; mutating calls run alone, in submission order). Sequence dependent work with \`await\`.
+- Emit results with \`return\` and/or \`console.log(...)\`. Only what you print or return is program output. A successful tool result containing an image is attached after the run so you can inspect it on the next step; every other intermediate result stays out of the conversation, so extract just what you need.
+
+The available tools:`;
+
+/**
+ * The derivation rule that replaces `ToolArgsMap`. The argument type IS the
+ * native schema already in the prompt — restating it would be the duplication
+ * this section exists to remove. The exotic-name case is stated explicitly:
+ * that is where a derived call goes wrong.
+ */
+const ARGS_DERIVATION_RULE = `Argument types are not repeated here: for \`tools.NAME(args)\`, the argument type IS the native \`NAME\` tool schema already in this prompt — same fields, same required list, same descriptions. For exotic names use quoted access: \`tools["my-tool"](args)\`.`;
+
+/** Points at the lookup tool and explains the collapsed references. */
+const LOOKUP_HINT = `Full per-tool declarations — argument fields, nested types, descriptions, exact output shapes — are one call away: \`schema_lookup({ name: "NAME" })\`. Deep output shapes below collapse to a \`...Output\` reference; the lookup expands it.`;
+
+/**
+ * The sliver of the tools service the shadow and the lookup read.
+ * `sdkSchemas()`/`modeFor()` are real methods at runtime but marked private
+ * in the shipped .d.ts, so this narrow structural interface names exactly
+ * what is used (and nothing else) instead of fighting the declarations.
+ */
+interface SdkProjection {
+  sdkSchemas(scope?: unknown): Array<{
+    name: string;
+    description: string;
+    parameters: unknown;
+    output: unknown;
+  }>;
+  modeFor(scope?: unknown): string;
+}
+
+/** `renderKey` twin: quote names that are not bare TS identifiers. */
+function isBareIdentifier(name: string): boolean {
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name);
+}
+
+/** `XxxOutput` alias for one tool name (`send_message` -> `SendMessageOutput`). */
+function outputAliasFor(name: string): string {
+  const pascal =
+    name
+      .split(/[^a-zA-Z0-9]+/)
+      .filter((part) => part.length > 0)
+      .map((part) => part[0].toUpperCase() + part.slice(1))
+      .join("") || "Tool";
+  return `${pascal}Output`;
+}
+
+/**
+ * Render the compact `tools:sdk` replacement for one scope's visible SDK
+ * schemas (the `sdkSchemas()` projection: `run_code` already excluded,
+ * masked tools already absent).
+ *
+ * D7, closed by measurement 2026-09-09 against the real aidos visible set
+ * (42 tools, schema_lookup included): full section 44,539B; variant (a,
+ * full output map) 9,330B; variant (b, this: deep shapes collapse) 6,184B;
+ * variant (c, trivial omitted) 8,693B. The (a) saving over baseline
+ * (~35.2KB) is the dropped `ToolArgsMap`; (b) wins over (a) by a further
+ * ~3.1KB. If the tool set changes shape radically, re-measure before
+ * assuming (b) still wins.
+ */
+export function renderCompactSdk(
+  schemas: Array<{ name: string; output: unknown }>,
+): string {
+  const sorted = [...schemas].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  const members: string[] = [];
+  const aliases: string[] = [];
+  for (const schema of sorted) {
+    const rendered = jsonSchemaToTs(schema.output, 1);
+    if (rendered.includes("\n")) {
+      const alias = outputAliasFor(schema.name);
+      members.push(`  ${schema.name}: ${alias};`);
+      aliases.push(`type ${alias} = unknown; // full shape: ${LOOKUP_TOOL_NAME}({ name: "${schema.name}" })`);
+    } else {
+      members.push(`  ${schema.name}: ${rendered};`);
+    }
+  }
+  const map = `interface ToolOutputMap {\n${members.join("\n")}\n}`;
+  return (
+    `${SDK_CALLING_CONVENTION}\n\n\`\`\`ts\n` +
+    `type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }\n\n` +
+    `${map}` +
+    (aliases.length > 0 ? `\n\n${aliases.join("\n")}` : "") +
+    `\n\ntype ToolName = keyof ToolOutputMap\n\n` +
+    `declare class ToolCallError extends Error {\n` +
+    `  readonly name: "ToolCallError";\n` +
+    `  readonly toolName: ToolName;\n` +
+    `}\n\`\`\`\n\n${ARGS_DERIVATION_RULE}\n\n${LOOKUP_HINT}`
+  );
+}
+
+/**
+ * True when the error is the system-prompt layer's duplicate-section throw
+ * for OUR name — meaning a preset-level `presentAs()` already owns this
+ * agent's `tools:sdk` (the standard/code presets), so the shadow defers.
+ * Same message-parsing idiom as `parseKnownTools` below: the registry's own
+ * error is the one place the layer publishes this fact.
+ */
+function isDuplicateSdkSection(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.includes(`prompt section "${SDK_SECTION_NAME}" is already registered`);
+}
+
+/** Agents whose compact shadow is settled (registered, or deferred to the preset). */
+const sdkShadowById = new Set<string>();
+
+/** Comment every line of a possibly multi-line description. */
+function commentLines(text: string): string {
+  return String(text ?? "")
+    .split("\n")
+    .map((line) => `// ${line}`.trimEnd())
+    .join("\n");
+}
+
+/** D4's one-line description: the first line only. */
+function firstLine(text: string): string {
+  return String(text ?? "").split("\n")[0] ?? "";
+}
 
 /** Read the frontmatter between the first two `---` lines. */
 function readFrontmatter(text: string): string {
@@ -174,7 +338,7 @@ function parseToolsGated(frontmatter: string, ctx: Context): string[] {
   }
   if (block.length === 0) {
     ctx.logger.warn(
-      "[skill-gate] tools-gated key with no value and no block list; gating nothing for this skill",
+      "[context-guard] tools-gated key with no value and no block list; gating nothing for this skill",
     );
   }
   return block.filter((e) => e.length > 0);
@@ -290,9 +454,10 @@ export function apply(ctx: Context, config: unknown): void {
   ctx.on("agent/session-start" as keyof Events, (payload) => {
     try {
       enforce((payload as { agent?: Agent }).agent);
+      ensureCompactSdk((payload as { agent?: Agent }).agent);
     } catch (err) {
       ctx.logger.error(
-        `[skill-gate] session-start enforcement failed: ${err instanceof Error ? err.message : String(err)}`,
+        `[context-guard] session-start enforcement failed: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   });
@@ -302,10 +467,11 @@ export function apply(ctx: Context, config: unknown): void {
   ctx.on("agent/pre-step", (payload, next) => {
     try {
       enforce(payload.agent);
+      ensureCompactSdk(payload.agent);
     } catch (err) {
       // Observe only: never break stepping, but surface the fault in the journal.
       ctx.logger.error(
-        `[skill-gate] pre-step enforcement failed: ${err instanceof Error ? err.message : String(err)}`,
+        `[context-guard] pre-step enforcement failed: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
     // A skill loads through TWO paths, not one. The `skill` TOOL path is
@@ -356,6 +522,34 @@ export function apply(ctx: Context, config: unknown): void {
     dropReconcileSnapshots();
   });
 
+  // The on-demand schema lookup (ticket #120): one small global tool that
+  // resolves any tool name to its declaration. A VISIBLE tool returns the
+  // full TypeScript declaration; a MASKED tool returns name, one-line
+  // description and the unlocking skill only, so the gate explains itself
+  // without letting the agent skip the skill load. The schema stays tiny
+  // (one string in, one string out) so it never reintroduces the weight the
+  // compact section just saved. Registered globally, like every model tool:
+  // visibility filtering happens per call through the caller's own scope.
+  ctx.tools.register(
+    defineTool({
+      name: LOOKUP_TOOL_NAME,
+      description:
+        "Resolve one tool to its TypeScript declaration. Visible tools return the full declaration; gated tools return name, description and the unlocking skill — load that skill for full types.",
+      parameters: {
+        name: {
+          type: "string",
+          required: true,
+          description: "The exact global tool name to resolve.",
+        },
+      },
+      output: {
+        schema: { type: "string" },
+        render: (_args, value) => [{ type: "text", text: value }],
+      },
+      execute: async (args, exec) => resolveToolSchema(args.name, exec?.agent),
+    }),
+  );
+
   /** Every `tools-gated` declaration, exact names and `*` patterns alike. */
   function gatedPatterns(): string[] {
     if (!gatesCache) gatesCache = discoverGates(skillDirs, ctx);
@@ -364,6 +558,135 @@ export function apply(ctx: Context, config: unknown): void {
       for (const tool of toolList) out.add(tool);
     }
     return [...out];
+  }
+
+  /**
+   * Every skill whose `tools-gated` declaration covers `toolName`, exact
+   * entries and `prefix*` patterns alike. The lookup tool reports these so a
+   * masked tool names its unlock. Usually one skill; the cordis inspection
+   * tools are declared by two, and both genuinely unlock them.
+   */
+  function ownerSkills(toolName: string): string[] {
+    if (!gatesCache) gatesCache = discoverGates(skillDirs, ctx);
+    const owners: string[] = [];
+    for (const [skillName, gated] of gatesCache) {
+      for (const entry of gated) {
+        const hit = entry.endsWith("*")
+          ? toolName.startsWith(entry.slice(0, -1))
+          : entry === toolName;
+        if (hit && !owners.includes(skillName)) owners.push(skillName);
+      }
+    }
+    return owners;
+  }
+
+  /**
+   * Resolve one tool name through the CALLER's scope, for the lookup tool.
+   * A visible tool returns its full TypeScript declaration (description,
+   * argument type, output alias). A masked tool returns name, one-line
+   * description and the unlocking skill only — full types require loading
+   * that skill (D4). A configuration-locked tool (alwaysDeny, or the
+   * subagent lockdown for a child caller) says so instead of naming a skill
+   * that cannot unlock it. Unknown names resolve to a short note.
+   */
+  function resolveToolSchema(name: string, agent: Agent | undefined): string {
+    const registry = ctx.tools as unknown as SdkProjection & {
+      get(
+        toolName: string,
+        scope?: unknown,
+      ):
+        | { name: string; description: string; parameters: unknown; output?: { schema?: unknown } }
+        | undefined;
+    };
+    const trimmed = String(name ?? "").trim();
+    if (trimmed === "") return `Unknown tool ${JSON.stringify(String(name))}: no global tool by that name is registered.`;
+    if (trimmed === RUN_CODE_NAME) {
+      return [
+        `// ${RUN_CODE_NAME} is the batching transport itself, not a lookup subject.`,
+        `// See the calling convention in the tools:sdk section.`,
+      ].join("\n");
+    }
+    const visible = registry.get(trimmed, agent);
+    if (visible) {
+      const alias = outputAliasFor(trimmed);
+      const key = isBareIdentifier(trimmed) ? trimmed : JSON.stringify(trimmed);
+      const argsTs = jsonSchemaToTs(visible.parameters, 1);
+      const outputTs = jsonSchemaToTs(visible.output?.schema, 1);
+      return [
+        commentLines(visible.description),
+        `type ${alias} = ${outputTs};`,
+        `declare const tools: { ${key}: (args: ${argsTs}) => Promise<${alias}>; };`,
+      ].join("\n");
+    }
+    const global = registry.get(trimmed);
+    if (!global) return `Unknown tool "${trimmed}": no global tool by that name is registered.`;
+    const locked =
+      alwaysDeny.includes(trimmed) || (agent !== undefined && isSubagent(agent) && subagentDeny.includes(trimmed));
+    if (locked) {
+      return [
+        firstLine(global.description) === "" ? `// ${trimmed}` : `// ${firstLine(global.description)}`,
+        `// Tool "${trimmed}" is locked by configuration for this agent; no skill unlocks it.`,
+      ].join("\n");
+    }
+    const owners = ownerSkills(trimmed);
+    const skillNote =
+      owners.length > 0
+        ? owners.map((skillName) => `"${skillName}"`).join(", ")
+        : "(no skill declares it — masked by configuration)";
+    return [
+      firstLine(global.description) === "" ? `// ${trimmed}` : `// ${firstLine(global.description)}`,
+      `// Tool "${trimmed}" is gated behind skill ${skillNote}.`,
+      `// Load that skill first for argument and output types.`,
+    ].join("\n");
+  }
+
+  /**
+   * Shadow the global `tools:sdk` section on one agent's scope with the
+   * compact rendering (ticket #120). Runs at session start (before the first
+   * assembly) and on every pre-step (agents that predate this mount), once
+   * per agent: the text provider re-renders from the calling scope's live
+   * `sdkSchemas()`, so later skill loads appear with no re-registration.
+   *
+   * When the agent's preset already declared a presentation, `presentAs()`
+   * owns this scope's `tools:sdk` and the insert throws its duplicate error:
+   * defer to the preset and keep the full rendering there. Any other fault
+   * drops the once-per-agent mark so a later step retries, and is logged,
+   * never thrown — stepping must not break over a prompt section.
+   */
+  function ensureCompactSdk(agent: Agent | undefined): void {
+    if (!agent || !agent.ctx) return;
+    if (sdkShadowById.has(agent.id)) return;
+    // Hosts without a system-prompt service cannot carry sections; leave the
+    // agent unmarked so a richer context can still register later.
+    if (!agent.ctx.systemPrompt) return;
+    sdkShadowById.add(agent.id);
+    try {
+      agent.ctx.systemPrompt.section({
+        name: SDK_SECTION_NAME,
+        order: SDK_SECTION_ORDER,
+        text: (context) => {
+          try {
+            const projection = agent.ctx.tools as unknown as SdkProjection;
+            if (typeof projection.modeFor !== "function" || typeof projection.sdkSchemas !== "function") {
+              return "";
+            }
+            if (projection.modeFor(context.scope) !== "both") return "";
+            return renderCompactSdk(projection.sdkSchemas(context.scope));
+          } catch (err) {
+            ctx.logger.error(
+              `[context-guard] compact sdk render failed: ${err instanceof Error ? err.message : String(err)}`,
+            );
+            return "";
+          }
+        },
+      });
+    } catch (err) {
+      if (isDuplicateSdkSection(err)) return;
+      sdkShadowById.delete(agent.id);
+      ctx.logger.error(
+        `[context-guard] compact sdk shadow failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   /**

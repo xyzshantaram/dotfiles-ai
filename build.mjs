@@ -29,7 +29,7 @@ const entries = [
   ["plugins/see.ts", "plugins/see.js"],
   ["plugins/manifest-guard.ts", "plugins/manifest-guard.js"],
   ["plugins/package-tool.ts", "plugins/package-tool.js"],
-  ["plugins/skill-gate.ts", "plugins/skill-gate.js"],
+  ["plugins/context-guard.ts", "plugins/context-guard.js"],
   ["plugins/profiles.ts", "plugins/profiles.js"],
   ["plugins/resume.ts", "plugins/resume.js"],
   ["plugins/ask-interrupt.ts", "plugins/ask-interrupt.js"],
