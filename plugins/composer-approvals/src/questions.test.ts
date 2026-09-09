@@ -2,8 +2,14 @@
 // modal rows pair jump targets through the same FIFO the card claims with,
 // and the composer ring inputs count live pendings plus answered calls.
 import { describe, expect, it } from "vitest";
-import { pendingQuestionForCall } from "../../tool-render/src/questions";
-import { questionModalRowsOf, ringInputsOf, ringWidthsOf } from "./questions.js";
+import { pendingQuestionForCall, ringWidths } from "../../tool-render/src/questions";
+import {
+  INITIAL_RING_FADE,
+  composerRingPaint,
+  questionModalRowsOf,
+  ringInputsOf,
+  ringWidthsOf,
+} from "./questions.js";
 
 function runningCall(callId: string, name = "ask_user_question", subCalls: any[] = []) {
   return { callId, name, argsRaw: "{}", time: 1, subCalls };
@@ -72,7 +78,70 @@ describe("ringInputsOf / ringWidthsOf", () => {
   });
 
   it("is quiet with nothing pending and nothing answered", () => {
-    expect(ringInputsOf(snapshot([], [runningCall("c1", "bash")]))).toEqual({ pending: 0, answered: 0 });
+    expect(ringInputsOf(snapshot([], [runningCall("c1", "bash")]))).toEqual({
+      pending: 0,
+      answered: 0,
+    });
     expect(ringWidthsOf(snapshot([], []))).toEqual({ bright: 0, dull: 0 });
+  });
+});
+
+describe("composerRingPaint (#106 fade lifecycle)", () => {
+  it("never arms a timer for pending questions: the bright ring cannot fade", () => {
+    const paint = composerRingPaint(2, 0, INITIAL_RING_FADE);
+    expect(paint).toEqual({ bright: 5, dull: 0, ornament: true, next: null });
+  });
+
+  it("leaves the other bright rings intact when one of several pending is answered", () => {
+    // Answer lands: bright shrinks by exactly the answered one, dull holds
+    // the confirmation band.
+    const held = composerRingPaint(2, 1, INITIAL_RING_FADE);
+    expect(held).toEqual({ bright: 5, dull: 3, ornament: true, next: "hold" });
+    // Hold fires: the answered contribution drops (CSS animates it out)
+    // while the survivors stay at full width.
+    const fading = composerRingPaint(2, 1, { faded: 0, zeroed: 1 });
+    expect(fading).toEqual({ bright: 5, dull: 0, ornament: true, next: "remove" });
+    // Transition lands: marker stays for the still-pending questions.
+    const settled = composerRingPaint(2, 1, { faded: 1, zeroed: null });
+    expect(settled).toEqual({ bright: 5, dull: 0, ornament: true, next: null });
+  });
+
+  it("returns the composer to its pre-question appearance once all answers fade", () => {
+    const held = composerRingPaint(0, 2, INITIAL_RING_FADE);
+    expect(held).toEqual({ bright: 0, dull: 5, ornament: true, next: "hold" });
+    // Mid-fade the marker stays so the transition has a rule to animate
+    // within; dropping it here would snap instead of fading.
+    const fading = composerRingPaint(0, 2, { faded: 0, zeroed: 2 });
+    expect(fading).toEqual({ bright: 0, dull: 0, ornament: true, next: "remove" });
+    // Fade landed: no band, no marker — the client half removes the
+    // attribute and the width properties, leaving no residual box-shadow.
+    const gone = composerRingPaint(0, 2, { faded: 2, zeroed: null });
+    expect(gone).toEqual({ bright: 0, dull: 0, ornament: false, next: null });
+  });
+
+  it("re-shows the band when a new answer lands mid-fade", () => {
+    const paint = composerRingPaint(0, 2, { faded: 1, zeroed: 1 });
+    expect(paint).toEqual({ bright: 0, dull: 3, ornament: true, next: "hold" });
+  });
+
+  it("caps both bands at four steps", () => {
+    expect(composerRingPaint(40, 0, INITIAL_RING_FADE).bright).toBe(9);
+    expect(composerRingPaint(0, 40, INITIAL_RING_FADE).dull).toBe(9);
+    // A long session fades one outstanding answer at a time, not the cap.
+    expect(composerRingPaint(0, 40, { faded: 39, zeroed: null }).dull).toBe(3);
+  });
+
+  it("derives the bright width from the live pending count in every phase", () => {
+    const phases = [
+      INITIAL_RING_FADE,
+      { faded: 0, zeroed: 1 },
+      { faded: 1, zeroed: null },
+      { faded: 1, zeroed: 2 },
+    ];
+    for (const fade of phases) {
+      for (const pending of [0, 1, 3, 40]) {
+        expect(composerRingPaint(pending, 2, fade).bright).toBe(ringWidths(pending, 0).bright);
+      }
+    }
   });
 });
