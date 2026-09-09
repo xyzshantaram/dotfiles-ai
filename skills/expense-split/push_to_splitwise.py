@@ -120,11 +120,6 @@ def fmt_rs(amount: float) -> str:
     return f"{amount:.2f}"
 
 
-def abbreviated(name: str) -> str:
-    """First letter of the first name, capitalized."""
-    return name.strip()[0].upper() if name.strip() else "?"
-
-
 def load_pushed() -> dict[str, int]:
     """Return {fingerprint: expense_id} of already-pushed orders."""
     if PUSHED_FILE.exists():
@@ -142,11 +137,12 @@ def save_pushed(pushed: dict[str, int]):
 
 
 def order_fingerprint(order: list[dict]) -> str:
-    """Generate a unique fingerprint for an order: platform|date|total."""
+    """Generate a unique fingerprint for an order: platform|order_id|date|total."""
     platform = order[0]["platform"]
     date = order[0]["date"]
+    oid = order[0].get("order_id", "")
     total = fmt_rs(sum(item["price"] for item in order))
-    return f"{platform}|{date}|{total}"
+    return f"{platform}|{oid}|{date}|{total}"
 
 
 # ---------------------------------------------------------------------------
@@ -297,16 +293,25 @@ def build_name_map(api: SplitwiseAPI, people: list[str]) -> dict[str, int]:
 # Group splits into orders
 # ---------------------------------------------------------------------------
 def group_orders(splits: list[dict]) -> list[list[dict]]:
-    """Group consecutive splits sharing the same platform + date into orders."""
+    """Group consecutive splits into orders.
+
+    Splits carrying an order_id group by (platform, order_id); legacy
+    splits without one fall back to (platform, date), so distinct orders
+    sharing a placeholder date no longer merge.
+    """
     if not splits:
         return []
+
+    def group_key(item: dict):
+        oid = item.get("order_id")
+        if oid:
+            return (item["platform"], f"#{oid}")
+        return (item["platform"], item["date"])
+
     orders = []
     current_order = [splits[0]]
     for item in splits[1:]:
-        if (
-            item["platform"] == current_order[-1]["platform"]
-            and item["date"] == current_order[-1]["date"]
-        ):
+        if group_key(item) == group_key(current_order[-1]):
             current_order.append(item)
         else:
             orders.append(current_order)
@@ -339,35 +344,51 @@ def infer_payer(order: list[dict], settlements: list[dict]) -> str:
 def summarise_order(
     order: list[dict], people: list[str], payer: str, idx: int, total_orders: int
 ) -> str:
-    """Return a multi-line string describing the order and its splits."""
+    """Return a multi-line item-by-person table describing the order."""
     total = sum(item["price"] for item in order)
     platform = order[0]["platform"]
 
-    # Build per-person owed totals for this order.
-    person_owed: dict[str, float] = {p: 0.0 for p in people}
-    for item in order:
-        for name, amt in item["assignments"].items():
-            person_owed[name] = person_owed.get(name, 0.0) + amt
+    name_w = min(38, max([len("Item")] + [len(i["item"]) for i in order])) + 2
+    person_ws = {p: max(9, len(p) + 2) for p in people}
+    total_w = 11
+    width = name_w + sum(person_ws.values()) + total_w
+    sep = "-" * width
 
     lines = []
+    lines.append("=" * width)
     lines.append(
-        f"{'=' * 72}\n"
         f"Order {idx + 1}/{total_orders}: {platform.title()} "
-        f"— {order[0]['date']} — ₹{fmt_rs(total)}"
+        f"— {order[0]['date']} — total ₹{fmt_rs(total)} — payer {payer}"
     )
-    for item in order:
-        parts = [item["item"] + ":"]
-        for p in people:
-            if p in item["assignments"]:
-                parts.append(f" {abbreviated(p)} Rs {fmt_rs(item['assignments'][p])}")
-        lines.append("  " + " |".join(parts))
-    # Per-person totals line.
-    tot_parts = []
+    lines.append("=" * width)
+
+    header = "Item".ljust(name_w)
     for p in people:
-        if person_owed[p] > 0:
-            tot_parts.append(f" {abbreviated(p)} Rs {fmt_rs(person_owed[p])}")
-    lines.append(f"  ORDER:{' |'.join(tot_parts)}")
-    lines.append(f"{'=' * 72}")
+        header += p[: person_ws[p] - 1].rjust(person_ws[p])
+    header += "Total".rjust(total_w)
+    lines.append(header)
+    lines.append(sep)
+
+    person_owed: dict[str, float] = {p: 0.0 for p in people}
+    for item in order:
+        row = item["item"][: name_w - 2].ljust(name_w)
+        for p in people:
+            amt = item["assignments"].get(p)
+            if amt:
+                person_owed[p] += amt
+                row += fmt_rs(amt).rjust(person_ws[p])
+            else:
+                row += "-".rjust(person_ws[p])
+        row += fmt_rs(item["price"]).rjust(total_w)
+        lines.append(row)
+
+    lines.append(sep)
+    total_row = "TOTAL".ljust(name_w)
+    for p in people:
+        total_row += fmt_rs(person_owed[p]).rjust(person_ws[p])
+    total_row += fmt_rs(total).rjust(total_w)
+    lines.append(total_row)
+    lines.append("=" * width)
     return "\n".join(lines)
 
 
@@ -383,31 +404,56 @@ def format_title(order):
 
 
 def build_itemized_comment(order, people):
-    """Return a multi-line string with the itemized split for the comment."""
-    lines = ["Itemized split:"]
+    """Return the plain-text itemized split for the Splitwise comment.
+
+    Format (settled 2026-09-09):
+      S=Siddharth H=Hemang P=Puneet          <- initials legend
+      Marlboro Advance (240) - S:120 H:120   <- items, initials
+      Fees (78) - S:26 H:26 P:26             <- all fee items collapsed
+      Total - S:203.33 H:203.33 P:83.34      <- single totals line
+    """
+    initials = {}
+    used = set()
+    for p in people:
+        letter = p.strip()[0].upper() if p.strip() else "?"
+        while letter in used and len(letter) < len(p):
+            letter = (p.strip()[: len(letter) + 1]).title()
+        used.add(letter)
+        initials[p] = letter
+
+    def compact(amount: float) -> str:
+        return fmt_rs(amount).rstrip("0").rstrip(".") or "0"
+
+    def shares(assignments):
+        return " ".join(
+            f"{initials[p]}:{compact(amt)}"
+            for p in people
+            if (amt := assignments.get(p))
+        )
+
+    lines = [" ".join(f"{initials[p]}={p}" for p in people)]
+
+    fee_total = 0.0
+    fee_assignments = {p: 0.0 for p in people}
     for item in order:
-        name = item["item"]
-        price = item["price"]
-        parts = []
-        for p in people:
-            if p in item["assignments"]:
-                parts.append(f"{p}: Rs {fmt_rs(item['assignments'][p])}")
-        if parts:
-            lines.append(f"  {name} (Rs {fmt_rs(price)}) — {', '.join(parts)}")
-        else:
-            lines.append(f"  {name} (Rs {fmt_rs(price)}) — unassigned")
-    
-    # Per-person totals
+        if item["item"].startswith("[") and item["item"].endswith("]"):
+            fee_total += item["price"]
+            for name, amt in item["assignments"].items():
+                fee_assignments[name] += amt
+            continue
+        line = f"{item['item']} ({compact(item['price'])})"
+        share_str = shares(item["assignments"]) or "unassigned"
+        lines.append(f"{line} - {share_str}")
+
+    if fee_total > 0:
+        lines.append(f"Fees ({compact(fee_total)}) - {shares(fee_assignments)}")
+
     person_owed = {p: 0.0 for p in people}
     for item in order:
         for name, amt in item["assignments"].items():
-            person_owed[name] = person_owed.get(name, 0.0) + amt
-    lines.append("")
-    lines.append("Totals:")
-    for p in people:
-        if person_owed[p] > 0:
-            lines.append(f"  {p}: Rs {fmt_rs(person_owed[p])}")
-    
+            person_owed[name] += amt
+    lines.append(f"Total - {shares(person_owed)}")
+
     return "\n".join(lines)
 
 
