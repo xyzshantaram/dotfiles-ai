@@ -12,6 +12,12 @@
 // (not only bash-guard's). The tool-call card reads it for the durable
 // decided badge that survives the decision and a page reload.
 //
+// The fold also keeps the guard approval's raw reason per callId, so the
+// decided badge's tooltip can name the rewrite/prompt reasons after the
+// live pending payload is gone (ticket #104). Only guard-shaped reasons
+// are kept — an escalation justification has its own banner — and the text
+// is capped, because projection state persists for the session.
+//
 // The outcome string is stored VERBATIM, and the real vocabulary is the
 // host's settle vocabulary -- "allowed-once" | "rejected" | "cancelled"
 // (dsh-user-approval appends `approval/decided` with whatever `decide`
@@ -29,6 +35,14 @@ export const GUARDED_APPROVALS_KEY = "tool-render/guarded-approvals";
 /** Keep the most recent 200 approvals so a long session cannot grow the state without bound. */
 export const GUARDED_APPROVALS_CAP = 200;
 
+/**
+ * Maximum stored characters of one guard approval reason. The verdict
+ * tooltip summarises the first line, but the raw text is kept so the one
+ * summariser (verdict-tip.ts) decides what that means; the cap only stops
+ * a rule dump from living in session state unbounded.
+ */
+export const GUARD_REASON_MAX = 2000;
+
 export interface GuardedApprovalsEntry {
   seq: number;
   callId: string;
@@ -38,16 +52,23 @@ export interface GuardedApprovalsEntry {
   outcome?: string;
   /** Present only while the asked approval was raised by bash-guard. */
   guarded?: boolean;
+  /**
+   * The guard approval's raw reason, capped at GUARD_REASON_MAX. Present
+   * only for guard-shaped reasons; a later non-guard re-ask never clears a
+   * stored guard reason, mirroring the sticky `guarded` flag.
+   */
+  reason?: string;
 }
 
 export interface GuardedApprovalsState {
   entries: GuardedApprovalsEntry[];
 }
 
-/** The view: the bash-guard callId set for the card outline, plus the callId→outcome map for the decided badge. */
+/** The view: the bash-guard callId set for the card outline, plus the callId→outcome map for the decided badge, plus the callId→guard-reason map for the badge tooltip. */
 export interface GuardedApprovalsView {
   guarded: Record<string, boolean>;
   outcomes: Record<string, string>;
+  reasons: Record<string, string>;
 }
 
 declare module "@deepseek-ai/dsh-session-projection/types" {
@@ -60,6 +81,7 @@ const viewSchema = z
   .object({
     guarded: z.record(z.string(), z.literal(true)),
     outcomes: z.record(z.string(), z.string()),
+    reasons: z.record(z.string(), z.string()),
   })
   .nullable();
 
@@ -68,10 +90,10 @@ export const guardedApprovalsProjection: ProjectionDefinition<
   GuardedApprovalsState
 > = {
   key: GUARDED_APPROVALS_KEY,
-  // Version 3: entries now pair `approval/asked` to `approval/decided` by id
-  // and carry the outcome for the decided badge, so the version-2 state
-  // (callId-only) is stale and the log must be replayed.
-  stateVersion: 3,
+  // Version 4: entries now keep the guard approval's raw reason for the
+  // verdict-badge tooltip, so the version-3 state (no reasons) is stale and
+  // the log must be replayed.
+  stateVersion: 4,
   schema: viewSchema,
   init(): GuardedApprovalsState {
     return { entries: [] };
@@ -109,6 +131,16 @@ export const guardedApprovalsProjection: ProjectionDefinition<
     if (typeof data.callId !== "string" || data.callId === "") return state;
     const id = typeof data.id === "string" ? data.id : undefined;
     const guardedNow = isBashGuardReason(data.reason);
+    // The tooltip's prompt line reads this stored reason, not the live
+    // pending payload, so it survives settling and a page reload. Guard
+    // reasons only: an escalation justification already has its own banner,
+    // and echoing it here would show the same fact twice.
+    const reasonNow =
+      guardedNow && typeof data.reason === "string"
+        ? data.reason.length > GUARD_REASON_MAX
+          ? data.reason.slice(0, GUARD_REASON_MAX)
+          : data.reason
+        : undefined;
     // Every asked approval with a callId is recorded, so its decision can
     // pair later; the guarded flag keeps the outline set exactly as it was.
     // A re-ask of a callId already in the set refreshes its seq/id and
@@ -123,12 +155,21 @@ export const guardedApprovalsProjection: ProjectionDefinition<
         callId: data.callId,
         id: id,
         guarded: entries[i].guarded === true || guardedNow || undefined,
+        // A fresh guard reason replaces the stored one; a non-guard re-ask
+        // keeps the earlier guard reason, mirroring the sticky flag.
+        reason: reasonNow !== undefined ? reasonNow : entries[i].reason,
       };
       updated = true;
       break;
     }
     if (!updated) {
-      entries.push({ seq: e.seq, callId: data.callId, id: id, guarded: guardedNow || undefined });
+      entries.push({
+        seq: e.seq,
+        callId: data.callId,
+        id: id,
+        guarded: guardedNow || undefined,
+        reason: reasonNow,
+      });
     }
     entries.sort(function (a, b) {
       return a.seq - b.seq;
@@ -140,10 +181,12 @@ export const guardedApprovalsProjection: ProjectionDefinition<
     if (state.entries.length === 0) return null;
     const guarded: Record<string, boolean> = {};
     const outcomes: Record<string, string> = {};
+    const reasons: Record<string, string> = {};
     for (const entry of state.entries) {
       if (entry.guarded === true) guarded[entry.callId] = true;
       if (entry.outcome !== undefined) outcomes[entry.callId] = entry.outcome;
+      if (entry.reason !== undefined) reasons[entry.callId] = entry.reason;
     }
-    return { guarded, outcomes };
+    return { guarded, outcomes, reasons };
   },
 };

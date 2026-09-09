@@ -17,7 +17,11 @@ describe("guardedApprovalsProjection.apply", () => {
   it("records a callId whose reason passes the bash-guard test", () => {
     var state = guardedApprovalsProjection.init();
     state = guardedApprovalsProjection.apply(state, askedEvent(4, { id: "a1", callId: "call-1", reason: GUARD_REASON }) as never);
-    expect(guardedApprovalsProjection.view(state)).toEqual({ guarded: { "call-1": true }, outcomes: {} });
+    expect(guardedApprovalsProjection.view(state)).toEqual({
+      guarded: { "call-1": true },
+      outcomes: {},
+      reasons: { "call-1": GUARD_REASON },
+    });
   });
 
   it("records a callId from the shipped guard's plain-text reason", () => {
@@ -27,18 +31,25 @@ describe("guardedApprovalsProjection.apply", () => {
     var reason = 'bash-guard: the following command needs approval:\n\n  git push\n\nMatched rule(s):\n  • git (push): denied.\n';
     var state = guardedApprovalsProjection.init();
     state = guardedApprovalsProjection.apply(state, askedEvent(4, { id: "a1", callId: "call-2", reason }) as never);
-    expect(guardedApprovalsProjection.view(state)).toEqual({ guarded: { "call-2": true }, outcomes: {} });
+    expect(guardedApprovalsProjection.view(state)).toEqual({
+      guarded: { "call-2": true },
+      outcomes: {},
+      reasons: { "call-2": reason },
+    });
   });
 
-  it("records a non-guard asked callId without guarding it", () => {
+  it("stores no reason for a non-guard approval", () => {
     // Every approval with a callId is folded (the decided badge serves all
-    // of them); only the outline set stays bash-guard-only.
+    // of them); only the outline set stays bash-guard-only. An escalation
+    // justification already has its own banner, so keeping it here would
+    // show the same fact twice.
     var state = guardedApprovalsProjection.init();
     state = guardedApprovalsProjection.apply(state, askedEvent(4, { id: "a1", callId: "call-1", reason: "please approve" }) as never);
     var view = guardedApprovalsProjection.view(state);
     expect(view).not.toBeNull();
     expect((view as { guarded: Record<string, boolean> }).guarded).toEqual({});
     expect((view as { outcomes: Record<string, string> }).outcomes).toEqual({});
+    expect((view as { reasons: Record<string, string> }).reasons).toEqual({});
   });
 
   it("skips an event with a missing or empty callId", () => {
@@ -55,6 +66,7 @@ describe("guardedApprovalsProjection.apply", () => {
     expect(guardedApprovalsProjection.view(state)).toEqual({
       guarded: { "call-1": true },
       outcomes: { "call-1": "approved" },
+      reasons: { "call-1": GUARD_REASON },
     });
   });
 
@@ -74,6 +86,7 @@ describe("guardedApprovalsProjection.apply", () => {
     expect(guardedApprovalsProjection.view(state)).toEqual({
       guarded: { "call-1": true, "call-2": true },
       outcomes: { "call-1": "allowed-once", "call-2": "cancelled" },
+      reasons: { "call-1": GUARD_REASON, "call-2": GUARD_REASON },
     });
   });
 
@@ -84,6 +97,7 @@ describe("guardedApprovalsProjection.apply", () => {
     expect(guardedApprovalsProjection.view(state)).toEqual({
       guarded: {},
       outcomes: { "call-3": "rejected" },
+      reasons: {},
     });
   });
 
@@ -91,7 +105,11 @@ describe("guardedApprovalsProjection.apply", () => {
     var state = guardedApprovalsProjection.init();
     state = guardedApprovalsProjection.apply(state, askedEvent(4, { id: "a1", callId: "call-1", reason: GUARD_REASON }) as never);
     state = guardedApprovalsProjection.apply(state, decidedEvent(5, { id: "unknown", outcome: "approved" }) as never);
-    expect(guardedApprovalsProjection.view(state)).toEqual({ guarded: { "call-1": true }, outcomes: {} });
+    expect(guardedApprovalsProjection.view(state)).toEqual({
+      guarded: { "call-1": true },
+      outcomes: {},
+      reasons: { "call-1": GUARD_REASON },
+    });
   });
 
   it("ignores a second decision for an already-paired entry", () => {
@@ -102,6 +120,7 @@ describe("guardedApprovalsProjection.apply", () => {
     expect(guardedApprovalsProjection.view(state)).toEqual({
       guarded: { "call-1": true },
       outcomes: { "call-1": "approved" },
+      reasons: { "call-1": GUARD_REASON },
     });
   });
 
@@ -119,6 +138,9 @@ describe("guardedApprovalsProjection.apply", () => {
     expect(guardedApprovalsProjection.view(state)).toEqual({
       guarded: { "call-1": true },
       outcomes: { "call-1": "approved" },
+      // The stored guard reason is sticky too: the later non-guard ask
+      // never clears it, mirroring the guard mark.
+      reasons: { "call-1": GUARD_REASON },
     });
   });
 
@@ -130,7 +152,31 @@ describe("guardedApprovalsProjection.apply", () => {
     expect(guardedApprovalsProjection.view(state)).toEqual({
       guarded: {},
       outcomes: {},
+      reasons: {},
     });
+  });
+
+  it("refreshes the stored reason when a guard approval re-asks the same callId", () => {
+    var first = "summary: first ask\nruns: ls\n";
+    var second = "summary: second ask\nruns: ls\n";
+    var state = guardedApprovalsProjection.init();
+    state = guardedApprovalsProjection.apply(state, askedEvent(4, { id: "a1", callId: "call-1", reason: first }) as never);
+    state = guardedApprovalsProjection.apply(state, askedEvent(6, { id: "a2", callId: "call-1", reason: second }) as never);
+    expect(guardedApprovalsProjection.view(state)).toEqual({
+      guarded: { "call-1": true },
+      outcomes: {},
+      reasons: { "call-1": second },
+    });
+  });
+
+  it("caps a stored guard reason so a rule dump cannot live in state unbounded", () => {
+    var long = "summary: " + "x".repeat(3000) + "\nruns: ls\n";
+    var state = guardedApprovalsProjection.init();
+    state = guardedApprovalsProjection.apply(state, askedEvent(4, { id: "a1", callId: "call-1", reason: long }) as never);
+    var view = guardedApprovalsProjection.view(state);
+    expect(view).not.toBeNull();
+    var reasons = (view as { reasons: Record<string, string> }).reasons;
+    expect(reasons["call-1"]).toBe(long.slice(0, 2000));
   });
 
   it("caps the map at the most recent entries by seq", async () => {
@@ -154,7 +200,7 @@ describe("guardedApprovalsProjection.apply", () => {
     expect((view as { outcomes: Record<string, string> }).outcomes["call-209"]).toBe("rejected");
   });
 
-  it("is at state version 3 so the callId-only state is replayed", () => {
-    expect(guardedApprovalsProjection.stateVersion).toBe(3);
+  it("is at state version 4 so the reason-less state is replayed", () => {
+    expect(guardedApprovalsProjection.stateVersion).toBe(4);
   });
 });

@@ -26344,16 +26344,18 @@ function isBashGuardReason(reason) {
 // plugins/tool-render/src/guarded-approvals.ts
 var GUARDED_APPROVALS_KEY = "tool-render/guarded-approvals";
 var GUARDED_APPROVALS_CAP = 200;
+var GUARD_REASON_MAX = 2e3;
 var viewSchema2 = external_exports.object({
   guarded: external_exports.record(external_exports.string(), external_exports.literal(true)),
-  outcomes: external_exports.record(external_exports.string(), external_exports.string())
+  outcomes: external_exports.record(external_exports.string(), external_exports.string()),
+  reasons: external_exports.record(external_exports.string(), external_exports.string())
 }).nullable();
 var guardedApprovalsProjection = {
   key: GUARDED_APPROVALS_KEY,
-  // Version 3: entries now pair `approval/asked` to `approval/decided` by id
-  // and carry the outcome for the decided badge, so the version-2 state
-  // (callId-only) is stale and the log must be replayed.
-  stateVersion: 3,
+  // Version 4: entries now keep the guard approval's raw reason for the
+  // verdict-badge tooltip, so the version-3 state (no reasons) is stale and
+  // the log must be replayed.
+  stateVersion: 4,
   schema: viewSchema2,
   init() {
     return { entries: [] };
@@ -26387,6 +26389,7 @@ var guardedApprovalsProjection = {
     if (typeof data.callId !== "string" || data.callId === "") return state;
     const id = typeof data.id === "string" ? data.id : void 0;
     const guardedNow = isBashGuardReason(data.reason);
+    const reasonNow = guardedNow && typeof data.reason === "string" ? data.reason.length > GUARD_REASON_MAX ? data.reason.slice(0, GUARD_REASON_MAX) : data.reason : void 0;
     const entries = state.entries.slice();
     let updated = false;
     for (let i = 0; i < entries.length; i++) {
@@ -26395,13 +26398,22 @@ var guardedApprovalsProjection = {
         seq: e.seq,
         callId: data.callId,
         id,
-        guarded: entries[i].guarded === true || guardedNow || void 0
+        guarded: entries[i].guarded === true || guardedNow || void 0,
+        // A fresh guard reason replaces the stored one; a non-guard re-ask
+        // keeps the earlier guard reason, mirroring the sticky flag.
+        reason: reasonNow !== void 0 ? reasonNow : entries[i].reason
       };
       updated = true;
       break;
     }
     if (!updated) {
-      entries.push({ seq: e.seq, callId: data.callId, id, guarded: guardedNow || void 0 });
+      entries.push({
+        seq: e.seq,
+        callId: data.callId,
+        id,
+        guarded: guardedNow || void 0,
+        reason: reasonNow
+      });
     }
     entries.sort(function(a, b) {
       return a.seq - b.seq;
@@ -26413,11 +26425,13 @@ var guardedApprovalsProjection = {
     if (state.entries.length === 0) return null;
     const guarded = {};
     const outcomes = {};
+    const reasons = {};
     for (const entry of state.entries) {
       if (entry.guarded === true) guarded[entry.callId] = true;
       if (entry.outcome !== void 0) outcomes[entry.callId] = entry.outcome;
+      if (entry.reason !== void 0) reasons[entry.callId] = entry.reason;
     }
-    return { guarded, outcomes };
+    return { guarded, outcomes, reasons };
   }
 };
 

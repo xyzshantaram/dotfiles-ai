@@ -348,6 +348,38 @@ export function extractHunk(readText, removeFrom, removeTo, replacementText, sta
   };
 }
 
+// ---- bash-guard rewrite label (shared with the verdict-badge tooltip). ----
+// The guard metadata carries only {rewritten: true, ran} — no reason field —
+// so the short phrase must be DERIVED by comparing commands: same first
+// token means an argument-level rewrite; a swapped first token means the
+// binary itself changed; anything unreadable keeps the generic label. This
+// is the single source for both the expanded-card rewrite block
+// (client.tsx) and the collapsed-row verdict tooltip (verdict-tip.ts), so
+// the two can never disagree.
+
+/** Extract the first token (command name) from a bash command string. */
+export function firstTokenOf(cmdStr) {
+  if (typeof cmdStr !== "string" || cmdStr === "") return "";
+  var trimmed = cmdStr.trim();
+  var match = /^[^\s]+/.exec(trimmed);
+  return match ? match[0] : "";
+}
+
+/**
+ * Label for the guard rewrite block pair by comparing commands. meta carries
+ * only {rewritten: true, ran} — no reason field — so precision must be
+ * derived: same first token means an argument-level rewrite; a swapped
+ * first token means the binary itself changed; anything unreadable keeps
+ * the generic label.
+ */
+export function guardRewriteLabel(originalCmd, rewrittenCmd) {
+  var origToken = firstTokenOf(originalCmd);
+  var rewriteToken = firstTokenOf(rewrittenCmd);
+  if (origToken === "" || rewriteToken === "") return "ran instead";
+  if (origToken === rewriteToken) return "rewrote arguments to";
+  return "translated to " + rewriteToken;
+}
+
 // ---- bash-guard rewrite banner (the nested-call fallback marker). ----
 // The banner bash-guard's ranMessage prints once it has ALREADY run a
 // replacement: the marker, a blank separator line, then two-space-indented
