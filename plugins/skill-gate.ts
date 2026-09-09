@@ -38,14 +38,16 @@
  *     every agent: the mask is reconciled with the agent's loaded-skill state
  *     and only rewritten when it actually changed. This covers agents that
  *     existed before this plugin mounted, tools that register late (MCP servers
- *     connecting after session start), and post-compaction re-application.
+ *     connecting after session start), and post-compaction re-validation.
  *     Never break stepping over a gating fault.
  *   - On a successful `skill` tool call (`tools/post-execute`), this plugin
  *     adds the loaded skill's gated tools to that agent's active set; the next
  *     step's reconciliation unmasks them.
- *   - On `compaction/start`, only the applied masks and their disposers are
- *     dropped; each agent's active (skill-unlocked) set SURVIVES, and the
- *     next pre-step re-applies the deny from the preserved actives — so a
+ *   - On `compaction/start`, only the reconcile snapshots are dropped; the
+ *     live masks stay in force, so the first post-compaction prompt renders
+ *     masked on both surfaces even though it assembles BEFORE the next
+ *     pre-step (#102). Each agent's active (skill-unlocked) set SURVIVES, and
+ *     the next pre-step re-validates the deny from the preserved actives — so a
  *     skill loaded before compaction keeps its tools, while an agent that
  *     never loaded one still gets the full deny. (#89: activations are
  *     intent, not context; wiping them silently revoked capabilities.)
@@ -347,8 +349,11 @@ export function apply(ctx: Context, config: unknown): void {
     return proceed();
   });
 
+  // On `compaction/start`, drop only the reconcile snapshots (below). The
+  // live masks stay in force, so the first post-compaction prompt — which
+  // assembles BEFORE the next pre-step — still renders the masked view.
   ctx.on("compaction/start" as keyof Events, () => {
-    clearAll();
+    dropReconcileSnapshots();
   });
 
   /** Every `tools-gated` declaration, exact names and `*` patterns alike. */
@@ -477,7 +482,7 @@ export function apply(ctx: Context, config: unknown): void {
     disposerById.set(agent.id, disposer);
   }
 
-  function clearAll(): void {
+  function dropReconcileSnapshots(): void {
     // #89. This used to clear activeById as well, on the reasoning that
     // "compaction wipes which skills each conversation had loaded ... so gated
     // tools return to hidden instead of leaking open into post-compaction
@@ -495,20 +500,29 @@ export function apply(ctx: Context, config: unknown): void {
     // carrying them is not "leaking" anything the agent had not already been
     // given.
     //
-    // So activeById SURVIVES compaction. Only the applied masks and their
-    // disposers are dropped, because those are bound to pre-compaction tool
-    // registrations; the next pre-step reconciles each agent from its
-    // preserved active set.
+    // So activeById SURVIVES compaction — and since #102, so do the applied
+    // masks and their disposers. A restriction is a live name filter on the
+    // agent's scope layer, resolved fresh on every assembly (dsh-tools
+    // view(): layers.every((layer) => layer.admits(name))); it is not bound
+    // to pre-compaction tool registrations, and compaction rewinds session
+    // history, not the agent's scoped world (there is no dispose/re-setup
+    // seam for it — setup runs once at creation). Lifting the masks here
+    // opened the first post-compaction prompt to gated tools on BOTH
+    // surfaces, because every step assembles BEFORE its pre-step waterfall —
+    // the same ordering #98 was built on — and the deleted assemble filter
+    // no longer covers even the native list. There is also no
+    // post-compaction re-arm event to hook instead: SessionStartSource
+    // reserves 'clear'/'compact' with no emitter yet (dsh-agent README,
+    // TODO(compaction)). Never disarming needs none.
+    //
+    // What IS dropped is the reconcile snapshots (the deny mark and the
+    // registry fingerprint), so the next pre-step re-runs the dispose +
+    // re-apply against the agent's CURRENT scope instead of trusting
+    // pre-compaction marks — one restrict cycle per agent per compaction,
+    // rare and prefix-stable. The deny itself still flows through the one
+    // seam: enforce() -> restrictKnown() -> tools.restrict({ deny }).
     appliedById.clear();
     fingerprintById.clear();
-    for (const dispose of disposerById.values()) {
-      try {
-        dispose();
-      } catch {
-        // A stale agent may already be gone; nothing to unwind.
-      }
-    }
-    disposerById.clear();
   }
 
   function notifySkillLoaded(exec: unknown, result: unknown): void {
