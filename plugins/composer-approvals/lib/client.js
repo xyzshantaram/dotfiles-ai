@@ -289,7 +289,9 @@ function ringInputsOf(snapshot) {
 }
 var RING_FADE_HOLD_MS = 2500;
 var RING_FADE_MS = 1600;
-var INITIAL_RING_FADE = { faded: 0, zeroed: null };
+function initialRingFade(answeredAtMount) {
+  return { faded: Math.max(0, answeredAtMount), zeroed: null };
+}
 function composerRingPaint(pending, answered, fade) {
   const bright = ringWidths(pending, 0).bright;
   const outstanding = Math.max(0, answered - fade.faded);
@@ -519,7 +521,9 @@ function makeIndicator() {
     });
     var missing = missingState[0];
     var setMissing = missingState[1];
-    var fadeState = react2.useState(INITIAL_RING_FADE);
+    var fadeState = react2.useState(function() {
+      return initialRingFade(questionInputs.answered);
+    });
     var fade = fadeState[0];
     var setFade = fadeState[1];
     var paint = composerRingPaint(questionInputs.pending, questionInputs.answered, fade);
