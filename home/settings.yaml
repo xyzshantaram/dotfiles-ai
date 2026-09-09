@@ -363,7 +363,7 @@ llm-pi-ai:
         - text
         - image
       - id: moonshotai/Kimi-K2.5
-        name: Kimi K2.5
+        name: Kimi-K2.5
         contextWindow: 262144
         maxTokens: 262144
         input:
@@ -1148,10 +1148,53 @@ llm-pi-ai:
       # markers here on purpose: keep sync-models from overwriting with
       # cross-vendor guesses. maxTokens is conservative (no upstream data).
       models:
+      # sync-models:begin
+      - id: deepseek-v4-flash:dev
+        name: DeepSeek V4 Flash
+        contextWindow: 1000000
+        maxTokens: 384000
+        input:
+        - text
+        reasoningEfforts:
+          off:
+          high: high
+          max: max
+      - id: deepseek-v4-flash-0731:dev
+        name: DeepSeek V4 Flash 0731
+        contextWindow: 1000000
+        maxTokens: 384000
+        input:
+        - text
+        reasoningEfforts:
+          off:
+          minimal: minimal
+          low: low
+          medium: medium
+          high: high
+      - id: mimo-v2.5:dev
+        name: MiMo-V2.5
+        contextWindow: 1048576
+        maxTokens: 131072
+        input:
+        - text
+        - image
+      - id: minimax-m2.7:dev
+        name: minimax-m2.7
+        contextWindow: 196608
+        maxTokens: 196608
+        input:
+        - text
+      - id: qwen3.8-27b:dev
+        name: Qwen3.8 27B
+        contextWindow: 262144
+        maxTokens: 32768
+        input:
+        - text
+        - image
       - id: glm-5.3:dev
-        name: GLM 5.3 (DevPass)
-        contextWindow: 262000
-        maxTokens: 65536
+        name: GLM5.3
+        contextWindow: 1048576
+        maxTokens: 1048576
         input:
         - text
         reasoningEfforts:
@@ -1159,41 +1202,17 @@ llm-pi-ai:
           high: high
           max: max
       - id: glm-5.3-flash:dev
-        name: GLM 5.3 Flash (DevPass)
-        contextWindow: 1000000
-        maxTokens: 131072
+        name: GLM5.3 Flash
+        contextWindow: 1048576
+        maxTokens: 1048576
         input:
         - text
         - image
         reasoningEfforts:
-          low: low
+          medium: medium
           high: high
-          max: max
-      - id: deepseek-v4-flash:dev
-        name: DeepSeek V4 Flash (DevPass)
-        contextWindow: 1000000
-        maxTokens: 131072
-        input:
-        - text
-      - id: deepseek-v4-flash-0731:dev
-        name: DeepSeek V4 Flash 0731 (DevPass)
-        contextWindow: 400000
-        maxTokens: 65536
-        input:
-        - text
-      - id: mimo-v2.5:dev
-        name: Mimo V2.5 (DevPass)
-        contextWindow: 1000000
-        maxTokens: 131072
-        input:
-        - text
-        - image
-      - id: minimax-m2.7:dev
-        name: MiniMax M2.7 (DevPass)
-        contextWindow: 180000
-        maxTokens: 65536
-        input:
-        - text
+          xhigh: xhigh
+      # sync-models:end
 agent-presets:
   default: standard
 profile:
@@ -1255,4 +1274,561 @@ profile:
 
 
 modelSync:
-  lastRun: 2026-09-05T18:02:41.574Z
+  lastRun: 2026-09-09T08:34:11.496Z
+prices:
+  # USD per million tokens, from models.dev `cost` (see sync-models.mjs).
+  # `rates` is sync-managed and rebuilt wholesale every run: hand edits here
+  # vanish. Put hand-kept prices in `overrides` below — the sync never touches
+  # that map, and the client prefers it over `rates`.
+  rates:
+    "command-code/MiniMaxAI/MiniMax-M2.5":
+      input: 0.3
+      output: 1.2
+      cache_read: 0.03
+      cache_write: 0.375
+    "command-code/MiniMaxAI/MiniMax-M2.7":
+      input: 0.3
+      output: 1.2
+      cache_read: 0.06
+      cache_write: 0.375
+    "command-code/MiniMaxAI/MiniMax-M3":
+      input: 0.3
+      output: 1.2
+      cache_read: 0.06
+      cache_write: 0
+    "command-code/Qwen/Qwen3.6-Max-Preview":
+      input: 1.3
+      output: 7.8
+      cache_read: 0.13
+      cache_write: 1.625
+    "command-code/Qwen/Qwen3.6-Plus":
+      input: 0.5
+      output: 3
+      cache_read: 0.05
+      cache_write: 0.625
+    "command-code/Qwen/Qwen3.7-Flash":
+      input: 0.03
+      output: 0.13
+      cache_read: 0.006
+      cache_write: 0.038
+    "command-code/Qwen/Qwen3.7-Max":
+      input: 2.5
+      output: 7.5
+      cache_read: 0.5
+      cache_write: 3.125
+    "command-code/Qwen/Qwen3.7-Plus":
+      input: 0.5
+      output: 3
+      cache_read: 0.05
+      cache_write: 0.625
+    "command-code/Qwen/Qwen3.8-27B":
+      input: 0.87
+      output: 3.5
+      cache_read: 0
+      cache_write: 0
+    "command-code/Qwen/Qwen3.8-Flash":
+      input: 0.15
+      output: 0.47
+      cache_read: 0.016
+      cache_write: 0.2
+    "command-code/Qwen/Qwen3.8-Max":
+      input: 2
+      output: 6
+      cache_read: 0.25
+      cache_write: 2.5
+    "command-code/Qwen/Qwen3.8-Max-0902":
+      input: 2
+      output: 6
+      cache_read: 0.25
+      cache_write: 2.5
+    "command-code/claude-fable-5":
+      input: 10
+      output: 50
+      cache_read: 1
+      cache_write: 12.5
+    "command-code/claude-fable-5-1":
+      input: 10
+      output: 50
+      cache_read: 0.25
+      cache_write: 12.5
+    "command-code/claude-haiku-4-5-20251001":
+      input: 1
+      output: 5
+      cache_read: 0.1
+      cache_write: 1.25
+    "command-code/claude-opus-4-7":
+      input: 5
+      output: 25
+      cache_read: 0.5
+      cache_write: 6.25
+    "command-code/claude-opus-4-8":
+      input: 5
+      output: 25
+      cache_read: 0.5
+      cache_write: 6.25
+    "command-code/claude-opus-5":
+      input: 5
+      output: 25
+      cache_read: 0.5
+      cache_write: 6.25
+    "command-code/claude-sonnet-4-6":
+      input: 3
+      output: 15
+      cache_read: 0.3
+      cache_write: 3.75
+    "command-code/claude-sonnet-5":
+      input: 2
+      output: 10
+      cache_read: 0.2
+      cache_write: 2.5
+    "command-code/deepseek/deepseek-v4-flash":
+      input: 0.14
+      output: 0.28
+      cache_read: 0.0028
+      cache_write: 0
+    "command-code/deepseek/deepseek-v4-flash-vision-exp":
+      input: 0.14
+      output: 0.28
+      cache_read: 0.0028
+      cache_write: 0
+    "command-code/deepseek/deepseek-v4-pro":
+      input: 0.435
+      output: 0.87
+      cache_read: 0.003625
+      cache_write: 0
+    "command-code/google/gemini-3.1-flash-lite":
+      input: 0.25
+      output: 1.5
+      cache_read: 0.025
+      cache_write: 0
+    "command-code/google/gemini-3.5-flash":
+      input: 1.5
+      output: 9
+      cache_read: 0.15
+      cache_write: 0
+    "command-code/google/gemini-3.5-flash-lite":
+      input: 0.3
+      output: 2.5
+      cache_read: 0.03
+      cache_write: 0
+    "command-code/google/gemini-3.6-flash":
+      input: 0.75
+      output: 3.75
+      cache_read: 0.075
+      cache_write: 0
+    "command-code/google/gemini-3.7-flash":
+      input: 0.75
+      output: 3.75
+      cache_read: 0.075
+      cache_write: 0
+    "command-code/google/gemini-3.8-flash":
+      input: 0.75
+      output: 3.75
+      cache_read: 0.075
+      cache_write: 0
+    "command-code/gpt-5.3-codex":
+      input: 1.75
+      output: 14
+      cache_read: 0.175
+      cache_write: 0
+    "command-code/gpt-5.4":
+      input: 2.5
+      output: 15
+      cache_read: 0.25
+      cache_write: 0
+    "command-code/gpt-5.4-mini":
+      input: 0.75
+      output: 4.5
+      cache_read: 0.075
+      cache_write: 0
+    "command-code/gpt-5.5":
+      input: 5
+      output: 30
+      cache_read: 0.5
+      cache_write: 0
+    "command-code/gpt-5.6-luna":
+      input: 0.2
+      output: 1.2
+      cache_read: 0.02
+      cache_write: 0.25
+    "command-code/gpt-5.6-sol":
+      input: 4
+      output: 20
+      cache_read: 0.4
+      cache_write: 5
+    "command-code/gpt-5.6-terra":
+      input: 2
+      output: 12
+      cache_read: 0.2
+      cache_write: 2.5
+    "command-code/meituan/LongCat-2.0:free":
+      input: 0
+      output: 0
+      cache_read: 0
+      cache_write: 0
+    "command-code/meta/muse-spark-1.1":
+      input: 1.25
+      output: 4.25
+      cache_read: 0.15
+      cache_write: 0
+    "command-code/meta/muse-spark-1.2":
+      input: 1.25
+      output: 4.25
+      cache_read: 0.15
+      cache_write: 0
+    "command-code/meta/muse-spark-1.2-contributor":
+      input: 0.1
+      output: 0.2
+      cache_read: 0.002
+      cache_write: 0
+    "command-code/meta/muse-spark-1.3":
+      input: 1.25
+      output: 4.25
+      cache_read: 0.15
+      cache_write: 0
+    "command-code/meta/muse-spark-1.3-contributor":
+      input: 0.1
+      output: 0.2
+      cache_read: 0.002
+      cache_write: 0
+    "command-code/moonshotai/Kimi-K2.5":
+      input: 0.6
+      output: 3
+      cache_read: 0.1
+      cache_write: 0
+    "command-code/moonshotai/Kimi-K2.6":
+      input: 0.95
+      output: 4
+      cache_read: 0.16
+      cache_write: 0
+    "command-code/moonshotai/Kimi-K2.7-Code":
+      input: 0.95
+      output: 4
+      cache_read: 0.19
+      cache_write: 0
+    "command-code/moonshotai/Kimi-K2.7-Code-Highspeed":
+      input: 1.9
+      output: 8
+      cache_read: 0.38
+      cache_write: 0
+    "command-code/moonshotai/Kimi-K3":
+      input: 3
+      output: 15
+      cache_read: 0.3
+      cache_write: 0
+    "command-code/nvidia/nemotron-3-ultra-550b-a55b":
+      input: 0.5
+      output: 2.5
+      cache_read: 0.15
+      cache_write: 0
+    "command-code/poolside/laguna-s-2.1-free":
+      input: 0
+      output: 0
+      cache_read: 0
+      cache_write: 0
+    "command-code/sakana/fugu-ultra":
+      input: 5
+      output: 30
+      cache_read: 0.5
+      cache_write: 0
+    "command-code/stepfun/Step-3.5-Flash":
+      input: 0.1
+      output: 0.3
+      cache_read: 0.02
+      cache_write: 0
+    "command-code/stepfun/Step-3.7-Flash":
+      input: 0.185
+      output: 1.11
+      cache_read: 0.037
+      cache_write: 0
+    "command-code/tencent/hy4-preview":
+      input: 0.834
+      output: 2.501
+      cache_read: 0.042
+      cache_write: 0
+    "command-code/thinkingmachines/inkling":
+      input: 1.87
+      output: 4.68
+      cache_read: 0.374
+      cache_write: 0
+    "command-code/thinkingmachines/inkling-small":
+      input: 0.58
+      output: 1.44
+      cache_read: 0
+      cache_write: 0
+    "command-code/xai/grok-4.5":
+      input: 2
+      output: 6
+      cache_read: 0.3
+      cache_write: 0
+    "command-code/xai/grok-4.6":
+      input: 2
+      output: 6
+      cache_read: 0.5
+      cache_write: 0
+    "command-code/xiaomi/mimo-v2.5":
+      input: 0.14
+      output: 0.28
+      cache_read: 0.0028
+      cache_write: 0
+    "command-code/xiaomi/mimo-v2.5-pro":
+      input: 0.435
+      output: 0.87
+      cache_read: 0.0036
+      cache_write: 0
+    "command-code/z-ai/glm-5.3-flash":
+      input: 0.075
+      output: 0.25
+      cache_read: 0.015
+      cache_write: 0
+    "command-code/zai-org/GLM-5":
+      input: 1
+      output: 3.2
+      cache_read: 0.2
+      cache_write: 0
+    "command-code/zai-org/GLM-5.1":
+      input: 1.4
+      output: 4.4
+      cache_read: 0.26
+      cache_write: 0
+    "command-code/zai-org/GLM-5.2":
+      input: 1.4
+      output: 4.4
+      cache_read: 0.26
+      cache_write: 0
+    "command-code/zai-org/GLM-5.2-Fast":
+      input: 2.1
+      output: 6.6
+      cache_read: 0.21
+      cache_write: 0
+    "command-code/zai-org/GLM-5.3":
+      input: 1.4
+      output: 4.4
+      cache_read: 0.26
+      cache_write: 0
+    "deepseek-official/deepseek-v4-flash":
+      input: 0.0983
+      output: 0.1966
+      cache_read: 0
+      cache_write: 0
+    "deepseek-official/deepseek-v4-pro":
+      input: 0.435
+      output: 0.87
+      cache_read: 0
+      cache_write: 0
+    "electronhub/deepseek-v4-flash-0731:dev":
+      input: 0.1596
+      output: 0.399
+      cache_read: 0.0456
+      cache_write: 0
+    "electronhub/deepseek-v4-flash:dev":
+      input: 0.0983
+      output: 0.1966
+      cache_read: 0
+      cache_write: 0
+    "electronhub/glm-5.3-flash:dev":
+      input: 0.15
+      output: 0.5
+      cache_read: 0.03
+      cache_write: 0
+    "electronhub/glm-5.3:dev":
+      input: 1.4
+      output: 4.4
+      cache_read: 0.26
+      cache_write: 0
+    "electronhub/mimo-v2.5:dev":
+      input: 0.14
+      output: 0.28
+      cache_read: 0.0028
+      cache_write: 0
+    "electronhub/minimax-m2.7:dev":
+      input: 0.3
+      output: 1.2
+      cache_read: 0.06
+      cache_write: 0.375
+    "electronhub/qwen3.8-27b:dev":
+      input: 0.15
+      output: 0.7
+      cache_read: 0.04
+      cache_write: 0
+    "meridian/claude-fable-5":
+      input: 10
+      output: 50
+      cache_read: 1
+      cache_write: 12.5
+    "meridian/claude-haiku-4-5":
+      input: 1
+      output: 5
+      cache_read: 0.1
+      cache_write: 1.25
+    "meridian/claude-opus-4-6":
+      input: 5
+      output: 25
+      cache_read: 0.5
+      cache_write: 6.25
+    "meridian/claude-opus-4-7":
+      input: 5
+      output: 25
+      cache_read: 0.5
+      cache_write: 6.25
+    "meridian/claude-opus-4-8":
+      input: 5
+      output: 25
+      cache_read: 0.5
+      cache_write: 6.25
+    "meridian/claude-opus-5":
+      input: 5
+      output: 25
+      cache_read: 0.5
+      cache_write: 6.25
+    "meridian/claude-sonnet-4-6":
+      input: 3
+      output: 15
+      cache_read: 0.3
+      cache_write: 3.75
+    "meridian/claude-sonnet-5":
+      input: 2
+      output: 10
+      cache_read: 0.2
+      cache_write: 2.5
+    "opencode-go-responses/muse-spark-1.3-contributor":
+      input: 0.1
+      output: 0.2
+      cache_read: 0.002
+      cache_write: 0
+    "opencode-go/glm-5.3-flash":
+      input: 0.15
+      output: 0.5
+      cache_read: 0.03
+      cache_write: 0
+    "opencode-go/hy3":
+      input: 0.14
+      output: 0.58
+      cache_read: 0.035
+      cache_write: 0
+    "opencode-go/hy3-preview":
+      input: 0.17
+      output: 0.566661
+      cache_read: 0.051
+      cache_write: 0
+    "opencode-go/hy4-preview":
+      input: 0.834
+      output: 2.501
+      cache_read: 0.042
+      cache_write: 0
+    "opencode-go/longcat-2.0":
+      input: 0.75
+      output: 3
+      cache_read: 0.015
+      cache_write: 0
+    "opencode-go/mimo-v2-omni":
+      input: 0.14
+      output: 0.28
+      cache_read: 0.0028
+      cache_write: 0
+    "opencode-go/mimo-v2-pro":
+      input: 0.435
+      output: 0.87
+      cache_read: 0.0036
+      cache_write: 0
+    "opencode-go/mimo-v2.5":
+      input: 0.14
+      output: 0.28
+      cache_read: 0.0028
+      cache_write: 0
+    "opencode-go/mimo-v2.5-pro":
+      input: 0.4
+      output: 1.5
+      cache_read: 0.08
+      cache_write: 0
+    "opencode-go/muse-spark-1.2-contributor":
+      input: 0.1
+      output: 0.2
+      cache_read: 0.002
+      cache_write: 0
+    "opencode-go/muse-spark-1.3-contributor":
+      input: 0.1
+      output: 0.2
+      cache_read: 0.002
+      cache_write: 0
+    "opencode-go/omen-alpha":
+      input: 0.2
+      output: 0.66
+      cache_read: 0.04
+      cache_write: 0
+    "opencode-go/qwen3.7-max":
+      input: 2.5
+      output: 7.5
+      cache_read: 0.5
+      cache_write: 3.125
+    "opencode-go/qwen3.7-plus":
+      input: 0.4
+      output: 1.6
+      cache_read: 0.08
+      cache_write: 0.5
+    "opencode-go/qwen3.8-flash":
+      input: 0.11875
+      output: 0.40073
+      cache_read: 0.01187
+      cache_write: 0.14844
+    "opencode-go/qwen3.8-max":
+      input: 2
+      output: 6
+      cache_read: 0.25
+      cache_write: 2.5
+    "opencode/qwen3.6-plus":
+      input: 0.28
+      output: 1.69
+      cache_read: 0.0282
+      cache_write: 0.3525
+    "zai/glm-4.5":
+      input: 0.6
+      output: 2.2
+      cache_read: 0.11
+      cache_write: 0
+    "zai/glm-4.5-air":
+      input: 0.13
+      output: 0.85
+      cache_read: 0.025
+      cache_write: 0
+    "zai/glm-4.6":
+      input: 0.44999999999999996
+      output: 1.5
+      cache_read: 0
+      cache_write: 0
+    "zai/glm-4.7":
+      input: 0.45
+      output: 1.65
+      cache_read: 0
+      cache_write: 0
+    "zai/glm-5":
+      input: 1
+      output: 3.2
+      cache_read: 0.2
+      cache_write: 0
+    "zai/glm-5-turbo":
+      input: 0.72
+      output: 3.2
+      cache_read: 0
+      cache_write: 0
+    "zai/glm-5.1":
+      input: 1.756
+      output: 5.518
+      cache_read: 0
+      cache_write: 0
+    "zai/glm-5.2":
+      input: 1.254
+      output: 5.016
+      cache_read: 0.3135
+      cache_write: 0
+    "zai/glm-5.3":
+      input: 1.4
+      output: 4.4
+      cache_read: 0.26
+      cache_write: 0
+    "zai/glm-5.3-flash":
+      input: 0.15
+      output: 0.5
+      cache_read: 0.03
+      cache_write: 0
+  overrides: {}

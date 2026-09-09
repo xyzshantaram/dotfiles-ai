@@ -1,6 +1,7 @@
 import * as react from "react";
 import { useDismissable } from "../../shared/client-react";
 import { injectStyle, shippedClass } from "../../shared/client-util";
+import { formatApproxCost, priceBuckets, rateKey, resolveRate } from "./cost";
 import localCss from "./client.module.css";
 
 const PLUGIN_NAME = "context-meter";
@@ -44,10 +45,52 @@ var inject = ["slots"];
 var name = PLUGIN_NAME;
 
 function apply(ctx: any) {
+  // Prices arrive through the `prices` settings namespace this plugin's host
+  // half owns (rates rebuilt by sync-models.mjs, overrides hand-kept). The
+  // seat below reads them through this scope; when the settings transport is
+  // absent the scope stays inert and every figure degrades to unknown price
+  // instead of throwing the ring off the composer row.
+  let pricesScope: any;
+  try {
+    pricesScope = ctx.settingsScope.bind({ namespace: "prices" });
+  } catch (e) {
+    const snapshot = Object.freeze({ status: "unavailable", value: undefined });
+    pricesScope = { store: { subscribe: () => () => {}, getSnapshot: () => snapshot } };
+  }
+
+  // The live model selection lives behind the modelDirectories service,
+  // which mounts independently of this slot. The box holds whatever has
+  // arrived; the seat below subscribes to the version so a late arrival
+  // re-renders into a priced figure instead of sticking on unknown price.
+  // Without the service (or its package) the box stays empty and the cost
+  // rows stay unknown — a missing selection must never invent a rate.
+  const servicesBox: { models?: any; version: number; listeners: Set<(v: number) => void> } = {
+    version: 0,
+    listeners: new Set(),
+  };
+  const notifyServices = () => {
+    servicesBox.version += 1;
+    for (const listener of servicesBox.listeners) listener(servicesBox.version);
+  };
+  try {
+    ctx.inject(["modelDirectories"], (scope: any) => {
+      servicesBox.models = scope.modelDirectories;
+      notifyServices();
+    });
+  } catch (e) {
+    // No modelDirectories on this context: the seat below prices nothing.
+  }
+
   ctx.slots.inject("conversation.input.right", function* () {
     yield ctx.slots.register(
       { name: "conversation.input.right", id: "true-context-meter", order: 50 },
-      (props: any) => react.createElement(Meter, { useProjection: props.useProjection }),
+      (props: any) =>
+        react.createElement(Meter, {
+          useProjection: props.useProjection,
+          sessionId: props.sessionId,
+          pricesScope: pricesScope,
+          servicesBox: servicesBox,
+        }),
     );
   });
 
@@ -144,6 +187,107 @@ function apply(ctx: any) {
     const [hovering, setHovering] = react.useState(false);
     const rootRef = react.useRef(null);
 
+    // Resolved prices doc ({rates, overrides}) through the scope bound in
+    // apply(). A revised settings document re-resolves and re-renders, so a
+    // sync-models run shows up without a reload. The subscribe closure is
+    // stable: without useCallback every render would resubscribe the store.
+    const pricesScope = props.pricesScope;
+    const pricesSubscribe = react.useCallback(
+      (callback: any) => pricesScope.store.subscribe(callback),
+      [pricesScope],
+    );
+    const pricesSnap = react.useSyncExternalStore(pricesSubscribe, () =>
+      pricesScope.store.getSnapshot(),
+    );
+
+    // Late-arriving modelDirectories bumps the box version and re-renders
+    // into a priced figure instead of sticking on unknown price.
+    const box = props.servicesBox;
+    const boxSubscribe = react.useCallback(
+      (callback: any) => {
+        box.listeners.add(callback);
+        return () => {
+          box.listeners.delete(callback);
+        };
+      },
+      [box],
+    );
+    const servicesVersion = react.useSyncExternalStore(boxSubscribe, () => box.version);
+
+    // The session's live model selection, shared with the model seat through
+    // the same resolver (profiles-client resolves it identically from its
+    // slot inject). Resolved in an effect, not in render: the first call per
+    // session registers the directory's lifetime effects, which do not
+    // belong in a render pass. An unknown session, or no selection yet,
+    // leaves the directory null — unknown price, never a guessed rate.
+    const sessionId = props.sessionId;
+    const [directory, setDirectory] = react.useState(null);
+    react.useEffect(() => {
+      if (box === undefined || box.models === undefined) {
+        setDirectory(null);
+        return;
+      }
+      if (typeof sessionId !== "string" || sessionId === "") {
+        setDirectory(null);
+        return;
+      }
+      let resolved: any = null;
+      try {
+        resolved = box.models.directoryFor(sessionId);
+      } catch (e) {
+        resolved = null;
+      }
+      setDirectory(resolved);
+      // Refresh the already-shared snapshot. Without this a freshly opened
+      // session prices nothing until something else touches the model seat.
+      if (resolved !== null) {
+        try {
+          const pending = resolved.load();
+          if (pending !== undefined && pending !== null && typeof pending.catch === "function")
+            pending.catch(() => {});
+        } catch (e) {}
+      }
+    }, [box, sessionId, servicesVersion]);
+
+    const dirSubscribe = react.useCallback(
+      (callback: any) => (directory === null ? () => {} : directory.store.subscribe(callback)),
+      [directory],
+    );
+    const dirSnap = react.useSyncExternalStore(dirSubscribe, () =>
+      directory === null ? null : directory.store.getSnapshot(),
+    );
+    const current = dirSnap !== null && dirSnap !== undefined ? dirSnap.current : undefined;
+    const provider =
+      current !== undefined && current !== null && typeof current.provider === "string"
+        ? current.provider
+        : null;
+    const model =
+      current !== undefined && current !== null && typeof current.model === "string"
+        ? current.model
+        : null;
+
+    // The whole-session approximate cost at the live selection's rate. A
+    // mixed-model history prices at the current rate and says which one: the
+    // projection carries no per-model split, so any single-rate figure is an
+    // approximation, and the rate label keeps it checkable.
+    const pricesDoc =
+      pricesSnap !== null && pricesSnap !== undefined ? pricesSnap.value : undefined;
+    const rate = resolveRate(pricesDoc, provider, model);
+    let costText: string | null = null;
+    let rateLabel: string | null = null;
+    if (usage !== undefined) {
+      const totalTokens =
+        (usage.uncachedInputTokens || 0) +
+        (usage.cacheReadTokens || 0) +
+        (usage.cacheWriteTokens || 0) +
+        (usage.outputTokens || 0);
+      if (totalTokens === 0) costText = formatApproxCost(0);
+      else if (rate !== null) {
+        costText = formatApproxCost(priceBuckets(usage, rate));
+        rateLabel = provider !== null && model !== null ? rateKey(provider, model) : null;
+      } else costText = "unknown price";
+    }
+
     // No dependency list: the composer row re-renders around us, so reassert the
     // order after every render rather than only on mount. Both shipped-class
     // lookups also retry here, because at boot they can run before the shipped
@@ -164,6 +308,9 @@ function apply(ctx: any) {
     const dash = CIRCUMFERENCE * Math.min(1, trueTotal / contextWindow);
     const reading =
       formatTokens(trueTotal) + " / " + formatTokens(contextWindow) + ", " + percent + "% used";
+    // The hover tip carries the same total the panel prices, so the two
+    // surfaces can never disagree about one session.
+    const tipText = costText === null ? reading : reading + " · " + costText;
 
     const segments = TRUE_ROWS.map((part) => ({
       key: part.key,
@@ -176,7 +323,7 @@ function apply(ctx: any) {
       {
         type: "button",
         className: "ctx-meter-trigger",
-        "aria-label": reading,
+        "aria-label": tipText,
         "aria-expanded": open,
         onClick: () => setOpen(!open),
       },
@@ -270,6 +417,22 @@ function apply(ctx: any) {
           row("cw", "of which cache write", formatTokens(usage.cacheWriteTokens), true),
           row("out", "Output", formatTokens(usage.outputTokens)),
         ]),
+        react.createElement(
+          "div",
+          { key: "cg", className: "ctx-meter-group" },
+          "Session cost, approximate",
+        ),
+        react.createElement("dl", { key: "cost", className: "ctx-meter-rows" }, [
+          row("cost", "Whole session", costText ?? "unknown price"),
+          ...(rateLabel !== null ? [row("rate", "Priced at", rateLabel, true)] : []),
+        ]),
+        react.createElement(
+          "div",
+          { key: "cn", className: "ctx-meter-note" },
+          "Per-model cache rates from models.dev. The runtime exposes no " +
+            "subagent or since-compaction split, so the panel shows the " +
+            "whole-session total only.",
+        ),
       ];
     }
 
@@ -299,7 +462,7 @@ function apply(ctx: any) {
       );
     else if (hovering)
       children.push(
-        react.createElement("div", { key: "tip", className: "ctx-meter-tip" }, reading),
+        react.createElement("div", { key: "tip", className: "ctx-meter-tip" }, tipText),
       );
 
     return react.createElement(

@@ -20,7 +20,12 @@
 //      reasoningEfforts derived from models.dev's per-level reasoning flags.
 //   4. Checks every model referenced by `profile.chains` and warns about any
 //      that are missing from the (now seeded) providers.
-//   5. Writes the sync time to `modelSync.lastRun` so the file records when it
+//   5. Rebuilds the sync-managed `rates:` map of the top-level `prices:`
+//      section from models.dev `cost` data (USD per million tokens), so the
+//      context-meter client can price its token buckets. The hand-kept
+//      `overrides:` map in the same section is never touched here: a price
+//      the sync clobbers is a price nobody sets twice.
+//   6. Writes the sync time to `modelSync.lastRun` so the file records when it
 //      was last seeded.
 //
 // This is a MANUAL tool. Run it, review the diff, commit, then run sync.sh.
@@ -39,7 +44,7 @@
 //   skipped with a warning, exactly like a failed fetch.
 
 import { readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as YAML from "yaml";
 
@@ -158,30 +163,12 @@ function indexProviderModels(models) {
 async function fetchModelsDev() {
   const res = await fetch(MODELS_DEV_URL);
   if (!res.ok) throw new Error(`models.dev HTTP ${res.status}`);
-  const json = await res.json();
-  const providers = {};
-  for (const [pid, p] of Object.entries(json || {})) {
-    if (!p || typeof p !== "object") continue;
-    providers[pid] = indexProviderModels(p.models);
-  }
-  const unionById = new Map();
-  const unionNorm = new Map();
-  for (const idx of Object.values(providers)) {
-    for (const [id, list] of idx.byId) {
-      if (!unionById.has(id)) unionById.set(id, []);
-      unionById.get(id).push(...list);
-    }
-    for (const [n, list] of idx.norm) {
-      if (!unionNorm.has(n)) unionNorm.set(n, []);
-      unionNorm.get(n).push(...list);
-    }
-  }
-  return { providers, union: { byId: unionById, norm: unionNorm } };
+  return indexModelsDev(await res.json());
 }
 
 // Within a single index, try exact id, normalized id, exact tail-after-slash,
 // normalized tail. The first strategy that yields a non-empty list wins.
-function matchId(idx, id) {
+function matchIdLists(idx, id) {
   const candidates = [
     idx.byId.get(id),
     idx.norm.get(id.toLowerCase().replace(/[^a-z0-9]/g, "")),
@@ -190,8 +177,12 @@ function matchId(idx, id) {
   const tail = slash >= 0 ? id.slice(slash + 1) : id;
   candidates.push(idx.byId.get(tail));
   candidates.push(idx.norm.get(tail.toLowerCase().replace(/[^a-z0-9]/g, "")));
-  for (const list of candidates) if (list && list.length) return list[0];
-  return null;
+  return candidates.filter((list) => list && list.length);
+}
+
+function matchId(idx, id) {
+  const lists = matchIdLists(idx, id);
+  return lists.length ? lists[0][0] : null;
 }
 
 // Three-tier ordered lookup. First hit wins, never unioned across tiers.
@@ -237,6 +228,216 @@ function reasoningEffortsForEntry(entry) {
     }
   }
   return Object.keys(out).length ? out : null;
+}
+
+// ---- Approximate cost prices (ticket #99). ----
+// models.dev carries per-model USD-per-million `cost` {input, output,
+// cache_read, cache_write}; most {baseURL}/models endpoints carry no prices
+// at all, so this fetch is the only one that sees them and no second fetcher
+// is added. The context-meter client prices its tokenUsage buckets from a
+// top-level `prices:` section: `rates` is rebuilt wholesale every run (a hand
+// edit there would vanish without warning), while `overrides` is hand-kept
+// and never touched here. Both maps are keyed "provider/model".
+
+/** Settings key for one rate row. The client resolves the same key. */
+function priceKey(provider, model) {
+  return `${provider}/${model}`;
+}
+
+// models.dev `cost` to a rate row, or null when the entry cannot price.
+// input and output must both be present: without them the row is not a
+// price and the client renders "unknown price". Absent cache dimensions
+// bill as zero — models.dev omits uncharged dimensions (zai writes
+// cache_write: 0 while resellers omit the key), so only the two dominant
+// dimensions gate. Extra dimensions (e.g. reasoning) are ignored.
+function rateForEntry(entry) {
+  const cost = entry?.cost;
+  if (!cost || typeof cost !== "object") return null;
+  if (typeof cost.input !== "number" || !isFinite(cost.input)) return null;
+  if (typeof cost.output !== "number" || !isFinite(cost.output)) return null;
+  const dim = (v) => (typeof v === "number" && isFinite(v) ? v : 0);
+  return {
+    input: cost.input,
+    output: cost.output,
+    cache_read: dim(cost.cache_read),
+    cache_write: dim(cost.cache_write),
+  };
+}
+
+// Pure half of fetchModelsDev: index one models.dev api.json document.
+// Split out so tests can build the real lookup index from a fixture without
+// touching the network; the fetch half stays a thin wrapper below.
+function indexModelsDev(json) {
+  const providers = {};
+  for (const [pid, p] of Object.entries(json || {})) {
+    if (!p || typeof p !== "object") continue;
+    providers[pid] = indexProviderModels(p.models);
+  }
+  const unionById = new Map();
+  const unionNorm = new Map();
+  for (const idx of Object.values(providers)) {
+    for (const [id, list] of idx.byId) {
+      if (!unionById.has(id)) unionById.set(id, []);
+      unionById.get(id).push(...list);
+    }
+    for (const [n, list] of idx.norm) {
+      if (!unionNorm.has(n)) unionNorm.set(n, []);
+      unionNorm.get(n).push(...list);
+    }
+  }
+  return { providers, union: { byId: unionById, norm: unionNorm } };
+}
+
+// Fresh managed rates for every target the session layer can actually run:
+// {route, id} pairs priced through the same three-tier lookup the seed uses
+// (electronhub :dev ids look up stripped, exactly like the seed). Targets
+// without a models.dev entry, or with an entry that cannot price, are left
+// out: the client renders those "unknown price" rather than guessing.
+function buildFreshRates(targets, db) {
+  const rates = new Map();
+  const tiers = { 1: 0, 2: 0, 3: 0 };
+  for (const { route, id } of targets) {
+    const lookupId = route === "electronhub" && id.endsWith(":dev") ? id.slice(0, -4) : id;
+    const hit = pricedLookup(lookupId, db, route);
+    if (!hit) continue;
+    const rate = rateForEntry(hit.entry);
+    if (!rate) continue;
+    tiers[hit.tier]++;
+    rates.set(priceKey(route, id), rate);
+  }
+  return { rates, tiers };
+}
+
+// Same three tiers as lookupModelsDev, but within the winning tier a priced
+// (non-zero) entry beats a free-plan row. models.dev lists reseller free
+// plans beside vendor rows (xiaomi-token-plan-cn/mimo-v2.5 at $0 next to
+// xiaomi/mimo-v2.5 at $0.14), and union order is arbitrary — first-hit
+// would price paid gateway traffic at $0. A tier whose every candidate is
+// $0 keeps its first row: genuinely free models (LongCat-2.0:free) must not
+// inherit a paid vendor's price, and a route's own free catalog row stays
+// authoritative over a paid higher tier.
+function pricedLookup(id, db, routeProviderId) {
+  if (!db) return null;
+  const tiered = [];
+  const t1 = TIER1_ROUTE[routeProviderId];
+  if (t1 && db.providers[t1]) tiered.push({ idx: db.providers[t1], tier: 1 });
+  for (const [re, pid] of TIER2_PREFIX_RE) {
+    if (!re.test(id)) continue;
+    if (!db.providers[pid]) continue;
+    tiered.push({ idx: db.providers[pid], tier: 2 });
+  }
+  tiered.push({ idx: db.union, tier: 3 });
+  for (const { idx, tier } of tiered) {
+    const cands = [];
+    for (const list of matchIdLists(idx, id)) cands.push(...list);
+    if (!cands.length) continue;
+    // First priced non-zero row wins; else the first priced row (genuinely
+    // free); else the first candidate (unpriced — the caller skips it).
+    const nonZero = cands.find((e) => {
+      const r = rateForEntry(e);
+      return r !== null && (r.input > 0 || r.output > 0);
+    });
+    if (nonZero) return { entry: nonZero, tier };
+    const priced = cands.find((e) => rateForEntry(e) !== null);
+    return { entry: priced ?? cands[0], tier };
+  }
+  return null;
+}
+
+// Managed header rewritten over `prices:` on every run. It names the
+// override contract: without it a hand edit to `rates` vanishes silently
+// and the owner learns about it from a wrong dollar figure.
+const PRICES_HEAD = [
+  "prices:",
+  "  # USD per million tokens, from models.dev `cost` (see sync-models.mjs).",
+  "  # `rates` is sync-managed and rebuilt wholesale every run: hand edits here",
+  "  # vanish. Put hand-kept prices in `overrides` below — the sync never touches",
+  "  # that map, and the client prefers it over `rates`.",
+  "  rates:",
+];
+
+const PRICES_OVERRIDES_DEFAULT = ["  overrides: {}"];
+
+/** Quote one rates key. Model ids contain `:` and `/` (glm-5.3:dev), and an
+ * unquoted key with a colon reads as a nested map to some YAML parsers. */
+function pricesRateLines(sortedEntries) {
+  const out = [];
+  for (const [key, rate] of sortedEntries) {
+    out.push(`    "${key}":`);
+    out.push(`      input: ${rate.input}`);
+    out.push(`      output: ${rate.output}`);
+    out.push(`      cache_read: ${rate.cache_read}`);
+    out.push(`      cache_write: ${rate.cache_write}`);
+  }
+  return out;
+}
+
+// Line index of the first `  overrides:` line in a prices block, or -1.
+// Anything from there to the block end is hand-kept and preserved verbatim.
+function overridesLine(block) {
+  for (let i = 0; i < block.length; i++) {
+    if (/^  overrides:/.test(block[i])) return i;
+  }
+  return -1;
+}
+
+// Lines of an existing prices block the rebuild drops that are NOT old rate
+// data: non-blank, non-comment lines outside the rates region and the
+// overrides tail (stray keys, typo'd maps). The loop bound already excludes
+// the overrides tail; the rates region is skipped below. Old rate entries
+// are expected turnover, not loss; these are. main() warns so the manual
+// review step sees them instead of losing them silently.
+function droppedPricesLines(block) {
+  const over = overridesLine(block);
+  const tail = over >= 0 ? over : block.length;
+  let ratesAt = -1;
+  for (let i = 0; i < tail; i++) {
+    if (/^  rates:/.test(block[i])) {
+      ratesAt = i;
+      break;
+    }
+  }
+  // The managed rates region runs from the rates key to the next line at
+  // indent 2 or less: rate rows sit at indent 4, their fields at 6. A
+  // 2-space key after the rows is a stray of its own, not more rates.
+  let ratesEnd = tail;
+  if (ratesAt >= 0) {
+    ratesEnd = ratesAt + 1;
+    while (ratesEnd < tail) {
+      const line = block[ratesEnd];
+      if (/^\s*$/.test(line) || /^\s*#/.test(line)) {
+        ratesEnd++;
+        continue;
+      }
+      const indent = (line.match(/^\s*/) || [""])[0].length;
+      if (indent <= 2) break;
+      ratesEnd++;
+    }
+  }
+  let dropped = 0;
+  for (let i = 0; i < tail; i++) {
+    if (i === 0) continue;
+    if (ratesAt >= 0 && i >= ratesAt && i < ratesEnd) continue;
+    const line = block[i];
+    if (/^\s*$/.test(line) || /^\s*#/.test(line)) continue;
+    // One warning per stray key is enough; deeper lines attach to it and the
+    // manual diff review shows the rest.
+    const indent = (line.match(/^\s*/) || [""])[0].length;
+    if (indent <= 2) dropped++;
+  }
+  return dropped;
+}
+
+// Full replacement `prices:` block: managed head, fresh rates sorted by key
+// (fetch order would churn the diff), then the existing overrides tail
+// verbatim — or an empty overrides map when the section is new. Rate rows
+// the sync cannot price are simply absent.
+function renderPricesSection(sortedEntries, existing) {
+  const tail =
+    existing !== null && overridesLine(existing) >= 0
+      ? existing.slice(overridesLine(existing))
+      : PRICES_OVERRIDES_DEFAULT;
+  return [...PRICES_HEAD, ...pricesRateLines(sortedEntries), ...tail];
 }
 
 /** The model ids models.dev lists for one provider. */
@@ -342,13 +543,12 @@ function analyzeDocument(doc, text) {
     }
   }
 
-  // modelSync is a top-level block. Its line range starts at the `modelSync:`
-  // key and ends (exclusive) where the next top-level line begins, or at EOF.
-  const root = doc.contents;
-  let modelSyncRange = null;
-  const msPair = root?.items?.find((p) => p.key?.value === "modelSync");
-  if (msPair) {
-    const start = lineOfOffset(text, msPair.key.srcToken.offset);
+  // A top-level block's line range starts at its key and ends (exclusive)
+  // where the next top-level line begins, or at EOF.
+  function topLevelRange(key) {
+    const pair = root?.items?.find((p) => p.key?.value === key);
+    if (!pair) return null;
+    const start = lineOfOffset(text, pair.key.srcToken.offset);
     const lines = text.split("\n");
     let end = lines.length; // exclusive; the section runs to EOF by default
     for (let i = start + 1; i < lines.length; i++) {
@@ -358,10 +558,16 @@ function analyzeDocument(doc, text) {
         break;
       }
     }
-    modelSyncRange = { start, end };
+    return { start, end };
   }
 
-  return { providers, byName, chainRefs, visionChainRefs, modelSyncRange };
+  // modelSync and prices are top-level blocks; their ranges come from the
+  // shared helper above.
+  const root = doc.contents;
+  const modelSyncRange = topLevelRange("modelSync");
+  const pricesRange = topLevelRange("prices");
+
+  return { providers, byName, chainRefs, visionChainRefs, modelSyncRange, pricesRange };
 }
 
 // Locate a provider's `models:` block as line indices: the line of the
@@ -475,7 +681,7 @@ function entryText(id, name, meta) {
 async function main() {
   const text = readFileSync(SETTINGS, "utf8");
   const doc = YAML.parseDocument(text, { keepSourceTokens: true });
-  const { providers, byName, chainRefs, visionChainRefs, modelSyncRange } =
+  const { providers, byName, chainRefs, visionChainRefs, modelSyncRange, pricesRange } =
     analyzeDocument(doc, text);
   // Chain-mentioned model ids per provider route. The catalog cut exempts
   // these when the live endpoint serves them.
@@ -738,6 +944,57 @@ async function main() {
     warnings++;
   }
   if (warnings === 0) console.log("  all chain-referenced models are present");
+
+  // Approximate cost prices: the managed `rates:` map covers every model id
+  // the seeded providers serve after this run plus every chain-referenced
+  // model (catalog routes and unseeded providers have no models list here,
+  // but sessions still run them). Without models.dev metadata the section
+  // stays exactly as it was: unwritten prices beat wrong ones.
+  let pricesAppendBlock = null;
+  if (!modelsDevIndex) {
+    console.warn("  ! models.dev metadata missing; leaving prices: untouched");
+  } else {
+    const targets = new Map(); // priceKey -> {route, id}; chain refs dedupe seeds
+    for (const p of providers) {
+      if (CATALOG_ROUTES.has(p.name)) continue; // no models list; chains cover it
+      for (const id of p.modelIds) targets.set(priceKey(p.name, id), { route: p.name, id });
+    }
+    for (const ref of chainRefs) {
+      const slash = ref.indexOf("/");
+      if (slash < 0) continue;
+      const prov = ref.slice(0, slash);
+      const model = ref.slice(slash + 1);
+      if (prov === "" || model === "") continue;
+      targets.set(priceKey(prov, model), { route: prov, id: model });
+    }
+    const { rates, tiers } = buildFreshRates([...targets.values()], modelsDevIndex);
+    const fresh = [...rates.entries()].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+    const existing = pricesRange ? lines.slice(pricesRange.start, pricesRange.end) : null;
+    if (existing !== null) {
+      const dropped = droppedPricesLines(existing);
+      if (dropped > 0) {
+        console.warn(
+          `  ! prices: dropping ${dropped} stray line(s) outside rates:/overrides:; review the diff`,
+        );
+      }
+    }
+    const block = renderPricesSection(fresh, existing);
+    if (!DRY_RUN) {
+      if (pricesRange) {
+        edits.push({
+          at: pricesRange.start,
+          deleteCount: pricesRange.end - pricesRange.start,
+          block,
+        });
+      } else {
+        pricesAppendBlock = block;
+      }
+    }
+    console.log(
+      `  prices: ${fresh.length} rate(s) (tiers ${tiers[1]}/${tiers[2]}/${tiers[3]}), ` +
+        (DRY_RUN ? "dry-run, not written" : pricesRange ? "rates rebuilt" : "section created"),
+    );
+  }
   // Record the last sync time in the file's modelSync section.
   const now = new Date().toISOString();
   let modelSyncAppend = false;
@@ -761,12 +1018,20 @@ async function main() {
         ? `  (modelSync.lastRun would be updated to ${now})`
         : `  (modelSync.lastRun would be set to ${now})`,
     );
-  } else if (edits.length > 0 || modelSyncAppend) {
+    console.log(
+      pricesRange
+        ? `  (prices.rates would be rebuilt)`
+        : `  (prices: section would be created)`,
+    );
+  } else if (edits.length > 0 || modelSyncAppend || pricesAppendBlock) {
     edits.sort((a, b) => b.at - a.at);
     for (const e of edits) {
       if (e.deleteCount != null) lines.splice(e.at, e.deleteCount, ...(e.block || []));
       else lines.splice(e.at, 0, ...e.block);
     }
+    // Appended sections land in file order: prices before modelSync, which
+    // has always been last.
+    if (pricesAppendBlock) lines.push(...pricesAppendBlock);
     if (modelSyncAppend) lines.push("modelSync:", `  lastRun: ${now}`);
     writeFileSync(SETTINGS, lines.join("\n"), "utf8");
     console.log(`\nwrote ${SETTINGS} (lastRun ${now})`);
@@ -786,7 +1051,17 @@ async function main() {
   );
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+// Importing this file (e.g. from its vitest suite) must not seed anything:
+// main() runs only for a direct `node sync-models.mjs` invocation.
+const RUN_AS_SCRIPT =
+  typeof process.argv[1] === "string" &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (RUN_AS_SCRIPT) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}
+
+export { priceKey, rateForEntry, indexModelsDev, buildFreshRates, renderPricesSection, droppedPricesLines };

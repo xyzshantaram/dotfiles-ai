@@ -104,6 +104,38 @@ var HLJS_THEME_CSS = [
   ".hljs-deletion{color:#ffdcd7;background-color:#67060c}"
 ].join("");
 
+// plugins/context-meter/src/cost.ts
+function num(value) {
+  return typeof value === "number" && isFinite(value) ? value : 0;
+}
+function priceBuckets(buckets, rate) {
+  return (num(buckets.uncachedInputTokens) * num(rate.input) + num(buckets.cacheReadTokens) * num(rate.cache_read) + num(buckets.cacheWriteTokens) * num(rate.cache_write) + num(buckets.outputTokens) * num(rate.output)) / 1e6;
+}
+function formatApproxCost(usd) {
+  if (!isFinite(usd)) return "~$\u2014.\u2014\u2014";
+  if (usd < 0.01) return "~$" + usd.toFixed(4);
+  return "~$" + usd.toFixed(2);
+}
+function rateKey(provider, model) {
+  return provider + "/" + model;
+}
+function isPriced(rate) {
+  if (rate === null || rate === void 0 || typeof rate !== "object") return false;
+  const r = rate;
+  return typeof r["input"] === "number" && typeof r["output"] === "number";
+}
+function resolveRate(doc, provider, model) {
+  if (doc === null || doc === void 0) return null;
+  if (typeof provider !== "string" || provider === "") return null;
+  if (typeof model !== "string" || model === "") return null;
+  const key = rateKey(provider, model);
+  const over = doc.overrides !== null && doc.overrides !== void 0 ? doc.overrides[key] : void 0;
+  if (isPriced(over)) return over;
+  const base = doc.rates !== null && doc.rates !== void 0 ? doc.rates[key] : void 0;
+  if (isPriced(base)) return base;
+  return null;
+}
+
 // css-text:/home/sid/repos/dotfiles-ai/plugins/context-meter/src/client.module.css
 var client_default = ".ctx-meter-root {\n  display: inline-flex;\n  position: relative;\n}\n.ctx-meter-trigger {\n  width: 30px;\n  height: 30px;\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  background: 0 0;\n  border: none;\n  border-radius: 999px;\n  flex: none;\n  place-items: center;\n  display: grid;\n  padding: 0;\n}\n.ctx-meter-trigger:hover {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.ctx-meter-track {\n  fill: none;\n  stroke: var(--dsw-alias-border-l2);\n  stroke-width: 2.5px;\n}\n.ctx-meter-fill {\n  fill: none;\n  stroke: var(--dsw-alias-label-primary);\n  stroke-width: 2.5px;\n  stroke-linecap: round;\n}\n.ctx-meter-tip {\n  z-index: 100;\n  pointer-events: none;\n  white-space: nowrap;\n  border: 1px solid var(--dsw-alias-border-inverted);\n  background: var(--dsw-specific-menu);\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-secondary);\n  border-radius: 8px;\n  padding: 4px 8px;\n  font-size: 12px;\n  line-height: 18px;\n  font-variant-numeric: tabular-nums;\n  position: absolute;\n  bottom: calc(100% + 8px);\n  right: 0;\n}\n.ctx-meter-panel {\n  z-index: 100;\n  box-sizing: border-box;\n  border: 1px solid var(--dsw-alias-border-inverted);\n  background: var(--dsw-specific-menu);\n  width: 296px;\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-secondary);\n  cursor: default;\n  border-radius: 12px;\n  padding: 12px;\n  font-size: 12px;\n  line-height: 20px;\n  position: absolute;\n  bottom: calc(100% + 8px);\n  right: 0;\n}\n.ctx-meter-title {\n  color: var(--dsw-alias-label-primary);\n  font-weight: 500;\n}\n.ctx-meter-half + .ctx-meter-half {\n  margin-top: 12px;\n  padding-top: 10px;\n  border-top: 1px solid var(--dsw-alias-border-l3);\n}\n.ctx-meter-head {\n  align-items: baseline;\n  gap: 6px;\n  display: flex;\n}\n.ctx-meter-figures {\n  font-variant-numeric: tabular-nums;\n  color: var(--dsw-alias-label-primary);\n  margin-left: auto;\n  font-weight: 500;\n}\n.ctx-meter-bar {\n  background: var(--dsw-alias-interactive-bg-hover);\n  border-radius: 999px;\n  gap: 1px;\n  height: 4px;\n  margin: 8px 0 6px;\n  display: flex;\n  overflow: hidden;\n}\n.ctx-meter-segment {\n  background: var(--meter-tint, var(--dsw-alias-label-tertiary));\n  border-radius: 1px;\n  flex: none;\n  min-width: 2px;\n  height: 100%;\n}\n.ctx-meter-swatch {\n  background: var(--meter-tint);\n  vertical-align: baseline;\n  border-radius: 2px;\n  width: 8px;\n  height: 8px;\n  margin-right: 6px;\n  display: inline-block;\n}\n.ctx-meter-color-system {\n  --meter-tint: var(--dsw-static-neutral-bluish-400);\n}\n.ctx-meter-color-tools {\n  --meter-tint: #a78bfa;\n}\n.ctx-meter-color-messages {\n  --meter-tint: var(--dsw-static-blue-450);\n}\n.ctx-meter-rows {\n  margin: 4px 0 0;\n}\n.ctx-meter-row {\n  justify-content: space-between;\n  align-items: center;\n  gap: 12px;\n  padding: 2px 0;\n  display: flex;\n}\n.ctx-meter-row dt {\n  color: var(--dsw-alias-label-secondary);\n}\n.ctx-meter-row dd {\n  font-variant-numeric: tabular-nums;\n  color: var(--dsw-alias-label-primary);\n  margin: 0;\n}\n.ctx-meter-sub dt {\n  padding-left: 14px;\n  color: var(--dsw-alias-label-tertiary);\n}\n.ctx-meter-group {\n  color: var(--dsw-alias-label-tertiary);\n  margin-top: 8px;\n}\n.ctx-meter-note {\n  color: var(--dsw-alias-label-tertiary);\n  margin-top: 6px;\n}\n";
 
@@ -142,10 +174,38 @@ function row(key, label, value, sub) {
 var inject = ["slots"];
 var name = PLUGIN_NAME;
 function apply(ctx) {
+  let pricesScope;
+  try {
+    pricesScope = ctx.settingsScope.bind({ namespace: "prices" });
+  } catch (e) {
+    const snapshot = Object.freeze({ status: "unavailable", value: void 0 });
+    pricesScope = { store: { subscribe: () => () => {
+    }, getSnapshot: () => snapshot } };
+  }
+  const servicesBox = {
+    version: 0,
+    listeners: /* @__PURE__ */ new Set()
+  };
+  const notifyServices = () => {
+    servicesBox.version += 1;
+    for (const listener of servicesBox.listeners) listener(servicesBox.version);
+  };
+  try {
+    ctx.inject(["modelDirectories"], (scope) => {
+      servicesBox.models = scope.modelDirectories;
+      notifyServices();
+    });
+  } catch (e) {
+  }
   ctx.slots.inject("conversation.input.right", function* () {
     yield ctx.slots.register(
       { name: "conversation.input.right", id: "true-context-meter", order: 50 },
-      (props) => react2.createElement(Meter, { useProjection: props.useProjection })
+      (props) => react2.createElement(Meter, {
+        useProjection: props.useProjection,
+        sessionId: props.sessionId,
+        pricesScope,
+        servicesBox
+      })
     );
   });
   injectStyle(PLUGIN_NAME, "context-meter", client_default);
@@ -205,6 +265,78 @@ function apply(ctx) {
     const [open, setOpen] = react2.useState(false);
     const [hovering, setHovering] = react2.useState(false);
     const rootRef = react2.useRef(null);
+    const pricesScope2 = props.pricesScope;
+    const pricesSubscribe = react2.useCallback(
+      (callback) => pricesScope2.store.subscribe(callback),
+      [pricesScope2]
+    );
+    const pricesSnap = react2.useSyncExternalStore(
+      pricesSubscribe,
+      () => pricesScope2.store.getSnapshot()
+    );
+    const box = props.servicesBox;
+    const boxSubscribe = react2.useCallback(
+      (callback) => {
+        box.listeners.add(callback);
+        return () => {
+          box.listeners.delete(callback);
+        };
+      },
+      [box]
+    );
+    const servicesVersion = react2.useSyncExternalStore(boxSubscribe, () => box.version);
+    const sessionId = props.sessionId;
+    const [directory, setDirectory] = react2.useState(null);
+    react2.useEffect(() => {
+      if (box === void 0 || box.models === void 0) {
+        setDirectory(null);
+        return;
+      }
+      if (typeof sessionId !== "string" || sessionId === "") {
+        setDirectory(null);
+        return;
+      }
+      let resolved = null;
+      try {
+        resolved = box.models.directoryFor(sessionId);
+      } catch (e) {
+        resolved = null;
+      }
+      setDirectory(resolved);
+      if (resolved !== null) {
+        try {
+          const pending = resolved.load();
+          if (pending !== void 0 && pending !== null && typeof pending.catch === "function")
+            pending.catch(() => {
+            });
+        } catch (e) {
+        }
+      }
+    }, [box, sessionId, servicesVersion]);
+    const dirSubscribe = react2.useCallback(
+      (callback) => directory === null ? () => {
+      } : directory.store.subscribe(callback),
+      [directory]
+    );
+    const dirSnap = react2.useSyncExternalStore(
+      dirSubscribe,
+      () => directory === null ? null : directory.store.getSnapshot()
+    );
+    const current = dirSnap !== null && dirSnap !== void 0 ? dirSnap.current : void 0;
+    const provider = current !== void 0 && current !== null && typeof current.provider === "string" ? current.provider : null;
+    const model = current !== void 0 && current !== null && typeof current.model === "string" ? current.model : null;
+    const pricesDoc = pricesSnap !== null && pricesSnap !== void 0 ? pricesSnap.value : void 0;
+    const rate = resolveRate(pricesDoc, provider, model);
+    let costText = null;
+    let rateLabel = null;
+    if (usage !== void 0) {
+      const totalTokens = (usage.uncachedInputTokens || 0) + (usage.cacheReadTokens || 0) + (usage.cacheWriteTokens || 0) + (usage.outputTokens || 0);
+      if (totalTokens === 0) costText = formatApproxCost(0);
+      else if (rate !== null) {
+        costText = formatApproxCost(priceBuckets(usage, rate));
+        rateLabel = provider !== null && model !== null ? rateKey(provider, model) : null;
+      } else costText = "unknown price";
+    }
     react2.useEffect(() => {
       ensureShippedHidden();
       placeAfterModelSelect(rootRef.current);
@@ -217,6 +349,7 @@ function apply(ctx) {
     const percent = Math.min(100, Math.round(trueTotal / contextWindow * 100));
     const dash = CIRCUMFERENCE * Math.min(1, trueTotal / contextWindow);
     const reading = formatTokens(trueTotal) + " / " + formatTokens(contextWindow) + ", " + percent + "% used";
+    const tipText = costText === null ? reading : reading + " \xB7 " + costText;
     const segments = TRUE_ROWS.map((part) => ({
       key: part.key,
       color: part.color,
@@ -227,7 +360,7 @@ function apply(ctx) {
       {
         type: "button",
         className: "ctx-meter-trigger",
-        "aria-label": reading,
+        "aria-label": tipText,
         "aria-expanded": open,
         onClick: () => setOpen(!open)
       },
@@ -318,7 +451,21 @@ function apply(ctx) {
           row("cr", "of which cache read", formatTokens(usage.cacheReadTokens), true),
           row("cw", "of which cache write", formatTokens(usage.cacheWriteTokens), true),
           row("out", "Output", formatTokens(usage.outputTokens))
-        ])
+        ]),
+        react2.createElement(
+          "div",
+          { key: "cg", className: "ctx-meter-group" },
+          "Session cost, approximate"
+        ),
+        react2.createElement("dl", { key: "cost", className: "ctx-meter-rows" }, [
+          row("cost", "Whole session", costText ?? "unknown price"),
+          ...rateLabel !== null ? [row("rate", "Priced at", rateLabel, true)] : []
+        ]),
+        react2.createElement(
+          "div",
+          { key: "cn", className: "ctx-meter-note" },
+          "Per-model cache rates from models.dev. The runtime exposes no subagent or since-compaction split, so the panel shows the whole-session total only."
+        )
       ];
     }
     const providerHalf = react2.createElement("div", { className: "ctx-meter-half" }, [
@@ -346,7 +493,7 @@ function apply(ctx) {
       );
     else if (hovering)
       children.push(
-        react2.createElement("div", { key: "tip", className: "ctx-meter-tip" }, reading)
+        react2.createElement("div", { key: "tip", className: "ctx-meter-tip" }, tipText)
       );
     return react2.createElement(
       "span",
