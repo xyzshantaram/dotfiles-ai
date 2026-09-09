@@ -10,6 +10,13 @@ function isApprovalNotice(message) {
 }
 function apply(ctx, config) {
   void config;
+  ctx.on("agent/inbox/inserted", (payload) => {
+    const message = payload.message;
+    if (!isApprovalNotice(message)) return;
+    if (payload.agent.inbox.remove(message.id)) {
+      ctx.logger.info(`purged user-approval notice ${message.id} at insert`);
+    }
+  });
   ctx.on(
     "agent/pre-step",
     async (_payload, next) => {
