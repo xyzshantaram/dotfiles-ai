@@ -287,9 +287,23 @@ function ringInputsOf(snapshot) {
     answered: answeredAskCountOf(snapshot)
   };
 }
+var RING_FADE_HOLD_MS = 2500;
+var RING_FADE_MS = 1600;
+var INITIAL_RING_FADE = { faded: 0, zeroed: null };
+function composerRingPaint(pending, answered, fade) {
+  const bright = ringWidths(pending, 0).bright;
+  const outstanding = Math.max(0, answered - fade.faded);
+  if (outstanding <= 0) {
+    return { bright, dull: 0, ornament: bright > 0, next: null };
+  }
+  if (fade.zeroed === answered) {
+    return { bright, dull: 0, ornament: true, next: "remove" };
+  }
+  return { bright, dull: ringWidths(0, outstanding).dull, ornament: true, next: "hold" };
+}
 
 // css-text:/home/sid/repos/dotfiles-ai/plugins/composer-approvals/src/client.module.css
-var client_default = "/* Pending-approval indicator at the composer. */\n.composer-approvals-indicator {\n  position: relative;\n  width: 20px;\n  height: 20px;\n  flex: none;\n  display: grid;\n  place-items: center;\n  border: none;\n  border-radius: 999px;\n  padding: 0;\n  cursor: pointer;\n  background: var(--dsw-alias-state-warn-primary, #d97706);\n  color: #fff;\n}\n.composer-approvals-indicator:hover {\n  filter: brightness(1.08);\n}\n.composer-approvals-glyph {\n  font-size: 13px;\n  font-weight: 700;\n  line-height: 1;\n}\n.composer-approvals-count {\n  position: absolute;\n  top: -5px;\n  right: -7px;\n  min-width: 14px;\n  height: 14px;\n  box-sizing: border-box;\n  padding: 0 3px;\n  border-radius: 999px;\n  background: var(--dsw-alias-state-danger-primary, #dc2626);\n  color: #fff;\n  font-size: 9px;\n  font-weight: 600;\n  line-height: 14px;\n  text-align: center;\n}\n.composer-approvals-list {\n  /* No scroller here: the shared modal's body owns scrolling, and the\n     compact panel caps itself at the mask safe box. */\n  list-style: none;\n  margin: 0;\n  padding: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n.composer-approvals-row {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n.composer-approvals-label {\n  flex: 1 1 auto;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 13px;\n  font-family: var(--dsw-alias-font-mono, monospace);\n}\n.composer-approvals-jump {\n  flex: none;\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 999px;\n  background: 0 0;\n  color: var(--dsw-alias-label-primary);\n  font-size: 12px;\n  padding: 3px 10px;\n  cursor: pointer;\n}\n.composer-approvals-jump:hover:enabled {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.composer-approvals-jump:disabled {\n  opacity: 0.45;\n  cursor: default;\n}\n.composer-approvals-no-call {\n  flex: none;\n  font-size: 12px;\n  color: var(--dsw-alias-label-tertiary);\n}\n/* Inline answer buttons for a no-callId row: the card answer bar is the\n   single answer surface for callId approvals, so those rows keep only\n   their jump button. Reject arms first; the armed fill marks the confirm\n   step. */\n.composer-approvals-approve,\n.composer-approvals-reject {\n  flex: none;\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 999px;\n  background: 0 0;\n  font-size: 12px;\n  padding: 3px 10px;\n  cursor: pointer;\n}\n.composer-approvals-approve {\n  color: var(--dsw-alias-state-business-primary, #2563eb);\n  border-color: var(--dsw-alias-state-business-primary, #2563eb);\n}\n.composer-approvals-reject {\n  color: var(--dsw-alias-state-danger-primary, #dc2626);\n  border-color: var(--dsw-alias-state-danger-primary, #dc2626);\n}\n.composer-approvals-approve:hover:enabled,\n.composer-approvals-reject:hover:enabled {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.composer-approvals-approve:disabled,\n.composer-approvals-reject:disabled {\n  opacity: 0.45;\n  cursor: default;\n}\n.composer-approvals-reject[data-armed] {\n  background: var(--dsw-alias-state-danger-primary, #dc2626);\n  border-color: var(--dsw-alias-state-danger-primary, #dc2626);\n  color: #fff;\n}\n/* Pending-question rings around the composer card (#38). While a question\n   waits, the composer card carries a white band; answered batches leave a\n   duller band instead of the mark vanishing. One band step per question\n   (widths set inline as --dsh-q-bright/--dsh-q-dull, capped at four steps\n   each), so the session's active-questions state reads at a glance. An\n   outline cannot stack, hence box-shadow: the bright band paints inside\n   the dull one, and the card's own shadow rides underneath so disabling\n   the rings (attribute absent) changes nothing. The doubled attribute\n   outranks the card's own single-class shadow rule regardless of style\n   tag order. The composer stays a normal editable input; these are\n   additive styling only. */\n[data-composer-card][data-dsh-qrings] {\n  box-shadow:\n    0 0 0 var(--dsh-q-bright, 0px) #fff,\n    0 0 0 calc(var(--dsh-q-bright, 0px) + var(--dsh-q-dull, 0px)) color-mix(in srgb, #fff 45%, transparent),\n    var(--dsh-shadow-lv2, 0 0 0 #0000);\n}\n";
+var client_default = "/* Pending-approval indicator at the composer. */\n.composer-approvals-indicator {\n  position: relative;\n  width: 20px;\n  height: 20px;\n  flex: none;\n  display: grid;\n  place-items: center;\n  border: none;\n  border-radius: 999px;\n  padding: 0;\n  cursor: pointer;\n  background: var(--dsw-alias-state-warn-primary, #d97706);\n  color: #fff;\n}\n.composer-approvals-indicator:hover {\n  filter: brightness(1.08);\n}\n.composer-approvals-glyph {\n  font-size: 13px;\n  font-weight: 700;\n  line-height: 1;\n}\n.composer-approvals-count {\n  position: absolute;\n  top: -5px;\n  right: -7px;\n  min-width: 14px;\n  height: 14px;\n  box-sizing: border-box;\n  padding: 0 3px;\n  border-radius: 999px;\n  background: var(--dsw-alias-state-danger-primary, #dc2626);\n  color: #fff;\n  font-size: 9px;\n  font-weight: 600;\n  line-height: 14px;\n  text-align: center;\n}\n.composer-approvals-list {\n  /* No scroller here: the shared modal's body owns scrolling, and the\n     compact panel caps itself at the mask safe box. */\n  list-style: none;\n  margin: 0;\n  padding: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n.composer-approvals-row {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n.composer-approvals-label {\n  flex: 1 1 auto;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 13px;\n  font-family: var(--dsw-alias-font-mono, monospace);\n}\n.composer-approvals-jump {\n  flex: none;\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 999px;\n  background: 0 0;\n  color: var(--dsw-alias-label-primary);\n  font-size: 12px;\n  padding: 3px 10px;\n  cursor: pointer;\n}\n.composer-approvals-jump:hover:enabled {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.composer-approvals-jump:disabled {\n  opacity: 0.45;\n  cursor: default;\n}\n.composer-approvals-no-call {\n  flex: none;\n  font-size: 12px;\n  color: var(--dsw-alias-label-tertiary);\n}\n/* Inline answer buttons for a no-callId row: the card answer bar is the\n   single answer surface for callId approvals, so those rows keep only\n   their jump button. Reject arms first; the armed fill marks the confirm\n   step. */\n.composer-approvals-approve,\n.composer-approvals-reject {\n  flex: none;\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 999px;\n  background: 0 0;\n  font-size: 12px;\n  padding: 3px 10px;\n  cursor: pointer;\n}\n.composer-approvals-approve {\n  color: var(--dsw-alias-state-business-primary, #2563eb);\n  border-color: var(--dsw-alias-state-business-primary, #2563eb);\n}\n.composer-approvals-reject {\n  color: var(--dsw-alias-state-danger-primary, #dc2626);\n  border-color: var(--dsw-alias-state-danger-primary, #dc2626);\n}\n.composer-approvals-approve:hover:enabled,\n.composer-approvals-reject:hover:enabled {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.composer-approvals-approve:disabled,\n.composer-approvals-reject:disabled {\n  opacity: 0.45;\n  cursor: default;\n}\n.composer-approvals-reject[data-armed] {\n  background: var(--dsw-alias-state-danger-primary, #dc2626);\n  border-color: var(--dsw-alias-state-danger-primary, #dc2626);\n  color: #fff;\n}\n/* Pending-question rings around the composer card (#38, fade per #106).\n   While a question waits, the composer card carries a white band; an\n   answered batch holds a duller band just long enough to confirm the answer\n   registered, then the contribution drops to zero and this transition\n   animates it away \u2014 no per-frame JS, no React re-renders, one timeout per\n   phase (see composerRingPaint in ./questions). One band step per question\n   (widths set inline as --dsh-q-bright/--dsh-q-dull, capped at four steps\n   each). An outline cannot stack, hence box-shadow: the bright band paints\n   inside the dull one, and the card's own shadow rides underneath so\n   disabling the rings (attribute absent) changes nothing. The doubled\n   attribute outranks the card's own single-class shadow rule regardless of\n   style tag order. The composer stays a normal editable input; these are\n   additive styling only. The fade is COMPOSER-ONLY by owner decision: tool\n   call cards are durable records whose outlines are the record's mark, so\n   they keep theirs permanently. */\n[data-composer-card][data-dsh-qrings] {\n  box-shadow:\n    0 0 0 var(--dsh-q-bright, 0px) #fff,\n    0 0 0 calc(var(--dsh-q-bright, 0px) + var(--dsh-q-dull, 0px))\n      color-mix(in srgb, #fff 45%, transparent),\n    var(--dsh-shadow-lv2, 0 0 0 #0000);\n  /* The widths arrive as custom properties, so transitioning the consuming\n     box-shadow animates the fade while the width change itself stays a\n     single style write. Duration arrives inline as --dsh-q-fade (single\n     source of truth: RING_FADE_MS); the fallback only covers a missed\n     write and must match it. */\n  transition: box-shadow var(--dsh-q-fade, 1600ms) ease-out;\n}\n@media (prefers-reduced-motion: reduce) {\n  [data-composer-card][data-dsh-qrings] {\n    transition: none;\n  }\n}\n";
 
 // plugins/composer-approvals/src/client.tsx
 var conversationContextKey2 = runtime.conversationContextKey;
@@ -505,33 +519,62 @@ function makeIndicator() {
     });
     var missing = missingState[0];
     var setMissing = missingState[1];
+    var fadeState = react2.useState(INITIAL_RING_FADE);
+    var fade = fadeState[0];
+    var setFade = fadeState[1];
+    var paint = composerRingPaint(questionInputs.pending, questionInputs.answered, fade);
+    react2.useEffect(
+      function() {
+        if (paint.next === null) return void 0;
+        if (paint.next === "hold") {
+          var answered = questionInputs.answered;
+          var hold = window.setTimeout(function() {
+            setFade(function(prev) {
+              return prev.zeroed === answered ? prev : { faded: prev.faded, zeroed: answered };
+            });
+          }, RING_FADE_HOLD_MS);
+          return function() {
+            window.clearTimeout(hold);
+          };
+        }
+        var seen = questionInputs.answered;
+        var remove = window.setTimeout(function() {
+          setFade({ faded: seen, zeroed: null });
+        }, RING_FADE_MS);
+        return function() {
+          window.clearTimeout(remove);
+        };
+      },
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [paint.next, questionInputs.answered, fade.faded, fade.zeroed]
+    );
     react2.useEffect(
       function() {
         if (typeof document === "undefined") return void 0;
         var card = document.querySelector("[data-composer-card]");
         if (card === null || !(card instanceof HTMLElement)) return void 0;
-        var widths = ringWidths(questionInputs.pending, questionInputs.answered);
         var painted = card;
-        if (widths.bright <= 0 && widths.dull <= 0) {
+        if (!paint.ornament) {
           painted.removeAttribute("data-dsh-qrings");
           painted.style.removeProperty("--dsh-q-bright");
           painted.style.removeProperty("--dsh-q-dull");
+          painted.style.removeProperty("--dsh-q-fade");
           return void 0;
         }
         painted.setAttribute("data-dsh-qrings", "1");
-        painted.style.setProperty("--dsh-q-bright", widths.bright + "px");
-        painted.style.setProperty("--dsh-q-dull", widths.dull + "px");
+        painted.style.setProperty("--dsh-q-bright", paint.bright + "px");
+        painted.style.setProperty("--dsh-q-dull", paint.dull + "px");
+        painted.style.setProperty("--dsh-q-fade", RING_FADE_MS + "ms");
         return function() {
           painted.removeAttribute("data-dsh-qrings");
           painted.style.removeProperty("--dsh-q-bright");
           painted.style.removeProperty("--dsh-q-dull");
+          painted.style.removeProperty("--dsh-q-fade");
         };
       },
-      [questionInputs.pending, questionInputs.answered]
+      [paint.ornament, paint.bright, paint.dull]
     );
-    var rows = approvalRows.concat(
-      questionInputs.rows
-    );
+    var rows = approvalRows.concat(questionInputs.rows);
     if (rows.length === 0) return null;
     var jump = function(row) {
       if (row.callId === null) return;

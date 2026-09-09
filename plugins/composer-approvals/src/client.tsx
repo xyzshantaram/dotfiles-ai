@@ -12,18 +12,20 @@
 // running card shows a disabled jump. The indicator disappears once every
 // pending is answered.
 //
-// The same component maintains the composer question rings (#38): while a
-// question waits, the composer card carries a white band whose width grows
-// per pending question; answered batches leave a duller band. Widths come
-// from the shared ring rule (see ./questions); the paint itself is static
-// CSS on [data-composer-card], so this effect only sets two custom
-// properties (and a marker attribute that outranks the card's own shadow).
+// The same component maintains the composer question rings (#38, fade per
+// #106): while a question waits, the composer card carries a white band
+// whose width grows per pending question; an answered batch holds a duller
+// band just long enough to confirm the answer registered, then it fades out
+// and leaves nothing behind. Widths come from the shared ring rule (see
+// ./questions); the paint itself is static CSS on [data-composer-card], so
+// this effect only sets two custom properties (and a marker attribute that
+// outranks the card's own shadow).
 import * as react from "react";
 import * as runtime from "@deepseek-ai/dsh-client-runtime/client";
 import { injectStyle } from "../../shared/client-util";
 import { PluginModal } from "../../shared/plugin-modal";
-import { questionModalRowsOf, ringInputsOf } from "./questions";
-import { ringWidths } from "../../tool-render/src/questions";
+import { composerRingPaint, questionModalRowsOf, ringInputsOf } from "./questions";
+import { INITIAL_RING_FADE, RING_FADE_HOLD_MS, RING_FADE_MS } from "./questions";
 import type { QuestionModalRow } from "./questions";
 import localCss from "./client.module.css";
 
@@ -179,7 +181,9 @@ function makeQuestionSelector() {
       "\u0000" +
       rows
         .map(function (row) {
-          return row.key + "\u0000" + (row.callId === null ? "" : row.callId) + "\u0000" + row.label;
+          return (
+            row.key + "\u0000" + (row.callId === null ? "" : row.callId) + "\u0000" + row.label
+          );
         })
         .join("\u0001");
     if (sig === lastSig) return lastValue;
@@ -357,40 +361,91 @@ function makeIndicator() {
     var missing = missingState[0];
     var setMissing = missingState[1];
 
-    // The composer question rings (#38): one band step per pending
-    // question (bright) and per answered batch (dull), painted by static
-    // CSS on the composer card. This effect only maintains the marker
-    // attribute and the two width properties; cleanup removes them, so no
-    // ring survives the last pending or an unmount. The card may be absent
-    // (hero phase), in which case there is nothing to paint.
+    // Fade progress for the answered contribution. `faded` counts batches
+    // whose band is fully gone; `zeroed` names the answered count dropped to
+    // zero while the CSS transition animates it out. Pending counts never
+    // enter this state — the bright width below is a pure function of the
+    // live pending set, so no timer can ever touch a waiting question.
+    var fadeState = react.useState(INITIAL_RING_FADE);
+    var fade = fadeState[0];
+    var setFade = fadeState[1];
+    var paint = composerRingPaint(questionInputs.pending, questionInputs.answered, fade);
+
+    // The answered contribution fades on a hold-then-drop cycle: one timeout
+    // holds the confirmation band, a second waits out the CSS transition
+    // before the marker is cleared. Keyed on the paint decision (not on the
+    // raw counts), so a new answer mid-fade re-arms the hold instead of
+    // joining a stale timer, while a new PENDING question changes only the
+    // bright width and never disturbs the answered cycle.
+    react.useEffect(
+      function () {
+        if (paint.next === null) return undefined;
+        if (paint.next === "hold") {
+          var answered = questionInputs.answered;
+          var hold = window.setTimeout(function () {
+            setFade(function (prev) {
+              return prev.zeroed === answered ? prev : { faded: prev.faded, zeroed: answered };
+            });
+          }, RING_FADE_HOLD_MS);
+          return function () {
+            window.clearTimeout(hold);
+          };
+        }
+        var seen = questionInputs.answered;
+        var remove = window.setTimeout(function () {
+          setFade({ faded: seen, zeroed: null });
+        }, RING_FADE_MS);
+        return function () {
+          window.clearTimeout(remove);
+        };
+      },
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [paint.next, questionInputs.answered, fade.faded, fade.zeroed],
+    );
+
+    // The composer question rings (#38, fade per #106): one band step per
+    // pending question (bright) and, briefly, per newly answered batch
+    // (dull, fading). This effect only maintains the marker attribute and
+    // the width properties; cleanup removes all three, and the removal
+    // timer above drops the attribute once the last fade lands, so the
+    // composer returns to exactly its pre-question appearance. The card may
+    // be absent (hero phase), in which case there is nothing to paint.
+    //
+    // WHY THE COMPOSER FADES WHILE TOOL CALL CARDS KEEP THEIR OUTLINES
+    // PERMANENTLY: a card is a durable RECORD of one call and its outline is
+    // that record's mark, so a record that erases its own marks is not a
+    // record; the composer is a LIVE CONTROL whose styling must describe
+    // what the user can do now, so a ring that outlives the thing it asked
+    // about is putting history where the present belongs. Do not "fix" a
+    // permanent card outline by fading it.
     react.useEffect(
       function () {
         if (typeof document === "undefined") return undefined;
         var card = document.querySelector("[data-composer-card]");
         if (card === null || !(card instanceof HTMLElement)) return undefined;
-        var widths = ringWidths(questionInputs.pending, questionInputs.answered);
         var painted = card;
-        if (widths.bright <= 0 && widths.dull <= 0) {
+        if (!paint.ornament) {
           painted.removeAttribute("data-dsh-qrings");
           painted.style.removeProperty("--dsh-q-bright");
           painted.style.removeProperty("--dsh-q-dull");
+          painted.style.removeProperty("--dsh-q-fade");
           return undefined;
         }
         painted.setAttribute("data-dsh-qrings", "1");
-        painted.style.setProperty("--dsh-q-bright", widths.bright + "px");
-        painted.style.setProperty("--dsh-q-dull", widths.dull + "px");
+        painted.style.setProperty("--dsh-q-bright", paint.bright + "px");
+        painted.style.setProperty("--dsh-q-dull", paint.dull + "px");
+        painted.style.setProperty("--dsh-q-fade", RING_FADE_MS + "ms");
         return function () {
           painted.removeAttribute("data-dsh-qrings");
           painted.style.removeProperty("--dsh-q-bright");
           painted.style.removeProperty("--dsh-q-dull");
+          painted.style.removeProperty("--dsh-q-fade");
         };
       },
-      [questionInputs.pending, questionInputs.answered],
+      [paint.ornament, paint.bright, paint.dull],
     );
 
-    var rows: ModalRow[] = (approvalRows as ApprovalRow[]).concat(
-      questionInputs.rows,
-    );
+    var rows: ModalRow[] = (approvalRows as ApprovalRow[]).concat(questionInputs.rows);
     if (rows.length === 0) return null;
 
     var jump = function (row: ModalRow) {
