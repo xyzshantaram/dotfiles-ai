@@ -385,6 +385,12 @@
 .tool-render-card[data-guard-approval] {
   outline: 3px solid var(--dsh-outline-guard);
 }
+/* Once answered, the outline dulls to translucent white instead of
+   vanishing. This rule sits BEFORE error/stopped/guard so a failed or
+   guarded call keeps its own stronger mark. */
+.tool-render-card[data-question-answered] {
+  outline: 3px solid color-mix(in srgb, #fff 40%, transparent);
+}
 /* An errored call is outlined the way an escalated one is, in red and a little
    thinner. The outline follows the card's rounded corners. It replaces the old
    tinted row background and inset left bar. */
@@ -405,6 +411,15 @@
    survives a failing exit. */
 .tool-render-card[data-guard-approval][data-guard-approval] {
   outline: 3px solid var(--dsh-outline-guard);
+}
+/* A call waiting on the human's answer to its question is outlined in
+   solid white at the same 3px weight as the other state outlines. This
+   rule sits after error/stopped/guard so the bright "answer me" mark wins
+   while pending (a pending call is still running, so error/stopped cannot
+   co-occur; the doubled guard rule above still wins a true tie, which
+   cannot happen because guard approvals are bash-only). */
+.tool-render-card[data-question-pending] {
+  outline: 3px solid #fff;
 }
 .tool-render-card:hover {
   border-color: var(--dsw-alias-border-l3);
@@ -529,6 +544,263 @@
 .tool-render-option-description p,
 .tool-render-answer-note p {
   margin: 0;
+}
+
+/* ask_user_question answer form: the interactive UI on the pending card,
+   ported from the shipped QuestionComposer. Option buttons follow the
+   approval-btn recipe (1px border, surface bg); the selected option takes
+   the business-primary border, the primary action the filled recipe. */
+.tool-render-qform {
+  flex-direction: column;
+  display: flex;
+  gap: 0.375rem;
+  padding: 0.25rem 0 0.25rem 0.25rem;
+}
+.tool-render-qheader {
+  align-items: flex-start;
+  justify-content: space-between;
+  display: flex;
+  gap: 0.5rem;
+}
+.tool-render-qheading {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.tool-render-qeyebrow {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 0.6875rem;
+  line-height: 1rem;
+}
+.tool-render-qtitle {
+  color: var(--dsw-alias-label-primary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+  overflow-wrap: anywhere;
+}
+.tool-render-qdismiss {
+  flex: none;
+  border: none;
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  padding: 0.0625rem 0.25rem;
+  text-decoration: underline dotted;
+}
+.tool-render-qdismiss:hover:enabled {
+  color: var(--dsw-alias-label-primary);
+}
+.tool-render-qdismiss:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.tool-render-qbody {
+  flex-direction: column;
+  display: flex;
+  gap: 0.375rem;
+}
+.tool-render-qdetail {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  overflow-wrap: anywhere;
+}
+.tool-render-qoptions {
+  flex-direction: column;
+  display: flex;
+  gap: 0.25rem;
+}
+.tool-render-qoption {
+  align-items: baseline;
+  display: flex;
+  gap: 0.375rem;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 0.5rem;
+  background: var(--dsw-alias-bg-base);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0.375rem 0.5rem;
+}
+.tool-render-qoption:hover:enabled {
+  background: var(--dsw-alias-interactive-bg-hover-solid);
+}
+.tool-render-qoption:disabled {
+  cursor: default;
+}
+.tool-render-qoption[data-selected] {
+  border-color: var(--dsw-alias-state-business-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+.tool-render-qoption-marker {
+  flex: none;
+  width: 1rem;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  text-align: center;
+}
+.tool-render-qoption[data-selected] .tool-render-qoption-marker {
+  color: var(--dsw-alias-state-business-primary);
+}
+.tool-render-qoption-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.tool-render-qoption-line {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+}
+.tool-render-qoption-label {
+  color: var(--dsw-alias-label-primary);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  overflow-wrap: anywhere;
+}
+.tool-render-qoption[data-selected] .tool-render-qoption-label {
+  font-weight: 700;
+}
+.tool-render-qoption-description {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+  overflow-wrap: anywhere;
+}
+.tool-render-qbadge {
+  flex: none;
+  border: 1px solid var(--dsw-alias-state-business-primary);
+  border-radius: 999px;
+  color: var(--dsw-alias-state-business-primary);
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  padding: 0 0.375rem;
+}
+.tool-render-qcustom-row {
+  align-items: center;
+  display: flex;
+  gap: 0.375rem;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 0.5rem;
+  background: var(--dsw-alias-bg-base);
+  padding: 0.375rem 0.5rem;
+}
+.tool-render-qcustom-row[data-active] {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+.tool-render-qcustom-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: none;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  padding: 0;
+}
+.tool-render-qcustom-input::placeholder {
+  color: var(--dsw-alias-label-caption);
+}
+.tool-render-qcustom-textarea {
+  box-sizing: border-box;
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 0.5rem;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  padding: 0.375rem 0.5rem;
+}
+.tool-render-qcustom-textarea:focus {
+  border-color: var(--dsw-alias-state-business-primary);
+  outline: none;
+}
+.tool-render-qfooter {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+}
+.tool-render-qpager {
+  flex: none;
+  align-items: center;
+  display: flex;
+  gap: 0.25rem;
+}
+.tool-render-qnav {
+  border: none;
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  border-radius: 999px;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.125rem 0.375rem;
+}
+.tool-render-qnav:hover:enabled {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+.tool-render-qnav:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.tool-render-qprogress {
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+.tool-render-qfeedback {
+  flex: 1 1 auto;
+  min-height: 1rem;
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 0.6875rem;
+  line-height: 1rem;
+}
+.tool-render-qactions {
+  flex: none;
+  align-items: center;
+  display: flex;
+  gap: 0.25rem;
+}
+.tool-render-qbtn {
+  border: 1px solid var(--dsw-alias-border-l3);
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 20px;
+  padding: 5px 12px;
+}
+.tool-render-qbtn:hover:enabled {
+  background: var(--dsw-alias-interactive-bg-hover-solid);
+  color: var(--dsw-alias-label-primary);
+}
+.tool-render-qbtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.tool-render-qbtn-primary {
+  border-color: transparent;
+  background: var(--dsw-alias-label-secondary);
+  color: var(--dsw-alias-bg-base);
+  font-weight: 600;
+}
+.tool-render-qbtn-primary:hover:enabled {
+  background: var(--dsw-alias-label-secondary);
+  color: var(--dsw-alias-bg-base);
+  filter: brightness(1.15);
 }
 
 /* list_agents roster: one line per agent, status first so the column reads

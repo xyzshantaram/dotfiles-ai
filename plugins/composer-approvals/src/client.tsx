@@ -1,17 +1,30 @@
 // Client half of the composer-approvals indicator.
 //
 // A small warning circle sits immediately right of the composer overflow
-// trigger whenever the session has at least one pending approval. Clicking
-// it opens a modal listing every pending approval; rows that carry a callId
-// get a jump action that scrolls the conversation to that tool call's card
-// (found through tool-render's data-call-id attribute), which is the single
-// answer surface for those approvals; rows WITHOUT a callId answer inline
-// here with approve/reject buttons (reject arms first). The indicator
-// disappears once every pending is answered.
+// trigger whenever the session has at least one pending approval or
+// pending ask_user_question batch. Clicking it opens a modal listing every
+// pending item; rows that carry a callId get a jump action that scrolls the
+// conversation to that tool call's card (found through tool-render's
+// data-call-id attribute), which is the single answer surface for those
+// items. Approval rows WITHOUT a callId answer inline here with
+// approve/reject buttons (reject arms first); question rows NEVER answer
+// in place (the card is their only surface), so a question row without a
+// running card shows a disabled jump. The indicator disappears once every
+// pending is answered.
+//
+// The same component maintains the composer question rings (#38): while a
+// question waits, the composer card carries a white band whose width grows
+// per pending question; answered batches leave a duller band. Widths come
+// from the shared ring rule (see ./questions); the paint itself is static
+// CSS on [data-composer-card], so this effect only sets two custom
+// properties (and a marker attribute that outranks the card's own shadow).
 import * as react from "react";
 import * as runtime from "@deepseek-ai/dsh-client-runtime/client";
 import { injectStyle } from "../../shared/client-util";
 import { PluginModal } from "../../shared/plugin-modal";
+import { questionModalRowsOf, ringInputsOf } from "./questions";
+import { ringWidths } from "../../tool-render/src/questions";
+import type { QuestionModalRow } from "./questions";
 import localCss from "./client.module.css";
 
 var conversationContextKey = runtime.conversationContextKey;
@@ -64,10 +77,18 @@ function firstLineOf(text: unknown): string | null {
  */
 interface ApprovalRow {
   key: string;
+  kind: "approval";
   callId: string | null;
   approvalId: unknown;
   label: string;
 }
+
+/** A modal row for a pending question batch: jump-only, never in place. */
+interface ModalQuestionRow extends QuestionModalRow {
+  kind: "question";
+}
+
+type ModalRow = ApprovalRow | ModalQuestionRow;
 
 /**
  * Build the selector once per component so its memo cell is not shared
@@ -109,6 +130,7 @@ function makeSelector() {
       pendingByKey.set(key, item);
       rows.push({
         key: key,
+        kind: "approval",
         callId: callId,
         approvalId: payload.approvalId,
         label: label === null ? "Approval" : label,
@@ -131,6 +153,43 @@ function makeSelector() {
   };
 }
 
+/**
+ * Question selector twin of makeSelector: one stable value per component
+ * holding the jump rows plus the composer ring inputs. Rebuilt only when
+ * the row signature or either count changes, same no-loop contract.
+ */
+interface QuestionInputs {
+  rows: ModalQuestionRow[];
+  pending: number;
+  answered: number;
+}
+
+function makeQuestionSelector() {
+  var lastSig = "\u0000";
+  var lastValue: QuestionInputs = { rows: EMPTY as ModalQuestionRow[], pending: 0, answered: 0 };
+  var selectQuestions = function (snapshot: any): QuestionInputs {
+    var rows = questionModalRowsOf(snapshot).map(function (row) {
+      return { kind: "question" as const, key: row.key, callId: row.callId, label: row.label };
+    });
+    var inputs = ringInputsOf(snapshot);
+    var sig =
+      inputs.pending +
+      "\u0000" +
+      inputs.answered +
+      "\u0000" +
+      rows
+        .map(function (row) {
+          return row.key + "\u0000" + (row.callId === null ? "" : row.callId) + "\u0000" + row.label;
+        })
+        .join("\u0001");
+    if (sig === lastSig) return lastValue;
+    lastSig = sig;
+    lastValue = { rows: rows, pending: inputs.pending, answered: inputs.answered };
+    return lastValue;
+  };
+  return { selectQuestions: selectQuestions };
+}
+
 /** Find the tool-render card for one callId, or null when it is not mounted. */
 function cardOf(callId: string): HTMLElement | null {
   return document.querySelector('.tool-render-card[data-call-id="' + CSS.escape(callId) + '"]');
@@ -144,8 +203,12 @@ function cardOf(callId: string): HTMLElement | null {
  * comment field here (settled default): commenting lives on the card's
  * answer bar, and no-callId approvals answer without one.
  *
- * Props: { row: ApprovalRow, jumpable: boolean, onJump: (row) => void,
- * pendingOf: (key) => live pending or undefined }.
+ * A question row (kind "question") is always jump-only: the ask_user_question
+ * card is the single answer surface, so the modal never answers in place --
+ * a question with no running card shows a disabled jump instead.
+ *
+ * Props: { row: ApprovalRow | ModalQuestionRow, jumpable: boolean,
+ * onJump: (row) => void, pendingOf: (key) => live pending or undefined }.
  */
 function ComposerApprovalsRow(props: any) {
   var row = props.row;
@@ -225,7 +288,10 @@ function ComposerApprovalsRow(props: any) {
     }, REJECT_ARM_RESET_MS);
   };
 
-  if (row.callId !== null) {
+  // A question row is jump-only even WITH a callId, and stays jump-only
+  // (disabled) without one: the running card is the single answer surface
+  // for questions, and the modal never answers in place.
+  if (row.kind === "question" || row.callId !== null) {
     return (
       <li className="composer-approvals-row">
         <span className="composer-approvals-label" title={row.label}>
@@ -278,7 +344,9 @@ function ComposerApprovalsRow(props: any) {
 function makeIndicator() {
   return function Indicator(props: any) {
     var selectorTools = react.useMemo(makeSelector, []);
-    var rows = props.useSession(selectorTools.selectApprovals);
+    var approvalRows = props.useSession(selectorTools.selectApprovals);
+    var questionTools = react.useMemo(makeQuestionSelector, []);
+    var questionInputs = props.useSession(questionTools.selectQuestions);
     var openState = react.useState(false);
     var open = openState[0];
     var setOpen = openState[1];
@@ -289,9 +357,43 @@ function makeIndicator() {
     var missing = missingState[0];
     var setMissing = missingState[1];
 
+    // The composer question rings (#38): one band step per pending
+    // question (bright) and per answered batch (dull), painted by static
+    // CSS on the composer card. This effect only maintains the marker
+    // attribute and the two width properties; cleanup removes them, so no
+    // ring survives the last pending or an unmount. The card may be absent
+    // (hero phase), in which case there is nothing to paint.
+    react.useEffect(
+      function () {
+        if (typeof document === "undefined") return undefined;
+        var card = document.querySelector("[data-composer-card]");
+        if (card === null || !(card instanceof HTMLElement)) return undefined;
+        var widths = ringWidths(questionInputs.pending, questionInputs.answered);
+        var painted = card;
+        if (widths.bright <= 0 && widths.dull <= 0) {
+          painted.removeAttribute("data-dsh-qrings");
+          painted.style.removeProperty("--dsh-q-bright");
+          painted.style.removeProperty("--dsh-q-dull");
+          return undefined;
+        }
+        painted.setAttribute("data-dsh-qrings", "1");
+        painted.style.setProperty("--dsh-q-bright", widths.bright + "px");
+        painted.style.setProperty("--dsh-q-dull", widths.dull + "px");
+        return function () {
+          painted.removeAttribute("data-dsh-qrings");
+          painted.style.removeProperty("--dsh-q-bright");
+          painted.style.removeProperty("--dsh-q-dull");
+        };
+      },
+      [questionInputs.pending, questionInputs.answered],
+    );
+
+    var rows: ModalRow[] = (approvalRows as ApprovalRow[]).concat(
+      questionInputs.rows,
+    );
     if (rows.length === 0) return null;
 
-    var jump = function (row: ApprovalRow) {
+    var jump = function (row: ModalRow) {
       if (row.callId === null) return;
       var el = cardOf(row.callId);
       if (el === null) {

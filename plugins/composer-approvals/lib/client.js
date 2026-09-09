@@ -146,8 +146,150 @@ function PluginModal(props) {
   ));
 }
 
+// plugins/tool-render/src/questions.ts
+var ASK_TOOL_NAME = "ask_user_question";
+var RING_CAP = 4;
+function isSettled(block) {
+  return block !== null && typeof block === "object" && "kind" in block;
+}
+function blockName(block) {
+  if (isSettled(block)) {
+    return block.call && typeof block.call.name === "string" ? block.call.name : "";
+  }
+  return block !== null && typeof block === "object" && typeof block.name === "string" ? block.name : "";
+}
+function blockCallId(block) {
+  return block !== null && typeof block === "object" && typeof block.callId === "string" ? block.callId : null;
+}
+function rootBlocksOf(snapshot) {
+  const nodes = snapshot && snapshot.chat && snapshot.chat.nodes;
+  if (nodes === void 0 || nodes === null || typeof nodes.values !== "function") return [];
+  const iter = nodes.values();
+  if (iter === null || iter === void 0) return [];
+  const entries = typeof iter.next === "function" ? (() => {
+    const out2 = [];
+    for (let entry = iter.next(); entry.done !== true; entry = iter.next()) out2.push(entry.value);
+    return out2;
+  })() : Array.isArray(iter) ? iter : [];
+  const out = [];
+  for (const node of entries) {
+    if (node === void 0 || node === null || node.kind !== "tool-call") continue;
+    const block = node.data !== void 0 && node.data !== null ? node.data.root : void 0;
+    if (block === void 0 || block === null) continue;
+    out.push(block);
+  }
+  return out;
+}
+function walkCalls(block, visit) {
+  visit(block);
+  const sub = block !== null && typeof block === "object" && Array.isArray(block.subCalls) ? block.subCalls : [];
+  for (const child of sub) walkCalls(child, visit);
+}
+function pendingQuestionsOf(snapshot) {
+  const pending = snapshot !== null && snapshot !== void 0 && Array.isArray(snapshot.pending) ? snapshot.pending : [];
+  const out = [];
+  for (const item of pending) {
+    if (item === null || item === void 0 || item.kind !== "question") continue;
+    out.push(item);
+  }
+  return out;
+}
+function runningAskCallIdsOf(snapshot) {
+  const out = [];
+  for (const root of rootBlocksOf(snapshot)) {
+    walkCalls(root, (block) => {
+      if (isSettled(block)) return;
+      if (blockName(block) !== ASK_TOOL_NAME) return;
+      const callId = blockCallId(block);
+      if (callId !== null) out.push(callId);
+    });
+  }
+  return out;
+}
+function questionsOfPending(pending) {
+  const payload = pending !== null && pending !== void 0 ? pending.payload : void 0;
+  const questions = payload !== null && payload !== void 0 ? payload.questions : void 0;
+  return Array.isArray(questions) ? questions : null;
+}
+function firstLineOf(text) {
+  if (typeof text !== "string") return null;
+  const line = text.split("\n", 1)[0].trim();
+  return line === "" ? null : line;
+}
+function questionLabelOf(questions) {
+  if (questions.length === 1) {
+    return firstLineOf(questions[0] !== null && questions[0] !== void 0 ? questions[0].question : void 0) ?? "Question";
+  }
+  return `${questions.length} questions`;
+}
+function questionRowsOf(snapshot) {
+  const pendings = pendingQuestionsOf(snapshot);
+  const running = runningAskCallIdsOf(snapshot);
+  const rows = [];
+  for (let i = 0; i < pendings.length; i++) {
+    const pending = pendings[i];
+    const questions = questionsOfPending(pending);
+    rows.push({
+      key: String(pending.key),
+      callId: i < running.length ? running[i] : null,
+      label: questions === null ? "Question" : questionLabelOf(questions)
+    });
+  }
+  return rows;
+}
+function parseBlockArgs(raw) {
+  if (typeof raw !== "string" || raw === "") return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+function settledAnswerCount(block) {
+  if (!isSettled(block) || block.isError === true) return 0;
+  const content = Array.isArray(block.content) ? block.content : [];
+  const parts = [];
+  for (const item of content) {
+    if (item && item.type === "text" && typeof item.text === "string") parts.push(item.text);
+  }
+  const parsed = parseBlockArgs(parts.join("\n"));
+  if (parsed === null || typeof parsed !== "object" || !Array.isArray(parsed.answers)) return 0;
+  return 1;
+}
+function answeredAskCountOf(snapshot) {
+  let count = 0;
+  for (const root of rootBlocksOf(snapshot)) {
+    walkCalls(root, (block) => {
+      if (!isSettled(block)) return;
+      if (blockName(block) !== ASK_TOOL_NAME) return;
+      count += settledAnswerCount(block);
+    });
+  }
+  return count;
+}
+function ringWidths(pendingCount, answeredCount) {
+  const bright = pendingCount <= 0 ? 0 : 3 + 2 * (Math.min(pendingCount, RING_CAP) - 1);
+  const dull = answeredCount <= 0 ? 0 : 3 + 2 * (Math.min(answeredCount, RING_CAP) - 1);
+  return { bright, dull };
+}
+
+// plugins/composer-approvals/src/questions.ts
+function questionModalRowsOf(snapshot) {
+  return questionRowsOf(snapshot).map((row) => ({
+    key: row.key,
+    callId: row.callId,
+    label: row.label
+  }));
+}
+function ringInputsOf(snapshot) {
+  return {
+    pending: pendingQuestionsOf(snapshot).length,
+    answered: answeredAskCountOf(snapshot)
+  };
+}
+
 // css-text:/home/sid/repos/dotfiles-ai/plugins/composer-approvals/src/client.module.css
-var client_default = "/* Pending-approval indicator at the composer. */\n.composer-approvals-indicator {\n  position: relative;\n  width: 20px;\n  height: 20px;\n  flex: none;\n  display: grid;\n  place-items: center;\n  border: none;\n  border-radius: 999px;\n  padding: 0;\n  cursor: pointer;\n  background: var(--dsw-alias-state-warn-primary, #d97706);\n  color: #fff;\n}\n.composer-approvals-indicator:hover {\n  filter: brightness(1.08);\n}\n.composer-approvals-glyph {\n  font-size: 13px;\n  font-weight: 700;\n  line-height: 1;\n}\n.composer-approvals-count {\n  position: absolute;\n  top: -5px;\n  right: -7px;\n  min-width: 14px;\n  height: 14px;\n  box-sizing: border-box;\n  padding: 0 3px;\n  border-radius: 999px;\n  background: var(--dsw-alias-state-danger-primary, #dc2626);\n  color: #fff;\n  font-size: 9px;\n  font-weight: 600;\n  line-height: 14px;\n  text-align: center;\n}\n.composer-approvals-list {\n  /* No scroller here: the shared modal's body owns scrolling, and the\n     compact panel caps itself at the mask safe box. */\n  list-style: none;\n  margin: 0;\n  padding: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n.composer-approvals-row {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n.composer-approvals-label {\n  flex: 1 1 auto;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 13px;\n  font-family: var(--dsw-alias-font-mono, monospace);\n}\n.composer-approvals-jump {\n  flex: none;\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 999px;\n  background: 0 0;\n  color: var(--dsw-alias-label-primary);\n  font-size: 12px;\n  padding: 3px 10px;\n  cursor: pointer;\n}\n.composer-approvals-jump:hover:enabled {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.composer-approvals-jump:disabled {\n  opacity: 0.45;\n  cursor: default;\n}\n.composer-approvals-no-call {\n  flex: none;\n  font-size: 12px;\n  color: var(--dsw-alias-label-tertiary);\n}\n/* Inline answer buttons for a no-callId row: the card answer bar is the\n   single answer surface for callId approvals, so those rows keep only\n   their jump button. Reject arms first; the armed fill marks the confirm\n   step. */\n.composer-approvals-approve,\n.composer-approvals-reject {\n  flex: none;\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 999px;\n  background: 0 0;\n  font-size: 12px;\n  padding: 3px 10px;\n  cursor: pointer;\n}\n.composer-approvals-approve {\n  color: var(--dsw-alias-state-business-primary, #2563eb);\n  border-color: var(--dsw-alias-state-business-primary, #2563eb);\n}\n.composer-approvals-reject {\n  color: var(--dsw-alias-state-danger-primary, #dc2626);\n  border-color: var(--dsw-alias-state-danger-primary, #dc2626);\n}\n.composer-approvals-approve:hover:enabled,\n.composer-approvals-reject:hover:enabled {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.composer-approvals-approve:disabled,\n.composer-approvals-reject:disabled {\n  opacity: 0.45;\n  cursor: default;\n}\n.composer-approvals-reject[data-armed] {\n  background: var(--dsw-alias-state-danger-primary, #dc2626);\n  border-color: var(--dsw-alias-state-danger-primary, #dc2626);\n  color: #fff;\n}\n";
+var client_default = "/* Pending-approval indicator at the composer. */\n.composer-approvals-indicator {\n  position: relative;\n  width: 20px;\n  height: 20px;\n  flex: none;\n  display: grid;\n  place-items: center;\n  border: none;\n  border-radius: 999px;\n  padding: 0;\n  cursor: pointer;\n  background: var(--dsw-alias-state-warn-primary, #d97706);\n  color: #fff;\n}\n.composer-approvals-indicator:hover {\n  filter: brightness(1.08);\n}\n.composer-approvals-glyph {\n  font-size: 13px;\n  font-weight: 700;\n  line-height: 1;\n}\n.composer-approvals-count {\n  position: absolute;\n  top: -5px;\n  right: -7px;\n  min-width: 14px;\n  height: 14px;\n  box-sizing: border-box;\n  padding: 0 3px;\n  border-radius: 999px;\n  background: var(--dsw-alias-state-danger-primary, #dc2626);\n  color: #fff;\n  font-size: 9px;\n  font-weight: 600;\n  line-height: 14px;\n  text-align: center;\n}\n.composer-approvals-list {\n  /* No scroller here: the shared modal's body owns scrolling, and the\n     compact panel caps itself at the mask safe box. */\n  list-style: none;\n  margin: 0;\n  padding: 0;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n.composer-approvals-row {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n.composer-approvals-label {\n  flex: 1 1 auto;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 13px;\n  font-family: var(--dsw-alias-font-mono, monospace);\n}\n.composer-approvals-jump {\n  flex: none;\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 999px;\n  background: 0 0;\n  color: var(--dsw-alias-label-primary);\n  font-size: 12px;\n  padding: 3px 10px;\n  cursor: pointer;\n}\n.composer-approvals-jump:hover:enabled {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.composer-approvals-jump:disabled {\n  opacity: 0.45;\n  cursor: default;\n}\n.composer-approvals-no-call {\n  flex: none;\n  font-size: 12px;\n  color: var(--dsw-alias-label-tertiary);\n}\n/* Inline answer buttons for a no-callId row: the card answer bar is the\n   single answer surface for callId approvals, so those rows keep only\n   their jump button. Reject arms first; the armed fill marks the confirm\n   step. */\n.composer-approvals-approve,\n.composer-approvals-reject {\n  flex: none;\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 999px;\n  background: 0 0;\n  font-size: 12px;\n  padding: 3px 10px;\n  cursor: pointer;\n}\n.composer-approvals-approve {\n  color: var(--dsw-alias-state-business-primary, #2563eb);\n  border-color: var(--dsw-alias-state-business-primary, #2563eb);\n}\n.composer-approvals-reject {\n  color: var(--dsw-alias-state-danger-primary, #dc2626);\n  border-color: var(--dsw-alias-state-danger-primary, #dc2626);\n}\n.composer-approvals-approve:hover:enabled,\n.composer-approvals-reject:hover:enabled {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.composer-approvals-approve:disabled,\n.composer-approvals-reject:disabled {\n  opacity: 0.45;\n  cursor: default;\n}\n.composer-approvals-reject[data-armed] {\n  background: var(--dsw-alias-state-danger-primary, #dc2626);\n  border-color: var(--dsw-alias-state-danger-primary, #dc2626);\n  color: #fff;\n}\n/* Pending-question rings around the composer card (#38). While a question\n   waits, the composer card carries a white band; answered batches leave a\n   duller band instead of the mark vanishing. One band step per question\n   (widths set inline as --dsh-q-bright/--dsh-q-dull, capped at four steps\n   each), so the session's active-questions state reads at a glance. An\n   outline cannot stack, hence box-shadow: the bright band paints inside\n   the dull one, and the card's own shadow rides underneath so disabling\n   the rings (attribute absent) changes nothing. The doubled attribute\n   outranks the card's own single-class shadow rule regardless of style\n   tag order. The composer stays a normal editable input; these are\n   additive styling only. */\n[data-composer-card][data-dsh-qrings] {\n  box-shadow:\n    0 0 0 var(--dsh-q-bright, 0px) #fff,\n    0 0 0 calc(var(--dsh-q-bright, 0px) + var(--dsh-q-dull, 0px)) color-mix(in srgb, #fff 45%, transparent),\n    var(--dsh-shadow-lv2, 0 0 0 #0000);\n}\n";
 
 // plugins/composer-approvals/src/client.tsx
 var conversationContextKey2 = runtime.conversationContextKey;
@@ -170,7 +312,7 @@ function commandOf(call) {
     return void 0;
   }
 }
-function firstLineOf(text) {
+function firstLineOf2(text) {
   if (typeof text !== "string") return null;
   var line = text.split("\n", 1)[0].trim();
   return line === "" ? null : line;
@@ -193,13 +335,14 @@ function makeSelector() {
       if (callId !== null) {
         label = commandOf(rootToolCall(snapshot, callId)) ?? null;
       }
-      if (label === null) label = firstLineOf(payload.reason);
+      if (label === null) label = firstLineOf2(payload.reason);
       var key = String(item.key);
       parts.push(key + "\0" + (callId === null ? "" : callId) + "\0" + label);
       live.add(key);
       pendingByKey.set(key, item);
       rows.push({
         key,
+        kind: "approval",
         callId,
         approvalId: payload.approvalId,
         label: label === null ? "Approval" : label
@@ -220,6 +363,24 @@ function makeSelector() {
       return pendingByKey.get(key);
     }
   };
+}
+function makeQuestionSelector() {
+  var lastSig = "\0";
+  var lastValue = { rows: EMPTY, pending: 0, answered: 0 };
+  var selectQuestions = function(snapshot) {
+    var rows = questionModalRowsOf(snapshot).map(function(row) {
+      return { kind: "question", key: row.key, callId: row.callId, label: row.label };
+    });
+    var inputs = ringInputsOf(snapshot);
+    var sig = inputs.pending + "\0" + inputs.answered + "\0" + rows.map(function(row) {
+      return row.key + "\0" + (row.callId === null ? "" : row.callId) + "\0" + row.label;
+    }).join("");
+    if (sig === lastSig) return lastValue;
+    lastSig = sig;
+    lastValue = { rows, pending: inputs.pending, answered: inputs.answered };
+    return lastValue;
+  };
+  return { selectQuestions };
 }
 function cardOf(callId) {
   return document.querySelector('.tool-render-card[data-call-id="' + CSS.escape(callId) + '"]');
@@ -293,7 +454,7 @@ function ComposerApprovalsRow(props) {
       setArmed(false);
     }, REJECT_ARM_RESET_MS);
   };
-  if (row.callId !== null) {
+  if (row.kind === "question" || row.callId !== null) {
     return /* @__PURE__ */ react2.createElement("li", { className: "composer-approvals-row" }, /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-label", title: row.label }, row.label), /* @__PURE__ */ react2.createElement(
       "button",
       {
@@ -333,7 +494,9 @@ function ComposerApprovalsRow(props) {
 function makeIndicator() {
   return function Indicator(props) {
     var selectorTools = react2.useMemo(makeSelector, []);
-    var rows = props.useSession(selectorTools.selectApprovals);
+    var approvalRows = props.useSession(selectorTools.selectApprovals);
+    var questionTools = react2.useMemo(makeQuestionSelector, []);
+    var questionInputs = props.useSession(questionTools.selectQuestions);
     var openState = react2.useState(false);
     var open = openState[0];
     var setOpen = openState[1];
@@ -342,6 +505,33 @@ function makeIndicator() {
     });
     var missing = missingState[0];
     var setMissing = missingState[1];
+    react2.useEffect(
+      function() {
+        if (typeof document === "undefined") return void 0;
+        var card = document.querySelector("[data-composer-card]");
+        if (card === null || !(card instanceof HTMLElement)) return void 0;
+        var widths = ringWidths(questionInputs.pending, questionInputs.answered);
+        var painted = card;
+        if (widths.bright <= 0 && widths.dull <= 0) {
+          painted.removeAttribute("data-dsh-qrings");
+          painted.style.removeProperty("--dsh-q-bright");
+          painted.style.removeProperty("--dsh-q-dull");
+          return void 0;
+        }
+        painted.setAttribute("data-dsh-qrings", "1");
+        painted.style.setProperty("--dsh-q-bright", widths.bright + "px");
+        painted.style.setProperty("--dsh-q-dull", widths.dull + "px");
+        return function() {
+          painted.removeAttribute("data-dsh-qrings");
+          painted.style.removeProperty("--dsh-q-bright");
+          painted.style.removeProperty("--dsh-q-dull");
+        };
+      },
+      [questionInputs.pending, questionInputs.answered]
+    );
+    var rows = approvalRows.concat(
+      questionInputs.rows
+    );
     if (rows.length === 0) return null;
     var jump = function(row) {
       if (row.callId === null) return;

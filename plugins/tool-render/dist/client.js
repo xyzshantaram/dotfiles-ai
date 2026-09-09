@@ -1843,6 +1843,143 @@ function guardRewriteFromText(text) {
   return { ran: command };
 }
 
+// plugins/tool-render/src/questions.ts
+var ASK_TOOL_NAME = "ask_user_question";
+function isSettled(block) {
+  return block !== null && typeof block === "object" && "kind" in block;
+}
+function blockName(block) {
+  if (isSettled(block)) {
+    return block.call && typeof block.call.name === "string" ? block.call.name : "";
+  }
+  return block !== null && typeof block === "object" && typeof block.name === "string" ? block.name : "";
+}
+function blockCallId(block) {
+  return block !== null && typeof block === "object" && typeof block.callId === "string" ? block.callId : null;
+}
+function rootBlocksOf(snapshot) {
+  const nodes = snapshot && snapshot.chat && snapshot.chat.nodes;
+  if (nodes === void 0 || nodes === null || typeof nodes.values !== "function") return [];
+  const iter = nodes.values();
+  if (iter === null || iter === void 0) return [];
+  const entries = typeof iter.next === "function" ? (() => {
+    const out2 = [];
+    for (let entry = iter.next(); entry.done !== true; entry = iter.next()) out2.push(entry.value);
+    return out2;
+  })() : Array.isArray(iter) ? iter : [];
+  const out = [];
+  for (const node of entries) {
+    if (node === void 0 || node === null || node.kind !== "tool-call") continue;
+    const block = node.data !== void 0 && node.data !== null ? node.data.root : void 0;
+    if (block === void 0 || block === null) continue;
+    out.push(block);
+  }
+  return out;
+}
+function walkCalls(block, visit3) {
+  visit3(block);
+  const sub = block !== null && typeof block === "object" && Array.isArray(block.subCalls) ? block.subCalls : [];
+  for (const child of sub) walkCalls(child, visit3);
+}
+function pendingQuestionsOf(snapshot) {
+  const pending = snapshot !== null && snapshot !== void 0 && Array.isArray(snapshot.pending) ? snapshot.pending : [];
+  const out = [];
+  for (const item of pending) {
+    if (item === null || item === void 0 || item.kind !== "question") continue;
+    out.push(item);
+  }
+  return out;
+}
+function runningAskCallIdsOf(snapshot) {
+  const out = [];
+  for (const root of rootBlocksOf(snapshot)) {
+    walkCalls(root, (block) => {
+      if (isSettled(block)) return;
+      if (blockName(block) !== ASK_TOOL_NAME) return;
+      const callId = blockCallId(block);
+      if (callId !== null) out.push(callId);
+    });
+  }
+  return out;
+}
+function pendingQuestionForCall(snapshot, callId) {
+  const running = runningAskCallIdsOf(snapshot);
+  const index = running.indexOf(callId);
+  if (index === -1) return null;
+  const pendings = pendingQuestionsOf(snapshot);
+  return index < pendings.length ? pendings[index] : null;
+}
+function questionsOfPending(pending) {
+  const payload = pending !== null && pending !== void 0 ? pending.payload : void 0;
+  const questions = payload !== null && payload !== void 0 ? payload.questions : void 0;
+  return Array.isArray(questions) ? questions : null;
+}
+function blankDrafts(count) {
+  const out = [];
+  for (let i = 0; i < count; i++) out.push({ selected: [], custom: "", skipped: false });
+  return out;
+}
+function isMulti(question) {
+  return question !== null && typeof question === "object" && question.multiSelect === true;
+}
+function chooseInDraft(question, draft, label) {
+  if (isMulti(question)) {
+    const selected = draft.selected.includes(label) ? draft.selected.filter((item) => item !== label) : [...draft.selected, label];
+    return { ...draft, selected, skipped: false };
+  }
+  return { selected: [label], custom: "", skipped: false };
+}
+function typeCustomInDraft(question, draft, value) {
+  return {
+    ...draft,
+    selected: isMulti(question) ? draft.selected : [],
+    custom: value,
+    skipped: false
+  };
+}
+function skipDraft() {
+  return { selected: [], custom: "", skipped: true };
+}
+function draftAnswered(draft) {
+  return draft.selected.length > 0 || draft.custom.trim() !== "";
+}
+function draftCompleted(draft) {
+  return draftAnswered(draft) || draft.skipped;
+}
+function buildAnswerBatch(questions, drafts) {
+  for (let i = 0; i < drafts.length; i++) {
+    if (!draftCompleted(drafts[i])) return { ok: false, missingIndex: i };
+  }
+  return {
+    ok: true,
+    batch: {
+      answers: questions.map((item, index) => {
+        const value = drafts[index];
+        if (value.skipped) return { id: item.id, selected: [] };
+        const custom = value.custom.trim();
+        return {
+          id: item.id,
+          selected: custom === "" || isMulti(item) ? value.selected : [],
+          ...custom === "" ? {} : { custom }
+        };
+      })
+    }
+  };
+}
+function answerMessage(pending, batch) {
+  return { ok: true, value: { sessionId: pending.sessionId, answer: batch } };
+}
+function cancelMessage() {
+  return {
+    ok: false,
+    error: { code: "cancelled", message: "the user closed this question request", details: {} }
+  };
+}
+function parseRecommendedLabel(label) {
+  const suffix = /\s*(?:\((?:recommended|推荐)\)|（(?:recommended|推荐)）)\s*$/i;
+  return suffix.test(label) ? { label: label.replace(suffix, ""), recommended: true } : { label, recommended: false };
+}
+
 // plugins/tool-render/src/pretty.ts
 function isPrettyView(value) {
   if (value === null || typeof value !== "object") return false;
@@ -2384,6 +2521,12 @@ var client_default = `.tool-render-row {
 .tool-render-card[data-guard-approval] {
   outline: 3px solid var(--dsh-outline-guard);
 }
+/* Once answered, the outline dulls to translucent white instead of
+   vanishing. This rule sits BEFORE error/stopped/guard so a failed or
+   guarded call keeps its own stronger mark. */
+.tool-render-card[data-question-answered] {
+  outline: 3px solid color-mix(in srgb, #fff 40%, transparent);
+}
 /* An errored call is outlined the way an escalated one is, in red and a little
    thinner. The outline follows the card's rounded corners. It replaces the old
    tinted row background and inset left bar. */
@@ -2404,6 +2547,15 @@ var client_default = `.tool-render-row {
    survives a failing exit. */
 .tool-render-card[data-guard-approval][data-guard-approval] {
   outline: 3px solid var(--dsh-outline-guard);
+}
+/* A call waiting on the human's answer to its question is outlined in
+   solid white at the same 3px weight as the other state outlines. This
+   rule sits after error/stopped/guard so the bright "answer me" mark wins
+   while pending (a pending call is still running, so error/stopped cannot
+   co-occur; the doubled guard rule above still wins a true tie, which
+   cannot happen because guard approvals are bash-only). */
+.tool-render-card[data-question-pending] {
+  outline: 3px solid #fff;
 }
 .tool-render-card:hover {
   border-color: var(--dsw-alias-border-l3);
@@ -2528,6 +2680,263 @@ var client_default = `.tool-render-row {
 .tool-render-option-description p,
 .tool-render-answer-note p {
   margin: 0;
+}
+
+/* ask_user_question answer form: the interactive UI on the pending card,
+   ported from the shipped QuestionComposer. Option buttons follow the
+   approval-btn recipe (1px border, surface bg); the selected option takes
+   the business-primary border, the primary action the filled recipe. */
+.tool-render-qform {
+  flex-direction: column;
+  display: flex;
+  gap: 0.375rem;
+  padding: 0.25rem 0 0.25rem 0.25rem;
+}
+.tool-render-qheader {
+  align-items: flex-start;
+  justify-content: space-between;
+  display: flex;
+  gap: 0.5rem;
+}
+.tool-render-qheading {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.tool-render-qeyebrow {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 0.6875rem;
+  line-height: 1rem;
+}
+.tool-render-qtitle {
+  color: var(--dsw-alias-label-primary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+  overflow-wrap: anywhere;
+}
+.tool-render-qdismiss {
+  flex: none;
+  border: none;
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  padding: 0.0625rem 0.25rem;
+  text-decoration: underline dotted;
+}
+.tool-render-qdismiss:hover:enabled {
+  color: var(--dsw-alias-label-primary);
+}
+.tool-render-qdismiss:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.tool-render-qbody {
+  flex-direction: column;
+  display: flex;
+  gap: 0.375rem;
+}
+.tool-render-qdetail {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  overflow-wrap: anywhere;
+}
+.tool-render-qoptions {
+  flex-direction: column;
+  display: flex;
+  gap: 0.25rem;
+}
+.tool-render-qoption {
+  align-items: baseline;
+  display: flex;
+  gap: 0.375rem;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 0.5rem;
+  background: var(--dsw-alias-bg-base);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0.375rem 0.5rem;
+}
+.tool-render-qoption:hover:enabled {
+  background: var(--dsw-alias-interactive-bg-hover-solid);
+}
+.tool-render-qoption:disabled {
+  cursor: default;
+}
+.tool-render-qoption[data-selected] {
+  border-color: var(--dsw-alias-state-business-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+.tool-render-qoption-marker {
+  flex: none;
+  width: 1rem;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  text-align: center;
+}
+.tool-render-qoption[data-selected] .tool-render-qoption-marker {
+  color: var(--dsw-alias-state-business-primary);
+}
+.tool-render-qoption-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.tool-render-qoption-line {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+}
+.tool-render-qoption-label {
+  color: var(--dsw-alias-label-primary);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  overflow-wrap: anywhere;
+}
+.tool-render-qoption[data-selected] .tool-render-qoption-label {
+  font-weight: 700;
+}
+.tool-render-qoption-description {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+  overflow-wrap: anywhere;
+}
+.tool-render-qbadge {
+  flex: none;
+  border: 1px solid var(--dsw-alias-state-business-primary);
+  border-radius: 999px;
+  color: var(--dsw-alias-state-business-primary);
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  padding: 0 0.375rem;
+}
+.tool-render-qcustom-row {
+  align-items: center;
+  display: flex;
+  gap: 0.375rem;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 0.5rem;
+  background: var(--dsw-alias-bg-base);
+  padding: 0.375rem 0.5rem;
+}
+.tool-render-qcustom-row[data-active] {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+.tool-render-qcustom-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: none;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  padding: 0;
+}
+.tool-render-qcustom-input::placeholder {
+  color: var(--dsw-alias-label-caption);
+}
+.tool-render-qcustom-textarea {
+  box-sizing: border-box;
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 0.5rem;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  padding: 0.375rem 0.5rem;
+}
+.tool-render-qcustom-textarea:focus {
+  border-color: var(--dsw-alias-state-business-primary);
+  outline: none;
+}
+.tool-render-qfooter {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+}
+.tool-render-qpager {
+  flex: none;
+  align-items: center;
+  display: flex;
+  gap: 0.25rem;
+}
+.tool-render-qnav {
+  border: none;
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  border-radius: 999px;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.125rem 0.375rem;
+}
+.tool-render-qnav:hover:enabled {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+.tool-render-qnav:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.tool-render-qprogress {
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+.tool-render-qfeedback {
+  flex: 1 1 auto;
+  min-height: 1rem;
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 0.6875rem;
+  line-height: 1rem;
+}
+.tool-render-qactions {
+  flex: none;
+  align-items: center;
+  display: flex;
+  gap: 0.25rem;
+}
+.tool-render-qbtn {
+  border: 1px solid var(--dsw-alias-border-l3);
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 20px;
+  padding: 5px 12px;
+}
+.tool-render-qbtn:hover:enabled {
+  background: var(--dsw-alias-interactive-bg-hover-solid);
+  color: var(--dsw-alias-label-primary);
+}
+.tool-render-qbtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.tool-render-qbtn-primary {
+  border-color: transparent;
+  background: var(--dsw-alias-label-secondary);
+  color: var(--dsw-alias-bg-base);
+  font-weight: 600;
+}
+.tool-render-qbtn-primary:hover:enabled {
+  background: var(--dsw-alias-label-secondary);
+  color: var(--dsw-alias-bg-base);
+  filter: brightness(1.15);
 }
 
 /* list_agents roster: one line per agent, status first so the column reads
@@ -15951,7 +16360,7 @@ function ToolRenderAnswerableCard(props) {
 }
 function renderToolRenderCard(options, approvalOpen) {
   var interactive = options.expandable === true;
-  var open = (options.expanded === true || approvalOpen === true) && interactive;
+  var open = (options.expanded === true || approvalOpen === true || options.questionState === "pending") && interactive;
   var leading = toolNameBadge(options.toolName, options.icon, options.state);
   var summary;
   var showsError = options.state === "error" && options.errorSummary !== void 0;
@@ -15995,6 +16404,8 @@ function renderToolRenderCard(options, approvalOpen) {
       "data-call-id": options.callId ?? void 0,
       "data-escalated": options.escalated || void 0,
       "data-guard-approval": options.guardApproval || void 0,
+      "data-question-pending": options.questionState === "pending" || void 0,
+      "data-question-answered": options.questionState === "answered" || void 0,
       "data-error": options.state === "error" || void 0,
       "data-stopped": options.state === "stopped" || void 0
     },
@@ -17210,6 +17621,249 @@ function askBody(questions, answers) {
   }
   return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-ask" }, children);
 }
+function isQuestionComposing(event) {
+  var native = event !== null && event !== void 0 ? event.nativeEvent : void 0;
+  if (native === void 0 || native === null) return false;
+  return native.isComposing === true || native.keyCode === 229;
+}
+function renderQuestionOption(option, optionIndex, multi, selected, busy, onChoose) {
+  if (option === null || typeof option !== "object" || typeof option.label !== "string") return null;
+  var display = parseRecommendedLabel(option.label);
+  return /* @__PURE__ */ import_react.default.createElement(
+    "button",
+    {
+      type: "button",
+      className: "tool-render-qoption",
+      "data-selected": selected || void 0,
+      role: multi ? "checkbox" : "radio",
+      "aria-checked": selected,
+      "aria-label": display.label,
+      disabled: busy !== null,
+      onClick: function() {
+        onChoose(option.label);
+      }
+    },
+    /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-qoption-marker", "aria-hidden": true }, multi ? selected ? "\u2611" : "\u2610" : optionIndex + 1),
+    /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-qoption-text" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-qoption-line" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-qoption-label" }, display.label), display.recommended ? /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-qbadge" }, "Recommended") : null, typeof option.description === "string" && option.description !== "" ? /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-qoption-description" }, option.description) : null))
+  );
+}
+function AskAnswerForm(props) {
+  var questions = props.questions;
+  var pending = props.pending;
+  var indexState = useState(0);
+  var index = indexState[0];
+  var setIndex = indexState[1];
+  var draftsState = useState(function() {
+    return blankDrafts(questions.length);
+  });
+  var drafts = draftsState[0];
+  var setDrafts = draftsState[1];
+  var busyState = useState(null);
+  var busy = busyState[0];
+  var setBusy = busyState[1];
+  var errorState = useState(null);
+  var error = errorState[0];
+  var setError = errorState[1];
+  var question = questions[index];
+  var draft = drafts[index];
+  var options = question !== null && typeof question === "object" && Array.isArray(question.options) ? question.options : [];
+  var hasOptions = options.length > 0;
+  var multi = question !== null && typeof question === "object" && question.multiSelect === true;
+  var sendRespond = function(message, which) {
+    var receiptOf;
+    try {
+      receiptOf = Promise.resolve(pending.respond(message));
+    } catch (thrown) {
+      console.warn("[tool-render] question answer failed", which, thrown);
+      setBusy(null);
+      setError({ text: thrown instanceof Error ? thrown.message : String(thrown) });
+      return;
+    }
+    receiptOf.then(function(receipt) {
+      if (receipt === void 0 || receipt === null || !receipt.accepted) {
+        throw new Error(
+          "question response rejected: " + (receipt === void 0 || receipt === null || receipt.reason === void 0 ? "unknown" : receipt.reason)
+        );
+      }
+      console.debug("[tool-render] question answered", which);
+    }).catch(function(failure) {
+      console.warn("[tool-render] question answer failed", which, failure);
+      setBusy(null);
+      setError({ text: failure instanceof Error ? failure.message : String(failure) });
+    });
+  };
+  var submitDrafts = function(values) {
+    var built = buildAnswerBatch(questions, values);
+    if (built.ok !== true) {
+      setIndex(built.missingIndex);
+      setError({ key: "incomplete" });
+      return;
+    }
+    setBusy("answer");
+    setError(null);
+    sendRespond(answerMessage(pending, built.batch), "answer");
+  };
+  var continueFlow = function() {
+    if (!draftAnswered(draft)) {
+      setError({ key: "unanswered" });
+      return;
+    }
+    if (index < questions.length - 1) {
+      setIndex(index + 1);
+      setError(null);
+      return;
+    }
+    submitDrafts(drafts);
+  };
+  var replaceDraft = function(next) {
+    setDrafts(function(current) {
+      return current.map(function(item, itemIndex) {
+        return itemIndex === index ? next : item;
+      });
+    });
+    setError(null);
+  };
+  var choose = function(label) {
+    replaceDraft(chooseInDraft(question, draft, label));
+    if (!multi && index < questions.length - 1) setIndex(index + 1);
+  };
+  var draftCustom = function(event) {
+    replaceDraft(typeCustomInDraft(question, draft, event.target.value));
+  };
+  var continueFromCustom = function(event) {
+    if (event.key !== "Enter" || event.shiftKey || isQuestionComposing(event)) return;
+    event.preventDefault();
+    continueFlow();
+  };
+  var skipQuestion = function() {
+    var values = drafts.map(function(item, itemIndex) {
+      return itemIndex === index ? skipDraft() : item;
+    });
+    setDrafts(values);
+    setError(null);
+    if (index < questions.length - 1) {
+      setIndex(index + 1);
+      return;
+    }
+    submitDrafts(values);
+  };
+  var cancelFlow = function() {
+    setBusy("cancel");
+    setError(null);
+    sendRespond(cancelMessage(), "cancel");
+  };
+  var errorText = error === null ? null : error.key === "unanswered" ? "Please select an option or enter a custom answer." : error.key === "incomplete" ? "Please complete this question first." : error.text;
+  var optionRows = [];
+  for (var optionIndex = 0; optionIndex < options.length; optionIndex++) {
+    var rawOption = options[optionIndex];
+    var rawLabel = rawOption !== null && typeof rawOption === "object" ? rawOption.label : "";
+    var rendered = renderQuestionOption(
+      rawOption,
+      optionIndex,
+      multi,
+      draft.selected.indexOf(typeof rawLabel === "string" ? rawLabel : "") !== -1,
+      busy,
+      choose
+    );
+    if (rendered !== null) optionRows.push(rendered);
+  }
+  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-qform" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-qheader" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-qheading" }, typeof question.header === "string" && question.header !== "" ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-qeyebrow" }, question.header) : null, /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-qtitle" }, question.question)), /* @__PURE__ */ import_react.default.createElement(
+    "button",
+    {
+      type: "button",
+      className: "tool-render-qdismiss",
+      disabled: busy !== null,
+      title: "Dismiss all questions",
+      "aria-label": "Dismiss all questions",
+      onClick: cancelFlow
+    },
+    "Dismiss"
+  )), /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-qbody" }, typeof question.detail === "string" && question.detail !== "" ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-qdetail" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: question.detail })) : null, /* @__PURE__ */ import_react.default.createElement(
+    "div",
+    {
+      className: "tool-render-qoptions",
+      role: multi ? "group" : "radiogroup"
+    },
+    optionRows,
+    hasOptions ? /* @__PURE__ */ import_react.default.createElement(
+      "div",
+      {
+        className: "tool-render-qcustom-row",
+        "data-active": draft.custom !== "" || void 0
+      },
+      /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-qoption-marker", "aria-hidden": true }, "\u270E"),
+      /* @__PURE__ */ import_react.default.createElement(
+        "input",
+        {
+          type: "text",
+          className: "tool-render-qcustom-input",
+          value: draft.custom,
+          disabled: busy !== null,
+          placeholder: "Type your answer",
+          "aria-label": "Type your answer",
+          onChange: draftCustom,
+          onKeyDown: continueFromCustom
+        }
+      )
+    ) : /* @__PURE__ */ import_react.default.createElement(
+      "textarea",
+      {
+        className: "tool-render-qcustom-textarea",
+        value: draft.custom,
+        disabled: busy !== null,
+        rows: 2,
+        placeholder: "Type your answer",
+        "aria-label": "Type your answer",
+        onChange: draftCustom,
+        onKeyDown: continueFromCustom
+      }
+    )
+  )), /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-qfooter" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-qpager" }, /* @__PURE__ */ import_react.default.createElement(
+    "button",
+    {
+      type: "button",
+      className: "tool-render-qnav",
+      "aria-label": "Previous question",
+      disabled: index === 0 || busy !== null,
+      onClick: function() {
+        setIndex(index - 1);
+        setError(null);
+      }
+    },
+    "\u2039"
+  ), /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-qprogress" }, index + 1, " / ", questions.length), /* @__PURE__ */ import_react.default.createElement(
+    "button",
+    {
+      type: "button",
+      className: "tool-render-qnav",
+      "aria-label": "Next question",
+      disabled: index === questions.length - 1 || busy !== null,
+      onClick: function() {
+        setIndex(index + 1);
+        setError(null);
+      }
+    },
+    "\u203A"
+  )), /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-qfeedback", role: "status" }, errorText), /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-qactions" }, /* @__PURE__ */ import_react.default.createElement(
+    "button",
+    {
+      type: "button",
+      className: "tool-render-qbtn",
+      disabled: busy !== null,
+      onClick: skipQuestion
+    },
+    "Skip this question"
+  ), /* @__PURE__ */ import_react.default.createElement(
+    "button",
+    {
+      type: "button",
+      className: "tool-render-qbtn tool-render-qbtn-primary",
+      disabled: busy !== null || !draftAnswered(draft),
+      onClick: continueFlow
+    },
+    busy === "answer" ? "Submitting\u2026" : index === questions.length - 1 ? "Submit" : "Next"
+  ))));
+}
 function AskRow(props) {
   var expandedState = useState(false);
   var expanded = expandedState[0];
@@ -17239,9 +17893,23 @@ function AskRow(props) {
   } else {
     summary = "Ask user";
   }
+  var questionRef = useRef(null);
+  var questionKey = typeof props.useSession === "function" ? props.useSession(function(snapshot) {
+    var found = done ? null : pendingQuestionForCall(snapshot, props.callId);
+    questionRef.current = found;
+    return found === null ? null : String(found.key);
+  }) : null;
+  var livePending = questionKey === null ? null : questionRef.current;
+  var pendingQuestions = livePending === null ? null : questionsOfPending(livePending);
+  var questionOpen = pendingQuestions !== null && pendingQuestions.length > 0;
   var body = null;
-  if (questions !== null && output !== null && output !== "" && state !== "error") {
+  var questionState;
+  if (questionOpen) {
+    questionState = "pending";
+    body = /* @__PURE__ */ import_react.default.createElement(AskAnswerForm, { key: questionKey, pending: livePending, questions: pendingQuestions });
+  } else if (questions !== null && output !== null && output !== "" && state !== "error") {
     body = askBody(questions, answers);
+    if (answers !== null) questionState = "answered";
   }
   return toolRenderRow({
     callId: props.callId,
@@ -17252,6 +17920,7 @@ function AskRow(props) {
     title: "Ask user",
     summary,
     state,
+    questionState,
     expandable: body !== null,
     expanded,
     onToggle: function() {

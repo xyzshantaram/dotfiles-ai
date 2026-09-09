@@ -68,6 +68,19 @@ import {
   readStartLine,
   splitSystemReminders,
 } from "./text";
+import {
+  answerMessage,
+  blankDrafts,
+  buildAnswerBatch,
+  cancelMessage,
+  chooseInDraft,
+  draftAnswered,
+  parseRecommendedLabel,
+  pendingQuestionForCall,
+  questionsOfPending,
+  skipDraft,
+  typeCustomInDraft,
+} from "./questions";
 import { countMessageRows, prettyRows } from "./pretty";
 import {
   injectStyle,
@@ -570,8 +583,13 @@ function renderToolRenderCard(options, approvalOpen) {
   // row, so the failure reads at a glance without opening the card.
   var interactive = options.expandable === true;
   // A pending approval pins the card open; the user's own toggle takes back
-  // control the moment that approval settles.
-  var open = (options.expanded === true || approvalOpen === true) && interactive;
+  // control the moment that approval settles. A pending question pins the
+  // card open the same way: the answer form must stay visible while asked.
+  var open =
+    (options.expanded === true ||
+      approvalOpen === true ||
+      options.questionState === "pending") &&
+    interactive;
   // The leading area is the chevron when open, then the tool-name badge.
   // The old state dots are gone: a stopped card carries an outline instead,
   // and the badge replaces the bare icon as the row's leading mark.
@@ -626,6 +644,8 @@ function renderToolRenderCard(options, approvalOpen) {
       data-call-id={options.callId ?? undefined}
       data-escalated={options.escalated || undefined}
       data-guard-approval={options.guardApproval || undefined}
+      data-question-pending={options.questionState === "pending" || undefined}
+      data-question-answered={options.questionState === "answered" || undefined}
       data-error={options.state === "error" || undefined}
       data-stopped={options.state === "stopped" || undefined}
     >
@@ -2177,6 +2197,10 @@ function TodoRow(props) {
 // Expanded, each question shows its prompt and its options; an option the
 // user picked gets a filled marker. A free-text answer renders as an
 // indented note under the question. Errors keep the plain error body.
+//
+// While the call still runs and holds a pending question, the card answers
+// inline instead (AskAnswerForm below): the shipped composer takeover is
+// disabled in this GUI, so this card is the single answer surface.
 function askQuestions(args) {
   if (args === null || typeof args !== "object" || !Array.isArray(args.questions)) return null;
   var out = [];
@@ -2304,6 +2328,322 @@ function askBody(questions, answers) {
   return <div className="tool-render-ask">{children}</div>;
 }
 
+// ---- ask_user_question answer form: the card answers its own question. ----
+// Ported from the shipped QuestionComposer (dsh-client-ui-user-questions
+// lib/client.js QuestionFlow): the same draft shape, the same single-select
+// advance, the same unanswered/incomplete validation, the same answer-batch
+// shape, and the same answer/cancel wire (the pure pieces live in
+// ./questions so vitest reaches them without a browser). Deliberate
+// differences from the takeover: no minimize/maximize (the card has its own
+// expand), no plan-review layout (plan-mode is disabled upstream, so no
+// plan-review intent can arrive; a batch carrying one still answers through
+// this generic flow), and English-only copy (this bundle registers no
+// locale). One form instance answers one pending batch; the card remounts
+// it per pending key, so a same-call re-ask starts from blank drafts.
+function isQuestionComposing(event) {
+  var native = event !== null && event !== undefined ? event.nativeEvent : undefined;
+  if (native === undefined || native === null) return false;
+  return native.isComposing === true || native.keyCode === 229;
+}
+
+function renderQuestionOption(option, optionIndex, multi, selected, busy, onChoose) {
+  if (option === null || typeof option !== "object" || typeof option.label !== "string") return null;
+  var display = parseRecommendedLabel(option.label);
+  return (
+    <button
+      type="button"
+      className="tool-render-qoption"
+      data-selected={selected || undefined}
+      role={multi ? "checkbox" : "radio"}
+      aria-checked={selected}
+      aria-label={display.label}
+      disabled={busy !== null}
+      onClick={function () {
+        onChoose(option.label);
+      }}
+    >
+      <span className="tool-render-qoption-marker" aria-hidden={true}>
+        {multi ? (selected ? "☑" : "☐") : optionIndex + 1}
+      </span>
+      <span className="tool-render-qoption-text">
+        <span className="tool-render-qoption-line">
+          <span className="tool-render-qoption-label">{display.label}</span>
+          {display.recommended ? (
+            <span className="tool-render-qbadge">Recommended</span>
+          ) : null}
+          {typeof option.description === "string" && option.description !== "" ? (
+            <span className="tool-render-qoption-description">{option.description}</span>
+          ) : null}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function AskAnswerForm(props) {
+  var questions = props.questions;
+  var pending = props.pending;
+  var indexState = useState(0);
+  var index = indexState[0];
+  var setIndex = indexState[1];
+  var draftsState = useState(function () {
+    return blankDrafts(questions.length);
+  });
+  var drafts = draftsState[0];
+  var setDrafts = draftsState[1];
+  var busyState = useState(null);
+  var busy = busyState[0];
+  var setBusy = busyState[1];
+  var errorState = useState(null);
+  var error = errorState[0];
+  var setError = errorState[1];
+  var question = questions[index];
+  var draft = drafts[index];
+  var options = question !== null && typeof question === "object" && Array.isArray(question.options)
+    ? question.options
+    : [];
+  var hasOptions = options.length > 0;
+  var multi = question !== null && typeof question === "object" && question.multiSelect === true;
+
+  // The wire vocabulary is the shipped PendingQuestion shape (see
+  // ./questions): respond ok with the sessionId plus the whole batch, or
+  // the exact cancelled error. respond throws synchronously once the wait
+  // settled elsewhere, and a rejected carrier receipt throws at the call
+  // site, so both paths re-enable the form with the failure shown.
+  var sendRespond = function (message, which) {
+    var receiptOf;
+    try {
+      receiptOf = Promise.resolve(pending.respond(message));
+    } catch (thrown) {
+      console.warn("[tool-render] question answer failed", which, thrown);
+      setBusy(null);
+      setError({ text: thrown instanceof Error ? thrown.message : String(thrown) });
+      return;
+    }
+    receiptOf
+      .then(function (receipt) {
+        if (receipt === undefined || receipt === null || !receipt.accepted) {
+          throw new Error(
+            "question response rejected: " +
+              (receipt === undefined || receipt === null || receipt.reason === undefined
+                ? "unknown"
+                : receipt.reason),
+          );
+        }
+        console.debug("[tool-render] question answered", which);
+      })
+      .catch(function (failure) {
+        console.warn("[tool-render] question answer failed", which, failure);
+        setBusy(null);
+        setError({ text: failure instanceof Error ? failure.message : String(failure) });
+      });
+  };
+  var submitDrafts = function (values) {
+    var built = buildAnswerBatch(questions, values);
+    if (built.ok !== true) {
+      setIndex(built.missingIndex);
+      setError({ key: "incomplete" });
+      return;
+    }
+    setBusy("answer");
+    setError(null);
+    sendRespond(answerMessage(pending, built.batch), "answer");
+  };
+  var continueFlow = function () {
+    if (!draftAnswered(draft)) {
+      setError({ key: "unanswered" });
+      return;
+    }
+    if (index < questions.length - 1) {
+      setIndex(index + 1);
+      setError(null);
+      return;
+    }
+    submitDrafts(drafts);
+  };
+  var replaceDraft = function (next) {
+    setDrafts(function (current) {
+      return current.map(function (item, itemIndex) {
+        return itemIndex === index ? next : item;
+      });
+    });
+    setError(null);
+  };
+  var choose = function (label) {
+    replaceDraft(chooseInDraft(question, draft, label));
+    if (!multi && index < questions.length - 1) setIndex(index + 1);
+  };
+  var draftCustom = function (event) {
+    replaceDraft(typeCustomInDraft(question, draft, event.target.value));
+  };
+  var continueFromCustom = function (event) {
+    if (event.key !== "Enter" || event.shiftKey || isQuestionComposing(event)) return;
+    event.preventDefault();
+    continueFlow();
+  };
+  var skipQuestion = function () {
+    var values = drafts.map(function (item, itemIndex) {
+      return itemIndex === index ? skipDraft() : item;
+    });
+    setDrafts(values);
+    setError(null);
+    if (index < questions.length - 1) {
+      setIndex(index + 1);
+      return;
+    }
+    submitDrafts(values);
+  };
+  var cancelFlow = function () {
+    setBusy("cancel");
+    setError(null);
+    sendRespond(cancelMessage(), "cancel");
+  };
+  var errorText =
+    error === null
+      ? null
+      : error.key === "unanswered"
+        ? "Please select an option or enter a custom answer."
+        : error.key === "incomplete"
+          ? "Please complete this question first."
+          : error.text;
+  var optionRows = [];
+  for (var optionIndex = 0; optionIndex < options.length; optionIndex++) {
+    var rawOption = options[optionIndex];
+    var rawLabel = rawOption !== null && typeof rawOption === "object" ? rawOption.label : "";
+    var rendered = renderQuestionOption(
+      rawOption,
+      optionIndex,
+      multi,
+      draft.selected.indexOf(typeof rawLabel === "string" ? rawLabel : "") !== -1,
+      busy,
+      choose,
+    );
+    if (rendered !== null) optionRows.push(rendered);
+  }
+  return (
+    <div className="tool-render-qform">
+      <div className="tool-render-qheader">
+        <div className="tool-render-qheading">
+          {typeof question.header === "string" && question.header !== "" ? (
+            <div className="tool-render-qeyebrow">{question.header}</div>
+          ) : null}
+          <div className="tool-render-qtitle">{question.question}</div>
+        </div>
+        <button
+          type="button"
+          className="tool-render-qdismiss"
+          disabled={busy !== null}
+          title="Dismiss all questions"
+          aria-label="Dismiss all questions"
+          onClick={cancelFlow}
+        >
+          Dismiss
+        </button>
+      </div>
+      <div className="tool-render-qbody">
+        {typeof question.detail === "string" && question.detail !== "" ? (
+          <div className="tool-render-qdetail">
+            <MarkdownText text={question.detail} />
+          </div>
+        ) : null}
+        <div
+          className="tool-render-qoptions"
+          role={multi ? "group" : "radiogroup"}
+        >
+          {optionRows}
+          {hasOptions ? (
+            <div
+              className="tool-render-qcustom-row"
+              data-active={draft.custom !== "" || undefined}
+            >
+              <span className="tool-render-qoption-marker" aria-hidden={true}>
+                ✎
+              </span>
+              <input
+                type="text"
+                className="tool-render-qcustom-input"
+                value={draft.custom}
+                disabled={busy !== null}
+                placeholder="Type your answer"
+                aria-label="Type your answer"
+                onChange={draftCustom}
+                onKeyDown={continueFromCustom}
+              />
+            </div>
+          ) : (
+            <textarea
+              className="tool-render-qcustom-textarea"
+              value={draft.custom}
+              disabled={busy !== null}
+              rows={2}
+              placeholder="Type your answer"
+              aria-label="Type your answer"
+              onChange={draftCustom}
+              onKeyDown={continueFromCustom}
+            />
+          )}
+        </div>
+      </div>
+      <div className="tool-render-qfooter">
+        <div className="tool-render-qpager">
+          <button
+            type="button"
+            className="tool-render-qnav"
+            aria-label="Previous question"
+            disabled={index === 0 || busy !== null}
+            onClick={function () {
+              setIndex(index - 1);
+              setError(null);
+            }}
+          >
+            ‹
+          </button>
+          <span className="tool-render-qprogress">
+            {index + 1} / {questions.length}
+          </span>
+          <button
+            type="button"
+            className="tool-render-qnav"
+            aria-label="Next question"
+            disabled={index === questions.length - 1 || busy !== null}
+            onClick={function () {
+              setIndex(index + 1);
+              setError(null);
+            }}
+          >
+            ›
+          </button>
+        </div>
+        <div className="tool-render-qfeedback" role="status">
+          {errorText}
+        </div>
+        <div className="tool-render-qactions">
+          <button
+            type="button"
+            className="tool-render-qbtn"
+            disabled={busy !== null}
+            onClick={skipQuestion}
+          >
+            Skip this question
+          </button>
+          <button
+            type="button"
+            className="tool-render-qbtn tool-render-qbtn-primary"
+            disabled={busy !== null || !draftAnswered(draft)}
+            onClick={continueFlow}
+          >
+            {busy === "answer"
+              ? "Submitting…"
+              : index === questions.length - 1
+                ? "Submit"
+                : "Next"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AskRow(props) {
   var expandedState = useState(false);
   var expanded = expandedState[0];
@@ -2336,9 +2676,35 @@ function AskRow(props) {
   } else {
     summary = "Ask user";
   }
+  // The pending question this running call claims, FIFO across concurrent
+  // ask calls (see ./questions). The selector's RESULT is the stable
+  // pending key, so the card only re-renders when its claim appears,
+  // changes, or clears; the live pending object parks in a ref for answer
+  // time and never enters React state. A settled call claims nothing.
+  var questionRef = useRef(null);
+  var questionKey =
+    typeof props.useSession === "function"
+      ? props.useSession(function (snapshot) {
+          var found = done ? null : pendingQuestionForCall(snapshot, props.callId);
+          questionRef.current = found;
+          return found === null ? null : String(found.key);
+        })
+      : null;
+  var livePending = questionKey === null ? null : questionRef.current;
+  var pendingQuestions = livePending === null ? null : questionsOfPending(livePending);
+  var questionOpen = pendingQuestions !== null && pendingQuestions.length > 0;
+  // While pending, the body is the answer form fed by the pending payload
+  // (the call's own args may still be streaming in). Once settled, the
+  // card renders the picked answers as before; a parsed answer batch keeps
+  // the dull "answered" outline instead of dropping the mark entirely.
   var body = null;
-  if (questions !== null && output !== null && output !== "" && state !== "error") {
+  var questionState;
+  if (questionOpen) {
+    questionState = "pending";
+    body = <AskAnswerForm key={questionKey} pending={livePending} questions={pendingQuestions} />;
+  } else if (questions !== null && output !== null && output !== "" && state !== "error") {
     body = askBody(questions, answers);
+    if (answers !== null) questionState = "answered";
   }
   return toolRenderRow({
     callId: props.callId,
@@ -2348,6 +2714,7 @@ function AskRow(props) {
     title: "Ask user",
     summary: summary,
     state: state,
+    questionState: questionState,
     expandable: body !== null,
     expanded: expanded,
     onToggle: function () {
