@@ -1277,11 +1277,24 @@
    sandbox widens, so it stays discoverable without being jammed into the
    justification sentence. The justification below is prose in the same
    tertiary 12px/18px voice as the approval reason, never code. */
+/* The chip carries the ESCALATION colour, not a neutral one (owner,
+   2026-09-09). The mode is the single most consequential fact on the card —
+   how far the sandbox widens — and a grey chip made it read as incidental
+   metadata beside its own warning. Sharing --dsh-outline-escalated with the
+   card outline means the chip and the outline state the same thing in the
+   same colour, so the eye pairs them.
+
+   Independent of the outline defect this was reported alongside (#105: a
+   REJECTED escalation currently outlines guard-blue instead of escalated,
+   cause still unproven). The owner chose to ship the chip first, accepting
+   that until #105 lands a rejected card shows a yellow chip inside a blue
+   outline. Do not "fix" that mismatch by neutralising the chip again — the
+   outline is the wrong half. */
 .tool-render-escalation-mode {
   font: inherit;
   white-space: nowrap;
-  color: var(--dsw-alias-label-secondary);
-  border: 1px solid var(--dsw-alias-border-l2);
+  color: var(--dsh-outline-escalated);
+  border: 1px solid var(--dsh-outline-escalated);
   border-radius: 0.25rem;
   margin-left: 0.375rem;
   padding: 0 0.25rem;
