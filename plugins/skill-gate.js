@@ -118,6 +118,7 @@ function discoverGates(skillDirs, ctx) {
 var activeById = /* @__PURE__ */ new Map();
 var appliedById = /* @__PURE__ */ new Map();
 var disposerById = /* @__PURE__ */ new Map();
+var fingerprintById = /* @__PURE__ */ new Map();
 function delegationDepth(agent) {
   try {
     const header = agent.session?.header?.delegationDepth;
@@ -141,6 +142,15 @@ function apply(ctx, config) {
   ctx.on("skills/change", () => {
     gatesCache = void 0;
   });
+  ctx.on("agent/session-start", (payload) => {
+    try {
+      enforce(payload.agent);
+    } catch (err) {
+      ctx.logger.error(
+        `[skill-gate] session-start enforcement failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  });
   ctx.on("agent/pre-step", (payload, next) => {
     try {
       enforce(payload.agent);
@@ -158,20 +168,6 @@ function apply(ctx, config) {
       return decision;
     };
     return proceed();
-  });
-  ctx.on("system-prompt/assemble", (assembly, context, next) => {
-    const agent = context.agent;
-    if (!agent) return next();
-    const patterns = gatedPatterns();
-    const lockdown = [...alwaysDeny, ...isSubagent(agent) ? subagentDeny : []];
-    if (patterns.length === 0 && lockdown.length === 0) return next();
-    const active = activeById.get(agent.id) ?? /* @__PURE__ */ new Set();
-    const deny = expandDeny(agent, patterns, active);
-    for (const name2 of lockdown) if (!deny.includes(name2)) deny.push(name2);
-    if (deny.length === 0) return next();
-    const blocked = new Set(deny);
-    assembly.tools = assembly.tools.filter((t) => !blocked.has(t.name));
-    return next();
   });
   ctx.on("tools/post-execute", (exec, result, next) => {
     const proceed = async () => {
@@ -233,6 +229,15 @@ function apply(ctx, config) {
     }
     return [...deny].sort();
   }
+  function registryFingerprint(agent) {
+    try {
+      const schemas = agent.ctx.tools.schemas?.();
+      if (!Array.isArray(schemas)) return void 0;
+      return schemas.map((s) => s.name).sort().join(",");
+    } catch {
+      return void 0;
+    }
+  }
   function enforce(agent) {
     if (!agent || !agent.ctx || !agent.ctx.tools) return;
     const patterns = gatedPatterns();
@@ -243,11 +248,13 @@ function apply(ctx, config) {
     for (const name2 of lockdown) if (!deny.includes(name2)) deny.push(name2);
     deny.sort();
     const mark = deny.join(",");
-    if (appliedById.get(agent.id) === mark) return;
+    const fingerprint = registryFingerprint(agent);
+    if (appliedById.get(agent.id) === mark && fingerprintById.get(agent.id) === fingerprint) return;
     disposerById.get(agent.id)?.();
     disposerById.delete(agent.id);
     if (deny.length === 0) {
       appliedById.set(agent.id, mark);
+      fingerprintById.set(agent.id, fingerprint);
       return;
     }
     let disposer;
@@ -262,10 +269,12 @@ function apply(ctx, config) {
       return;
     }
     appliedById.set(agent.id, mark);
+    fingerprintById.set(agent.id, fingerprint);
     disposerById.set(agent.id, disposer);
   }
   function clearAll() {
     appliedById.clear();
+    fingerprintById.clear();
     for (const dispose of disposerById.values()) {
       try {
         dispose();

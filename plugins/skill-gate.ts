@@ -21,11 +21,25 @@
  *     that every named tool is a global tool and applies an agent-scoped
  *     visibility mask. A deny mask removes a tool; the tool returns when the
  *     deny mask no longer names it.
- *   - Enforcement runs on `agent/pre-step`, before every model step of every
- *     agent: the mask is reconciled with the agent's loaded-skill state and
- *     only rewritten when it actually changed. This covers fresh agents
- *     (hidden until their first skill load) and agents that existed before
- *     this plugin mounted.
+ *   - Enforcement runs FIRST on `agent/session-start`, which the agent factory
+ *     emits after creation announcements and BEFORE the loop starts, hence
+ *     before the agent's first prompt assembly (@deepseek-ai/dsh-agent
+ *     AgentFactory.createAgent). Both model-facing surfaces render from the
+ *     calling scope's restricted view — the native list via `wireSchemas(scope)`
+ *     and the Code Mode `tools:sdk` block via `sdkSchemas(scope)`, both reading
+ *     `view(scope).visible` (@deepseek-ai/dsh-tools lib/index.js: sdkSection,
+ *     wireSchemas, sdkSchemas, view) — so one mask hides a tool from BOTH
+ *     surfaces at once, including the very first prompt. There is deliberately
+ *     NO `system-prompt/assemble` listener in this plugin: filtering
+ *     `assembly.tools` covers only the native list and drifts out of sync with
+ *     the SDK block (#98), while the restriction covers both through the seam
+ *     the registry itself owns.
+ *   - Enforcement RECONCILES on `agent/pre-step`, before every model step of
+ *     every agent: the mask is reconciled with the agent's loaded-skill state
+ *     and only rewritten when it actually changed. This covers agents that
+ *     existed before this plugin mounted, tools that register late (MCP servers
+ *     connecting after session start), and post-compaction re-application.
+ *     Never break stepping over a gating fault.
  *   - On a successful `skill` tool call (`tools/post-execute`), this plugin
  *     adds the loaded skill's gated tools to that agent's active set; the next
  *     step's reconciliation unmasks them.
@@ -47,10 +61,11 @@
  * (`$DSH_HOME/skills`), so the frontmatter is the only place a gate is
  * declared; no second list lives in this file. Frontmatter must name the
  * GLOBAL tool names exactly as registered (e.g. `time`, not the package id
- * `tool-time`) — unknown names are filtered out of the deny list, which would
- * leave those tools permanently visible. An entry MAY end with `*` as a
- * prefix pattern (`mcp__gitlab__*`); patterns expand at enforcement time
- * against the live tool schemas, so tool sets that shift between releases
+ * `tool-time`) — names the registry does not know yet are dropped from the
+ * applied mask (restrict() rejects unknown globals), and a registry
+ * fingerprint re-arms the rewrite when they register. An entry MAY end with
+ * `*` as a prefix pattern (`mcp__gitlab__*`); patterns expand at enforcement
+ * time against the live tool schemas, so tool sets that shift between releases
  * (MCP servers) stay fully gated without maintaining a literal list.
  */
 import { readFileSync, readdirSync, existsSync } from "node:fs";
@@ -58,7 +73,6 @@ import { join } from "node:path";
 import { resolveDshHome } from "@deepseek-ai/dsh-home-paths";
 import type { Context, Events } from "@deepseek-ai/cordis";
 import type { Agent } from "@deepseek-ai/dsh-agent";
-import type { AssembleContext, PromptAssembly } from "@deepseek-ai/dsh-system-prompt";
 import z from "@deepseek-ai/schemastery";
 
 export const name = "skill-gate";
@@ -213,6 +227,12 @@ function discoverGates(skillDirs: string[], ctx: Context): Map<string, string[]>
 const activeById = new Map<string, Set<string>>();
 const appliedById = new Map<string, string>();
 const disposerById = new Map<string, () => void>();
+/**
+ * Last-seen registry fingerprint per agent (see enforce()). A change in tool
+ * registration re-arms the restrict() rewrite even when the deny list itself
+ * is unchanged.
+ */
+const fingerprintById = new Map<string, string | undefined>();
 
 /**
  * An agent's delegation depth: the persisted header count, or the runtime
@@ -257,9 +277,26 @@ export function apply(ctx: Context, config: unknown): void {
     gatesCache = undefined;
   });
 
-  // Enforcement point: before EVERY model step of EVERY agent — fresh agents,
-  // agents that predate this mount, and post-compaction states all reconcile
-  // here. Never break stepping over a gating fault.
+  // Enforcement point, FIRST: at session start, before the agent's first
+  // prompt assembly. The factory emits `agent/session-start` after creation
+  // and before the loop starts, so the deny mask is already in force when the
+  // first prompt renders — the native `assembly.tools` list AND the Code Mode
+  // `tools:sdk` block both read the scope's restricted view, so both are clean
+  // from step one. Without this, the first (often only) assembly ships every
+  // gated tool and only the CALL is refused (#98). Synchronous notification:
+  // enforce() is sync. Never break startup over a gating fault.
+  ctx.on("agent/session-start" as keyof Events, (payload) => {
+    try {
+      enforce((payload as { agent?: Agent }).agent);
+    } catch (err) {
+      ctx.logger.error(
+        `[skill-gate] session-start enforcement failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  });
+  // Enforcement point, ONGOING: before EVERY model step of EVERY agent — fresh
+  // agents, agents that predate this mount, and post-compaction states all
+  // reconcile here. Never break stepping over a gating fault.
   ctx.on("agent/pre-step", (payload, next) => {
     try {
       enforce(payload.agent);
@@ -293,26 +330,6 @@ export function apply(ctx: Context, config: unknown): void {
       return decision;
     };
     return proceed();
-  });
-  // Prompt filter: strip gated schemas from the system prompt's tool list
-  // during assembly, so the model never receives them on ANY step — not just
-  // steps after the first. The pre-step restrict() below blocks calls but runs
-  // after assemble(), so the first (often only) step would otherwise ship every
-  // gated tool and waste context. This runs inside assemble() for every step,
-  // including the first, and removes schemas from the prompt the request is built from.
-  ctx.on("system-prompt/assemble", (assembly: PromptAssembly, context: AssembleContext, next) => {
-    const agent = context.agent;
-    if (!agent) return next();
-    const patterns = gatedPatterns();
-    const lockdown = [...alwaysDeny, ...(isSubagent(agent) ? subagentDeny : [])];
-    if (patterns.length === 0 && lockdown.length === 0) return next();
-    const active = activeById.get(agent.id) ?? new Set<string>();
-    const deny = expandDeny(agent, patterns, active);
-    for (const name of lockdown) if (!deny.includes(name)) deny.push(name);
-    if (deny.length === 0) return next();
-    const blocked = new Set(deny);
-    assembly.tools = assembly.tools.filter((t) => !blocked.has(t.name));
-    return next();
   });
   ctx.on("tools/post-execute", (exec, result, next) => {
     const proceed = async () => {
@@ -397,6 +414,24 @@ export function apply(ctx: Context, config: unknown): void {
   }
 
   /**
+   * Fingerprint the live tool registry for one agent: the sorted global tool
+   * names joined, or undefined when the schema surface is unavailable. Used
+   * only as a change detector beside the deny mark, never as policy input.
+   */
+  function registryFingerprint(agent: Agent): string | undefined {
+    try {
+      const schemas = (agent.ctx.tools as { schemas?: () => Array<{ name: string }> }).schemas?.();
+      if (!Array.isArray(schemas)) return undefined;
+      return schemas
+        .map((s) => s.name)
+        .sort()
+        .join(",");
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
    * Reconcile one agent's deny mask with its loaded-skill state. Cheap when
    * nothing changed: the snapshot comparison skips the restrict() round trip.
    */
@@ -410,11 +445,20 @@ export function apply(ctx: Context, config: unknown): void {
     for (const name of lockdown) if (!deny.includes(name)) deny.push(name);
     deny.sort();
     const mark = deny.join(",");
-    if (appliedById.get(agent.id) === mark) return;
+    // The registry fingerprint re-arms the rewrite when tool REGISTRATION
+    // changes under a constant deny list (#98): an exact-gated tool that is
+    // not yet registered (late plugin mount, HMR reload) is dropped from the
+    // applied mask by restrictKnown, and without this the mark would match on
+    // every later round while the tool sits visible. `*` patterns self-heal
+    // through expandDeny; exact names need this. schemas() with no scope is
+    // the global (unrestricted) view, so the fingerprint sees every tool.
+    const fingerprint = registryFingerprint(agent);
+    if (appliedById.get(agent.id) === mark && fingerprintById.get(agent.id) === fingerprint) return;
     disposerById.get(agent.id)?.();
     disposerById.delete(agent.id);
     if (deny.length === 0) {
       appliedById.set(agent.id, mark);
+      fingerprintById.set(agent.id, fingerprint);
       return;
     }
     let disposer: (() => void) | undefined;
@@ -429,6 +473,7 @@ export function apply(ctx: Context, config: unknown): void {
       return;
     }
     appliedById.set(agent.id, mark);
+    fingerprintById.set(agent.id, fingerprint);
     disposerById.set(agent.id, disposer);
   }
 
@@ -455,6 +500,7 @@ export function apply(ctx: Context, config: unknown): void {
     // registrations; the next pre-step reconciles each agent from its
     // preserved active set.
     appliedById.clear();
+    fingerprintById.clear();
     for (const dispose of disposerById.values()) {
       try {
         dispose();
