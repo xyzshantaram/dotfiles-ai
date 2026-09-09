@@ -26369,6 +26369,14 @@ var viewSchema2 = external_exports.object({
   outcomes: external_exports.record(external_exports.string(), external_exports.string()),
   reasons: external_exports.record(external_exports.string(), external_exports.string())
 }).nullable();
+function makeEntry(fields) {
+  const entry = { seq: fields.seq, callId: fields.callId };
+  if (fields.id !== void 0) entry.id = fields.id;
+  if (fields.outcome !== void 0) entry.outcome = fields.outcome;
+  if (fields.guarded !== void 0) entry.guarded = fields.guarded;
+  if (fields.reason !== void 0) entry.reason = fields.reason;
+  return entry;
+}
 var guardedApprovalsProjection = {
   key: GUARDED_APPROVALS_KEY,
   // Version 5: the guard test now keys on the explicit `kind`
@@ -26415,26 +26423,30 @@ var guardedApprovalsProjection = {
     let updated = false;
     for (let i = 0; i < entries.length; i++) {
       if (entries[i].callId !== data.callId) continue;
-      entries[i] = {
+      entries[i] = makeEntry({
         seq: e.seq,
         callId: data.callId,
         id,
-        guarded: entries[i].guarded === true || guardedNow || void 0,
+        // Sticky: a later non-guard re-ask never un-guards an already-guarded
+        // call. `true` or ABSENT — never a present `undefined` key.
+        guarded: entries[i].guarded === true || guardedNow ? true : void 0,
         // A fresh guard reason replaces the stored one; a non-guard re-ask
         // keeps the earlier guard reason, mirroring the sticky flag.
         reason: reasonNow !== void 0 ? reasonNow : entries[i].reason
-      };
+      });
       updated = true;
       break;
     }
     if (!updated) {
-      entries.push({
-        seq: e.seq,
-        callId: data.callId,
-        id,
-        guarded: guardedNow || void 0,
-        reason: reasonNow
-      });
+      entries.push(
+        makeEntry({
+          seq: e.seq,
+          callId: data.callId,
+          id,
+          guarded: guardedNow ? true : void 0,
+          reason: reasonNow
+        })
+      );
     }
     entries.sort(function(a, b) {
       return a.seq - b.seq;

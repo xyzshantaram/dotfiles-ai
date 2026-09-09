@@ -201,6 +201,47 @@ describe("guardedApprovalsProjection.apply", () => {
     expect((view as { outcomes: Record<string, string> }).outcomes["call-209"]).toBe("rejected");
   });
 
+  it("keeps STATE losslessly JSON-serializable, with no present-but-undefined keys (#127)", () => {
+    // The STATE, not the view, is what gets checkpointed, and that contract is
+    // stricter than JSON.stringify: it REJECTS undefined rather than dropping
+    // the key. One `{guarded: undefined}` failed the checkpoint write for
+    // every unit in the session, 1473 times in six hours, and the cache never
+    // healed. The view was always clean, which is exactly why nothing outside
+    // the journal ever complained -- so this asserts on state.
+    var state = guardedApprovalsProjection.init();
+    // The common case is the poisonous one: a NON-guard approval with no id.
+    state = guardedApprovalsProjection.apply(
+      state,
+      askedEvent(1, { callId: "call-plain", reason: "just some prose" }) as never,
+    );
+    // A guard approval, which sets the optional fields for real.
+    state = guardedApprovalsProjection.apply(
+      state,
+      askedEvent(2, { id: "a2", callId: "call-guard", reason: GUARD_REASON }) as never,
+    );
+    // A re-ask, which rebuilds an existing entry in place.
+    state = guardedApprovalsProjection.apply(
+      state,
+      askedEvent(3, { callId: "call-guard", reason: "not a guard reason" }) as never,
+    );
+    // A decision, which spreads an existing entry into a new one.
+    state = guardedApprovalsProjection.apply(
+      state,
+      decidedEvent(4, { id: "a2", outcome: "approved" }) as never,
+    );
+
+    expect(state.entries.length).toBeGreaterThan(0);
+    for (const entry of state.entries) {
+      for (const [key, value] of Object.entries(entry)) {
+        // Checking the VALUE of every present key is the real test:
+        // JSON.stringify silently drops an undefined-valued key, so the
+        // round-trip assertion below is necessary but not sufficient alone.
+        expect(value, `entry key "${key}" is present but undefined`).not.toBe(undefined);
+      }
+    }
+    expect(JSON.parse(JSON.stringify(state))).toEqual(state);
+  });
+
   it("is at state version 5 so the shape-poisoned sticky marks are replayed", () => {
     // Fixing the classifier does not clean sessions that already rendered an
     // escalation: their guarded[callId] is sticky-durable. The bump forces a
