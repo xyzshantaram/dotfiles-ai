@@ -11,7 +11,7 @@ This skill gates two host tools: `resume_search` and `resume_read`. Both read
 the durable, append-only session event log, which compaction never deletes, so
 context lost to compaction or from earlier sessions stays reachable. The tools
 stay hidden from the model until this skill loads. See
-`plugins/skill-gate.ts` for the gating mechanism.
+`plugins/context-guard.ts` for the gating mechanism.
 
 ## What the tools do
 

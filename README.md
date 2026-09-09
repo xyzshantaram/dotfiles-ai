@@ -30,7 +30,7 @@ Host plane (mounted in the web patch):
 - [`plugins/bash-guard.ts`](plugins/bash-guard.ts) — gates model bash calls. It parses the command, not a string. Read-only git verbs run, git mutations ask, everything else is denied. For `grep` and `find` it denies, but the denial carries the exact `rg` or `fd` command to run instead, so the model does not have to guess.
 - [`plugins/manifest-guard.ts`](plugins/manifest-guard.ts) — denies direct edits to package manifests and lockfiles.
 - [`plugins/package-tool.ts`](plugins/package-tool.ts) — the sanctioned way to change dependencies. It detects the package manager and runs the change.
-- [`plugins/skill-gate.ts`](plugins/skill-gate.ts) — shows a gated tool only while its skill is loaded.
+- [`plugins/context-guard.ts`](plugins/context-guard.ts) — shows a gated tool only while its skill is loaded.
 - [`plugins/see.ts`](plugins/see.ts) — runs an image and a question through a one-shot vision child. It hides itself when the active model already sees images.
 - [`plugins/tmp-dsh-shared.ts`](plugins/tmp-dsh-shared.ts) — shares `/tmp/dsh` with sandboxed bash calls.
 - [`plugins/grant.ts`](plugins/grant.ts) — gives one path a session-scoped write grant.

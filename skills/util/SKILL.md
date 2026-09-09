@@ -9,7 +9,7 @@ tools-gated: [time, regex, markdown, encoding]
 
 This skill gates four zero-dependency host tools: `time`, `regex`, `markdown`,
 `encoding`. Each tool stays hidden from the model
-until this skill loads. See `plugins/skill-gate.ts` for the gating
+until this skill loads. See `plugins/context-guard.ts` for the gating
 mechanism.
 
 Load this skill before you call any of the four tools. A session that has

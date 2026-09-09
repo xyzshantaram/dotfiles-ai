@@ -45,7 +45,7 @@
  * shipped `ask_user_question` registration is owned by
  * `@deepseek-ai/dsh-tool-ask-user` and this plugin does not replace it,
  * following the same non-invasive observation style as
- * `plugins/skill-gate.ts`'s `tools/post-execute` listener for the `skill`
+ * `plugins/context-guard.ts`'s `tools/post-execute` listener for the `skill`
  * tool.
  *
  * `exec.agent` can be `undefined` for an agentless/programmatic tool call

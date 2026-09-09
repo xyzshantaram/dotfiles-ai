@@ -68,7 +68,7 @@ These are three different things. Do not mix them.
 
 - **A skill** is instructions only. It teaches the agent how to do something.
   It does not mount tools by itself. If a skill needs tools, gate them with a
-  top-level `tools-gated` frontmatter list, and the skill-gate plugin hides
+  top-level `tools-gated` frontmatter list, and the context-guard plugin hides
   those tools until the agent loads the skill.
 
 - **A plugin** registers capabilities into a scope layer. A host-plane plugin
