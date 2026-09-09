@@ -1,12 +1,37 @@
 import { describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { comparePresets, evaluate, parsePresetText, runCheck } from "../scripts/check-preset-drift.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
+
+describe("the default allowlist path", () => {
+  // Every other test in this file passes --allowlist explicitly, so until
+  // #128 the DEFAULT path was exercised by nothing. That is precisely why
+  // moving the file could have broken the live check silently: the suite
+  // would stay green while `node scripts/check-preset-drift.mjs` with no
+  // arguments read a path that no longer existed.
+  it("resolves to a file that exists and parses as the expected shape", () => {
+    const defaultPath = join(here, "..", "scripts", "preset-drift.json");
+    const parsed = JSON.parse(readFileSync(defaultPath, "utf8")) as unknown;
+    expect(Array.isArray(parsed)).toBe(true);
+    for (const entry of parsed as Array<Record<string, unknown>>) {
+      expect(typeof entry.row).toBe("string");
+      expect(typeof entry.reason).toBe("string");
+    }
+  });
+
+  it("is NOT in guards/, which bash-guard parses as rule files (#128)", () => {
+    // guards/*.json must every one be a bash-guard rule file carrying
+    // commands[]. This file is a different schema, so its presence there made
+    // bash-guard warn on every single bash call. Keep it out.
+    const guardsCopy = join(here, "..", "guards", "preset-drift.json");
+    expect(() => readFileSync(guardsCopy, "utf8")).toThrow();
+  });
+});
 
 const STD = `
 - id: persona
