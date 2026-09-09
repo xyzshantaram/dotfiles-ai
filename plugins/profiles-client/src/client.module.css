@@ -497,6 +497,33 @@
   font-size: 1rem;
   line-height: 1.25rem;
 }
+/* Drag handle on each chain rung. Only the handle starts a drag, so the
+ * row's selects and buttons keep working; touch-action lets pointer drags
+ * begin on touch, and the focus ring marks the keyboard-reorder target. */
+.pf-panel-grip {
+  flex: none;
+  cursor: grab;
+  border: none;
+  background: none;
+  padding: 0 0.25rem;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  touch-action: none;
+}
+.pf-panel-grip:active {
+  cursor: grabbing;
+}
+.pf-panel-grip:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -0.125rem;
+}
+/* A `chain:<name>` reference rung: visually distinct from provider/model
+ * rungs, and reordering moves the reference itself, never its expansion. */
+.pf-panel-chainref {
+  border-left: 2px solid var(--dsw-alias-state-business-primary);
+  padding-left: 0.5rem;
+}
 .pf-panel-add {
   align-self: flex-start;
   color: var(--dsw-alias-label-secondary);

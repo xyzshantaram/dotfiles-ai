@@ -400,11 +400,9 @@ await wrapClientBundle(
 // Why the wrapper asymmetry (review nit, 2026-08-22): the client halves
 // bundle CJS with npm deps inlined, so esbuild's CJS output needs the
 // module-loader facade with Symbol.toStringTag to expose a shape the loader
-// accepts. profiles-client has no npm deps, so it emits a plain IIFE that
-// calls window.__ModuleLoader__.load itself; no facade is needed. Not
-// unifying on one wrapper: the IIFE form is simpler, and the facade form
-// exists only because esbuild cannot emit a bare load call around an
-// inlined bundle without it.
+// accepts. The facade form exists because esbuild cannot emit a bare load
+// call around an inlined bundle without it; every client half with npm deps
+// goes through it.
 await wrapClientBundle(
   join(here, "plugins/tool-render/src/client.tsx"),
   join(here, "plugins/tool-render/dist/client.js"),
@@ -435,26 +433,17 @@ await build({
 });
 
 // W6: profiles-client CLIENT plugin package. The seat and title rewriter
-// live in the browser half; the host half bundles via esbuild. No
-// browser half bundles as a plain IIFE that calls window.__ModuleLoader__.load
-// itself at evaluation.
-await build({
-  entryPoints: [join(here, "plugins/profiles-client/src/client.tsx")],
-  bundle: true,
-  platform: "browser",
-  format: "iife",
-  // The primitives package stays external like react: the manifest's
-  // dsh.client.inject lists it, so the browser module table resolves it at
-  // evaluation. Bundling it here would inline a second copy beside the one
-  // tool-render already ships.
-  external: ["react", "@deepseek-ai/*"],
-  jsx: "transform",
-  jsxFactory: "react.createElement",
-  jsxFragment: "react.Fragment",
-  plugins: [cssTextPlugin],
-  outfile: join(here, "plugins/profiles-client/dist/client.js"),
-  logLevel: "info",
-});
+// live in the browser half; the host half bundles via esbuild. The browser
+// half bundles as factory-form CJS through the module-loader facade like the
+// other client halves: it now has npm deps (@dnd-kit), which a plain IIFE
+// cannot carry — any React-importing dep inlines a top-level __require shim
+// that throws at evaluation before __ModuleLoader__.load runs, so the bundle
+// would load without registering (green build, vanished panel).
+await wrapClientBundle(
+  join(here, "plugins/profiles-client/src/client.tsx"),
+  join(here, "plugins/profiles-client/dist/client.js"),
+  "profiles-client",
+);
 await build({
   entryPoints: [join(here, "plugins/profiles-client/src/index.ts")],
   bundle: true,
