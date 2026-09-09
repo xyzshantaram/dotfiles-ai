@@ -20,8 +20,43 @@ import { isBashGuardReason } from "./guard";
  * The label line above a sandbox-escalation justification, in the guard
  * rewrite banner's label styling, so the two "something happened to this
  * call" annotations read as one family rather than two inventions.
+ *
+ * Tense follows state, driven by ONE settled/open boolean (see
+ * escalationLabel): while the approval is open the agent is still asking;
+ * once it settles — approved OR rejected, both alike — the ask is history.
  */
 export const ESCALATION_LABEL = "agent requests sandbox access escalation";
+export const ESCALATION_LABEL_SETTLED = "agent requested sandbox access escalation";
+
+/**
+ * The banner label for one settled/open signal. Tense and prominence both
+ * flow from this same boolean at the render site (see
+ * escalationReasonClassName), so a past-tense label at full prominence —
+ * or vice versa — cannot happen.
+ */
+export function escalationLabel(settled: boolean): string {
+  return settled ? ESCALATION_LABEL_SETTLED : ESCALATION_LABEL;
+}
+
+/** Base class for the justification prose. */
+export const ESCALATION_REASON_CLASS = "tool-render-escalation-reason";
+
+/** Muted-small modifier, added once the ask settles. */
+export const ESCALATION_REASON_MUTED_CLASS = "tool-render-escalation-reason-muted";
+
+/**
+ * The justification element's class for one settled/open signal — the SAME
+ * boolean that picks the label tense. Open: normal prominence. Settled:
+ * muted and small, so a decided ask (a rejection included) no longer reads
+ * as though it still needed an answer. This quiets the ASK only: the
+ * outcome keeps its own surfaces (the collapsed-row verdict badge, the
+ * error outline), which this class never touches.
+ */
+export function escalationReasonClassName(settled: boolean): string {
+  return settled
+    ? ESCALATION_REASON_CLASS + " " + ESCALATION_REASON_MUTED_CLASS
+    : ESCALATION_REASON_CLASS;
+}
 
 export interface EscalationDetail {
   mode: string;

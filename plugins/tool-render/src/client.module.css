@@ -1270,3 +1270,37 @@
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
+/* The sandbox-escalation banner (owner, 2026-09-09). The label line reuses
+   the guard rewrite banner's .tool-render-cmd-label styling, so the two
+   "something happened to this call" annotations read as one family. The
+   mode rides the label line as its own chip — it decides how far the
+   sandbox widens, so it stays discoverable without being jammed into the
+   justification sentence. The justification below is prose in the same
+   tertiary 12px/18px voice as the approval reason, never code. */
+.tool-render-escalation-mode {
+  font: inherit;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 0.25rem;
+  margin-left: 0.375rem;
+  padding: 0 0.25rem;
+}
+.tool-render-escalation-reason {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  margin: 0.125rem 0 0.25rem 0.25rem;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+/* The settled ask (approved OR rejected — the trigger is settledness, not
+   approval): muted and small, so a decided request no longer reads as
+   though it still needed an answer. This quiets the ASK only — the outcome
+   keeps its own surfaces (the collapsed-row verdict badge, the error
+   outline), which this rule never touches. */
+.tool-render-escalation-reason-muted {
+  color: var(--dsw-alias-label-caption);
+  font-size: 11px;
+  line-height: 16px;
+}

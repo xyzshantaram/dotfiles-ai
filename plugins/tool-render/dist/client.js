@@ -3430,6 +3430,16 @@ var client_default = `.tool-render-row {
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
+/* The settled ask (approved OR rejected \u2014 the trigger is settledness, not
+   approval): muted and small, so a decided request no longer reads as
+   though it still needed an answer. This quiets the ASK only \u2014 the outcome
+   keeps its own surfaces (the collapsed-row verdict badge, the error
+   outline), which this rule never touches. */
+.tool-render-escalation-reason-muted {
+  color: var(--dsw-alias-label-caption);
+  font-size: 11px;
+  line-height: 16px;
+}
 `;
 
 // node_modules/.pnpm/highlight.js@11.12.0/node_modules/highlight.js/es/languages/javascript.js
@@ -16074,6 +16084,15 @@ function isBashGuardReason(reason) {
 
 // plugins/tool-render/src/escalation.ts
 var ESCALATION_LABEL = "agent requests sandbox access escalation";
+var ESCALATION_LABEL_SETTLED = "agent requested sandbox access escalation";
+function escalationLabel(settled) {
+  return settled ? ESCALATION_LABEL_SETTLED : ESCALATION_LABEL;
+}
+var ESCALATION_REASON_CLASS = "tool-render-escalation-reason";
+var ESCALATION_REASON_MUTED_CLASS = "tool-render-escalation-reason-muted";
+function escalationReasonClassName(settled) {
+  return settled ? ESCALATION_REASON_CLASS + " " + ESCALATION_REASON_MUTED_CLASS : ESCALATION_REASON_CLASS;
+}
 function pickString(value, keys) {
   for (let i = 0; i < keys.length; i++) {
     const v = value[keys[i]];
@@ -16827,15 +16846,15 @@ function ReadRow(props) {
     inspect: props.inspect
   });
 }
-function escalationBanner(detail) {
-  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-escalation" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-cmd-label" }, ESCALATION_LABEL, /* @__PURE__ */ import_react.default.createElement(
+function escalationBanner(detail, settled) {
+  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-escalation" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-cmd-label" }, escalationLabel(settled), /* @__PURE__ */ import_react.default.createElement(
     "code",
     {
       className: "tool-render-escalation-mode",
       title: "requested sandbox mode: " + detail.mode
     },
     detail.mode
-  )), /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-escalation-reason" }, detail.justification));
+  )), /* @__PURE__ */ import_react.default.createElement("div", { className: escalationReasonClassName(settled) }, detail.justification));
 }
 function BashRow(props) {
   var expandedState = useState(false);
@@ -16853,6 +16872,9 @@ function BashRow(props) {
   var summary = description !== void 0 && description !== "" ? firstLine(description) : command !== void 0 ? firstLine(command) : "Bash";
   var escalated = escalatedOf(argsObj);
   var escalation = escalationDetailOf(argsObj);
+  var escalationSettled = props.useSession(function(snapshot) {
+    return pendingApprovalOf(snapshot, props.callId) === null;
+  }) === true;
   var durableGuardApproval = useGuardedApprovals(props.useSession, props.useProjection);
   var guardApproval = props.useSession(function(snapshot) {
     var pending = snapshot !== null && snapshot !== void 0 ? snapshot.pending : void 0;
@@ -16876,7 +16898,7 @@ function BashRow(props) {
   if (escalation !== null || command !== void 0 || output !== null && output !== "") {
     var inner = [];
     if (escalation !== null) {
-      inner.push(escalationBanner(escalation));
+      inner.push(escalationBanner(escalation, escalationSettled));
     }
     if (command !== void 0) {
       var commandBlock = function(label, text) {
