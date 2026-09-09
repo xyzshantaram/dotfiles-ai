@@ -85,6 +85,44 @@ const viewSchema = z
   })
   .nullable();
 
+/**
+ * Build an entry with absent fields OMITTED rather than set to `undefined`.
+ *
+ * WHY THIS EXISTS (#127). The projection's STATE is what gets checkpointed —
+ * dsh-session-projection's checkpoint() persists structuredClone(cell.state)
+ * per unit, and dsh-session-projection-cache then runs ONE snapshotJsonValue
+ * over the combined rows. That contract is stricter than JSON.stringify: it
+ * REJECTS `undefined` outright (dsh-session/lib/types/json.js) rather than
+ * dropping the key, because a dropped key does not round-trip. So a single
+ * `{ guarded: undefined }` here failed the checkpoint write for EVERY unit in
+ * the session, on every interval — measured at 1473 failures in six hours,
+ * with the cache never healing and readers falling back to a full-log replay.
+ *
+ * The view is unaffected and always was: view() rebuilds fresh objects with
+ * only defined values, which is exactly why the UI looked fine and nothing
+ * else ever complained. The bug was invisible outside the journal.
+ *
+ * Note the type above already documents these fields as "Present only ..." —
+ * the declaration was right and the construction did not honour it. Assigning
+ * `x || undefined` to an optional field creates the key; only omitting it
+ * leaves the field absent.
+ */
+function makeEntry(fields: {
+  seq: number;
+  callId: string;
+  id?: string;
+  outcome?: string;
+  guarded?: boolean;
+  reason?: string;
+}): GuardedApprovalsEntry {
+  const entry: GuardedApprovalsEntry = { seq: fields.seq, callId: fields.callId };
+  if (fields.id !== undefined) entry.id = fields.id;
+  if (fields.outcome !== undefined) entry.outcome = fields.outcome;
+  if (fields.guarded !== undefined) entry.guarded = fields.guarded;
+  if (fields.reason !== undefined) entry.reason = fields.reason;
+  return entry;
+}
+
 export const guardedApprovalsProjection: ProjectionDefinition<
   typeof GUARDED_APPROVALS_KEY,
   GuardedApprovalsState
@@ -152,26 +190,30 @@ export const guardedApprovalsProjection: ProjectionDefinition<
     let updated = false;
     for (let i = 0; i < entries.length; i++) {
       if (entries[i].callId !== data.callId) continue;
-      entries[i] = {
+      entries[i] = makeEntry({
         seq: e.seq,
         callId: data.callId,
         id: id,
-        guarded: entries[i].guarded === true || guardedNow || undefined,
+        // Sticky: a later non-guard re-ask never un-guards an already-guarded
+        // call. `true` or ABSENT — never a present `undefined` key.
+        guarded: entries[i].guarded === true || guardedNow ? true : undefined,
         // A fresh guard reason replaces the stored one; a non-guard re-ask
         // keeps the earlier guard reason, mirroring the sticky flag.
         reason: reasonNow !== undefined ? reasonNow : entries[i].reason,
-      };
+      });
       updated = true;
       break;
     }
     if (!updated) {
-      entries.push({
-        seq: e.seq,
-        callId: data.callId,
-        id: id,
-        guarded: guardedNow || undefined,
-        reason: reasonNow,
-      });
+      entries.push(
+        makeEntry({
+          seq: e.seq,
+          callId: data.callId,
+          id: id,
+          guarded: guardedNow ? true : undefined,
+          reason: reasonNow,
+        }),
+      );
     }
     entries.sort(function (a, b) {
       return a.seq - b.seq;
