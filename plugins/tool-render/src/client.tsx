@@ -60,6 +60,7 @@ import {
   compactionCommandError,
   compactionSummaryNode,
   guardRewriteFromText,
+  guardRewriteLabel,
   numberedReadRows,
   stripOuterFence,
   looksLikeRawHtml,
@@ -180,6 +181,11 @@ var EXTENSION_LANGUAGE = {
 import react from "react";
 import { isBashGuardReason } from "./guard";
 import { escalationDetailOf, escalationLabel, escalationReasonClassName } from "./escalation";
+import {
+  composeVerdictTooltip,
+  guardRewriteTipLine,
+  summariseGuardPromptReason,
+} from "./verdict-tip";
 import * as primitives from "@deepseek-ai/dsh-client-ui-primitives";
 var useState = react.useState;
 var useEffect = react.useEffect;
@@ -702,6 +708,7 @@ function renderToolRenderCard(options, approvalOpen) {
             callId={options.callId}
             useSession={options.useSession}
             useProjection={options.useProjection}
+            tip={options.verdictTip}
           />
         ) : null}
         <span className="tool-render-sep" aria-hidden={true} />
@@ -762,6 +769,13 @@ function renderToolRenderCard(options, approvalOpen) {
  * repo's hand-maintained shim (plugins/shared/shims.d.ts) declares no shield
  * export, and the primitives package is not resolvable from this repo, so
  * adding a declaration would be inventing an export we cannot verify exists.
+ *
+ * The badge carries the rewrite/prompt reasons in its tooltip (owner,
+ * 2026-09-09, #104): one tooltip with two labelled lines, composed by
+ * composeVerdictTooltip from DURABLE sources, so it survives settling and a
+ * page reload. `tip` arrives precomposed from the row (BashRow); null means
+ * neither reason exists, and then no title attribute is set at all — an
+ * empty tooltip promises information and delivers a blank.
  */
 function ToolRenderApprovalVerdict(props) {
   var decidedRecord = useGuardedApprovals(props.useSession, props.useProjection);
@@ -777,7 +791,11 @@ function ToolRenderApprovalVerdict(props) {
         : null;
   if (label === null) return null;
   return (
-    <span className="tool-render-verdict" data-outcome={label}>
+    <span
+      className="tool-render-verdict"
+      data-outcome={label}
+      title={props.tip !== null && props.tip !== undefined ? props.tip : undefined}
+    >
       <svg
         className="tool-render-verdict-shield"
         viewBox="0 0 16 16"
@@ -868,28 +886,9 @@ var approvalSteerTo = null;
 /** How long an armed reject stays confirmable before it resets itself. */
 var REJECT_ARM_RESET_MS = 4000;
 
-/** Extract the first token (command name) from a bash command string. */
-function firstTokenOf(cmdStr) {
-  if (typeof cmdStr !== "string" || cmdStr === "") return "";
-  var trimmed = cmdStr.trim();
-  var match = /^[^\s]+/.exec(trimmed);
-  return match ? match[0] : "";
-}
-
-/**
- * Label for the guard rewrite block pair by comparing commands. meta carries
- * only {rewritten: true, ran} — no reason field — so precision must be
- * derived: same first token means an argument-level rewrite; a swapped
- * first token means the binary itself changed; anything unreadable keeps
- * the generic label.
- */
-function guardRewriteLabel(originalCmd, rewrittenCmd) {
-  var origToken = firstTokenOf(originalCmd);
-  var rewriteToken = firstTokenOf(rewrittenCmd);
-  if (origToken === "" || rewriteToken === "") return "ran instead";
-  if (origToken === rewriteToken) return "rewrote arguments to";
-  return "translated to " + rewriteToken;
-}
+// firstTokenOf and guardRewriteLabel live in ./text now: the verdict-badge
+// tooltip (verdict-tip.ts) derives its rewrite line from the same function
+// the expanded rewrite block renders, so the two can never disagree.
 
 /**
  * The answer bar for one card. Renders nothing unless this callId has an
@@ -1297,6 +1296,29 @@ function BashRow(props) {
   }
   var guardRewrite = guardRewriteOf(block, output);
   if (guardRewrite !== null) guardApproval = true;
+  // The verdict badge's tooltip (owner, 2026-09-09, #104): the rewrite line
+  // from the call's own durable result metadata — the same guardRewrite the
+  // expanded banner renders, so the two cannot disagree — and the prompt
+  // line from the durable guarded-approvals fold, which keeps the guard
+  // approval's raw reason. Neither reads the live pending approval, so the
+  // tooltip survives the decision settling and a page reload. Null when
+  // neither reason exists, so the badge gains no title attribute at all.
+  var verdictTip = (function () {
+    var rewriteLine = guardRewrite !== null ? guardRewriteTipLine(command, guardRewrite.ran) : null;
+    var promptLine = null;
+    if (
+      durableGuardApproval !== null &&
+      durableGuardApproval !== undefined &&
+      durableGuardApproval.reasons !== null &&
+      durableGuardApproval.reasons !== undefined
+    ) {
+      var storedGuardReason = durableGuardApproval.reasons[props.callId];
+      if (storedGuardReason !== undefined) {
+        promptLine = summariseGuardPromptReason(storedGuardReason);
+      }
+    }
+    return composeVerdictTooltip(rewriteLine, promptLine);
+  })();
   var body = null;
   if (escalation !== null || command !== undefined || (output !== null && output !== "")) {
     var inner = [];
@@ -1363,6 +1385,7 @@ function BashRow(props) {
     escalated: escalated,
     escalation: escalation,
     guardApproval: guardApproval,
+    verdictTip: verdictTip,
     state: state,
     expandable: body !== null,
     expanded: expanded,
@@ -3844,9 +3867,10 @@ function useCompactionViews(useSession) {
 // ---- guarded approvals: durable bash-guard callIds + decided outcomes. --
 // Same shape as useCompactionViews with a different key: the host-side
 // projection in guarded-approvals.ts folds `approval/asked` and
-// `approval/decided` events into { guarded, outcomes } maps keyed by
-// callId, so the BashRow outline and the card's decided badge survive
-// the approval decision and a page reload. A session without projections (an older
+// `approval/decided` events into { guarded, outcomes, reasons } maps keyed
+// by callId, so the BashRow outline, the card's decided badge, AND the
+// badge's rewrite/prompt tooltip all survive the approval decision and a
+// page reload. A session without projections (an older
 // seat) leaves the record null and the row falls back to the live
 // snapshot.pending check. Deliberately not a rewrite of
 // useCompactionViews, so the compaction code stays untouched.

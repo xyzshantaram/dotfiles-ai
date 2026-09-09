@@ -1821,6 +1821,19 @@ function extractHunk(readText, removeFrom, removeTo, replacementText, startLine)
     oldStart: base + from
   };
 }
+function firstTokenOf(cmdStr) {
+  if (typeof cmdStr !== "string" || cmdStr === "") return "";
+  var trimmed = cmdStr.trim();
+  var match = /^[^\s]+/.exec(trimmed);
+  return match ? match[0] : "";
+}
+function guardRewriteLabel(originalCmd, rewrittenCmd) {
+  var origToken = firstTokenOf(originalCmd);
+  var rewriteToken = firstTokenOf(rewrittenCmd);
+  if (origToken === "" || rewriteToken === "") return "ran instead";
+  if (origToken === rewriteToken) return "rewrote arguments to";
+  return "translated to " + rewriteToken;
+}
 var GUARD_REWRITE_MARKER = "bash-guard: ran this instead:";
 function guardRewriteFromText(text) {
   if (typeof text !== "string") return null;
@@ -16126,6 +16139,62 @@ function escalationDetailOf(args) {
   return { mode, justification };
 }
 
+// plugins/tool-render/src/verdict-tip.ts
+var VERDICT_TIP_REWRITE_LABEL = "Rewrite";
+var VERDICT_TIP_PROMPT_LABEL = "Prompt";
+var VERDICT_TIP_LINE_MAX = 300;
+function singleLineTipText(text) {
+  return text.replace(/\s+/g, " ").trim();
+}
+function summariseGuardPromptReason(reason) {
+  if (typeof reason !== "string" || !isBashGuardReason(reason)) return null;
+  var parsed = null;
+  try {
+    parsed = parse(reason);
+  } catch (error) {
+    parsed = null;
+  }
+  if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+    var summary = parsed.summary;
+    if (typeof summary === "string") {
+      var summaryLine = singleLineTipText(summary);
+      if (summaryLine !== "") return summaryLine;
+    }
+  }
+  var lines = reason.split("\n");
+  for (var i = 0; i < lines.length; i++) {
+    var line = singleLineTipText(lines[i]);
+    if (line !== "") return line;
+  }
+  return null;
+}
+function guardRewriteTipLine(originalCmd, ranCmd) {
+  if (typeof ranCmd !== "string") return null;
+  var ran = singleLineTipText(ranCmd);
+  if (ran === "") return null;
+  var label = guardRewriteLabel(typeof originalCmd === "string" ? originalCmd : void 0, ranCmd);
+  return label + " " + ran;
+}
+function capTipLine(line) {
+  var collapsed = singleLineTipText(line);
+  if (collapsed === "") return null;
+  if (collapsed.length <= VERDICT_TIP_LINE_MAX) return collapsed;
+  return collapsed.slice(0, VERDICT_TIP_LINE_MAX - 1).replace(/\s+$/, "") + "\u2026";
+}
+function composeVerdictTooltip(rewriteReason, promptReason) {
+  var lines = [];
+  if (typeof rewriteReason === "string") {
+    var rewrite = capTipLine(rewriteReason);
+    if (rewrite !== null) lines.push(VERDICT_TIP_REWRITE_LABEL + ": " + rewrite);
+  }
+  if (typeof promptReason === "string") {
+    var prompt = capTipLine(promptReason);
+    if (prompt !== null) lines.push(VERDICT_TIP_PROMPT_LABEL + ": " + prompt);
+  }
+  if (lines.length === 0) return null;
+  return lines.join("\n");
+}
+
 // plugins/tool-render/src/client.tsx
 var primitives = __toESM(require("@deepseek-ai/dsh-client-ui-primitives"), 1);
 var languageModules = {
@@ -16525,7 +16594,8 @@ function renderToolRenderCard(options, approvalOpen) {
         {
           callId: options.callId,
           useSession: options.useSession,
-          useProjection: options.useProjection
+          useProjection: options.useProjection,
+          tip: options.verdictTip
         }
       ) : null,
       /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-sep", "aria-hidden": true }),
@@ -16548,27 +16618,36 @@ function ToolRenderApprovalVerdict(props) {
   var outcome = decidedRecord !== null && decidedRecord !== void 0 ? decidedRecord.outcomes[props.callId] : void 0;
   var label = outcome === "allowed-once" || outcome === "approved" ? "approved" : outcome === "rejected" ? "rejected" : null;
   if (label === null) return null;
-  return /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-verdict", "data-outcome": label }, /* @__PURE__ */ import_react.default.createElement(
-    "svg",
+  return /* @__PURE__ */ import_react.default.createElement(
+    "span",
     {
-      className: "tool-render-verdict-shield",
-      viewBox: "0 0 16 16",
-      width: "11",
-      height: "11",
-      "aria-hidden": true,
-      focusable: "false"
+      className: "tool-render-verdict",
+      "data-outcome": label,
+      title: props.tip !== null && props.tip !== void 0 ? props.tip : void 0
     },
     /* @__PURE__ */ import_react.default.createElement(
-      "path",
+      "svg",
       {
-        d: "M8 1.5 3 3.4v4.2c0 3.1 2.1 5.9 5 6.9 2.9-1 5-3.8 5-6.9V3.4L8 1.5Z",
-        fill: "none",
-        stroke: "currentColor",
-        strokeWidth: "1.3",
-        strokeLinejoin: "round"
-      }
-    )
-  ), /* @__PURE__ */ import_react.default.createElement("span", null, label === "approved" ? "APPROVED" : "REJECTED"));
+        className: "tool-render-verdict-shield",
+        viewBox: "0 0 16 16",
+        width: "11",
+        height: "11",
+        "aria-hidden": true,
+        focusable: "false"
+      },
+      /* @__PURE__ */ import_react.default.createElement(
+        "path",
+        {
+          d: "M8 1.5 3 3.4v4.2c0 3.1 2.1 5.9 5 6.9 2.9-1 5-3.8 5-6.9V3.4L8 1.5Z",
+          fill: "none",
+          stroke: "currentColor",
+          strokeWidth: "1.3",
+          strokeLinejoin: "round"
+        }
+      )
+    ),
+    /* @__PURE__ */ import_react.default.createElement("span", null, label === "approved" ? "APPROVED" : "REJECTED")
+  );
 }
 function pendingApprovalOf(snapshot, callId) {
   var pending = snapshot !== null && snapshot !== void 0 ? snapshot.pending : void 0;
@@ -16613,19 +16692,6 @@ function buildApprovalSteer(sessions) {
 }
 var approvalSteerTo = null;
 var REJECT_ARM_RESET_MS = 4e3;
-function firstTokenOf(cmdStr) {
-  if (typeof cmdStr !== "string" || cmdStr === "") return "";
-  var trimmed = cmdStr.trim();
-  var match = /^[^\s]+/.exec(trimmed);
-  return match ? match[0] : "";
-}
-function guardRewriteLabel(originalCmd, rewrittenCmd) {
-  var origToken = firstTokenOf(originalCmd);
-  var rewriteToken = firstTokenOf(rewrittenCmd);
-  if (origToken === "" || rewriteToken === "") return "ran instead";
-  if (origToken === rewriteToken) return "rewrote arguments to";
-  return "translated to " + rewriteToken;
-}
 function ToolRenderApprovalBar(props) {
   var pendingRef = useRef(null);
   var approvalId = props.useSession(function(snapshot) {
@@ -16894,6 +16960,17 @@ function BashRow(props) {
   }
   var guardRewrite = guardRewriteOf(block, output);
   if (guardRewrite !== null) guardApproval = true;
+  var verdictTip = (function() {
+    var rewriteLine = guardRewrite !== null ? guardRewriteTipLine(command, guardRewrite.ran) : null;
+    var promptLine = null;
+    if (durableGuardApproval !== null && durableGuardApproval !== void 0 && durableGuardApproval.reasons !== null && durableGuardApproval.reasons !== void 0) {
+      var storedGuardReason = durableGuardApproval.reasons[props.callId];
+      if (storedGuardReason !== void 0) {
+        promptLine = summariseGuardPromptReason(storedGuardReason);
+      }
+    }
+    return composeVerdictTooltip(rewriteLine, promptLine);
+  })();
   var body = null;
   if (escalation !== null || command !== void 0 || output !== null && output !== "") {
     var inner = [];
@@ -16948,6 +17025,7 @@ function BashRow(props) {
     escalated,
     escalation,
     guardApproval,
+    verdictTip,
     state,
     expandable: body !== null,
     expanded,
