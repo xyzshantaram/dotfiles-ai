@@ -32,10 +32,74 @@
  * `keepInbox: true`) and says nothing at all. Removing the sentence makes
  * approval-rejection behave like every other cancellation in the system.
  *
- * THE SEAM. `agent/pre-step` is the chokepoint where the loop assembles the
- * messages a step will actually see (dsh-agent-loop/lib/index.js:496-508): it
- * claims the inbox, renders the runtime context, and dispatches the waterfall
- * whose returned decision is authoritative.
+ * THE SEAM, FIRST HALF (#76, KEPT AS A BACKSTOP). `agent/pre-step` is the
+ * chokepoint where the loop assembles the messages a step will actually see
+ * (dsh-agent-loop/lib/index.js:496-508): it claims the inbox, renders the
+ * runtime context, and dispatches the waterfall whose returned decision is
+ * authoritative.
+ *
+ * THE SEAM, SECOND HALF (#113, PRIMARY). The pre-step filter is correct and
+ * late: a rejection CANCELS the turn (`maybeInterruptOnRejection` pairs the
+ * followup with `agent.cancel(..., { keepInbox: true })`), a cancelled turn
+ * assembles no further step, and the followup sits in the queue — rendered
+ * above the composer with steer/delete/edit affordances — until the user's
+ * next message finally drives a step. The fix purges at insertion instead:
+ * `agent/inbox/inserted` (declared in dsh-agent/lib/types/runtime-types.d.ts,
+ * `@mode emit`, payload `{ agent, message }`) fires synchronously inside
+ * `agent.followup()` / `agent.inject()` — durable append, live projection,
+ * then this notification, all in one task — so `Inbox.remove()` runs before
+ * any render, queue snapshot, or step can observe the message. The queue the
+ * composer shows therefore never contains the sentence: it is gone before
+ * the user could see it, not dropped at the next step. (The gateway derives
+ * its `session/queue` snapshots from the durable splices asynchronously over
+ * the wire — dsh-host-apiproxy/README.md:41 — so an insert and its
+ * same-task removal settle to a queue that never held the message.)
+ *
+ * Why not earlier still, and why not on the decided event — both checked:
+ * - STRICTLY PRE-INBOX (a) is impossible on a public seam. `send()` splices
+ *   straight into the inbox (dsh-agent-loop/lib/index.js:390-404 — `send`
+ *   plus its `followup`/`steer`/`inject` wrappers, no waterfall or event
+ *   before the splice; read, not guessed). Intercepting the call would mean wrapping another package's
+ *   agent instance — more invasive than the prototype patch already
+ *   rejected below — for no observable gain over a same-task purge.
+ * - LITERALLY ON `approval/decided` (b-as-written) observes too early to
+ *   purge. `decided` is a session-log event, and `request()` appends it
+ *   BEFORE `maybeInterruptOnRejection` runs — the message to purge does not
+ *   exist yet when the decided event fires. (Session events ARE observable
+ *   via `ctx.on("session/event")`, dsh-goal-round-driver precedent — the
+ *   problem is ordering, not visibility.) A decided-observer could only arm
+ *   a flag for the later insertion, which the source stamp already
+ *   identifies. So the purge runs at insertion: the earliest public point
+ *   where the message exists, in the same synchronous block as the decision.
+ * No UI-only hide (c): the message must not exist, not merely not render.
+ *
+ * First-party precedent for this exact shape: dsh-goal-round-driver listens
+ * on `agent/inbox/inserted` with a synchronous callback reading
+ * `agent.inbox` (lib/index.js:239-246). Both halves used here are public:
+ * the event is declared agent vocabulary and `Inbox.remove(messageId)` is a
+ * public method ("remove one pending message and durably record its
+ * cancellation", dsh-agent/lib/types/inbox.d.ts:65-70); the Agent interface
+ * itself exposes `readonly inbox: Inbox` (runtime-types.d.ts:68).
+ *
+ * SILENCE BY CONVENTION (#113 owner decision 2026-09-09). A rejection with
+ * NO comment produces NO message at all: the turn stops exactly as clicking
+ * Stop in the composer stops it. That is the system's existing convention —
+ * the Stop button cancels identically (`{kind:'user'}`, `keepInbox: true`)
+ * and says nothing — so the silence here is consistency, not an omission.
+ * Do NOT "fix" it by adding a canned message back: purging the sentence and
+ * adding nothing is the whole point.
+ *
+ * DISMISS PARITY (checked 2026-09-09 for #113; owned by ask-interrupt, not
+ * this plugin). `ask_user_question`'s Dismiss already stops the turn the way
+ * the Stop button does: the client answers the pending question with
+ * `{ok:false, error:{code:"cancelled"}}`, the host provider rejects with
+ * `UserQuestionError("the user cancelled ask_user_question", "ASK_CANCELLED")`
+ * (dsh-host-apiproxy/lib/index.js:3762), and ask-interrupt's
+ * `tools/post-execute` listener turns that code into
+ * `agent.cancel(..., { keepInbox: true })`. No inbox message exists anywhere
+ * on that path (a dismissal is a failed TOOL RESULT inside its step, never
+ * a followup), so there is nothing for this plugin to purge. If that chain
+ * ever breaks, the fix belongs in ask-interrupt, not here.
  *
  * Ordering is guaranteed by Cordis, not assumed: `register` uses
  * `options.prepend ? "unshift" : "push"` (cordis/lib/index.js:335-345) and
@@ -93,13 +157,29 @@ interface SourcedMessage {
   source?: { kind?: string; plugin?: string };
 }
 
+/** A claimed or inserted inbox message: identity plus the approval stamp. */
+interface StampedMessage extends SourcedMessage {
+  id: string;
+}
+
+/**
+ * The fields this plugin reads off an `agent/inbox/inserted` notification:
+ * the agent whose inbox changed (for its public `inbox.remove`) and the
+ * inserted message. Structural on purpose — this plugin observes the event,
+ * it does not import the loop's Agent class.
+ */
+interface InboxInsertion {
+  agent: { inbox: { remove(messageId: string): boolean } };
+  message: unknown;
+}
+
 /**
  * True for a message authored by the shipped approval service — the rejection
  * followup or the policy-change notice.
- * @param message - a claimed inbox message.
+ * @param message - a claimed or inserted inbox message.
  * @returns whether this plugin should drop it.
  */
-function isApprovalNotice(message: unknown): boolean {
+function isApprovalNotice(message: unknown): message is StampedMessage {
   const source = (message as SourcedMessage | null | undefined)?.source;
   if (source === undefined || source === null) return false;
   return source.kind === "plugin" && source.plugin === APPROVAL_PLUGIN;
@@ -108,6 +188,26 @@ function isApprovalNotice(message: unknown): boolean {
 export function apply(ctx: Context, config: ApprovalInterruptConfig): void {
   void config;
 
+  // PRIMARY SEAM (#113): purge at insertion. This listener runs synchronously
+  // inside `agent.followup()` / `agent.inject()` — `emit` never awaits, so a
+  // sync callback removes the message in the SAME task as the insert, before
+  // any render, queue snapshot, or step can observe it. An async callback
+  // would still beat every render, but same-task is strictly earlier.
+  ctx.on("agent/inbox/inserted", (payload: InboxInsertion) => {
+    const message = payload.message;
+    if (!isApprovalNotice(message)) return;
+    // The user's rejection comment travels a different wire
+    // (`session.prompt(blocks, "steer")`, authored as the user, never stamped
+    // `{kind:"plugin", plugin:"user-approval"}`), so the stamp filter cannot
+    // take the user's words with the canned sentence. And a rejection with no
+    // comment leaves nothing behind: silence by convention (see header).
+    if (payload.agent.inbox.remove(message.id)) {
+      ctx.logger.info(`purged user-approval notice ${message.id} at insert`);
+    }
+  });
+
+  // BACKSTOP (#76, kept): if the insertion seam is ever bypassed, a step must
+  // still never see the sentence.
   ctx.on(
     "agent/pre-step",
     async (_payload, next) => {
