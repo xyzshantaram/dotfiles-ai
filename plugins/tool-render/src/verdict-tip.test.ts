@@ -96,8 +96,10 @@ describe("guardRewriteTipLine", () => {
 describe("summariseGuardPromptReason", () => {
   it("reads the human summary out of the guard's YAML payload", () => {
     // Built with the same stringify the guard uses, so this is the actual
-    // YAML shape — not a hand-written approximation of it.
+    // YAML shape — not a hand-written approximation of it. The `kind` is
+    // part of that shape now: without it the payload is not a guard reason.
     var reason = stringify({
+      kind: "bash-guard",
       summary: "bash-guard: this command runs in a different form.",
       wrote: "grep -n foo",
       runs: "rg -n foo",
@@ -133,7 +135,8 @@ describe("summariseGuardPromptReason", () => {
     // The projection caps stored reasons at 2000 characters; a cut inside
     // a plain scalar still parses, so the summary survives the cap.
     var reason =
-      "summary: block rm -rf outside the workspace\nruns: rm -rf /tmp/x\nwhy: " + "x".repeat(3000);
+      "kind: bash-guard\nsummary: block rm -rf outside the workspace\nruns: rm -rf /tmp/x\nwhy: " +
+      "x".repeat(3000);
     expect(summariseGuardPromptReason(reason.slice(0, 2000))).toBe(
       "block rm -rf outside the workspace",
     );
@@ -154,29 +157,30 @@ describe("singleLineTipText", () => {
 });
 
 describe("guard/escalation classification at the tooltip boundary (#105)", () => {
-  it("does NOT classify the live escalation string as a guard reason", () => {
-    // The host executor raises the plain string, which appears nowhere in
-    // this repo as a producer — so the misclassification does not fire
-    // today, and the tooltip renders no Prompt line for it.
+  it("leaves the host's plain-string escalation unguarded", () => {
+    // The host executor raises the plain string `escalate sandbox to <mode>:`
+    // in compositions where this repo's wrapper is not in the path. It is a
+    // live escalation shape and it correctly classifies false, so the tooltip
+    // renders no Prompt line for it. (The FIRING shape was this repo's own
+    // YAML prompt — covered by the next test — not this string.)
     var live = "escalate sandbox to danger-full-access: run the migration";
     expect(isBashGuardReason(live)).toBe(false);
     expect(summariseGuardPromptReason(live)).toBe(null);
   });
 
-  it("pins the latent misclassification: repo-built escalation YAML reads as guard", () => {
-    // bash-guard.ts builds its (currently dead) escalation prompt as YAML
-    // carrying a `summary` key — exactly the shape the classifier treats as
-    // TRUE. If that branch ever executes against a client surfacing its
-    // reasons, the tooltip WOULD render the escalation summary as its
-    // Prompt line. Pinned here as the known trap, not absorbed silently.
+  it("renders no Prompt line for the repo-built escalation YAML", () => {
+    // Fixed 2026-09-09: bash-guard.ts builds its escalation prompt as YAML
+    // carrying a `summary` key, which the old shape-matching classifier read
+    // as TRUE — painting escalations guard-blue with a Prompt line. The
+    // prompt now declares `kind: escalation`, the classifier keys on it, and
+    // the tooltip renders nothing: the escalation already has its own banner.
     var yaml = stringify({
+      kind: "escalation",
       summary: 'bash-guard: escalate from "read-only" to "workspace-write"',
       justification: "need to write the migration",
       runs: "npx migrate",
     });
-    expect(isBashGuardReason(yaml)).toBe(true);
-    expect(summariseGuardPromptReason(yaml)).toBe(
-      'bash-guard: escalate from "read-only" to "workspace-write"',
-    );
+    expect(isBashGuardReason(yaml)).toBe(false);
+    expect(summariseGuardPromptReason(yaml)).toBe(null);
   });
 });

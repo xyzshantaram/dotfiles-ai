@@ -17,7 +17,24 @@
 import { describe, expect, it } from "vitest";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { apply, evaluate, type GuardOutcome } from "./bash-guard";
+import { spawnSync } from "node:child_process";
+import {
+  apply,
+  buildEscalationApprovalReason,
+  buildGuardApprovalReason,
+  decidePipeExit,
+  ESCALATION_APPROVAL_KIND,
+  evaluate,
+  formatPipeStages,
+  GUARD_APPROVAL_KIND,
+  planPipeCapture,
+  type GuardOutcome,
+} from "./bash-guard";
+import {
+  isBashGuardReason,
+  isHostEscalationReason,
+  isRetiredEscalationPrompt,
+} from "./tool-render/src/guard.js";
 
 const GUARDS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "guards");
 
@@ -185,7 +202,7 @@ describe("bash-guard tool wiring", () => {
    * records every command the fake shell was asked to run, and answers the
    * approval seam with `approvalVerdict`.
    */
-  function mountTool(approvalVerdict: string) {
+  function mountTool(approvalVerdict: string, shellRun?: (command: string) => unknown) {
     let tool: { execute(args: unknown, exec: unknown): Promise<string> } | undefined;
     const ran: string[] = [];
     const noop = () => {};
@@ -213,6 +230,7 @@ describe("bash-guard tool wiring", () => {
         },
         run(req: { command: string }) {
           ran.push(req.command);
+          if (shellRun !== undefined) return Promise.resolve(shellRun(req.command));
           return Promise.resolve(shellResult(`ran: ${req.command}`));
         },
       },
@@ -309,5 +327,245 @@ describe("bash-guard tool wiring", () => {
       /rejected/,
     );
     expect(mounted.ran).toEqual([]);
+  });
+
+  /** Run the command for real in bash, mapping the result like a shell executor. */
+  function realBash(command: string) {
+    const res = spawnSync("bash", ["-c", command], {
+      encoding: "utf8",
+      maxBuffer: 64 * 1024 * 1024,
+    });
+    return {
+      exitCode: res.status ?? 0,
+      signal: res.signal,
+      timedOut: false,
+      timeoutMs: 60000,
+      stdout: { text: res.stdout ?? "" },
+      stderr: { text: res.stderr ?? "" },
+    };
+  }
+
+  type PipeValue = {
+    text: string;
+    ran: string;
+    rewritten: boolean;
+    exitCode: number | null;
+    denied: boolean;
+    pipeStages?: { name?: string; exitCode: number }[];
+  };
+
+  async function runReal(command: string): Promise<{ value: PipeValue; ran: string[] }> {
+    const mounted = mountTool("allowed-once", realBash);
+    const value = (await mounted.execute(command)) as unknown as PipeValue;
+    return { value, ran: mounted.ran };
+  }
+
+  it("reports a genuine mid-pipeline failure instead of exit 0", async () => {
+    const { value, ran } = await runReal("false | cat");
+    expect(ran).toHaveLength(1);
+    expect(ran[0]).toContain("set -o pipefail");
+    expect(ran[0]).toContain("PIPESTATUS");
+    expect(value.exitCode).toBe(1);
+    expect(value.pipeStages).toEqual([
+      { name: "false", exitCode: 1 },
+      { name: "cat", exitCode: 0 },
+    ]);
+    expect(value.text).toContain("[exit code: 1]");
+    expect(value.text).toContain("[exit codes: false 1, cat 0]");
+    // The capture rides a side file, never the output stream.
+    expect(value.text).not.toContain("pipestatus-");
+  });
+
+  it("does not fail the benign producer-dies-of-SIGPIPE idiom", async () => {
+    const { value } = await runReal("seq 1 100000 | head -3");
+    expect(value.exitCode).toBe(0);
+    expect(value.text).not.toContain("[exit code:");
+    expect(value.text).not.toContain("[exit codes:");
+    // The stages were still captured as data: producer 141, consumer 0.
+    expect(value.pipeStages).toEqual([
+      { name: "seq", exitCode: 141 },
+      { name: "head", exitCode: 0 },
+    ]);
+  });
+
+  it("leaves a command that neither pipes nor fails exactly alone", async () => {
+    const { value, ran } = await runReal("echo hello-pipe-test");
+    expect(ran).toEqual(["echo hello-pipe-test"]);
+    expect(value.exitCode).toBe(0);
+    expect(value.pipeStages).toBeUndefined();
+    expect(value.text).not.toContain("[exit codes:");
+    expect(value.text).not.toContain("[exit code:");
+  });
+
+  it("reports a compound command's last pipeline without guessing names", async () => {
+    const { value } = await runReal("echo one | cat; echo two | cat");
+    expect(value.exitCode).toBe(0);
+    expect(value.pipeStages).toEqual([{ exitCode: 0 }, { exitCode: 0 }]);
+    expect(value.text).not.toContain("[exit codes:");
+  });
+
+  it("lets a piped sandbox-style failure surface a non-zero exit", async () => {
+    // The owner's deno reproducer shape: a producer refused by the sandbox,
+    // piped through tail. Before the wrap the call reported exit 0 and the
+    // host's denial gate — matchesSignature returns false on exit 0 — could
+    // never fire. After the wrap the failure is detectable as data.
+    const { value } = await runReal(
+      `node -e "console.error('Read-only file system (os error 30)'); process.exit(1)" 2>&1 | tail -2`,
+    );
+    expect(value.exitCode).toBe(1);
+    expect(value.pipeStages).toEqual([
+      { name: "node", exitCode: 1 },
+      { name: "tail", exitCode: 0 },
+    ]);
+    expect(value.text).toContain("[exit code: 1]");
+  });
+
+  it("propagates a host-computed sandbox denial into data and markers", async () => {
+    const mounted = mountTool("allowed-once", () => ({
+      exitCode: 1,
+      signal: null,
+      timedOut: false,
+      timeoutMs: 1000,
+      stdout: { text: "partial\n" },
+      stderr: { text: "Read-only file system (os error 30)" },
+      sandbox: { denied: true, mode: "workspace-write" },
+    }));
+    const value = (await mounted.execute("echo denied-probe")) as unknown as PipeValue;
+    expect(value.denied).toBe(true);
+    expect(value.exitCode).toBe(1);
+    expect(value.text).toContain("[sandbox: file access denied under workspace-write mode]");
+  });
+});
+
+describe("approval reason kinds", () => {
+  // The #105 contract: the YAML this file builds, run through the real
+  // classifier the card reads. A hand-written approximation of the YAML
+  // would prove nothing — these tests call the real builders.
+  it("marks the escalation prompt as an escalation, not a guard reason", () => {
+    const reason = buildEscalationApprovalReason({
+      standingMode: "workspace-write",
+      escalateTo: "danger-full-access",
+      justification: "write the probe file outside the workspace",
+      runs: "echo probe > ~/probe.txt",
+    });
+    expect(isBashGuardReason(reason)).toBe(false);
+  });
+
+  it("stamps kind: escalation on the escalation prompt", () => {
+    const reason = buildEscalationApprovalReason({
+      standingMode: "workspace-write",
+      escalateTo: "danger-full-access",
+      justification: "j",
+      runs: "true",
+    });
+    expect(reason).toContain(`kind: ${ESCALATION_APPROVAL_KIND}`);
+    expect(ESCALATION_APPROVAL_KIND).toBe("escalation");
+  });
+
+  it("still marks the rewrite prompt as a guard reason", () => {
+    const reason = buildGuardApprovalReason({
+      summary: "bash-guard: this command runs in a different form.",
+      wrote: "grep -rn foo .",
+      runs: "rg -n foo .",
+      why: "rg is faster",
+    });
+    expect(reason).toContain(`kind: ${GUARD_APPROVAL_KIND}`);
+    expect(isBashGuardReason(reason)).toBe(true);
+  });
+
+  it("matches the host's plain-string escalation with one narrow matcher", () => {
+    const reason =
+      "escalate sandbox to danger-full-access: sync.sh installs plugins into ~/.dsh";
+    expect(isHostEscalationReason(reason)).toBe(true);
+    expect(isBashGuardReason(reason)).toBe(false);
+  });
+
+  it("keeps the legacy plain-text rewrite prompt guarded", () => {
+    // The blue outline and its stickiness are unchanged for real rewrites,
+    // including asks raised before the YAML form existed.
+    expect(
+      isBashGuardReason(
+        "bash-guard: the following command needs approval:\n\n  git push\n\nMatched rule(s):\n  • git (push): denied.\n",
+      ),
+    ).toBe(true);
+  });
+
+  it("does not guard the retired plain-text escalation prompt", () => {
+    expect(
+      isRetiredEscalationPrompt(
+        'bash-guard: escalate this bash command from "workspace-write" to "danger-full-access". Justification: write outside',
+      ),
+    ).toBe(true);
+    expect(
+      isBashGuardReason(
+        'bash-guard: escalate this bash command from "workspace-write" to "danger-full-access". Justification: write outside',
+      ),
+    ).toBe(false);
+  });
+
+  it("does not guard kind-less YAML: a reason declares itself or it is not one", () => {
+    // The pre-kind rewrite shape. Old logs replay under the corrected
+    // classifier, so this documents the strict break the version bump heals.
+    expect(isBashGuardReason("summary: block rm -rf outside\ncommand: rm -rf /tmp/x\n")).toBe(
+      false,
+    );
+  });
+
+  it("needs no classifier change for a future third kind of ask", () => {
+    expect(isBashGuardReason("kind: audit-trail\nsummary: something new\n")).toBe(false);
+  });
+});
+
+describe("pipeline stage capture", () => {
+  it("names the stages of a single simple pipeline from the pipeline node", () => {
+    expect(planPipeCapture("false | cat")).toEqual({ hasPipe: true, names: ["false", "cat"] });
+    expect(planPipeCapture("VITE_X=1 vite build | rg warn | tail -2")).toEqual({
+      hasPipe: true,
+      names: ["vite", "rg", "tail"],
+    });
+  });
+
+  it("omits names for anything more complex than one simple pipeline", () => {
+    // A subshell still captures (its last pipeline's bare codes) but never
+    // claims names: the flat command list would mislabel these stages.
+    expect(planPipeCapture("(false | cat)").names).toBeNull();
+    expect(planPipeCapture("(false | cat)").hasPipe).toBe(true);
+    expect(planPipeCapture("echo $(false | cat)").names).toBeNull();
+    expect(planPipeCapture("cd /tmp && rg foo | head").names).toBeNull();
+    expect(planPipeCapture("echo one | cat; echo two | cat").names).toBeNull();
+  });
+
+  it("skips commands without a pipeline and commands that do not parse", () => {
+    expect(planPipeCapture("echo hello")).toEqual({ hasPipe: false, names: null });
+    expect(planPipeCapture("echo $(date)").hasPipe).toBe(false);
+    expect(planPipeCapture("if true; then |; fi")).toEqual({ hasPipe: false, names: null });
+  });
+
+  it("reports the rightmost non-zero stage", () => {
+    expect(decidePipeExit([1, 0, 0])).toBe(1);
+    expect(decidePipeExit([1, 2, 0])).toBe(2);
+    expect(decidePipeExit([0, 0])).toBe(0);
+    expect(decidePipeExit([])).toBe(0);
+  });
+
+  it("forgives a benign SIGPIPE death but never a lone one", () => {
+    // seq dies of SIGPIPE because head already left: success.
+    expect(decidePipeExit([141, 0])).toBe(0);
+    // An earlier genuine failure still surfaces past the forgiven 141.
+    expect(decidePipeExit([1, 141, 0])).toBe(1);
+    // No downstream consumer, no forgiveness.
+    expect(decidePipeExit([141])).toBe(141);
+    expect(decidePipeExit([0, 141])).toBe(141);
+  });
+
+  it("formats named and unnamed stages the way the model reads them", () => {
+    expect(
+      formatPipeStages([
+        { name: "vite", exitCode: 1 },
+        { name: "grep", exitCode: 0 },
+        { name: "tail", exitCode: 0 },
+      ]),
+    ).toBe("vite 1, grep 0, tail 0");
+    expect(formatPipeStages([{ exitCode: 1 }, { exitCode: 0 }])).toBe("1, 0");
   });
 });

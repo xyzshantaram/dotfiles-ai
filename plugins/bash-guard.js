@@ -7365,7 +7365,7 @@ var require_dist = __commonJS({
 
 // plugins/bash-guard.ts
 var import_yaml = __toESM(require_dist());
-import { readdir, readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { join as join2, resolve, sep, isAbsolute as isAbsolute2 } from "node:path";
 
 // node_modules/.pnpm/unbash@3.0.0/node_modules/unbash/dist/chars.js
@@ -12262,6 +12262,28 @@ var WIDER_MODES = {
   "danger-full-access": []
 };
 var ESCALATION_TARGETS = ["workspace-write", "danger-full-access"];
+var GUARD_APPROVAL_KIND = "bash-guard";
+var ESCALATION_APPROVAL_KIND = "escalation";
+function buildGuardApprovalReason(fields) {
+  const prompt = {
+    kind: GUARD_APPROVAL_KIND,
+    summary: fields.summary
+  };
+  if (fields.wrote !== void 0) prompt.wrote = fields.wrote;
+  prompt.runs = fields.runs;
+  if (fields.mutating === true) prompt.mutating = true;
+  if (fields.changes !== void 0) prompt.changes = fields.changes;
+  if (fields.why !== void 0) prompt.why = fields.why;
+  return (0, import_yaml.stringify)(prompt);
+}
+function buildEscalationApprovalReason(fields) {
+  return (0, import_yaml.stringify)({
+    kind: ESCALATION_APPROVAL_KIND,
+    summary: `bash-guard: escalate from "${fields.standingMode}" to "${fields.escalateTo}"`,
+    justification: fields.justification,
+    runs: fields.runs
+  });
+}
 var Config = z.object({
   guardsDir: z.string().default("$DSH_HOME/plugins/guards"),
   // Left unset by default (not defaulted to ""): evaluate() falls back to
@@ -12821,6 +12843,77 @@ async function evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates)
       return { action: "run", command, rewritten: false };
   }
 }
+function containsPipeline(node) {
+  switch (node.type) {
+    case "Pipeline":
+      return true;
+    case "Script":
+    case "CompoundList":
+      return node.commands.some((s) => containsPipeline(s));
+    case "Statement":
+      return containsPipeline(node.command);
+    case "AndOr":
+      return node.commands.some((c) => containsPipeline(c));
+    case "If":
+      return containsPipeline(node.clause) || containsPipeline(node.then) || node.else !== void 0 && containsPipeline(node.else);
+    case "While":
+      return containsPipeline(node.clause) || containsPipeline(node.body);
+    case "For":
+    case "Select":
+    case "ArithmeticFor":
+      return containsPipeline(node.body);
+    case "Subshell":
+    case "BraceGroup":
+      return containsPipeline(node.body);
+    case "Function":
+    case "Coproc":
+      return containsPipeline(node.body);
+    case "Case":
+      return node.items.some((item) => containsPipeline(item.body));
+    default:
+      return false;
+  }
+}
+function planPipeCapture(command) {
+  let script;
+  try {
+    script = parse(command);
+  } catch {
+    return { hasPipe: false, names: null };
+  }
+  if (script.errors !== void 0 && script.errors.length > 0) {
+    return { hasPipe: false, names: null };
+  }
+  let names = null;
+  if (script.commands.length === 1) {
+    const only = script.commands[0];
+    const inner = only !== void 0 && only.type === "Statement" ? only.command : void 0;
+    if (inner !== void 0 && inner.type === "Pipeline" && inner.commands.length > 0 && inner.commands.every((stage) => stage.type === "Command")) {
+      names = inner.commands.map(
+        (stage) => (
+          // Group 0: the group id only links operators for display, and a
+          // basename needs just the node and its source string.
+          getBasename({ node: stage, source: command, group: 0 })
+        )
+      );
+    }
+  }
+  return { hasPipe: containsPipeline(script), names };
+}
+function decidePipeExit(stages) {
+  const effective = stages.map(
+    (code, i) => code === 141 && i + 1 < stages.length && stages.slice(i + 1).every((later) => later === 0) ? 0 : code
+  );
+  for (let i = effective.length - 1; i >= 0; i--) {
+    if (effective[i] !== 0) return effective[i];
+  }
+  return 0;
+}
+function formatPipeStages(stages) {
+  return stages.map(
+    (s) => s.name !== void 0 && s.name !== "" ? `${s.name} ${s.exitCode}` : `${s.exitCode}`
+  ).join(", ");
+}
 function renderShellResult(result) {
   let body = result.stdout.text;
   const stderr = result.stderr.text;
@@ -12920,14 +13013,40 @@ function apply(ctx, config) {
           properties: {
             text: { type: "string", required: true },
             ran: { type: "string", required: true },
-            rewritten: { type: "boolean", required: true }
+            rewritten: { type: "boolean", required: true },
+            exitCode: {
+              type: "integer",
+              description: "The reported exit code: the pipeline-aware decision over PIPESTATUS, not bash's last-stage default."
+            },
+            denied: {
+              type: "boolean",
+              description: "Whether the sandbox denied a file operation during this call."
+            },
+            pipeStages: {
+              type: "array",
+              description: "One entry per stage of the last pipeline (PIPESTATUS), paired with program names when the command is a single simple pipeline. Present only when the command was wrapped for capture.",
+              items: {
+                type: "object",
+                properties: {
+                  name: {
+                    type: "string",
+                    description: "Stage program name; absent when the command is not a single simple pipeline."
+                  },
+                  exitCode: { type: "integer", required: true }
+                },
+                additionalProperties: false
+              }
+            }
           },
           additionalProperties: false
         },
         render: (_args, value) => [{ type: "text", text: value.text }],
         presentationMeta: (_args, value) => ({
           ran: value.ran,
-          rewritten: value.rewritten
+          rewritten: value.rewritten,
+          exitCode: value.exitCode,
+          denied: value.denied,
+          ...value.pipeStages !== void 0 ? { pipeStages: value.pipeStages } : {}
         })
       },
       async execute(args, exec) {
@@ -12992,12 +13111,12 @@ function apply(ctx, config) {
           const notes = outcome.notes ?? [];
           const mutating = outcome.mutatingWhy ?? [];
           const isRewrite = outcome.command !== outcome.original;
-          let prompt;
+          let fields;
           if (notes.length === 0 && mutating.length === 0) {
             const reasonLines = (outcome.reason ?? "").split("\n");
             const summary = reasonLines[0]?.trim() || "bash-guard: this command needs your approval.";
             const why = reasonLines.slice(1).join("\n").trim();
-            prompt = {
+            fields = {
               summary,
               ...isRewrite ? { wrote: outcome.original } : {},
               runs: outcome.command,
@@ -13005,7 +13124,7 @@ function apply(ctx, config) {
             };
           } else {
             const summary = mutating.length > 0 ? isRewrite ? "bash-guard: this command changes files, and it runs in a different form." : "bash-guard: this command changes files." : isRewrite ? "bash-guard: this command runs in a different form." : "bash-guard: this command needs your approval.";
-            prompt = {
+            fields = {
               summary,
               ...isRewrite ? { wrote: outcome.original } : {},
               runs: outcome.command,
@@ -13018,7 +13137,7 @@ function apply(ctx, config) {
             agent,
             toolName: "bash",
             callId: exec.callId,
-            reason: (0, import_yaml.stringify)(prompt),
+            reason: buildGuardApprovalReason(fields),
             signal: exec.signal
           });
           if (verdict !== "allowed-once") {
@@ -13038,16 +13157,16 @@ ${outcome.reason}` : "")
               "sandbox escalation is unavailable here: it needs a confining executor, a calling agent, and a mounted approval service"
             );
           }
-          const prompt = {
-            summary: `bash-guard: escalate from "${standing.mode}" to "${escalateTo}"`,
-            justification: args.justification,
-            runs: toRun
-          };
           const verdict = await approval.request({
             agent,
             toolName: "bash",
             callId: exec.callId,
-            reason: (0, import_yaml.stringify)(prompt),
+            reason: buildEscalationApprovalReason({
+              standingMode: standing.mode,
+              escalateTo,
+              justification: args.justification,
+              runs: toRun
+            }),
             signal: exec.signal
           });
           if (verdict !== "allowed-once") {
@@ -13096,18 +13215,69 @@ ${outcome.reason}` : "")
 bash-guard: ${outcome.ranNote}`;
           return { text: text2, ran: toRun, rewritten: outcome.rewritten };
         }
+        const pipePlan = planPipeCapture(toRun);
+        let wrappedCommand = toRun;
+        let pipeDir;
+        if (pipePlan.hasPipe) {
+          try {
+            await mkdir("/tmp/dsh", { recursive: true });
+            pipeDir = await mkdtemp(join2("/tmp/dsh", "pipestatus-"));
+            const statusFile = shellQuote(join2(pipeDir, "status"));
+            wrappedCommand = `set -o pipefail
+${toRun}
+__dsh_pipe_exit=$? __dsh_pipe_stages=("\${PIPESTATUS[@]}")
+printf '%s' "\${__dsh_pipe_stages[*]}" > ${statusFile} 2>/dev/null || true
+exit $__dsh_pipe_exit`;
+          } catch {
+            pipeDir = void 0;
+            wrappedCommand = toRun;
+          }
+        }
         const result = await ctx.shell.run(
           ctx.shell.resolve({
             ...request,
+            command: wrappedCommand,
             ...args.timeoutMs !== void 0 ? { timeoutMs: args.timeoutMs } : {},
             ...exec.signal ? { signal: exec.signal } : {}
           })
         );
-        let text = renderShellResult(result);
+        let pipeStages;
+        if (pipeDir !== void 0) {
+          try {
+            if (result.signal === null) {
+              const raw = (await readFile(join2(pipeDir, "status"), "utf8")).trim();
+              const codes = raw.split(/\s+/).map((s) => Number(s)).filter((n) => Number.isInteger(n));
+              if (codes.length > 0) {
+                pipeStages = codes.map((exitCode, i) => ({
+                  ...pipePlan.names !== null && pipePlan.names[i] !== void 0 ? { name: pipePlan.names[i] } : {},
+                  exitCode
+                }));
+              }
+            }
+          } catch {
+            pipeStages = void 0;
+          } finally {
+            await rm(pipeDir, { recursive: true, force: true }).catch(() => {
+            });
+          }
+        }
+        const reportedExit = pipeStages !== void 0 && result.signal === null ? result.exitCode === 0 ? 0 : decidePipeExit(pipeStages.map((s) => s.exitCode)) : result.exitCode;
+        let text = renderShellResult({ ...result, exitCode: reportedExit });
+        if (pipeStages !== void 0 && reportedExit !== 0 && reportedExit !== null) {
+          text += `
+[exit codes: ${formatPipeStages(pipeStages)}]`;
+        }
         if (outcome.ranNote !== void 0) text += `
 
 bash-guard: ${outcome.ranNote}`;
-        return { text, ran: toRun, rewritten: outcome.rewritten };
+        return {
+          text,
+          ran: toRun,
+          rewritten: outcome.rewritten,
+          exitCode: reportedExit,
+          denied: result.sandbox?.denied === true,
+          ...pipeStages !== void 0 ? { pipeStages } : {}
+        };
       },
       presentCall: (args) => ({
         card: "terminal",
@@ -13120,10 +13290,17 @@ bash-guard: ${outcome.ranNote}`;
 }
 export {
   Config,
+  ESCALATION_APPROVAL_KIND,
   ESCALATION_TARGETS,
+  GUARD_APPROVAL_KIND,
   WIDER_MODES,
   apply,
+  buildEscalationApprovalReason,
+  buildGuardApprovalReason,
+  decidePipeExit,
   evaluate,
+  formatPipeStages,
   inject,
-  name
+  name,
+  planPipeCapture
 };

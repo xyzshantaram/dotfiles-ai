@@ -18,6 +18,8 @@ import {
   parseSkillContent,
   readStartLine,
   splitSystemReminders,
+  firstLineOfError,
+  bashErrorState,
 } from "./text";
 
 describe("deIndent", () => {
@@ -462,5 +464,95 @@ describe("guardRewriteFromText", () => {
     expect(guardRewriteFromText(undefined)).toBeNull();
     expect(guardRewriteFromText(null)).toBeNull();
     expect(guardRewriteFromText(42)).toBeNull();
+  });
+});
+
+describe("bashErrorState", () => {
+  // The #115 reproducer: a successful `rg` over the harness's own source,
+  // whose output quotes the denial marker mid-dump. Structured facts say
+  // exit 0; the quoted prose must not re-mark the row.
+  const QUOTED_DUMP = [
+    "lib/index.js:120: * non-empty adds the same-turn escalation hint",
+    "lib/index.js:127: [sandbox: file access denied under workspace-write mode]",
+    "lib/index.js:128:xxxxxxxxxx xx xxxxxxxxx",
+    "lib/index.js:195: exitCode: result.exitCode,",
+  ].join("\n");
+
+  it("does not fail a successful command whose output quotes the denial marker", () => {
+    expect(bashErrorState("ok", QUOTED_DUMP, { exitCode: 0, denied: false })).toBe("ok");
+  });
+
+  it("does not fail quoted markers when the facts are absent either: only trailing markers count", () => {
+    expect(bashErrorState("ok", QUOTED_DUMP, undefined)).toBe("ok");
+    expect(bashErrorState("ok", "out\n[exit code: 1] is discussed\nmore", undefined)).toBe("ok");
+  });
+
+  it("does not fail a successful command whose output quotes an exit marker as data", () => {
+    var output = 'results: ["[exit code: 1]", "ok"]\ndone';
+    expect(bashErrorState("ok", output, { exitCode: 0, denied: false })).toBe("ok");
+    expect(bashErrorState("ok", output, undefined)).toBe("ok");
+  });
+
+  it("fails a genuine sandbox denial from facts or from trailing markers", () => {
+    var output = "partial output\n[sandbox: file access denied under workspace-write mode]";
+    expect(bashErrorState("ok", output, { exitCode: 1, denied: true })).toBe("error");
+    expect(bashErrorState("ok", output, undefined)).toBe("error");
+  });
+
+  it("fails a genuine non-zero exit from facts or from trailing markers", () => {
+    var output = "boom\n[exit code: 3]";
+    expect(bashErrorState("ok", output, { exitCode: 3, denied: false })).toBe("error");
+    expect(bashErrorState("ok", output, undefined)).toBe("error");
+  });
+
+  it("lets clean facts overrule even a trailing marker in the text", () => {
+    // Data over rendering: the facts say success, so a trailing marker is
+    // quoted data, not signal.
+    var output = "review of markers\n[exit code: 1]";
+    expect(bashErrorState("ok", output, { exitCode: 0, denied: false })).toBe("ok");
+  });
+
+  it("keeps the legacy reading for meta that carries no facts", () => {
+    // Old sessions and background starts publish {ran, rewritten} only:
+    // inconclusive, so the anchored text check decides.
+    var failed = "boom\n[exit code: 3]";
+    expect(bashErrorState("ok", failed, { ran: "x", rewritten: false })).toBe("error");
+    expect(bashErrorState("ok", QUOTED_DUMP, { ran: "x", rewritten: false })).toBe("ok");
+  });
+
+  it("leaves signal kills and running rows exactly as before", () => {
+    var output = "out\n[killed by signal: SIGKILL]";
+    expect(bashErrorState("ok", output, { exitCode: null, denied: false })).toBe("ok");
+    expect(bashErrorState("ok", output, undefined)).toBe("ok");
+    expect(bashErrorState("running", output, undefined)).toBe("running");
+  });
+});
+
+describe("firstLineOfError", () => {
+  it("never headlines a quoted marker from the middle of a dump", () => {
+    var dump = [
+      "rg hit one",
+      "91- if (sandbox?.runnerFailed) notices.push(`[sandbox: the sandbox runner itself failed under`",
+      "rg hit two",
+    ].join("\n");
+    expect(firstLineOfError(dump)).toBe("rg hit one");
+  });
+
+  it("headlines a genuine trailing marker", () => {
+    expect(firstLineOfError("partial\n[sandbox: file access denied under workspace-write mode]")).toBe(
+      "[sandbox: file access denied under workspace-write mode]",
+    );
+    expect(firstLineOfError("boom\n[exit code: 3]")).toBe("[exit code: 3]");
+  });
+
+  it("headlines the exit line, not the named pipe-stage list", () => {
+    var output = "out\n[exit code: 1]\n[exit codes: vite 1, grep 0, tail 0]";
+    expect(firstLineOfError(output)).toBe("[exit code: 1]");
+  });
+
+  it("falls back to the first line for plain errors", () => {
+    expect(firstLineOfError("Error: boom\nsecond line")).toBe("Error: boom");
+    expect(firstLineOfError("Error: boom")).toBe("Error: boom");
+    expect(firstLineOfError("")).toBe("");
   });
 });

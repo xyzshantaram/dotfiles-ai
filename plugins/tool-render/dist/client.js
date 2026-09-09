@@ -1855,6 +1855,44 @@ function guardRewriteFromText(text) {
   if (command.length === 0) return null;
   return { ran: command };
 }
+var ERROR_TOKEN_RE = /\[(?:E_|exit code:|sandbox:)/;
+var TRAILING_MARKER_LINE_RE = /^\[(?:E_|exit code:|exit codes:|sandbox:|timed out|killed by signal:)/;
+function trailingMarkerLines(text) {
+  var lines = text.split("\n");
+  var out = [];
+  for (var i = lines.length - 1; i >= 0; i--) {
+    if (!TRAILING_MARKER_LINE_RE.test(lines[i])) break;
+    out.unshift(lines[i]);
+  }
+  return out;
+}
+function firstLineOfError(text) {
+  if (typeof text !== "string" || text === "") return text;
+  var markers = trailingMarkerLines(text);
+  for (var i = 0; i < markers.length; i++) {
+    if (ERROR_TOKEN_RE.test(markers[i])) return markers[i];
+  }
+  var at = text.indexOf("\n");
+  return at === -1 ? text : text.slice(0, at);
+}
+var BASH_ERROR_MARKERS = /\[sandbox: file access denied under|\[exit code: [1-9]/;
+function bashErrorState(state, output, meta) {
+  if (state === "running") return state;
+  if (meta !== null && typeof meta === "object" && !Array.isArray(meta)) {
+    if (meta.denied === true) return "error";
+    if (typeof meta.exitCode === "number" && meta.exitCode !== 0) return "error";
+    if (typeof meta.exitCode === "number" || typeof meta.denied === "boolean") {
+      return state;
+    }
+  }
+  if (typeof output !== "string" || output === "") return state;
+  var lines = output.split("\n");
+  for (var i = lines.length - 1; i >= 0; i--) {
+    if (!TRAILING_MARKER_LINE_RE.test(lines[i])) break;
+    if (BASH_ERROR_MARKERS.test(lines[i])) return "error";
+  }
+  return state;
+}
 
 // plugins/tool-render/src/questions.ts
 var ASK_TOOL_NAME = "ask_user_question";
@@ -16094,8 +16132,18 @@ function parse(src, reviver, options) {
 }
 
 // plugins/tool-render/src/guard.ts
+var GUARD_APPROVAL_KIND = "bash-guard";
+var HOST_ESCALATION_PREFIX = "escalate sandbox to ";
+function isHostEscalationReason(reason) {
+  return typeof reason === "string" && reason.startsWith(HOST_ESCALATION_PREFIX);
+}
+function isRetiredEscalationPrompt(reason) {
+  return typeof reason === "string" && reason.startsWith("bash-guard: escalate this bash command from ");
+}
 function isBashGuardReason(reason) {
   if (typeof reason !== "string") return false;
+  if (isHostEscalationReason(reason)) return false;
+  if (isRetiredEscalationPrompt(reason)) return false;
   if (reason.startsWith("bash-guard:")) return true;
   var result;
   try {
@@ -16105,7 +16153,7 @@ function isBashGuardReason(reason) {
   }
   if (result === null || typeof result !== "object" || Array.isArray(result)) return false;
   const record = result;
-  return typeof record.summary === "string";
+  return record.kind === GUARD_APPROVAL_KIND;
 }
 
 // plugins/tool-render/src/escalation.ts
@@ -16128,7 +16176,7 @@ function pickString(value, keys) {
 }
 function splitEscalationReason(reason) {
   if (typeof reason !== "string") return null;
-  const prefix = "escalate sandbox to ";
+  const prefix = HOST_ESCALATION_PREFIX;
   if (reason.indexOf(prefix) !== 0) return null;
   const rest = reason.slice(prefix.length);
   const colon = rest.indexOf(":");
@@ -16423,21 +16471,6 @@ function errorTextOf(block) {
 function firstLine(text) {
   var at = text.indexOf("\n");
   return at === -1 ? text : text.slice(0, at);
-}
-var ERROR_TOKEN_RE = /\[(?:E_|exit code:|sandbox:)/;
-function firstLineOfError(text) {
-  if (typeof text !== "string" || text === "") return text;
-  var lines = text.split("\n");
-  for (var i = 0; i < lines.length; i++) {
-    if (ERROR_TOKEN_RE.test(lines[i])) return lines[i];
-  }
-  return firstLine(text);
-}
-var BASH_ERROR_MARKERS = /\[sandbox: file access denied under|\[exit code: [1-9]/;
-function bashErrorState(state, output) {
-  if (state === "running") return state;
-  if (typeof output !== "string" || output === "") return state;
-  return BASH_ERROR_MARKERS.test(output) ? "error" : state;
 }
 function relativizeToCwd(text, cwd) {
   if (typeof cwd !== "string" || cwd === "" || typeof text !== "string") return text;
@@ -16946,7 +16979,7 @@ function BashRow(props) {
   var description = argsObj !== null ? pickString2(argsObj, ["description"]) : void 0;
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
-  var state = bashErrorState(rowStateOf(block), output);
+  var state = bashErrorState(rowStateOf(block), output, block.meta);
   var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
   var summary = description !== void 0 && description !== "" ? firstLine(description) : command !== void 0 ? firstLine(command) : "Bash";
   var escalated = escalatedOf(argsObj);

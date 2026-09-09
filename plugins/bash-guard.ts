@@ -96,7 +96,7 @@
  *     name: /path/to/plugins/bash-guard.js
  *     config: {}                # rules come from the drop-in files
  */
-import { readdir, readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { stringify } from "yaml";
 import { join, resolve, sep, isAbsolute } from "node:path";
 import {
@@ -108,6 +108,7 @@ import {
   isStaticallyResolvable,
 } from "@cad0p/unbash-walker";
 import type { CommandRef } from "@cad0p/unbash-walker";
+import type { Command as UnbashCommand, Node as UnbashNode, Script as UnbashScript } from "@cad0p/unbash-walker";
 import type { Context } from "@deepseek-ai/cordis";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import type { ShellExecRequest } from "@deepseek-ai/dsh-shell";
@@ -120,7 +121,7 @@ export const inject = ["shell", "jobs", "tools"];
 
 /** The sandbox mode vocabulary. dsh-shell does not re-export it, so this
  * plugin carries the three string literals locally. */
-type SandboxMode = "read-only" | "workspace-write" | "danger-full-access";
+export type SandboxMode = "read-only" | "workspace-write" | "danger-full-access";
 
 /** The strictly-wider escalation table, mirrored from dsh-sandbox
  * WIDER_MODES: a request must strictly widen the effective mode, and a
@@ -134,6 +135,67 @@ export const WIDER_MODES: Record<SandboxMode, readonly SandboxMode[]> = {
 /** Every mode a confined call may escalate to (mirrors dsh-sandbox
  * ESCALATION_TARGETS; read-only is the floor, nothing escalates to it). */
 export const ESCALATION_TARGETS: readonly SandboxMode[] = ["workspace-write", "danger-full-access"];
+
+/**
+ * Discriminators stamped on the approval reasons this plugin owns, so the
+ * card can tell a rewrite ask from an escalation ask without guessing from
+ * the shape. `kind: "bash-guard"` marks the rewrite/rule prompt;
+ * `kind: "escalation"` marks the sandbox-escalation prompt. The reader is
+ * plugins/tool-render/src/guard.ts, which keys its test on these literals;
+ * the contract between the two copies is pinned by bash-guard.test.ts,
+ * which runs the real builder output below through the real classifier.
+ */
+export const GUARD_APPROVAL_KIND = "bash-guard";
+export const ESCALATION_APPROVAL_KIND = "escalation";
+
+export interface GuardApprovalReasonFields {
+  summary: string;
+  wrote?: string;
+  runs: string;
+  why?: string;
+  mutating?: boolean;
+  changes?: string[];
+}
+
+/**
+ * Build the YAML reason for a bash-guard rewrite/rule approval. The `kind`
+ * is what marks it as a guard reason; everything else is the human-facing
+ * detail the guard banner renders.
+ */
+export function buildGuardApprovalReason(fields: GuardApprovalReasonFields): string {
+  const prompt: Record<string, string | boolean | string[]> = {
+    kind: GUARD_APPROVAL_KIND,
+    summary: fields.summary,
+  };
+  if (fields.wrote !== undefined) prompt.wrote = fields.wrote;
+  prompt.runs = fields.runs;
+  if (fields.mutating === true) prompt.mutating = true;
+  if (fields.changes !== undefined) prompt.changes = fields.changes;
+  if (fields.why !== undefined) prompt.why = fields.why;
+  return stringify(prompt);
+}
+
+export interface EscalationApprovalReasonFields {
+  standingMode: SandboxMode;
+  escalateTo: SandboxMode;
+  justification: string;
+  runs: string;
+}
+
+/**
+ * Build the YAML reason for a sandbox-escalation approval. The `kind` is
+ * what keeps it OUT of the guard set: it carries a `summary` like every
+ * other prompt this plugin builds, and a shape-matching classifier cannot
+ * tell them apart.
+ */
+export function buildEscalationApprovalReason(fields: EscalationApprovalReasonFields): string {
+  return stringify({
+    kind: ESCALATION_APPROVAL_KIND,
+    summary: `bash-guard: escalate from "${fields.standingMode}" to "${fields.escalateTo}"`,
+    justification: fields.justification,
+    runs: fields.runs,
+  });
+}
 
 /** Structural view of the approval seam (ctx.approval), typed locally so this
  * plugin needs no dependency on the approval package. Only "allowed-once"
@@ -1148,6 +1210,136 @@ export async function evaluate(
   }
 }
 
+/** One pipeline stage's status: its exit code, plus the stage's program name
+ * when the command is a single simple pipeline. Names are omitted rather
+ * than guessed for anything more complex. */
+export interface PipeStageStatus {
+  name?: string;
+  exitCode: number;
+}
+
+export interface PipeCapturePlan {
+  /** The command contains at least one statement-level pipeline, so
+   * wrapping it for PIPESTATUS capture can report stage statuses. */
+  hasPipe: boolean;
+  /** Stage program names from the pipeline node itself — only when the whole
+   * command is one simple pipeline. Null otherwise. */
+  names: string[] | null;
+}
+
+/** Whether a statement-level tree contains a Pipeline node. Word interiors
+ * ($( ... ), <( ... )) are not descended into: a pipeline hidden there keeps
+ * the legacy behavior instead of a wrong one. */
+function containsPipeline(node: UnbashScript | UnbashNode): boolean {
+  switch (node.type) {
+    case "Pipeline":
+      return true;
+    case "Script":
+    case "CompoundList":
+      return node.commands.some((s) => containsPipeline(s));
+    case "Statement":
+      return containsPipeline(node.command);
+    case "AndOr":
+      return node.commands.some((c) => containsPipeline(c));
+    case "If":
+      return (
+        containsPipeline(node.clause) ||
+        containsPipeline(node.then) ||
+        (node.else !== undefined && containsPipeline(node.else))
+      );
+    case "While":
+      return containsPipeline(node.clause) || containsPipeline(node.body);
+    case "For":
+    case "Select":
+    case "ArithmeticFor":
+      return containsPipeline(node.body);
+    case "Subshell":
+    case "BraceGroup":
+      return containsPipeline(node.body);
+    case "Function":
+    case "Coproc":
+      return containsPipeline(node.body);
+    case "Case":
+      return node.items.some((item) => containsPipeline(item.body));
+    default:
+      return false;
+  }
+}
+
+/**
+ * Decide whether a command is worth wrapping for PIPESTATUS capture, and
+ * which stage names the capture may claim. Names come from the pipeline
+ * NODE — never from the flat extractAllCommandsFromAST list, which mixes in
+ * subshells, command substitutions and wrapper expansions and so does not
+ * correspond positionally to one pipeline's stages. A command that is not a
+ * single simple pipeline still captures (its last pipeline's bare codes),
+ * but its names are null: a confidently mislabelled stage is worse than an
+ * unnamed one.
+ */
+export function planPipeCapture(command: string): PipeCapturePlan {
+  // Unannotated like evaluate()'s own parse: the inferred ParsedScript
+  // carries the optional errors list the plain Script type does not.
+  let script;
+  try {
+    script = parse(command);
+  } catch {
+    return { hasPipe: false, names: null };
+  }
+  if (script.errors !== undefined && script.errors.length > 0) {
+    return { hasPipe: false, names: null };
+  }
+  let names: string[] | null = null;
+  if (script.commands.length === 1) {
+    const only = script.commands[0];
+    const inner = only !== undefined && only.type === "Statement" ? only.command : undefined;
+    if (
+      inner !== undefined &&
+      inner.type === "Pipeline" &&
+      inner.commands.length > 0 &&
+      inner.commands.every((stage) => stage.type === "Command")
+    ) {
+      names = inner.commands.map((stage) =>
+        // Group 0: the group id only links operators for display, and a
+        // basename needs just the node and its source string.
+        getBasename({ node: stage as UnbashCommand, source: command, group: 0 }),
+      );
+    }
+  }
+  return { hasPipe: containsPipeline(script), names };
+}
+
+/**
+ * Decide the reported exit code from one pipeline's stage statuses: the
+ * rightmost non-zero stage, except that a 141 (SIGPIPE) is forgiven when a
+ * downstream stage exists and every stage after it exited 0 — the benign
+ * `producer | head/tail` idiom, where the producer dies only because the
+ * consumer already has what it needs. A lone 141 with no downstream stage
+ * is genuine and still reported.
+ */
+export function decidePipeExit(stages: number[]): number {
+  const effective = stages.map((code, i) =>
+    code === 141 &&
+    i + 1 < stages.length &&
+    stages.slice(i + 1).every((later) => later === 0)
+      ? 0
+      : code,
+  );
+  for (let i = effective.length - 1; i >= 0; i--) {
+    if (effective[i] !== 0) return effective[i] as number;
+  }
+  return 0;
+}
+
+/** Render stage statuses the way the model reads them: `vite 1, grep 0` when
+ * named, bare codes when the names were omitted rather than guessed. */
+export function formatPipeStages(stages: PipeStageStatus[]): string {
+  return stages
+    .map((s) =>
+      s.name !== undefined && s.name !== "" ? `${s.name} ${s.exitCode}` : `${s.exitCode}`,
+    )
+    .join(", ");
+}
+
 /** Render one completed foreground run into the text the model receives. */
 function renderShellResult(result: {
   exitCode: number | null;
@@ -1291,6 +1483,32 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
             text: { type: "string", required: true },
             ran: { type: "string", required: true },
             rewritten: { type: "boolean", required: true },
+            exitCode: {
+              type: "integer",
+              description:
+                "The reported exit code: the pipeline-aware decision over PIPESTATUS, not bash's last-stage default.",
+            },
+            denied: {
+              type: "boolean",
+              description: "Whether the sandbox denied a file operation during this call.",
+            },
+            pipeStages: {
+              type: "array",
+              description:
+                "One entry per stage of the last pipeline (PIPESTATUS), paired with program names when the command is a single simple pipeline. Present only when the command was wrapped for capture.",
+              items: {
+                type: "object",
+                properties: {
+                  name: {
+                    type: "string",
+                    description:
+                      "Stage program name; absent when the command is not a single simple pipeline.",
+                  },
+                  exitCode: { type: "integer", required: true },
+                },
+                additionalProperties: false,
+              },
+            },
           },
           additionalProperties: false,
         },
@@ -1298,6 +1516,9 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
         presentationMeta: (_args, value) => ({
           ran: value.ran,
           rewritten: value.rewritten,
+          exitCode: value.exitCode,
+          denied: value.denied,
+          ...(value.pipeStages !== undefined ? { pipeStages: value.pipeStages } : {}),
         }),
       },
       async execute(args, exec) {
@@ -1388,7 +1609,7 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
           const notes = outcome.notes ?? [];
           const mutating = outcome.mutatingWhy ?? [];
           const isRewrite = outcome.command !== outcome.original;
-          let prompt: Record<string, string | boolean | string[]>;
+          let fields: GuardApprovalReasonFields;
           if (notes.length === 0 && mutating.length === 0) {
             // Plain rule ask: its template is already a single line and may be
             // overridden by config, so slice the text as before.
@@ -1396,7 +1617,7 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
             const summary =
               reasonLines[0]?.trim() || "bash-guard: this command needs your approval.";
             const why = reasonLines.slice(1).join("\n").trim();
-            prompt = {
+            fields = {
               summary,
               ...(isRewrite ? { wrote: outcome.original } : {}),
               runs: outcome.command,
@@ -1411,7 +1632,7 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
                 : isRewrite
                   ? "bash-guard: this command runs in a different form."
                   : "bash-guard: this command needs your approval.";
-            prompt = {
+            fields = {
               summary,
               ...(isRewrite ? { wrote: outcome.original } : {}),
               runs: outcome.command,
@@ -1424,7 +1645,7 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
             agent,
             toolName: "bash",
             callId: exec.callId,
-            reason: stringify(prompt),
+            reason: buildGuardApprovalReason(fields),
             signal: exec.signal,
           });
           if (verdict !== "allowed-once") {
@@ -1449,16 +1670,16 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
               "sandbox escalation is unavailable here: it needs a confining executor, a calling agent, and a mounted approval service",
             );
           }
-          const prompt: Record<string, string> = {
-            summary: `bash-guard: escalate from "${standing.mode}" to "${escalateTo}"`,
-            justification: args.justification,
-            runs: toRun,
-          };
           const verdict = await approval.request({
             agent,
             toolName: "bash",
             callId: exec.callId,
-            reason: stringify(prompt),
+            reason: buildEscalationApprovalReason({
+              standingMode: standing.mode,
+              escalateTo,
+              justification: args.justification,
+              runs: toRun,
+            }),
             signal: exec.signal,
           });
           if (verdict !== "allowed-once") {
@@ -1530,16 +1751,111 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
           return { text, ran: toRun, rewritten: outcome.rewritten };
         }
 
+        // Mid-pipeline failures hide behind the last stage's status: bash
+        // reports a pipeline as its LAST stage, so `false | cat` exits 0 and
+        // even the harness's own sandbox detection (which gates on a non-zero
+        // exit) goes blind on piped commands. Wrap piped commands so the
+        // shell reports every stage's status into a side file, never into
+        // stdout: polluting the output stream would be its own bug, and a
+        // sentinel line scraped back out of the text is exactly the
+        // render-sniffing #115 removes.
+        //
+        // The wrap is per-invocation, never global: `set -o pipefail` here
+        // scopes to this one script. A global pipefail would turn the benign
+        // `producer | head` idiom (producer dies of SIGPIPE, exit 141) into a
+        // failure on every successful call.
+        //
+        // Capture limits, stated plainly: PIPESTATUS holds the LAST pipeline
+        // only, so a compound command reports that pipeline's stages; when
+        // the shell never reaches the epilogue (`exec`, `exit`, a signal
+        // kill) the side file is absent and everything below degrades to the
+        // legacy last-stage behavior. A missing capture never fails the call.
+        const pipePlan = planPipeCapture(toRun);
+        let wrappedCommand = toRun;
+        let pipeDir: string | undefined;
+        if (pipePlan.hasPipe) {
+          try {
+            await mkdir("/tmp/dsh", { recursive: true });
+            pipeDir = await mkdtemp(join("/tmp/dsh", "pipestatus-"));
+            const statusFile = shellQuote(join(pipeDir, "status"));
+            // One command saves BOTH facts: $? and PIPESTATUS each die with
+            // the next command, so neither survives a two-step save — the
+            // expansions below all read the verdict of toRun itself. The
+            // printf then reports the saved copy, never the live array.
+            wrappedCommand =
+              `set -o pipefail\n${toRun}\n` +
+              `__dsh_pipe_exit=$? __dsh_pipe_stages=("\${PIPESTATUS[@]}")\n` +
+              `printf '%s' "\${__dsh_pipe_stages[*]}" > ${statusFile} 2>/dev/null || true\n` +
+              `exit $__dsh_pipe_exit`;
+          } catch {
+            pipeDir = undefined;
+            wrappedCommand = toRun;
+          }
+        }
+
         const result = await ctx.shell.run(
           ctx.shell.resolve({
             ...request,
+            command: wrappedCommand,
             ...(args.timeoutMs !== undefined ? { timeoutMs: args.timeoutMs } : {}),
             ...(exec.signal ? { signal: exec.signal } : {}),
           }),
         );
-        let text = renderShellResult(result);
+        // Stage statuses, when the capture survived. A signal kill cannot
+        // have run the epilogue to a trustworthy state, so its markers keep
+        // the legacy signal reading instead of stage data.
+        let pipeStages: PipeStageStatus[] | undefined;
+        if (pipeDir !== undefined) {
+          try {
+            if (result.signal === null) {
+              const raw = (await readFile(join(pipeDir, "status"), "utf8")).trim();
+              const codes = raw
+                .split(/\s+/)
+                .map((s) => Number(s))
+                .filter((n) => Number.isInteger(n));
+              if (codes.length > 0) {
+                pipeStages = codes.map((exitCode, i) => ({
+                  ...(pipePlan.names !== null && pipePlan.names[i] !== undefined
+                    ? { name: pipePlan.names[i] as string }
+                    : {}),
+                  exitCode,
+                }));
+              }
+            }
+          } catch {
+            pipeStages = undefined;
+          } finally {
+            await rm(pipeDir, { recursive: true, force: true }).catch(() => {});
+          }
+        }
+        // The REPORTED exit code comes from the stages, not from bash's
+        // last-stage default: a genuine non-final failure surfaces, while the
+        // benign SIGPIPE idiom stays silent. An explicit script-level success
+        // ($? 0 via `!`, `||`, or the user's own `set +o pipefail`) is never
+        // overridden — the user inverted the verdict on purpose.
+        const reportedExit =
+          pipeStages !== undefined && result.signal === null
+            ? result.exitCode === 0
+              ? 0
+              : decidePipeExit(pipeStages.map((s) => s.exitCode))
+            : result.exitCode;
+        let text = renderShellResult({ ...result, exitCode: reportedExit });
+        // The named list is data rendered once, not a second signal: it
+        // prints only when a stage actually failed, never on a fully
+        // successful pipeline, and no reader scrapes it back out of the text
+        // (the stages travel in the value and in presentationMeta instead).
+        if (pipeStages !== undefined && reportedExit !== 0 && reportedExit !== null) {
+          text += `\n[exit codes: ${formatPipeStages(pipeStages)}]`;
+        }
         if (outcome.ranNote !== undefined) text += `\n\nbash-guard: ${outcome.ranNote}`;
-        return { text, ran: toRun, rewritten: outcome.rewritten };
+        return {
+          text,
+          ran: toRun,
+          rewritten: outcome.rewritten,
+          exitCode: reportedExit,
+          denied: result.sandbox?.denied === true,
+          ...(pipeStages !== undefined ? { pipeStages } : {}),
+        };
       },
       presentCall: (args) => ({
         card: "terminal",

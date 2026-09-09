@@ -26327,8 +26327,18 @@ var compactionViewsProjection = {
 
 // plugins/tool-render/src/guard.ts
 var import_yaml = __toESM(require_dist(), 1);
+var GUARD_APPROVAL_KIND = "bash-guard";
+var HOST_ESCALATION_PREFIX = "escalate sandbox to ";
+function isHostEscalationReason(reason) {
+  return typeof reason === "string" && reason.startsWith(HOST_ESCALATION_PREFIX);
+}
+function isRetiredEscalationPrompt(reason) {
+  return typeof reason === "string" && reason.startsWith("bash-guard: escalate this bash command from ");
+}
 function isBashGuardReason(reason) {
   if (typeof reason !== "string") return false;
+  if (isHostEscalationReason(reason)) return false;
+  if (isRetiredEscalationPrompt(reason)) return false;
   if (reason.startsWith("bash-guard:")) return true;
   var result;
   try {
@@ -26338,7 +26348,7 @@ function isBashGuardReason(reason) {
   }
   if (result === null || typeof result !== "object" || Array.isArray(result)) return false;
   const record2 = result;
-  return typeof record2.summary === "string";
+  return record2.kind === GUARD_APPROVAL_KIND;
 }
 
 // plugins/tool-render/src/guarded-approvals.ts
@@ -26352,10 +26362,12 @@ var viewSchema2 = external_exports.object({
 }).nullable();
 var guardedApprovalsProjection = {
   key: GUARDED_APPROVALS_KEY,
-  // Version 4: entries now keep the guard approval's raw reason for the
-  // verdict-badge tooltip, so the version-3 state (no reasons) is stale and
-  // the log must be replayed.
-  stateVersion: 4,
+  // Version 5: the guard test now keys on the explicit `kind`
+  // discriminator instead of the incidental `summary` shape, so the
+  // version-4 state still carries escalation callIds poisoned by the old
+  // shape match and the log must be replayed. Entries keep the guard
+  // approval's raw reason for the verdict-badge tooltip.
+  stateVersion: 5,
   schema: viewSchema2,
   init() {
     return { entries: [] };
