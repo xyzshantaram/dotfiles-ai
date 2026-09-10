@@ -129,12 +129,19 @@
    (widths set inline as --dsh-q-bright/--dsh-q-dull, capped at four steps
    each). An outline cannot stack, hence box-shadow: the bright band paints
    inside the dull one, and the card's own shadow rides underneath so
-   disabling the rings (attribute absent) changes nothing. The doubled
-   attribute outranks the card's own single-class shadow rule regardless of
-   style tag order. The composer stays a normal editable input; these are
-   additive styling only. The fade is COMPOSER-ONLY by owner decision: tool
-   call cards are durable records whose outlines are the record's mark, so
-   they keep theirs permanently. */
+   disabling the rings (attribute absent) changes nothing.
+
+   The specificity note that used to sit here — that the doubled attribute
+   outranks the card's own single-class shadow rule regardless of style tag
+   order — described the OLD mechanism and was removed with it (#132). This
+   rule no longer competes for `box-shadow` at all: it fills one slot of a
+   list approval-comment composes, so there is nothing left to outrank and
+   ordering no longer decides anything.
+
+   The composer stays a normal editable input; these are additive styling
+   only. The fade is COMPOSER-ONLY by owner decision: tool call cards are
+   durable records whose outlines are the record's mark, so they keep theirs
+   permanently. */
 /* #132: FILL THE QUESTION SLOT, DO NOT REPLACE THE WHOLE PROPERTY.
    This rule used to declare `box-shadow` outright. Because box-shadow is a
    single property, that REPLACED approval-comment's composed list, so while
