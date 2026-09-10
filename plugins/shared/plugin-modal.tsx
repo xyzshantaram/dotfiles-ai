@@ -5,6 +5,13 @@
  * modal's STRUCTURE and its STYLING, which is the whole point: two callers
  * cannot drift apart because neither one gets to decide either.
  *
+ * RUNTIME DIRECTION (#93). This file stays the component's SINGLE SOURCE,
+ * but it is no longer the seam: `plugins/modal` mounts one container into
+ * `shell.overlay` that renders THIS component and publishes it at
+ * `window.__dshModal__` (versioned, like `plugins/toast`). Direct imports
+ * keep working until each consumer migrates onto that global; nothing here
+ * changes when they do, because the component never knew who rendered it.
+ *
  * Two standard sizes, and nothing else (`size`):
  *
  *   - "full" (the default) -- the settings-panel spec (#35): width 800px,
