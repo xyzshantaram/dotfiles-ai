@@ -10,7 +10,14 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -97,5 +104,83 @@ describe("step_sync_guard_rules mirrors the guards directory (#128)", () => {
     expect(readFileSync(join(dshHome, "plugins", "guards", "profile-planning"), "utf8")).toBe(
       "planning\n",
     );
+  });
+});
+
+/**
+ * step_drop_code_preset removes the shipped code preset (#139).
+ *
+ * Driven through a FAKE `dsh` on PATH rather than a production override:
+ * the step derives its package dir as dirname(dirname(realpath(dsh))), so a
+ * temp bin/dsh makes the derivation resolve into a temp package. That keeps
+ * the test faithful to the real code path — no seam exists only for tests,
+ * which is how a seam ends up untested itself.
+ *
+ * Never executes sync.sh as a whole: it mutates $DSH_HOME.
+ */
+describe("step_drop_code_preset removes the code agent preset (#139)", () => {
+  function extractStep(name: string): string {
+    const text = readFileSync(syncSh, "utf8");
+    const start = text.indexOf(`${name}() {`);
+    expect(start, `${name}() not found in sync.sh`).toBeGreaterThan(-1);
+    const end = text.indexOf("\n}\n", start);
+    expect(end, `end of ${name}() not found`).toBeGreaterThan(start);
+    return text.slice(start, end + 3);
+  }
+
+  /** A temp package with a fake `dsh` binary, plus the presets it ships. */
+  function makePkg(presets: readonly string[]): { root: string; pkg: string } {
+    const root = mkdtempSync(join(tmpdir(), "code-preset-"));
+    const pkg = join(root, "pkg");
+    mkdirSync(join(pkg, "bin"), { recursive: true });
+    writeFileSync(join(pkg, "bin", "dsh"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    for (const name of presets) {
+      mkdirSync(join(pkg, "config", "agent-presets", name), { recursive: true });
+      writeFileSync(join(pkg, "config", "agent-presets", name, "agent.cordis.yml"), "- id: x\n");
+    }
+    return { root, pkg };
+  }
+
+  function runStep(pkg: string): void {
+    const body = extractStep("step_drop_code_preset");
+    const script = [
+      "set -euo pipefail",
+      `PATH=${JSON.stringify(join(pkg, "bin"))}:$PATH`,
+      "short_path() { echo \"$1\"; }",
+      body,
+      "step_drop_code_preset",
+    ].join("\n");
+    execFileSync("bash", ["-c", script], { stdio: "pipe" });
+  }
+
+  it("removes the code preset and leaves the others alone", () => {
+    const { pkg } = makePkg(["code", "standard", "aidos", "cordis.bak", "minimal.bak"]);
+    runStep(pkg);
+    const presets = join(pkg, "config", "agent-presets");
+    expect(existsSync(join(presets, "code"))).toBe(false);
+    // The .bak dirs and the live presets are explicitly NOT collateral.
+    for (const keep of ["standard", "aidos", "cordis.bak", "minimal.bak"]) {
+      expect(existsSync(join(presets, keep)), `${keep} must survive`).toBe(true);
+    }
+  });
+
+  it("is idempotent: absent is success, so a rerun converges", () => {
+    // sync runs repeatedly; a step that errors on an already-done state
+    // fails the whole run for no reason.
+    const { pkg } = makePkg(["standard"]);
+    expect(() => runStep(pkg)).not.toThrow();
+    expect(() => runStep(pkg)).not.toThrow();
+  });
+
+  it("is registered in STEPS so it actually runs", () => {
+    // A step nobody calls is the same as no step, and nothing else would
+    // notice: the tripwire would simply fire forever.
+    const text = readFileSync(syncSh, "utf8");
+    expect(text).toContain("|step_drop_code_preset");
+  });
+
+  it("keeps a tripwire, because a dsh reinstall re-extracts the preset", () => {
+    const text = readFileSync(syncSh, "utf8");
+    expect(text).toMatch(/agent-presets\/code.{0,200}rerun sync/s);
   });
 });
