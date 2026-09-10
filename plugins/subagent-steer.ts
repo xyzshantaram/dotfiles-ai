@@ -135,6 +135,7 @@ interface AgentsService {
 }
 interface SubagentsService {
   followup(parent: unknown, childId: unknown, message: unknown, options?: unknown): Promise<unknown>;
+  interrupt(agentId: unknown, by: unknown): unknown;
 }
 
 /** Read `child.session.header.parentSession` without trusting any hop. */
@@ -164,7 +165,61 @@ export function apply(ctx: Context) {
     | SubagentsService
     | undefined;
 
-  (ctx as unknown as { tools: { register(t: unknown): unknown } }).tools.register(
+  const tools = (ctx as unknown as { tools: { register(t: unknown): unknown } }).tools;
+
+  /*
+   * RE-PROVIDED, NOT REDESIGNED (#129).
+   *
+   * The shipped `tool-subagent-control` row registers TWO tools —
+   * `send_message` AND `interrupt_agent` — and sync.sh disables the whole
+   * row so this plugin can own `send_message`. Disabling a row is
+   * all-or-nothing, so `interrupt_agent` would simply VANISH unless it is
+   * re-provided here. That is a regression a test of send_message could
+   * never catch: the tool is not wrong, it is absent.
+   *
+   * So this is a deliberate verbatim delegate. The behaviour, the parameter,
+   * the output shape and the description are the shipped ones, because
+   * nothing about interrupt_agent is changing — only its registrar. Its
+   * description remains TRUE under steer delivery: cancel keeps both inbox
+   * lists, so "messages already queued for the agent stay parked until a
+   * later send_message" still holds.
+   */
+  tools.register(
+    defineTool({
+      name: "interrupt_agent",
+      description:
+        "Request cancellation of a background agent's current turn by its agent id. The target may be your direct child or a deeper agent created under you. Only the current turn stops: messages already queued for the agent stay parked until a later send_message, agents it started keep running, and the agent itself stays available for follow-ups. This call returns as soon as the stop request is accepted, so the target may keep running briefly; interrupting an agent that already finished is an accepted no-op.",
+      parameters: {
+        agent_id: {
+          type: "string",
+          required: true,
+          description: "The agent id of the running agent to interrupt.",
+        },
+      },
+      output: {
+        schema: { type: "string" },
+        render: (args: any, _value: unknown) => [
+          { type: "text", text: `interrupt requested for agent ${args.agent_id}` },
+        ],
+      },
+      async execute(args: any, exec: any) {
+        if (subagents === undefined) {
+          throw new Error("interrupt_agent is not available in this composition");
+        }
+        const caller = exec?.agent;
+        if (caller === undefined || caller === null) {
+          throw new Error("interrupt_agent requires a calling agent (exec.agent was undefined)");
+        }
+        // `kind: "ancestor"` is the shipped authorization shape: the manager
+        // checks the caller is an ancestor of the target. Unlike steer, this
+        // path is authorized by the manager, so we do not re-implement it.
+        subagents.interrupt(args.agent_id, { kind: "ancestor", agent: caller });
+        return `interrupt requested for agent ${args.agent_id}`;
+      },
+    }) as unknown,
+  );
+
+  tools.register(
     defineTool({
       name: "send_message",
       description:
