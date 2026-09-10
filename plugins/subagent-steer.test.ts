@@ -9,6 +9,9 @@
  * escalation, not a UX regression, and it would pass every happy-path test.
  */
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   decideDelivery,
   isRunning,
@@ -242,5 +245,53 @@ describe("resultTextFor tells the caller when the message actually lands", () =>
 
   it("passes a refusal reason through unchanged", () => {
     expect(resultTextFor({ kind: "refuse", reason: "nope" }, "sub-1", false)).toBe("nope");
+  });
+});
+
+/**
+ * THE MOUNTING CONTRACT (#129).
+ *
+ * `ctx.tools.register` THROWS on a duplicate name within a layer, so this
+ * shadow only works if sync.sh disables the shipped registrar. That is a
+ * two-sided arrangement across two files, and neither side fails visibly on
+ * its own: register without disabling and the plugin tree throws at boot;
+ * disable without registering and send_message vanishes entirely. So the
+ * pairing is asserted rather than remembered.
+ *
+ * Reads sync.sh as source, the same technique plugins/sync.test.ts uses
+ * (it deliberately refuses to EXECUTE the script, which mutates $HOME).
+ */
+describe("sync.sh mounts the shadow and retires the builtin together", () => {
+  const raw = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "..", "sync.sh"),
+    "utf8",
+  );
+  const code = raw.replace(/^\s*#.*$/gm, "");
+
+  it("registers the plugin into the web profile", () => {
+    expect(code).toContain("id: subagent-steer");
+    expect(code).toContain("plugins/subagent-steer.js");
+  });
+
+  it("disables the builtin control row in BOTH presets", () => {
+    // The aidos preset (which this deployment runs) and the shipped standard
+    // preset each carry their own row; patching one leaves the other throwing.
+    const disables = code.match(/preset_disable_tool[^\n]*tool-subagent-control/g) ?? [];
+    expect(disables.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("NEVER disables tool-subagent-list-agents", () => {
+    // list_agents is a SEPARATE shipped row and is not shadowed. Disabling it
+    // would remove a working tool for no reason — the surgery is narrower
+    // than "turn off subagent control".
+    expect(code).not.toMatch(/preset_disable_tool[^\n]*tool-subagent-list-agents/);
+  });
+
+  it("keeps a tripwire for each preset, because a reinstall reverts the patch", () => {
+    // Editing INSTALLED files is not durable: re-extracting the preset
+    // silently restores the builtin row, and the failure then looks like a
+    // duplicate-registration crash at boot with no obvious cause.
+    const trips = code.match(/preset_tool_enabled[^\n]*tool-subagent-control/g) ?? [];
+    expect(trips.length).toBeGreaterThanOrEqual(2);
   });
 });
