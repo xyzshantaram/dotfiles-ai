@@ -9,6 +9,9 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   explainMissingRate,
   formatApproxCost,
@@ -226,5 +229,58 @@ describe("explainMissingRate", () => {
     expect(new Set(labels).size).toBe(3);
     // And none of them may be the old catch-all.
     for (const label of labels) expect(label).not.toBe("unknown price");
+  });
+});
+
+/**
+ * THE RENDER PATH, pinned (#134 review SHOULD-FIX; #99's original complaint).
+ *
+ * Every test above covers the CLASSIFIER. None covered the WIRING, so a
+ * future edit could reintroduce a catch-all string in the panel, or drop the
+ * explanatory title, and this suite would stay green — which is precisely
+ * the gap #99's review_fail recorded about the unknown-price render path.
+ *
+ * There is no DOM in this suite, so this reads client.tsx as source. That is
+ * the same technique the repo already uses where the artefact is not
+ * executable here (plugins/session-archive/src/archive.test.ts,
+ * plugins/composer-approvals/src/rings.test.ts). It pins the WIRING, not the
+ * pixels; only a live look proves the panel reads well.
+ */
+describe("the panel is wired to the explainer, not to a catch-all string", () => {
+  const raw = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "client.tsx"), "utf8");
+  // Comments legitimately discuss the old string; assertions are about code.
+  const source = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+  it("never renders the old catch-all", () => {
+    expect(source).not.toContain('"unknown price"');
+  });
+
+  it("computes the explanation and renders its label", () => {
+    expect(source).toMatch(/explainMissingRate\s*\(/);
+    expect(source).toMatch(/missing\.label/);
+  });
+
+  it("passes the actionable sentence through as a title", () => {
+    // Without this the reader gets a better word but no way to act on it.
+    //
+    // ASSERT THE CALL, NOT THE MENTION. The first version of this test
+    // checked only that `missing.detail` appeared SOMEWHERE in the file, and
+    // it SURVIVED a mutation that severed the detail from the row — because
+    // the same expression also appears at its assignment site. A guard that
+    // passes against the bug it exists to catch is worse than no guard, so
+    // this asserts the cost row actually receives a title argument.
+    const call = /row\(\s*"cost"\s*,[^)]*\)/s.exec(source);
+    expect(call).not.toBeNull();
+    const args = (call as RegExpExecArray)[0];
+    expect(args).toMatch(/detail/);
+    expect(args.split(",").length).toBeGreaterThanOrEqual(5);
+    // And row() must APPLY it rather than accept and ignore it.
+    expect(source).toMatch(/title:\s*title/);
+  });
+
+  it("feeds the scope status in, so a dead transport is detectable at all", () => {
+    // Dropping this argument silently downgrades every transport failure to
+    // "unpriced model" — the wrong half, and invisible.
+    expect(source).toMatch(/pricesSnap[^;]*\.status/s);
   });
 });
