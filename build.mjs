@@ -74,6 +74,19 @@ await build({
   logLevel: "info",
 });
 
+// subagent-steer (#129): a HOST-only tool plugin. No require shim needed —
+// it bundles only its own source plus @deepseek-ai externals, with none of
+// the bare-specifier `require` problem bash-guard has to work around.
+await build({
+  entryPoints: [join(here, "plugins/subagent-steer.ts")],
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  external: ["@deepseek-ai/*", "node:*"],
+  outfile: join(here, "plugins/subagent-steer.js"),
+  logLevel: "info",
+});
+
 // CLIENT plugin halves bundle to a temp file, then get wrapped in the
 // module-loader facade and written to their final path. The esbuild
 // options are identical for every client half (browser CJS, react and
