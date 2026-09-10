@@ -40,6 +40,16 @@ var inject = [];
 function service(ctx, name2) {
   return ctx.get(name2);
 }
+function titleOf(cache, header) {
+  if (cache === void 0) return null;
+  try {
+    const snapshot = cache.cachedSnapshot(header);
+    const title = snapshot?.values?.title;
+    return typeof title === "string" && title !== "" ? title : null;
+  } catch {
+    return null;
+  }
+}
 function makeListHandler(ctx) {
   return async (_req, res) => {
     const workspace = service(ctx, "workspaceRegistry");
@@ -52,6 +62,10 @@ function makeListHandler(ctx) {
     try {
       const archived = new Set(workspace.archivedSessionIds);
       const sessions = service(ctx, "sessions");
+      const projectionCache = service(
+        ctx,
+        "sessionProjectionCache"
+      );
       const headers = await persistence.list();
       const rows = [];
       for (const header of headers) {
@@ -66,27 +80,15 @@ function makeListHandler(ctx) {
         }
         rows.push({
           id: header.id,
-          title: null,
+          // Read from the in-memory cache row, in this loop, with no await:
+          // the previous implementation gathered ids here and then fanned
+          // out a full log load per id after the loop.
+          title: titleOf(projectionCache, header),
           cwd: header.cwd ?? null,
           createdAt: header.createdAt,
           size,
           live: sessions?.get(header.id) !== void 0
         });
-      }
-      const sessionQuery = service(ctx, "sessionQuery");
-      if (sessionQuery !== void 0 && rows.length > 0) {
-        const observations = await sessionQuery.readTitleSnapshots(rows.map((row) => row.id));
-        const titles = /* @__PURE__ */ new Map();
-        for (const observation of observations) {
-          if (observation.status !== "fulfilled") continue;
-          const title = observation.value.title;
-          if (title === void 0) continue;
-          titles.set(observation.sessionId, title.title);
-        }
-        for (const row of rows) {
-          const title = titles.get(row.id);
-          if (title !== void 0) row.title = title;
-        }
       }
       sendJson(res, 200, { ok: true, sessions: rows });
       ctx.logger.info(`listed ${rows.length} archived sessions`);
@@ -219,5 +221,6 @@ export {
   deleteArchivedSession,
   inject,
   makeBatchDeleteHandler,
-  name
+  name,
+  titleOf
 };
