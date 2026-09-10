@@ -151,6 +151,38 @@ describe("decideDelivery: refusals are the security surface", () => {
     expect(out.kind).toBe("refuse");
   });
 
+  it("refuses falsy and non-string ids that happen to match", () => {
+    // Live-probed by the #129 reviewer against the built code: the first
+    // guard excluded undefined/null/"" only, so `{id: 0}` against a child
+    // whose parentSession was `0` compared equal and STEERED. Ids are
+    // harness-issued strings, so nothing exploitable followed — but a guard
+    // whose contract reads "usable id" must not admit these.
+    for (const id of [0, false, NaN, 123, Symbol("s") as unknown]) {
+      const parent = { id: id };
+      const out = decideDelivery({
+        parent: parent,
+        liveParent: parent,
+        child: { status: "running", session: { header: { parentSession: id } } },
+        childParentSession: id,
+      });
+      expect(out.kind).toBe("refuse");
+    }
+  });
+
+  it("refuses an object id even when both sides are the same object", () => {
+    // Identity would make `===` true; only a non-empty string is usable.
+    const shared = { not: "a string" };
+    const parent = { id: shared };
+    expect(
+      decideDelivery({
+        parent: parent,
+        liveParent: parent,
+        child: { status: "running", session: { header: { parentSession: shared } } },
+        childParentSession: shared,
+      }).kind,
+    ).toBe("refuse");
+  });
+
   it("does not authorize on two undefined ids matching each other", () => {
     // The nastiest shape: a parent with no id and a child with no recorded
     // parent would compare equal under a naive `===`.

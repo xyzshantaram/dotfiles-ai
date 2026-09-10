@@ -1206,6 +1206,16 @@ step_disable_preset_builtin_tools() {
 	preset_disable_tool "$preset_yaml" "tool-bash"
 	preset_disable_tool "$preset_yaml" "tool-goal"
 	preset_disable_tool "$preset_yaml" "tool-subagent-control"
+	# THE `code` PRESET IS DELIBERATELY NOT PATCHED, and the reason is recorded
+	# so the next reader does not treat it as an oversight (#129 review). That
+	# preset carries BOTH tool-bash (:51) and tool-subagent-control (:181), and
+	# sync.sh has never patched it for either -- the gap predates this ticket
+	# and is shared with bash-guard. This composition does not compose the code
+	# preset, so no session here has two registrars for one name. Extending the
+	# patch for tool-subagent-control ALONE would diverge from that precedent
+	# and leave tool-bash still colliding, which is worse than a stated gap.
+	# If the code preset is ever composed here, BOTH must be disabled together
+	# and both need tripwires; do not add one without the other.
 }
 
 # Relocate the attachment picker button. dsh-paste-to-path mounts its
