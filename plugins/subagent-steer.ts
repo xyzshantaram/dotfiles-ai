@@ -99,7 +99,13 @@ export function decideDelivery(input: DeliveryInput): Delivery {
   // objects must never authorize each other, so an unusable id is refused
   // before any comparison happens.
   const parentId = parent.id;
-  if (parentId === undefined || parentId === null || parentId === "") {
+  // A USABLE ID IS A NON-EMPTY STRING, nothing looser. The first version
+  // excluded undefined/null/"" only, which a reviewer live-probed and broke:
+  // `{id: 0}` against a child whose parentSession is `0` compared equal and
+  // STEERED. Ids are harness-issued strings so nothing exploitable follows,
+  // but a guard whose contract is "usable id" must not admit 0, false, NaN
+  // or an object that happens to be identical on both sides.
+  if (typeof parentId !== "string" || parentId === "") {
     return { kind: "refuse", reason: "the calling agent has no usable id" };
   }
   if (input.childParentSession !== parentId) {
@@ -158,12 +164,15 @@ export const name = "subagent-steer";
 export const inject = ["tools"];
 
 export function apply(ctx: Context) {
-  const agents = (ctx as unknown as { get(n: string): unknown }).get("agents") as
-    | AgentsService
-    | undefined;
-  const subagents = (ctx as unknown as { get(n: string): unknown }).get("subagents") as
-    | SubagentsService
-    | undefined;
+  /*
+   * LOOKED UP PER CALL, not snapshotted at apply. A reviewer flagged the
+   * snapshot: if apply ever runs before those services are provided, the
+   * plugin would report "not available" permanently, with nothing to
+   * recover it. see.ts and profiles.ts resolve services lazily for the same
+   * reason. The cost is one map read per invocation.
+   */
+  const svc = <T,>(n: string): T | undefined =>
+    (ctx as unknown as { get(n: string): unknown }).get(n) as T | undefined;
 
   const tools = (ctx as unknown as { tools: { register(t: unknown): unknown } }).tools;
 
@@ -196,13 +205,24 @@ export function apply(ctx: Context) {
           description: "The agent id of the running agent to interrupt.",
         },
       },
+      // THE SHIPPED OUTPUT SHAPE, restored. My first re-provision quietly
+      // returned a plain string where the shipped tool returns
+      // `{accepted: true}`. "Verbatim delegate" has to mean the WIRE too:
+      // a caller or card reading `.accepted` would have silently seen
+      // undefined, which is the same class of invisible break as the missing
+      // registrar this whole commit exists to repair.
       output: {
-        schema: { type: "string" },
+        schema: {
+          type: "object",
+          additionalProperties: false,
+          properties: { accepted: { type: "boolean", required: true } },
+        },
         render: (args: any, _value: unknown) => [
           { type: "text", text: `interrupt requested for agent ${args.agent_id}` },
         ],
       },
       async execute(args: any, exec: any) {
+        const subagents = svc<SubagentsService>("subagents");
         if (subagents === undefined) {
           throw new Error("interrupt_agent is not available in this composition");
         }
@@ -214,7 +234,7 @@ export function apply(ctx: Context) {
         // checks the caller is an ancestor of the target. Unlike steer, this
         // path is authorized by the manager, so we do not re-implement it.
         subagents.interrupt(args.agent_id, { kind: "ancestor", agent: caller });
-        return `interrupt requested for agent ${args.agent_id}`;
+        return { accepted: true };
       },
     }) as unknown,
   );
@@ -241,6 +261,8 @@ export function apply(ctx: Context) {
         render: (_args: unknown, value: string) => [{ type: "text", text: value }],
       },
       async execute(args: any, exec: any) {
+        const agents = svc<AgentsService>("agents");
+        const subagents = svc<SubagentsService>("subagents");
         if (agents === undefined || subagents === undefined) {
           throw new Error("send_message is not available in this composition");
         }

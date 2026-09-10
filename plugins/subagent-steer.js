@@ -13,7 +13,7 @@ function decideDelivery(input) {
   }
   if (input.child === void 0 || input.child === null) return { kind: "followup" };
   const parentId = parent.id;
-  if (parentId === void 0 || parentId === null || parentId === "") {
+  if (typeof parentId !== "string" || parentId === "") {
     return { kind: "refuse", reason: "the calling agent has no usable id" };
   }
   if (input.childParentSession !== parentId) {
@@ -46,8 +46,7 @@ function isRunning(child) {
 var name = "subagent-steer";
 var inject = ["tools"];
 function apply(ctx) {
-  const agents = ctx.get("agents");
-  const subagents = ctx.get("subagents");
+  const svc = (n) => ctx.get(n);
   const tools = ctx.tools;
   tools.register(
     defineTool({
@@ -60,13 +59,24 @@ function apply(ctx) {
           description: "The agent id of the running agent to interrupt."
         }
       },
+      // THE SHIPPED OUTPUT SHAPE, restored. My first re-provision quietly
+      // returned a plain string where the shipped tool returns
+      // `{accepted: true}`. "Verbatim delegate" has to mean the WIRE too:
+      // a caller or card reading `.accepted` would have silently seen
+      // undefined, which is the same class of invisible break as the missing
+      // registrar this whole commit exists to repair.
       output: {
-        schema: { type: "string" },
+        schema: {
+          type: "object",
+          additionalProperties: false,
+          properties: { accepted: { type: "boolean", required: true } }
+        },
         render: (args, _value) => [
           { type: "text", text: `interrupt requested for agent ${args.agent_id}` }
         ]
       },
       async execute(args, exec) {
+        const subagents = svc("subagents");
         if (subagents === void 0) {
           throw new Error("interrupt_agent is not available in this composition");
         }
@@ -75,7 +85,7 @@ function apply(ctx) {
           throw new Error("interrupt_agent requires a calling agent (exec.agent was undefined)");
         }
         subagents.interrupt(args.agent_id, { kind: "ancestor", agent: caller });
-        return `interrupt requested for agent ${args.agent_id}`;
+        return { accepted: true };
       }
     })
   );
@@ -100,6 +110,8 @@ function apply(ctx) {
         render: (_args, value) => [{ type: "text", text: value }]
       },
       async execute(args, exec) {
+        const agents = svc("agents");
+        const subagents = svc("subagents");
         if (agents === void 0 || subagents === void 0) {
           throw new Error("send_message is not available in this composition");
         }
