@@ -74,6 +74,14 @@
   --composer-ring-escalated: 0 0 0 3px transparent;
   --composer-ring-rewrite: 0 0 0 6px transparent;
   --composer-ring-question: 0 0 0 9px transparent;
+  /* THE OUTERMOST APPROVAL SPREAD, published for the question slot (#132).
+     Shadow spreads are cumulative from the border box, so a question band
+     that starts at 0 would paint UNDER the approval rings rather than
+     outside them. composer-approvals offsets its bands by this value, which
+     is why it is declared here beside the rings it measures rather than
+     guessed there. Kept in step with the two rules below: whenever a ring
+     slot's spread changes, this changes with it. */
+  --composer-ring-outer: 0px;
   box-shadow:
     var(--composer-ring-escalated),
     var(--composer-ring-rewrite),
@@ -82,9 +90,11 @@
 }
 [data-composer-seat]:has(.approval-comment-shadow[data-escalated]) [data-composer-card] {
   --composer-ring-escalated: 0 0 0 3px var(--dsh-outline-escalated);
+  --composer-ring-outer: 3px;
 }
 [data-composer-seat]:has(.approval-comment-shadow[data-rewrite]) [data-composer-card] {
   --composer-ring-rewrite: 0 0 0 6px var(--dsh-outline-guard);
+  --composer-ring-outer: 6px;
 }
 /* Shadow spreads are cumulative from the border box, so the 6px rewrite slot
    reads as a 6px ring when it is the ONLY pending kind (the transparent 3px
@@ -96,4 +106,5 @@
   )
   [data-composer-card] {
   --composer-ring-rewrite: 0 0 0 3px var(--dsh-outline-guard);
+  --composer-ring-outer: 3px;
 }

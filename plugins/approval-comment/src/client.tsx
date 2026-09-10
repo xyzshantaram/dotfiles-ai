@@ -37,13 +37,16 @@
 
 /** The browser module table resolves these platform modules. */
 import react from "react";
-import { parse } from "yaml";
 import {
   injectStyle,
   mergeCss,
   PERMISSION_OUTLINE_CSS,
   HLJS_THEME_CSS,
 } from "../../shared/client-util";
+/** Bash-guard classification, single-sourced in shared with tool-render
+ * (#130): this file must not carry its own copy of the predicate — the copy
+ * is how #105 survived two fixes here, painting escalations blue. */
+import { isBashGuardReason } from "../../shared/guard-reason";
 import localCss from "./client.module.css";
 
 /** Stable plugin identity, also the loader entry id in cordis.patch.yml. */
@@ -59,25 +62,6 @@ injectStyle(PLUGIN_NAME, STYLE_TAG_ID, mergeCss(localCss));
 injectStyle(PLUGIN_NAME, "dsh-permission-outline", PERMISSION_OUTLINE_CSS);
 /** Shared highlight.js token colors. The id matches tool-render's injector, so only one tag exists. */
 injectStyle(PLUGIN_NAME, "dsh-hljs-theme", HLJS_THEME_CSS);
-
-/** Whether an approval's reason was raised by bash-guard. Verbatim twin of
- * tool-render's ./guard classifier (bundles cannot cross-import): the shape
- * the guard actually emits is plain text starting with "bash-guard:"; the
- * YAML payload with a string `summary` stays accepted for forward
- * compatibility. A YAML parse alone is not a test — the plain text parses
- * as YAML too — so each shape gets its own branch. */
-function isBashGuardReason(reason) {
-  if (typeof reason !== "string") return false;
-  if (reason.indexOf("bash-guard:") === 0) return true;
-  var parsed;
-  try {
-    parsed = parse(reason);
-  } catch (error) {
-    return false;
-  }
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return false;
-  return typeof parsed.summary === "string";
-}
 
 /** Chain routing: claim the composer takeover while an approval wait is
  * pending, and classify WHY it was asked. The elector input carries the

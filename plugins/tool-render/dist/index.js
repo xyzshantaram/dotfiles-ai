@@ -26325,8 +26325,8 @@ var compactionViewsProjection = {
   }
 };
 
-// plugins/tool-render/src/guard.ts
-var import_yaml = __toESM(require_dist(), 1);
+// plugins/shared/guard-reason.ts
+var import_yaml = __toESM(require_dist());
 var GUARD_APPROVAL_KIND = "bash-guard";
 var HOST_ESCALATION_PREFIX = "escalate sandbox to ";
 function isHostEscalationReason(reason) {
