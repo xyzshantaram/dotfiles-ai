@@ -134,6 +134,12 @@ step_write_web_patch() {
       name: $HERE/plugins/bash-guard.js
       config:
         guardsDir: $DSH_HOME/plugins/guards
+    # subagent-steer registers its own `send_message` (#129), so the preset's
+    # builtin tool-subagent-control row is disabled below -- two registrars
+    # for one tool name would throw on the duplicate. tool-subagent-list-agents
+    # is a SEPARATE row and stays enabled: list_agents is unchanged.
+    - id: subagent-steer
+      name: $HERE/plugins/subagent-steer.js
     - id: manifest-guard
       name: $HERE/plugins/manifest-guard.js
     - id: package-tool
@@ -828,6 +834,10 @@ step_register_aidos_preset() {
 	# tool-bash row must not also claim that name. Disable it here, right
 	# after the copy, alongside the aidos-tools.js rewrite above.
 	preset_disable_tool "$DSH_HOME/.agent-presets/aidos/agent.cordis.yml" "tool-bash"
+	# subagent-steer registers `send_message` with steer delivery (#129);
+	# the builtin registrar must go or the duplicate name throws. Only the
+	# CONTROL row: tool-subagent-list-agents is separate and keeps working.
+	preset_disable_tool "$DSH_HOME/.agent-presets/aidos/agent.cordis.yml" "tool-subagent-control"
 	cat > "$DSH_HOME/.agent-presets/aidos/aidos-loader.js" <<EOF
 // Installed by sync.sh. Re-exports the aidos-tools plugin bundle from the
 // aidos package installed via \`dsh plugin add\`.
@@ -1189,6 +1199,7 @@ step_disable_preset_builtin_tools() {
 	fi
 	preset_disable_tool "$preset_yaml" "tool-bash"
 	preset_disable_tool "$preset_yaml" "tool-goal"
+	preset_disable_tool "$preset_yaml" "tool-subagent-control"
 }
 
 # Relocate the attachment picker button. dsh-paste-to-path mounts its
@@ -1331,6 +1342,10 @@ step_verify_preset_tool_disabled() {
 			echo "  ERROR: tool-bash is still enabled in $(short_path "$aidos_yaml")" >&2
 			bad=1
 		fi
+		if preset_tool_enabled "$aidos_yaml" "tool-subagent-control"; then
+			echo "  ERROR: tool-subagent-control is still enabled in $(short_path "$aidos_yaml")" >&2
+			bad=1
+		fi
 	else
 		echo "  WARNING: $aidos_yaml not found; skipping aidos check."
 	fi
@@ -1345,6 +1360,10 @@ step_verify_preset_tool_disabled() {
 			fi
 			if preset_tool_enabled "$std_yaml" "tool-goal"; then
 				echo "  ERROR: tool-goal is still enabled in $(short_path "$std_yaml")" >&2
+				bad=1
+			fi
+			if preset_tool_enabled "$std_yaml" "tool-subagent-control"; then
+				echo "  ERROR: tool-subagent-control is still enabled in $(short_path "$std_yaml")" >&2
 				bad=1
 			fi
 			if preset_tool_enabled "$std_yaml" "tool-jobs"; then
