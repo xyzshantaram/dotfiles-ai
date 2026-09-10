@@ -58,6 +58,21 @@ export function apply(ctx: Context): void {
     kind: "prefix",
     path: "/mcp-servers",
     async handler(req, res) {
+      // KNOWN DEFECT, deliberately NOT fixed here (#136 covers the
+      // composer-menu guard; this needs its own decision — see the follow-up
+      // ticket). `currentOrigin` becomes the OAuth redirect_uri, which the
+      // comment above rightly says must match the browser's origin EXACTLY,
+      // yet the scheme below is hardcoded. Behind a TLS-terminating proxy the
+      // browser's origin is https://<host> and this yields http://<host>, so
+      // the redirect_uri mismatches and OAuth cannot complete.
+      //
+      // It is worse than a missing scheme, which is why a one-line patch was
+      // refused: when dsh-remote is gating (its trustProxy defaults to true)
+      // it rewrites BOTH Host and Origin to the loopback authority for every
+      // authenticated request, and stashes the real one on a module-private
+      // Symbol we cannot read. So the browser's true origin is not
+      // recoverable from this request at all, and guessing a scheme would
+      // only make a wrong redirect_uri look plausible.
       const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "127.0.0.1"}`);
       currentOrigin = url.origin;
       const parts = url.pathname.split("/").filter(Boolean);

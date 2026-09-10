@@ -2,6 +2,18 @@
 var webOff = /* @__PURE__ */ new Map();
 var name = "composer-menu";
 var inject = ["webServer", "sessions", "permissionPresets"];
+function isSameOriginPost(originHeader, hostHeader) {
+  if (typeof originHeader !== "string" || originHeader === "") return false;
+  if (typeof hostHeader !== "string" || hostHeader === "") return false;
+  let originHost;
+  try {
+    originHost = new URL(originHeader).host;
+  } catch {
+    return false;
+  }
+  if (originHost === "") return false;
+  return originHost.toLowerCase() === hostHeader.trim().toLowerCase();
+}
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let text = "";
@@ -53,7 +65,7 @@ function apply(ctx) {
       const url = new URL(req.url ?? "/", "http://" + (req.headers.host ?? "127.0.0.1"));
       if (req.method !== "POST") return reply(404, { error: "not found" });
       const readGuardedBody = async () => {
-        if (req.headers.origin !== url.origin) {
+        if (!isSameOriginPost(req.headers.origin, req.headers.host)) {
           reply(403, { error: "cross-origin request refused" });
           return null;
         }
@@ -112,5 +124,6 @@ function apply(ctx) {
 export {
   apply,
   inject,
+  isSameOriginPost,
   name
 };

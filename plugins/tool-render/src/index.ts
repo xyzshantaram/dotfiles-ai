@@ -63,6 +63,11 @@ function apply(ctx: HostContext): () => void {
         res.end(JSON.stringify(body));
       };
 
+      // The "http://" here is a PARSING BASE, not a claim about the scheme:
+      // only searchParams is read below, so a TLS-terminated request parses
+      // identically. Do not copy this line into a place that compares or
+      // publishes url.origin — that is #136 (composer-menu) and the OAuth
+      // redirect_uri defect noted in mcp-servers/src/index.ts.
       const url = new URL(req.url ?? "/", "http://" + (req.headers.host ?? "127.0.0.1"));
       const filePath = url.searchParams.get("path");
       if (req.method !== "GET" || filePath === null || filePath === "")
