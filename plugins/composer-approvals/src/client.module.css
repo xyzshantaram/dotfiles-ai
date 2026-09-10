@@ -135,12 +135,42 @@
    additive styling only. The fade is COMPOSER-ONLY by owner decision: tool
    call cards are durable records whose outlines are the record's mark, so
    they keep theirs permanently. */
+/* #132: FILL THE QUESTION SLOT, DO NOT REPLACE THE WHOLE PROPERTY.
+   This rule used to declare `box-shadow` outright. Because box-shadow is a
+   single property, that REPLACED approval-comment's composed list, so while
+   `data-dsh-qrings` was present a pending bash-guard approval's ring was
+   painted over and simply invisible — and the window is not momentary: the
+   attribute stays through the answered-fade cycle (#106's 2500ms hold plus
+   1600ms fade, ~4.1s AFTER a question is answered). The reported symptom
+   was exactly that: "it only does the questions". It also silently dropped
+   the host's own elevation layer, because the replacement carried
+   `--dsh-shadow-lv2`, which is not the host token (`--dsw-shadow-lv2` is).
+
+   A pending approval blocks an agent mid-command while a pending question
+   does not, so the less consequential signal was winning — an inversion of
+   priority, not merely a cosmetic clash.
+
+   approval-comment owns the composing rule and reserved
+   `--composer-ring-question` for us (its base rule, this file's sibling
+   plugin). Filling one slot means both signals stack instead of racing, and
+   a future fourth signal takes the next slot rather than fighting for the
+   property. THE COUPLING IS DELIBERATE AND NAMED: if approval-comment is
+   ever unmounted, nothing consumes this slot and the question bands stop
+   painting. Both plugins ship together from sync.sh; a bundle that splits
+   them must move the composing base rule somewhere shared. */
 [data-composer-card][data-dsh-qrings] {
-  box-shadow:
-    0 0 0 var(--dsh-q-bright, 0px) #fff,
-    0 0 0 calc(var(--dsh-q-bright, 0px) + var(--dsh-q-dull, 0px))
-      color-mix(in srgb, #fff 45%, transparent),
-    var(--dsh-shadow-lv2, 0 0 0 #0000);
+  /* One custom property may hold several comma-separated shadow layers, so
+     the two bands still occupy exactly one slot in the composed list.
+     Offsets start at --composer-ring-outer (the outermost approval spread,
+     published by approval-comment, 0px when no approval is pending) because
+     shadow spreads are cumulative from the border box: without the offset a
+     question band would paint UNDER a pending approval ring, which is the
+     same masking bug in the other direction. */
+  --composer-ring-question:
+    0 0 0 calc(var(--composer-ring-outer, 0px) + var(--dsh-q-bright, 0px)) #fff,
+    0 0 0
+      calc(var(--composer-ring-outer, 0px) + var(--dsh-q-bright, 0px) + var(--dsh-q-dull, 0px))
+      color-mix(in srgb, #fff 45%, transparent);
   /* The widths arrive as custom properties, so transitioning the consuming
      box-shadow animates the fade while the width change itself stays a
      single style write. Duration arrives inline as --dsh-q-fade (single

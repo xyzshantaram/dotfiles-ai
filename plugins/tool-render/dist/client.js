@@ -16131,7 +16131,7 @@ function parse(src, reviver, options) {
   return doc.toJS(Object.assign({ reviver: _reviver }, options));
 }
 
-// plugins/tool-render/src/guard.ts
+// plugins/shared/guard-reason.ts
 var GUARD_APPROVAL_KIND = "bash-guard";
 var HOST_ESCALATION_PREFIX = "escalate sandbox to ";
 function isHostEscalationReason(reason) {

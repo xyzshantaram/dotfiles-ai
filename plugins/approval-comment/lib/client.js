@@ -42,6 +42,43 @@ __export(client_exports, {
 module.exports = __toCommonJS(client_exports);
 var import_react = __toESM(require("react"), 1);
 
+// plugins/shared/client-util.ts
+function injectStyle(pluginName, styleId, cssText) {
+  if (typeof document === "undefined") return;
+  if (document.querySelector(
+    'style[data-plugin-css="' + (typeof CSS !== "undefined" && CSS.escape ? CSS.escape(styleId) : String(styleId).replace(/"/g, '\\"')) + '"]'
+  ) !== null)
+    return;
+  const tag = document.createElement("style");
+  tag.dataset.plugin = pluginName;
+  tag.dataset.pluginCss = styleId;
+  tag.textContent = cssText;
+  document.head.appendChild(tag);
+}
+var PERMISSION_OUTLINE_CSS = `:root {
+  --dsh-outline-escalated: #ff8c00;
+  --dsh-outline-guard: #00b7ff;
+}`;
+var HLJS_THEME_CSS = [
+  ".hljs-doctag,.hljs-keyword,.hljs-meta .hljs-keyword,.hljs-template-tag,.hljs-template-variable,.hljs-type,.hljs-variable.language_{color:#ff7b72}",
+  ".hljs-title,.hljs-title.class_,.hljs-title.class_.inherited__,.hljs-title.function_{color:#d2a8ff}",
+  ".hljs-attr,.hljs-attribute,.hljs-literal,.hljs-meta,.hljs-number,.hljs-operator,.hljs-variable,.hljs-selector-attr,.hljs-selector-class,.hljs-selector-id{color:#79c0ff}",
+  ".hljs-regexp,.hljs-string,.hljs-meta .hljs-string{color:#a5d6ff}",
+  ".hljs-built_in,.hljs-symbol{color:#ffa657}",
+  ".hljs-comment,.hljs-code,.hljs-formula{color:#8b949e}",
+  ".hljs-name,.hljs-quote,.hljs-selector-tag,.hljs-selector-pseudo{color:#7ee787}",
+  ".hljs-subst{color:#c9d1d9}",
+  ".hljs-section{color:#1f6feb;font-weight:bold}",
+  ".hljs-bullet{color:#f2cc60}",
+  ".hljs-emphasis{color:#c9d1d9;font-style:italic}",
+  ".hljs-strong{color:#c9d1d9;font-weight:bold}",
+  ".hljs-addition{color:#aff5b4;background-color:#033a16}",
+  ".hljs-deletion{color:#ffdcd7;background-color:#67060c}"
+].join("");
+function mergeCss(...parts) {
+  return parts.flat().filter(Boolean).join("\n");
+}
+
 // node_modules/.pnpm/yaml@2.9.0/node_modules/yaml/browser/dist/nodes/identity.js
 var ALIAS = /* @__PURE__ */ Symbol.for("yaml.alias");
 var DOC = /* @__PURE__ */ Symbol.for("yaml.document");
@@ -6309,45 +6346,42 @@ function parse(src, reviver, options) {
   return doc.toJS(Object.assign({ reviver: _reviver }, options));
 }
 
-// plugins/shared/client-util.ts
-function injectStyle(pluginName, styleId, cssText) {
-  if (typeof document === "undefined") return;
-  if (document.querySelector(
-    'style[data-plugin-css="' + (typeof CSS !== "undefined" && CSS.escape ? CSS.escape(styleId) : String(styleId).replace(/"/g, '\\"')) + '"]'
-  ) !== null)
-    return;
-  const tag = document.createElement("style");
-  tag.dataset.plugin = pluginName;
-  tag.dataset.pluginCss = styleId;
-  tag.textContent = cssText;
-  document.head.appendChild(tag);
+// plugins/shared/guard-reason.ts
+var GUARD_APPROVAL_KIND = "bash-guard";
+var HOST_ESCALATION_PREFIX = "escalate sandbox to ";
+function isHostEscalationReason(reason) {
+  return typeof reason === "string" && reason.startsWith(HOST_ESCALATION_PREFIX);
 }
-var PERMISSION_OUTLINE_CSS = `:root {
-  --dsh-outline-escalated: #ff8c00;
-  --dsh-outline-guard: #00b7ff;
-}`;
-var HLJS_THEME_CSS = [
-  ".hljs-doctag,.hljs-keyword,.hljs-meta .hljs-keyword,.hljs-template-tag,.hljs-template-variable,.hljs-type,.hljs-variable.language_{color:#ff7b72}",
-  ".hljs-title,.hljs-title.class_,.hljs-title.class_.inherited__,.hljs-title.function_{color:#d2a8ff}",
-  ".hljs-attr,.hljs-attribute,.hljs-literal,.hljs-meta,.hljs-number,.hljs-operator,.hljs-variable,.hljs-selector-attr,.hljs-selector-class,.hljs-selector-id{color:#79c0ff}",
-  ".hljs-regexp,.hljs-string,.hljs-meta .hljs-string{color:#a5d6ff}",
-  ".hljs-built_in,.hljs-symbol{color:#ffa657}",
-  ".hljs-comment,.hljs-code,.hljs-formula{color:#8b949e}",
-  ".hljs-name,.hljs-quote,.hljs-selector-tag,.hljs-selector-pseudo{color:#7ee787}",
-  ".hljs-subst{color:#c9d1d9}",
-  ".hljs-section{color:#1f6feb;font-weight:bold}",
-  ".hljs-bullet{color:#f2cc60}",
-  ".hljs-emphasis{color:#c9d1d9;font-style:italic}",
-  ".hljs-strong{color:#c9d1d9;font-weight:bold}",
-  ".hljs-addition{color:#aff5b4;background-color:#033a16}",
-  ".hljs-deletion{color:#ffdcd7;background-color:#67060c}"
-].join("");
-function mergeCss(...parts) {
-  return parts.flat().filter(Boolean).join("\n");
+function isRetiredEscalationPrompt(reason) {
+  return typeof reason === "string" && reason.startsWith("bash-guard: escalate this bash command from ");
+}
+var LEGACY_ESCALATION_SUMMARY_PREFIX = 'bash-guard: escalate from "';
+function isLegacyGuardReasonRecord(record) {
+  if ("kind" in record) return false;
+  if (typeof record.summary !== "string") return false;
+  if (typeof record.runs !== "string") return false;
+  if ("justification" in record) return false;
+  return !record.summary.startsWith(LEGACY_ESCALATION_SUMMARY_PREFIX);
+}
+function isBashGuardReason(reason) {
+  if (typeof reason !== "string") return false;
+  if (isHostEscalationReason(reason)) return false;
+  if (isRetiredEscalationPrompt(reason)) return false;
+  if (reason.startsWith("bash-guard:")) return true;
+  var result;
+  try {
+    result = parse(reason);
+  } catch (error) {
+    return false;
+  }
+  if (result === null || typeof result !== "object" || Array.isArray(result)) return false;
+  const record = result;
+  if (record.kind === GUARD_APPROVAL_KIND) return true;
+  return isLegacyGuardReasonRecord(record);
 }
 
 // css-text:/home/sid/repos/dotfiles-ai/plugins/approval-comment/src/client.module.css
-var client_default = '/* #65 \u2014 hand the composer back while this bundle holds the takeover chain.\n   `conversation.composer` is the host\'s composer TAKEOVER chain: whenever any\n   entry is elected, ConversationRoot renders the whole default composer (input\n   bar, tool row, and the input dock itself) inside\n   `<div data-chain-overlay-fallback="conversation.composer" style="display:none">`\n   and mounts the winner beside it. This bundle must keep winning that election,\n   because winning is the only way to stop the shipped `ApprovalPanel` from\n   mounting and taking the composer over itself \u2014 so the winner is the empty\n   `ComposerShadow` marker and this rule restores the composer\'s own\n   `display: contents`, which is exactly what the host sets when nothing is\n   elected. An author `!important` declaration outranks the host\'s non-important\n   inline style, so no DOM is touched to undo it.\n\n   The `:has()` guard is what keeps this honest: the override applies only when\n   OUR marker is the elected sibling, so another takeover kind (a pending user\n   question) still hides the composer exactly as the host intends.\n\n   The dock-card styles this file used to carry are gone with the card: the\n   answer surface is the tool call card\'s approval bar (tool-render, #8/#48),\n   and the owner rejected a duplicate card above the composer. */\n.approval-comment-shadow {\n  display: none;\n}\n/* Self-healing (review nit, 3cd6cf67): a chain entry does NOT abdicate on\n   crash \u2014 a crashing ComposerShadow renders\n   <div data-slot-error="conversation.composer"> as the elected sibling and\n   the composer would stay hidden forever. Matching that error node in the\n   same override hands the composer back even then, so the failure mode of a\n   marker loss is a working composer instead of a dead one.\n\n   Scope note (review 3aa96162): the second selector matches the error node of\n   ANY registrant on this chain \u2014 a future question panel, or the shipped\n   ApprovalPanel \u2014 not just our marker. That is deliberate rather than loose:\n   a crashed chain entry never abdicates, so failing open to a usable composer\n   is right no matter whose entry died. */\n[data-chain-overlay-fallback="conversation.composer"]:has(~ .approval-comment-shadow),\n[data-chain-overlay-fallback="conversation.composer"]:has(~ [data-slot-error="conversation.composer"]) {\n  display: contents !important;\n}\n\n/* #65 \u2014 the composer\'s pending-state rings. Yellow when a sandbox escalation\n   waits, blue when a bash-guard rewrite waits; the third slot is the reserved\n   question ring (white, to be colored by #38\'s question marker, which mounts\n   as the same kind of elected chain child). Rings STACK \u2014 one per pending\n   kind, concentric \u2014 instead of replacing each other. The defaults are fully\n   transparent, so the box-shadow list stays valid for every combination and\n   no combinatorial rule is needed: each :has() rule colors only its own slot.\n\n   THE REAL DOM (review 3aa96162; an earlier version of this comment claimed\n   the marker was a direct child of the seat, and its `> ` selectors were dead.\n   Verified against the installed host):\n\n     div[data-composer-seat]                         conversation client.js:7167\n     \u2514\u2500 div[data-slot="conversation.composer"]       renderer client.js:745-749\n        \u2502  (display:contents \u2014 removed from the BOX tree, still in the DOM\n        \u2502   tree, so a child combinator from the seat does NOT reach past it)\n        \u251C\u2500 div[data-chain-overlay-fallback]          renderer client.js:822\n        \u2502  \u2514\u2500 \u2026 \u2514\u2500 div[data-composer-card]           conversation client.js:3893\n        \u2514\u2500 div.approval-comment-shadow[data-\u2026]       our elected entry\n\n   So: match the marker as a DESCENDANT of the seat, and paint the ring on\n   [data-composer-card] \u2014 the 748px centred card \u2014 NOT on the seat. The seat\n   is the full-width sticky bar inside .scrollBody{overflow:hidden auto}, so an\n   outset shadow on it is clipped left/right/bottom and reads as a coloured bar\n   rather than a ring (review should-fix). The card is narrower than the seat\n   and rounded (border-radius 22px), so the rings follow its corners.\n\n   The host paints its own elevation on that card\n   (`box-shadow: var(--dsw-shadow-lv2)`, conversation client.js composer-card\n   rule). box-shadow is one property, so our list must carry that layer\n   explicitly as the outermost entry or we would stomp it \u2014 the one place this\n   file depends on a host token staying named as it is. */\n[data-composer-card] {\n  --composer-ring-escalated: 0 0 0 3px transparent;\n  --composer-ring-rewrite: 0 0 0 6px transparent;\n  --composer-ring-question: 0 0 0 9px transparent;\n  box-shadow:\n    var(--composer-ring-escalated),\n    var(--composer-ring-rewrite),\n    var(--composer-ring-question),\n    var(--dsw-shadow-lv2);\n}\n[data-composer-seat]:has(.approval-comment-shadow[data-escalated]) [data-composer-card] {\n  --composer-ring-escalated: 0 0 0 3px var(--dsh-outline-escalated);\n}\n[data-composer-seat]:has(.approval-comment-shadow[data-rewrite]) [data-composer-card] {\n  --composer-ring-rewrite: 0 0 0 6px var(--dsh-outline-guard);\n}\n/* Shadow spreads are cumulative from the border box, so the 6px rewrite slot\n   reads as a 6px ring when it is the ONLY pending kind (the transparent 3px\n   layer composites over it, it does not mask it). One pending kind should\n   always look the same weight, so collapse rewrite-only to 3px; the stacked\n   case keeps 3px yellow inside 6px blue and stays concentric. */\n[data-composer-seat]:has(.approval-comment-shadow[data-rewrite]):not(\n    :has(.approval-comment-shadow[data-escalated])\n  )\n  [data-composer-card] {\n  --composer-ring-rewrite: 0 0 0 3px var(--dsh-outline-guard);\n}\n';
+var client_default = '/* #65 \u2014 hand the composer back while this bundle holds the takeover chain.\n   `conversation.composer` is the host\'s composer TAKEOVER chain: whenever any\n   entry is elected, ConversationRoot renders the whole default composer (input\n   bar, tool row, and the input dock itself) inside\n   `<div data-chain-overlay-fallback="conversation.composer" style="display:none">`\n   and mounts the winner beside it. This bundle must keep winning that election,\n   because winning is the only way to stop the shipped `ApprovalPanel` from\n   mounting and taking the composer over itself \u2014 so the winner is the empty\n   `ComposerShadow` marker and this rule restores the composer\'s own\n   `display: contents`, which is exactly what the host sets when nothing is\n   elected. An author `!important` declaration outranks the host\'s non-important\n   inline style, so no DOM is touched to undo it.\n\n   The `:has()` guard is what keeps this honest: the override applies only when\n   OUR marker is the elected sibling, so another takeover kind (a pending user\n   question) still hides the composer exactly as the host intends.\n\n   The dock-card styles this file used to carry are gone with the card: the\n   answer surface is the tool call card\'s approval bar (tool-render, #8/#48),\n   and the owner rejected a duplicate card above the composer. */\n.approval-comment-shadow {\n  display: none;\n}\n/* Self-healing (review nit, 3cd6cf67): a chain entry does NOT abdicate on\n   crash \u2014 a crashing ComposerShadow renders\n   <div data-slot-error="conversation.composer"> as the elected sibling and\n   the composer would stay hidden forever. Matching that error node in the\n   same override hands the composer back even then, so the failure mode of a\n   marker loss is a working composer instead of a dead one.\n\n   Scope note (review 3aa96162): the second selector matches the error node of\n   ANY registrant on this chain \u2014 a future question panel, or the shipped\n   ApprovalPanel \u2014 not just our marker. That is deliberate rather than loose:\n   a crashed chain entry never abdicates, so failing open to a usable composer\n   is right no matter whose entry died. */\n[data-chain-overlay-fallback="conversation.composer"]:has(~ .approval-comment-shadow),\n[data-chain-overlay-fallback="conversation.composer"]:has(~ [data-slot-error="conversation.composer"]) {\n  display: contents !important;\n}\n\n/* #65 \u2014 the composer\'s pending-state rings. Yellow when a sandbox escalation\n   waits, blue when a bash-guard rewrite waits; the third slot is the reserved\n   question ring (white, to be colored by #38\'s question marker, which mounts\n   as the same kind of elected chain child). Rings STACK \u2014 one per pending\n   kind, concentric \u2014 instead of replacing each other. The defaults are fully\n   transparent, so the box-shadow list stays valid for every combination and\n   no combinatorial rule is needed: each :has() rule colors only its own slot.\n\n   THE REAL DOM (review 3aa96162; an earlier version of this comment claimed\n   the marker was a direct child of the seat, and its `> ` selectors were dead.\n   Verified against the installed host):\n\n     div[data-composer-seat]                         conversation client.js:7167\n     \u2514\u2500 div[data-slot="conversation.composer"]       renderer client.js:745-749\n        \u2502  (display:contents \u2014 removed from the BOX tree, still in the DOM\n        \u2502   tree, so a child combinator from the seat does NOT reach past it)\n        \u251C\u2500 div[data-chain-overlay-fallback]          renderer client.js:822\n        \u2502  \u2514\u2500 \u2026 \u2514\u2500 div[data-composer-card]           conversation client.js:3893\n        \u2514\u2500 div.approval-comment-shadow[data-\u2026]       our elected entry\n\n   So: match the marker as a DESCENDANT of the seat, and paint the ring on\n   [data-composer-card] \u2014 the 748px centred card \u2014 NOT on the seat. The seat\n   is the full-width sticky bar inside .scrollBody{overflow:hidden auto}, so an\n   outset shadow on it is clipped left/right/bottom and reads as a coloured bar\n   rather than a ring (review should-fix). The card is narrower than the seat\n   and rounded (border-radius 22px), so the rings follow its corners.\n\n   The host paints its own elevation on that card\n   (`box-shadow: var(--dsw-shadow-lv2)`, conversation client.js composer-card\n   rule). box-shadow is one property, so our list must carry that layer\n   explicitly as the outermost entry or we would stomp it \u2014 the one place this\n   file depends on a host token staying named as it is. */\n[data-composer-card] {\n  --composer-ring-escalated: 0 0 0 3px transparent;\n  --composer-ring-rewrite: 0 0 0 6px transparent;\n  --composer-ring-question: 0 0 0 9px transparent;\n  /* THE OUTERMOST APPROVAL SPREAD, published for the question slot (#132).\n     Shadow spreads are cumulative from the border box, so a question band\n     that starts at 0 would paint UNDER the approval rings rather than\n     outside them. composer-approvals offsets its bands by this value, which\n     is why it is declared here beside the rings it measures rather than\n     guessed there. Kept in step with the two rules below: whenever a ring\n     slot\'s spread changes, this changes with it. */\n  --composer-ring-outer: 0px;\n  box-shadow:\n    var(--composer-ring-escalated),\n    var(--composer-ring-rewrite),\n    var(--composer-ring-question),\n    var(--dsw-shadow-lv2);\n}\n[data-composer-seat]:has(.approval-comment-shadow[data-escalated]) [data-composer-card] {\n  --composer-ring-escalated: 0 0 0 3px var(--dsh-outline-escalated);\n  --composer-ring-outer: 3px;\n}\n[data-composer-seat]:has(.approval-comment-shadow[data-rewrite]) [data-composer-card] {\n  --composer-ring-rewrite: 0 0 0 6px var(--dsh-outline-guard);\n  --composer-ring-outer: 6px;\n}\n/* Shadow spreads are cumulative from the border box, so the 6px rewrite slot\n   reads as a 6px ring when it is the ONLY pending kind (the transparent 3px\n   layer composites over it, it does not mask it). One pending kind should\n   always look the same weight, so collapse rewrite-only to 3px; the stacked\n   case keeps 3px yellow inside 6px blue and stays concentric. */\n[data-composer-seat]:has(.approval-comment-shadow[data-rewrite]):not(\n    :has(.approval-comment-shadow[data-escalated])\n  )\n  [data-composer-card] {\n  --composer-ring-rewrite: 0 0 0 3px var(--dsh-outline-guard);\n  --composer-ring-outer: 3px;\n}\n';
 
 // plugins/approval-comment/src/client.tsx
 var PLUGIN_NAME = "approval-comment";
@@ -6355,18 +6389,6 @@ var STYLE_TAG_ID = "approval-comment/ApprovalComment.module.css";
 injectStyle(PLUGIN_NAME, STYLE_TAG_ID, mergeCss(client_default));
 injectStyle(PLUGIN_NAME, "dsh-permission-outline", PERMISSION_OUTLINE_CSS);
 injectStyle(PLUGIN_NAME, "dsh-hljs-theme", HLJS_THEME_CSS);
-function isBashGuardReason(reason) {
-  if (typeof reason !== "string") return false;
-  if (reason.indexOf("bash-guard:") === 0) return true;
-  var parsed;
-  try {
-    parsed = parse(reason);
-  } catch (error) {
-    return false;
-  }
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return false;
-  return typeof parsed.summary === "string";
-}
 function selectApproval(owner) {
   var any = false;
   var escalated = false;
