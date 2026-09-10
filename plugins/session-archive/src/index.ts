@@ -58,25 +58,64 @@ interface SessionPersistenceService {
 interface SessionsService {
   get(id: string): unknown;
 }
-interface SessionQueryService {
-  readTitleSnapshots(
-    sessionIds: readonly string[],
-    signal?: AbortSignal,
-  ): Promise<
-    Array<
-      | {
-          sessionId: string;
-          status: "fulfilled";
-          value: { session: unknown; title?: { title: string } };
-        }
-      | { sessionId: string; status: "rejected"; reason: unknown }
-    >
-  >;
+/**
+ * The zero-I/O listing read (#133).
+ *
+ * This replaced `sessionQuery.readTitleSnapshots(everyArchivedId)`, which
+ * looked like an index lookup and was not: per session it performed a full
+ * readFile, a full zstd decompress, a full log parse and a structuredClone
+ * PER EVENT. The panel therefore paid the cost of fully loading EVERY
+ * archived log — measured here at 822 logs / 715MB, twelve over 10MB, worst
+ * case 38.6MB expanding to 215MB across 154,865 events — in order to render
+ * a one-line title per row.
+ *
+ * The second-order damage was worse than the first. Upstream retains only
+ * FIVE prepared inspections (dsh-session-persistence preparedSessionCacheSize:
+ * 5), so fanning out dozens of inspections evicted the very inspection a
+ * subsequent session OPEN would have reused. The panel did not merely cost
+ * its own load; it made the next click slower too.
+ *
+ * `cachedSnapshot` is documented upstream as "the zero-I/O listing read:
+ * whole values viewed straight from the stored rows... as stale as the last
+ * durable checkpoint but never wrong, and never from an unrelated log (the
+ * caller's header is the identity witness)". It is synchronous, reads no
+ * log, and is the same mechanism the shipped session list already uses.
+ */
+interface SessionProjectionCacheService {
+  cachedSnapshot(meta: SessionHeader): { values?: { title?: unknown } } | undefined;
 }
 
 /** Look up one optional host service. */
 function service<T>(ctx: Context, name: string): T | undefined {
   return (ctx as { get(name: string): unknown }).get(name) as T | undefined;
+}
+
+/**
+ * One row's title, or null when the cache cannot supply it.
+ *
+ * DEGRADES PER ROW, NEVER PER LIST. A session checkpointed before the cache
+ * could write (the projection cache only began writing successfully once the
+ * lossless-JSON defect #127 was fixed), or one whose row predates the
+ * current log lifecycle, simply has no cached title — that row lists without
+ * one, exactly as an unresolved title did before. Nothing here may throw or
+ * reject: a missing title must never cost the user the whole archive list,
+ * which is the only reason it is worth reading a possibly-absent value at
+ * all.
+ */
+export function titleOf(
+  cache: SessionProjectionCacheService | undefined,
+  header: SessionHeader,
+): string | null {
+  if (cache === undefined) return null;
+  try {
+    const snapshot = cache.cachedSnapshot(header);
+    const title = snapshot?.values?.title;
+    return typeof title === "string" && title !== "" ? title : null;
+  } catch {
+    // A cache miss must not fail the listing. Same fail-soft contract the
+    // upstream cache states for its own durable writes.
+    return null;
+  }
 }
 
 /** The archived sessions list handler. */
@@ -92,6 +131,11 @@ function makeListHandler(ctx: Context) {
     try {
       const archived = new Set(workspace.archivedSessionIds);
       const sessions = service<SessionsService>(ctx, "sessions");
+      // Looked up ONCE for the whole listing, not per row.
+      const projectionCache = service<SessionProjectionCacheService>(
+        ctx,
+        "sessionProjectionCache",
+      );
       const headers = await persistence.list();
       const rows: Array<{
         id: string;
@@ -114,27 +158,15 @@ function makeListHandler(ctx: Context) {
         }
         rows.push({
           id: header.id,
-          title: null,
+          // Read from the in-memory cache row, in this loop, with no await:
+          // the previous implementation gathered ids here and then fanned
+          // out a full log load per id after the loop.
+          title: titleOf(projectionCache, header),
           cwd: header.cwd ?? null,
           createdAt: header.createdAt,
           size,
           live: sessions?.get(header.id) !== undefined,
         });
-      }
-      const sessionQuery = service<SessionQueryService>(ctx, "sessionQuery");
-      if (sessionQuery !== undefined && rows.length > 0) {
-        const observations = await sessionQuery.readTitleSnapshots(rows.map((row) => row.id));
-        const titles = new Map<string, string>();
-        for (const observation of observations) {
-          if (observation.status !== "fulfilled") continue;
-          const title = observation.value.title;
-          if (title === undefined) continue;
-          titles.set(observation.sessionId, title.title);
-        }
-        for (const row of rows) {
-          const title = titles.get(row.id);
-          if (title !== undefined) row.title = title;
-        }
       }
       sendJson(res, 200, { ok: true, sessions: rows });
       ctx.logger.info(`listed ${rows.length} archived sessions`);
