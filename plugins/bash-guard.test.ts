@@ -621,3 +621,118 @@ describe("pipeline stage capture", () => {
     expect(formatPipeStages([{ exitCode: 1 }, { exitCode: 0 }])).toBe("1, 0");
   });
 });
+
+/**
+ * #131. presentationMeta must never emit a key whose value is `undefined`.
+ *
+ * The harness enforces a plain-JSON contract on tool output (walkJsonValue in
+ * @deepseek-ai/dsh-session), and a key that is PRESENT with value `undefined`
+ * violates it — the call then fails with `output.presentationMeta returned
+ * non-lossless JSON`. That is not hypothetical: it broke EVERY backgrounded
+ * bash call, while the job itself ran fine, so it read as a phantom error.
+ *
+ * The background path returns `{ text, ran, rewritten }` only: a job that has
+ * just started has no exit code and was not denied. Those two fields are
+ * optional in the output schema precisely because of that path.
+ *
+ * These tests assert on the KEYS, not just on JSON.stringify. stringify DROPS
+ * undefined-valued keys silently, so a round-trip test alone would pass
+ * against the bug it is meant to catch.
+ */
+describe("presentationMeta stays losslessly JSON-serializable (#131)", () => {
+  /** Mount apply() with a fake ctx and hand back the registered tool itself. */
+  function mountForMeta() {
+    const noop = () => {};
+    let tool: any;
+    const ctx = {
+      logger: { debug: noop, info: noop, warn: noop, error: noop },
+      on() {
+        return () => {};
+      },
+      get() {
+        return undefined;
+      },
+      shell: {
+        sandboxMode: undefined,
+        resolve(req: unknown) {
+          return req;
+        },
+        run() {
+          return Promise.resolve({});
+        },
+      },
+      tools: {
+        register(t: never) {
+          tool = t;
+        },
+      },
+    };
+    apply(ctx as never, { guardsDir: GUARDS_DIR });
+    if (tool === undefined) throw new Error("apply() did not register the bash tool");
+    return tool.output.presentationMeta as (args: unknown, value: unknown) => object;
+  }
+
+  /** Keys present with an undefined value — the exact contract violation. */
+  function undefinedKeys(meta: object): string[] {
+    return Object.entries(meta)
+      .filter(([, v]) => v === undefined)
+      .map(([k]) => k);
+  }
+
+  it("omits exitCode and denied entirely on the background path", () => {
+    const presentationMeta = mountForMeta();
+    // Exactly what the run_in_background branch returns.
+    const meta = presentationMeta(
+      { command: "sleep 1", description: "d", run_in_background: true },
+      { text: "Started background job bash-1.", ran: "sleep 1", rewritten: false },
+    );
+    expect(undefinedKeys(meta)).toEqual([]);
+    expect(Object.keys(meta).sort()).toEqual(["ran", "rewritten"]);
+    expect("exitCode" in meta).toBe(false);
+    expect("denied" in meta).toBe(false);
+  });
+
+  it("keeps exitCode and denied when the call actually completed", () => {
+    const presentationMeta = mountForMeta();
+    const meta = presentationMeta(
+      { command: "true", description: "d" },
+      { text: "ok", ran: "true", rewritten: false, exitCode: 0, denied: false },
+    ) as Record<string, unknown>;
+    expect(undefinedKeys(meta)).toEqual([]);
+    // exitCode 0 and denied false are FALSY but present: a truthiness guard
+    // instead of an `!== undefined` guard would wrongly drop both.
+    expect(meta.exitCode).toBe(0);
+    expect(meta.denied).toBe(false);
+  });
+
+  it("omits pipeStages when absent and keeps it when present", () => {
+    const presentationMeta = mountForMeta();
+    const without = presentationMeta(
+      { command: "true", description: "d" },
+      { text: "ok", ran: "true", rewritten: false, exitCode: 0, denied: false },
+    );
+    expect("pipeStages" in without).toBe(false);
+    const stages = [{ name: "false", exitCode: 1 }, { exitCode: 0 }];
+    const with_ = presentationMeta(
+      { command: "false | cat", description: "d" },
+      { text: "ok", ran: "false | cat", rewritten: false, exitCode: 1, denied: false, pipeStages: stages },
+    ) as Record<string, unknown>;
+    expect(undefinedKeys(with_)).toEqual([]);
+    expect(with_.pipeStages).toEqual(stages);
+  });
+
+  it("survives a JSON round-trip on every return shape", () => {
+    const presentationMeta = mountForMeta();
+    const shapes = [
+      { text: "t", ran: "sleep 1", rewritten: false },
+      { text: "t", ran: "sleep 1", rewritten: true },
+      { text: "t", ran: "true", rewritten: false, exitCode: 0, denied: false },
+      { text: "t", ran: "rm x", rewritten: true, exitCode: 1, denied: true },
+    ];
+    for (const value of shapes) {
+      const meta = presentationMeta({ command: "x", description: "d" }, value);
+      expect(undefinedKeys(meta)).toEqual([]);
+      expect(JSON.parse(JSON.stringify(meta))).toEqual(meta);
+    }
+  });
+});

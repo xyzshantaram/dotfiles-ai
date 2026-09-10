@@ -13041,11 +13041,31 @@ function apply(ctx, config) {
           additionalProperties: false
         },
         render: (_args, value) => [{ type: "text", text: value.text }],
+        // EVERY KEY IS ASSIGNED ONLY WHEN DEFINED. `text`, `ran` and
+        // `rewritten` are required by the schema above and are set on every
+        // return path, so they are unconditional. `exitCode` and `denied` are
+        // OPTIONAL and are genuinely absent on the background path
+        // (`return { text, ran, rewritten }` at the run_in_background branch),
+        // because a job that has only just started has not exited and was not
+        // denied.
+        //
+        // Reading an absent property yields `undefined`, and assigning that
+        // produces a key PRESENT with value `undefined`, which violates the
+        // plain-JSON contract the harness enforces on tool output
+        // (walkJsonValue in @deepseek-ai/dsh-session rejects undefined, along
+        // with non-finite numbers, -0, functions, symbols, cycles, and
+        // non-plain prototypes). The whole call then fails with
+        // `output.presentationMeta returned non-lossless JSON` — so every
+        // backgrounded bash call failed its result while the job itself ran
+        // fine, which is what made it read as a phantom error (#131).
+        //
+        // The `pipeStages` guard below was already correct; the bug was that
+        // its two neighbours did not follow it.
         presentationMeta: (_args, value) => ({
           ran: value.ran,
           rewritten: value.rewritten,
-          exitCode: value.exitCode,
-          denied: value.denied,
+          ...value.exitCode !== void 0 ? { exitCode: value.exitCode } : {},
+          ...value.denied !== void 0 ? { denied: value.denied } : {},
           ...value.pipeStages !== void 0 ? { pipeStages: value.pipeStages } : {}
         })
       },
