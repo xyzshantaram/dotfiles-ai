@@ -107,3 +107,84 @@ export function resolveRate(
   if (isPriced(base)) return base as PriceRate;
   return null;
 }
+
+/**
+ * WHY THREE STATES INSTEAD OF ONE STRING (#134).
+ *
+ * `resolveRate` returning null used to render one word — "unknown price" —
+ * for three completely different failures, with no console output. That cost
+ * a full day of diagnosis: a dead settings transport is indistinguishable
+ * from a model we simply have no rate for, so the report "it still says
+ * unknown price" carried no information about which half to look at.
+ *
+ * The real case that motivated this: the settings scope is only mirrored
+ * from the host over a LOOPBACK connection (dsh-client-ui-settings builds
+ * its mirror as `connection.isLoopback ? "host" : "memory"`), so on a
+ * proxied or LAN URL the prices document never arrives at all and EVERY
+ * model reads unpriced — permanently, restart-proof, no matter how complete
+ * the rate table is.
+ *
+ * These states are DIAGNOSTIC, not cosmetic. The never-guess rule is
+ * unchanged: none of them invents a rate, and an unpriced model still shows
+ * no figure rather than a zero (#126's criterion).
+ */
+export type MissingRateKind = "transport" | "no-model" | "unpriced";
+
+export interface MissingRate {
+  kind: MissingRateKind;
+  /** Short enough for the panel row and the hover tip. */
+  label: string;
+  /** One sentence a reader can act on, for the tooltip. */
+  detail: string;
+}
+
+/**
+ * Explain why no rate could be resolved.
+ *
+ * Ordered most-fundamental first: without the document nothing else can be
+ * judged, and without a model the document cannot be queried. Reporting a
+ * later cause while an earlier one holds would send a reader to the wrong
+ * half — which is exactly the failure this function exists to end.
+ *
+ * @param scopeStatus - the settings scope snapshot's `status`, when the
+ *   transport reports one. Anything other than the string "unavailable" is
+ *   treated as present, so an unfamiliar transport degrades to judging the
+ *   document itself rather than mislabelling it as broken.
+ * @param doc - the resolved prices document, if it arrived.
+ * @param provider - live selection's provider, or null when unresolved.
+ * @param model - live selection's model, or null when unresolved.
+ */
+export function explainMissingRate(
+  scopeStatus: unknown,
+  doc: PricesDoc | null | undefined,
+  provider: string | null | undefined,
+  model: string | null | undefined,
+): MissingRate {
+  const docMissing = doc === null || doc === undefined;
+  if (scopeStatus === "unavailable" || docMissing) {
+    return {
+      kind: "transport",
+      label: "prices unavailable",
+      detail:
+        "The browser never received the price table. Settings are mirrored from the host only over a loopback connection, so this is expected on a proxied or LAN URL and no rate can be resolved for any model.",
+    };
+  }
+  const hasProvider = typeof provider === "string" && provider !== "";
+  const hasModel = typeof model === "string" && model !== "";
+  if (!hasProvider || !hasModel) {
+    return {
+      kind: "no-model",
+      label: "no model reported",
+      detail:
+        "The session has not reported which provider and model served it, so there is no rate to look up. The price table is present.",
+    };
+  }
+  return {
+    kind: "unpriced",
+    label: "unpriced model",
+    detail:
+      "No rate row for " +
+      rateKey(provider as string, model as string) +
+      ". The price table arrived but does not price this model; add a row under the prices namespace.",
+  };
+}

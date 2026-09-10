@@ -135,6 +135,30 @@ function resolveRate(doc, provider, model) {
   if (isPriced(base)) return base;
   return null;
 }
+function explainMissingRate(scopeStatus, doc, provider, model) {
+  const docMissing = doc === null || doc === void 0;
+  if (scopeStatus === "unavailable" || docMissing) {
+    return {
+      kind: "transport",
+      label: "prices unavailable",
+      detail: "The browser never received the price table. Settings are mirrored from the host only over a loopback connection, so this is expected on a proxied or LAN URL and no rate can be resolved for any model."
+    };
+  }
+  const hasProvider = typeof provider === "string" && provider !== "";
+  const hasModel = typeof model === "string" && model !== "";
+  if (!hasProvider || !hasModel) {
+    return {
+      kind: "no-model",
+      label: "no model reported",
+      detail: "The session has not reported which provider and model served it, so there is no rate to look up. The price table is present."
+    };
+  }
+  return {
+    kind: "unpriced",
+    label: "unpriced model",
+    detail: "No rate row for " + rateKey(provider, model) + ". The price table arrived but does not price this model; add a row under the prices namespace."
+  };
+}
 
 // css-text:/home/sid/repos/dotfiles-ai/plugins/context-meter/src/client.module.css
 var client_default = ".ctx-meter-root {\n  display: inline-flex;\n  position: relative;\n}\n.ctx-meter-trigger {\n  width: 30px;\n  height: 30px;\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  background: 0 0;\n  border: none;\n  border-radius: 999px;\n  flex: none;\n  place-items: center;\n  display: grid;\n  padding: 0;\n}\n.ctx-meter-trigger:hover {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.ctx-meter-track {\n  fill: none;\n  stroke: var(--dsw-alias-border-l2);\n  stroke-width: 2.5px;\n}\n.ctx-meter-fill {\n  fill: none;\n  stroke: var(--dsw-alias-label-primary);\n  stroke-width: 2.5px;\n  stroke-linecap: round;\n}\n.ctx-meter-tip {\n  z-index: 100;\n  pointer-events: none;\n  white-space: nowrap;\n  border: 1px solid var(--dsw-alias-border-inverted);\n  background: var(--dsw-specific-menu);\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-secondary);\n  border-radius: 8px;\n  padding: 4px 8px;\n  font-size: 12px;\n  line-height: 18px;\n  font-variant-numeric: tabular-nums;\n  position: absolute;\n  bottom: calc(100% + 8px);\n  right: 0;\n}\n.ctx-meter-panel {\n  z-index: 100;\n  box-sizing: border-box;\n  border: 1px solid var(--dsw-alias-border-inverted);\n  background: var(--dsw-specific-menu);\n  width: 296px;\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-secondary);\n  cursor: default;\n  border-radius: 12px;\n  padding: 12px;\n  font-size: 12px;\n  line-height: 20px;\n  position: absolute;\n  bottom: calc(100% + 8px);\n  right: 0;\n}\n.ctx-meter-title {\n  color: var(--dsw-alias-label-primary);\n  font-weight: 500;\n}\n.ctx-meter-half + .ctx-meter-half {\n  margin-top: 12px;\n  padding-top: 10px;\n  border-top: 1px solid var(--dsw-alias-border-l3);\n}\n.ctx-meter-head {\n  align-items: baseline;\n  gap: 6px;\n  display: flex;\n}\n.ctx-meter-figures {\n  font-variant-numeric: tabular-nums;\n  color: var(--dsw-alias-label-primary);\n  margin-left: auto;\n  font-weight: 500;\n}\n.ctx-meter-bar {\n  background: var(--dsw-alias-interactive-bg-hover);\n  border-radius: 999px;\n  gap: 1px;\n  height: 4px;\n  margin: 8px 0 6px;\n  display: flex;\n  overflow: hidden;\n}\n.ctx-meter-segment {\n  background: var(--meter-tint, var(--dsw-alias-label-tertiary));\n  border-radius: 1px;\n  flex: none;\n  min-width: 2px;\n  height: 100%;\n}\n.ctx-meter-swatch {\n  background: var(--meter-tint);\n  vertical-align: baseline;\n  border-radius: 2px;\n  width: 8px;\n  height: 8px;\n  margin-right: 6px;\n  display: inline-block;\n}\n.ctx-meter-color-system {\n  --meter-tint: var(--dsw-static-neutral-bluish-400);\n}\n.ctx-meter-color-tools {\n  --meter-tint: #a78bfa;\n}\n.ctx-meter-color-messages {\n  --meter-tint: var(--dsw-static-blue-450);\n}\n.ctx-meter-rows {\n  margin: 4px 0 0;\n}\n.ctx-meter-row {\n  justify-content: space-between;\n  align-items: center;\n  gap: 12px;\n  padding: 2px 0;\n  display: flex;\n}\n.ctx-meter-row dt {\n  color: var(--dsw-alias-label-secondary);\n}\n.ctx-meter-row dd {\n  font-variant-numeric: tabular-nums;\n  color: var(--dsw-alias-label-primary);\n  margin: 0;\n}\n.ctx-meter-sub dt {\n  padding-left: 14px;\n  color: var(--dsw-alias-label-tertiary);\n}\n.ctx-meter-group {\n  color: var(--dsw-alias-label-tertiary);\n  margin-top: 8px;\n}\n.ctx-meter-note {\n  color: var(--dsw-alias-label-tertiary);\n  margin-top: 6px;\n}\n";
@@ -161,13 +185,17 @@ var TRUE_ROWS = [
     color: "ctx-meter-color-messages"
   }
 ];
-function row(key, label, value, sub) {
+function row(key, label, value, sub, title) {
   return react2.createElement(
     "div",
     { key, className: sub ? "ctx-meter-row ctx-meter-sub" : "ctx-meter-row" },
     [
       react2.createElement("dt", { key: "dt" }, label),
-      react2.createElement("dd", { key: "dd" }, value)
+      react2.createElement(
+        "dd",
+        title === void 0 || title === null ? { key: "dd" } : { key: "dd", title },
+        value
+      )
     ]
   );
 }
@@ -329,13 +357,23 @@ function apply(ctx) {
     const rate = resolveRate(pricesDoc, provider, model);
     let costText = null;
     let rateLabel = null;
+    const missing = explainMissingRate(
+      pricesSnap !== null && pricesSnap !== void 0 ? pricesSnap.status : void 0,
+      pricesDoc,
+      provider,
+      model
+    );
+    let costDetail = null;
     if (usage !== void 0) {
       const totalTokens = (usage.uncachedInputTokens || 0) + (usage.cacheReadTokens || 0) + (usage.cacheWriteTokens || 0) + (usage.outputTokens || 0);
       if (totalTokens === 0) costText = formatApproxCost(0);
       else if (rate !== null) {
         costText = formatApproxCost(priceBuckets(usage, rate));
         rateLabel = provider !== null && model !== null ? rateKey(provider, model) : null;
-      } else costText = "unknown price";
+      } else {
+        costText = missing.label;
+        costDetail = missing.detail;
+      }
     }
     react2.useEffect(() => {
       ensureShippedHidden();
@@ -458,7 +496,10 @@ function apply(ctx) {
           "Session cost, approximate"
         ),
         react2.createElement("dl", { key: "cost", className: "ctx-meter-rows" }, [
-          row("cost", "Whole session", costText ?? "unknown price"),
+          // The label is now specific (prices unavailable / no model reported /
+          // unpriced model) and the sentence a reader can act on rides in the
+          // title, so the panel explains itself without a console.
+          row("cost", "Whole session", costText ?? missing.label, false, costDetail ?? missing.detail),
           ...rateLabel !== null ? [row("rate", "Priced at", rateLabel, true)] : []
         ]),
         react2.createElement(
