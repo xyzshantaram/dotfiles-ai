@@ -296,6 +296,27 @@ await wrapClientBundle(
   "toast",
 );
 
+// modal: the shared modal host. Mounts one container into shell.overlay and
+// publishes window.__dshModal__ so other bundles can open a PluginModal
+// without inlining their own copy. The container renders the shared
+// component (plugins/shared/plugin-modal.tsx), which stays its single
+// source. Built before its consumers, like toast above; it needs no host
+// logic, so the host half stays a stub.
+await build({
+  entryPoints: [join(here, "plugins/modal/src/index.ts")],
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  external: ["@deepseek-ai/*", "node:*"],
+  outfile: join(here, "plugins/modal/lib/index.js"),
+  logLevel: "info",
+});
+await wrapClientBundle(
+  join(here, "plugins/modal/src/client.tsx"),
+  join(here, "plugins/modal/lib/client.js"),
+  "modal",
+);
+
 // composer-approvals: the pending-approval indicator beside the overflow
 // trigger, with a modal listing every pending approval. Plain client plugin:
 // host half bundles via esbuild, client half via the module-loader facade.

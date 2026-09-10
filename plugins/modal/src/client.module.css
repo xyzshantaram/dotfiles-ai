@@ -1,0 +1,15 @@
+/* The modal host's own chrome — everything that is NOT the shared component.
+ *
+ * The modal itself (mask, panel, header, body, actions row, and both
+ * standard sizes) lives in plugins/shared/plugin-modal.module.css and is
+ * injected by that component when this plugin's container imports it. That
+ * sheet is the modal's ONLY sizing surface: nothing here redefines a
+ * `plugin-modal-*` class, re-aligns the actions row, or adds a third size,
+ * and registry.test.ts pins that absence.
+ *
+ * What belongs here instead is shell-owned chrome AROUND the component —
+ * today that is nothing, and this sheet exists (imported and injected by
+ * client.tsx like every other client half) so the next shell-owned surface
+ * (the #103 attention tab bar, settled to live in this plugin) has a home
+ * that is not a caller's stylesheet.
+ */

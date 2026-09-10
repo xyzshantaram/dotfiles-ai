@@ -4,6 +4,13 @@
  * The component is exported from plugin-modal.tsx. Consumers import it via:
  *   import { PluginModal } from "../../shared/plugin-modal";
  *
+ * RUNTIME DIRECTION (#93). New callers should prefer the `plugins/modal`
+ * runtime plugin (`window.__dshModal__`, guarded by the registry's
+ * availability reporting in `plugins/modal/src/registry.ts`) over importing
+ * this module directly: every direct import inlines another copy of the
+ * component and its CSS into that consumer's bundle. This file remains the
+ * component's single source either way.
+ *
  * Keep this file in step with plugin-modal.tsx: it is the documented shape
  * of the component's public API.
  */

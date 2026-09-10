@@ -426,6 +426,11 @@ step_install_plugins() {
 		# The shared toast stack. Other packages reach it through the global it
 		# publishes, so it must be installed before anything that raises a toast.
 		pnpm_ins "$HERE/plugins/toast"
+		# The shared modal host. Other packages reach it through the global it
+		# publishes, so it must be installed before anything that opens a
+		# modal — the same ordering discipline as toast above. It has no hard
+		# dependencies beyond static modules, so it cannot pend the boot.
+		pnpm_ins "$HERE/plugins/modal"
 		pnpm_ins "$HERE/plugins/session-archive"
 		pnpm_ins "$HERE/plugins/restart-pause"
 		pnpm_ins "$HERE/plugins/subscriptions"
@@ -552,6 +557,7 @@ step_report_extra_plugins() {
 		"log-viewer"
 		"job-viewer"
 		"mcp-servers"
+		"modal"
 		"tool-render"
 
 		"dsh-plugin-better-mobile-ui"
