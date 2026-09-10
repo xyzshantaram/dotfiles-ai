@@ -1,7 +1,13 @@
 import * as react from "react";
 import { useDismissable } from "../../shared/client-react";
 import { injectStyle, shippedClass } from "../../shared/client-util";
-import { formatApproxCost, priceBuckets, rateKey, resolveRate } from "./cost";
+import {
+  explainMissingRate,
+  formatApproxCost,
+  priceBuckets,
+  rateKey,
+  resolveRate,
+} from "./cost";
 import localCss from "./client.module.css";
 
 const PLUGIN_NAME = "context-meter";
@@ -29,14 +35,25 @@ const TRUE_ROWS = [
   },
 ];
 
-/** One label/value row in the panel. */
-function row(key: string, label: string, value: string, sub?: boolean) {
+/**
+ * One label/value row in the panel.
+ *
+ * `title` hangs an explanatory sentence off the VALUE rather than the whole
+ * row, so hovering the thing that reads oddly is what explains it (#134).
+ * Absent by default: a title on every row would turn the panel into a field
+ * of tooltips and devalue the ones that carry a real diagnosis.
+ */
+function row(key: string, label: string, value: string, sub?: boolean, title?: string | null) {
   return react.createElement(
     "div",
     { key: key, className: sub ? "ctx-meter-row ctx-meter-sub" : "ctx-meter-row" },
     [
       react.createElement("dt", { key: "dt" }, label),
-      react.createElement("dd", { key: "dd" }, value),
+      react.createElement(
+        "dd",
+        title === undefined || title === null ? { key: "dd" } : { key: "dd", title: title },
+        value,
+      ),
     ],
   );
 }
@@ -275,6 +292,19 @@ function apply(ctx: any) {
     const rate = resolveRate(pricesDoc, provider, model);
     let costText: string | null = null;
     let rateLabel: string | null = null;
+    // #134: WHY no rate, not merely THAT there is none. One "unknown price"
+    // string used to cover three unrelated failures — a dead settings
+    // transport, an unresolved model, and a genuinely unpriced model — with
+    // no console output, so a bug report could not say which half to look
+    // at. Computed even when priced, because it costs nothing and keeps the
+    // two branches from drifting apart.
+    const missing = explainMissingRate(
+      pricesSnap !== null && pricesSnap !== undefined ? pricesSnap.status : undefined,
+      pricesDoc,
+      provider,
+      model,
+    );
+    let costDetail: string | null = null;
     if (usage !== undefined) {
       const totalTokens =
         (usage.uncachedInputTokens || 0) +
@@ -285,7 +315,12 @@ function apply(ctx: any) {
       else if (rate !== null) {
         costText = formatApproxCost(priceBuckets(usage, rate));
         rateLabel = provider !== null && model !== null ? rateKey(provider, model) : null;
-      } else costText = "unknown price";
+      } else {
+        // Still never a guessed rate and never a zero (#126's rule): the
+        // figure is absent, and only the EXPLANATION is now specific.
+        costText = missing.label;
+        costDetail = missing.detail;
+      }
     }
 
     // No dependency list: the composer row re-renders around us, so reassert the
@@ -423,7 +458,10 @@ function apply(ctx: any) {
           "Session cost, approximate",
         ),
         react.createElement("dl", { key: "cost", className: "ctx-meter-rows" }, [
-          row("cost", "Whole session", costText ?? "unknown price"),
+          // The label is now specific (prices unavailable / no model reported /
+          // unpriced model) and the sentence a reader can act on rides in the
+          // title, so the panel explains itself without a console.
+          row("cost", "Whole session", costText ?? missing.label, false, costDetail ?? missing.detail),
           ...(rateLabel !== null ? [row("rate", "Priced at", rateLabel, true)] : []),
         ]),
         react.createElement(
