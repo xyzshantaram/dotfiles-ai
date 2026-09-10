@@ -27,6 +27,50 @@ const webOff = new Map<string, boolean>();
 const name = "composer-menu";
 const inject = ["webServer", "sessions", "permissionPresets"];
 
+/**
+ * Same-origin check for a guarded POST (#136).
+ *
+ * WHY NOT COMPARE FULL ORIGINS. This used to rebuild the expected origin as
+ * `"http://" + req.headers.host` and demand an exact string match against the
+ * browser's `Origin`. Behind a TLS-terminating proxy the browser sends
+ * `https://<host>` while the reconstruction says `http://<host>`, so the
+ * comparison could NEVER succeed and every guarded POST 403'd — for a
+ * legitimate same-origin request from the app's own page.
+ *
+ * THE SCHEME IS DELIBERATELY EXCLUDED, and must stay excluded. Once a proxy
+ * terminates TLS the origin scheme is not knowable from the request (absent a
+ * trusted `x-forwarded-proto`, which we do not have). The AUTHORITY is what
+ * distinguishes an attacker's page from ours, and it is what the check needs.
+ * Do not "harden" this back into a scheme comparison: that is the bug, not
+ * the protection.
+ *
+ * WHAT THE CHECK IS FOR, so it is not weakened by accident: one of these
+ * routes raises sandbox permissions, so it must not be reachable from any page
+ * the browser happens to load. A cross-origin JSON POST is stopped by the CORS
+ * preflight, but a `text/plain` POST carrying a JSON body does NOT preflight,
+ * so the preflight alone is not a defence. Browsers always attach `Origin` to
+ * a POST, so a MISSING Origin is refused rather than trusted.
+ *
+ * @param originHeader - the request's `Origin`.
+ * @param hostHeader - the request's `Host`.
+ */
+export function isSameOriginPost(originHeader: unknown, hostHeader: unknown): boolean {
+  if (typeof originHeader !== "string" || originHeader === "") return false;
+  if (typeof hostHeader !== "string" || hostHeader === "") return false;
+  let originHost: string;
+  try {
+    // An opaque origin ("null") is not a URL and throws here, which refuses
+    // it — the correct answer for a sandboxed or cross-site initiator.
+    originHost = new URL(originHeader).host;
+  } catch {
+    return false;
+  }
+  if (originHost === "") return false;
+  // Authorities are case-insensitive; URL already lowercases its host, the
+  // raw Host header may not.
+  return originHost.toLowerCase() === hostHeader.trim().toLowerCase();
+}
+
 /** Read the whole request body as a UTF-8 string. */
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -94,7 +138,7 @@ function apply(ctx: HostContext): () => void {
       // hold the same line rather than each inventing their own.
       // Returns the parsed body, or null once it has already replied.
       const readGuardedBody = async (): Promise<Record<string, unknown> | null> => {
-        if (req.headers.origin !== url.origin) {
+        if (!isSameOriginPost(req.headers.origin, req.headers.host)) {
           reply(403, { error: "cross-origin request refused" });
           return null;
         }
