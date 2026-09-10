@@ -48,7 +48,38 @@ var inject = ["tools"];
 function apply(ctx) {
   const agents = ctx.get("agents");
   const subagents = ctx.get("subagents");
-  ctx.tools.register(
+  const tools = ctx.tools;
+  tools.register(
+    defineTool({
+      name: "interrupt_agent",
+      description: "Request cancellation of a background agent's current turn by its agent id. The target may be your direct child or a deeper agent created under you. Only the current turn stops: messages already queued for the agent stay parked until a later send_message, agents it started keep running, and the agent itself stays available for follow-ups. This call returns as soon as the stop request is accepted, so the target may keep running briefly; interrupting an agent that already finished is an accepted no-op.",
+      parameters: {
+        agent_id: {
+          type: "string",
+          required: true,
+          description: "The agent id of the running agent to interrupt."
+        }
+      },
+      output: {
+        schema: { type: "string" },
+        render: (args, _value) => [
+          { type: "text", text: `interrupt requested for agent ${args.agent_id}` }
+        ]
+      },
+      async execute(args, exec) {
+        if (subagents === void 0) {
+          throw new Error("interrupt_agent is not available in this composition");
+        }
+        const caller = exec?.agent;
+        if (caller === void 0 || caller === null) {
+          throw new Error("interrupt_agent requires a calling agent (exec.agent was undefined)");
+        }
+        subagents.interrupt(args.agent_id, { kind: "ancestor", agent: caller });
+        return `interrupt requested for agent ${args.agent_id}`;
+      }
+    })
+  );
+  tools.register(
     defineTool({
       name: "send_message",
       description: "Send a message to a background subagent by its subagent id, continuing the same conversation. If the subagent is idle this starts a new turn; if it is still working the message is STEERED into its current turn and is visible before its next model call, so it can redirect work already underway. This is the same delivery a human gets from Ctrl+Enter in the composer. Prefer it for corrections and newly arrived facts. This call returns no answer from the subagent \u2014 only confirmation that the message was delivered \u2014 so use it to give it more work. A failure means the message was NOT delivered. Cost, so you can time it well: a steer can land in the middle of a multi-step plan and prolongs the current turn while it is unread, so keep steers short and unambiguous. A message you queued earlier may be delivered in the same step, after the steered one.",

@@ -295,3 +295,39 @@ describe("sync.sh mounts the shadow and retires the builtin together", () => {
     expect(trips.length).toBeGreaterThanOrEqual(2);
   });
 });
+
+/**
+ * THE ABSENCE REGRESSION (#129).
+ *
+ * The shipped tool-subagent-control row registers TWO tools, send_message
+ * AND interrupt_agent, and disabling a preset row is all-or-nothing. The
+ * first draft of this plugin provided only send_message, so mounting it
+ * would have made interrupt_agent VANISH — a regression no test of
+ * send_message could catch, because the tool is not wrong, it is missing.
+ *
+ * Source-level because registering for real needs a live tool registry;
+ * the point is to pin that BOTH names are registered by this file, so the
+ * pairing cannot be broken by an edit that only thinks about steering.
+ */
+describe("the shadow re-provides everything the disabled row carried", () => {
+  const code = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "subagent-steer.ts"),
+    "utf8",
+  ).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+  it("registers send_message", () => {
+    expect(code).toMatch(/name:\s*"send_message"/);
+  });
+
+  it("ALSO registers interrupt_agent, which the disabled row also provided", () => {
+    expect(code).toMatch(/name:\s*"interrupt_agent"/);
+  });
+
+  it("delegates interrupt to the manager rather than re-authorizing it", () => {
+    // interrupt goes through ctx.subagents.interrupt with the shipped
+    // `ancestor` shape, so the manager performs the check. Only steer needed
+    // lineage re-implemented, because Agent.steer() has none of its own.
+    expect(code).toMatch(/subagents\.interrupt\(/);
+    expect(code).toMatch(/kind:\s*"ancestor"/);
+  });
+});
