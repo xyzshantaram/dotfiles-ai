@@ -88,8 +88,14 @@ export function isPriced(rate: unknown): rate is PriceRate {
 /**
  * Resolve one rate row. Overrides win: a hand-set price the sync silently
  * replaced would be set once and never trusted again. Anything absent or
- * unpriced resolves null, and the caller renders "unknown price" — never a
- * guessed rate, never a hidden row that would make the session look cheap.
+ * unpriced resolves null — never a guessed rate, never a hidden row that
+ * would make the session look cheap.
+ *
+ * A null result is not self-explaining: pass the same inputs to
+ * {@link explainMissingRate} to learn WHICH of the three causes applies.
+ * This comment used to say the caller renders "unknown price"; it no longer
+ * does, and a stale contract comment is how the next reader inherits the
+ * confusion this pair was written to end (#134).
  */
 export function resolveRate(
   doc: PricesDoc | null | undefined,
