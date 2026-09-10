@@ -1206,16 +1206,10 @@ step_disable_preset_builtin_tools() {
 	preset_disable_tool "$preset_yaml" "tool-bash"
 	preset_disable_tool "$preset_yaml" "tool-goal"
 	preset_disable_tool "$preset_yaml" "tool-subagent-control"
-	# THE `code` PRESET IS DELIBERATELY NOT PATCHED, and the reason is recorded
-	# so the next reader does not treat it as an oversight (#129 review). That
-	# preset carries BOTH tool-bash (:51) and tool-subagent-control (:181), and
-	# sync.sh has never patched it for either -- the gap predates this ticket
-	# and is shared with bash-guard. This composition does not compose the code
-	# preset, so no session here has two registrars for one name. Extending the
-	# patch for tool-subagent-control ALONE would diverge from that precedent
-	# and leave tool-bash still colliding, which is worse than a stated gap.
-	# If the code preset is ever composed here, BOTH must be disabled together
-	# and both need tripwires; do not add one without the other.
+	# The `code` preset is not patched because it no longer EXISTS: #139
+	# removes it outright (step_drop_code_preset), since run_code is global
+	# now and the preset only carried a boot-collision risk. Nothing to keep
+	# in step here any more.
 }
 
 # Relocate the attachment picker button. dsh-paste-to-path mounts its
@@ -1344,6 +1338,42 @@ step_disable_replaced_jobs_rows() {
 	fi
 }
 
+# Remove the shipped `code` agent preset (#139).
+#
+# WHY IT GOES. run_code is no longer preset-scoped: the top-level dsh-tools
+# row above sets `mode: both`, which registers the shipped tools:sdk section
+# GLOBALLY, and context-guard shadows it with the compact view on the agent
+# scope. Every session gets run_code and the compact SDK, so a preset whose
+# purpose was Code Mode has nothing left to provide.
+#
+# WHY IT IS A HAZARD RATHER THAN MERELY DEAD WEIGHT. That preset declares
+# tool-bash (:51) and tool-subagent-control (:181), both of which are shadowed
+# by repo plugins registering the SAME tool names -- bash-guard owns `bash`,
+# subagent-steer owns `send_message`. Composing it would throw a
+# duplicate-registration error at boot. It stays safe only because nothing
+# selects it, which is not a property to rely on.
+#
+# Verified before removal (#139 evidence): no session on this machine was
+# created with it. Idempotent: absent is success, so a rerun converges.
+# A dsh reinstall re-extracts the directory, so
+# step_verify_preset_tool_disabled carries the tripwire.
+step_drop_code_preset() {
+	local dsh_bin dsh_pkg preset_dir
+	dsh_bin="$(command -v dsh 2>/dev/null || true)"
+	if [ -z "$dsh_bin" ]; then
+		echo "  WARNING: dsh not on PATH; skipping code-preset removal."
+		return 0
+	fi
+	dsh_pkg="$(dirname "$(dirname "$(realpath "$dsh_bin")")")"
+	preset_dir="$dsh_pkg/config/agent-presets/code"
+	if [ ! -d "$preset_dir" ]; then
+		echo "  code preset already absent."
+		return 0
+	fi
+	rm -rf "$preset_dir"
+	echo "  removed $(short_path "$preset_dir")"
+}
+
 step_verify_preset_tool_disabled() {
 	# Tripwire for the disable steps above. A dsh reinstall re-extracts the
 	# standard preset and silently reverts an in-place patch; this step turns
@@ -1382,6 +1412,16 @@ step_verify_preset_tool_disabled() {
 				echo "  ERROR: tool-subagent-control is still enabled in $(short_path "$std_yaml")" >&2
 				bad=1
 			fi
+		fi
+		# #139: the code preset is REMOVED, not patched. A dsh reinstall
+		# re-extracts it, and it declares tool-bash and tool-subagent-control,
+		# both shadowed by repo plugins -- composing it would throw a
+		# duplicate-registration error at boot. Rerunning sync removes it again.
+		if [ -d "$dsh_pkg/config/agent-presets/code" ]; then
+			echo "  ERROR: the code agent preset is back at $(short_path "$dsh_pkg/config/agent-presets/code"); rerun sync" >&2
+			bad=1
+		fi
+		if [ -f "$std_yaml" ]; then
 			if preset_tool_enabled "$std_yaml" "tool-jobs"; then
 				echo "  ERROR: tool-jobs is still enabled in $(short_path "$std_yaml") (job-viewer replaces it)" >&2
 				bad=1
@@ -1746,6 +1786,7 @@ STEPS=(
 	"Report extra plugins (removal commands)|step_report_extra_plugins"
 	"Install the aidos plugin from git|step_install_aidos"
 	"Sync aidos skills from pinned commit|step_sync_aidos_skills"
+	"Drop the shipped code agent preset (#139)|step_drop_code_preset"
 	"Pin subagents onto the subagent chain (patch standard preset)|step_patch_standard_preset_tool_subagent"
 	"Turn on Code Mode for the standard preset (mode: both)|step_patch_standard_preset_tool_presentation"
 	"Disable builtin tool rows in the standard preset|step_disable_preset_builtin_tools"
