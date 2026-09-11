@@ -7037,21 +7037,6 @@ var client_default = `/* Pending-approval indicator at the composer. */
   min-width: 0;
   padding-top: 2px;
 }
-.composer-approvals-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.composer-approvals-label {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-  font-family: var(--dsw-alias-font-mono, monospace);
-}
 .composer-approvals-jump {
   flex: none;
   border: 1px solid var(--dsw-alias-border-l3);
@@ -7738,7 +7723,7 @@ function makeIndicator() {
       /* @__PURE__ */ react2.createElement(
         PluginModal,
         {
-          title: "Pending approvals",
+          title: "Needs your attention",
           size: "full",
           onClose: function() {
             setOpen(false);

@@ -989,7 +989,7 @@ function makeIndicator() {
           // there is no modal-level actions row here — but the panel matches
           // its siblings rather than being the one odd 420px popover.
           <PluginModal
-            title="Pending approvals"
+            title="Needs your attention"
             size="full"
             onClose={function () {
               setOpen(false);
