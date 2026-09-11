@@ -32,16 +32,23 @@ import { isBashGuardReason } from "./guard.js";
 
 export const GUARDED_APPROVALS_KEY = "tool-render/guarded-approvals";
 
-/** Keep the most recent 200 approvals so a long session cannot grow the state without bound. */
-export const GUARDED_APPROVALS_CAP = 200;
+/**
+ * Keep the most recent 100 approvals so a long session cannot grow the state
+ * without bound. Halved from 200 in #133: this state is checkpointed into
+ * the shared projection file on every turn/end and shipped in every tail
+ * projections block, and one real session measured 238KB of it — far past
+ * any scrollback the verdict tooltip could show.
+ */
+export const GUARDED_APPROVALS_CAP = 100;
 
 /**
  * Maximum stored characters of one guard approval reason. The verdict
- * tooltip summarises the first line, but the raw text is kept so the one
- * summariser (verdict-tip.ts) decides what that means; the cap only stops
- * a rule dump from living in session state unbounded.
+ * tooltip summarises the first line, so anything past the first line break
+ * is dead weight in session state. Cut from 2000 to 280 in #133 (a few
+ * lines of context); with the cap halving this takes the worst case from
+ * ~440KB to ~50KB per session.
  */
-export const GUARD_REASON_MAX = 2000;
+export const GUARD_REASON_MAX = 280;
 
 export interface GuardedApprovalsEntry {
   seq: number;
