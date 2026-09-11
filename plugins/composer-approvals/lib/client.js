@@ -40,7 +40,7 @@ __export(client_exports, {
   name: () => name
 });
 module.exports = __toCommonJS(client_exports);
-var react2 = __toESM(require("react"), 1);
+var react = __toESM(require("react"), 1);
 var runtime = __toESM(require("@deepseek-ai/dsh-client-runtime/client"), 1);
 
 // plugins/shared/client-util.ts
@@ -73,77 +73,62 @@ var HLJS_THEME_CSS = [
   ".hljs-deletion{color:#ffdcd7;background-color:#67060c}"
 ].join("");
 
-// plugins/shared/plugin-modal.tsx
-var import_react = __toESM(require("react"));
-
-// css-text:/home/sid/repos/dotfiles-ai/plugins/shared/plugin-modal.module.css
-var plugin_modal_default = "/* Shared modal component styles. Class names are kebab-case only.\n *\n * This stylesheet is the modal's ONLY sizing surface. The component injects\n * it once (plugin-modal.tsx) and picks between exactly two standard sizes\n * through the panel's `data-size` attribute, so a caller cannot invent a\n * third size, and cannot re-align the action row, from its own stylesheet.\n */\n\n.plugin-modal-mask {\n  /* Full-screen overlay with mask blur and semi-transparent background. */\n  position: fixed;\n  inset: 0;\n  z-index: 200;\n  display: grid;\n  place-items: center;\n  /* The SAFE BOX: 24px of inset on every side. Both standard sizes measure\n     their caps against this box, which is what makes the compact size's\n     `max-width: 100%` / `max-height: 100%` mean \"the safe box\" rather than\n     \"the raw viewport\". It is also exactly the 48px total that the full\n     size's calc()/min() expressions subtract, so the two sizes agree. */\n  padding: 24px;\n  box-sizing: border-box;\n  background: var(--dsw-alias-bg-mask-1);\n  backdrop-filter: var(--dsw-mask-blur);\n}\n\n.plugin-modal-panel {\n  /* Dialog panel, centered by the overlay's grid layout. Mask, radius and\n     elevation are the settings-panel family's; only the sizing below\n     differs between the two standard sizes. */\n  display: flex;\n  flex-direction: column;\n  border-radius: 24px;\n  background: var(--dsw-alias-bg-layer-2);\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-primary);\n  padding: 20px;\n  box-sizing: border-box;\n  /* The PANEL never scrolls -- the body is the modal's single scroller. */\n  overflow: hidden;\n  min-height: 0;\n\n  /* SIZE 1 of 2, FULL (the default): the settings-panel spec (#35). This is\n     also the base rule, so markup that somehow loses its data-size still\n     lands on a standard size instead of an unsized panel. */\n  width: 800px;\n  max-width: calc(100vw - 48px);\n  height: min(800px, 100vh - 48px);\n}\n\n.plugin-modal-panel[data-size=\"compact\"] {\n  /* SIZE 2 of 2, COMPACT: the aidos modal spec. Fixed 420px wide, capped by\n     the mask safe box on both axes, and auto-height so a short modal stays\n     short. When the cap bites the panel still does not scroll: the body\n     does. */\n  width: 420px;\n  max-width: 100%;\n  max-height: 100%;\n  height: auto;\n}\n\n.plugin-modal-header {\n  /* Header row: title on the left, close button on the right. */\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 12px;\n  margin-bottom: 16px;\n  flex: none;\n}\n\n.plugin-modal-title {\n  /* Header title text. */\n  font-size: 16px;\n  font-weight: 600;\n  line-height: 1.375rem;\n  margin: 0;\n  flex: 1;\n}\n\n.plugin-modal-close {\n  /* Close button in the header. */\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  flex: none;\n  width: 24px;\n  height: 24px;\n  border: none;\n  background: transparent;\n  color: var(--dsw-alias-label-primary);\n  cursor: pointer;\n  padding: 0;\n  border-radius: 4px;\n  transition: background-color 0.12s;\n}\n\n.plugin-modal-close:hover {\n  background: var(--dsw-alias-bg-tertiary);\n}\n\n.plugin-modal-body {\n  /* The modal's single scroller, filling whatever the header and the action\n     row leave. A flex column on purpose: it lets a caller mark one region as\n     the flexible one (job-viewer's output box is `flex: 1`) so that region\n     keeps a CONSTANT height and scrolls internally instead of growing the\n     panel with its content. */\n  display: flex;\n  flex-direction: column;\n  flex: 1;\n  min-height: 0;\n  overflow-y: auto;\n  overflow-x: hidden;\n}\n\n.plugin-modal-actions,\n.plugin-modal-footer {\n  /* Action buttons are ALWAYS right-aligned. The shared component wraps\n     whatever the caller passes as `actions` in this row, so the alignment is\n     structural: no caller has to ask for it and no caller can opt out of it.\n     Stays fixed at the bottom while the body scrolls. */\n  display: flex;\n  align-items: center;\n  justify-content: flex-end;\n  gap: 8px;\n  margin-top: 16px;\n  flex: none;\n  padding-top: 12px;\n  border-top: 1px solid var(--dsw-alias-border-l3);\n}\n";
-
-// plugins/shared/plugin-modal.tsx
-var STYLE_OWNER = "shared";
-var STYLE_ID = "shared/plugin-modal.css";
-injectStyle(STYLE_OWNER, STYLE_ID, plugin_modal_default);
-function CloseIcon() {
-  return /* @__PURE__ */ import_react.default.createElement(
-    "svg",
-    {
-      viewBox: "0 0 24 24",
-      width: "16",
-      height: "16",
-      fill: "none",
-      stroke: "currentColor",
-      strokeWidth: "2",
-      strokeLinecap: "round",
-      strokeLinejoin: "round"
-    },
-    /* @__PURE__ */ import_react.default.createElement("line", { x1: "18", y1: "6", x2: "6", y2: "18" }),
-    /* @__PURE__ */ import_react.default.createElement("line", { x1: "6", y1: "6", x2: "18", y2: "18" })
-  );
+// plugins/shared/modal-client.ts
+var MODAL_API_VERSION = 1;
+function api() {
+  const found = globalThis.__dshModal__;
+  if (found === null || typeof found !== "object") return null;
+  const candidate = found;
+  if (candidate.version !== MODAL_API_VERSION) return null;
+  if (typeof candidate.open !== "function" || typeof candidate.close !== "function") {
+    return null;
+  }
+  if (typeof candidate.subscribe !== "function") return null;
+  return candidate;
 }
-function standardSize(size) {
-  return size === "compact" ? "compact" : "full";
+function openModal(request) {
+  const found = api();
+  if (found === null) {
+    return { opened: false, id: null, reason: "modal-unavailable" };
+  }
+  try {
+    return { opened: true, id: found.open(request) };
+  } catch (error) {
+    console.error("[modal-client] open threw:", error);
+    return { opened: false, id: null, reason: "modal-threw" };
+  }
 }
-function PluginModal(props) {
-  var size = standardSize(props.size);
-  var actions = props.actions !== void 0 && props.actions !== null ? props.actions : props.footer;
-  import_react.default.useEffect(
-    function() {
-      var onKeyDown = function(event) {
-        if (event.key === "Escape") {
-          props.onClose();
-        }
-      };
-      document.addEventListener("keydown", onKeyDown);
-      return function() {
-        document.removeEventListener("keydown", onKeyDown);
-      };
-    },
-    [props.onClose]
-  );
-  return /* @__PURE__ */ import_react.default.createElement("div", { className: "plugin-modal-mask", onClick: props.onClose }, /* @__PURE__ */ import_react.default.createElement(
-    "div",
-    {
-      className: "plugin-modal-panel",
-      "data-size": size,
-      role: "dialog",
-      "aria-labelledby": "plugin-modal-title",
-      onClick: function(event) {
-        event.stopPropagation();
-      }
-    },
-    /* @__PURE__ */ import_react.default.createElement("div", { className: "plugin-modal-header" }, /* @__PURE__ */ import_react.default.createElement("h2", { id: "plugin-modal-title", className: "plugin-modal-title" }, props.title), /* @__PURE__ */ import_react.default.createElement(
-      "button",
-      {
-        className: "plugin-modal-close",
-        onClick: props.onClose,
-        "aria-label": "Close",
-        type: "button"
-      },
-      /* @__PURE__ */ import_react.default.createElement(CloseIcon, null)
-    )),
-    /* @__PURE__ */ import_react.default.createElement("div", { className: "plugin-modal-body" }, props.children),
-    actions ? /* @__PURE__ */ import_react.default.createElement("div", { className: "plugin-modal-actions" }, actions) : null
-  ));
+function closeModal(id) {
+  if (id === null) return false;
+  const found = api();
+  if (found === null) return false;
+  try {
+    return found.close(id);
+  } catch (error) {
+    console.error("[modal-client] close threw:", error);
+    return false;
+  }
+}
+
+// plugins/shared/toast-client.ts
+var SUPPORTED_VERSION = 1;
+function api2() {
+  const found = globalThis.__dshToast__;
+  if (found === null || typeof found !== "object") return null;
+  const candidate = found;
+  if (candidate.version !== SUPPORTED_VERSION) return null;
+  if (typeof candidate.show !== "function" || typeof candidate.dismiss !== "function") return null;
+  return candidate;
+}
+function toast(text, kind = "info", durationMs) {
+  const found = api2();
+  if (found === null) return null;
+  try {
+    return found.show(text, kind, durationMs);
+  } catch (error) {
+    console.error("[toast-client] show threw:", error);
+    return null;
+  }
 }
 
 // plugins/tool-render/src/questions.ts
@@ -7252,7 +7237,7 @@ function respondToApproval(pending, outcome) {
     }
   });
 }
-var SafeItemBody = class extends react2.Component {
+var SafeItemBody = class extends react.Component {
   props;
   state;
   constructor(props) {
@@ -7268,14 +7253,14 @@ var SafeItemBody = class extends react2.Component {
   render() {
     if (this.state.error !== null && this.state.error !== void 0) {
       var fallback = bodyFallbackFor(this.props.surfaceName);
-      return /* @__PURE__ */ react2.createElement(
+      return /* @__PURE__ */ react.createElement(
         "div",
         {
           className: "composer-approvals-fallback",
           "data-surface": fallback.surface,
           role: "note"
         },
-        /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-fallback-text" }, fallback.message)
+        /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-fallback-text" }, fallback.message)
       );
     }
     var bodyProps = this.props.bodyProps || {};
@@ -7284,34 +7269,34 @@ var SafeItemBody = class extends react2.Component {
       if (Object.prototype.hasOwnProperty.call(bodyProps, key)) merged[key] = bodyProps[key];
     }
     merged.ask = this.props.ask;
-    return react2.createElement(this.props.component, merged);
+    return react.createElement(this.props.component, merged);
   }
 };
 function ApprovalBody(props) {
   var detail = typeof props.detail === "string" && props.detail !== "" ? props.detail : null;
-  return /* @__PURE__ */ react2.createElement("div", { className: "composer-approvals-detail" }, detail === null ? /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-detail-empty" }, "Waiting on your answer.") : /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-detail-text", title: detail }, detail));
+  return /* @__PURE__ */ react.createElement("div", { className: "composer-approvals-detail" }, detail === null ? /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-detail-empty" }, "Waiting on your answer.") : /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-detail-text", title: detail }, detail));
 }
 function QuestionBody(props) {
   var detail = typeof props.detail === "string" && props.detail !== "" ? props.detail : null;
-  return /* @__PURE__ */ react2.createElement("div", { className: "composer-approvals-detail" }, detail === null ? /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-detail-empty" }, "Answer on the running card.") : /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-detail-text", title: detail }, detail));
+  return /* @__PURE__ */ react.createElement("div", { className: "composer-approvals-detail" }, detail === null ? /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-detail-empty" }, "Answer on the running card.") : /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-detail-text", title: detail }, detail));
 }
 function AttentionCard(props) {
   var item = props.item;
   var bodyProps = item.props;
-  var armedState = react2.useState(false);
+  var armedState = react.useState(false);
   var armed = armedState[0];
   var setArmed = armedState[1];
-  var answeredState = react2.useState(false);
+  var answeredState = react.useState(false);
   var answered = answeredState[0];
   var setAnswered = answeredState[1];
-  var armTimer = react2.useRef(0);
-  react2.useEffect(function() {
+  var armTimer = react.useRef(0);
+  react.useEffect(function() {
     return function() {
       if (armTimer.current !== 0) window.clearTimeout(armTimer.current);
     };
   }, []);
   var verdict = evaluateItemExpiry(item);
-  react2.useEffect(
+  react.useEffect(
     function() {
       if (verdict === "expired") {
         props.store.removeItem(item.key);
@@ -7357,7 +7342,7 @@ function AttentionCard(props) {
     var tone = action.tone === "approve" ? "approve" : action.tone === "reject" ? "reject" : "jump";
     var className = tone === "approve" ? "composer-approvals-approve" : tone === "reject" ? "composer-approvals-reject" : "composer-approvals-jump";
     var isArmed = tone === "reject" && armed;
-    return /* @__PURE__ */ react2.createElement(
+    return /* @__PURE__ */ react.createElement(
       "button",
       {
         key: action.id,
@@ -7372,16 +7357,16 @@ function AttentionCard(props) {
       isArmed && action.confirmLabel ? action.confirmLabel : action.label
     );
   });
-  return /* @__PURE__ */ react2.createElement(
+  return /* @__PURE__ */ react.createElement(
     "li",
     {
       className: "composer-approvals-card",
       "data-kind": typeof kind === "string" ? kind : void 0,
       "data-unverifiable": verdict === "unverifiable" ? "1" : void 0
     },
-    /* @__PURE__ */ react2.createElement("div", { className: "composer-approvals-card-head" }, kindLabel === null ? null : /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-kind" }, kindLabel), /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-title", title }, title)),
-    /* @__PURE__ */ react2.createElement("div", { className: "composer-approvals-attr" }, props.sessionLabel),
-    verdict === "unverifiable" ? /* @__PURE__ */ react2.createElement("div", { className: "composer-approvals-unverifiable", role: "note" }, /* @__PURE__ */ react2.createElement("span", null, "Could not verify whether this ask is still live, so it stays visible \u2014 a hidden live ask would strand an agent."), /* @__PURE__ */ react2.createElement(
+    /* @__PURE__ */ react.createElement("div", { className: "composer-approvals-card-head" }, kindLabel === null ? null : /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-kind" }, kindLabel), /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-title", title }, title)),
+    /* @__PURE__ */ react.createElement("div", { className: "composer-approvals-attr" }, props.sessionLabel),
+    verdict === "unverifiable" ? /* @__PURE__ */ react.createElement("div", { className: "composer-approvals-unverifiable", role: "note" }, /* @__PURE__ */ react.createElement("span", null, "Could not verify whether this ask is still live, so it stays visible \u2014 a hidden live ask would strand an agent."), /* @__PURE__ */ react.createElement(
       "button",
       {
         type: "button",
@@ -7392,7 +7377,7 @@ function AttentionCard(props) {
       },
       "Remove"
     )) : null,
-    /* @__PURE__ */ react2.createElement("div", { className: "composer-approvals-body" }, /* @__PURE__ */ react2.createElement(
+    /* @__PURE__ */ react.createElement("div", { className: "composer-approvals-body" }, /* @__PURE__ */ react.createElement(
       SafeItemBody,
       {
         key: item.key,
@@ -7403,7 +7388,7 @@ function AttentionCard(props) {
         itemKey: item.key
       }
     )),
-    /* @__PURE__ */ react2.createElement("div", { className: "composer-approvals-actions" }, callId === null ? actions.length === 0 ? /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-no-call" }, "no tool call") : null : /* @__PURE__ */ react2.createElement(
+    /* @__PURE__ */ react.createElement("div", { className: "composer-approvals-actions" }, callId === null ? actions.length === 0 ? /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-no-call" }, "no tool call") : null : /* @__PURE__ */ react.createElement(
       "button",
       {
         type: "button",
@@ -7419,17 +7404,17 @@ function AttentionCard(props) {
 }
 function AttentionModal(props) {
   var store = props.store;
-  var snapshot = react2.useSyncExternalStore(store.subscribe, store.getSnapshot);
+  var snapshot = react.useSyncExternalStore(store.subscribe, store.getSnapshot);
   var tabs = visibleTabsOf(snapshot, props.sessionId);
-  var activeState = react2.useState(null);
+  var activeState = react.useState(null);
   var activeId = activeState[0];
   var setActiveId = activeState[1];
   var active = tabs.length === 0 ? null : tabs.find(function(tab) {
     return tab.surface.id === activeId;
   }) || tabs[0];
-  var bar = tabs.length < 2 ? null : /* @__PURE__ */ react2.createElement("div", { className: "composer-approvals-tabs", role: "tablist" }, tabs.map(function(tab) {
+  var bar = tabs.length < 2 ? null : /* @__PURE__ */ react.createElement("div", { className: "composer-approvals-tabs", role: "tablist" }, tabs.map(function(tab) {
     var selected = active !== null && tab.surface.id === active.surface.id;
-    return /* @__PURE__ */ react2.createElement(
+    return /* @__PURE__ */ react.createElement(
       "button",
       {
         key: tab.surface.id,
@@ -7442,12 +7427,12 @@ function AttentionModal(props) {
           setActiveId(tab.surface.id);
         }
       },
-      /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-tab-name" }, tab.surface.displayName),
-      tab.items.length > 1 ? /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-tab-count", "aria-hidden": true }, tab.items.length) : null
+      /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-tab-name" }, tab.surface.displayName),
+      tab.items.length > 1 ? /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-tab-count", "aria-hidden": true }, tab.items.length) : null
     );
   }));
-  return /* @__PURE__ */ react2.createElement(react2.Fragment, null, bar, active === null ? null : /* @__PURE__ */ react2.createElement("ul", { className: "composer-approvals-list" }, active.items.map(function(item) {
-    return /* @__PURE__ */ react2.createElement(
+  return /* @__PURE__ */ react.createElement(react.Fragment, null, bar, active === null ? null : /* @__PURE__ */ react.createElement("ul", { className: "composer-approvals-list" }, active.items.map(function(item) {
+    return /* @__PURE__ */ react.createElement(
       AttentionCard,
       {
         key: item.key,
@@ -7464,7 +7449,7 @@ function AttentionModal(props) {
 }
 function useBuiltInSurfaces(sessionId, approvalRows, questionRows, pendingOf) {
   var store = getAttentionStore();
-  var box = react2.useRef(null);
+  var box = react.useRef(null);
   if (box.current === null) {
     mountSeq += 1;
     var suffix = String(mountSeq);
@@ -7481,7 +7466,7 @@ function useBuiltInSurfaces(sessionId, approvalRows, questionRows, pendingOf) {
       handlesByItem: /* @__PURE__ */ new Map()
     };
   }
-  react2.useEffect(function() {
+  react.useEffect(function() {
     var owned = box.current;
     if (owned === null) return void 0;
     return function() {
@@ -7496,7 +7481,7 @@ function useBuiltInSurfaces(sessionId, approvalRows, questionRows, pendingOf) {
       box.current = null;
     };
   }, []);
-  react2.useEffect(
+  react.useEffect(
     function() {
       var owned = box.current;
       if (owned === null) return;
@@ -7614,25 +7599,23 @@ function useBuiltInSurfaces(sessionId, approvalRows, questionRows, pendingOf) {
 }
 function makeIndicator() {
   return function Indicator(props) {
-    var selectorTools = react2.useMemo(makeSelector, []);
+    var selectorTools = react.useMemo(makeSelector, []);
     var approvalRows = props.useSession(selectorTools.selectApprovals);
-    var questionTools = react2.useMemo(makeQuestionSelector, []);
+    var questionTools = react.useMemo(makeQuestionSelector, []);
     var questionInputs = props.useSession(questionTools.selectQuestions);
-    var openState = react2.useState(false);
-    var open = openState[0];
-    var setOpen = openState[1];
-    var missingState = react2.useState(function() {
+    var modalId = react.useRef(null);
+    var missingState = react.useState(function() {
       return /* @__PURE__ */ new Set();
     });
     var missing = missingState[0];
     var setMissing = missingState[1];
-    var fadeState = react2.useState(function() {
+    var fadeState = react.useState(function() {
       return initialRingFade(questionInputs.answered);
     });
     var fade = fadeState[0];
     var setFade = fadeState[1];
     var paint = composerRingPaint(questionInputs.pending, questionInputs.answered, fade);
-    react2.useEffect(
+    react.useEffect(
       function() {
         if (paint.next === null) return void 0;
         if (paint.next === "hold") {
@@ -7687,7 +7670,7 @@ function makeIndicator() {
         return;
       }
       el.scrollIntoView({ behavior: "smooth", block: "center" });
-      setOpen(false);
+      closeAttention();
     };
     var jumpableOf = function(item) {
       var callId = item.props.callId;
@@ -7699,7 +7682,50 @@ function makeIndicator() {
       var found = owned.handlesByItem.get(itemKey);
       return found === void 0 ? null : found;
     };
-    return /* @__PURE__ */ react2.createElement(react2.Fragment, null, /* @__PURE__ */ react2.createElement(
+    var liveHandlers = react.useRef({ jumpableOf, onJump: jump, handlesOf });
+    liveHandlers.current = { jumpableOf, onJump: jump, handlesOf };
+    var closeAttention = function() {
+      closeModal(modalId.current);
+      modalId.current = null;
+    };
+    var openAttention = function() {
+      if (modalId.current !== null) return;
+      var opened = openModal({
+        title: "Needs your attention",
+        // The full standard size (#75): the settings-panel footprint every
+        // other plugin modal uses. Cards carry their own actions rows, so
+        // there is no modal-level actions row here — but the panel matches
+        // its siblings rather than being the one odd 420px popover.
+        size: "full",
+        onClose: function() {
+          modalId.current = null;
+        },
+        body: /* @__PURE__ */ react.createElement(
+          AttentionModal,
+          {
+            sessionId,
+            sessionLabel: "This session",
+            jumpableOf: function(item) {
+              return liveHandlers.current.jumpableOf(item);
+            },
+            onJump: function(key, callId) {
+              liveHandlers.current.onJump(key, callId);
+            },
+            handlesOf: function(itemKey) {
+              return liveHandlers.current.handlesOf(itemKey);
+            },
+            store: getAttentionStore()
+          }
+        )
+      });
+      if (opened.opened) {
+        modalId.current = opened.id;
+      } else {
+        console.error("[composer-approvals] attention modal did not open:", opened.reason);
+        toast("Approvals modal is unavailable", "refusal");
+      }
+    };
+    return /* @__PURE__ */ react.createElement(react.Fragment, null, /* @__PURE__ */ react.createElement(
       "button",
       {
         type: "button",
@@ -7710,38 +7736,12 @@ function makeIndicator() {
         "data-dsh-tip": "",
         title: label,
         onClick: function() {
-          setOpen(true);
+          openAttention();
         }
       },
-      /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-glyph", "aria-hidden": true }, "!"),
-      count > 1 ? /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-count", "aria-hidden": true }, count) : null
-    ), open ? (
-      // The full standard size (#75): the settings-panel footprint every
-      // other plugin modal uses. Cards carry their own actions rows, so
-      // there is no modal-level actions row here — but the panel matches
-      // its siblings rather than being the one odd 420px popover.
-      /* @__PURE__ */ react2.createElement(
-        PluginModal,
-        {
-          title: "Needs your attention",
-          size: "full",
-          onClose: function() {
-            setOpen(false);
-          }
-        },
-        /* @__PURE__ */ react2.createElement(
-          AttentionModal,
-          {
-            sessionId,
-            sessionLabel: "This session",
-            jumpableOf,
-            onJump: jump,
-            handlesOf,
-            store: getAttentionStore()
-          }
-        )
-      )
-    ) : null);
+      /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-glyph", "aria-hidden": true }, "!"),
+      count > 1 ? /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-count", "aria-hidden": true }, count) : null
+    ));
   };
 }
 var name = PLUGIN_NAME;

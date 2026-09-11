@@ -22,7 +22,8 @@ import { createPortal } from "react-dom";
 import { AnsiUp } from "ansi_up";
 import primitives from "@deepseek-ai/dsh-client-ui-primitives";
 import { injectStyle, mergeCss, fetchJson, postJson } from "../../shared/client-util";
-import { PluginModal } from "../../shared/plugin-modal";
+import { closeModal, openModal } from "../../shared/modal-client";
+import { toast } from "../../shared/toast-client";
 import settingsCss from "../../shared/settings.css";
 import localCss from "./client.module.css";
 
@@ -98,6 +99,256 @@ function ordered(
   });
 }
 
+/**
+ * One job-output modal body, SELF-CONTAINED: everything it shows is state it
+ * owns plus the props it was handed. React context does not cross the modal
+ * seam (#93) — the modal host renders this component in ITS tree — so the
+ * poll chain, autoscroll, the ANSI conversion and the per-job state that used
+ * to live in the dropdown all moved in here, handed over in props at open
+ * time.
+ *
+ * The two-step kill control lives HERE rather than in the shared actions row:
+ * the actions node crosses the seam as a static record stored at open time,
+ * so a control whose label tracks live state ("Really stop?" → "Stopping…")
+ * cannot live there. The Close button, whose label never changes, stays in
+ * the shared row.
+ */
+function JobOutputBody(props: any) {
+  var jobId = props.jobId;
+
+  var statusState = react.useState(props.status);
+  var status = statusState[0];
+  var setStatus = statusState[1];
+  var statusRef = react.useRef(props.status);
+
+  var outState = react.useState(null);
+  var out = outState[0];
+  var setOut = outState[1];
+
+  var autoscrollState = react.useState(true);
+  var autoscroll = autoscrollState[0];
+  var setAutoscroll = autoscrollState[1];
+
+  var killPhaseState = react.useState("idle");
+  var killPhase = killPhaseState[0];
+  var setKillPhase = killPhaseState[1];
+
+  var killErrorState = react.useState(null);
+  var killError = killErrorState[0];
+  var setKillError = killErrorState[1];
+
+  var outputWrapRef = react.useRef(null);
+
+  // One fetch now, then a poll chain while the known status stays live.
+  // The cleanup cancels the chain and any pending timer, so a closed
+  // modal leaves no timer behind.
+  react.useEffect(
+    function () {
+      var cancelled = false;
+      var timer: any = null;
+      var tick = function () {
+        fetchJson("/job-viewer/output?job_id=" + encodeURIComponent(jobId)).then(
+          function (result) {
+            if (cancelled) return;
+            if (result.error) {
+              // A live job with no buffer entry yet is transient: the
+              // poller simply hasn't stored its first read. Keep the
+              // "Loading…" state and keep polling instead of showing the
+              // raw "unknown job" string. A terminal job with no entry is
+              // settled: show the friendly missing state and stop.
+              var unknown = result.error === UNKNOWN_JOB_ERROR;
+              var live = statusRef.current === "running" || statusRef.current === "stopping";
+              if (!unknown || !live) {
+                setOut({
+                  error: unknown ? null : result.error,
+                  text: unknown ? "" : null,
+                  truncated: false,
+                  missing: unknown,
+                });
+              }
+            } else {
+              var data = result.data;
+              setOut({
+                error: null,
+                text: data && typeof data.text === "string" ? data.text : "",
+                truncated: !!(data && data.truncated === true),
+                evicted: !!(data && data.evicted === true),
+                job: data && data.job ? data.job : undefined,
+              });
+              if (data && data.job && data.job.status) {
+                statusRef.current = data.job.status;
+                setStatus(data.job.status);
+              }
+            }
+            if (statusRef.current === "running" || statusRef.current === "stopping") {
+              timer = setTimeout(tick, POLL_MS);
+            }
+          },
+        );
+      };
+      tick();
+      return function () {
+        cancelled = true;
+        if (timer !== null) clearTimeout(timer);
+      };
+    },
+    [jobId],
+  );
+
+  // Scroll the output to its bottom on new data, but only when the
+  // autoscroll checkbox is checked.
+  react.useEffect(
+    function () {
+      if (!autoscroll) return;
+      var wrap = outputWrapRef.current;
+      if (wrap !== null) wrap.scrollTop = wrap.scrollHeight;
+    },
+    [out && out.text, autoscroll],
+  );
+
+  // Revert the kill confirm on its own after a short wait.
+  react.useEffect(
+    function () {
+      if (killPhase !== "confirming") return;
+      var timer = setTimeout(function () {
+        setKillPhase("idle");
+      }, CONFIRM_MS);
+      return function () {
+        clearTimeout(timer);
+      };
+    },
+    [killPhase],
+  );
+
+  // Convert ANSI escapes to HTML once per output change. ansi_up escapes
+  // plain text by default, so the result is safe for inner HTML. A fresh
+  // converter per run keeps one output's dangling styles out of the next.
+  var outputHtml = react.useMemo(
+    function () {
+      if (out === null || typeof out.text !== "string" || out.text === "") return "";
+      return makeAnsiUp().ansi_to_html(out.text);
+    },
+    [out && out.text],
+  );
+
+  /** Two-step kill: arm the confirm, then post and refetch the output. */
+  var onKillClick = function () {
+    if (killPhase === "idle") {
+      setKillError(null);
+      setKillPhase("confirming");
+      return;
+    }
+    if (killPhase !== "confirming") return;
+    setKillPhase("killing");
+    postJson("/job-viewer/kill", { job_id: jobId }).then(function (result) {
+      if (result.error || !result.data || result.data.ok !== true) {
+        setKillError(result.error || "Kill request failed");
+        setKillPhase("idle");
+        return;
+      }
+      if (result.data.job && result.data.job.status) {
+        statusRef.current = result.data.job.status;
+        setStatus(result.data.job.status);
+      }
+      // One-shot refetch so the fresh terminal status and output show
+      // without waiting for the next poll tick.
+      fetchJson("/job-viewer/output?job_id=" + encodeURIComponent(jobId)).then(
+        function (fresh) {
+          if (fresh.error) {
+            setKillError(fresh.error);
+            return;
+          }
+          var data = fresh.data;
+          setOut({
+            error: null,
+            text: data && typeof data.text === "string" ? data.text : "",
+            truncated: !!(data && data.truncated === true),
+          });
+          if (data && data.job && data.job.status) {
+            statusRef.current = data.job.status;
+            setStatus(data.job.status);
+          }
+        },
+      );
+    });
+  };
+
+  // The row is the freshest label; the fetch snapshot covers rows that
+  // outlived the live list or the buffer entry (evicted/missing).
+  var shown =
+    props.label != null
+      ? { label: props.label, kind: props.kind }
+      : out && out.job
+        ? out.job
+        : null;
+  var live = status === "running" || status === "stopping";
+  var killLabel =
+    killPhase === "killing" ? "Stopping…" : killPhase === "confirming" ? "Really stop?" : "Stop job";
+
+  var body = null;
+  if (out === null) {
+    body = <div className="jv-empty">Loading…</div>;
+  } else if (out.evicted) {
+    body = (
+      <>
+        {shown ? <div className="jv-command">{shown.label}</div> : null}
+        <div className="jv-empty">
+          {"Output expired — finished jobs keep their output for 10 minutes."}
+        </div>
+        <div className="jv-meta">
+          {shown ? shown.kind + " · " + status : "job status: " + status}
+        </div>
+      </>
+    );
+  } else if (out.missing) {
+    body = (
+      <>
+        {shown ? <div className="jv-command">{shown.label}</div> : null}
+        <div className="jv-empty">{"No output available for this job."}</div>
+      </>
+    );
+  } else {
+    body = (
+      <>
+        {shown ? <div className="jv-command">{shown.label}</div> : null}
+        <div className="jv-meta">
+          {"status: " + status}
+        </div>
+        <label className="jv-autoscroll">
+          <input
+            type="checkbox"
+            checked={autoscroll}
+            onChange={function (event) {
+              setAutoscroll(event.target.checked);
+            }}
+          />
+          {"Auto-scroll"}
+        </label>
+        <div className="jv-output-wrap" ref={outputWrapRef}>
+          <pre className="jv-output" dangerouslySetInnerHTML={{ __html: outputHtml }} />
+        </div>
+        {out.truncated ? (
+          <div className="jv-note">Earlier output was dropped (buffer full).</div>
+        ) : null}
+        {out.error ? <div className="dsp-err">{out.error}</div> : null}
+        {killError ? <div className="dsp-err">{killError}</div> : null}
+        {live ? (
+          <div className="jv-modal-actions">
+            <ui.Button
+              variant="outline"
+              disabled={killPhase === "killing"}
+              onClick={onKillClick}
+            >
+              {killLabel}
+            </ui.Button>
+          </div>
+        ) : null}
+      </>
+    );
+  }
+  return body;
+}
+
 /** Build the dropdown component. State stays per-registration. */
 function makeJobViewerAction() {
   return function JobViewerAction(props: any) {
@@ -118,32 +369,11 @@ function makeJobViewerAction() {
     var now = nowState[0];
     var setNow = nowState[1];
 
-    var openJobState = react.useState(null);
-    var openJobId = openJobState[0];
-    var setOpenJobId = openJobState[1];
-
-    var outState = react.useState(null);
-    var out = outState[0];
-    var setOut = outState[1];
-
-    var statusState = react.useState(null);
-    var status = statusState[0];
-    var setStatus = statusState[1];
-    var statusRef = react.useRef(null);
-
-    var autoscrollState = react.useState(true);
-    var autoscroll = autoscrollState[0];
-    var setAutoscroll = autoscrollState[1];
-
-    var killPhaseState = react.useState("idle");
-    var killPhase = killPhaseState[0];
-    var setKillPhase = killPhaseState[1];
-
-    var killErrorState = react.useState(null);
-    var killError = killErrorState[0];
-    var setKillError = killErrorState[1];
-
-    var outputWrapRef = react.useRef(null);
+    // The id openModal() handed back, or null when no output modal is on
+    // screen. The modal's own state lives in JobOutputBody (it renders in
+    // the host's tree); the dropdown tracks only the handle it needs to
+    // close the modal again.
+    var modalId = react.useRef(null);
 
     var triggerRef = react.useRef(null);
     var menuRef = react.useRef(null);
@@ -236,160 +466,57 @@ function makeJobViewerAction() {
       [menuOpen],
     );
 
-    /** Open the modal for one job and reset all per-job state. */
-    var openJob = function (job: { id: string; status: string }) {
+    /** Open the output modal for one job through the shared modal host. */
+    var openJob = function (job: any) {
       setMenuOpen(false);
-      statusRef.current = job.status;
-      setStatus(job.status);
-      setOut(null);
-      setKillPhase("idle");
-      setKillError(null);
-      setOpenJobId(job.id);
-    };
-
-    /** Close the modal and drop its data. */
-    var closeJob = function () {
-      setOpenJobId(null);
-      setOut(null);
-      setKillPhase("idle");
-      setKillError(null);
-    };
-
-    // One fetch now, then a poll chain while the known status stays live.
-    // The cleanup cancels the chain and any pending timer, so a closed
-    // modal or an unmounted component leaves no timer behind.
-    react.useEffect(
-      function () {
-        if (openJobId === null) return;
-        var cancelled = false;
-        var timer: any = null;
-        var tick = function () {
-          fetchJson("/job-viewer/output?job_id=" + encodeURIComponent(openJobId)).then(
-            function (result) {
-              if (cancelled) return;
-              if (result.error) {
-                // A live job with no buffer entry yet is transient: the
-                // poller simply hasn't stored its first read. Keep the
-                // "Loading…" state and keep polling instead of showing the
-                // raw "unknown job" string. A terminal job with no entry is
-                // settled: show the friendly missing state and stop.
-                var unknown = result.error === UNKNOWN_JOB_ERROR;
-                var live = statusRef.current === "running" || statusRef.current === "stopping";
-                if (!unknown || !live) {
-                  setOut({
-                    error: unknown ? null : result.error,
-                    text: unknown ? "" : null,
-                    truncated: false,
-                    missing: unknown,
-                  });
-                }
-              } else {
-                var data = result.data;
-                setOut({
-                  error: null,
-                  text: data && typeof data.text === "string" ? data.text : "",
-                  truncated: !!(data && data.truncated === true),
-                  evicted: !!(data && data.evicted === true),
-                  job: data && data.job ? data.job : undefined,
-                });
-                if (data && data.job && data.job.status) {
-                  statusRef.current = data.job.status;
-                  setStatus(data.job.status);
-                }
-              }
-              if (statusRef.current === "running" || statusRef.current === "stopping") {
-                timer = setTimeout(tick, POLL_MS);
-              }
-            },
-          );
-        };
-        tick();
-        return function () {
-          cancelled = true;
-          if (timer !== null) clearTimeout(timer);
-        };
-      },
-      [openJobId],
-    );
-
-    // Scroll the output to its bottom on new data, but only when the
-    // autoscroll checkbox is checked.
-    react.useEffect(
-      function () {
-        if (!autoscroll) return;
-        var wrap = outputWrapRef.current;
-        if (wrap !== null) wrap.scrollTop = wrap.scrollHeight;
-      },
-      [out && out.text, autoscroll],
-    );
-
-    // Revert the kill confirm on its own after a short wait.
-    react.useEffect(
-      function () {
-        if (killPhase !== "confirming") return;
-        var timer = setTimeout(function () {
-          setKillPhase("idle");
-        }, CONFIRM_MS);
-        return function () {
-          clearTimeout(timer);
-        };
-      },
-      [killPhase],
-    );
-
-    // Convert ANSI escapes to HTML once per output change. ansi_up escapes
-    // plain text by default, so the result is safe for inner HTML. A fresh
-    // converter per run keeps one output's dangling styles out of the next.
-    var outputHtml = react.useMemo(
-      function () {
-        if (out === null || typeof out.text !== "string" || out.text === "") return "";
-        return makeAnsiUp().ansi_to_html(out.text);
-      },
-      [out && out.text],
-    );
-
-    /** Two-step kill: arm the confirm, then post and refetch the output. */
-    var onKillClick = function () {
-      if (openJobId === null) return;
-      if (killPhase === "idle") {
-        setKillError(null);
-        setKillPhase("confirming");
-        return;
+      // One output modal at a time: the host stacks a record per open, so
+      // a second row click would put a second panel on screen.
+      if (modalId.current !== null) {
+        closeModal(modalId.current);
+        modalId.current = null;
       }
-      if (killPhase !== "confirming") return;
-      setKillPhase("killing");
-      var jobId = openJobId;
-      postJson("/job-viewer/kill", { job_id: jobId }).then(function (result) {
-        if (result.error || !result.data || result.data.ok !== true) {
-          setKillError(result.error || "Kill request failed");
-          setKillPhase("idle");
-          return;
-        }
-        if (result.data.job && result.data.job.status) {
-          statusRef.current = result.data.job.status;
-          setStatus(result.data.job.status);
-        }
-        // One-shot refetch so the fresh terminal status and output show
-        // without waiting for the next poll tick.
-        fetchJson("/job-viewer/output?job_id=" + encodeURIComponent(jobId)).then(
-          function (fresh) {
-            if (fresh.error) {
-              setKillError(fresh.error);
-              return;
-            }
-            var data = fresh.data;
-            setOut({
-              error: null,
-              text: data && typeof data.text === "string" ? data.text : "",
-              truncated: !!(data && data.truncated === true),
-            });
-            if (data && data.job && data.job.status) {
-              statusRef.current = data.job.status;
-              setStatus(data.job.status);
-            }
-          },
-        );
+      var opened = openModal({
+        title: "Job output",
+        // The full standard size: this modal holds a constant-height output
+        // box, so it wants the settings-panel footprint, not the compact one.
+        size: "full",
+        onClose: function () {
+          modalId.current = null;
+        },
+        // The actions row crosses the seam as a static record, so only the
+        // ever-green Close button lives here; the kill control is in the
+        // body. The row is the shared one, right-aligned by the shared
+        // stylesheet; this file never states an alignment of its own.
+        actions: (
+          <ui.Button
+            variant="outline"
+            onClick={function () {
+              closeModal(modalId.current);
+              modalId.current = null;
+            }}
+          >
+            {"Close"}
+          </ui.Button>
+        ),
+        body: (
+          <JobOutputBody
+            jobId={job.id}
+            label={job.label}
+            kind={job.kind}
+            status={job.status}
+          />
+        ),
       });
+      if (opened.opened) {
+        modalId.current = opened.id;
+      } else {
+        // The load-bearing inversion: the modal did NOT open, so say so —
+        // never silence. The toast names the failure; the console carries
+        // the host's reason. The row stays usable, so a retry after the
+        // modal plugin loads works.
+        console.error("[job-viewer] output modal did not open:", opened.reason);
+        toast("Job output modal is unavailable", "refusal");
+      }
     };
 
     if (jobs.length === 0) return null;
@@ -419,98 +546,6 @@ function makeJobViewerAction() {
         </li>
       );
     });
-
-    var modal = null;
-    if (openJobId !== null) {
-      var known = jobs.find(function (job: any) {
-        return job.id === openJobId;
-      });
-      var live = status === "running" || status === "stopping";
-      var killLabel =
-        killPhase === "killing" ? "Stopping…" : killPhase === "confirming" ? "Really stop?" : "Stop job";
-      // The row is the freshest label; the fetch snapshot covers rows that
-      // outlived the live list or the buffer entry (evicted/missing).
-      var shown = known !== undefined ? known : out && out.job ? out.job : null;
-      var body = null;
-      if (out === null) {
-        body = <div className="jv-empty">Loading…</div>;
-      } else if (out.evicted) {
-        body = (
-          <>
-            {shown ? <div className="jv-command">{shown.label}</div> : null}
-            <div className="jv-empty">
-              {"Output expired — finished jobs keep their output for 10 minutes."}
-            </div>
-            <div className="jv-meta">
-              {shown ? shown.kind + " · " + status : "job status: " + status}
-            </div>
-          </>
-        );
-      } else if (out.missing) {
-        body = (
-          <>
-            {shown ? <div className="jv-command">{shown.label}</div> : null}
-            <div className="jv-empty">{"No output available for this job."}</div>
-          </>
-        );
-      } else {
-        body = (
-          <>
-            {shown ? <div className="jv-command">{shown.label}</div> : null}
-            <div className="jv-meta">
-              {"status: " + status}
-            </div>
-            <label className="jv-autoscroll">
-              <input
-                type="checkbox"
-                checked={autoscroll}
-                onChange={function (event) {
-                  setAutoscroll(event.target.checked);
-                }}
-              />
-              {"Auto-scroll"}
-            </label>
-            <div className="jv-output-wrap" ref={outputWrapRef}>
-              <pre className="jv-output" dangerouslySetInnerHTML={{ __html: outputHtml }} />
-            </div>
-            {out.truncated ? (
-              <div className="jv-note">Earlier output was dropped (buffer full).</div>
-            ) : null}
-            {out.error ? <div className="dsp-err">{out.error}</div> : null}
-            {killError ? <div className="dsp-err">{killError}</div> : null}
-          </>
-        );
-      }
-      // The full standard size: this modal holds a constant-height output
-      // box, so it wants the settings-panel footprint, not the compact one.
-      // The buttons go through the shared actions row, which right-aligns
-      // them; this file never states an alignment of its own.
-      modal = (
-        <PluginModal
-          title="Job output"
-          size="full"
-          onClose={closeJob}
-          actions={
-            <>
-              <ui.Button variant="outline" onClick={closeJob}>
-                {"Close"}
-              </ui.Button>
-              {live ? (
-                <ui.Button
-                  variant="outline"
-                  disabled={killPhase === "killing"}
-                  onClick={onKillClick}
-                >
-                  {killLabel}
-                </ui.Button>
-              ) : null}
-            </>
-          }
-        >
-          {body}
-        </PluginModal>
-      );
-    }
 
     return (
       <div className="jv-root">
@@ -554,7 +589,6 @@ function makeJobViewerAction() {
               document.body,
             )
           : null}
-        {modal}
       </div>
     );
   };
