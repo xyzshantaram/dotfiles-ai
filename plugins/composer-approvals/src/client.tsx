@@ -12,20 +12,18 @@
 // running card shows a disabled jump. The indicator disappears once every
 // pending is answered.
 //
-// The same component maintains the composer question rings (#38, fade per
-// #106): while a question waits, the composer card carries a white band
-// whose width grows per pending question; an answered batch holds a duller
-// band just long enough to confirm the answer registered, then it fades out
-// and leaves nothing behind. Widths come from the shared ring rule (see
-// ./questions); the paint itself is static CSS on [data-composer-card], so
-// this effect only sets two custom properties (and a marker attribute that
-// outranks the card's own shadow).
+// The same component drives the composer BADGE (#135): tone by pending kind
+// (blue rewrite / yellow escalation / neutral question, priority rule in
+// ./badge), count across every pending kind, and #106's hold-then-fade
+// confirmation window after the last answer. The composer RING this file
+// used to paint is deliberately gone; ./questions keeps only the timing
+// constants and the row/question plumbing that survived the deletion.
 import * as react from "react";
 import * as runtime from "@deepseek-ai/dsh-client-runtime/client";
 import { injectStyle } from "../../shared/client-util";
 import { PluginModal } from "../../shared/plugin-modal";
 import { composerRingPaint, questionModalRowsOf, ringInputsOf } from "./questions";
-import { badgeToneOf, badgeVisible } from "./badge";
+import { badgeCount, badgeToneOf, badgeVisible } from "./badge";
 import { initialRingFade, RING_FADE_HOLD_MS, RING_FADE_MS } from "./questions";
 import type { QuestionModalRow } from "./questions";
 import localCss from "./client.module.css";
@@ -445,6 +443,13 @@ function makeIndicator() {
     }
     var tone = badgeToneOf(approvalReasons, questionInputs.pending);
     var confirming = paint.ornament && tone === "none";
+    // The label names what is actually pending: a question-only badge that
+    // announces "approvals" lies to a screen reader and to the tooltip.
+    var label = tone === "question" ? "Pending questions" : "Pending approvals";
+    // The count goes through the TESTED helper (not rows.length) so the
+    // mutation-pinned "count is independent of tone" contract is the shipped
+    // path, not a structural twin of it (#135 review note).
+    var count = badgeCount((approvalRows as ApprovalRow[]).length, questionInputs.pending);
 
     var rows: ModalRow[] = (approvalRows as ApprovalRow[]).concat(questionInputs.rows);
     // Stay mounted through the confirmation window so an answer reads as
@@ -488,9 +493,9 @@ function makeIndicator() {
           className="composer-approvals-indicator"
           data-tone={tone}
           data-fading={confirming ? "1" : undefined}
-          aria-label="Pending approvals"
+          aria-label={label}
           data-dsh-tip=""
-          title="Pending approvals"
+          title={label}
           onClick={function () {
             setOpen(true);
           }}
@@ -504,9 +509,9 @@ function makeIndicator() {
             lower-priority kind is out-ranked for colour but never hidden,
             which is exactly the masking #132 had to undo.
           */}
-          {rows.length > 1 ? (
+          {count > 1 ? (
             <span className="composer-approvals-count" aria-hidden={true}>
-              {rows.length}
+              {count}
             </span>
           ) : null}
         </button>

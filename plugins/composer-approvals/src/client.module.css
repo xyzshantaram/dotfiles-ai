@@ -4,6 +4,7 @@
   width: 20px;
   height: 20px;
   flex: none;
+  box-sizing: border-box;
   display: grid;
   place-items: center;
   border: none;
@@ -126,8 +127,14 @@
    maintained. Colour vocabulary is INHERITED, not re-picked: blue = guard
    rewrite or rule ask, yellow = sandbox escalation, neutral = questions
    (#130 corrected escalations from blue to yellow hours ago; do not undo it).
-   One transition carries both the fade-in on arrival and the fade-out of the
-   confirmation window, so no per-frame JS is involved. */
+   The tone rides a 2px RING, not the glyph: every tone colour measured worse
+   than 3:1 against the amber disc (escalated is same-hue at ~1.4:1, the
+   review's weakest point), so the glyph stays white and the border carries
+   the vocabulary. One transition carries both the fade-in on arrival and the
+   fade-out of the confirmation window, so no per-frame JS is involved.
+   The 1600ms fallback MUST match RING_FADE_MS (src/questions.ts) — nothing
+   writes --dsh-badge-fade inline, so the literal IS the duration;
+   badge.test.ts pins the drift. */
 .composer-approvals-indicator {
   transition:
     border-color var(--dsh-badge-fade, 1600ms) ease-out,
@@ -135,17 +142,14 @@
     opacity var(--dsh-badge-fade, 1600ms) ease-out;
 }
 .composer-approvals-indicator[data-tone="escalated"] {
-  color: var(--dsh-outline-escalated, #ff8c00);
-  border-color: var(--dsh-outline-escalated, #ff8c00);
+  border: 2px solid var(--dsh-outline-escalated, #ff8c00);
 }
 .composer-approvals-indicator[data-tone="rewrite"],
 .composer-approvals-indicator[data-tone="approval"] {
-  color: var(--dsh-outline-guard, #00b7ff);
-  border-color: var(--dsh-outline-guard, #00b7ff);
+  border: 2px solid var(--dsh-outline-guard, #00b7ff);
 }
 .composer-approvals-indicator[data-tone="question"] {
-  color: var(--dsw-alias-label-primary);
-  border-color: var(--dsw-alias-border-l3);
+  border: 2px solid var(--dsw-alias-border-l3);
 }
 /* The confirmation window after the last item is answered (#106's intent,
    preserved): the badge dims out rather than vanishing under the cursor. */

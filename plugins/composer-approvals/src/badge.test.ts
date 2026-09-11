@@ -8,8 +8,12 @@
  * another. Out-ranked for colour is fine; invisible is not, which is why the
  * count is asserted to stay independent of the tone.
  */
+import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { approvalToneOf, badgeCount, badgeToneOf, badgeVisible } from "./badge";
+import { RING_FADE_MS } from "./questions";
 
 /** A stamped bash-guard rule/rewrite ask, as the guard writes it. */
 const REWRITE = "kind: bash-guard\nsummary: 'bash-guard: this command changes files.'\nruns: rm x\n";
@@ -108,5 +112,22 @@ describe("badgeVisible keeps the confirmation window", () => {
 
   it("disappears once nothing is pending and the window has closed", () => {
     expect(badgeVisible("none", false)).toBe(false);
+  });
+});
+
+describe("CSS/TS drift", () => {
+  it("the badge fade literal in client.module.css equals RING_FADE_MS", async () => {
+    // Nothing writes --dsh-badge-fade inline, so the CSS fallback literal IS
+    // the badge's fade duration. If it drifts from RING_FADE_MS the badge
+    // fades at a different speed than the timer that schedules the fade —
+    // the same hazard the old ring code's "must match it" comment guarded,
+    // restated as a test (#135 review note).
+    const css = await readFile(
+      join(dirname(fileURLToPath(import.meta.url)), "client.module.css"),
+      "utf8",
+    );
+    const hits = css.match(/--dsh-badge-fade,\s*\d+ms/g) ?? [];
+    expect(hits.length).toBeGreaterThan(0);
+    for (const hit of hits) expect(hit).toContain(`${RING_FADE_MS}ms`);
   });
 });
