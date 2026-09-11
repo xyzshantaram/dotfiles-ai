@@ -1,7 +1,7 @@
 // Unit tests for the guarded-approvals projection's apply fold. Pure state
 // checks: no React render, no DOM, no plugin host.
 import { describe, expect, it } from "vitest";
-import { guardedApprovalsProjection } from "./guarded-approvals";
+import { guardedApprovalsProjection, GUARDED_APPROVALS_CAP, GUARD_REASON_MAX } from "./guarded-approvals";
 
 function askedEvent(seq: number, data: unknown) {
   return { type: "approval/asked", seq: seq, time: 0, data: data };
@@ -177,28 +177,28 @@ describe("guardedApprovalsProjection.apply", () => {
     var view = guardedApprovalsProjection.view(state);
     expect(view).not.toBeNull();
     var reasons = (view as { reasons: Record<string, string> }).reasons;
-    expect(reasons["call-1"]).toBe(long.slice(0, 2000));
+    expect(reasons["call-1"]).toBe(long.slice(0, GUARD_REASON_MAX));
   });
 
   it("caps the map at the most recent entries by seq", async () => {
     var state = guardedApprovalsProjection.init();
-    for (var i = 0; i < 210; i++) {
+    for (var i = 0; i < GUARDED_APPROVALS_CAP + 10; i++) {
       state = guardedApprovalsProjection.apply(state, askedEvent(i, { id: "a" + i, callId: "call-" + i, reason: GUARD_REASON }) as never);
     }
     var view = guardedApprovalsProjection.view(state);
     expect(view).not.toBeNull();
     var typed = view as { guarded: Record<string, boolean>; outcomes: Record<string, string> };
-    expect(Object.keys(typed.guarded)).toHaveLength(200);
+    expect(Object.keys(typed.guarded)).toHaveLength(GUARDED_APPROVALS_CAP);
     expect(typed.guarded["call-9"]).toBeUndefined();
-    expect(typed.guarded["call-209"]).toBe(true);
+    expect(typed.guarded["call-" + (GUARDED_APPROVALS_CAP + 9)]).toBe(true);
     // A decision for an entry the cap already evicted cannot pair.
     state = guardedApprovalsProjection.apply(state, decidedEvent(300, { id: "a5", outcome: "approved" }) as never);
     view = guardedApprovalsProjection.view(state);
     expect((view as { outcomes: Record<string, string> }).outcomes["call-5"]).toBeUndefined();
     // A decision for a live entry pairs.
-    state = guardedApprovalsProjection.apply(state, decidedEvent(301, { id: "a209", outcome: "rejected" }) as never);
+    state = guardedApprovalsProjection.apply(state, decidedEvent(301, { id: "a" + (GUARDED_APPROVALS_CAP + 9), outcome: "rejected" }) as never);
     view = guardedApprovalsProjection.view(state);
-    expect((view as { outcomes: Record<string, string> }).outcomes["call-209"]).toBe("rejected");
+    expect((view as { outcomes: Record<string, string> }).outcomes["call-" + (GUARDED_APPROVALS_CAP + 9)]).toBe("rejected");
   });
 
   it("keeps STATE losslessly JSON-serializable, with no present-but-undefined keys (#127)", () => {

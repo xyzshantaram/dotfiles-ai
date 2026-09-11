@@ -26362,8 +26362,8 @@ function isBashGuardReason(reason) {
 
 // plugins/tool-render/src/guarded-approvals.ts
 var GUARDED_APPROVALS_KEY = "tool-render/guarded-approvals";
-var GUARDED_APPROVALS_CAP = 200;
-var GUARD_REASON_MAX = 2e3;
+var GUARDED_APPROVALS_CAP = 100;
+var GUARD_REASON_MAX = 280;
 var viewSchema2 = external_exports.object({
   guarded: external_exports.record(external_exports.string(), external_exports.literal(true)),
   outcomes: external_exports.record(external_exports.string(), external_exports.string()),
