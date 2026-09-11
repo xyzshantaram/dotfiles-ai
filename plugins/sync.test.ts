@@ -190,10 +190,18 @@ describe("step_drop_code_preset removes the code agent preset (#139)", () => {
       "step_drop_code_preset",
       'echo "STEP_RETURNED"',
     ].join("\n");
-    const out = execFileSync("bash", ["-c", script], { stdio: "pipe" }).toString();
-    // The step must RETURN, not abort the run.
+    const out = execFileSync("bash", ["-c", script], {
+      stdio: "pipe",
+      cwd: root,
+    }).toString();
+    // The step must RETURN rather than abort the run...
     expect(out).toContain("STEP_RETURNED");
-    expect(root).toBeTruthy();
+    // ...AND it must have taken the SKIP path. Asserting only the return was
+    // not discriminating: GNU realpath resolves a bare name against cwd and
+    // exits 0, so the unguarded version does not abort either — it computes
+    // a garbage package root and is saved only by the later -d check. The
+    // warning is what proves we refused to derive from an unresolvable dsh.
+    expect(out).toMatch(/could not resolve dsh to a real binary/);
   });
 
   it("is idempotent: absent is success, so a rerun converges", () => {
