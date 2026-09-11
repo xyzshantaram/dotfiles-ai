@@ -19,8 +19,15 @@
  * contract, where emptyLine is indeed always set.
  */
 
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { ehSectionModel, ehUsageHasContent } from "./eh-section-model";
+import {
+  ELECTRONHUB_DEV_NOTE,
+  ehSectionModel,
+  ehUsageHasContent,
+} from "./eh-section-model";
 
 /** One fold input pair plus what the section must render for it. */
 interface FoldRow {
@@ -393,6 +400,26 @@ describe("#141 shape 1: a regular ek- key renders everything REST gives, fail-so
   });
 });
 
+describe("#141 review: the models fetch honours the dev-key guard", () => {
+  // Source-structure pin, the same tool as the archive regression guard:
+  // /user/models 401s dev keys BY DESIGN, so the guard must fire BEFORE the
+  // account-scoped attempt — or the dev credential reaches an endpoint that
+  // rejects it (#141 review finding 1).
+  const here = dirname(fileURLToPath(import.meta.url));
+
+  it("electronhubModelsOnce checks ehIsDevKey before any /user/models fetch", () => {
+    const src = readFileSync(join(here, "index.ts"), "utf8");
+    const start = src.indexOf("electronhubModelsOnce");
+    const end = src.indexOf("handleElectronhubUsage");
+    const body = src.slice(start, end);
+    const guard = body.indexOf("ehIsDevKey(key)");
+    const scoped = body.indexOf('attempt("/user/models")');
+    expect(guard).toBeGreaterThan(-1);
+    expect(scoped).toBeGreaterThan(-1);
+    expect(guard).toBeLessThan(scoped);
+  });
+});
+
 describe("#141 shape 2: a dev key renders the design fact, never 'invalid key'", () => {
   /** What the host answers for a dev key, from the prefix alone (no fetch). */
   const devEnvelope = () =>
@@ -400,9 +427,7 @@ describe("#141 shape 2: a dev key renders the design fact, never 'invalid key'",
       ok: true,
       ...parseElectronHubUsage(null),
       devKey: true,
-      note:
-        "usage endpoints are unavailable to dev keys (ek-dev-… answers HTTP 401 on " +
-        "/user/me and /user/models by design — the key is valid for inference only)",
+      note: ELECTRONHUB_DEV_NOTE,
     });
 
   it("the fold reads as ready with the note, not as an error or empty", () => {

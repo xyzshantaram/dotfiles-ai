@@ -1032,8 +1032,27 @@ export function apply(ctx, config) {
     // /v1/user/models is the account-scoped list and rejects key classes that
     // still work for inference; /v1/models is the public catalog and answers
     // for any valid key. Fall back to it so the section shows a real model
-    // list instead of nothing. (#141: a dev key never reaches this fetch for
-    // usage, but the catalog here is public and still renders — fine.)
+    // list instead of nothing.
+    if (ehIsDevKey(key)) {
+      // Probe step 1 applies to THIS fetch too (#141 review): a dev key must
+      // never reach /user/models — it 401s there BY DESIGN, and a swallowed
+      // 401 is still the dev credential hitting an endpoint that rejects it.
+      // The public catalog answers WITHOUT any key (verified live during
+      // #74), so fetch it keyless: no Authorization header, no dev
+      // credential on the wire. Account usage is unreachable for a dev key
+      // by definition, so this branch is catalog-only.
+      const res = await fetch(`${ELECTRONHUB_API_BASE}/models`, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(ELECTRONHUB_TIMEOUT_MS),
+      });
+      if (!res.ok) {
+        throw new Error(
+          `electronhub models unavailable: public catalog HTTP ${res.status} ` +
+            "(dev key cannot request account usage)",
+        );
+      }
+      return { models: parseElectronHubModels(await res.json()), source: "catalog" };
+    }
     const attempt = async (path) => {
       const res = await electronhubGet(path, key);
       if (!res.ok) return { ok: false, status: res.status, models: [], body: null };

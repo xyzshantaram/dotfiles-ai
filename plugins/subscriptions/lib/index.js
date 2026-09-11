@@ -1326,6 +1326,18 @@ function apply(ctx, config) {
     return parseElectronHubUsage(await res.json());
   }, ELECTRONHUB_USAGE_CACHE_MS);
   const electronhubModelsOnce = cachedOnce(async (key) => {
+    if (ehIsDevKey(key)) {
+      const res = await fetch(`${ELECTRONHUB_API_BASE}/models`, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(ELECTRONHUB_TIMEOUT_MS)
+      });
+      if (!res.ok) {
+        throw new Error(
+          `electronhub models unavailable: public catalog HTTP ${res.status} (dev key cannot request account usage)`
+        );
+      }
+      return { models: parseElectronHubModels(await res.json()), source: "catalog" };
+    }
     const attempt = async (path) => {
       const res = await electronhubGet(path, key);
       if (!res.ok) return { ok: false, status: res.status, models: [], body: null };
