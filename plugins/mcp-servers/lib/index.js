@@ -19678,18 +19678,87 @@ function createStore(path) {
   };
 }
 
+// plugins/mcp-servers/src/origin.ts
+function isLoopbackHostname(hostname) {
+  const h = hostname.toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
+  if (h === "localhost" || h === "::1") return true;
+  const parts = h.split(".");
+  if (parts.length === 4 && parts[0] === "127") {
+    return parts.every((p) => /^\d{1,3}$/.test(p) && Number(p) <= 255);
+  }
+  return false;
+}
+function invalidConfig(raw, why) {
+  return {
+    ok: false,
+    error: `mcp-servers: invalid redirectOrigin ${JSON.stringify(raw) ?? String(raw)}: ${why} It must be the exact public origin browsers use, for example "https://harness.example.com". MCP OAuth is loopback-only until a valid origin is pinned here.`
+  };
+}
+function normalizeConfiguredOrigin(raw) {
+  if (raw === void 0 || raw === null) return { ok: true, origin: "" };
+  if (typeof raw !== "string" || raw.trim() === "") {
+    if (typeof raw === "string") return { ok: true, origin: "" };
+    return invalidConfig(raw, "it must be a string.");
+  }
+  const trimmed = raw.trim();
+  let url2;
+  try {
+    url2 = new URL(trimmed);
+  } catch {
+    return invalidConfig(raw, "it is not an absolute URL.");
+  }
+  if (url2.protocol !== "http:" && url2.protocol !== "https:") {
+    return invalidConfig(raw, `its scheme is "${url2.protocol}" instead of http or https.`);
+  }
+  return { ok: true, origin: url2.origin };
+}
+function loudUnconfigured(hostShown) {
+  return {
+    ok: false,
+    error: `mcp-servers: cannot build an OAuth redirect_uri for host "${hostShown}": the browser's true origin is not recoverable from this request. Behind a TLS-terminating proxy the scheme is lost, and when dsh-remote gates it rewrites Host and Origin to the loopback authority for authenticated requests, so neither scheme nor authority can be trusted here; x-forwarded-* headers are attacker-controllable and deliberately ignored. MCP OAuth is loopback-only unless a redirect origin is pinned: set redirectOrigin in the mcp-servers plugin config to the exact public origin browsers use (for example "https://harness.example.com") and register "https://harness.example.com/mcp-servers/callback/<server>" with the OAuth provider as a redirect URI.`
+  };
+}
+function resolveRedirectOrigin(host, configuredOrigin) {
+  if (configuredOrigin !== "") {
+    return { ok: true, origin: configuredOrigin, source: "configured" };
+  }
+  const rawHost = host ?? "127.0.0.1";
+  let url2;
+  try {
+    url2 = new URL(`http://${rawHost}`);
+  } catch {
+    return loudUnconfigured(rawHost);
+  }
+  if (isLoopbackHostname(url2.hostname)) {
+    return { ok: true, origin: url2.origin, source: "loopback" };
+  }
+  return loudUnconfigured(rawHost);
+}
+
 // plugins/mcp-servers/src/index.ts
 var name = "mcp-servers";
 var inject = ["tools", "webServer"];
 function page(title, body) {
   return `<!doctype html><html><head><title>${title}</title></head><body><h1>${title}</h1><p>${body}</p><p><a href="/">Back</a></p></body></html>`;
 }
-function apply(ctx) {
+function apply(ctx, config2) {
   const dir = process.env.DSH_HOME ?? join(homedir2(), ".dsh");
   const path = join(dir, "mcp-servers.json");
   const { servers, error: error2 } = readConfig(path);
   ctx.logger.info(`mcp-servers: loaded ${servers.length} server(s) from ${path}`);
   if (error2) ctx.logger.warn(`mcp-servers: ${error2}`);
+  const normalized = normalizeConfiguredOrigin(config2?.redirectOrigin);
+  let configuredOrigin = "";
+  let configError = "";
+  if (normalized.ok === false) {
+    configError = normalized.error;
+    ctx.logger.warn(`mcp-servers: ${configError}`);
+  } else {
+    configuredOrigin = normalized.origin;
+    if (configuredOrigin !== "") {
+      ctx.logger.info(`mcp-servers: using configured redirect origin ${configuredOrigin}`);
+    }
+  }
   const store = createStore(join(dir, "mcp-oauth.json"));
   const registry2 = createRegistry(ctx, {
     store,
@@ -19698,14 +19767,22 @@ function apply(ctx) {
       return currentOrigin;
     }
   });
-  let currentOrigin = "";
+  let currentOrigin = configuredOrigin;
+  let lastOriginError = configError;
   const webServer = ctx.webServer;
   const disposeRoute = webServer.register({
     kind: "prefix",
     path: "/mcp-servers",
     async handler(req, res) {
+      const verdict = configError !== "" ? { ok: false, error: configError } : resolveRedirectOrigin(req.headers.host, configuredOrigin);
+      if (verdict.ok === false) {
+        currentOrigin = configuredOrigin;
+        lastOriginError = verdict.error;
+      } else {
+        currentOrigin = verdict.origin;
+        lastOriginError = "";
+      }
       const url2 = new URL(req.url ?? "/", `http://${req.headers.host ?? "127.0.0.1"}`);
-      currentOrigin = url2.origin;
       const parts = url2.pathname.split("/").filter(Boolean);
       if (req.method === "GET" && parts[1] === "callback" && parts[2] !== void 0) {
         const name2 = decodeURIComponent(parts[2]);
@@ -19747,7 +19824,21 @@ function apply(ctx) {
       if (req.method === "POST" && parts[1] === "api" && parts[2] === "servers" && parts[3] !== void 0 && parts[4] === "authorize") {
         const name2 = decodeURIComponent(parts[3]);
         try {
+          if (lastOriginError !== "") {
+            res.writeHead(200, { "content-type": "application/json" });
+            res.end(JSON.stringify({ error: lastOriginError }));
+            return;
+          }
           const authorizeUrl = await registry2.authorize(name2);
+          if (authorizeUrl === "") {
+            res.writeHead(200, { "content-type": "application/json" });
+            res.end(
+              JSON.stringify({
+                error: "mcp-servers: the browser origin is still unknown; reload the panel and try again."
+              })
+            );
+            return;
+          }
           res.writeHead(200, { "content-type": "application/json" });
           res.end(JSON.stringify({ authorizeUrl }));
         } catch (e) {
