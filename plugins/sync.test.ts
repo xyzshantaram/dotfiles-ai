@@ -174,6 +174,28 @@ describe("step_drop_code_preset removes the code agent preset (#139)", () => {
     expect(existsSync(join(pkg, "config", "agent-presets", "code"))).toBe(true);
   });
 
+  it("skips with a warning when dsh does not resolve to a real binary", () => {
+    // `command -v` can return a function name or alias, and realpath then
+    // fails. Under `set -euo pipefail` an unguarded failure would kill the
+    // WHOLE sync with no message — a failure mode that reads as "sync is
+    // broken" rather than "this one step was skipped".
+    const root = mkdtempSync(join(tmpdir(), "code-preset-fn-"));
+    const body = extractStep("step_drop_code_preset");
+    const script = [
+      "set -euo pipefail",
+      'short_path() { echo "$1"; }',
+      // A shell FUNCTION named dsh: command -v prints "dsh", realpath fails.
+      "dsh() { :; }",
+      body,
+      "step_drop_code_preset",
+      'echo "STEP_RETURNED"',
+    ].join("\n");
+    const out = execFileSync("bash", ["-c", script], { stdio: "pipe" }).toString();
+    // The step must RETURN, not abort the run.
+    expect(out).toContain("STEP_RETURNED");
+    expect(root).toBeTruthy();
+  });
+
   it("is idempotent: absent is success, so a rerun converges", () => {
     // sync runs repeatedly; a step that errors on an already-done state
     // fails the whole run for no reason.
