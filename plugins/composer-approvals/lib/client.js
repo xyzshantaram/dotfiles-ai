@@ -6641,6 +6641,9 @@ function badgeToneOf(approvalReasons, questionCount) {
   if (best !== "none") return best;
   return questionCount > 0 ? "question" : "none";
 }
+function badgeCount(approvalCount, questionCount) {
+  return Math.max(0, approvalCount) + Math.max(0, questionCount);
+}
 function badgeVisible(tone, confirming) {
   return tone !== "none" || confirming;
 }
@@ -6652,6 +6655,7 @@ var client_default = `/* Pending-approval indicator at the composer. */
   width: 20px;
   height: 20px;
   flex: none;
+  box-sizing: border-box;
   display: grid;
   place-items: center;
   border: none;
@@ -6774,8 +6778,14 @@ var client_default = `/* Pending-approval indicator at the composer. */
    maintained. Colour vocabulary is INHERITED, not re-picked: blue = guard
    rewrite or rule ask, yellow = sandbox escalation, neutral = questions
    (#130 corrected escalations from blue to yellow hours ago; do not undo it).
-   One transition carries both the fade-in on arrival and the fade-out of the
-   confirmation window, so no per-frame JS is involved. */
+   The tone rides a 2px RING, not the glyph: every tone colour measured worse
+   than 3:1 against the amber disc (escalated is same-hue at ~1.4:1, the
+   review's weakest point), so the glyph stays white and the border carries
+   the vocabulary. One transition carries both the fade-in on arrival and the
+   fade-out of the confirmation window, so no per-frame JS is involved.
+   The 1600ms fallback MUST match RING_FADE_MS (src/questions.ts) \u2014 nothing
+   writes --dsh-badge-fade inline, so the literal IS the duration;
+   badge.test.ts pins the drift. */
 .composer-approvals-indicator {
   transition:
     border-color var(--dsh-badge-fade, 1600ms) ease-out,
@@ -6783,17 +6793,14 @@ var client_default = `/* Pending-approval indicator at the composer. */
     opacity var(--dsh-badge-fade, 1600ms) ease-out;
 }
 .composer-approvals-indicator[data-tone="escalated"] {
-  color: var(--dsh-outline-escalated, #ff8c00);
-  border-color: var(--dsh-outline-escalated, #ff8c00);
+  border: 2px solid var(--dsh-outline-escalated, #ff8c00);
 }
 .composer-approvals-indicator[data-tone="rewrite"],
 .composer-approvals-indicator[data-tone="approval"] {
-  color: var(--dsh-outline-guard, #00b7ff);
-  border-color: var(--dsh-outline-guard, #00b7ff);
+  border: 2px solid var(--dsh-outline-guard, #00b7ff);
 }
 .composer-approvals-indicator[data-tone="question"] {
-  color: var(--dsw-alias-label-primary);
-  border-color: var(--dsw-alias-border-l3);
+  border: 2px solid var(--dsw-alias-border-l3);
 }
 /* The confirmation window after the last item is answered (#106's intent,
    preserved): the badge dims out rather than vanishing under the cursor. */
@@ -7059,6 +7066,8 @@ function makeIndicator() {
     }
     var tone = badgeToneOf(approvalReasons, questionInputs.pending);
     var confirming = paint.ornament && tone === "none";
+    var label = tone === "question" ? "Pending questions" : "Pending approvals";
+    var count = badgeCount(approvalRows.length, questionInputs.pending);
     var rows = approvalRows.concat(questionInputs.rows);
     if (!badgeVisible(tone, confirming)) return null;
     var jump = function(row) {
@@ -7095,15 +7104,15 @@ function makeIndicator() {
         className: "composer-approvals-indicator",
         "data-tone": tone,
         "data-fading": confirming ? "1" : void 0,
-        "aria-label": "Pending approvals",
+        "aria-label": label,
         "data-dsh-tip": "",
-        title: "Pending approvals",
+        title: label,
         onClick: function() {
           setOpen(true);
         }
       },
       /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-glyph", "aria-hidden": true }, "!"),
-      rows.length > 1 ? /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-count", "aria-hidden": true }, rows.length) : null
+      count > 1 ? /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-count", "aria-hidden": true }, count) : null
     ), open ? (
       // The full standard size (#75): the settings-panel footprint every
       // other plugin modal uses. Rows carry their own actions, so there is
