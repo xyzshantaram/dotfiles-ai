@@ -89,7 +89,8 @@
  * impossible, and it must not creep back in as a feature.
  *
  * EXIT CODES
- *   0  every mutation was killed
+ *   0  every mutation was killed, or survivors were reported because
+ *      --allow-survivors was passed (see the caveat above)
  *   1  at least one mutation survived (a coverage gap)
  *   2  the run could not be trusted: dirty tree, wrong HEAD, red baseline,
  *      empty or unappliable patch, or a revert that did not restore the tree
