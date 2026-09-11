@@ -471,6 +471,169 @@ function isPlainObject(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+// plugins/subscriptions/src/eh-section-model.ts
+var ELECTRONHUB_DEV_PREFIX = "ek-dev-";
+var ELECTRONHUB_DEV_NOTE = "usage endpoints are unavailable to dev keys (ek-dev-\u2026 answers HTTP 401 on /user/me and /user/models by design \u2014 the key is valid for inference only)";
+function ehIsDevKey(key) {
+  return typeof key === "string" && key.slice(0, ELECTRONHUB_DEV_PREFIX.length) === ELECTRONHUB_DEV_PREFIX;
+}
+function ehCodingPlanName(source) {
+  if (!source || typeof source !== "object") return null;
+  var candidates = [source.subscription, source.tier, source.plan];
+  if (source.subscription && typeof source.subscription === "object") {
+    candidates = [source.subscription.tier, source.subscription.name].concat(candidates);
+  }
+  for (var i = 0; i < candidates.length; i++) {
+    var value = candidates[i];
+    if (typeof value === "string" && /coding/i.test(value)) return value;
+  }
+  return null;
+}
+function ehNumber(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+function ehHistoryEntry(item) {
+  if (item === null || typeof item !== "object") return null;
+  const entry = item;
+  if (typeof entry.date !== "string" || entry.date === "") return null;
+  return { date: entry.date, requests: ehNumber(entry.requests) ?? 0 };
+}
+function ehFormatTimestamp(value) {
+  if (value === null || value === void 0) return null;
+  if (typeof value === "string" && value !== "") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().replace("T", " ").slice(0, 16) + " UTC";
+  }
+  const num = ehNumber(value);
+  if (num === null) return null;
+  const ms = Math.abs(num) >= 1e11 ? num : num * 1e3;
+  const date = new Date(ms);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().replace("T", " ").slice(0, 16) + " UTC";
+}
+function ehPercent(used, limit) {
+  const u = ehNumber(used);
+  const l = ehNumber(limit);
+  if (u === null || l === null || l <= 0) return null;
+  return Math.round(Math.min(100, u / l * 100));
+}
+function ehMonthlyBox(value) {
+  if (value === null || typeof value !== "object") return null;
+  const entry = value;
+  const used = ehNumber(entry.used);
+  const limit = ehNumber(entry.limit);
+  if (used === null && limit === null && ehNumber(entry.remaining) === null) return null;
+  return {
+    used,
+    limit,
+    remaining: ehNumber(entry.remaining),
+    reset: ehFormatTimestamp(entry.reset),
+    percent: ehPercent(used, limit)
+  };
+}
+function parseElectronHubUsage(data) {
+  const source = data !== null && typeof data === "object" ? data : {};
+  const usageSrc = source.usage !== null && typeof source.usage === "object" ? source.usage : {};
+  const history = [];
+  if (Array.isArray(source.history)) {
+    for (const item of source.history) {
+      const entry = ehHistoryEntry(item);
+      if (entry !== null) history.push(entry);
+    }
+  }
+  const endpoints = [];
+  const endpointsSrc = source.endpoints !== null && typeof source.endpoints === "object" && !Array.isArray(source.endpoints) ? source.endpoints : {};
+  for (const name2 of Object.keys(endpointsSrc)) {
+    const value = endpointsSrc[name2];
+    const requests = ehNumber(value) ?? (value === true ? 1 : 0);
+    endpoints.push({ name: name2, requests });
+  }
+  const codingPlanName = ehCodingPlanName(source);
+  let subscription = null;
+  if (typeof source.subscription === "string" && source.subscription !== "") {
+    subscription = source.subscription;
+  } else if (source.subscription && typeof source.subscription === "object") {
+    const named = [source.subscription.tier, source.subscription.name].find(
+      (candidate) => typeof candidate === "string" && candidate !== ""
+    );
+    if (typeof named === "string") subscription = named;
+  }
+  if (subscription === null && typeof source.tier === "string" && source.tier !== "") {
+    subscription = source.tier;
+  }
+  return {
+    subscription,
+    codingPlan: codingPlanName !== null,
+    credits: ehNumber(source.credits),
+    weeklyCredits: ehNumber(source.weekly_credits),
+    studioCredits: ehNumber(source.studio_credits),
+    usage: {
+      inputTokens: ehNumber(usageSrc.input_tokens) ?? 0,
+      outputTokens: ehNumber(usageSrc.output_tokens) ?? 0
+    },
+    monthly: {
+      claude: ehMonthlyBox(source.claude_monthly_tokens),
+      openai: ehMonthlyBox(source.openai_monthly_tokens)
+    },
+    history,
+    endpoints
+  };
+}
+function ehAccountModel(id, entry) {
+  const src = entry !== null && typeof entry === "object" ? entry : {};
+  return {
+    id: String(id),
+    requests: ehNumber(src.requests) ?? 0,
+    inputTokens: ehNumber(src.input_tokens),
+    outputTokens: ehNumber(src.output_tokens),
+    totalCost: ehNumber(src.total_cost),
+    ownedBy: typeof src.owned_by === "string" && src.owned_by !== "" ? src.owned_by : null
+  };
+}
+function parseElectronHubAccountModels(data) {
+  if (data === null || typeof data !== "object" || Array.isArray(data)) return null;
+  const source = data;
+  const modelsSrc = source.models;
+  if (modelsSrc === null || typeof modelsSrc !== "object" || Array.isArray(modelsSrc)) return null;
+  const ids = Object.keys(modelsSrc);
+  if (ids.length === 0) return null;
+  const entries = ids.map((id) => ehAccountModel(id, modelsSrc[id]));
+  entries.sort((a, b) => b.requests - a.requests);
+  return {
+    entries,
+    totalConsumption: ehNumber(source.total_consumption),
+    lastUpdated: ehFormatTimestamp(source.last_updated)
+  };
+}
+function parseElectronHubModels(data) {
+  let items = data;
+  if (items !== null && typeof items === "object" && !Array.isArray(items)) {
+    const wrapper = items;
+    if (Array.isArray(wrapper.data)) items = wrapper.data;
+    else if (Array.isArray(wrapper.models)) items = wrapper.models;
+    else return [];
+  }
+  if (!Array.isArray(items)) return [];
+  const models = [];
+  for (const item of items) {
+    if (typeof item === "string") {
+      if (item !== "") models.push(item);
+      continue;
+    }
+    if (item === null || typeof item !== "object") continue;
+    const entry = item;
+    const name2 = [entry.id, entry.name, entry.slug, entry.model].find(
+      (candidate) => typeof candidate === "string" && candidate !== ""
+    );
+    if (typeof name2 === "string") models.push(name2);
+  }
+  return models;
+}
+
 // plugins/subscriptions/src/index.ts
 var name = "subscriptions";
 var inject = ["webServer", "credentials"];
@@ -799,72 +962,6 @@ async function zaiMonitorGet(path, key) {
     );
   }
   return body.data;
-}
-function ehNumber(value) {
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
-function ehHistoryEntry(item) {
-  if (item === null || typeof item !== "object") return null;
-  const entry = item;
-  if (typeof entry.date !== "string" || entry.date === "") return null;
-  return { date: entry.date, requests: ehNumber(entry.requests) ?? 0 };
-}
-function parseElectronHubUsage(data) {
-  const source = data !== null && typeof data === "object" ? data : {};
-  const usageSrc = source.usage !== null && typeof source.usage === "object" ? source.usage : {};
-  const history = [];
-  if (Array.isArray(source.history)) {
-    for (const item of source.history) {
-      const entry = ehHistoryEntry(item);
-      if (entry !== null) history.push(entry);
-    }
-  }
-  const endpoints = [];
-  const endpointsSrc = source.endpoints !== null && typeof source.endpoints === "object" && !Array.isArray(source.endpoints) ? source.endpoints : {};
-  for (const name2 of Object.keys(endpointsSrc)) {
-    const value = endpointsSrc[name2];
-    const requests = ehNumber(value) ?? (value === true ? 1 : 0);
-    endpoints.push({ name: name2, requests });
-  }
-  return {
-    subscription: typeof source.subscription === "string" && source.subscription !== "" ? source.subscription : null,
-    credits: ehNumber(source.credits),
-    usage: {
-      inputTokens: ehNumber(usageSrc.input_tokens) ?? 0,
-      outputTokens: ehNumber(usageSrc.output_tokens) ?? 0
-    },
-    history,
-    endpoints
-  };
-}
-function parseElectronHubModels(data) {
-  let items = data;
-  if (items !== null && typeof items === "object" && !Array.isArray(items)) {
-    const wrapper = items;
-    if (Array.isArray(wrapper.data)) items = wrapper.data;
-    else if (Array.isArray(wrapper.models)) items = wrapper.models;
-    else return [];
-  }
-  if (!Array.isArray(items)) return [];
-  const models = [];
-  for (const item of items) {
-    if (typeof item === "string") {
-      if (item !== "") models.push(item);
-      continue;
-    }
-    if (item === null || typeof item !== "object") continue;
-    const entry = item;
-    const name2 = [entry.id, entry.name, entry.slug, entry.model].find(
-      (candidate) => typeof candidate === "string" && candidate !== ""
-    );
-    if (typeof name2 === "string") models.push(name2);
-  }
-  return models;
 }
 function apply(ctx, config) {
   const credentials = ctx.get("credentials");
@@ -1208,6 +1305,9 @@ function apply(ctx, config) {
     signal: AbortSignal.timeout(ELECTRONHUB_TIMEOUT_MS)
   });
   const electronhubUsageOnce = cachedOnce(async (key) => {
+    if (ehIsDevKey(key)) {
+      return { ...parseElectronHubUsage(null), devKey: true, note: ELECTRONHUB_DEV_NOTE };
+    }
     const res = await electronhubGet("/user/me", key);
     if (res.status === 403) {
       return {
@@ -1228,12 +1328,29 @@ function apply(ctx, config) {
   const electronhubModelsOnce = cachedOnce(async (key) => {
     const attempt = async (path) => {
       const res = await electronhubGet(path, key);
-      if (!res.ok) return { ok: false, status: res.status, models: [] };
-      return { ok: true, status: res.status, models: parseElectronHubModels(await res.json()) };
+      if (!res.ok) return { ok: false, status: res.status, models: [], body: null };
+      const body = await res.json();
+      return {
+        ok: true,
+        status: res.status,
+        models: parseElectronHubModels(body),
+        body
+      };
     };
     const scoped = await attempt("/user/models");
-    if (scoped.ok === true && scoped.models.length > 0) {
-      return { models: scoped.models, source: "account" };
+    const scopedAccount = scoped.ok === true ? parseElectronHubAccountModels(scoped.body) : null;
+    if (scoped.ok === true && (scoped.models.length > 0 || scopedAccount !== null)) {
+      const names = scoped.models.length > 0 ? scoped.models : scopedAccount.entries.map((entry) => entry.id);
+      const result = { models: names, source: "account" };
+      if (scopedAccount !== null) {
+        return {
+          ...result,
+          accountUsage: scopedAccount.entries,
+          totalConsumption: scopedAccount.totalConsumption,
+          lastUpdated: scopedAccount.lastUpdated
+        };
+      }
+      return result;
     }
     const catalog = await attempt("/models");
     if (catalog.ok === true) return { models: catalog.models, source: "catalog" };
