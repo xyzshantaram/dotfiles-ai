@@ -624,6 +624,19 @@ describe("attention shell: source structure", () => {
     expect(tsx).toContain("tabs.length < 2");
   });
 
+  it("a failed respond re-asks while the pending is still live", () => {
+    // #103 review nit: the re-ask path is implemented but only provable
+    // structurally in this toolchain (no DOM). Pin both halves — the
+    // still-live guard inside the owned box, and the re-place that returns
+    // the item to its tab with working buttons — so deleting either half
+    // of the recovery fails here.
+    expect(tsx).toContain(
+      "respondToApproval(target, String(settlement.outcome))",
+    );
+    expect(tsx).toContain("var stillLive = pendingOf(row.key);");
+    expect(tsx).toContain("placeApproval(row);");
+  });
+
   it("bodies are context-free: everything arrives through props", () => {
     // React context does not cross the modal seam (#93 review), so a body
     // relying on a caller-provided context would silently lose it.
