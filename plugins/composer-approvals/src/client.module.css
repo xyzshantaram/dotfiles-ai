@@ -120,73 +120,40 @@
   border-color: var(--dsw-alias-state-danger-primary, #dc2626);
   color: #fff;
 }
-/* Pending-question rings around the composer card (#38, fade per #106).
-   While a question waits, the composer card carries a white band; an
-   answered batch holds a duller band just long enough to confirm the answer
-   registered, then the contribution drops to zero and this transition
-   animates it away — no per-frame JS, no React re-renders, one timeout per
-   phase (see composerRingPaint in ./questions). One band step per question
-   (widths set inline as --dsh-q-bright/--dsh-q-dull, capped at four steps
-   each). An outline cannot stack, hence box-shadow: the bright band paints
-   inside the dull one, and the card's own shadow rides underneath so
-   disabling the rings (attribute absent) changes nothing.
-
-   The specificity note that used to sit here — that the doubled attribute
-   outranks the card's own single-class shadow rule regardless of style tag
-   order — described the OLD mechanism and was removed with it (#132). This
-   rule no longer competes for `box-shadow` at all: it fills one slot of a
-   list approval-comment composes, so there is nothing left to outrank and
-   ordering no longer decides anything.
-
-   The composer stays a normal editable input; these are additive styling
-   only. The fade is COMPOSER-ONLY by owner decision: tool call cards are
-   durable records whose outlines are the record's mark, so they keep theirs
-   permanently. */
-/* #132: FILL THE QUESTION SLOT, DO NOT REPLACE THE WHOLE PROPERTY.
-   This rule used to declare `box-shadow` outright. Because box-shadow is a
-   single property, that REPLACED approval-comment's composed list, so while
-   `data-dsh-qrings` was present a pending bash-guard approval's ring was
-   painted over and simply invisible — and the window is not momentary: the
-   attribute stays through the answered-fade cycle (#106's 2500ms hold plus
-   1600ms fade, ~4.1s AFTER a question is answered). The reported symptom
-   was exactly that: "it only does the questions". It also silently dropped
-   the host's own elevation layer, because the replacement carried
-   `--dsh-shadow-lv2`, which is not the host token (`--dsw-shadow-lv2` is).
-
-   A pending approval blocks an agent mid-command while a pending question
-   does not, so the less consequential signal was winning — an inversion of
-   priority, not merely a cosmetic clash.
-
-   approval-comment owns the composing rule and reserved
-   `--composer-ring-question` for us (its base rule, this file's sibling
-   plugin). Filling one slot means both signals stack instead of racing, and
-   a future fourth signal takes the next slot rather than fighting for the
-   property. THE COUPLING IS DELIBERATE AND NAMED: if approval-comment is
-   ever unmounted, nothing consumes this slot and the question bands stop
-   painting. Both plugins ship together from sync.sh; a bundle that splits
-   them must move the composing base rule somewhere shared. */
-[data-composer-card][data-dsh-qrings] {
-  /* One custom property may hold several comma-separated shadow layers, so
-     the two bands still occupy exactly one slot in the composed list.
-     Offsets start at --composer-ring-outer (the outermost approval spread,
-     published by approval-comment, 0px when no approval is pending) because
-     shadow spreads are cumulative from the border box: without the offset a
-     question band would paint UNDER a pending approval ring, which is the
-     same masking bug in the other direction. */
-  --composer-ring-question:
-    0 0 0 calc(var(--composer-ring-outer, 0px) + var(--dsh-q-bright, 0px)) #fff,
-    0 0 0
-      calc(var(--composer-ring-outer, 0px) + var(--dsh-q-bright, 0px) + var(--dsh-q-dull, 0px))
-      color-mix(in srgb, #fff 45%, transparent);
-  /* The widths arrive as custom properties, so transitioning the consuming
-     box-shadow animates the fade while the width change itself stays a
-     single style write. Duration arrives inline as --dsh-q-fade (single
-     source of truth: RING_FADE_MS); the fallback only covers a missed
-     write and must match it. */
-  transition: box-shadow var(--dsh-q-fade, 1600ms) ease-out;
+/* BADGE TONE (#135), replacing the composer ring entirely.
+   No rule here touches [data-composer-card] any more, so the cross-plugin
+   box-shadow contract #132 had to build is retired with the ring rather than
+   maintained. Colour vocabulary is INHERITED, not re-picked: blue = guard
+   rewrite or rule ask, yellow = sandbox escalation, neutral = questions
+   (#130 corrected escalations from blue to yellow hours ago; do not undo it).
+   One transition carries both the fade-in on arrival and the fade-out of the
+   confirmation window, so no per-frame JS is involved. */
+.composer-approvals-indicator {
+  transition:
+    border-color var(--dsh-badge-fade, 1600ms) ease-out,
+    color var(--dsh-badge-fade, 1600ms) ease-out,
+    opacity var(--dsh-badge-fade, 1600ms) ease-out;
+}
+.composer-approvals-indicator[data-tone="escalated"] {
+  color: var(--dsh-outline-escalated, #ff8c00);
+  border-color: var(--dsh-outline-escalated, #ff8c00);
+}
+.composer-approvals-indicator[data-tone="rewrite"],
+.composer-approvals-indicator[data-tone="approval"] {
+  color: var(--dsh-outline-guard, #00b7ff);
+  border-color: var(--dsh-outline-guard, #00b7ff);
+}
+.composer-approvals-indicator[data-tone="question"] {
+  color: var(--dsw-alias-label-primary);
+  border-color: var(--dsw-alias-border-l3);
+}
+/* The confirmation window after the last item is answered (#106's intent,
+   preserved): the badge dims out rather than vanishing under the cursor. */
+.composer-approvals-indicator[data-fading] {
+  opacity: 0.35;
 }
 @media (prefers-reduced-motion: reduce) {
-  [data-composer-card][data-dsh-qrings] {
+  .composer-approvals-indicator {
     transition: none;
   }
 }

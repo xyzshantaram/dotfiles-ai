@@ -25,6 +25,7 @@ import * as runtime from "@deepseek-ai/dsh-client-runtime/client";
 import { injectStyle } from "../../shared/client-util";
 import { PluginModal } from "../../shared/plugin-modal";
 import { composerRingPaint, questionModalRowsOf, ringInputsOf } from "./questions";
+import { badgeToneOf, badgeVisible } from "./badge";
 import { initialRingFade, RING_FADE_HOLD_MS, RING_FADE_MS } from "./questions";
 import type { QuestionModalRow } from "./questions";
 import localCss from "./client.module.css";
@@ -416,50 +417,39 @@ function makeIndicator() {
       [paint.next, questionInputs.answered, fade.faded, fade.zeroed],
     );
 
-    // The composer question rings (#38, fade per #106): one band step per
-    // pending question (bright) and, briefly, per newly answered batch
-    // (dull, fading). This effect only maintains the marker attribute and
-    // the width properties; cleanup removes all three, and the removal
-    // timer above drops the attribute once the last fade lands, so the
-    // composer returns to exactly its pre-question appearance. The card may
-    // be absent (hero phase), in which case there is nothing to paint.
-    //
-    // WHY THE COMPOSER FADES WHILE TOOL CALL CARDS KEEP THEIR OUTLINES
-    // PERMANENTLY: a card is a durable RECORD of one call and its outline is
-    // that record's mark, so a record that erases its own marks is not a
-    // record; the composer is a LIVE CONTROL whose styling must describe
-    // what the user can do now, so a ring that outlives the thing it asked
-    // about is putting history where the present belongs. Do not "fix" a
-    // permanent card outline by fading it.
-    react.useEffect(
-      function () {
-        if (typeof document === "undefined") return undefined;
-        var card = document.querySelector("[data-composer-card]");
-        if (card === null || !(card instanceof HTMLElement)) return undefined;
-        var painted = card;
-        if (!paint.ornament) {
-          painted.removeAttribute("data-dsh-qrings");
-          painted.style.removeProperty("--dsh-q-bright");
-          painted.style.removeProperty("--dsh-q-dull");
-          painted.style.removeProperty("--dsh-q-fade");
-          return undefined;
-        }
-        painted.setAttribute("data-dsh-qrings", "1");
-        painted.style.setProperty("--dsh-q-bright", paint.bright + "px");
-        painted.style.setProperty("--dsh-q-dull", paint.dull + "px");
-        painted.style.setProperty("--dsh-q-fade", RING_FADE_MS + "ms");
-        return function () {
-          painted.removeAttribute("data-dsh-qrings");
-          painted.style.removeProperty("--dsh-q-bright");
-          painted.style.removeProperty("--dsh-q-dull");
-          painted.style.removeProperty("--dsh-q-fade");
-        };
-      },
-      [paint.ornament, paint.bright, paint.dull],
-    );
+    /*
+     * THE COMPOSER RING IS GONE (#135). This used to paint
+     * `data-dsh-qrings` and three width properties onto
+     * [data-composer-card]. Three fronts had accumulated there -- #38's
+     * question rings, #65's approval rings, #106's hold-then-fade -- and
+     * #132 then had to stop them MASKING each other, because two plugins
+     * competed for one box-shadow property. The owner's call: drop the ring
+     * entirely and colour the badge instead. That deletes the whole
+     * cross-plugin custom-property contract rather than maintaining it.
+     *
+     * TOOL CALL CARDS ARE UNTOUCHED and must stay so. A card is a durable
+     * RECORD of one call and its outline is that record's mark, so a record
+     * that erases its own marks is not a record. The composer is a LIVE
+     * CONTROL whose styling describes what you can do NOW, which is why its
+     * state may fade. Do not "fix" a permanent card outline by fading it.
+     *
+     * `paint.ornament` survives as the CONFIRMATION WINDOW: it stays true
+     * through #106's hold-then-fade after the last question is answered, so
+     * the badge lingers briefly rather than vanishing mid-click. That intent
+     * is preserved; only its rendering moved.
+     */
+    var approvalReasons: unknown[] = [];
+    for (var ai = 0; ai < (approvalRows as ApprovalRow[]).length; ai++) {
+      var live = selectorTools.pendingOf((approvalRows as ApprovalRow[])[ai].key);
+      approvalReasons.push(live === undefined || live === null ? undefined : live.payload?.reason);
+    }
+    var tone = badgeToneOf(approvalReasons, questionInputs.pending);
+    var confirming = paint.ornament && tone === "none";
 
     var rows: ModalRow[] = (approvalRows as ApprovalRow[]).concat(questionInputs.rows);
-    if (rows.length === 0) return null;
+    // Stay mounted through the confirmation window so an answer reads as
+    // confirmed rather than as the badge disappearing under the cursor.
+    if (!badgeVisible(tone, confirming)) return null;
 
     var jump = function (row: ModalRow) {
       if (row.callId === null) return;
@@ -496,6 +486,8 @@ function makeIndicator() {
         <button
           type="button"
           className="composer-approvals-indicator"
+          data-tone={tone}
+          data-fading={confirming ? "1" : undefined}
           aria-label="Pending approvals"
           data-dsh-tip=""
           title="Pending approvals"
@@ -506,6 +498,12 @@ function makeIndicator() {
           <span className="composer-approvals-glyph" aria-hidden={true}>
             !
           </span>
+          {/*
+            The COUNT reports everything pending while the TONE reports only
+            the most urgent kind. Keeping them separate is deliberate: a
+            lower-priority kind is out-ranked for colour but never hidden,
+            which is exactly the masking #132 had to undo.
+          */}
           {rows.length > 1 ? (
             <span className="composer-approvals-count" aria-hidden={true}>
               {rows.length}
