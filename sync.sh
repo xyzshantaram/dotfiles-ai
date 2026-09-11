@@ -1364,7 +1364,18 @@ step_drop_code_preset() {
 		echo "  WARNING: dsh not on PATH; skipping code-preset removal."
 		return 0
 	fi
-	dsh_pkg="$(dirname "$(dirname "$(realpath "$dsh_bin")")")"
+	# `command -v` can return a FUNCTION NAME or an alias rather than a path,
+	# and realpath then fails. Under `set -euo pipefail` that would kill the
+	# entire sync mid-run with no message — the opposite of the warn-and-skip
+	# this step intends, and a failure mode that looks like sync itself is
+	# broken. Capture the failure instead of inheriting it.
+	local dsh_real
+	dsh_real="$(realpath "$dsh_bin" 2>/dev/null || true)"
+	if [ -z "$dsh_real" ] || [ ! -x "$dsh_real" ]; then
+		echo "  WARNING: could not resolve dsh to a real binary ('$dsh_bin'); skipping code-preset removal."
+		return 0
+	fi
+	dsh_pkg="$(dirname "$(dirname "$dsh_real")")"
 	preset_dir="$dsh_pkg/config/agent-presets/code"
 	if [ ! -d "$preset_dir" ]; then
 		echo "  code preset already absent."
