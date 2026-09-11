@@ -1,5 +1,6 @@
 // plugins/subagent-steer.ts
 import { defineTool } from "@deepseek-ai/dsh-tools";
+import { createUserMessage } from "@deepseek-ai/dsh-llm";
 function decideDelivery(input) {
   const parent = input.parent;
   if (parent === void 0 || parent === null) {
@@ -105,9 +106,35 @@ function apply(ctx) {
           description: "The message to deliver to the subagent."
         }
       },
+      /*
+       * THE SHIPPED WIRE SHAPE IS PRESERVED (#129 re-review).
+       *
+       * The shipped tool returns `{messageId: string}`. An earlier draft here
+       * returned a bare string, which would have silently removed
+       * `.messageId` from every caller — the SAME class of undisclosed wire
+       * delta that had to be repaired for interrupt_agent one commit
+       * earlier. No in-repo caller reads it and the id is opaque, but
+       * "shadow" cannot mean "quietly different".
+       *
+       * `delivery` is a deliberate SUPERSET, not a replacement: the shipped
+       * render derives its text from `args` alone, which cannot distinguish
+       * steered-into-a-running-turn from started-a-new-one from
+       * queued-because-cold. Those three are the whole point of this ticket,
+       * so the outcome travels in the value and render reads it. A caller
+       * that only knows the shipped shape is unaffected.
+       */
       output: {
-        schema: { type: "string" },
-        render: (_args, value) => [{ type: "text", text: value }]
+        schema: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            messageId: { type: "string", required: true },
+            delivery: { type: "string" }
+          }
+        },
+        render: (_args, value) => [
+          { type: "text", text: typeof value?.delivery === "string" ? value.delivery : "" }
+        ]
       },
       async execute(args, exec) {
         const agents = svc("agents");
@@ -126,19 +153,27 @@ function apply(ctx) {
           childParentSession: parentSessionOf(child)
         });
         if (delivery.kind === "refuse") throw new Error(delivery.reason);
+        const source = {
+          kind: "coordinator",
+          form: "relay",
+          senderSessionId: parent.id
+        };
         if (delivery.kind === "steer") {
           const running = isRunning(child);
-          child.steer({
+          const message = createUserMessage({
             content: [{ type: "text", text: args.message }],
-            source: { kind: "coordinator", form: "relay", senderSessionId: parent.id }
+            source
           });
-          return resultTextFor(delivery, childId, running);
+          child.steer(message);
+          return { messageId: message.id, delivery: resultTextFor(delivery, childId, running) };
         }
-        await subagents.followup(parent, childId, [{ type: "text", text: args.message }], {
-          source: { kind: "coordinator", form: "relay", senderSessionId: parent.id },
-          signal: exec?.signal
-        });
-        return resultTextFor(delivery, childId, false);
+        const messageId = await subagents.followup(
+          parent,
+          childId,
+          [{ type: "text", text: args.message }],
+          { source, signal: exec?.signal }
+        );
+        return { messageId: String(messageId), delivery: resultTextFor(delivery, childId, false) };
       }
     })
   );

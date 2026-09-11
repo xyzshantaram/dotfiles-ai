@@ -39,6 +39,7 @@
  */
 import type { Context } from "@deepseek-ai/cordis";
 import { defineTool } from "@deepseek-ai/dsh-tools";
+import { createUserMessage } from "@deepseek-ai/dsh-llm";
 
 /** How a message should be delivered, or why it must not be. */
 export type Delivery =
@@ -256,9 +257,35 @@ export function apply(ctx: Context) {
           description: "The message to deliver to the subagent.",
         },
       },
+      /*
+       * THE SHIPPED WIRE SHAPE IS PRESERVED (#129 re-review).
+       *
+       * The shipped tool returns `{messageId: string}`. An earlier draft here
+       * returned a bare string, which would have silently removed
+       * `.messageId` from every caller — the SAME class of undisclosed wire
+       * delta that had to be repaired for interrupt_agent one commit
+       * earlier. No in-repo caller reads it and the id is opaque, but
+       * "shadow" cannot mean "quietly different".
+       *
+       * `delivery` is a deliberate SUPERSET, not a replacement: the shipped
+       * render derives its text from `args` alone, which cannot distinguish
+       * steered-into-a-running-turn from started-a-new-one from
+       * queued-because-cold. Those three are the whole point of this ticket,
+       * so the outcome travels in the value and render reads it. A caller
+       * that only knows the shipped shape is unaffected.
+       */
       output: {
-        schema: { type: "string" },
-        render: (_args: unknown, value: string) => [{ type: "text", text: value }],
+        schema: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            messageId: { type: "string", required: true },
+            delivery: { type: "string" },
+          },
+        },
+        render: (_args: any, value: any) => [
+          { type: "text", text: typeof value?.delivery === "string" ? value.delivery : "" },
+        ],
       },
       async execute(args: any, exec: any) {
         const agents = svc<AgentsService>("agents");
@@ -277,19 +304,41 @@ export function apply(ctx: Context) {
           childParentSession: parentSessionOf(child),
         });
         if (delivery.kind === "refuse") throw new Error(delivery.reason);
+        // The relay source shape is the shipped one, verbatim, so a steered
+        // message is indistinguishable in provenance from a followup.
+        // `as const` so the discriminant stays the literal "coordinator"
+        // rather than widening to string, which would fail to narrow against
+        // MessageSource's union.
+        const source = {
+          kind: "coordinator",
+          form: "relay",
+          senderSessionId: parent.id,
+        } as const;
         if (delivery.kind === "steer") {
           const running = isRunning(child);
-          (child as { steer(m: unknown): void }).steer({
+          // A REAL UserMessage, not an ad-hoc object literal. Agent.steer
+          // takes a message, and the earlier draft handed it `{content,
+          // source}` with no id and no role — which a unit test cannot see,
+          // and which the re-review flagged as one of only two novel seams
+          // here. createUserMessage is the same constructor the shipped
+          // followup path uses (and job-viewer already uses in this repo),
+          // so the child receives exactly the shape it would have received
+          // through the manager. It also gives us the messageId the shipped
+          // wire contract returns.
+          const message = createUserMessage({
             content: [{ type: "text", text: args.message }],
-            source: { kind: "coordinator", form: "relay", senderSessionId: parent.id },
-          });
-          return resultTextFor(delivery, childId, running);
+            source: source,
+          }) as { id: string };
+          (child as { steer(m: unknown): void }).steer(message);
+          return { messageId: message.id, delivery: resultTextFor(delivery, childId, running) };
         }
-        await subagents.followup(parent, childId, [{ type: "text", text: args.message }], {
-          source: { kind: "coordinator", form: "relay", senderSessionId: parent.id },
-          signal: exec?.signal,
-        });
-        return resultTextFor(delivery, childId, false);
+        const messageId = await subagents.followup(
+          parent,
+          childId,
+          [{ type: "text", text: args.message }],
+          { source: source, signal: exec?.signal },
+        );
+        return { messageId: String(messageId), delivery: resultTextFor(delivery, childId, false) };
       },
     }) as unknown,
   );
