@@ -143,6 +143,52 @@ function ehResultBody(result) {
   var body = result.data;
   return body && typeof body === "object" && body.ok === true ? body : null;
 }
+function ehNumber(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+function ehFormatTimestamp(value) {
+  if (value === null || value === void 0) return null;
+  if (typeof value === "string" && value !== "") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().replace("T", " ").slice(0, 16) + " UTC";
+  }
+  const num = ehNumber(value);
+  if (num === null) return null;
+  const ms = Math.abs(num) >= 1e11 ? num : num * 1e3;
+  const date = new Date(ms);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().replace("T", " ").slice(0, 16) + " UTC";
+}
+function ehAccountModel(id, entry) {
+  const src = entry !== null && typeof entry === "object" ? entry : {};
+  return {
+    id: String(id),
+    requests: ehNumber(src.requests) ?? 0,
+    inputTokens: ehNumber(src.input_tokens),
+    outputTokens: ehNumber(src.output_tokens),
+    totalCost: ehNumber(src.total_cost),
+    ownedBy: typeof src.owned_by === "string" && src.owned_by !== "" ? src.owned_by : null
+  };
+}
+function parseElectronHubAccountModels(data) {
+  if (data === null || typeof data !== "object" || Array.isArray(data)) return null;
+  const source = data;
+  const modelsSrc = source.models;
+  if (modelsSrc === null || typeof modelsSrc !== "object" || Array.isArray(modelsSrc)) return null;
+  const ids = Object.keys(modelsSrc);
+  if (ids.length === 0) return null;
+  const entries = ids.map((id) => ehAccountModel(id, modelsSrc[id]));
+  entries.sort((a, b) => b.requests - a.requests);
+  return {
+    entries,
+    totalConsumption: ehNumber(source.total_consumption),
+    lastUpdated: ehFormatTimestamp(source.last_updated)
+  };
+}
 function ehUsageHasContent(usage) {
   if (!usage) return false;
   if (typeof usage.subscription === "string" && usage.subscription !== "") return true;
@@ -154,11 +200,15 @@ function ehUsageHasContent(usage) {
     return true;
   return false;
 }
+var ELECTRONHUB_CODING_PLAN_NOTE = "Coding plan subscription: the live today/weekly headroom numbers are console-only (they ride an authenticated WebSocket plus a browser session, not REST), so they are not shown here \u2014 everything above is what the REST API returns";
 function ehSectionModel(ehUsage, ehModels) {
   var errorLine = ehResultError(ehUsage, "usage unavailable") || ehResultError(ehModels, "models unavailable");
   var usage = ehResultBody(ehUsage);
   var modelsBody = ehResultBody(ehModels);
   var models = modelsBody && Array.isArray(modelsBody.models) ? modelsBody.models : null;
+  var derivedAccount = modelsBody !== null && !Array.isArray(modelsBody.accountUsage) ? parseElectronHubAccountModels(modelsBody) : null;
+  var accountUsage = modelsBody && Array.isArray(modelsBody.accountUsage) ? modelsBody.accountUsage : derivedAccount !== null ? derivedAccount.entries : null;
+  if (accountUsage !== null && accountUsage.length === 0) accountUsage = null;
   var notes = [];
   if (usage && typeof usage.note === "string" && usage.note !== "") notes.push(usage.note);
   if (modelsBody) {
@@ -167,10 +217,13 @@ function ehSectionModel(ehUsage, ehModels) {
       notes.push("model list is ElectronHub's public catalog, not an account-scoped list");
     }
   }
-  var hasContent = ehUsageHasContent(usage) || models !== null && models.length > 0;
+  if (usage && usage.codingPlan === true) notes.push(ELECTRONHUB_CODING_PLAN_NOTE);
+  var hasContent = ehUsageHasContent(usage) || models !== null && models.length > 0 || accountUsage !== null && accountUsage.length > 0;
+  var isDevKeyAnswer = usage !== null && usage.devKey === true;
   var status;
   if (errorLine) status = "error";
   else if (usage === null && modelsBody === null) status = "pending";
+  else if (isDevKeyAnswer) status = "ready";
   else if (!hasContent) status = "empty";
   else status = "ready";
   var emptyLine = null;
@@ -182,6 +235,9 @@ function ehSectionModel(ehUsage, ehModels) {
     notes,
     usage,
     models,
+    accountUsage,
+    totalConsumption: modelsBody !== null ? ehNumber(modelsBody.totalConsumption) ?? (derivedAccount !== null ? derivedAccount.totalConsumption : null) : null,
+    lastUpdated: modelsBody !== null ? typeof modelsBody.lastUpdated === "string" ? modelsBody.lastUpdated : derivedAccount !== null ? derivedAccount.lastUpdated : null : null,
     emptyLine
   };
 }
@@ -496,7 +552,7 @@ function renderEhSection(ehUsage, ehModels) {
   var models = model.models;
   var hero = null;
   if (usage) {
-    var tier = typeof usage.subscription === "string" && usage.subscription !== "" ? usage.subscription.charAt(0).toUpperCase() + usage.subscription.slice(1) + " plan" : null;
+    var tier = typeof usage.subscription === "string" && usage.subscription !== "" ? usage.subscription.charAt(0).toUpperCase() + usage.subscription.slice(1) + (usage.codingPlan ? " (coding plan)" : " plan") : null;
     var credits = typeof usage.credits === "number" ? usage.credits : null;
     var heroTotal = credits !== null ? fmtCount(credits) + " credits" : tier;
     var heroSub = credits !== null ? tier : null;
@@ -517,6 +573,41 @@ function renderEhSection(ehUsage, ehModels) {
       );
       tokenCards.push(
         /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-card" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-label" }, "Total tokens"), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-value" }, fmtCount(inTok + outTok)))
+      );
+    }
+  }
+  var creditCards = [];
+  if (usage) {
+    if (typeof usage.weeklyCredits === "number") {
+      creditCards.push(
+        /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-card", key: "eh-weekly" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-label" }, "Weekly credits"), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-value" }, fmtCount(usage.weeklyCredits)))
+      );
+    }
+    if (typeof usage.studioCredits === "number") {
+      creditCards.push(
+        /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-card", key: "eh-studio" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-label" }, "Studio credits"), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-value" }, fmtCount(usage.studioCredits)))
+      );
+    }
+  }
+  var monthlyCards = [];
+  if (usage && usage.monthly) {
+    var monthlyBoxes = [
+      ["Claude monthly", usage.monthly.claude],
+      ["OpenAI monthly", usage.monthly.openai]
+    ];
+    for (var mi = 0; mi < monthlyBoxes.length; mi++) {
+      var boxLabel = monthlyBoxes[mi][0];
+      var box = monthlyBoxes[mi][1];
+      if (!box) continue;
+      var parts = [];
+      if (box.used !== null && box.used !== void 0) parts.push(fmtCount(box.used) + " used");
+      if (box.limit !== null && box.limit !== void 0) parts.push("limit " + fmtCount(box.limit));
+      if (box.remaining !== null && box.remaining !== void 0)
+        parts.push(fmtCount(box.remaining) + " left");
+      if (box.percent !== null && box.percent !== void 0) parts.push(box.percent + "%");
+      var resetLine = box.reset !== null && box.reset !== void 0 ? "resets " + String(box.reset) : null;
+      monthlyCards.push(
+        /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-card", key: "eh-mon-" + mi }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-label" }, boxLabel), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-value" }, parts.join(" \xB7 ") || "\u2014"), resetLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-label" }, resetLine) : null)
       );
     }
   }
@@ -556,6 +647,31 @@ function renderEhSection(ehUsage, ehModels) {
       );
     }
   }
+  var accountUsageList = null;
+  if (model.accountUsage !== null && model.accountUsage.length > 0) {
+    var usageRows = model.accountUsage.map(function(entry, aidx) {
+      var bits = [fmtCount(Number(entry.requests) || 0) + " req"];
+      if (entry.inputTokens !== null && entry.inputTokens !== void 0)
+        bits.push(fmtCount(entry.inputTokens) + " in");
+      if (entry.outputTokens !== null && entry.outputTokens !== void 0)
+        bits.push(fmtCount(entry.outputTokens) + " out");
+      if (entry.totalCost !== null && entry.totalCost !== void 0)
+        bits.push("$" + entry.totalCost);
+      if (entry.ownedBy !== null) bits.push(String(entry.ownedBy));
+      return /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-row", key: "eh-am-" + aidx }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-row-label" }, /* @__PURE__ */ import_react2.default.createElement("b", null, String(entry.id)), /* @__PURE__ */ import_react2.default.createElement("b", null, bits.join(" \xB7 "))));
+    });
+    if (model.totalConsumption !== null) {
+      usageRows.push(
+        /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note", key: "eh-am-total" }, "Total consumption: $" + model.totalConsumption)
+      );
+    }
+    if (model.lastUpdated !== null) {
+      usageRows.push(
+        /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note", key: "eh-am-updated" }, "Last updated: " + model.lastUpdated)
+      );
+    }
+    accountUsageList = /* @__PURE__ */ import_react2.default.createElement("details", { className: "ocgs-details" }, /* @__PURE__ */ import_react2.default.createElement("summary", { className: "ocgs-summary" }, "Usage by model (" + model.accountUsage.length + ")"), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, usageRows));
+  }
   var modelList = null;
   if (models !== null && models.length > 0) {
     var shown = models.slice(0, EH_MODEL_ROW_CAP);
@@ -572,7 +688,7 @@ function renderEhSection(ehUsage, ehModels) {
   }
   return /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "ElectronHub"), errorLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, errorLine) : null, model.emptyLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note" }, model.emptyLine) : null, model.notes.map(function(note, ni) {
     return /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note", key: "eh-n-" + ni }, note);
-  }), hero, tokenCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, tokenCards) : null, historyRows.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, historyRows) : null, endpointCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, endpointCards) : null, modelList);
+  }), hero, creditCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, creditCards) : null, tokenCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, tokenCards) : null, monthlyCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, monthlyCards) : null, historyRows.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, historyRows) : null, endpointCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, endpointCards) : null, accountUsageList, modelList);
 }
 function makePanel(ctx, config) {
   return function Panel() {

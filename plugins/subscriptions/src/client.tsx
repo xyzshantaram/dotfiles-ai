@@ -524,7 +524,8 @@ function renderEhSection(ehUsage, ehModels) {
   if (usage) {
     var tier =
       typeof usage.subscription === "string" && usage.subscription !== ""
-        ? usage.subscription.charAt(0).toUpperCase() + usage.subscription.slice(1) + " plan"
+        ? usage.subscription.charAt(0).toUpperCase() + usage.subscription.slice(1) +
+          (usage.codingPlan ? " (coding plan)" : " plan")
         : null;
     var credits = typeof usage.credits === "number" ? usage.credits : null;
     var heroTotal = credits !== null ? fmtCount(credits) + " credits" : tier;
@@ -561,6 +562,59 @@ function renderEhSection(ehUsage, ehModels) {
         <div className="ds-usage-card">
           <div className="ds-usage-label">Total tokens</div>
           <div className="ds-usage-value">{fmtCount(inTok + outTok)}</div>
+        </div>,
+      );
+    }
+  }
+
+  // #141: secondary credit balances — weekly and studio credits render only
+  // when the payload actually carries them (fail-soft per field: an absent
+  // field omits its row, never blanks the section).
+  var creditCards = [];
+  if (usage) {
+    if (typeof usage.weeklyCredits === "number") {
+      creditCards.push(
+        <div className="ds-usage-card" key="eh-weekly">
+          <div className="ds-usage-label">Weekly credits</div>
+          <div className="ds-usage-value">{fmtCount(usage.weeklyCredits)}</div>
+        </div>,
+      );
+    }
+    if (typeof usage.studioCredits === "number") {
+      creditCards.push(
+        <div className="ds-usage-card" key="eh-studio">
+          <div className="ds-usage-label">Studio credits</div>
+          <div className="ds-usage-value">{fmtCount(usage.studioCredits)}</div>
+        </div>,
+      );
+    }
+  }
+
+  // #141: claude/openai monthly boxes — each renders only when present, with
+  // the reference's page-accurate percentage round(min(100, used/limit*100)).
+  var monthlyCards = [];
+  if (usage && usage.monthly) {
+    var monthlyBoxes = [
+      ["Claude monthly", usage.monthly.claude],
+      ["OpenAI monthly", usage.monthly.openai],
+    ];
+    for (var mi = 0; mi < monthlyBoxes.length; mi++) {
+      var boxLabel = monthlyBoxes[mi][0];
+      var box = monthlyBoxes[mi][1];
+      if (!box) continue;
+      var parts = [];
+      if (box.used !== null && box.used !== undefined) parts.push(fmtCount(box.used) + " used");
+      if (box.limit !== null && box.limit !== undefined) parts.push("limit " + fmtCount(box.limit));
+      if (box.remaining !== null && box.remaining !== undefined)
+        parts.push(fmtCount(box.remaining) + " left");
+      if (box.percent !== null && box.percent !== undefined) parts.push(box.percent + "%");
+      var resetLine =
+        box.reset !== null && box.reset !== undefined ? "resets " + String(box.reset) : null;
+      monthlyCards.push(
+        <div className="ds-usage-card" key={"eh-mon-" + mi}>
+          <div className="ds-usage-label">{boxLabel}</div>
+          <div className="ds-usage-value">{parts.join(" · ") || "—"}</div>
+          {resetLine ? <div className="ds-usage-label">{resetLine}</div> : null}
         </div>,
       );
     }
@@ -618,6 +672,52 @@ function renderEhSection(ehUsage, ehModels) {
     }
   }
 
+  // #141: account-scoped per-model usage (already sorted by requests by the
+  // parser), with the total and the tolerant last_updated stamp.
+  var accountUsageList = null;
+  if (model.accountUsage !== null && model.accountUsage.length > 0) {
+    var usageRows = model.accountUsage.map(function (entry, aidx) {
+      var bits = [fmtCount(Number(entry.requests) || 0) + " req"];
+      if (entry.inputTokens !== null && entry.inputTokens !== undefined)
+        bits.push(fmtCount(entry.inputTokens) + " in");
+      if (entry.outputTokens !== null && entry.outputTokens !== undefined)
+        bits.push(fmtCount(entry.outputTokens) + " out");
+      if (entry.totalCost !== null && entry.totalCost !== undefined)
+        bits.push("$" + entry.totalCost);
+      if (entry.ownedBy !== null) bits.push(String(entry.ownedBy));
+      return (
+        <div className="ocgs-row" key={"eh-am-" + aidx}>
+          <div className="ocgs-row-label">
+            <b>{String(entry.id)}</b>
+            <b>{bits.join(" · ")}</b>
+          </div>
+        </div>
+      );
+    });
+    if (model.totalConsumption !== null) {
+      usageRows.push(
+        <div className="ocgs-note" key="eh-am-total">
+          {"Total consumption: $" + model.totalConsumption}
+        </div>,
+      );
+    }
+    if (model.lastUpdated !== null) {
+      usageRows.push(
+        <div className="ocgs-note" key="eh-am-updated">
+          {"Last updated: " + model.lastUpdated}
+        </div>,
+      );
+    }
+    accountUsageList = (
+      <details className="ocgs-details">
+        <summary className="ocgs-summary">
+          {"Usage by model (" + model.accountUsage.length + ")"}
+        </summary>
+        <div className="ocgs-rows">{usageRows}</div>
+      </details>
+    );
+  }
+
   // Model catalog: collapsed by default, capped rows, "+N more" tail.
   var modelList = null;
   if (models !== null && models.length > 0) {
@@ -658,9 +758,12 @@ function renderEhSection(ehUsage, ehModels) {
         );
       })}
       {hero}
+      {creditCards.length > 0 ? <div className="ds-usage-grid">{creditCards}</div> : null}
       {tokenCards.length > 0 ? <div className="ds-usage-grid">{tokenCards}</div> : null}
+      {monthlyCards.length > 0 ? <div className="ds-usage-grid">{monthlyCards}</div> : null}
       {historyRows.length > 0 ? <div className="ocgs-rows">{historyRows}</div> : null}
       {endpointCards.length > 0 ? <div className="ds-usage-grid">{endpointCards}</div> : null}
+      {accountUsageList}
       {modelList}
     </div>
   );

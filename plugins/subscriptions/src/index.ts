@@ -530,109 +530,25 @@ async function zaiMonitorGet(path: string, key: string): Promise<unknown> {
  * The OpenAPI documents integers, but the panel must survive numbers
  * arriving as strings and partial payloads, so every numeric field goes
  * through ehNumber and every missing field degrades instead of throwing.
+ *
+ * The pure half of this work — key/account-type detection, the /user/me and
+ * /user/models parsers, and the section fold — lives in eh-section-model.ts,
+ * dependency-free so the vitest fixtures (#141) can exercise all three
+ * account shapes without importing the host. This file owns the probe
+ * sequence: key prefix -> GET /user/me -> response shape.
  */
+import {
+  ELECTRONHUB_DEV_NOTE,
+  ehIsDevKey,
+  ehNumber,
+  parseElectronHubAccountModels,
+  parseElectronHubModels,
+  parseElectronHubUsage,
+} from "./eh-section-model";
 
-/** Number or numeric string -> number; anything else -> null. */
-function ehNumber(value: unknown): number | null {
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
-
-/** One daily history row; null when the entry carries no usable date. */
-function ehHistoryEntry(item: unknown): { date: string; requests: number } | null {
-  if (item === null || typeof item !== "object") return null;
-  const entry = item as Record<string, unknown>;
-  if (typeof entry.date !== "string" || entry.date === "") return null;
-  return { date: entry.date, requests: ehNumber(entry.requests) ?? 0 };
-}
-
-/** /v1/user/me payload -> the panel shape; missing fields degrade to null/empty. */
-export function parseElectronHubUsage(data: unknown): {
-  subscription: string | null;
-  credits: number | null;
-  usage: { inputTokens: number; outputTokens: number };
-  history: { date: string; requests: number }[];
-  endpoints: { name: string; requests: number }[];
-} {
-  const source: Record<string, unknown> =
-    data !== null && typeof data === "object" ? (data as Record<string, unknown>) : {};
-  const usageSrc: Record<string, unknown> =
-    source.usage !== null && typeof source.usage === "object"
-      ? (source.usage as Record<string, unknown>)
-      : {};
-  const history: { date: string; requests: number }[] = [];
-  if (Array.isArray(source.history)) {
-    for (const item of source.history) {
-      const entry = ehHistoryEntry(item);
-      if (entry !== null) history.push(entry);
-    }
-  }
-  // `endpoints` is documented as an object keyed by endpoint path. The value
-  // semantics are unverified, so accept counts (number or numeric string) and
-  // treat a boolean as present(1)/absent(0) in case the field is a set.
-  const endpoints: { name: string; requests: number }[] = [];
-  const endpointsSrc: Record<string, unknown> =
-    source.endpoints !== null &&
-    typeof source.endpoints === "object" &&
-    !Array.isArray(source.endpoints)
-      ? (source.endpoints as Record<string, unknown>)
-      : {};
-  for (const name of Object.keys(endpointsSrc)) {
-    const value = endpointsSrc[name];
-    const requests = ehNumber(value) ?? (value === true ? 1 : 0);
-    endpoints.push({ name, requests });
-  }
-  return {
-    subscription:
-      typeof source.subscription === "string" && source.subscription !== ""
-        ? source.subscription
-        : null,
-    credits: ehNumber(source.credits),
-    usage: {
-      inputTokens: ehNumber(usageSrc.input_tokens) ?? 0,
-      outputTokens: ehNumber(usageSrc.output_tokens) ?? 0,
-    },
-    history,
-    endpoints,
-  };
-}
-
-/**
- * /v1/user/models payload -> model names. The endpoint's shape is
- * UNVERIFIED (no docs, no key to probe it), so accept the three shapes a
- * catalog endpoint plausibly answers with: a bare array, a `{data: [...]}`
- * envelope, or a `{models: [...]}` wrapper. Each item may be a string or an
- * object carrying an id/name/slug/model-ish string field; items that carry
- * none of those are dropped rather than guessed at.
- */
-export function parseElectronHubModels(data: unknown): string[] {
-  let items: unknown = data;
-  if (items !== null && typeof items === "object" && !Array.isArray(items)) {
-    const wrapper = items as Record<string, unknown>;
-    if (Array.isArray(wrapper.data)) items = wrapper.data;
-    else if (Array.isArray(wrapper.models)) items = wrapper.models;
-    else return [];
-  }
-  if (!Array.isArray(items)) return [];
-  const models: string[] = [];
-  for (const item of items) {
-    if (typeof item === "string") {
-      if (item !== "") models.push(item);
-      continue;
-    }
-    if (item === null || typeof item !== "object") continue;
-    const entry = item as Record<string, unknown>;
-    const name = [entry.id, entry.name, entry.slug, entry.model].find(
-      (candidate) => typeof candidate === "string" && candidate !== "",
-    );
-    if (typeof name === "string") models.push(name);
-  }
-  return models;
-}
+// Re-exported for compatibility with the pre-#141 layout (these were local
+// exports of this module; the implementations moved to the fold module).
+export { parseElectronHubModels, parseElectronHubUsage };
 
 export function apply(ctx, config) {
   const credentials = ctx.get("credentials");
@@ -1063,6 +979,14 @@ export function apply(ctx, config) {
     });
 
   const electronhubUsageOnce = cachedOnce(async (key) => {
+    // Probe step 1 (#141): the key PREFIX decides before any request. A dev
+    // key (ek-dev-…) answers 401 on /user/me and /user/models BY DESIGN — it
+    // only works for inference — so it must never reach the endpoints and
+    // must never read as an invalid key (#74's surfacing kept honest). This
+    // branch answers from the prefix alone; the fold renders its note.
+    if (ehIsDevKey(key)) {
+      return { ...parseElectronHubUsage(null), devKey: true, note: ELECTRONHUB_DEV_NOTE };
+    }
     const res = await electronhubGet("/user/me", key);
     // 403 is a CAPABILITY limit: the key is accepted, this surface is not in
     // its class. Empty payload plus a note; the section still shows its models.
@@ -1108,15 +1032,37 @@ export function apply(ctx, config) {
     // /v1/user/models is the account-scoped list and rejects key classes that
     // still work for inference; /v1/models is the public catalog and answers
     // for any valid key. Fall back to it so the section shows a real model
-    // list instead of nothing.
+    // list instead of nothing. (#141: a dev key never reaches this fetch for
+    // usage, but the catalog here is public and still renders — fine.)
     const attempt = async (path) => {
       const res = await electronhubGet(path, key);
-      if (!res.ok) return { ok: false, status: res.status, models: [] };
-      return { ok: true, status: res.status, models: parseElectronHubModels(await res.json()) };
+      if (!res.ok) return { ok: false, status: res.status, models: [], body: null };
+      const body = await res.json();
+      return {
+        ok: true,
+        status: res.status,
+        models: parseElectronHubModels(body),
+        body,
+      };
     };
     const scoped = await attempt("/user/models");
-    if (scoped.ok === true && scoped.models.length > 0) {
-      return { models: scoped.models, source: "account" };
+    // #141: the account shape — { models: { id: {...} } } — yields no NAMES
+    // through parseElectronHubModels (its models field is an object, not an
+    // array), so the account usage parser decides the account branch too.
+    const scopedAccount = scoped.ok === true ? parseElectronHubAccountModels(scoped.body) : null;
+    if (scoped.ok === true && (scoped.models.length > 0 || scopedAccount !== null)) {
+      const names =
+        scoped.models.length > 0 ? scoped.models : scopedAccount.entries.map((entry) => entry.id);
+      const result = { models: names, source: "account" };
+      if (scopedAccount !== null) {
+        return {
+          ...result,
+          accountUsage: scopedAccount.entries,
+          totalConsumption: scopedAccount.totalConsumption,
+          lastUpdated: scopedAccount.lastUpdated,
+        };
+      }
+      return result;
     }
     const catalog = await attempt("/models");
     if (catalog.ok === true) return { models: catalog.models, source: "catalog" };
