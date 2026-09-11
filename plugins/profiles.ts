@@ -523,6 +523,37 @@ function sessionLabel(agent: unknown): string {
 }
 
 /**
+ * The failover rung order for one request, given the caller's proposal and the
+ * depth-resolved chain (#81 owner decision: profiles.ts owns depth routing).
+ *
+ * Depth 0 — the orchestrator itself — is UNCHANGED from the pre-#81 behaviour:
+ * the proposal leads and the chain backs it up. A regression here changes
+ * every top-level session, which is why a test pins it.
+ *
+ * Depth >= 1 — a spawned subagent — leads with the chain head, so the first
+ * attempt runs on the cheap subagent model instead of whatever model the
+ * parent happened to be on. The inherited proposal is NOT discarded: it is
+ * preserved as the LAST rung, so (a) a deliberate caller-supplied model still
+ * runs once the whole chain is exhausted, and (b) failover reaches every rung
+ * it reached before, plus one. Its LAST position is deliberate: the chain is
+ * the intended default for children, and the proposal is only the fallback of
+ * fallbacks. A proposal that already matches a chain rung is not appended
+ * again — most importantly the head-equal case, which would otherwise produce
+ * a duplicate first rung.
+ */
+export function levelsForDepth(proposalRoute: Level, chain: Level[], depth: number): Level[] {
+  const sameLevel = (a: Level, b: Level) => a.provider === b.provider && a.model === b.model;
+  if (depth === 0) {
+    return [proposalRoute, ...chain.filter((level) => !sameLevel(level, proposalRoute))];
+  }
+  const head = chain[0];
+  if (!head) return [proposalRoute]; // empty chain: nothing to lead with
+  const rest = chain.slice(1).filter((level) => !sameLevel(level, head));
+  if (chain.some((level) => sameLevel(level, proposalRoute))) return [head, ...rest];
+  return [head, ...rest, proposalRoute];
+}
+
+/**
  * The active profile entry's chain for one agent depth. Depth-0 rides the
  * orchestrator chain; any spawned child (depth >= 1) rides the subagent
  * chain. Falls back to the other named chain, then to the legacy single
@@ -628,13 +659,15 @@ function registerFailover(ctx: Context, alwaysMaxRetries: number): void {
       model: proposal.model,
       ...(proposal.reasoningEffort ? { reasoningEffort: proposal.reasoningEffort as string } : {}),
     };
-    const levels: Level[] = [
-      proposalRoute,
-      ...chain.filter(
-        (level) =>
-          !(level.provider === proposalRoute.provider && level.model === proposalRoute.model),
-      ),
-    ];
+    // Deliberate-vs-inherited limitation, stated rather than papered over: at
+    // this hook a caller-named model and an inherited one are
+    // INDISTINGUISHABLE — both arrive as the proposal from next(). The runtime
+    // carries no marker saying "the caller explicitly asked for this model",
+    // so the depth >= 1 chain-head-first ordering below applies to both. That
+    // is the accepted trade (#81 owner decision): one mechanism owns routing,
+    // and a caller who truly needs a specific model still gets it after the
+    // chain is exhausted, because the proposal is preserved as a last resort.
+    const levels = levelsForDepth(proposalRoute, chain, depth);
 
     const agentMap = getAgentState(agent);
     let s = agentMap.get(stepKey);
