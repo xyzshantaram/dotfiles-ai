@@ -48,6 +48,161 @@
   flex-direction: column;
   gap: 8px;
 }
+/* ATTENTION SURFACE TABS (#103). One browser-style top-bar tab per
+   contributing surface; surfaces with no visible items render no tab at
+   all, and with a single visible tab the bar stays hidden. */
+.composer-approvals-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  margin: 0 0 12px;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--dsw-alias-border-l3);
+}
+.composer-approvals-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 6px 6px 0 0;
+  background: none;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 12px 7px;
+  margin-bottom: -1px;
+  cursor: pointer;
+}
+.composer-approvals-tab:hover {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+.composer-approvals-tab[data-active] {
+  color: var(--dsw-alias-label-primary);
+  border-bottom-color: var(--dsw-alias-state-business-primary, #2563eb);
+}
+.composer-approvals-tab-name {
+  line-height: 1.2;
+}
+.composer-approvals-tab-count {
+  min-width: 18px;
+  height: 18px;
+  box-sizing: border-box;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+/* ATTENTION CARDS (#103). Visually designed, not merely uniform: real card
+   chrome — header with kind chip and title, attribution line, wrapped
+   detail body, and a right-aligned actions row in the bundle's own pill
+   button language. The shell owns every rule here; a contributed body
+   cannot restyle the card, it only fills .composer-approvals-body. */
+.composer-approvals-card {
+  list-style: none;
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-primary, transparent);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.composer-approvals-card[data-kind="approval"] {
+  border-left: 3px solid var(--dsw-alias-state-warn-primary, #d97706);
+}
+.composer-approvals-card[data-kind="question"] {
+  border-left: 3px solid var(--dsw-alias-state-business-primary, #2563eb);
+}
+.composer-approvals-card-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.composer-approvals-kind {
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dsw-alias-label-secondary);
+}
+.composer-approvals-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--dsw-alias-font-mono, monospace);
+  color: var(--dsw-alias-label-primary);
+}
+/* Workspace/session attribution: whose ask this is. Phase 1 is local-only
+   so this reads "This session"; remote tabs in Phase 2 name theirs. */
+.composer-approvals-attr {
+  flex: none;
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+}
+.composer-approvals-body {
+  min-width: 0;
+}
+.composer-approvals-detail-text {
+  display: block;
+  font-size: 12px;
+  font-family: var(--dsw-alias-font-mono, monospace);
+  color: var(--dsw-alias-label-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.composer-approvals-detail-empty {
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+/* An item whose checkExpiry threw or could not decide stays visible with
+   this banner plus a manual removal button: a shown stale ask costs a
+   click, a hidden live ask strands an agent. */
+.composer-approvals-unverifiable {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px dashed var(--dsw-alias-state-warn-primary, #d97706);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+}
+.composer-approvals-unverifiable span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* The isolation placeholder: a throwing body degrades to this, naming its
+   surface, and never blanks the tab, the modal, or the approvals list. */
+.composer-approvals-fallback {
+  border: 1px dashed var(--dsw-alias-state-danger-primary, #dc2626);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.composer-approvals-fallback-text {
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+}
+.composer-approvals-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 2px;
+}
 .composer-approvals-row {
   display: flex;
   align-items: center;

@@ -6648,6 +6648,189 @@ function badgeVisible(tone, confirming) {
   return tone !== "none" || confirming;
 }
 
+// plugins/composer-approvals/src/attention.ts
+var surfaceSeq = 0;
+var itemSeq = 0;
+function createAttentionStore() {
+  const surfaces = /* @__PURE__ */ new Map();
+  const items = /* @__PURE__ */ new Map();
+  const waiters = /* @__PURE__ */ new Map();
+  const listeners = /* @__PURE__ */ new Set();
+  let snapshot = { surfaces: [] };
+  function emit() {
+    const tabs = [];
+    for (const surface of surfaces.values()) {
+      const owned = [];
+      for (const item of items.values()) {
+        if (item.surfaceId === surface.id) owned.push(item);
+      }
+      owned.sort((a, b) => a.addedAt - b.addedAt);
+      tabs.push({ surface, items: owned });
+    }
+    snapshot = { surfaces: tabs };
+    for (const listener of listeners) {
+      try {
+        listener();
+      } catch (error) {
+        console.error("[attention] subscriber threw:", error);
+      }
+    }
+  }
+  function settle(key, settlement) {
+    const waiter = waiters.get(key);
+    if (waiter === void 0) return;
+    waiters.delete(key);
+    items.delete(key);
+    emit();
+    waiter(settlement);
+  }
+  function ask(surfaceId, component, props, checkExpiry) {
+    if (!surfaces.has(surfaceId)) {
+      throw new Error("[attention] agentAskUser on a disposed or unknown surface: " + surfaceId);
+    }
+    itemSeq += 1;
+    const key = surfaceId + ":" + String(itemSeq);
+    const item = {
+      key,
+      surfaceId,
+      component,
+      props: props === void 0 || props === null ? {} : props,
+      checkExpiry: checkExpiry === void 0 ? null : checkExpiry,
+      addedAt: Date.now()
+    };
+    let waiter = null;
+    const promise = new Promise((fulfil) => {
+      waiter = fulfil;
+    });
+    waiters.set(key, waiter);
+    items.set(key, item);
+    emit();
+    return {
+      key,
+      surfaceId,
+      promise,
+      resolve(outcome) {
+        settle(key, { via: "resolved", outcome });
+      },
+      cancel(reason) {
+        settle(key, { via: "cancelled", reason: reason === void 0 ? "cancelled" : reason });
+      }
+    };
+  }
+  const store = {
+    createUserAttentionRequestSurface(id, displayName, opts) {
+      let surfaceId = typeof id === "string" ? id : "";
+      if (surfaceId === "") {
+        surfaceSeq += 1;
+        surfaceId = "surface-" + String(surfaceSeq);
+      }
+      if (surfaces.has(surfaceId)) {
+        throw new Error("[attention] duplicate surface id: " + surfaceId);
+      }
+      const record = {
+        id: surfaceId,
+        displayName,
+        workspace: opts !== void 0 && opts !== null && typeof opts.workspace === "string" ? opts.workspace : null,
+        sessionId: opts !== void 0 && opts !== null && typeof opts.sessionId === "string" ? opts.sessionId : null
+      };
+      surfaces.set(surfaceId, record);
+      emit();
+      return {
+        ...record,
+        agentAskUser(component, props, checkExpiry) {
+          return ask(surfaceId, component, props, checkExpiry);
+        },
+        dispose() {
+          store.disposeSurface(surfaceId);
+        }
+      };
+    },
+    resolveItem(key, outcome) {
+      settle(key, { via: "resolved", outcome });
+    },
+    cancelItem(key, reason) {
+      settle(key, { via: "cancelled", reason: reason === void 0 ? "cancelled" : reason });
+    },
+    removeItem(key) {
+      settle(key, { via: "cancelled", reason: "removed-by-user" });
+    },
+    disposeSurface(id) {
+      if (!surfaces.has(id)) return;
+      for (const item of Array.from(items.values())) {
+        if (item.surfaceId === id) {
+          const waiter = waiters.get(item.key);
+          if (waiter !== void 0) {
+            waiters.delete(item.key);
+            items.delete(item.key);
+            waiter({ via: "cancelled", reason: "surface-disposed" });
+          } else {
+            items.delete(item.key);
+          }
+        }
+      }
+      surfaces.delete(id);
+      emit();
+    },
+    sweepDeadSessions(liveSessionIds) {
+      const live = /* @__PURE__ */ new Set();
+      for (const id of liveSessionIds) live.add(id);
+      for (const surface of Array.from(surfaces.values())) {
+        if (surface.sessionId !== null && !live.has(surface.sessionId)) {
+          store.disposeSurface(surface.id);
+        }
+      }
+    },
+    getSnapshot() {
+      return snapshot;
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    }
+  };
+  return store;
+}
+var sharedStore = null;
+function getAttentionStore() {
+  if (sharedStore === null) sharedStore = createAttentionStore();
+  return sharedStore;
+}
+function evaluateItemExpiry(item) {
+  const fn = item.checkExpiry;
+  if (fn === void 0 || fn === null) return "live";
+  let verdict;
+  try {
+    verdict = fn();
+  } catch {
+    return "unverifiable";
+  }
+  if (verdict === false) return "expired";
+  if (verdict === true) return "live";
+  return "unverifiable";
+}
+function visibleTabsOf(snapshot, sessionId) {
+  if (snapshot === null || snapshot === void 0 || !Array.isArray(snapshot.surfaces)) return [];
+  const tabs = [];
+  for (const tab of snapshot.surfaces) {
+    if (tab === null || tab === void 0) continue;
+    const surface = tab.surface;
+    if (surface === null || surface === void 0) continue;
+    if (surface.sessionId !== null && surface.sessionId !== sessionId) continue;
+    if (!Array.isArray(tab.items) || tab.items.length === 0) continue;
+    tabs.push(tab);
+  }
+  return tabs;
+}
+function bodyFallbackFor(surfaceDisplayName) {
+  const name2 = typeof surfaceDisplayName === "string" && surfaceDisplayName !== "" ? surfaceDisplayName : "an attention surface";
+  return {
+    surface: name2,
+    message: "Something in \u201C" + name2 + "\u201D failed to render. The ask is still pending."
+  };
+}
+
 // css-text:/home/sid/repos/dotfiles-ai/plugins/composer-approvals/src/client.module.css
 var client_default = `/* Pending-approval indicator at the composer. */
 .composer-approvals-indicator {
@@ -6698,6 +6881,161 @@ var client_default = `/* Pending-approval indicator at the composer. */
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+/* ATTENTION SURFACE TABS (#103). One browser-style top-bar tab per
+   contributing surface; surfaces with no visible items render no tab at
+   all, and with a single visible tab the bar stays hidden. */
+.composer-approvals-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  margin: 0 0 12px;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--dsw-alias-border-l3);
+}
+.composer-approvals-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 6px 6px 0 0;
+  background: none;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 12px 7px;
+  margin-bottom: -1px;
+  cursor: pointer;
+}
+.composer-approvals-tab:hover {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+.composer-approvals-tab[data-active] {
+  color: var(--dsw-alias-label-primary);
+  border-bottom-color: var(--dsw-alias-state-business-primary, #2563eb);
+}
+.composer-approvals-tab-name {
+  line-height: 1.2;
+}
+.composer-approvals-tab-count {
+  min-width: 18px;
+  height: 18px;
+  box-sizing: border-box;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+/* ATTENTION CARDS (#103). Visually designed, not merely uniform: real card
+   chrome \u2014 header with kind chip and title, attribution line, wrapped
+   detail body, and a right-aligned actions row in the bundle's own pill
+   button language. The shell owns every rule here; a contributed body
+   cannot restyle the card, it only fills .composer-approvals-body. */
+.composer-approvals-card {
+  list-style: none;
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-primary, transparent);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.composer-approvals-card[data-kind="approval"] {
+  border-left: 3px solid var(--dsw-alias-state-warn-primary, #d97706);
+}
+.composer-approvals-card[data-kind="question"] {
+  border-left: 3px solid var(--dsw-alias-state-business-primary, #2563eb);
+}
+.composer-approvals-card-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.composer-approvals-kind {
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dsw-alias-label-secondary);
+}
+.composer-approvals-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--dsw-alias-font-mono, monospace);
+  color: var(--dsw-alias-label-primary);
+}
+/* Workspace/session attribution: whose ask this is. Phase 1 is local-only
+   so this reads "This session"; remote tabs in Phase 2 name theirs. */
+.composer-approvals-attr {
+  flex: none;
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+}
+.composer-approvals-body {
+  min-width: 0;
+}
+.composer-approvals-detail-text {
+  display: block;
+  font-size: 12px;
+  font-family: var(--dsw-alias-font-mono, monospace);
+  color: var(--dsw-alias-label-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.composer-approvals-detail-empty {
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+/* An item whose checkExpiry threw or could not decide stays visible with
+   this banner plus a manual removal button: a shown stale ask costs a
+   click, a hidden live ask strands an agent. */
+.composer-approvals-unverifiable {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px dashed var(--dsw-alias-state-warn-primary, #d97706);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+}
+.composer-approvals-unverifiable span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* The isolation placeholder: a throwing body degrades to this, naming its
+   surface, and never blanks the tab, the modal, or the approvals list. */
+.composer-approvals-fallback {
+  border: 1px dashed var(--dsw-alias-state-danger-primary, #dc2626);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.composer-approvals-fallback-text {
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+}
+.composer-approvals-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 2px;
 }
 .composer-approvals-row {
   display: flex;
@@ -6817,8 +7155,11 @@ var client_default = `/* Pending-approval indicator at the composer. */
 // plugins/composer-approvals/src/client.tsx
 var conversationContextKey2 = runtime.conversationContextKey;
 var PLUGIN_NAME = "composer-approvals";
+var APPROVALS_BASE_ID = "composer-approvals:approvals";
+var QUESTIONS_BASE_ID = "composer-approvals:questions";
 var EMPTY = [];
 var REJECT_ARM_RESET_MS = 4e3;
+var mountSeq = 0;
 function rootToolCall(snapshot, callId) {
   var node = snapshot.chat && snapshot.chat.nodes.get(conversationContextKey2("tool-call", callId));
   if (node === void 0 || node === null) return void 0;
@@ -6908,8 +7249,70 @@ function makeQuestionSelector() {
 function cardOf(callId) {
   return document.querySelector('.tool-render-card[data-call-id="' + CSS.escape(callId) + '"]');
 }
-function ComposerApprovalsRow(props) {
-  var row = props.row;
+function respondToApproval(pending, outcome) {
+  return Promise.resolve(
+    pending.respond({
+      ok: true,
+      value: {
+        sessionId: pending.sessionId,
+        approvalId: pending.payload.approvalId,
+        outcome
+      }
+    })
+  ).then(function(receipt) {
+    if (receipt === void 0 || receipt === null || !receipt.accepted) {
+      throw new Error(
+        "approval response rejected: " + (receipt === void 0 || receipt === null || receipt.reason === void 0 ? "unknown" : receipt.reason)
+      );
+    }
+  });
+}
+var SafeItemBody = class extends react2.Component {
+  props;
+  state;
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  componentDidCatch(error) {
+    console.error("[composer-approvals] attention body threw:", this.props.surfaceName, error);
+  }
+  render() {
+    if (this.state.error !== null && this.state.error !== void 0) {
+      var fallback = bodyFallbackFor(this.props.surfaceName);
+      return /* @__PURE__ */ react2.createElement(
+        "div",
+        {
+          className: "composer-approvals-fallback",
+          "data-surface": fallback.surface,
+          role: "note"
+        },
+        /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-fallback-text" }, fallback.message)
+      );
+    }
+    var bodyProps = this.props.bodyProps || {};
+    var merged = {};
+    for (var key in bodyProps) {
+      if (Object.prototype.hasOwnProperty.call(bodyProps, key)) merged[key] = bodyProps[key];
+    }
+    merged.ask = this.props.ask;
+    return react2.createElement(this.props.component, merged);
+  }
+};
+function ApprovalBody(props) {
+  var detail = typeof props.detail === "string" && props.detail !== "" ? props.detail : null;
+  return /* @__PURE__ */ react2.createElement("div", { className: "composer-approvals-detail" }, detail === null ? /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-detail-empty" }, "Waiting on your answer.") : /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-detail-text", title: detail }, detail));
+}
+function QuestionBody(props) {
+  var detail = typeof props.detail === "string" && props.detail !== "" ? props.detail : null;
+  return /* @__PURE__ */ react2.createElement("div", { className: "composer-approvals-detail" }, detail === null ? /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-detail-empty" }, "Answer on the running card.") : /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-detail-text", title: detail }, detail));
+}
+function AttentionCard(props) {
+  var item = props.item;
+  var bodyProps = item.props;
   var armedState = react2.useState(false);
   var armed = armedState[0];
   var setArmed = armedState[1];
@@ -6922,39 +7325,20 @@ function ComposerApprovalsRow(props) {
       if (armTimer.current !== 0) window.clearTimeout(armTimer.current);
     };
   }, []);
-  var answer = function(outcome) {
+  var verdict = evaluateItemExpiry(item);
+  react2.useEffect(
+    function() {
+      if (verdict === "expired") {
+        props.store.removeItem(item.key);
+      }
+      return void 0;
+    },
+    [verdict, item.key, props.store]
+  );
+  var settle = function(outcome) {
     if (answered) return;
-    var pending = props.pendingOf(row.key);
-    if (pending === void 0 || pending === null) {
-      console.warn("[composer-approvals] answer skipped, pending is gone", row.key);
-      return;
-    }
-    console.debug("[composer-approvals] answer:", outcome, row.key);
     setAnswered(true);
-    try {
-      Promise.resolve(
-        pending.respond({
-          ok: true,
-          value: {
-            sessionId: pending.sessionId,
-            approvalId: pending.payload.approvalId,
-            outcome
-          }
-        })
-      ).then(function(receipt) {
-        if (receipt === void 0 || receipt === null || !receipt.accepted) {
-          throw new Error(
-            "approval response rejected: " + (receipt === void 0 || receipt === null || receipt.reason === void 0 ? "unknown" : receipt.reason)
-          );
-        }
-      }).catch(function(error) {
-        console.warn("[composer-approvals] answer failed", row.key, outcome, error);
-        setAnswered(false);
-      });
-    } catch (error) {
-      console.warn("[composer-approvals] answer failed", row.key, outcome, error);
-      setAnswered(false);
-    }
+    props.store.resolveItem(item.key, outcome);
   };
   var clearArm = function() {
     if (armTimer.current !== 0) {
@@ -6962,57 +7346,286 @@ function ComposerApprovalsRow(props) {
       armTimer.current = 0;
     }
   };
-  var onReject = function() {
+  var onAction = function(action) {
     if (answered) return;
-    if (armed) {
+    if (action.confirmLabel !== void 0 && action.confirmLabel !== "") {
+      if (!armed) {
+        setArmed(true);
+        clearArm();
+        armTimer.current = window.setTimeout(function() {
+          armTimer.current = 0;
+          setArmed(false);
+        }, REJECT_ARM_RESET_MS);
+        return;
+      }
       clearArm();
       setArmed(false);
-      answer("rejected");
-      return;
     }
-    setArmed(true);
-    clearArm();
-    armTimer.current = window.setTimeout(function() {
-      armTimer.current = 0;
-      setArmed(false);
-    }, REJECT_ARM_RESET_MS);
+    settle(action.id);
   };
-  if (row.kind === "question" || row.callId !== null) {
-    return /* @__PURE__ */ react2.createElement("li", { className: "composer-approvals-row" }, /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-label", title: row.label }, row.label), /* @__PURE__ */ react2.createElement(
+  var kind = bodyProps.kind;
+  var kindLabel = kind === "approval" ? "Approval" : kind === "question" ? "Question" : null;
+  var title = typeof bodyProps.title === "string" && bodyProps.title !== "" ? bodyProps.title : props.surfaceName;
+  var callId = typeof bodyProps.callId === "string" ? bodyProps.callId : null;
+  var actions = Array.isArray(bodyProps.actions) ? bodyProps.actions : [];
+  var actionButtons = actions.map(function(action) {
+    var tone = action.tone === "approve" ? "approve" : action.tone === "reject" ? "reject" : "jump";
+    var className = tone === "approve" ? "composer-approvals-approve" : tone === "reject" ? "composer-approvals-reject" : "composer-approvals-jump";
+    var isArmed = tone === "reject" && armed;
+    return /* @__PURE__ */ react2.createElement(
+      "button",
+      {
+        key: action.id,
+        type: "button",
+        className,
+        "data-armed": isArmed || void 0,
+        disabled: answered,
+        onClick: function() {
+          onAction(action);
+        }
+      },
+      isArmed && action.confirmLabel ? action.confirmLabel : action.label
+    );
+  });
+  return /* @__PURE__ */ react2.createElement(
+    "li",
+    {
+      className: "composer-approvals-card",
+      "data-kind": typeof kind === "string" ? kind : void 0,
+      "data-unverifiable": verdict === "unverifiable" ? "1" : void 0
+    },
+    /* @__PURE__ */ react2.createElement("div", { className: "composer-approvals-card-head" }, kindLabel === null ? null : /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-kind" }, kindLabel), /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-title", title }, title)),
+    /* @__PURE__ */ react2.createElement("div", { className: "composer-approvals-attr" }, props.sessionLabel),
+    verdict === "unverifiable" ? /* @__PURE__ */ react2.createElement("div", { className: "composer-approvals-unverifiable", role: "note" }, /* @__PURE__ */ react2.createElement("span", null, "Could not verify whether this ask is still live, so it stays visible \u2014 a hidden live ask would strand an agent."), /* @__PURE__ */ react2.createElement(
+      "button",
+      {
+        type: "button",
+        className: "composer-approvals-jump",
+        onClick: function() {
+          props.store.removeItem(item.key);
+        }
+      },
+      "Remove"
+    )) : null,
+    /* @__PURE__ */ react2.createElement("div", { className: "composer-approvals-body" }, /* @__PURE__ */ react2.createElement(
+      SafeItemBody,
+      {
+        key: item.key,
+        component: item.component,
+        bodyProps,
+        ask: props.askOf(item.key),
+        surfaceName: props.surfaceName,
+        itemKey: item.key
+      }
+    )),
+    /* @__PURE__ */ react2.createElement("div", { className: "composer-approvals-actions" }, callId === null ? actions.length === 0 ? /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-no-call" }, "no tool call") : null : /* @__PURE__ */ react2.createElement(
       "button",
       {
         type: "button",
         className: "composer-approvals-jump",
         disabled: !props.jumpable,
         onClick: function() {
-          props.onJump(row);
+          props.onJump(item.key, callId);
         }
       },
       "Jump to call"
-    ));
+    ), actionButtons)
+  );
+}
+function AttentionModal(props) {
+  var store = props.store;
+  var snapshot = react2.useSyncExternalStore(store.subscribe, store.getSnapshot);
+  var tabs = visibleTabsOf(snapshot, props.sessionId);
+  var activeState = react2.useState(null);
+  var activeId = activeState[0];
+  var setActiveId = activeState[1];
+  var active = tabs.length === 0 ? null : tabs.find(function(tab) {
+    return tab.surface.id === activeId;
+  }) || tabs[0];
+  var bar = tabs.length < 2 ? null : /* @__PURE__ */ react2.createElement("div", { className: "composer-approvals-tabs", role: "tablist" }, tabs.map(function(tab) {
+    var selected = active !== null && tab.surface.id === active.surface.id;
+    return /* @__PURE__ */ react2.createElement(
+      "button",
+      {
+        key: tab.surface.id,
+        type: "button",
+        role: "tab",
+        "aria-selected": selected,
+        className: "composer-approvals-tab",
+        "data-active": selected || void 0,
+        onClick: function() {
+          setActiveId(tab.surface.id);
+        }
+      },
+      /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-tab-name" }, tab.surface.displayName),
+      tab.items.length > 1 ? /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-tab-count", "aria-hidden": true }, tab.items.length) : null
+    );
+  }));
+  return /* @__PURE__ */ react2.createElement(react2.Fragment, null, bar, active === null ? null : /* @__PURE__ */ react2.createElement("ul", { className: "composer-approvals-list" }, active.items.map(function(item) {
+    return /* @__PURE__ */ react2.createElement(
+      AttentionCard,
+      {
+        key: item.key,
+        item,
+        surfaceName: active.surface.displayName,
+        sessionLabel: props.sessionLabel,
+        jumpable: props.jumpableOf(item),
+        onJump: props.onJump,
+        askOf: props.handlesOf,
+        store
+      }
+    );
+  })));
+}
+function useBuiltInSurfaces(sessionId, approvalRows, questionRows, pendingOf) {
+  var store = getAttentionStore();
+  var box = react2.useRef(null);
+  if (box.current === null) {
+    mountSeq += 1;
+    var suffix = String(mountSeq);
+    var attributed = sessionId;
+    box.current = {
+      approvals: store.createUserAttentionRequestSurface(APPROVALS_BASE_ID + ":" + suffix, "Approvals", {
+        sessionId: attributed
+      }),
+      questions: store.createUserAttentionRequestSurface(QUESTIONS_BASE_ID + ":" + suffix, "Questions", {
+        sessionId: attributed
+      }),
+      approvalHandles: /* @__PURE__ */ new Map(),
+      questionHandles: /* @__PURE__ */ new Map(),
+      handlesByItem: /* @__PURE__ */ new Map()
+    };
   }
-  return /* @__PURE__ */ react2.createElement("li", { className: "composer-approvals-row" }, /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-label", title: row.label }, row.label), /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-no-call" }, "no tool call"), /* @__PURE__ */ react2.createElement(
-    "button",
-    {
-      type: "button",
-      className: "composer-approvals-approve",
-      disabled: answered,
-      onClick: function() {
-        answer("allowed-once");
+  react2.useEffect(function() {
+    var owned = box.current;
+    if (owned === null) return void 0;
+    return function() {
+      for (const handle of Array.from(owned.handlesByItem.values())) {
+        handle.cancel("surface-unmounted");
+      }
+      owned.approvalHandles.clear();
+      owned.questionHandles.clear();
+      owned.handlesByItem.clear();
+      owned.approvals.dispose();
+      owned.questions.dispose();
+      box.current = null;
+    };
+  }, []);
+  react2.useEffect(
+    function() {
+      var owned = box.current;
+      if (owned === null) return;
+      var dropApproval = function(rowKey, handle) {
+        if (owned.approvalHandles.get(rowKey) === handle) {
+          owned.approvalHandles.delete(rowKey);
+        }
+        owned.handlesByItem.delete(handle.key);
+      };
+      var placeApproval = function(row) {
+        if (owned.approvalHandles.has(row.key)) return;
+        var live = pendingOf(row.key);
+        if (live === void 0 || live === null) return;
+        var reason = live.payload === void 0 || live.payload === null ? null : live.payload.reason;
+        var reasonText = typeof reason === "string" && reason.trim() !== "" ? reason : null;
+        var props = {
+          kind: "approval",
+          title: row.label,
+          detail: reasonText !== null ? reasonText : row.label !== "Approval" ? row.label : null,
+          callId: row.callId,
+          // Wire vocabulary: the host schema accepts "allowed-once" |
+          // "rejected"; "approved" would be rejected as bad-response.
+          // A no-callId row answers inline here; a callId row is
+          // jump-only because the card's answer bar is the single answer
+          // surface for it. There is deliberately NO comment field
+          // (settled default): commenting lives on the card's answer bar.
+          actions: row.callId !== null ? [] : [
+            { id: "allowed-once", label: "\u2713 Approve", tone: "approve" },
+            {
+              id: "rejected",
+              label: "\u2717 Reject",
+              tone: "reject",
+              confirmLabel: "? Confirm reject"
+            }
+          ]
+        };
+        var handle = owned.approvals.agentAskUser(ApprovalBody, props, function() {
+          return pendingOf(row.key) !== void 0 && pendingOf(row.key) !== null;
+        });
+        owned.approvalHandles.set(row.key, handle);
+        owned.handlesByItem.set(handle.key, handle);
+        handle.promise.then(function(settlement) {
+          dropApproval(row.key, handle);
+          if (settlement.via !== "resolved") return;
+          var current = pendingOf(row.key);
+          var target = current === void 0 || current === null ? live : current;
+          respondToApproval(target, String(settlement.outcome)).catch(function(error) {
+            console.warn("[composer-approvals] answer failed", row.key, settlement, error);
+            if (box.current !== null && box.current === owned) {
+              var stillLive = pendingOf(row.key);
+              if (stillLive !== void 0 && stillLive !== null) {
+                placeApproval(row);
+              }
+            }
+          });
+        });
+      };
+      var liveApprovalKeys = /* @__PURE__ */ new Set();
+      for (var i = 0; i < approvalRows.length; i++) {
+        liveApprovalKeys.add(approvalRows[i].key);
+        placeApproval(approvalRows[i]);
+      }
+      for (var key of Array.from(owned.approvalHandles.keys())) {
+        if (!liveApprovalKeys.has(key)) {
+          var stale = owned.approvalHandles.get(key);
+          owned.approvalHandles.delete(key);
+          if (stale !== void 0) {
+            owned.handlesByItem.delete(stale.key);
+            stale.cancel("settled-elsewhere");
+          }
+        }
+      }
+      var liveQuestionKeys = /* @__PURE__ */ new Set();
+      for (var j = 0; j < questionRows.length; j++) {
+        (function(row) {
+          liveQuestionKeys.add(row.key);
+          if (owned.questionHandles.has(row.key)) return;
+          var handle = owned.questions.agentAskUser(
+            QuestionBody,
+            {
+              kind: "question",
+              title: row.label,
+              detail: row.label,
+              callId: row.callId,
+              actions: []
+            },
+            function() {
+              return true;
+            }
+          );
+          owned.questionHandles.set(row.key, handle);
+          owned.handlesByItem.set(handle.key, handle);
+          handle.promise.then(function() {
+            if (owned.questionHandles.get(row.key) === handle) {
+              owned.questionHandles.delete(row.key);
+            }
+            owned.handlesByItem.delete(handle.key);
+          });
+        })(questionRows[j]);
+      }
+      for (var qkey of Array.from(owned.questionHandles.keys())) {
+        if (!liveQuestionKeys.has(qkey)) {
+          var qstale = owned.questionHandles.get(qkey);
+          owned.questionHandles.delete(qkey);
+          if (qstale !== void 0) {
+            owned.handlesByItem.delete(qstale.key);
+            qstale.cancel("settled-elsewhere");
+          }
+        }
       }
     },
-    "\u2713 Approve"
-  ), /* @__PURE__ */ react2.createElement(
-    "button",
-    {
-      type: "button",
-      className: "composer-approvals-reject",
-      "data-armed": armed || void 0,
-      disabled: answered,
-      onClick: onReject
-    },
-    armed ? "? Confirm reject" : "\u2717 Reject"
-  ));
+    [approvalRows, questionRows, pendingOf]
+  );
+  return box;
 }
 function makeIndicator() {
   return function Indicator(props) {
@@ -7068,15 +7681,22 @@ function makeIndicator() {
     var confirming = paint.ornament && tone === "none";
     var label = tone === "question" ? "Pending questions" : "Pending approvals";
     var count = badgeCount(approvalRows.length, questionInputs.pending);
+    var sessionId = typeof props.sessionId === "string" ? props.sessionId : null;
+    var surfacesBox = useBuiltInSurfaces(
+      sessionId,
+      approvalRows,
+      questionInputs.rows,
+      selectorTools.pendingOf
+    );
     var rows = approvalRows.concat(questionInputs.rows);
     if (!badgeVisible(tone, confirming)) return null;
-    var jump = function(row) {
-      if (row.callId === null) return;
-      var el = cardOf(row.callId);
+    var jump = function(key, callId) {
+      if (callId === null) return;
+      var el = cardOf(callId);
       if (el === null) {
         setMissing(function(prev) {
           var next = new Set(prev);
-          next.add(row.key);
+          next.add(key);
           return next;
         });
         return;
@@ -7084,19 +7704,16 @@ function makeIndicator() {
       el.scrollIntoView({ behavior: "smooth", block: "center" });
       setOpen(false);
     };
-    var list = rows.map(function(row) {
-      var jumpable = row.callId !== null && !missing.has(row.key);
-      return /* @__PURE__ */ react2.createElement(
-        ComposerApprovalsRow,
-        {
-          key: row.key,
-          row,
-          jumpable,
-          onJump: jump,
-          pendingOf: selectorTools.pendingOf
-        }
-      );
-    });
+    var jumpableOf = function(item) {
+      var callId = item.props.callId;
+      return typeof callId === "string" && callId !== "" && !missing.has(item.key);
+    };
+    var handlesOf = function(itemKey) {
+      var owned = surfacesBox.current;
+      if (owned === null) return null;
+      var found = owned.handlesByItem.get(itemKey);
+      return found === void 0 ? null : found;
+    };
     return /* @__PURE__ */ react2.createElement(react2.Fragment, null, /* @__PURE__ */ react2.createElement(
       "button",
       {
@@ -7115,9 +7732,9 @@ function makeIndicator() {
       count > 1 ? /* @__PURE__ */ react2.createElement("span", { className: "composer-approvals-count", "aria-hidden": true }, count) : null
     ), open ? (
       // The full standard size (#75): the settings-panel footprint every
-      // other plugin modal uses. Rows carry their own actions, so there is
-      // no actions row here — but the panel matches its siblings rather
-      // than being the one odd 420px popover in the set.
+      // other plugin modal uses. Cards carry their own actions rows, so
+      // there is no modal-level actions row here — but the panel matches
+      // its siblings rather than being the one odd 420px popover.
       /* @__PURE__ */ react2.createElement(
         PluginModal,
         {
@@ -7127,7 +7744,17 @@ function makeIndicator() {
             setOpen(false);
           }
         },
-        /* @__PURE__ */ react2.createElement("ul", { className: "composer-approvals-list" }, list)
+        /* @__PURE__ */ react2.createElement(
+          AttentionModal,
+          {
+            sessionId,
+            sessionLabel: "This session",
+            jumpableOf,
+            onJump: jump,
+            handlesOf,
+            store: getAttentionStore()
+          }
+        )
       )
     ) : null);
   };
