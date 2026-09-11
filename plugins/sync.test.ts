@@ -164,6 +164,16 @@ describe("step_drop_code_preset removes the code agent preset (#139)", () => {
     }
   });
 
+  it("REFUSES to delete when the directory is not a real preset dir", () => {
+    // The step feeds a computed path to `rm -rf`. A genuine preset directory
+    // also contains `standard`; without it we are not where we think we are,
+    // and refusing is the only safe answer. This is the guard that keeps a
+    // mis-derived package root from being a destructive event.
+    const { pkg } = makePkg(["code"]);
+    runStep(pkg);
+    expect(existsSync(join(pkg, "config", "agent-presets", "code"))).toBe(true);
+  });
+
   it("is idempotent: absent is success, so a rerun converges", () => {
     // sync runs repeatedly; a step that errors on an already-done state
     // fails the whole run for no reason.

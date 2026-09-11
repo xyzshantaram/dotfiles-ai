@@ -1370,6 +1370,21 @@ step_drop_code_preset() {
 		echo "  code preset already absent."
 		return 0
 	fi
+	# PROVE WE ARE IN A REAL dsh PRESET DIRECTORY BEFORE rm -rf.
+	#
+	# dsh_pkg is derived from dirname(dirname(realpath(dsh))), which is
+	# correct for a normal install but is still a computed path feeding a
+	# recursive delete. The -d check above already means we only ever remove
+	# a directory that exists at exactly .../config/agent-presets/code, so a
+	# mis-derived root degrades to a no-op rather than deleting something
+	# else. This second check makes that reasoning explicit instead of
+	# incidental: a genuine preset directory also contains `standard`, which
+	# we never remove. If it does not, we are not where we think we are, and
+	# refusing is the only safe answer.
+	if [ ! -d "$dsh_pkg/config/agent-presets/standard" ]; then
+		echo "  WARNING: $(short_path "$dsh_pkg/config/agent-presets") does not look like a dsh preset dir (no standard preset); refusing to remove anything." >&2
+		return 0
+	fi
 	rm -rf "$preset_dir"
 	echo "  removed $(short_path "$preset_dir")"
 }
