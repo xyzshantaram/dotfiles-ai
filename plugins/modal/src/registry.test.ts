@@ -293,4 +293,15 @@ describe("modal shell plugin: boot-risk and single-source pins", () => {
     expect(modalClient).toBeLessThan(at("plugins/composer-approvals/src/client.tsx"));
     expect(modalHost).toBeLessThan(at("plugins/job-viewer/src/index.ts"));
   });
+
+  it("the shared wrapper drives the same API version the registry publishes", () => {
+    // modal-client.ts mirrors the guarded entry points structurally (no
+    // import, so consumers bundle no registry copy), so nothing type-checks
+    // the two versions together. Pin the constant: a bump on one side only
+    // must read as "absent" on the other, which is safe — but it should be
+    // a decision, never an accident.
+    expect(read("shared/modal-client.ts")).toContain(
+      "export const MODAL_API_VERSION = " + String(MODAL_API_VERSION) + ";",
+    );
+  });
 });

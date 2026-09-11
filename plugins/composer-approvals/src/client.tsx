@@ -40,7 +40,8 @@
 import * as react from "react";
 import * as runtime from "@deepseek-ai/dsh-client-runtime/client";
 import { injectStyle } from "../../shared/client-util";
-import { PluginModal } from "../../shared/plugin-modal";
+import { closeModal, openModal } from "../../shared/modal-client";
+import { toast } from "../../shared/toast-client";
 import { composerRingPaint, questionModalRowsOf, ringInputsOf } from "./questions";
 import { badgeCount, badgeToneOf, badgeVisible } from "./badge";
 import { initialRingFade, RING_FADE_HOLD_MS, RING_FADE_MS } from "./questions";
@@ -806,9 +807,10 @@ function makeIndicator() {
     var approvalRows = props.useSession(selectorTools.selectApprovals);
     var questionTools = react.useMemo(makeQuestionSelector, []);
     var questionInputs = props.useSession(questionTools.selectQuestions);
-    var openState = react.useState(false);
-    var open = openState[0];
-    var setOpen = openState[1];
+    // The id openModal() handed back, or null while no attention modal is
+    // on screen. The modal renders in the host's tree now, so the indicator
+    // tracks only the handle it needs to avoid a double open.
+    var modalId = react.useRef(null);
     // callIds whose card was not found on click; their jump button disables.
     var missingState = react.useState(function () {
       return new Set<string>();
@@ -939,7 +941,7 @@ function makeIndicator() {
         return;
       }
       el.scrollIntoView({ behavior: "smooth", block: "center" });
-      setOpen(false);
+      closeAttention();
     };
 
     var jumpableOf = function (item: AttentionItem) {
@@ -954,6 +956,62 @@ function makeIndicator() {
       return found === undefined ? null : found;
     };
 
+    // The modal body is a node stored at open time in the HOST's tree, so
+    // the closures it captures are the ones from that click. Forward through
+    // a ref that every render refreshes, so the body always reaches the
+    // current state (the `missing` set especially) instead of the click-time
+    // snapshot — the seam carries props, not live bindings (#140).
+    var liveHandlers = react.useRef({ jumpableOf: jumpableOf, onJump: jump, handlesOf: handlesOf });
+    liveHandlers.current = { jumpableOf: jumpableOf, onJump: jump, handlesOf: handlesOf };
+
+    /** Close the attention modal, wherever it was closed from. */
+    var closeAttention = function () {
+      closeModal(modalId.current);
+      modalId.current = null;
+    };
+
+    /** Open the attention modal through the shared modal host. */
+    var openAttention = function () {
+      if (modalId.current !== null) return; // already open — one at a time
+      var opened = openModal({
+        title: "Needs your attention",
+        // The full standard size (#75): the settings-panel footprint every
+        // other plugin modal uses. Cards carry their own actions rows, so
+        // there is no modal-level actions row here — but the panel matches
+        // its siblings rather than being the one odd 420px popover.
+        size: "full",
+        onClose: function () {
+          modalId.current = null;
+        },
+        body: (
+          <AttentionModal
+            sessionId={sessionId}
+            sessionLabel="This session"
+            jumpableOf={function (item: AttentionItem) {
+              return liveHandlers.current.jumpableOf(item);
+            }}
+            onJump={function (key: string, callId: string | null) {
+              liveHandlers.current.onJump(key, callId);
+            }}
+            handlesOf={function (itemKey: string) {
+              return liveHandlers.current.handlesOf(itemKey);
+            }}
+            store={getAttentionStore()}
+          />
+        ),
+      });
+      if (opened.opened) {
+        modalId.current = opened.id;
+      } else {
+        // Load-bearing: an approvals modal that silently fails to open
+        // leaves a human unable to answer and an agent blocked forever.
+        // Name the failure — never silence. The badge stays, so a retry
+        // after the modal plugin loads works.
+        console.error("[composer-approvals] attention modal did not open:", opened.reason);
+        toast("Approvals modal is unavailable", "refusal");
+      }
+    };
+
     return (
       <>
         <button
@@ -965,7 +1023,7 @@ function makeIndicator() {
           data-dsh-tip=""
           title={label}
           onClick={function () {
-            setOpen(true);
+            openAttention();
           }}
         >
           <span className="composer-approvals-glyph" aria-hidden={true}>
@@ -983,28 +1041,6 @@ function makeIndicator() {
             </span>
           ) : null}
         </button>
-        {open ? (
-          // The full standard size (#75): the settings-panel footprint every
-          // other plugin modal uses. Cards carry their own actions rows, so
-          // there is no modal-level actions row here — but the panel matches
-          // its siblings rather than being the one odd 420px popover.
-          <PluginModal
-            title="Needs your attention"
-            size="full"
-            onClose={function () {
-              setOpen(false);
-            }}
-          >
-            <AttentionModal
-              sessionId={sessionId}
-              sessionLabel="This session"
-              jumpableOf={jumpableOf}
-              onJump={jump}
-              handlesOf={handlesOf}
-              store={getAttentionStore()}
-            />
-          </PluginModal>
-        ) : null}
       </>
     );
   };

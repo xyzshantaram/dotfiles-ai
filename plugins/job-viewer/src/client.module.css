@@ -182,3 +182,12 @@
   line-height: 1.375rem;
   margin-top: 0.5rem;
 }
+
+.jv-modal-actions {
+  /* The kill control's row, INSIDE the body: the shared actions row crosses
+     the modal seam as a static record, so a control whose label tracks live
+     state cannot live there (#140). Right-aligned to match the shared row. */
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.75rem;
+}

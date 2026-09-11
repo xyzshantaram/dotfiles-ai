@@ -123,14 +123,20 @@ describe("shared modal: the stylesheet actually reaches the page", () => {
 });
 
 describe("shared modal: callers and their built bundles", () => {
-  it("job-viewer takes the full size and the shared actions row", () => {
+  it("job-viewer opens through the shared wrapper at the full size, with the shared actions row", () => {
     const client = read("job-viewer/src/client.tsx");
-    expect(client).toContain('size="full"');
-    expect(client).toContain("actions={");
+    // #140: through shared/modal-client, never a direct PluginModal import —
+    // a direct import bundles a private copy of the component again.
+    expect(client).toContain('from "../../shared/modal-client"');
+    expect(client).not.toContain("shared/plugin-modal");
+    // Same guarantees as before the migration: the full standard size, the
+    // "Job output" heading, and the shared (right-aligned) actions row.
+    expect(client).toContain('size: "full"');
+    expect(client).toContain('title: "Job output"');
+    expect(client).toContain("actions:");
     // The output area keeps its constant height.
     expect(read("job-viewer/src/client.module.css")).toContain("flex: 1;");
-    // Heading rules: "Job output" heading, command in a monospace body line.
-    expect(client).toContain('title="Job output"');
+    // Command in a monospace body line.
     expect(client).toContain('className="jv-command"');
   });
 
@@ -140,20 +146,33 @@ describe("shared modal: callers and their built bundles", () => {
   // test last touched by 8d002fa), so the suite carried a red test. The name
   // states the REQUIREMENT rather than the current value, so a future flip of
   // the source has to argue with the ticket instead of quietly editing a
-  // string here.
-  it("composer-approvals takes the full size, like every other modal", () => {
-    expect(read("composer-approvals/src/client.tsx")).toContain('size="full"');
+  // string here. #140 moved the call onto the shared wrapper; the size
+  // requirement is unchanged.
+  it("composer-approvals opens through the shared wrapper at the full size", () => {
+    const client = read("composer-approvals/src/client.tsx");
+    expect(client).toContain('from "../../shared/modal-client"');
+    expect(client).not.toContain("shared/plugin-modal");
+    expect(client).toContain('size: "full"');
+    expect(client).toContain('"Needs your attention"');
   });
 
-  it("the built client bundles mirror the shared source", () => {
+  it("the shared component and its sheet ship ONLY in the modal's bundle", () => {
+    // Before #140 both consumers imported the component directly and each
+    // bundled a private copy; the one-bundle proof in modal-client.test.ts
+    // counts the builds. This pin carries what the old bundle test
+    // guaranteed, retargeted: the shared sheet's rules and the sized panel
+    // reach the page from the MODAL's bundle, and every consumer reaches
+    // the modal through the published global instead of a bundled copy.
+    const host = read("modal/lib/client.js");
+    expect(host).toContain("width: 420px;");
+    expect(host).toContain("justify-content: flex-end;");
+    expect(host).toContain('className: "plugin-modal-panel"');
+    expect(host).toContain('"data-size": size');
     for (const bundle of ["composer-approvals/lib/client.js", "job-viewer/lib/client.js"]) {
       const built = read(bundle);
-      expect(built, bundle).toContain("width: 420px;");
-      expect(built, bundle).toContain("justify-content: flex-end;");
-      expect(built, bundle).toContain('className: "plugin-modal-panel"');
-      expect(code(built), bundle).not.toMatch(/\w+\["plugin-modal-/);
+      expect(built, bundle).not.toContain("plugin-modal-panel");
+      expect(built, bundle).toContain("__dshModal__");
     }
-    expect(read("job-viewer/lib/client.js")).toContain('"data-size": size');
   });
 
   it("the type definitions stay in step with the component", () => {
