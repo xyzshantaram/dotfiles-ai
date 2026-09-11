@@ -363,3 +363,52 @@ describe("the shadow re-provides everything the disabled row carried", () => {
     expect(code).toMatch(/kind:\s*"ancestor"/);
   });
 });
+
+/**
+ * THE WIRE CONTRACT (#129 re-review).
+ *
+ * A shadow that returns a different shape from the tool it replaces is a
+ * silent break: callers reading the old field get undefined, and nothing
+ * fails. That happened twice on this ticket — interrupt_agent's
+ * {accepted:true} and send_message's {messageId} — so both shapes are now
+ * asserted against the SHIPPED tool's own source rather than remembered.
+ */
+describe("the shadow preserves the shipped wire shapes", () => {
+  const shippedPath =
+    "/home/sid/.local/share/fnm/node-versions/v24.15.0/installation/lib/node_modules/" +
+    "@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-tool-subagent-control/lib/index.js";
+  const ours = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "subagent-steer.ts"),
+    "utf8",
+  );
+
+  it("returns messageId from send_message, as the shipped tool does", () => {
+    // Read the shipped source so this fails if the SHIPPED contract changes
+    // under us, not only if ours drifts.
+    const shipped = readFileSync(shippedPath, "utf8");
+    expect(shipped).toMatch(/messageId/);
+    expect(ours).toMatch(/messageId:\s*message\.id/);
+    expect(ours).toMatch(/messageId:\s*String\(messageId\)/);
+  });
+
+  it("returns {accepted: true} from interrupt_agent, as the shipped tool does", () => {
+    const shipped = readFileSync(shippedPath, "utf8");
+    expect(shipped).toMatch(/accepted/);
+    expect(ours).toMatch(/\{\s*accepted:\s*true\s*\}/);
+  });
+
+  it("builds a real UserMessage for the steer rather than an object literal", () => {
+    // Agent.steer takes a MESSAGE. An ad-hoc {content, source} with no id and
+    // no role is one of the two seams a unit test cannot observe, so the
+    // constructor is pinned instead.
+    expect(ours).toMatch(/createUserMessage\(/);
+    expect(ours).toMatch(/steer\(message\)/);
+  });
+
+  it("uses the shipped relay source shape verbatim", () => {
+    // Provenance must be indistinguishable from a followup's.
+    expect(ours).toMatch(/kind:\s*"coordinator"/);
+    expect(ours).toMatch(/form:\s*"relay"/);
+    expect(ours).toMatch(/senderSessionId:\s*parent\.id/);
+  });
+});
