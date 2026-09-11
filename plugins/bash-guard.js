@@ -12874,15 +12874,60 @@ function containsPipeline(node) {
       return false;
   }
 }
+function finalPipelineNaming(command, script) {
+  let last;
+  let trailing = false;
+  let flat = true;
+  const walk2 = (node) => {
+    if (!flat) return;
+    switch (node.type) {
+      case "Script":
+      case "CompoundList":
+        for (const s of node.commands) {
+          const before = last;
+          walk2(s);
+          if (last !== before) {
+            trailing = false;
+          } else if (before !== void 0) {
+            trailing = true;
+          }
+        }
+        return;
+      case "Statement":
+        walk2(node.command);
+        return;
+      case "Pipeline":
+        last = node;
+        return;
+      case "Command":
+        return;
+      default:
+        flat = false;
+    }
+  };
+  walk2(script);
+  if (!flat || last === void 0 || trailing) return null;
+  const stages = last.commands;
+  if (stages.length === 0 || !stages.every((s) => s.type === "Command")) return null;
+  const names = stages.map(
+    (stage) => (
+      // Group 0: the group id only links operators for display, and a basename
+      // needs just the node and its source string.
+      getBasename({ node: stage, source: command, group: 0 })
+    )
+  );
+  const leading = names[0];
+  return leading !== void 0 && leading !== "" ? { names, leading } : null;
+}
 function planPipeCapture(command) {
   let script;
   try {
     script = parse(command);
   } catch {
-    return { hasPipe: false, names: null };
+    return { hasPipe: false, names: null, finalNames: null, finalLeading: null };
   }
   if (script.errors !== void 0 && script.errors.length > 0) {
-    return { hasPipe: false, names: null };
+    return { hasPipe: false, names: null, finalNames: null, finalLeading: null };
   }
   let names = null;
   if (script.commands.length === 1) {
@@ -12898,7 +12943,13 @@ function planPipeCapture(command) {
       );
     }
   }
-  return { hasPipe: containsPipeline(script), names };
+  const final = finalPipelineNaming(command, script);
+  return {
+    hasPipe: containsPipeline(script),
+    names,
+    finalNames: final?.names ?? null,
+    finalLeading: final?.leading ?? null
+  };
 }
 function decidePipeExit(stages) {
   const effective = stages.map(
@@ -13024,7 +13075,7 @@ function apply(ctx, config) {
             },
             pipeStages: {
               type: "array",
-              description: "One entry per stage of the last pipeline (PIPESTATUS), paired with program names when the command is a single simple pipeline. Present only when the command was wrapped for capture.",
+              description: "One entry per stage of the last pipeline (PIPESTATUS), paired with program names when they can be honestly attributed \u2014 the whole command a single simple pipeline, or a flat script whose final statement is that pipeline. Present only when the command was wrapped for capture.",
               items: {
                 type: "object",
                 properties: {
@@ -13261,6 +13312,7 @@ exit $__dsh_pipe_exit`;
             ...exec.signal ? { signal: exec.signal } : {}
           })
         );
+        const stageNames = pipePlan.names !== null ? pipePlan.names : pipePlan.finalNames;
         let pipeStages;
         if (pipeDir !== void 0) {
           try {
@@ -13269,7 +13321,7 @@ exit $__dsh_pipe_exit`;
               const codes = raw.split(/\s+/).map((s) => Number(s)).filter((n) => Number.isInteger(n));
               if (codes.length > 0) {
                 pipeStages = codes.map((exitCode, i) => ({
-                  ...pipePlan.names !== null && pipePlan.names[i] !== void 0 ? { name: pipePlan.names[i] } : {},
+                  ...stageNames !== null && stageNames[i] !== void 0 ? { name: stageNames[i] } : {},
                   exitCode
                 }));
               }
@@ -13286,6 +13338,10 @@ exit $__dsh_pipe_exit`;
         if (pipeStages !== void 0 && reportedExit !== 0 && reportedExit !== null) {
           text += `
 [exit codes: ${formatPipeStages(pipeStages)}]`;
+        }
+        if (pipeStages !== void 0 && pipePlan.names === null) {
+          text += `
+[exit codes cover the final pipeline only` + (pipePlan.finalLeading !== null ? ` (last pipeline led by \`${pipePlan.finalLeading}\`)` : "") + `; earlier lines of a compound command were not captured]`;
         }
         if (outcome.ranNote !== void 0) text += `
 

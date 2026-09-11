@@ -397,11 +397,62 @@ describe("bash-guard tool wiring", () => {
     expect(value.text).not.toContain("[exit code:");
   });
 
-  it("reports a compound command's last pipeline without guessing names", async () => {
+  it("names a compound command's final pipeline and states the capture scope", async () => {
+    // Multi-line on one line: the codes belong to the LAST pipeline, so the
+    // report names it (`echo …`) and says plainly that earlier lines were
+    // never captured — even on success, where that limitation is otherwise
+    // invisible.
     const { value } = await runReal("echo one | cat; echo two | cat");
     expect(value.exitCode).toBe(0);
-    expect(value.pipeStages).toEqual([{ exitCode: 0 }, { exitCode: 0 }]);
+    expect(value.pipeStages).toEqual([
+      { name: "echo", exitCode: 0 },
+      { name: "cat", exitCode: 0 },
+    ]);
     expect(value.text).not.toContain("[exit codes:");
+    expect(value.text).toContain("exit codes cover the final pipeline only");
+    expect(value.text).toContain("last pipeline led by `echo`");
+    expect(value.text).toContain("earlier lines of a compound command were not captured");
+  });
+
+  it("attributes a multi-line script's codes to its final pipeline", async () => {
+    // The owner's report: several lines on screen, numbers that name no
+    // line. The failing pipeline is the LAST one here, and the report now
+    // says which pipeline the codes belong to.
+    const { value } = await runReal("echo starting\nfalse | cat");
+    expect(value.exitCode).toBe(1);
+    expect(value.pipeStages).toEqual([
+      { name: "false", exitCode: 1 },
+      { name: "cat", exitCode: 0 },
+    ]);
+    expect(value.text).toContain("[exit codes: false 1, cat 0]");
+    expect(value.text).toContain("exit codes cover the final pipeline only");
+    expect(value.text).toContain("last pipeline led by `false`");
+  });
+
+  it("states in the report when a mid-script failure is outside PIPESTATUS's reach", async () => {
+    // The first line's pipeline fails; the final command succeeds and
+    // overwrites PIPESTATUS. The capture cannot surface that failure —
+    // bash holds no record of it — so the report says the limitation
+    // instead of letting exit 0 read as all-clear.
+    const { value } = await runReal("false | cat\necho done");
+    expect(value.exitCode).toBe(0);
+    expect(value.pipeStages).toEqual([{ exitCode: 0 }]);
+    expect(value.text).not.toContain("[exit codes:");
+    expect(value.text).toContain("exit codes cover the final pipeline only");
+    expect(value.text).toContain("earlier lines of a compound command were not captured");
+  });
+
+  it("keeps an unnamed compound report unnamed but still attributed", async () => {
+    // A brace group disqualifies final-pipeline naming (the last executed
+    // pipeline is not decidable), so the codes stay bare — but the report
+    // still says they cover the final pipeline only.
+    const { value } = await runReal("{ false | cat; }");
+    expect(value.exitCode).toBe(1);
+    expect(value.pipeStages).toEqual([{ exitCode: 1 }, { exitCode: 0 }]);
+    expect(value.text).toContain("[exit codes: 1, 0]");
+    expect(value.text).toContain("exit codes cover the final pipeline only");
+    expect(value.text).not.toContain("last pipeline led by");
+    expect(value.text).toContain("earlier lines of a compound command were not captured");
   });
 
   it("lets a piped sandbox-style failure surface a non-zero exit", async () => {
@@ -570,10 +621,17 @@ describe("approval reason kinds", () => {
 
 describe("pipeline stage capture", () => {
   it("names the stages of a single simple pipeline from the pipeline node", () => {
-    expect(planPipeCapture("false | cat")).toEqual({ hasPipe: true, names: ["false", "cat"] });
+    expect(planPipeCapture("false | cat")).toEqual({
+      hasPipe: true,
+      names: ["false", "cat"],
+      finalNames: ["false", "cat"],
+      finalLeading: "false",
+    });
     expect(planPipeCapture("VITE_X=1 vite build | rg warn | tail -2")).toEqual({
       hasPipe: true,
       names: ["vite", "rg", "tail"],
+      finalNames: ["vite", "rg", "tail"],
+      finalLeading: "vite",
     });
   });
 
@@ -587,10 +645,48 @@ describe("pipeline stage capture", () => {
     expect(planPipeCapture("echo one | cat; echo two | cat").names).toBeNull();
   });
 
+  it("names a multi-line script's final pipeline when the script ends in it", () => {
+    // A flat sequence whose FINAL statement is the pipeline: PIPESTATUS will
+    // hold exactly those stages, so naming them is honest even though the
+    // script is compound.
+    const plan = planPipeCapture("echo start\nfalse | cat");
+    expect(plan.hasPipe).toBe(true);
+    expect(plan.names).toBeNull();
+    expect(plan.finalNames).toEqual(["false", "cat"]);
+    expect(plan.finalLeading).toBe("false");
+    // Same script on one line with `;` separators.
+    expect(planPipeCapture("echo one | cat; echo two | cat").finalNames).toEqual([
+      "echo",
+      "cat",
+    ]);
+  });
+
+  it("declines final-pipeline names when the pipeline is not the last statement", () => {
+    // A plain command after the pipeline overwrites PIPESTATUS with a single
+    // code, so pipeline stage names would be attached to the wrong thing.
+    expect(planPipeCapture("false | cat\necho done").finalNames).toBeNull();
+    expect(planPipeCapture("false | cat\necho done").finalLeading).toBeNull();
+    // Control flow or a conditional makes the last-executed pipeline
+    // undecidable from the source.
+    expect(planPipeCapture("if true; then false | cat; fi").finalNames).toBeNull();
+    expect(planPipeCapture("true && false | cat").finalNames).toBeNull();
+    expect(planPipeCapture("{ false | cat; }").finalNames).toBeNull();
+  });
+
   it("skips commands without a pipeline and commands that do not parse", () => {
-    expect(planPipeCapture("echo hello")).toEqual({ hasPipe: false, names: null });
+    expect(planPipeCapture("echo hello")).toEqual({
+      hasPipe: false,
+      names: null,
+      finalNames: null,
+      finalLeading: null,
+    });
     expect(planPipeCapture("echo $(date)").hasPipe).toBe(false);
-    expect(planPipeCapture("if true; then |; fi")).toEqual({ hasPipe: false, names: null });
+    expect(planPipeCapture("if true; then |; fi")).toEqual({
+      hasPipe: false,
+      names: null,
+      finalNames: null,
+      finalLeading: null,
+    });
   });
 
   it("reports the rightmost non-zero stage", () => {

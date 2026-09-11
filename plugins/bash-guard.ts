@@ -1225,6 +1225,13 @@ export interface PipeCapturePlan {
   /** Stage program names from the pipeline node itself — only when the whole
    * command is one simple pipeline. Null otherwise. */
   names: string[] | null;
+  /** Stage program names of the script's LAST pipeline, when those names can
+   * honestly be attached to what PIPESTATUS will hold once the script
+   * finishes: the script must be a flat sequence whose FINAL statement is
+   * that pipeline (see finalPipelineNaming). Null otherwise. */
+  finalNames: string[] | null;
+  /** The leading command of that last pipeline, when finalNames is set. */
+  finalLeading: string | null;
 }
 
 /** Whether a statement-level tree contains a Pipeline node. Word interiors
@@ -1267,14 +1274,81 @@ function containsPipeline(node: UnbashScript | UnbashNode): boolean {
 }
 
 /**
+ * The LAST pipeline of a flat statement sequence, when that pipeline is also
+ * the sequence's FINAL statement. PIPESTATUS is overwritten by every
+ * execution — a plain command after the pipeline reduces it to that one
+ * command's single code — so anything after the pipeline makes the names
+ * unattributable. Any control flow (if/while/case/subshell/function/...)
+ * or conditional (&&/||) anywhere disqualifies the script too: with
+ * branching, which pipeline runs LAST is not decidable from the source,
+ * and a confidently wrong label is worse than none.
+ */
+function finalPipelineNaming(
+  command: string,
+  script: UnbashScript,
+): { names: string[]; leading: string } | null {
+  let last: Extract<UnbashNode, { type: "Pipeline" }> | undefined;
+  let trailing = false;
+  let flat = true;
+  const walk = (node: UnbashScript | UnbashNode): void => {
+    if (!flat) return;
+    switch (node.type) {
+      case "Script":
+      case "CompoundList":
+        for (const s of node.commands) {
+          const before = last;
+          walk(s);
+          if (last !== before) {
+            // This statement held a new, later pipeline: anything BEFORE it
+            // no longer counts as trailing.
+            trailing = false;
+          } else if (before !== undefined) {
+            // A statement that ran after the current last pipeline: PIPESTATUS
+            // will no longer hold that pipeline's stages.
+            trailing = true;
+          }
+        }
+        return;
+      case "Statement":
+        walk(node.command);
+        return;
+      case "Pipeline":
+        last = node;
+        return;
+      case "Command":
+        return;
+      default:
+        // AndOr, If, While, For, Select, ArithmeticFor, Subshell, BraceGroup,
+        // Function, Coproc, Case, TestCommand, ArithmeticCommand: the last
+        // executed pipeline is no longer a source-order fact.
+        flat = false;
+    }
+  };
+  walk(script);
+  if (!flat || last === undefined || trailing) return null;
+  const stages = last.commands;
+  if (stages.length === 0 || !stages.every((s) => s.type === "Command")) return null;
+  const names = stages.map((stage) =>
+    // Group 0: the group id only links operators for display, and a basename
+    // needs just the node and its source string.
+    getBasename({ node: stage as UnbashCommand, source: command, group: 0 }),
+  );
+  const leading = names[0];
+  return leading !== undefined && leading !== "" ? { names, leading } : null;
+}
+
+/**
  * Decide whether a command is worth wrapping for PIPESTATUS capture, and
  * which stage names the capture may claim. Names come from the pipeline
  * NODE — never from the flat extractAllCommandsFromAST list, which mixes in
  * subshells, command substitutions and wrapper expansions and so does not
  * correspond positionally to one pipeline's stages. A command that is not a
  * single simple pipeline still captures (its last pipeline's bare codes),
- * but its names are null: a confidently mislabelled stage is worse than an
- * unnamed one.
+ * but `names` are null: a confidently mislabelled stage is worse than an
+ * unnamed one. When the script is a flat sequence ENDING in a simple
+ * pipeline, `finalNames`/`finalLeading` name that pipeline — the one
+ * PIPESTATUS actually holds — so a compound command's report can say which
+ * pipeline its codes belong to.
  */
 export function planPipeCapture(command: string): PipeCapturePlan {
   // Unannotated like evaluate()'s own parse: the inferred ParsedScript
@@ -1283,10 +1357,10 @@ export function planPipeCapture(command: string): PipeCapturePlan {
   try {
     script = parse(command);
   } catch {
-    return { hasPipe: false, names: null };
+    return { hasPipe: false, names: null, finalNames: null, finalLeading: null };
   }
   if (script.errors !== undefined && script.errors.length > 0) {
-    return { hasPipe: false, names: null };
+    return { hasPipe: false, names: null, finalNames: null, finalLeading: null };
   }
   let names: string[] | null = null;
   if (script.commands.length === 1) {
@@ -1305,7 +1379,13 @@ export function planPipeCapture(command: string): PipeCapturePlan {
       );
     }
   }
-  return { hasPipe: containsPipeline(script), names };
+  const final = finalPipelineNaming(command, script);
+  return {
+    hasPipe: containsPipeline(script),
+    names,
+    finalNames: final?.names ?? null,
+    finalLeading: final?.leading ?? null,
+  };
 }
 
 /**
@@ -1495,7 +1575,7 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
             pipeStages: {
               type: "array",
               description:
-                "One entry per stage of the last pipeline (PIPESTATUS), paired with program names when the command is a single simple pipeline. Present only when the command was wrapped for capture.",
+                "One entry per stage of the last pipeline (PIPESTATUS), paired with program names when they can be honestly attributed — the whole command a single simple pipeline, or a flat script whose final statement is that pipeline. Present only when the command was wrapped for capture.",
               items: {
                 type: "object",
                 properties: {
@@ -1824,6 +1904,11 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
         // Stage statuses, when the capture survived. A signal kill cannot
         // have run the epilogue to a trustworthy state, so its markers keep
         // the legacy signal reading instead of stage data.
+        // Which names the stages may carry: the single-simple-pipeline case
+        // names from `names`; a compound script names from `finalNames`, the
+        // LAST pipeline — the one PIPESTATUS actually holds (see the capture
+        // limits above). Anything else stays unnamed rather than guessed.
+        const stageNames = pipePlan.names !== null ? pipePlan.names : pipePlan.finalNames;
         let pipeStages: PipeStageStatus[] | undefined;
         if (pipeDir !== undefined) {
           try {
@@ -1835,8 +1920,8 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
                 .filter((n) => Number.isInteger(n));
               if (codes.length > 0) {
                 pipeStages = codes.map((exitCode, i) => ({
-                  ...(pipePlan.names !== null && pipePlan.names[i] !== undefined
-                    ? { name: pipePlan.names[i] as string }
+                  ...(stageNames !== null && stageNames[i] !== undefined
+                    ? { name: stageNames[i] as string }
                     : {}),
                   exitCode,
                 }));
@@ -1866,6 +1951,23 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
         // (the stages travel in the value and in presentationMeta instead).
         if (pipeStages !== undefined && reportedExit !== 0 && reportedExit !== null) {
           text += `\n[exit codes: ${formatPipeStages(pipeStages)}]`;
+        }
+        // Scope attribution. PIPESTATUS holds the LAST pipeline only, so
+        // when the command is anything more than one simple pipeline the
+        // report says so and names that pipeline where it can — a reader
+        // must never have to guess which line the numbers describe. On a
+        // successful compound run the note is the ONLY record that earlier
+        // lines were never checked, so a mid-script failure cannot hide
+        // behind a succeeding final pipeline without the limitation being
+        // stated in the report itself. Named single-pipeline reports need no
+        // note: the codes and the name are the same thing there.
+        if (pipeStages !== undefined && pipePlan.names === null) {
+          text +=
+            `\n[exit codes cover the final pipeline only` +
+            (pipePlan.finalLeading !== null
+              ? ` (last pipeline led by \`${pipePlan.finalLeading}\`)`
+              : "") +
+            `; earlier lines of a compound command were not captured]`;
         }
         if (outcome.ranNote !== undefined) text += `\n\nbash-guard: ${outcome.ranNote}`;
         return {
