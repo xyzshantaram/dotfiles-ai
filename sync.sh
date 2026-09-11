@@ -1538,19 +1538,33 @@ M18PY
 # adding, removing, or reordering steps needs NO manual renumbering.
 
 step_check_aidos_subagent_pin() {
-	# #81: assert the aidos preset's subagent model pin is EFFECTIVE, i.e. that
-	# `agentOptions` sits INSIDE `config` on every dsh-tool-subagent row.
+	# #81: check the aidos preset's dsh-tool-subagent `agentOptions` SHAPE —
+	# that is, that it sits INSIDE `config` (not a stray row-level sibling key)
+	# wherever it exists at all.
+	#
+	# RETARGETED 2026-09-09 (owner decision): profiles.ts now leads every
+	# depth >= 1 dispatch with the active profile's subagent-chain head and
+	# keeps the inherited proposal only as a last resort, so a MISSING pin is
+	# NO LONGER A DEFECT — the runtime picks the right first model either way.
+	# The old warning about a missing pin was retired with that change; this
+	# check now flags only the MISPLACED shape, which stays a real defect: a
+	# row-level `agentOptions:` is a no-op key the schema never reads, and its
+	# mere presence implies a pin that does nothing, which misleads anyone
+	# auditing the preset.
 	#
 	# Why a check and not a patch: the aidos preset is copied verbatim from the
 	# aidos package (step_register_aidos_preset), so the fix belongs upstream in
-	# that repo — this bundle does not rewrite it. But the failure is invisible
-	# without a check: `agentOptions` at ROW level is simply not read
-	# (@deepseek-ai/dsh-tool-subagent declares it in its Config schema and reads
-	# config.agentOptions when building the start request), so the pin silently
-	# does nothing, every subagent inherits the PARENT's provider/model, and the
-	# subagent chain is never walked. Observed 2026-09-08: subagents running the
-	# work orchestrator head (meridian/claude-opus-5) with no failover, because
-	# an inherited orchestrator model matches no rung of the subagent chain.
+	# that repo — this bundle does not rewrite it.
+	#
+	# ADJACENT HAZARD NOTE (moved here from step_patch_standard_preset_tool_subagent,
+	# which documents it in place ~550 lines above — #81 criterion: the hazard
+	# must be documented NEXT TO this check, not far away on a different step):
+	# the standard-preset pin patch edits the SHIPPED preset in place, and a dsh
+	# reinstall that re-extracts the preset silently reverts it. It is not
+	# detected automatically — rerun sync to restore it. Note that after the
+	# profiles.ts change the reverted pin is harmless at runtime too (missing
+	# pin = fine); it only drifts the standard preset from this bundle's
+	# intended state.
 	#
 	# Warns rather than fails: the fix lives in another repo, so a red run on
 	# every sync until that lands would be noise. The message names the file,
@@ -1580,7 +1594,7 @@ def walk(node):
 walk(doc)
 
 if not rows:
-    print("  WARNING: no dsh-tool-subagent rows in the aidos preset; nothing pinned.")
+    print("  ok: no dsh-tool-subagent rows in the aidos preset; nothing to check.")
     sys.exit(0)
 
 bad = []
@@ -1589,18 +1603,16 @@ for row in rows:
     cfg = row.get('config') or {}
     pinned = (cfg.get('agentOptions') or {}) if isinstance(cfg, dict) else {}
     if pinned.get('provider') and pinned.get('model'):
-        print(f"  ok: {rid} pinned to {pinned['provider']}/{pinned['model']}")
+        print(f"  ok: {rid} pinned to {pinned['provider']}/{pinned['model']} (harmless: profiles.ts would pick the chain head anyway)")
         continue
     misplaced = row.get('agentOptions')
-    bad.append((rid, misplaced))
+    if misplaced is not None:
+        bad.append((rid, misplaced))
 
 for rid, misplaced in bad:
-    if misplaced is not None:
-        print(f"  WARNING: {rid}: `agentOptions` is a SIBLING of `config`, so it is never read.")
-        print(f"           Indent it two spaces to sit INSIDE `config` (fix upstream in the aidos repo).")
-        print(f"           Until then every subagent inherits the parent agent's model and gets no failover.")
-    else:
-        print(f"  WARNING: {rid}: no config.agentOptions pin at all; subagents inherit the parent's model.")
+    print(f"  WARNING: {rid}: `agentOptions` is a SIBLING of `config`, so it is never read (a no-op row-level key).")
+    print(f"           Indent it two spaces to sit INSIDE `config` (fix upstream in the aidos repo).")
+    print(f"           Note: a MISSING pin is fine since #81 — profiles.ts leads depth >= 1 with the subagent-chain head.")
 PY
 }
 
@@ -1820,7 +1832,7 @@ STEPS=(
 	"Relocate the attach button to the send/steer edge|step_relocate_attach_button"
 	"Stop the web-tools search-button background poll|step_stop_web_tools_search_poll"
 	"Register the aidos agent preset|step_register_aidos_preset"
-	"Check the aidos subagent pin is effective|step_check_aidos_subagent_pin"
+	"Check the aidos preset's subagent agentOptions placement|step_check_aidos_subagent_pin"
 	"Check the pi-ai catalog for drift and mis-forced protocols|step_check_pi_ai_drift"
 	"Check preset drift (standard vs aidos)|step_check_preset_drift"
 	"Verify builtin tool rows are disabled|step_verify_preset_tool_disabled"
