@@ -38,17 +38,20 @@
   display: contents !important;
 }
 
-/* #65 — the composer's pending-state rings. Yellow when a sandbox escalation
-   waits, blue when a bash-guard rewrite waits; the third slot is the reserved
-   question ring (white, to be colored by #38's question marker, which mounts
-   as the same kind of elected chain child). Rings STACK — one per pending
-   kind, concentric — instead of replacing each other. The defaults are fully
-   transparent, so the box-shadow list stays valid for every combination and
-   no combinatorial rule is needed: each :has() rule colors only its own slot.
+/* THE COMPOSER RINGS ARE GONE (#135).
+   This file used to own a four-layer box-shadow on [data-composer-card]
+   (escalated / rewrite / question / host elevation, #65) plus the :has()
+   rules that filled each slot and published --composer-ring-outer for
+   composer-approvals to offset against (#132). The owner replaced the whole
+   idea with a coloured badge, so the slots, the offset contract and the
+   cumulative-spread arithmetic are DELETED rather than maintained. Nothing
+   here touches [data-composer-card] any more, so the host's own elevation is
+   left alone by simply not competing for the property.
 
-   THE REAL DOM (review 3aa96162; an earlier version of this comment claimed
-   the marker was a direct child of the seat, and its `> ` selectors were dead.
-   Verified against the installed host):
+   THE DOM FACT BELOW IS KEPT, because the marker and its :has() selectors
+   above still depend on it and it was expensive to establish (review
+   3aa96162 — an earlier version of this comment claimed the marker was a
+   direct child of the seat, and its `> ` selectors were dead):
 
      div[data-composer-seat]                         conversation client.js:7167
      └─ div[data-slot="conversation.composer"]       renderer client.js:745-749
@@ -58,53 +61,8 @@
         │  └─ … └─ div[data-composer-card]           conversation client.js:3893
         └─ div.approval-comment-shadow[data-…]       our elected entry
 
-   So: match the marker as a DESCENDANT of the seat, and paint the ring on
-   [data-composer-card] — the 748px centred card — NOT on the seat. The seat
-   is the full-width sticky bar inside .scrollBody{overflow:hidden auto}, so an
-   outset shadow on it is clipped left/right/bottom and reads as a coloured bar
-   rather than a ring (review should-fix). The card is narrower than the seat
-   and rounded (border-radius 22px), so the rings follow its corners.
+   So the marker is matched as a DESCENDANT of the seat, not a child.
 
-   The host paints its own elevation on that card
-   (`box-shadow: var(--dsw-shadow-lv2)`, conversation client.js composer-card
-   rule). box-shadow is one property, so our list must carry that layer
-   explicitly as the outermost entry or we would stomp it — the one place this
-   file depends on a host token staying named as it is. */
-[data-composer-card] {
-  --composer-ring-escalated: 0 0 0 3px transparent;
-  --composer-ring-rewrite: 0 0 0 6px transparent;
-  --composer-ring-question: 0 0 0 9px transparent;
-  /* THE OUTERMOST APPROVAL SPREAD, published for the question slot (#132).
-     Shadow spreads are cumulative from the border box, so a question band
-     that starts at 0 would paint UNDER the approval rings rather than
-     outside them. composer-approvals offsets its bands by this value, which
-     is why it is declared here beside the rings it measures rather than
-     guessed there. Kept in step with the two rules below: whenever a ring
-     slot's spread changes, this changes with it. */
-  --composer-ring-outer: 0px;
-  box-shadow:
-    var(--composer-ring-escalated),
-    var(--composer-ring-rewrite),
-    var(--composer-ring-question),
-    var(--dsw-shadow-lv2);
-}
-[data-composer-seat]:has(.approval-comment-shadow[data-escalated]) [data-composer-card] {
-  --composer-ring-escalated: 0 0 0 3px var(--dsh-outline-escalated);
-  --composer-ring-outer: 3px;
-}
-[data-composer-seat]:has(.approval-comment-shadow[data-rewrite]) [data-composer-card] {
-  --composer-ring-rewrite: 0 0 0 6px var(--dsh-outline-guard);
-  --composer-ring-outer: 6px;
-}
-/* Shadow spreads are cumulative from the border box, so the 6px rewrite slot
-   reads as a 6px ring when it is the ONLY pending kind (the transparent 3px
-   layer composites over it, it does not mask it). One pending kind should
-   always look the same weight, so collapse rewrite-only to 3px; the stacked
-   case keeps 3px yellow inside 6px blue and stays concentric. */
-[data-composer-seat]:has(.approval-comment-shadow[data-rewrite]):not(
-    :has(.approval-comment-shadow[data-escalated])
-  )
-  [data-composer-card] {
-  --composer-ring-rewrite: 0 0 0 3px var(--dsh-outline-guard);
-  --composer-ring-outer: 3px;
-}
+   The .approval-comment-shadow marker STAYS: it is the elected entry this
+   plugin registers, and the rules above depend on it. */
+
