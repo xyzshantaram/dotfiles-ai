@@ -1,0 +1,14 @@
+A=Asha B=Ben C=Cara
+[Combo] FarmLite Paneer (net of 15 offer) (230) - A:76.67 B:76.67 C:76.66
+Fresh Green Chilli (100 g) (10) - A:3.33 B:3.33 C:3.34
+Fresh Spinach Bunch (250 g) (20) - A:6.67 B:6.67 C:6.66
+Fresh Spinach Bunch (250 g) (20) - A:6.67 B:6.67 C:6.66
+PurePress Mustard Oil (1 L) (200) - A:66.67 B:66.67 C:66.66
+FizzUp Diet Cola Can (300 ml) (50) - A:16.67 B:16.67 C:16.66
+FizzUp Zero Sugar (300 ml) (50) - A:16.67 B:16.67 C:16.66
+FizzUp Zero Sugar (300 ml) (50) - A:16.67 B:16.67 C:16.66
+FizzUp Zero Sugar (300 ml) (50) - A:16.67 B:16.67 C:16.66
+FizzUp Zero Sugar (300 ml) (50) - A:16.67 B:16.67 C:16.66
+FizzUp Zero Sugar (300 ml) (50) - A:16.67 B:16.67 C:16.66
+Fees (48) - A:16 B:16 C:16
+Total - A:276.03 B:276.03 C:275.94

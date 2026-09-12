@@ -1,0 +1,15 @@
+00 blinkit|receipt-200101|2026-09-09 12:45 AM|490.00 payer=Asha n_items=4
+01 blinkit|receipt-200102|2026-09-09 5:15 AM|202.00 payer=Asha n_items=4
+02 blinkit|receipt-200103|2026-09-08 3:47 PM|420.00 payer=Asha n_items=5
+03 blinkit|receipt-200104|2026-09-09 1:28 AM|530.00 payer=Asha n_items=6
+04 blinkit|receipt-200105|2026-09-09 12:01 PM|360.00 payer=Asha n_items=5
+05 blinkit|receipt-200106|2026-09-08 11:27 PM|222.00 payer=Asha n_items=6
+06 blinkit|receipt-200107|2026-09-09 12:00 PM|722.00 payer=Asha n_items=11
+07 blinkit|receipt-200108|2026-09-09 12:00 PM|520.00 payer=Asha n_items=8
+08 blinkit|receipt-200109|2026-09-09 12:00 PM|482.00 payer=Asha n_items=6
+09 blinkit|receipt-200110|2026-09-09 11:47 AM|622.00 payer=Asha n_items=11
+10 grocery|receipt-200111|2026-09-09 12:00 PM|697.00 payer=Asha n_items=9
+11 swiggy_food|receipt-200112|2026-09-08 2:49 AM|258.00 payer=Asha n_items=5
+12 swiggy_food|receipt-200113|2026-08-23 1:51 PM|666.00 payer=Asha n_items=7
+13 swiggy_instamart|receipt-200114|2026-09-09 12:00 PM|707.00 payer=Asha n_items=11
+14 swiggy_instamart|receipt-200115|2026-09-09 12:00 PM|828.00 payer=Asha n_items=14

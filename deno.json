@@ -1,0 +1,57 @@
+{
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.19",
+    "mepcli": "npm:mepcli@1.4.0",
+    "exotui": "jsr:@ubernaut/exotui@0.7.0",
+    "exotui/app": "jsr:@ubernaut/exotui@0.7.0/app",
+    "micromark": "npm:micromark@4.0.2",
+    "oauth": "npm:oauth@^0.10.2",
+    "preact": "npm:preact@10.26.4",
+    "preact-render-to-string": "npm:preact-render-to-string@6.6.2",
+    "typed-htmx": "npm:typed-htmx@^0.3.1",
+    "zx": "npm:zx@8.8.5",
+    "cliffy-select": "jsr:@cliffy/prompt@1/select",
+    "cliffy-checkbox": "jsr:@cliffy/prompt@1/checkbox",
+    "cliffy-number": "jsr:@cliffy/prompt@1/number",
+    "cliffy-input": "jsr:@cliffy/prompt@1/input",
+    "cliffy-confirm": "jsr:@cliffy/prompt@1/confirm",
+    "playwright": "npm:playwright@1.57.0",
+    "crayon": "https://deno.land/x/crayon@3.3.3/mod.ts"
+  },
+  "tasks": {
+    "check": "deno check --no-lock src/*.ts wizards/*.ts wizards/expense-split/*.ts desktop/*.ts wizardkit/*.ts wizardkit/examples/*.ts",
+    "test": "deno test --no-lock --allow-read --allow-write --allow-env --allow-sys --allow-run tests/",
+    "test:fixtures": "bash tests/run.sh",
+    "dev": "deno run --no-lock -A",
+    "desktop": "deno desktop --hmr wizardkit/examples/demo.ts",
+    "menu": "deno run --no-lock -A wizards/meta.ts"
+  },
+  "workspace": [
+    "./desktop",
+    "./wizard",
+    "./wizardkit"
+  ],
+  "fmt": {
+    "lineWidth": 100,
+    "exclude": [
+      "wizardkit/vendor",
+      "state",
+      "out",
+      "desktop/dist",
+      "tests/fixtures"
+    ]
+  },
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact"
+  },
+  "lint": {
+    "exclude": [
+      "wizardkit/vendor",
+      "state",
+      "out",
+      "desktop/dist",
+      "tests/fixtures"
+    ]
+  }
+}

@@ -1,0 +1,8 @@
+A=Asha B=Ben C=Cara
+Steel Kitchen Tong (1 pc) (130) - A:43.33 B:43.33 C:43.34
+SoftWeave Kitchen Cloth (6 pcs) (110) - A:36.67 B:36.67 C:36.66
+TrueFuel Cocoa Protein Bar (50 g) (120) - C:120
+ZestUp Lemon Iced Tea (350 ml) (40) - A:40
+NutTrail Honey Cashew Mix (100 g) (70) - A:70
+Fees (12) - A:6 C:6
+Total - A:196 B:80 C:206

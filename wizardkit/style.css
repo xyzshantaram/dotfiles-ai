@@ -1,0 +1,274 @@
+html {
+  color-scheme: light dark;
+  background: light-dark(
+    var(--wa-color-neutral-95),
+    var(--wa-color-neutral-10)
+  );
+}
+body {
+  font-family: var(--wa-font-family-sans-serif, system-ui, sans-serif);
+  margin: 0;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: light-dark(
+    var(--wa-color-neutral-95),
+    var(--wa-color-neutral-10)
+  );
+}
+/* The three layout strips share one pair of side shadows. */
+.wiz-head,
+.wiz-main,
+.wiz-foot {
+  --wiz-side-shadow:
+    -12px 0 24px -12px rgba(0, 0, 0, 0.45),
+    12px 0 24px -12px rgba(0, 0, 0, 0.45);
+}
+.wiz-head {
+  width: 100%;
+  max-width: 640px;
+  box-sizing: border-box;
+  margin: 0 auto;
+  background: var(--wa-color-surface-default);
+  padding: 1rem;
+  border: 1px solid var(--wa-color-surface-border);
+  border-top: 0;
+  box-shadow: var(--wiz-side-shadow);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+.wiz-head h1 {
+  margin: 0;
+  font-size: 1.375rem;
+}
+.wiz-main {
+  max-width: 640px;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 0;
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--wa-color-surface-default);
+  box-shadow: var(--wiz-side-shadow);
+}
+/* The step fills the column so the nav bar has somewhere to sink to. */
+.wiz-step {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.wiz-step > form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.wiz-foot {
+  width: 100%;
+  max-width: 640px;
+  box-sizing: border-box;
+  margin: 0 auto;
+  background: var(--wa-color-surface-default);
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--wa-color-surface-border);
+  border-bottom: 0;
+  border-radius: var(--wa-border-radius-m) var(--wa-border-radius-m) 0 0;
+  box-shadow: var(--wiz-side-shadow);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+}
+/* The footer only says something while a draft is alive: hide the
+   strip entirely when idle so the nav bar sits flush at the bottom. */
+.wiz-foot:has(#draft-status:empty) {
+  display: none;
+}
+.node {
+  margin: 0.75rem 0;
+}
+/* Nav buttons live at the bottom in both cases: margin-top auto sinks
+   the bar when content is short, sticky pins it when content scrolls.
+   It stays inside the step form so submission keeps working. */
+.node-buttons {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  margin: auto -1rem 0;
+  padding: 0.5rem 1rem;
+  background: var(--wa-color-surface-default);
+  border-top: 1px solid var(--wa-color-surface-border);
+}
+.tree-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.tree-row {
+  padding: 0.375rem 0.5rem;
+  border-left: 4px solid var(--wa-color-neutral-40);
+  margin: 0.25rem 0;
+  background: var(--wa-color-surface-lowered);
+  color: var(--wa-color-text-normal);
+}
+.tree-row.is-done {
+  border-color: var(--wa-color-success-60);
+}
+.tree-row.is-current {
+  border-color: var(--wa-color-success-60);
+  font-weight: var(--wa-font-weight-bold);
+}
+.tree-row.is-skipped {
+  opacity: 0.65;
+}
+.button-row-right {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+.button-row-split {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+.action-out {
+  margin-top: 0.5rem;
+  max-height: 18rem;
+  overflow-y: auto;
+  padding: 0.5rem;
+  background: var(--wa-color-surface-lowered);
+  color: var(--wa-color-text-normal);
+  border: 1px solid var(--wa-color-surface-border);
+  border-radius: var(--wa-border-radius-s);
+}
+.action-out:empty {
+  display: none;
+}
+.action-strip {
+  width: 100%;
+}
+.action-strip::part(label) {
+  flex: 1;
+  text-align: left;
+}
+.stages-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.check-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+small.option-hint {
+  display: block;
+  margin-top: 0.8rem;
+  margin-bottom: 0.4rem;
+}
+.repeat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.repeat-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.repeat-row wa-input {
+  flex: 1 1 8rem;
+}
+.copyable-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.copyable-text {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem;
+  font: inherit;
+  resize: vertical;
+  background: var(--wa-color-surface-lowered);
+  color: var(--wa-color-text-normal);
+  border: 1px solid var(--wa-color-surface-border);
+  border-radius: var(--wa-border-radius-s);
+}
+.copyable-done {
+  color: var(--wa-color-text-quiet);
+}
+.stage-row {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.9375rem;
+  cursor: pointer;
+  border: 1px solid var(--wa-color-neutral-40);
+  border-left-width: 4px;
+  border-radius: var(--wa-border-radius-s);
+  background: var(--wa-color-surface-lowered);
+  color: var(--wa-color-text-normal);
+}
+.stage-row.is-now {
+  border-color: var(--wa-color-brand-fill-normal);
+  font-weight: var(--wa-font-weight-bold);
+}
+.answers-list {
+  margin: 0;
+}
+.answers-entry {
+  padding: 0.625rem 0;
+  border-top: 1px solid var(--wa-color-surface-border);
+}
+.answers-entry:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.answers-name {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--wa-color-text-quiet);
+}
+.answers-values {
+  margin: 0.25rem 0 0;
+  font-size: 0.9375rem;
+}
+wa-tab-group::part(tabs) {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--wa-color-surface-default);
+  border-bottom: 1px solid var(--wa-color-surface-border);
+}
+@media (max-width: 480px) {
+  .wiz-head {
+    padding: 0.75rem 1rem;
+  }
+  .wiz-main {
+    padding: 1rem 0.75rem 0;
+  }
+  .node-buttons {
+    margin: auto -0.75rem 0;
+    padding: 0.5rem 0.75rem;
+  }
+  .wiz-foot {
+    padding: 0.5rem 1rem;
+  }
+}

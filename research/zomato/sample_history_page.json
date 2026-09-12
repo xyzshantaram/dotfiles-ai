@@ -1,0 +1,44 @@
+{
+  "status": "success",
+  "has_more": false,
+  "postback_params": "{\"last_created_timestamp\":{\"seconds\":1714292519},\"last_order_id\":5747518212}",
+  "results": [
+    {
+      "layout_config": {
+        "snippet_type": "order_history_snippet_type_2",
+        "layout_type": "carousel",
+        "section_count": 1
+      },
+      "order_history_snippet_type_2": {
+        "click_action": {
+          "type": "deeplink",
+          "deeplink": { "url": "zomato://delivery/5777845053" }
+        },
+        "top_container": {
+          "title": { "text": "<medium-400|{grey-900|Sample Biryani House}>", "is_markdown": 1 },
+          "subtitle1": {
+            "text": "<medium-100|{grey-600|Indiranagar, Bengaluru}>",
+            "is_markdown": 1
+          },
+          "tag": { "title": { "text": "Delivered" } }
+        },
+        "items": [
+          {
+            "title": {
+              "text": "<semibold-300|{grey-600|2 x}> <semibold-300|{grey-900|Chicken Dum Biryani}>"
+            }
+          },
+          {
+            "title": {
+              "text": "<semibold-300|{grey-600|1 x}> <semibold-300|{grey-900|Mirchi ka Salan}>"
+            }
+          }
+        ],
+        "bottom_container": {
+          "title": { "text": "30 Apr 2024 at 9:11PM" },
+          "subtitle1": { "text": "<semibold-200|{grey-900|₹649.55}>" }
+        }
+      }
+    }
+  ]
+}

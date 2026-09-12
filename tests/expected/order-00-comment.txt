@@ -1,0 +1,5 @@
+A=Asha B=Ben C=Cara
+Nova Classic Blend (20 pcs) (240) - A:120 B:120
+FizzUp Zero Sugar (750 ml) (220) - A:73.33 B:73.33 C:73.34
+Fees (30) - A:10 B:10 C:10
+Total - A:203.33 B:203.33 C:83.34

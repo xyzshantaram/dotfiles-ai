@@ -1,0 +1,22 @@
+{
+  "name": "@sid/wizardkit",
+  "version": "0.1.0",
+  "exports": {
+    ".": "./mod.ts",
+    "./install": "./install.ts"
+  },
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact"
+  },
+  "imports": {
+    "typed-htmx": "npm:typed-htmx@^0.3.1",
+    "zx": "npm:zx@8.8.5",
+    "preact": "npm:preact@10.26.4",
+    "preact-render-to-string": "npm:preact-render-to-string@6.6.2",
+    "micromark": "npm:micromark@4.0.2"
+  },
+  "tasks": {
+    "check": "deno check --no-lock mod.ts examples/demo.ts"
+  }
+}

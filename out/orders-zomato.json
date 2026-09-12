@@ -1,0 +1,1075 @@
+[
+  {
+    "id": "zomato-8470552516",
+    "platform": "zomato",
+    "date": "2026-08-14 3:23 PM",
+    "paid": 347.38,
+    "items": [
+      {
+        "name": "Fish & Velvety Mash With Veggies",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Fish & Velvety Mash With Veggies",
+        "price": 400,
+        "quantity": 1
+      },
+      {
+        "name": "[GST]",
+        "price": 22.48,
+        "quantity": 1
+      },
+      {
+        "name": "[Handling]",
+        "price": 14.9,
+        "quantity": 1
+      },
+      {
+        "name": "[Tip]",
+        "price": 30,
+        "quantity": 1
+      },
+      {
+        "name": "[Discount]",
+        "price": -120,
+        "quantity": 1
+      }
+    ],
+    "fees": {
+      "delivery": 0,
+      "packaging": 0
+    }
+  },
+  {
+    "id": "zomato-8469140664",
+    "platform": "zomato",
+    "date": "2026-08-13 1:39 AM",
+    "paid": 574.39,
+    "items": [
+      {
+        "name": "Coke zero can",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "2 Pc Crispy Fried Chicken",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "McEgg Burger Protein Plus (2 Slices)",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "New McSaver McAloo Tikki",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Coke zero can",
+        "price": 66,
+        "quantity": 1
+      },
+      {
+        "name": "2 Pc Crispy Fried Chicken",
+        "price": 225,
+        "quantity": 1
+      },
+      {
+        "name": "McEgg Burger Protein Plus (2 Slices)",
+        "price": 125,
+        "quantity": 1
+      },
+      {
+        "name": "New McSaver McAloo Tikki",
+        "price": 225,
+        "quantity": 1
+      },
+      {
+        "name": "[Discount]",
+        "price": -58.33,
+        "quantity": 1
+      },
+      {
+        "name": "[GST]",
+        "price": 71.82,
+        "quantity": 1
+      },
+      {
+        "name": "[Handling]",
+        "price": 14.9,
+        "quantity": 1
+      },
+      {
+        "name": "[Tip]",
+        "price": 30,
+        "quantity": 1
+      },
+      {
+        "name": "[Discount]",
+        "price": -125,
+        "quantity": 1
+      }
+    ],
+    "fees": {
+      "delivery": 0,
+      "packaging": 0
+    }
+  },
+  {
+    "id": "zomato-8344201460",
+    "platform": "zomato",
+    "date": "2026-07-12 8:57 AM",
+    "paid": 363.4,
+    "items": [
+      {
+        "name": "Cappuccino",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Pepper Chicken Rice Bowl",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Cappuccino",
+        "price": 115,
+        "quantity": 1
+      },
+      {
+        "name": "Pepper Chicken Rice Bowl",
+        "price": 329,
+        "quantity": 1
+      },
+      {
+        "name": "[GST]",
+        "price": 43.63,
+        "quantity": 1
+      },
+      {
+        "name": "[Handling]",
+        "price": 14.9,
+        "quantity": 1
+      },
+      {
+        "name": "[Tip]",
+        "price": 30,
+        "quantity": 1
+      },
+      {
+        "name": "[Discount]",
+        "price": -150,
+        "quantity": 1
+      },
+      {
+        "name": "[Discount]",
+        "price": -19.13,
+        "quantity": 1
+      }
+    ],
+    "fees": {
+      "delivery": 0,
+      "packaging": 0
+    }
+  },
+  {
+    "id": "zomato-8337130591",
+    "platform": "zomato",
+    "date": "2026-07-11 4:50 AM",
+    "paid": 289.08,
+    "items": [
+      {
+        "name": "Gulab Jamun [2 Pieces]",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Hyderabadi Chicken Dum Biryani",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Gulab Jamun [2 Pieces]",
+        "price": 85,
+        "quantity": 1
+      },
+      {
+        "name": "Hyderabadi Chicken Dum Biryani",
+        "price": 220,
+        "quantity": 1
+      },
+      {
+        "name": "[GST]",
+        "price": 14.18,
+        "quantity": 1
+      },
+      {
+        "name": "[Handling]",
+        "price": 14.9,
+        "quantity": 1
+      },
+      {
+        "name": "[Tip]",
+        "price": 30,
+        "quantity": 1
+      },
+      {
+        "name": "[Discount]",
+        "price": -75,
+        "quantity": 1
+      }
+    ],
+    "fees": {
+      "delivery": 0,
+      "packaging": 0
+    }
+  },
+  {
+    "id": "zomato-8323056284",
+    "platform": "zomato",
+    "date": "2026-07-07 7:01 AM",
+    "paid": 344.15,
+    "items": [
+      {
+        "name": "Ginger Tea",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Aloo Matar Poha",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Veg Maggi",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Ginger Tea",
+        "price": 129,
+        "quantity": 1
+      },
+      {
+        "name": "Aloo Matar Poha",
+        "price": 149,
+        "quantity": 1
+      },
+      {
+        "name": "Veg Maggi",
+        "price": 139,
+        "quantity": 1
+      },
+      {
+        "name": "[Discount]",
+        "price": -41.28,
+        "quantity": 1
+      },
+      {
+        "name": "[GST]",
+        "price": 23.53,
+        "quantity": 1
+      },
+      {
+        "name": "[Handling]",
+        "price": 14.9,
+        "quantity": 1
+      },
+      {
+        "name": "[Tip]",
+        "price": 30,
+        "quantity": 1
+      },
+      {
+        "name": "[Discount]",
+        "price": -100,
+        "quantity": 1
+      }
+    ],
+    "fees": {
+      "delivery": 0,
+      "packaging": 0
+    }
+  },
+  {
+    "id": "zomato-8311683378",
+    "platform": "zomato",
+    "date": "2026-07-04 6:06 AM",
+    "paid": 348.66,
+    "items": [
+      {
+        "name": "Chicken Kurkure Cheese Momo",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Chicken Manchurian Kathi Roll",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Chicken Kurkure Cheese Momo",
+        "price": 199,
+        "quantity": 1
+      },
+      {
+        "name": "Chicken Manchurian Kathi Roll",
+        "price": 204,
+        "quantity": 1
+      },
+      {
+        "name": "[GST]",
+        "price": 43.38,
+        "quantity": 1
+      },
+      {
+        "name": "[Handling]",
+        "price": 14.9,
+        "quantity": 1
+      },
+      {
+        "name": "[Tip]",
+        "price": 30,
+        "quantity": 1
+      },
+      {
+        "name": "[Discount]",
+        "price": -125,
+        "quantity": 1
+      },
+      {
+        "name": "[Discount]",
+        "price": -17.62,
+        "quantity": 1
+      }
+    ],
+    "fees": {
+      "delivery": 0,
+      "packaging": 0
+    }
+  },
+  {
+    "id": "zomato-8298463993",
+    "platform": "zomato",
+    "date": "2026-06-30 9:58 PM",
+    "paid": 469.68,
+    "items": [
+      {
+        "name": "Crispy Mushroom Rice Bowl (Mini)",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Mexican Sunrise",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Crispy Mushroom Rice Bowl (Mini)",
+        "price": 315,
+        "quantity": 1
+      },
+      {
+        "name": "Mexican Sunrise",
+        "price": 65,
+        "quantity": 1
+      },
+      {
+        "name": "[GST]",
+        "price": 44.78,
+        "quantity": 1
+      },
+      {
+        "name": "[Handling]",
+        "price": 14.9,
+        "quantity": 1
+      },
+      {
+        "name": "[Tip]",
+        "price": 30,
+        "quantity": 1
+      }
+    ],
+    "fees": {
+      "delivery": 0,
+      "packaging": 0
+    }
+  },
+  {
+    "id": "zomato-8300991863",
+    "platform": "zomato",
+    "date": "2026-06-30 9:56 PM",
+    "paid": 469.68,
+    "items": [
+      {
+        "name": "Crispy Mushroom Rice Bowl (Mini)",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Mexican Sunrise",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Crispy Mushroom Rice Bowl (Mini)",
+        "price": 315,
+        "quantity": 1
+      },
+      {
+        "name": "Mexican Sunrise",
+        "price": 65,
+        "quantity": 1
+      },
+      {
+        "name": "[GST]",
+        "price": 44.78,
+        "quantity": 1
+      },
+      {
+        "name": "[Handling]",
+        "price": 14.9,
+        "quantity": 1
+      },
+      {
+        "name": "[Tip]",
+        "price": 30,
+        "quantity": 1
+      }
+    ],
+    "fees": {
+      "delivery": 0,
+      "packaging": 0
+    }
+  },
+  {
+    "id": "zomato-8284752047",
+    "platform": "zomato",
+    "date": "2026-06-30 9:56 PM",
+    "paid": 469.68,
+    "items": [
+      {
+        "name": "Crispy Mushroom Rice Bowl (Mini)",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Mexican Sunrise",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Crispy Mushroom Rice Bowl (Mini)",
+        "price": 315,
+        "quantity": 1
+      },
+      {
+        "name": "Mexican Sunrise",
+        "price": 65,
+        "quantity": 1
+      },
+      {
+        "name": "[GST]",
+        "price": 44.78,
+        "quantity": 1
+      },
+      {
+        "name": "[Handling]",
+        "price": 14.9,
+        "quantity": 1
+      },
+      {
+        "name": "[Tip]",
+        "price": 30,
+        "quantity": 1
+      }
+    ],
+    "fees": {
+      "delivery": 0,
+      "packaging": 0
+    }
+  },
+  {
+    "id": "zomato-8301736784",
+    "platform": "zomato",
+    "date": "2026-06-30 9:55 PM",
+    "paid": 469.68,
+    "items": [
+      {
+        "name": "Crispy Mushroom Rice Bowl (Mini)",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Mexican Sunrise",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Crispy Mushroom Rice Bowl (Mini)",
+        "price": 315,
+        "quantity": 1
+      },
+      {
+        "name": "Mexican Sunrise",
+        "price": 65,
+        "quantity": 1
+      },
+      {
+        "name": "[GST]",
+        "price": 44.78,
+        "quantity": 1
+      },
+      {
+        "name": "[Handling]",
+        "price": 14.9,
+        "quantity": 1
+      },
+      {
+        "name": "[Tip]",
+        "price": 30,
+        "quantity": 1
+      }
+    ],
+    "fees": {
+      "delivery": 0,
+      "packaging": 0
+    }
+  },
+  {
+    "id": "zomato-8297849572",
+    "platform": "zomato",
+    "date": "2026-06-30 7:17 AM",
+    "paid": 205.83,
+    "items": [
+      {
+        "name": "Ghee Podi Masala Dosa",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "2 Poori with Kesari Bath",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Vada",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Ghee Podi Masala Dosa",
+        "price": 130,
+        "quantity": 1
+      },
+      {
+        "name": "2 Poori with Kesari Bath",
+        "price": 85,
+        "quantity": 1
+      },
+      {
+        "name": "Vada",
+        "price": 50,
+        "quantity": 1
+      },
+      {
+        "name": "[GST]",
+        "price": 15.93,
+        "quantity": 1
+      },
+      {
+        "name": "[Handling]",
+        "price": 14.9,
+        "quantity": 1
+      },
+      {
+        "name": "[Tip]",
+        "price": 30,
+        "quantity": 1
+      },
+      {
+        "name": "[Discount]",
+        "price": -120,
+        "quantity": 1
+      }
+    ],
+    "fees": {
+      "delivery": 0,
+      "packaging": 0
+    }
+  },
+  {
+    "id": "zomato-8269380187",
+    "platform": "zomato",
+    "date": "2026-06-28 9:05 PM",
+    "paid": 673.88,
+    "items": [
+      {
+        "name": "Crispy Peri Peri Chicken Rice Bowl (Mini)",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Peach Iced Tea",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Crispy Mushroom Rice Bowl (Mini)",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Crispy Peri Peri Chicken Rice Bowl (Mini)",
+        "price": 269,
+        "quantity": 1
+      },
+      {
+        "name": "Peach Iced Tea",
+        "price": 65,
+        "quantity": 1
+      },
+      {
+        "name": "Crispy Mushroom Rice Bowl (Mini)",
+        "price": 315,
+        "quantity": 1
+      },
+      {
+        "name": "[GST]",
+        "price": 69.98,
+        "quantity": 1
+      },
+      {
+        "name": "[Handling]",
+        "price": 14.9,
+        "quantity": 1
+      },
+      {
+        "name": "[Tip]",
+        "price": 20,
+        "quantity": 1
+      },
+      {
+        "name": "[Discount]",
+        "price": -80,
+        "quantity": 1
+      }
+    ],
+    "fees": {
+      "delivery": 0,
+      "packaging": 0
+    }
+  },
+  {
+    "id": "zomato-8272819066",
+    "platform": "zomato",
+    "date": "2026-06-24 8:02 PM",
+    "paid": 393.32,
+    "items": [
+      {
+        "name": "Chicken Medium Wok Bowl",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Chicken Medium Wok Bowl",
+        "price": 458,
+        "quantity": 1
+      },
+      {
+        "name": "[Discount]",
+        "price": -150,
+        "quantity": 1
+      },
+      {
+        "name": "[GST]",
+        "price": 50.42,
+        "quantity": 1
+      },
+      {
+        "name": "[Handling]",
+        "price": 14.9,
+        "quantity": 1
+      },
+      {
+        "name": "[Tip]",
+        "price": 20,
+        "quantity": 1
+      }
+    ],
+    "fees": {
+      "delivery": 0,
+      "packaging": 0
+    }
+  },
+  {
+    "id": "zomato-8241855741",
+    "platform": "zomato",
+    "date": "2026-06-15 12:50 PM",
+    "paid": 405.28,
+    "items": [
+      {
+        "name": "McAloo Tikki + Fries (R)",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Piri Piri Spice Mix",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "2 Iced Coffee",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "McAloo Tikki Burger",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "McAloo Tikki + Fries (R)",
+        "price": 119,
+        "quantity": 1
+      },
+      {
+        "name": "Piri Piri Spice Mix",
+        "price": 23,
+        "quantity": 1
+      },
+      {
+        "name": "2 Iced Coffee",
+        "price": 245,
+        "quantity": 1
+      },
+      {
+        "name": "McAloo Tikki Burger",
+        "price": 79,
+        "quantity": 1
+      },
+      {
+        "name": "[Discount]",
+        "price": -97.19,
+        "quantity": 1
+      },
+      {
+        "name": "[GST]",
+        "price": 60.57,
+        "quantity": 1
+      },
+      {
+        "name": "[Handling]",
+        "price": 14.9,
+        "quantity": 1
+      },
+      {
+        "name": "[Tip]",
+        "price": 20,
+        "quantity": 1
+      },
+      {
+        "name": "Gold subscription fee",
+        "price": 1,
+        "quantity": 1
+      },
+      {
+        "name": "[Discount]",
+        "price": -60,
+        "quantity": 1
+      }
+    ],
+    "fees": {
+      "delivery": 0,
+      "packaging": 0
+    }
+  },
+  {
+    "id": "zomato-8124332835",
+    "platform": "zomato",
+    "date": "2026-05-16 6:09 AM",
+    "paid": 372.93,
+    "items": [
+      {
+        "name": "Egg Fried Ricee",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Paneer Chilli [k]",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Egg Fried Ricee",
+        "price": 198,
+        "quantity": 1
+      },
+      {
+        "name": "Paneer Chilli [k]",
+        "price": 159,
+        "quantity": 1
+      },
+      {
+        "name": "[GST]",
+        "price": 31.03,
+        "quantity": 1
+      },
+      {
+        "name": "[Handling]",
+        "price": 14.9,
+        "quantity": 1
+      },
+      {
+        "name": "[Tip]",
+        "price": 20,
+        "quantity": 1
+      },
+      {
+        "name": "[Discount]",
+        "price": -50,
+        "quantity": 1
+      }
+    ],
+    "fees": {
+      "delivery": 0,
+      "packaging": 0
+    }
+  },
+  {
+    "id": "zomato-8046289461",
+    "platform": "zomato",
+    "date": "2026-04-25 3:30 AM",
+    "paid": 408.03,
+    "items": [
+      {
+        "name": "Butter Naan",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Butter Chicken Masala With Ghee Rice",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Butter Naan",
+        "price": 40,
+        "quantity": 1
+      },
+      {
+        "name": "Butter Chicken Masala With Ghee Rice",
+        "price": 369,
+        "quantity": 1
+      },
+      {
+        "name": "[GST]",
+        "price": 44.13,
+        "quantity": 1
+      },
+      {
+        "name": "[Handling]",
+        "price": 14.9,
+        "quantity": 1
+      },
+      {
+        "name": "[Tip]",
+        "price": 20,
+        "quantity": 1
+      },
+      {
+        "name": "[Discount]",
+        "price": -80,
+        "quantity": 1
+      }
+    ],
+    "fees": {
+      "delivery": 0,
+      "packaging": 0
+    }
+  },
+  {
+    "id": "zomato-8037639283",
+    "platform": "zomato",
+    "date": "2026-04-24 5:45 AM",
+    "paid": 342.16,
+    "items": [
+      {
+        "name": "Chicken Samosa",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Veg Cutlet",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Cheese Corn Nuggets",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "French Toast",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Chicken Samosa",
+        "price": 35,
+        "quantity": 1
+      },
+      {
+        "name": "Veg Cutlet",
+        "price": 40,
+        "quantity": 1
+      },
+      {
+        "name": "Cheese Corn Nuggets",
+        "price": 139,
+        "quantity": 1
+      },
+      {
+        "name": "French Toast",
+        "price": 79,
+        "quantity": 1
+      },
+      {
+        "name": "[GST]",
+        "price": 43.56,
+        "quantity": 1
+      },
+      {
+        "name": "[Handling]",
+        "price": 14.9,
+        "quantity": 1
+      },
+      {
+        "name": "[Tip]",
+        "price": 20,
+        "quantity": 1
+      },
+      {
+        "name": "[Discount]",
+        "price": -29.3,
+        "quantity": 1
+      }
+    ],
+    "fees": {
+      "delivery": 0,
+      "packaging": 0
+    }
+  },
+  {
+    "id": "zomato-8026244111",
+    "platform": "zomato",
+    "date": "2026-04-21 1:25 AM",
+    "paid": 500.58,
+    "items": [
+      {
+        "name": "Choco Lava Cake",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Pepper Barbecue Chicken Cheese Burst",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Choco Lava Cake",
+        "price": 119,
+        "quantity": 1
+      },
+      {
+        "name": "Pepper Barbecue Chicken Cheese Burst",
+        "price": 409,
+        "quantity": 1
+      },
+      {
+        "name": "[GST]",
+        "price": 57.68,
+        "quantity": 1
+      },
+      {
+        "name": "[Handling]",
+        "price": 14.9,
+        "quantity": 1
+      },
+      {
+        "name": "[Discount]",
+        "price": -100,
+        "quantity": 1
+      }
+    ],
+    "fees": {
+      "delivery": 0,
+      "packaging": 0
+    }
+  },
+  {
+    "id": "zomato-8017942288",
+    "platform": "zomato",
+    "date": "2026-04-19 9:55 PM",
+    "paid": 355.13,
+    "items": [
+      {
+        "name": "Mexican McAloo Tikki Burger",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Cappuccino Coffee (R)",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Veg Pizza McPuff",
+        "price": 0,
+        "quantity": 1
+      },
+      {
+        "name": "Mexican McAloo Tikki Burger",
+        "price": 75,
+        "quantity": 1
+      },
+      {
+        "name": "Cappuccino Coffee (R)",
+        "price": 199,
+        "quantity": 1
+      },
+      {
+        "name": "Veg Pizza McPuff",
+        "price": 64,
+        "quantity": 1
+      },
+      {
+        "name": "[Discount]",
+        "price": -73.67,
+        "quantity": 1
+      },
+      {
+        "name": "[GST]",
+        "price": 55.91,
+        "quantity": 1
+      },
+      {
+        "name": "[Handling]",
+        "price": 14.9,
+        "quantity": 1
+      },
+      {
+        "name": "[Tip]",
+        "price": 20,
+        "quantity": 1
+      }
+    ],
+    "fees": {
+      "delivery": 0,
+      "packaging": 0
+    }
+  }
+]

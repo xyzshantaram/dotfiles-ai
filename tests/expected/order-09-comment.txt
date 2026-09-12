@@ -1,0 +1,13 @@
+A=Asha B=Ben C=Cara
+Fresh Papaya (700 g) (70) - A:23.33 B:23.33 C:23.34
+Fresh Tender Coconut (1 pc) (80) - B:80
+Fresh Tender Coconut (1 pc) (80) - B:80
+HydroPlus Apple Drink (500 ml) (90) - A:90
+Fresh Okra (250 g) (20) - A:6.67 B:6.67 C:6.66
+Fresh Okra (250 g) (20) - A:6.67 B:6.67 C:6.66
+Fresh Curry Leaves (50 g) (10) - A:3.33 B:3.33 C:3.34
+Fresh Carrot (500 g) (40) - A:13.33 B:13.33 C:13.34
+FarmHen Fresh Eggs (10 pcs) (140) - A:46.67 B:46.67 C:46.66
+SoftCrumb Milk Bread (350 g) (60) - A:20 B:20 C:20
+Fees (12) - A:4 B:4 C:4
+Total - A:214 B:284 C:124

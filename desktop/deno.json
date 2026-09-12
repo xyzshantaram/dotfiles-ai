@@ -1,0 +1,22 @@
+{
+  "version": "0.1.0",
+  "imports": {
+    "wizardkit": "../wizardkit/mod.ts"
+  },
+  "tasks": {
+    "start": "deno run --no-lock -A ../wizardkit/examples/demo.ts",
+    "dev": "deno desktop --hmr ../wizardkit/examples/demo.ts",
+    "check": "deno check --no-lock compile.ts",
+    "compile": "deno run --no-lock -A compile.ts"
+  },
+  "desktop": {
+    "app": {
+      "name": "Wizard demo",
+      "identifier": "dev.splitutils.wizard-demo"
+    },
+    "backend": "webview",
+    "output": {
+      "linux": "./dist/wizard-demo"
+    }
+  }
+}

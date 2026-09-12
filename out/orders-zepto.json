@@ -1,0 +1,1380 @@
+{
+  "orders": [
+    {
+      "id": "zepto-PLVQJBGNN47997",
+      "platform": "zepto",
+      "date": "2026-09-09 7:01 PM",
+      "paid": 357.9,
+      "items": [
+        {
+          "name": "Latte (250 ml)",
+          "price": 145.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Lit Thins Pre Rolled Cones ( 3 Packs | Total - 6 Cones ) (3 pack (6 pcs))",
+          "price": 45,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Almond Croissant (100 g)",
+          "price": 166.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-PLVQJBGNH31331",
+      "platform": "zepto",
+      "date": "2026-09-09 12:31 PM",
+      "paid": 614.95,
+      "items": [
+        {
+          "name": "Latte (250 ml)",
+          "price": 145.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Pepsi Zero Sugar Soft Drink | Zero Calories (1 pc (300 ml))",
+          "price": 40,
+          "quantity": 6,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Ambition Easy Lock & Seal Container 3 Pcs Set | 400 ml-900 ml-1600 ml - Assorted (3 pcs)",
+          "price": 229,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-NTPGJBGNN27993",
+      "platform": "zepto",
+      "date": "2026-09-08 6:52 PM",
+      "paid": 679.95,
+      "items": [
+        {
+          "name": "Tomato Local (500 g)",
+          "price": 18,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Superior MP Wheat Atta, 0% Maida | Aashirvaad (1 pack (2 kg))",
+          "price": 106,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Country Delight 40g Protein Taaza Paneer (1 pack (200 g))",
+          "price": 115,
+          "quantity": 2,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Heritage Table Butter (1 pack (100 g))",
+          "price": 62,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Spinach (Palak) - Cleaned, without roots (250 g)",
+          "price": 43,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Latte (250 ml)",
+          "price": 145.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Milky Mist Pure Cream (1 pack (250 ml))",
+          "price": 75,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-NTPGJBGNE78008",
+      "platform": "zepto",
+      "date": "2026-09-08 10:22 AM",
+      "paid": 507.95,
+      "items": [
+        {
+          "name": "Marlboro Advance Compact (1 pack (10 pcs))",
+          "price": 122,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Marlboro Gold Advance (1 pack (10 pcs))",
+          "price": 240,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Latte (250 ml)",
+          "price": 145.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-MIRLKBGNJ54550",
+      "platform": "zepto",
+      "date": "2026-09-07 2:38 PM",
+      "paid": 235.95,
+      "items": [
+        {
+          "name": "The Baker's Dozen Choco Chip Muffin | Dark Chocolate Chips | Eggless | Veg Cake | Bakery Delight (1 pack (45 g))",
+          "price": 45,
+          "quantity": 2,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Latte (250 ml)",
+          "price": 145.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-MIRLKBGNF90119",
+      "platform": "zepto",
+      "date": "2026-09-07 10:47 AM",
+      "paid": 269.9,
+      "items": [
+        {
+          "name": "Latte (250 ml)",
+          "price": 145.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Coconut Chia Cooler  (250 ml)",
+          "price": 61.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "ORS Ready to Drink - Apple Flavour (1 pc (200 ml))",
+          "price": 31,
+          "quantity": 2,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-MIRLKBGNF95119",
+      "platform": "zepto",
+      "date": "2026-09-07 10:46 AM",
+      "paid": 269.9,
+      "items": [
+        {
+          "name": "Latte (250 ml)",
+          "price": 145.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "ORS Ready to Drink - Apple Flavour (1 pc (200 ml))",
+          "price": 31,
+          "quantity": 2,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Coconut Chia Cooler  (250 ml)",
+          "price": 61.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-MIRLKBGNF15116",
+      "platform": "zepto",
+      "date": "2026-09-07 10:40 AM",
+      "paid": 269.9,
+      "items": [
+        {
+          "name": "Latte (250 ml)",
+          "price": 145.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "ORS Ready to Drink - Apple Flavour (1 pc (200 ml))",
+          "price": 31,
+          "quantity": 2,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Coconut Chia Cooler  (250 ml)",
+          "price": 61.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-JHUHKBGNJ29553",
+      "platform": "zepto",
+      "date": "2026-09-05 3:26 PM",
+      "paid": 227.85,
+      "items": [
+        {
+          "name": "Bull's-eye Egg - 2Pcs (100 g)",
+          "price": 40.95,
+          "quantity": 2,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Latte (250 ml)",
+          "price": 145.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-HGTKBGNI90442",
+      "platform": "zepto",
+      "date": "2026-09-03 2:08 PM",
+      "paid": 306,
+      "items": [
+        {
+          "name": "Nissin Geki Carbonara Creamy Veg Korean Ramen Noodles (1 pack (80 g))",
+          "price": 39,
+          "quantity": 2,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Soham Housewares Reusable Stainless Steel Straw With Cleaning Brush- Long Metal Straws For Drinking (1 pc)",
+          "price": 68,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Coca-Cola Zero Sugar  PET| Cola Sparkling Soft Drink | The Coca-Cola Company (1 pack (8 x 250 ml))",
+          "price": 160,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-SKLTJBGNL46775",
+      "platform": "zepto",
+      "date": "2026-09-01 5:27 PM",
+      "paid": 239.4,
+      "items": [
+        {
+          "name": "Latte (250 ml)",
+          "price": 145.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Mini Pizza (100 g)",
+          "price": 93.45,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-SKLTJBGNE77005",
+      "platform": "zepto",
+      "date": "2026-09-01 10:25 AM",
+      "paid": 646.95,
+      "items": [
+        {
+          "name": "Marlboro Gold Advance (1 pack (10 pcs))",
+          "price": 240,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Gimi Gimi x Zepto Chopsticks (1 pc)",
+          "price": 0,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Almond Croissant (100 g)",
+          "price": 166.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Ezee Biodegradable Medium Garbage Bags 19 x 21 Inch (1 pack (30 pcs))",
+          "price": 75,
+          "quantity": 2,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Dr. Bio Resuable Spoon | 12 Pcs | Disposable | Biodegradable | Compostable | Made of Corn Starch (1 pack (12 pcs))",
+          "price": 45,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Dr. Bio Resuable Fork | 12 Pcs | Disposable | Biodegradable | Compostable | Made of Corn Starch (1 pack (12 pcs))",
+          "price": 45,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-SRNHRBGNI91449",
+      "platform": "zepto",
+      "date": "2026-08-31 2:08 PM",
+      "paid": 544.85,
+      "items": [
+        {
+          "name": "Amul Slim Trim Skimmed Milk (Tetra Pack) (1 pack (1 L))",
+          "price": 85,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Coca-Cola Zero Sugar  Can| Cola Sparkling Soft Drink | The Coca-Cola Company (1 pc (300 ml))",
+          "price": 39,
+          "quantity": 6,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Nissin Carbonara Korean Ramen with Bull's-eye Eggs (2 Pcs) (2 combo)",
+          "price": 144.9,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Bull's-eye Egg - 2Pcs (100 g)",
+          "price": 40.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "BOROLINE SX Antiseptic Ayurvedic Cream (1 pc (19 g))",
+          "price": 40,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-SRNHRBGNG20227",
+      "platform": "zepto",
+      "date": "2026-08-31 11:31 AM",
+      "paid": 535.95,
+      "items": [
+        {
+          "name": "Latte (250 ml)",
+          "price": 145.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Marlboro Advance Compact (1 pack (10 pcs))",
+          "price": 115,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Marlboro Gold Advance (1 pack (10 pcs))",
+          "price": 240,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "[Fees]",
+          "price": 35,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-RJGNRBGNQ90224",
+      "platform": "zepto",
+      "date": "2026-08-30 10:22 PM",
+      "paid": 379.4,
+      "items": [
+        {
+          "name": "Latte (250 ml)",
+          "price": 145.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Mini Pizza (100 g)",
+          "price": 93.45,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "STASH PRO Wheely 69 Flint Lighter (1 pc)",
+          "price": 35,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "FLIK Tic Tac Lighter | Jet Flame (1 pc)",
+          "price": 105,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-RJGNRBGNE23002",
+      "platform": "zepto",
+      "date": "2026-08-30 10:13 AM",
+      "paid": 552.9,
+      "items": [
+        {
+          "name": "Marlboro Gold Advance (1 pack (10 pcs))",
+          "price": 240,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Almond Croissant (100 g)",
+          "price": 166.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Latte (250 ml)",
+          "price": 145.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-PQPTRBGNH53330",
+      "platform": "zepto",
+      "date": "2026-08-29 1:11 PM",
+      "paid": 310.85,
+      "items": [
+        {
+          "name": "Latte (250 ml)",
+          "price": 145.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Nissin Carbonara Korean Ramen with Bull's-eye Eggs (2 Pcs) (2 combo)",
+          "price": 144.9,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "[Fees]",
+          "price": 20,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-PQPTRBGND48993",
+      "platform": "zepto",
+      "date": "2026-08-29 9:08 AM",
+      "paid": 594.4,
+      "items": [
+        {
+          "name": "Marlboro Gold Advance (1 pack (10 pcs))",
+          "price": 240,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Latte (250 ml)",
+          "price": 145.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Mini Pizza (100 g)",
+          "price": 93.45,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Marlboro Advance Compact (1 pack (10 pcs))",
+          "price": 115,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-OIJJRBGNN46996",
+      "platform": "zepto",
+      "date": "2026-08-28 7:06 PM",
+      "paid": 290.85,
+      "items": [
+        {
+          "name": "Latte (250 ml)",
+          "price": 145.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Nissin Carbonara Korean Ramen with Bull's-eye Eggs (2 Pcs) (2 combo)",
+          "price": 144.9,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-OIJJRBGNF89119",
+      "platform": "zepto",
+      "date": "2026-08-28 11:21 AM",
+      "paid": 493.95,
+      "items": [
+        {
+          "name": "Latte (250 ml)",
+          "price": 145.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Marlboro Gold Advance (1 pack (10 pcs))",
+          "price": 240,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "The Rigged Rakhi (1 pc)",
+          "price": 0,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Bombay Shaving Company Disposable Razor for Men| Pack of 5 Razors | Aloe Lubra Strip | Sensi Stud (1 pack (5 pcs))",
+          "price": 108,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-MNLOSBGNS25449",
+      "platform": "zepto",
+      "date": "2026-08-27 11:53 PM",
+      "paid": 244.95,
+      "items": [
+        {
+          "name": "LetsShave Pro 2 Plus Disposable Razor for Men | Twin Blade Shaving Razor with Lubra Strip (1 pack (5 pcs))",
+          "price": 99,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Latte (250 ml)",
+          "price": 145.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-KUUUSBGNF30114",
+      "platform": "zepto",
+      "date": "2026-08-26 11:17 AM",
+      "paid": 323.4,
+      "items": [
+        {
+          "name": "Iced Cappuccino   (450 ml)",
+          "price": 156.45,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Almond Croissant (100 g)",
+          "price": 166.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-JMOKSBGNJ71557",
+      "platform": "zepto",
+      "date": "2026-08-25 3:19 PM",
+      "paid": 228.44,
+      "items": [
+        {
+          "name": "Vietnamese Cold Coffee (450 ml)",
+          "price": 99.22,
+          "quantity": 2,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "[Fees]",
+          "price": 30,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-JMOKSBGNG06225",
+      "platform": "zepto",
+      "date": "2026-08-25 11:47 AM",
+      "paid": 464,
+      "items": [
+        {
+          "name": "Amul Slim Trim Skimmed Milk (Tetra Pack) (1 pack (1 L))",
+          "price": 85,
+          "quantity": 2,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Kurkure Namkeen Chilli Chataka | Crunchy Snacks (1 pack (68 g))",
+          "price": 20,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Nissin Cup Noodles Spiced Chicken (1 pc (45 g))",
+          "price": 40,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Maggi Chilly Chow Cuppa Noodles (1 pc (70 g))",
+          "price": 55,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Lotte Choco Pie | Soft Cake Snack (1 pack (336 g))",
+          "price": 146,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Kurkure Namkeen Playz Puffcorn Yummy Cheese | Snacks (1 pack (84 g))",
+          "price": 33,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-HUHQSBGNI14447",
+      "platform": "zepto",
+      "date": "2026-08-24 2:22 PM",
+      "paid": 547.65,
+      "items": [
+        {
+          "name": "Latte (250 ml)",
+          "price": 145.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Bull's-eye Egg - 2Pcs (100 g)",
+          "price": 40.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Marlboro Gold Advance (1 pack (10 pcs))",
+          "price": 240,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Poha  (160 g)",
+          "price": 120.75,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-HUHQSBGNI60442",
+      "platform": "zepto",
+      "date": "2026-08-24 2:20 PM",
+      "paid": 547.65,
+      "items": [
+        {
+          "name": "Latte (250 ml)",
+          "price": 145.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Bull's-eye Egg - 2Pcs (100 g)",
+          "price": 40.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Marlboro Gold Advance (1 pack (10 pcs))",
+          "price": 240,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Poha  (160 g)",
+          "price": 120.75,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-LRGSBGNM10881",
+      "platform": "zepto",
+      "date": "2026-08-23 5:54 PM",
+      "paid": 260.95,
+      "items": [
+        {
+          "name": "Marlboro Advance Compact (1 pack (10 pcs))",
+          "price": 115,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Rakhi Sweetness Flyer (Haldiram's x Zepto)",
+          "price": 0,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Latte (250 ml)",
+          "price": 145.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-UHMQRBGNR15331",
+      "platform": "zepto",
+      "date": "2026-08-22 10:44 PM",
+      "paid": 739,
+      "items": [
+        {
+          "name": "Marlboro Gold Advance Cigarettes (1 pack (20 pcs))",
+          "price": 480,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Lifelong Glass Mug with Glass Straw (1 pack (2 pcs))",
+          "price": 259,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-UHMQRBGNO77002",
+      "platform": "zepto",
+      "date": "2026-08-22 8:26 PM",
+      "paid": 312.9,
+      "items": [
+        {
+          "name": "Latte (250 ml)",
+          "price": 145.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Almond Croissant (100 g)",
+          "price": 166.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "The Rakhi Lookbook (1 pc)",
+          "price": 0,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-SPGGRBGNM11886",
+      "platform": "zepto",
+      "date": "2026-08-21 5:54 PM",
+      "paid": 281.4,
+      "items": [
+        {
+          "name": "Latte (250 ml)",
+          "price": 145.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Chicken Cheese Burger (220 g)",
+          "price": 135.45,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-RGPMRBGNR50336",
+      "platform": "zepto",
+      "date": "2026-08-20 11:15 PM",
+      "paid": 342.9,
+      "items": [
+        {
+          "name": "Latte (250 ml)",
+          "price": 145.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": " DSR Projects (1 pc)",
+          "price": 0,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Baked Cheesecake Slice (Eggless) (80 g)",
+          "price": 166.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "[Fees]",
+          "price": 30,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-KSNTSBGNK88661",
+      "platform": "zepto",
+      "date": "2026-08-16 4:14 PM",
+      "paid": 196.35,
+      "items": [
+        {
+          "name": "Chicken Burger (200 g)",
+          "price": 114.45,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Bull's-eye Egg - 2Pcs (100 g)",
+          "price": 40.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "250ml Masala Chaas (250 ml)",
+          "price": 40.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-KSNTSBGNK81669",
+      "platform": "zepto",
+      "date": "2026-08-16 4:13 PM",
+      "paid": 196.35,
+      "items": [
+        {
+          "name": "Chicken Burger (200 g)",
+          "price": 114.45,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Bull's-eye Egg - 2Pcs (100 g)",
+          "price": 40.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "250ml Masala Chaas (250 ml)",
+          "price": 40.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-HRQPSBGNX99997",
+      "platform": "zepto",
+      "date": "2026-08-15 4:30 AM",
+      "paid": 445,
+      "items": [
+        {
+          "name": "Real Fruit Power Mixed Fruit Juice | Pack of 10 (1 pack (10 x 125 ml or 10 x 135ml))",
+          "price": 90,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Marlboro Advance Compact (1 pack (10 pcs))",
+          "price": 115,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Marlboro Gold Advance (1 pack (10 pcs))",
+          "price": 240,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-HRQPSBGNH68331",
+      "platform": "zepto",
+      "date": "2026-08-14 12:54 PM",
+      "paid": 198.45,
+      "items": [
+        {
+          "name": "Vietnamese Cold Coffee (450 ml)",
+          "price": 198.45,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-JJVSBGNI70441",
+      "platform": "zepto",
+      "date": "2026-08-13 1:58 PM",
+      "paid": 229.95,
+      "items": [
+        {
+          "name": "Latte (250 ml)",
+          "price": 145.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Bun Maska   (80 g)",
+          "price": 84,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-JJVSBGNI70447",
+      "platform": "zepto",
+      "date": "2026-08-13 1:58 PM",
+      "paid": 229.95,
+      "items": [
+        {
+          "name": "Latte (250 ml)",
+          "price": 145.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Bun Maska   (80 g)",
+          "price": 84,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-TUVPRBGNI92449",
+      "platform": "zepto",
+      "date": "2026-08-12 2:01 PM",
+      "paid": 198.45,
+      "items": [
+        {
+          "name": "Vietnamese Cold Coffee (450 ml)",
+          "price": 198.45,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-SMOVRBGNS78442",
+      "platform": "zepto",
+      "date": "2026-08-11 11:56 PM",
+      "paid": 239.4,
+      "items": [
+        {
+          "name": "Bun Maska   (80 g)",
+          "price": 93.45,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Latte (250 ml)",
+          "price": 145.95,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        },
+        {
+          "name": "Dove Hair Mask (14 ml)",
+          "price": 0,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-SMOVRBGNL49771",
+      "platform": "zepto",
+      "date": "2026-08-11 5:25 PM",
+      "paid": 198.45,
+      "items": [
+        {
+          "name": "Vietnamese Cold Coffee (450 ml)",
+          "price": 198.45,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-QUILRBGNR58336",
+      "platform": "zepto",
+      "date": "2026-08-10 11:14 PM",
+      "paid": 198.45,
+      "items": [
+        {
+          "name": "Vietnamese Cold Coffee (450 ml)",
+          "price": 198.45,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    },
+    {
+      "id": "zepto-QUILRBGNR58331",
+      "platform": "zepto",
+      "date": "2026-08-10 11:13 PM",
+      "paid": 198.45,
+      "items": [
+        {
+          "name": "Vietnamese Cold Coffee (450 ml)",
+          "price": 198.45,
+          "quantity": 1,
+          "estimated": false,
+          "source": "zepto-api"
+        }
+      ],
+      "fees": {
+        "delivery": 0,
+        "packaging": 0
+      }
+    }
+  ],
+  "meta": {
+    "source": "zepto-api",
+    "generated_at": "2026-09-09T14:30:11.890Z"
+  }
+}

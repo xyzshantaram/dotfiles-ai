@@ -1,0 +1,5 @@
+A=Asha B=Ben C=Cara
+Crispy Fried Chicken (12 pcs) (170) - A:85 B:85
+Chicken Tikka Biryani Full (400) - A:200 B:200
+Fees (96) - A:48 B:48
+Total - A:333 B:333

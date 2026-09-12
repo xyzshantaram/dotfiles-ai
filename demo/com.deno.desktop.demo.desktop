@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=demo
+Exec=demo
+Icon=AppIcon
+StartupWMClass=com.deno.desktop.demo
+Categories=Utility;
