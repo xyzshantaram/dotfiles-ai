@@ -51,13 +51,16 @@
   5. Load the target role's skill first — it states the contract your brief must satisfy (e.g.
      `tester` needs a nonce that YOU mint; see the mutation-dispatch rule in that skill).
   6. Say exactly what to report back, and forbid returning whole file contents.
-  7. Name a DURABLE patch path under this workspace's aidos scratch
-     (`~/.dsh/aidos/scratch/<workspaceKey>/patches/<id>.patch`), and require a `git commit`
-     inside the worktree with the hash reported. The WORKTREE may stay in /tmp — it is a
-     checkout of committed state and is disposable — but the emitted patch is the one artifact
-     in this flow that exists nowhere else, and /tmp does not survive hibernation here. Two
-     finished patches died that way on 2026-09-17 and were redone from scratch. If a reported
-     patch path is missing, look for the worktree commit BEFORE re-dispatching.
+  7. Name a DURABLE patch path under this workspace's aidos scratch — the ticket carries both
+     placeholders: `~/.dsh/aidos/scratch/<workspaceKey>/patches/<ticketId>.patch`. Also require
+     a `git commit` inside the worktree with the hash reported; if the worker's session DENIES
+     the commit (bash-guard does, in some sessions), it reports the block rather than skipping
+     it silently. The WORKTREE may stay in /tmp — a checkout of committed state is disposable,
+     and moving it is upstream aidos work, not this repo's — but the emitted patch is the one
+     artifact in this flow that exists nowhere else, and /tmp does not survive hibernation
+     here. Two finished patches died that way overnight on 2026-09-16/17 and were redone from
+     scratch. If a reported patch path is missing, look for the worktree commit BEFORE
+     re-dispatching.
 * When reviewing, assume the persona of a senior reviewer. Be especially wary of
   common AI slop patterns like dead code, unused imports, code which is duplicated
   between files, code which is almost the same but with only a few parameters tweaked,
