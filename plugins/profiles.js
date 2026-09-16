@@ -357,6 +357,17 @@ function sessionLabel(agent) {
   const id = a?.session?.header?.id ?? a?.session?.id;
   return id === void 0 ? "unknown" : String(id);
 }
+function levelsForDepth(proposalRoute, chain, depth) {
+  const sameLevel = (a, b) => a.provider === b.provider && a.model === b.model;
+  if (depth === 0) {
+    return [proposalRoute, ...chain.filter((level) => !sameLevel(level, proposalRoute))];
+  }
+  const head = chain[0];
+  if (!head) return [proposalRoute];
+  const rest = chain.slice(1).filter((level) => !sameLevel(level, head));
+  if (chain.some((level) => sameLevel(level, proposalRoute))) return [head, ...rest];
+  return [head, ...rest, proposalRoute];
+}
 function chainForDepth(ctx, depth) {
   const settings = service(ctx, "settings");
   const profile = settings?.get(PROFILE_NS);
@@ -430,12 +441,7 @@ function registerFailover(ctx, alwaysMaxRetries) {
       model: proposal.model,
       ...proposal.reasoningEffort ? { reasoningEffort: proposal.reasoningEffort } : {}
     };
-    const levels = [
-      proposalRoute,
-      ...chain.filter(
-        (level2) => !(level2.provider === proposalRoute.provider && level2.model === proposalRoute.model)
-      )
-    ];
+    const levels = levelsForDepth(proposalRoute, chain, depth);
     const agentMap = getAgentState(agent);
     let s = agentMap.get(stepKey);
     if (!s || s.stepKey !== stepKey) {
@@ -974,6 +980,7 @@ export {
   inject,
   isCachedDown,
   isSequenceFailed,
+  levelsForDepth,
   makeFailoverStatusHandler,
   markDown,
   name,
