@@ -65,11 +65,21 @@
   color: var(--dsw-alias-label-tertiary, #8a8a8a);
 }
 /*
- * THE RESERVED HEIGHT IS NOT DEAD SPACE — do not reclaim it. The row is
- * invisible until hover, so without a height of its own the page would
- * reflow under the pointer and every message would jump as the cursor
- * crossed it: worse than the misplacement this rule set fixes. Upstream
- * reserves the same 28px (.p-xYUq_actions).
+ * THE 28px IS UPSTREAM'S OWN (.p-xYUq_actions), kept so a user row occupies
+ * the same vertical rhythm as the assistant rows it sits between.
+ *
+ * AN EARLIER VERSION OF THIS COMMENT CALLED IT REFLOW PREVENTION, AND THAT
+ * WAS WRONG — caught in review (subagent 9c62b952). The row hides with
+ * `opacity: 0`, which KEEPS it in layout, so hover moves nothing with or
+ * without an explicit height. The height is rhythm, not a jump guard. It
+ * would BECOME load-bearing the moment anyone swapped the opacity fade for
+ * `display: none`, which is the real reason not to reclaim it.
+ *
+ * OUR SMALLER SCALE DIVERGES FROM UPSTREAM IN TWO MORE PLACES, deliberately,
+ * so that nobody "corrects" them later: the clock drops upstream's
+ * padding-right: 12px (the flex gap already separates it), and
+ * .user-bubble-action is 20x20 with a 5px radius where upstream is 28x28 and
+ * fully round. Both follow the owner's kept-ours type scale.
  *
  * WE FADE THE WHOLE ROW, upstream fades only the clock (its .p-xYUq_action
  * carries no opacity rule). Chosen deliberately: a copy button on every user
