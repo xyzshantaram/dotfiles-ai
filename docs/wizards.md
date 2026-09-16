@@ -1,14 +1,13 @@
 # Wizard contracts
 
 The seams every wizard builds against. Change a contract here first, then change the wizards. The
-main menu (`wizards/meta.ts`) dispatches purely through these surfaces, so it builds in parallel
-with the wizards it calls.
+main menu dispatches purely through these surfaces, so it builds in parallel with the wizards it
+calls.
 
 ## Main menu
 
-`wizards/meta.ts` shows the main menu. While the settings file misses, the menu shows exactly one
-item, "Start here". After onboarding saves the file, the full menu appears with one description line
-under each title:
+The main menu starts with one item while the settings file misses: item "Start here". After
+onboarding saves the file, the full menu appears with one description line under each title:
 
 1. "Split and push recent orders" — all three steps in order.
 2. "Pick up where you left off" — resume a saved session from run history.
@@ -16,7 +15,7 @@ under each title:
 4. "Assign per-order split" — split step on a picked run.
 5. "Upload orders to Splitwise" — push my orders, or push someone else's orders from a share link (a
    file path still works).
-6. "Settings" — runs `wizards/settings.ts`.
+6. "Settings" — changes app settings.
 7. "Set up with an AI assistant" — prints a copyable setup prompt.
 8. "Exit" — leaves the menu.
 
@@ -70,53 +69,51 @@ Root: `<repo>/state` resolved from each module's own `import.meta.url`. The env 
 
 ## Run lifecycle
 
-1. gatherer creates the run, gathers, writes `orders.json`, status `gathered`. On failure: status
-   `failed` plus `failureReason`, and the run dir is copied to `share/runs/<runId>-failed-backup/`.
-2. splitter assigns, writes outputs, status `assigned`.
-3. pusher pushes every confirmed order; on full success the run dir moves to `cache/runs/<runId>`
-   (archived, safe to delete).
-4. the main menu shows every `failed` run's reason on startup.
+1. The gather flow creates the run, collects orders, and writes `orders.json` with status
+   `gathered`. On failure the status becomes `failed` with a `failureReason`, and the run dir is
+   copied to `share/runs/<runId>-failed-backup/`.
+2. The split flow assigns every line and writes `output.json` plus a stamped copy, status
+   `assigned`.
+3. The push flow pushes every confirmed order. On full success `archiveRun` moves the run dir to
+   `cache/runs/<runId>`, which is archived and safe to delete.
+4. The resume pickers in the split and push flows label each run through `runHint`, which states the
+   reason on a failed run.
 
-## Wizard CLI surface
+## Command line surface
 
-All wizards run from the repo root:
+The browser app owns every user flow. One script still runs from the command line, and the app
+shells out to it as a child process:
 
 ```
-deno run -A --no-lock wizards/<name>.ts [runId] [--dry]
+deno run -A --no-lock wizards/gatherer.ts <mode>
 ```
 
+- The modes are `--emit`, `--login=<zepto|blinkit|swiggy>`, `--zomato-login-start`,
+  `--zomato-login-finish`, and `--zomato-city`.
+- A run with no mode prints the mode list and exits 1. The file holds no prompt.
 - `--allow-sys` in the shebang: zx 8.8.5 reads os.cpus at import.
-- Exit 0 on success, 1 on failure (run marked failed where one exists).
-- Every wizard opens a redacted log via `createRunLog(<kind>)` and prints the log path on any
+- Exit 0 on success, 1 on failure, with the run marked failed where one exists.
+- The script opens a redacted log through `createRunLog("gather")` and prints the log path on any
   failure.
-- `--dry` prints what the wizard WOULD do, runs nothing that writes or pushes, and exits 0.
-  Mandatory for every wizard.
-- `runId` (splitter, pusher): operate on that run instead of asking.
 
-| file                  | kind   | reads                    | writes                |
-| --------------------- | ------ | ------------------------ | --------------------- |
-| `wizards/gatherer.ts` | gather | platform logins in state | run `orders.json`     |
-| `wizards/splitter.ts` | split  | run `orders.json`        | run `output*.json`    |
-| `wizards/pusher.ts`   | push   | run `output.json`        | Splitwise, pushed map |
-| `wizards/meta.ts`     | menu   | runs                     | dispatches the above  |
+| file                  | kind   | reads                    | writes            |
+| --------------------- | ------ | ------------------------ | ----------------- |
+| `wizards/gatherer.ts` | gather | platform logins in state | run `orders.json` |
 
-The main menu never imports another wizard's internals. It shells out to the exact commands above
-and reads results through `src/runstate.ts`.
+`wizards/dev-zomato-consts.ts` is the one other script, and the Maintenance section below covers it.
 
 ## Child contract
 
-The main menu sets `SPLIT_UTILS_FROM_MENU=1` in the environment of each child wizard it runs. Direct
-runs leave the variable unset.
+The app runs the child with `Deno.Command` and shows its stdout in an action panel. Each machine
+mode prints one plain sentence for that panel. The one exception is `--emit` in AI mode, which
+prints the agent block on purpose.
 
-`src/wizardkit.ts` exports `wizardExit(code)`. It prints "Back to the main menu." for menu-owned
-runs, else "Open the main menu again to pick your next step.", then exits with the given code. Every
-wizard ends through `wizardExit`, never through a bare `Deno.exit`.
+No environment variable carries state between stages. One variable remains, `SPLIT_UTILS_STATE`, and
+it overrides the state root. `src/paths.ts` holds its only reader.
 
-Each wizard banner follows "split-utils v0.1.0 wizard — <purpose>". The main menu banner is
-"split-utils v0.1.0 main menu" with no suffix.
-
-Each pusher stage offers "Back to the main menu" at its first prompt (or checks for it before
-starting). Picking it calls `wizardExit(0)`. Saved work stays saved.
+`src/wizardkit.ts` exports `wizardExit(code)`. It closes the progress dot line, then exits with the
+given code. It prints no closing advice, because the old line pointed at a terminal main menu that
+no longer exists.
 
 ## Splitwise access setup
 

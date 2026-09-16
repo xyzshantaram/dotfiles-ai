@@ -7,21 +7,12 @@
 
 /// <reference lib="dom" />
 
-import { MepCLI } from "mepcli";
 import type { Page, Response as PWResponse } from "playwright";
 import {
-  APP_VERSION,
-  banner,
-  confirm,
-  createWizard,
   dot,
-  finish,
   lineEnd,
   lineStart,
-  readyGate,
   say,
-  selectHint,
-  setTotalStages,
   step,
   wizardExit,
 } from "../src/wizardkit.ts";
@@ -83,7 +74,6 @@ import {
 } from "../src/zomato.ts";
 
 // STAGES: eight fixed stages. Platform steps run only when picked.
-setTotalStages(8);
 
 // Sign in wait per platform before the retry question, in ms.
 const LOGIN_TIMEOUT_MS = 5 * 60_000;
@@ -374,7 +364,7 @@ async function swiggyBinary(): Promise<string | undefined> {
 // Returns nothing. Throws when the user skips the platform.
 // verifyUrl loads a page that fires the signal on its own (for checks
 // that harvest the site's own responses instead of calling APIs).
-// confirmChoice adds an "I'm signed in" escape hatch to the timeout menu.
+// It waits once and throws when the wait times out.
 async function loginWait(
   platform: string,
   siteUrl: string,
@@ -383,12 +373,6 @@ async function loginWait(
     verifyUrl?: string;
     verifyWaitMs?: number;
     onPage?: (page: Page) => void;
-    confirmChoice?: {
-      title: string;
-      value: string;
-      description: string;
-      verify: (session: Session) => Promise<boolean>;
-    };
   } = {},
 ): Promise<void> {
   step("Opening " + platform + ".");
@@ -421,68 +405,26 @@ async function loginWait(
   say("Sign in in the small window. The app will continue by itself.");
   say("Waiting for sign in.");
   logInfo(platform + " waits for manual sign in");
-  while (true) {
-    let ok = false;
-    try {
-      ok = await waitFor(page, () => check(page), {
-        timeoutMs: LOGIN_TIMEOUT_MS,
-        pollMs: 3000,
-        // One dot per poll so the wait is visible.
-        onTick: () => dot(),
-      });
-    } catch {
-      ok = false;
-    }
-    if (ok) {
-      logInfo(platform + " sign in seen");
-      say("Sign in seen. Fetching orders.");
-      await session.close().catch(() => {});
-      return;
-    }
-    logWarn(platform + " sign in wait timed out");
-    const choices = [
-      { title: "Keep waiting", value: "retry" },
-      ...(opts.confirmChoice
-        ? [
-          {
-            title: opts.confirmChoice.title,
-            value: opts.confirmChoice.value,
-            description: opts.confirmChoice.description,
-          },
-        ]
-        : []),
-      { title: "Skip this platform", value: "skip" },
-    ];
-    const next = await MepCLI.select<string>({
-      message: "Sign in was not seen. What now?" + selectHint(),
-      choices,
+  let ok = false;
+  try {
+    ok = await waitFor(page, () => check(page), {
+      timeoutMs: LOGIN_TIMEOUT_MS,
+      pollMs: 3000,
+      // One dot per poll so the wait is visible.
+      onTick: () => dot(),
     });
-    if (next === "skip") {
-      await session.close().catch(() => {});
-      throw new Error(platform + " sign in skipped");
-    }
-    if (opts.confirmChoice && next === opts.confirmChoice.value) {
-      // The user says they signed in. Load a page that fires the
-      // signal on its own and watch for it before trusting the claim.
-      say("Checking the orders page for your sign in.");
-      let confirmed = false;
-      try {
-        confirmed = await opts.confirmChoice.verify(session);
-      } catch {
-        confirmed = false;
-      }
-      if (confirmed) {
-        logInfo(platform + " sign in confirmed by the user");
-        await session.close().catch(() => {});
-        return;
-      }
-      say(
-        "The orders page did not load yet. Sign in first, then pick that choice again.",
-      );
-      logWarn(platform + " user confirm found no sign in");
-    }
-    say("Waiting for sign in.");
+  } catch {
+    ok = false;
   }
+  if (ok) {
+    logInfo(platform + " sign in seen");
+    say("Sign in seen. Fetching orders.");
+    await session.close().catch(() => {});
+    return;
+  }
+  logWarn(platform + " sign in wait timed out");
+  await session.close().catch(() => {});
+  throw new Error(platform + " sign in timed out");
 }
 
 // Watch the page for the site's own order-list 200.
@@ -1514,78 +1456,6 @@ function mapZomatoBill(detail: unknown): {
   return { items, delivery };
 }
 
-// Ask which city the Zomato orders belong to. Persists the answer.
-async function askLocation(
-  saved: ZomatoLocation | null,
-): Promise<ZomatoLocation> {
-  if (saved) say("Saved city is " + saved.city + ".");
-  const cities = [
-    { city: "Bengaluru", lat: "12.9341967", long: "77.7241821", cityId: "4" },
-    { city: "Mumbai", lat: "19.0760", long: "72.8777", cityId: "4" },
-    { city: "Delhi", lat: "28.6139", long: "77.2090", cityId: "4" },
-    { city: "Chennai", lat: "13.0827", long: "80.2707", cityId: "4" },
-    { city: "Hyderabad", lat: "17.3850", long: "78.4867", cityId: "4" },
-    { city: "Kolkata", lat: "22.5726", long: "88.3639", cityId: "4" },
-    { city: "Pune", lat: "18.5204", long: "73.8567", cityId: "4" },
-    { city: "Ahmedabad", lat: "23.0225", long: "72.5714", cityId: "4" },
-  ];
-  const picked = await MepCLI.select<string>({
-    message: "Which city are your orders in?" + selectHint(),
-    choices: [
-      ...(saved ? [{ title: "Keep " + saved.city, value: "__keep__" }] : []),
-      ...cities.map((c) => ({ title: c.city, value: c.city })),
-      { title: "Another city", value: "__other__" },
-    ],
-  });
-  if (picked === "__keep__" && saved) return saved;
-  const found = cities.find((c) => c.city === picked);
-  if (found) {
-    // Only Bengaluru carries a verified city number. Ask for the
-    // rest and keep 4 when the user does not know it.
-    let cityId = found.cityId;
-    if (found.city !== "Bengaluru") {
-      cityId = await MepCLI.text({
-        message: "Type the city code for " +
-          found.city +
-          " (the number in the web address after city=). Press Enter to keep 4:",
-        initial: "4",
-        validate: (v) => v.trim() === "" || /^\d+$/.test(v.trim()) ? true : "Type digits only.",
-      });
-      cityId = cityId.trim() === "" ? "4" : cityId.trim();
-    }
-    const loc: ZomatoLocation = { ...found, cityId };
-    await saveLocation(loc);
-    logInfo("zomato location saved: " + loc.city);
-    return loc;
-  }
-  const city = await MepCLI.text({
-    message: "Type the city name:",
-    validate: (v) => (v.trim() ? true : "Type the city name."),
-  });
-  const lat = await MepCLI.text({
-    message: "Type the latitude for " + city.trim() + " (for example 12.97):",
-    validate: (v) => (Number.isFinite(parseFloat(v)) ? true : "Type a number."),
-  });
-  const long = await MepCLI.text({
-    message: "Type the longitude for " + city.trim() + " (for example 77.59):",
-    validate: (v) => (Number.isFinite(parseFloat(v)) ? true : "Type a number."),
-  });
-  const cityIdRaw = await MepCLI.text({
-    message: "Type the Zomato city number (Enter keeps 4):",
-    initial: "4",
-    validate: (v) => v.trim() === "" || /^\d+$/.test(v.trim()) ? true : "Type digits only.",
-  });
-  const loc: ZomatoLocation = {
-    city: city.trim(),
-    lat: lat.trim(),
-    long: long.trim(),
-    cityId: cityIdRaw.trim() === "" ? "4" : cityIdRaw.trim(),
-  };
-  await saveLocation(loc);
-  logInfo("zomato location saved: " + loc.city);
-  return loc;
-}
-
 // Fetch the Zomato login challenge. Shared by the terminal prompt path
 // and the machine login start mode. Throws on failure.
 async function loadZomatoChallenge(): Promise<LoginState> {
@@ -1635,51 +1505,10 @@ function nameFromToken(token: string): string | null {
   }
 }
 
-// Run the headless Zomato phone OTP flow through plain prompts.
-async function zomatoLogin(): Promise<string | null> {
-  const phone = await MepCLI.text({
-    message: "Type the phone number on the Zomato account:",
-    validate: (v) => v.replace(/\D/g, "").length >= 10 ? true : "Type the full phone number.",
-  });
-  let state;
-  try {
-    state = await loadZomatoChallenge();
-  } catch (e) {
-    logError(
-      "zomato login challenge failed: " +
-        (e instanceof Error ? e.message : String(e)),
-    );
-    return null;
-  }
-  try {
-    await sendZomatoCode(phone.trim(), state);
-  } catch (e) {
-    logError(e instanceof Error ? e.message : "zomato OTP send failed");
-    return null;
-  }
-  say("Zomato sent a code. Type it here.");
-  logInfo("zomato OTP sent");
-  const otp = await MepCLI.text({
-    message: "Type the Zomato code:",
-    validate: (v) => (v.trim() ? true : "Type the code."),
-  });
-  try {
-    const done = await completeZomatoLogin(phone.trim(), otp.trim(), state);
-    logInfo("zomato tokens saved");
-    return done.accessToken;
-  } catch (e) {
-    logError(
-      "zomato login failed: " + (e instanceof Error ? e.message : String(e)),
-    );
-    return null;
-  }
-}
-
 // Gather Zomato orders headlessly through the app gateway.
 async function gatherZomato(
   days: number,
   loc: ZomatoLocation,
-  interactive: boolean,
 ): Promise<GatherResult> {
   const orders: Order[] = [];
   const shots: PendingShot[] = [];
@@ -1689,7 +1518,6 @@ async function gatherZomato(
   let token: string | null = null;
   const stored = await loadTokens();
   if (stored) token = stored.access_token;
-  if (!token && interactive) token = await zomatoLogin();
   if (!token) {
     failures.push({
       platform: "zomato",
@@ -1698,9 +1526,7 @@ async function gatherZomato(
       detail: "no stored login",
     });
     notes.push(
-      interactive
-        ? "Zomato sign in did not finish. Rerun the wizard to try again."
-        : "Zomato needs stored sign in for headless use. Run the wizard once to sign in.",
+      "Zomato needs stored sign in for headless use. Run the wizard once to sign in.",
     );
     logWarn("zomato gather skipped without a token");
     return { orders, shots, notes };
@@ -1840,23 +1666,33 @@ async function gatherZomato(
   return { orders, shots, notes };
 }
 
-// Gather one browser platform: headed login, headless scrape, close.
-// _headless is kept for call-site compatibility; both phases fix their
-// own headed/headless mode now.
-async function gatherBrowserPlatform(
-  platform: "zepto" | "blinkit" | "swiggy",
-  days: number,
-  headless: boolean,
-  shotDir: string,
-): Promise<GatherResult> {
-  const empty: GatherResult = { orders: [], shots: [], notes: [] };
-  const siteUrl = platform === "zepto"
+// Return the site URL for one browser platform.
+function platformSiteUrl(platform: "zepto" | "blinkit" | "swiggy"): string {
+  return platform === "zepto"
     ? "https://www.zepto.com"
     : platform === "blinkit"
     ? "https://blinkit.com"
     : "https://www.swiggy.com/";
+}
+
+// Build the sign in setup for one browser platform: site URL, sign in
+// check, and loginWait options. One helper owns the Zepto order watcher
+// so both the wizard and the machine login mode share it.
+function browserLoginSetup(
+  platform: "zepto" | "blinkit" | "swiggy",
+): {
+  siteUrl: string;
+  check: (page: Page) => Promise<boolean>;
+  opts: {
+    verifyUrl?: string;
+    verifyWaitMs?: number;
+    onPage?: (page: Page) => void;
+  };
+  cleanup: () => void;
+} {
+  const siteUrl = platformSiteUrl(platform);
   // Zepto detection harvests the site's own order-list 200 through a
-  // response watcher owned by this stage. Detached when the stage ends.
+  // response watcher owned by this setup. Detached when the stage ends.
   const watcherBox: { current: OrderWatcher | null } = { current: null };
   const check = platform === "zepto"
     // The watcher owns detection: it turns true when the site's own
@@ -1866,80 +1702,34 @@ async function gatherBrowserPlatform(
     : platform === "blinkit"
     ? blinkitCheck
     : swiggyCheck;
-  logInfo(platform + " gather starts for " + days + " days");
-  try {
-    try {
-      // Emit mode runs under the browser wizard, which owns sign in on
-      // its own screen and its own button. Opening a sign in window in
-      // the middle of a fetch steals focus and asks for a login the
-      // saved profile already holds. So emit mode never opens one: it
-      // fetches with the saved login, and reports out loud when that
-      // login is missing.
-      if (headless) {
-        logInfo(platform + " emit mode fetches with the saved login");
-      } else {
-        await loginWait(
-          platform,
-          siteUrl,
-          check,
-          platform === "zepto"
-            ? {
-              onPage: (page: Page) => {
-                watcherBox.current = attachOrderWatcher(page);
-              },
-              // The orders page fires the order call on its own load, so a
-              // saved login shows up without any direct API calls.
-              verifyUrl: "https://www.zepto.com/account/orders",
-              verifyWaitMs: 15000,
-              confirmChoice: {
-                title: "I'm signed in — continue",
-                value: "signedin",
-                description: "You finished signing in and the wait did not notice.",
-                verify: async (s: Session): Promise<boolean> => {
-                  try {
-                    await s.page.goto("https://www.zepto.com/account/orders", {
-                      waitUntil: "domcontentloaded",
-                      timeout: 30_000,
-                    });
-                  } catch {
-                    // A failed load means no sign in yet.
-                    return false;
-                  }
-                  try {
-                    return await waitFor(
-                      s.page,
-                      // deno-lint-ignore require-await -- waitFor takes a promise predicate, so this keeps async.
-                      async () => watcherBox.current?.seen() ?? false,
-                      {
-                        timeoutMs: 30_000,
-                        pollMs: 2000,
-                        onTick: () => dot(),
-                      },
-                    );
-                  } catch {
-                    return false;
-                  }
-                },
-              },
-            }
-            : {},
-        );
-      }
-    } finally {
-      // Gathering captures its own responses; the login watcher retires.
-      watcherBox.current?.detach();
-      watcherBox.current = null;
+  const opts = platform === "zepto"
+    ? {
+      onPage: (page: Page) => {
+        watcherBox.current = attachOrderWatcher(page);
+      },
+      // The orders page fires the order call on its own load, so a
+      // saved login shows up without any direct API calls.
+      verifyUrl: "https://www.zepto.com/account/orders",
+      verifyWaitMs: 15000,
     }
-  } catch (e) {
-    // loginWait throws only when the user skips the platform.
-    logWarn(
-      platform +
-        " gather skipped: " +
-        (e instanceof Error ? e.message : String(e)),
-    );
-    bag.notes.push(platform + " skipped.");
-    return empty;
-  }
+    : {};
+  const cleanup = () => {
+    // Gathering captures its own responses; the login watcher retires.
+    watcherBox.current?.detach();
+    watcherBox.current = null;
+  };
+  return { siteUrl, check, opts, cleanup };
+}
+
+// Gather one browser platform with the saved login, then scrape it headless.
+async function gatherBrowserPlatform(
+  platform: "zepto" | "blinkit" | "swiggy",
+  days: number,
+  shotDir: string,
+): Promise<GatherResult> {
+  const siteUrl = platformSiteUrl(platform);
+  logInfo(platform + " gather starts for " + days + " days");
+  logInfo(platform + " fetches with the saved login");
   // Reopen the same profile headless for the scrape. The headed login
   // phase already closed, so the profile lock is free.
   step("Opening " + platform + " headless for the scrape.");
@@ -1957,60 +1747,6 @@ async function gatherBrowserPlatform(
     await session.close().catch(() => {});
     logInfo(platform + " window closed");
   }
-}
-
-// Collect hand typed expenses in a plain loop.
-async function gatherManual(): Promise<Order[]> {
-  const orders: Order[] = [];
-  let n = 0;
-  let more = true;
-  while (more) {
-    n += 1;
-    say("Expense " + n + ".");
-    const store = await MepCLI.text({
-      message: "Where did you buy it?",
-      validate: (v) => (v.trim() ? true : "Type the store name."),
-    });
-    const date = await MepCLI.text({
-      message: "Which date (YYYY-MM-DD)?",
-      initial: new Date().toISOString().slice(0, 10),
-      validate: (v) => /^\d{4}-\d{2}-\d{2}$/.test(v.trim()) ? true : "Use YYYY-MM-DD.",
-    });
-    const item = await MepCLI.text({
-      message: "What did you buy?",
-      validate: (v) => (v.trim() ? true : "Type the item name."),
-    });
-    const amountRaw = await MepCLI.text({
-      message: "How much did it cost?",
-      validate: (v) => {
-        const amount = parseFloat(v);
-        return Number.isFinite(amount) && amount > 0 ? true : "Type an amount above zero.";
-      },
-    });
-    const amount = Math.round(parseFloat(amountRaw) * 100) / 100;
-    const later = await confirm("Split this with others later?");
-    const id = "manual-" + n;
-    orders.push({
-      id,
-      platform: "manual",
-      date: date.trim(),
-      paid: amount,
-      items: [
-        {
-          name: store.trim() + ": " + item.trim(),
-          price: amount,
-          quantity: 1,
-          estimated: false,
-          source: "hand",
-        },
-      ],
-      fees: { delivery: 0, packaging: 0 },
-    });
-    if (later) bag.splitLater.push(id);
-    logInfo("manual expense " + id + " recorded");
-    more = await confirm("Add another expense?");
-  }
-  return orders;
 }
 
 // Write orders plus manifest to a fresh run dir. Returns run id and dir.
@@ -2113,10 +1849,6 @@ async function assignmentPrompt(dir: string): Promise<string> {
 
 // Emit mode: no prompts, one JSON block plus the assignment prompt.
 async function runEmit(): Promise<void> {
-  // Emit mode runs under the browser wizard and prints into its output
-  // panel. That wizard shows the next step right below the panel, so
-  // navigation advice written for a terminal only adds noise.
-  Deno.env.set("SPLIT_UTILS_EMBEDDED", "1");
   const platforms = parsePlatforms(flagValue("platforms"), [
     "zepto",
     "blinkit",
@@ -2139,13 +1871,13 @@ async function runEmit(): Promise<void> {
         }
         if (platform === "zomato") {
           const loc = (await loadLocation()) ?? DEFAULT_LOCATION;
-          const res = await gatherZomato(days, loc, false);
+          const res = await gatherZomato(days, loc);
           bag.orders.push(...res.orders);
           bag.notes.push(...res.notes);
           for (const note of res.notes) logInfo("zomato note: " + note);
           continue;
         }
-        const res = await gatherBrowserPlatform(platform, days, true, shotDir);
+        const res = await gatherBrowserPlatform(platform, days, shotDir);
         bag.orders.push(...res.orders);
         bag.shots.push(...res.shots);
         bag.notes.push(...res.notes);
@@ -2176,21 +1908,6 @@ async function runEmit(): Promise<void> {
       // Temp cleanup must never fail the run.
     }
   }
-}
-
-// Dry mode: print the plan and change nothing.
-// deno-lint-ignore require-await -- entry awaits this in dry mode, so it keeps async.
-async function runDry(): Promise<void> {
-  say("Gather dry run. Nothing opens and nothing is written.");
-  step(
-    "1 Pick platforms: Zepto, Blinkit, Zomato, Swiggy, Enter expenses by hand.",
-  );
-  step("2 Ask how far back the orders go (default 30 days).");
-  step(
-    "3 Sign in once per platform in a small window, then read its order pages.",
-  );
-  step("4 Ask the Zomato city before history.");
-  step("5 Write orders.json to a fresh run dir with status gathered.");
 }
 
 // Machine mode: start the Zomato phone login without prompts.
@@ -2307,6 +2024,55 @@ async function runZomatoCity(): Promise<void> {
   Deno.exit(0);
 }
 
+// Machine mode: sign in to one browser platform without prompts.
+// Reads --login, opens the sign in window, waits, saves the profile,
+// then exits. Each path prints one human sentence on stdout.
+function loginFlag(): string | undefined {
+  const args = Deno.args;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg.startsWith("--login=")) return arg.slice("--login=".length);
+    if (arg === "--login") {
+      const next = args[i + 1];
+      if (next === undefined || next.startsWith("--")) return "";
+      return next;
+    }
+  }
+  return undefined;
+}
+
+async function runBrowserLogin(raw: string): Promise<void> {
+  const id = raw.trim().toLowerCase();
+  if (id !== "zepto" && id !== "blinkit" && id !== "swiggy") {
+    console.log("Pick a platform to sign in to: zepto, blinkit, or swiggy.");
+    wizardExit(1);
+  }
+  const platform = id as "zepto" | "blinkit" | "swiggy";
+  const display = platform === "zepto"
+    ? "Zepto"
+    : platform === "blinkit"
+    ? "Blinkit"
+    : "Swiggy";
+  const setup = browserLoginSetup(platform);
+  try {
+    await loginWait(platform, setup.siteUrl, setup.check, setup.opts);
+  } catch (e) {
+    setup.cleanup();
+    let reason = e instanceof Error ? e.message : String(e);
+    reason = reason.replace(/https?:\S+/g, "the page");
+    reason = reason.replace(/\s+/g, " ").trim();
+    if (!reason) reason = "sign in was not seen";
+    if (!reason.endsWith(".")) reason = reason + ".";
+    logError("browser machine login failed: " + platform);
+    console.log("Sign in did not finish: " + reason);
+    wizardExit(1);
+  }
+  setup.cleanup();
+  logInfo("browser machine login done: " + platform);
+  console.log("Signed in to " + display + ". Press Next to carry on.");
+  wizardExit(0);
+}
+
 // Plain summary after the run dir lands on disk.
 function summary(id: string, days: number): void {
   const total = bag.orders.length;
@@ -2366,173 +2132,17 @@ if (hasFlag("zomato-city")) {
   await runZomatoCity();
 }
 
-if (hasFlag("dry") || hasFlag("dry-run")) {
-  await runDry();
-  wizardExit(0);
+const login = loginFlag();
+if (login !== undefined) {
+  await runBrowserLogin(login);
 }
 
-await banner("split-utils wizard v" + APP_VERSION + " — collect orders");
-await readyGate();
-LOG = createRunLog("gather");
-logInfo("gather wizard started");
-const shotDir = await Deno.makeTempDir();
-
-interface GatherCtx {
-  [key: string]: unknown;
-  pick?: string[];
-  range?: number;
-  zepto?: number;
-  blinkit?: number;
-  zomato?: number;
-  swiggy?: number;
-  manual?: number;
-  finish?: string;
-}
-
-await createWizard<GatherCtx>()
-  .step("pick", async () => {
-    const picked = await MepCLI.multiSelect<string>({
-      message: "Where should the orders come from?",
-      choices: [
-        {
-          title: "Zepto",
-          value: "zepto",
-          description: "Groceries and more from Zepto.",
-        },
-        {
-          title: "Blinkit",
-          value: "blinkit",
-          description: "Groceries and more from Blinkit.",
-        },
-        {
-          title: "Zomato",
-          value: "zomato",
-          description: "Food orders from Zomato.",
-        },
-        {
-          title: "Swiggy",
-          value: "swiggy",
-          description: "Food and Instamart orders from Swiggy.",
-        },
-        {
-          title: "Enter expenses by hand",
-          value: "manual",
-          description: "Type store, date, item, and amount yourself.",
-        },
-        { title: "Back to the main menu", value: "__back__" },
-      ],
-      min: 1,
-    });
-    if (picked.includes("__back__")) {
-      say("Nothing saved yet. Back to the main menu.");
-      wizardExit(0);
-    }
-    logInfo("platforms picked: " + picked.join(","));
-    return picked;
-  })
-  .step("range", async () => {
-    const raw = await MepCLI.text({
-      message: "How far back should the orders go (days)?",
-      initial: "30",
-      validate: (v) => {
-        const n = parseInt(v.trim(), 10);
-        if (!Number.isFinite(n) || n < 1) {
-          return "Type a positive number of days.";
-        }
-        if (n > 365) return "Keep the range within 365 days.";
-        return true;
-      },
-    });
-    const days = parseInt(raw.trim(), 10);
-    logInfo("range picked: " + days + " days");
-    return days;
-  })
-  .stepIf(
-    (ctx) => (ctx.pick ?? []).includes("zepto"),
-    "zepto",
-    async (ctx) => {
-      say("Collect Zepto orders.");
-      const res = await gatherBrowserPlatform(
-        "zepto",
-        ctx.range ?? 30,
-        false,
-        shotDir,
-      );
-      bag.orders.push(...res.orders);
-      bag.shots.push(...res.shots);
-      bag.notes.push(...res.notes);
-      return res.orders.length;
-    },
-  )
-  .stepIf(
-    (ctx) => (ctx.pick ?? []).includes("blinkit"),
-    "blinkit",
-    async (ctx) => {
-      say("Collect Blinkit orders.");
-      const res = await gatherBrowserPlatform(
-        "blinkit",
-        ctx.range ?? 30,
-        false,
-        shotDir,
-      );
-      bag.orders.push(...res.orders);
-      bag.shots.push(...res.shots);
-      bag.notes.push(...res.notes);
-      return res.orders.length;
-    },
-  )
-  .stepIf(
-    (ctx) => (ctx.pick ?? []).includes("zomato"),
-    "zomato",
-    async (ctx) => {
-      say("Collect Zomato orders.");
-      const loc = await askLocation(await loadLocation());
-      const res = await gatherZomato(ctx.range ?? 30, loc, true);
-      bag.orders.push(...res.orders);
-      bag.notes.push(...res.notes);
-      return res.orders.length;
-    },
-  )
-  .stepIf(
-    (ctx) => (ctx.pick ?? []).includes("swiggy"),
-    "swiggy",
-    async (ctx) => {
-      say("Collect Swiggy orders.");
-      const res = await gatherBrowserPlatform(
-        "swiggy",
-        ctx.range ?? 30,
-        false,
-        shotDir,
-      );
-      bag.orders.push(...res.orders);
-      bag.shots.push(...res.shots);
-      bag.notes.push(...res.notes);
-      return res.orders.length;
-    },
-  )
-  .stepIf(
-    (ctx) => (ctx.pick ?? []).includes("manual"),
-    "manual",
-    async () => {
-      say("Type expenses by hand.");
-      const orders = await gatherManual();
-      bag.orders.push(...orders);
-      return orders.length;
-    },
-  )
-  .step("finish", async (ctx) => {
-    const picked = ctx.pick ?? [];
-    const days = ctx.range ?? 30;
-    const platforms = picked.filter((p) => p !== "__back__");
-    const label = platforms.length === 1 ? platforms[0] : "multi";
-    const { id } = await writeRun(label, platforms, days);
-    summary(id, days);
-    try {
-      await Deno.remove(shotDir, { recursive: true });
-    } catch {
-      // Temp cleanup must never fail the run.
-    }
-    return id;
-  })
-  .run();
-await finish();
+// No machine mode matched. Print the modes and stop.
+console.log("This tool runs from the browser app.");
+console.log("Pick one mode:");
+console.log("  --emit                  collect orders and write a run dir");
+console.log("  --login=<platform>      sign in to zepto, blinkit, or swiggy");
+console.log("  --zomato-login-start    send the Zomato code");
+console.log("  --zomato-login-finish   save the Zomato tokens");
+console.log("  --zomato-city           save the Zomato city");
+wizardExit(1);

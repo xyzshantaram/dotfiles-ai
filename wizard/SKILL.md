@@ -52,8 +52,10 @@ Deno.serve({ port: 8471 }, handle);
 
 Action nodes carry `{ label, id, command }`. Clicking posts to `/action`; output swaps below the
 strip. Long or destructive commands use `run: "onConfirm"`. Shell access inside handlers uses the
-re-exported `$` from zx. The `files` proxy serves one root read-only (traversal, dotfiles, and
-directories 404) so pages can fetch images or JSON.
+re-exported `$` from zx: write the bash you would type, as in `` await $`git status --porcelain` ``,
+then read `.stdout` off the result. Reach for it whenever bash is the shorter path than TypeScript.
+The `files` proxy serves one root read-only (traversal, dotfiles, and directories 404) so pages can
+fetch images or JSON.
 
 ## Ship it
 

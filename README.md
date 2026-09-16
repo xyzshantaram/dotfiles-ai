@@ -115,7 +115,6 @@ You need Deno on your machine. The installer script gets it for you.
 
 | Command                   | What it does                            |
 | ------------------------- | --------------------------------------- |
-| `deno task menu`          | Opens the main menu.                    |
 | `deno task dev`           | Runs any single wizard file.            |
 | `deno task check`         | Type-checks the source.                 |
 | `deno task test`          | Runs the unit tests.                    |

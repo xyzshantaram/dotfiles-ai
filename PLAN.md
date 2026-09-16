@@ -16,40 +16,41 @@ user drives the real screen before the work counts as finished.
 G3 splits into the two tickets below. One browser can read another one's answers today. The user
 chose the full fix: real per session state, in the toolkit first, then in every module.
 
-- [ ] K14 the toolkit holds one set of state for every browser. In flight: a wizard-sid cookie plus
-      a state record per session, with each live job owned by the session that started it. Eval: two
-      browsers keep separate answers, and neither reads the other's task output.
-- [ ] G3b every app module keys its state by the session id. seen and onboarding in
-      wizards/expense-split.ts, manualRun in gather.ts, session plus currency plus lastPeoplePost
-      plus storedShare in split.ts, session in push-engine.ts, and pending plus signedInAs in
-      connect.ts. Blocked on K14. Eval: two browsers run two splits with no crossover.
-- [ ] G7 Zomato sign in and the city question stay terminal only, so a Zomato user cannot finish a
-      gather in the browser. Half done: gatherer.ts holds three machine modes (--zomato-login-start,
-      --zomato-login-finish, --zomato-city), each printing one JSON line. No wizard step calls them
-      yet. Decided: fix K13 first, then build one screen rather than three. The modes must print a
-      short human line, because an action panel shows raw output to the user. Eval: a Zomato fetch
-      completes without a terminal.
+- [x] G18 one reader for a posted field. Closed. src/answers.ts now holds field(), answer(),
+      answers() and isDryMap(), each defined once. isDryMap keeps a re-export from src/runstate.ts
+      so old import paths still work. About twenty hand written reads collapsed into it. The raw
+      reads left behind are listed in the report: each one converts a number, tests for a missing
+      key, or matches an exact string, so the trimmed reader would change its meaning.
 
-- [ ] G18 one reader for a posted field. field() now lives in wizards/expense-split.ts and covers
-      the record form. The step modules still spell out the map form m.get("name")?.[0]?.trim().
-      Wanted: one home for both readers, with isDryMap beside them. Eval: no module spells the
-      shape out by hand.
-- [ ] G21 a manual row cannot say "split this later". The old terminal flow asked that question per
-      expense and saved the answer in the run meta. A repeating block takes only text and number
-      fields today, so the row cannot hold a checkbox. Blocked on K11. Eval: a manual row carries
-      its own split later answer into the run meta.
 - [ ] G17 nav() adoption across the step modules. Parked with a reason, not forgotten: nav() fixes
       the label of a goto row to "Next", so a sweep would silently rewrite copy such as "Back to
       menu". Blocked on K12. The other two parts of G17 landed: the People list now uses seeded
       repeating rows, and the AI setup uses copyable().
+
+### Closed with a reason, not with code
+
+- K1 gave the toolkit a custom done screen. This app does not need one. Every flow already ends on a
+  purpose built screen with a Back to menu button, and one shared done screen would serve three
+  flows badly. The single button that still posted `done` sat on the dry run export, where it hit
+  the toolkit summary and left the user stuck. That button now returns to the menu, matching the
+  live export path, and no `action: "done"` remains in the app.
 
 ### Final gate, after every ticket above is closed
 
 - [ ] Z9 full code review plus slop audit of the whole repo. Look for dead code, unused imports,
       duplicated logic across modules, near copies that differ by one argument, duplicated type
       definitions, and hand rolled code that a small well scoped dependency would replace. Review
-      the wizards, the toolkit, and src together, not module by module. Eval: every finding lands
-      as its own ticket here, or as a written reason to leave it alone.
+      the wizards, the toolkit, and src together, not module by module. Eval: every finding lands as
+      its own ticket here, or as a written reason to leave it alone.
+      Three findings already came out of the pre commit diff read, so start from them:
+      1. wizardkit/toolkit.tsx repeats one block four times: run onEnter, rebuild every step,
+         recompute applicability, find the step again, then reply. It sits on the root GET, the back
+         move, the done goto, and the main move. One helper should own it.
+      2. wizards/expense-split/gather.ts builds the same empty pick screen three times, differing
+         only in one sentence of the note.
+      3. The reader `answers` in src/answers.ts collides with the node builder `answers` from the
+         toolkit, so gather.ts imports one of them as `showAnswers`. One of the two names should
+         change.
 
 ### Deferred: wizardkit footguns found by the C-series audit
 
@@ -57,28 +58,68 @@ These are toolkit gaps, not app bugs. Each one invited a bug we then fixed insid
 not start these until split-utils runs end to end. Keep them here so the fix lands in the toolkit
 later, and the next app does not pay the same cost.
 
-- [ ] K1 done is a dead end. The done action renders a fixed summary screen with no way back, so
-      every flow that finishes kills the app. Apps work around it with goto:menu. Wanted: the wizard
-      decides what done means.
-- [ ] K3 a StepFn runs on every render, so any side effect inside one fires while the user is still
-      typing. This wrote a run dir mid typing in the gather flow. Wanted: a per-step enter or submit
-      hook, so side effects sit outside render.
-- [ ] K11 a repeating block takes only text and number fields, so a row cannot hold a checkbox or a
-      pick. This blocks the per row "split later" answer the old manual flow asked. Wanted: more
-      field kinds inside a repeating row.
-- [ ] K12 nav() fixes the label of a goto row to "Next", so a real row such as "Back to menu" cannot
-      use it. Wanted: a label beside the goto step id.
-- [ ] K4 the step list is fixed, so a step cannot say when it applies. Every user walked a Manual
-      expenses screen they never asked for. Apps work around it with jumps. Wanted: a step
-      predicate.
-Closed in the toolkit, now awaiting a hand drive: K2 real back history, K5 seeded repeating rows,
-K6 the pressed action in the hook, K7 the nav helper, K8 shared stage markers, K9 the copyable node,
-plus the rule that a validation veto never blocks Back or Restart. The wizards do not use K5, K7 and
-K9 yet. G17 above adopts them.
-
-- [ ] U5 purge old UI stacks: remove every exotui/mepcli/cliffy reference (code, deps, docs) after
-      U1 maps the copy. Eval: grep for exotui/mepcli/cliffy returns zero outside U1 evidence
-      (docs/copy-audit.md stays as the record); check plus suite green.
+- [ ] G27 move the split writes out of render. Low priority, with the evidence below. itemStep
+      writes while it renders: the Start over branch calls freshState plus saveState, and
+      commitPosted saves each posted assignment. K3 landed an onEnter hook, so arrival work belongs
+      there. Measured before acting: onSubmit holds no split-item branch, so no external veto can
+      re-render a rejected post, the toolkit already serialises double submits, and pendingResume
+      clears itself so the Start over write runs once. So this is a design fault with no known user
+      visible symptom. Do it when the core loop is not about to be hand driven. Eval: a repeated
+      render of one item writes nothing, and a posted assignment still saves once.
+- [x] U5 purge old UI stacks, stage one: delete the retired terminal wizards. Closed. Twenty files
+      left the tree: splitter.ts, pusher.ts, splitter-kit.ts, splitter-cliffy.ts, meta.ts,
+      settings.ts, _template.ts, kitchen-sink.ts, cliffy-kit.ts, splitwise-setup.ts, the whole
+      src/kit tree, and four test files that tested only deleted code. src/wizardkit.ts lost
+      seventeen dead exports. src/settings.ts lost the terminal pickCurrency. deno.json lost exotui,
+      exotui/app, crayon, five cliffy packages, and the menu task. Gates: 358 tests, check clean,
+      fixtures ALL MATCH, lint over 88 files. docs/copy-audit.md keeps the deleted names on purpose
+      as the record.
+- [x] U6 strip the interactive half of wizards/gatherer.ts. Closed. The file fell from 2622 lines to
+      2148. Stage one deleted the terminal wizard entry, runDry, gatherManual, askLocation,
+      zomatoLogin, the dead interactive branch of gatherZomato, and seven wizardkit imports. Stage
+      two deleted the loginWait timeout menu with its noPrompt and confirmChoice options, the Zepto
+      confirmChoice block, the dead login branch of gatherBrowserPlatform, and the MepCLI import.
+      The site URL ternary became the helper platformSiteUrl, shared by the two callers. Verified by
+      me on the real binary: a bare run prints the five modes and exits 1, --login=nosuch and
+      --zomato-city and --zomato-login-start each still print their one human line, and no MepCLI
+      call remains. Gates green at every step.
+- [x] U7 decided by the user: keep the tool, drop MepCLI, keep zx. Closed.
+      wizards/dev-zomato-consts.ts is now a linear non interactive script, 480 lines down to 395. It
+      takes an APK or XAPK path plus an optional `--write`. It prints the fresh values by default
+      and writes the config only with the flag. The drop folder polling loop, the file manager
+      question, and the write question are gone. Its `--selftest` used to die with a raw readDirSync
+      stack trace, because the decoded tree at /tmp/dsh/zomato-re/decoded no longer exists, and it
+      now states that in one line. With the last MepCLI call gone, src/wizardkit.ts fell from 297
+      lines to 101 and lost twelve dead exports: APP_VERSION, setTotalStages, clearScreen,
+      selectHint, installProcessGuards, createWizard, banner, readyGate, warn, open_url, confirm,
+      and finish. Nine print helpers remain. `mepcli` is out of deno.json. zx stays, and a real bash
+      command through the toolkit `$` is proven to run.
+- [ ] U11 the Zomato constants file ignores the state root override. src/zomato.ts reads its tokens
+      and its login state through `shareDir()`, which honours `SPLIT_UTILS_STATE`, but it reads the
+      constants from a fixed repo relative URL at lines 31 and 32. The dev script writes that same
+      fixed path, so the two agree with each other and disagree with every other state read. An
+      installed binary with a state root elsewhere would read constants from beside the module. This
+      predates the purge, so I report it and leave it alone. Eval: one resolver serves all three
+      reads, or a written reason says why the constants differ.
+- [ ] U10 the zx version sits in three files: deno.json, wizardkit/deno.json, and wizardkit/mod.ts,
+      which hardcodes `npm:zx@8.8.5` so the published package resolves with no import map. A bump
+      needs three edits today, and nothing fails when one is missed. Eval: one place states the
+      version, or a check fails when the three disagree.
+- [x] U8 retire CHECKLIST.md. Closed. The file is deleted, so one list survives: the human review
+      queue at the foot of this file. Its header certified a machine run from 2026-09-10 that no
+      longer held, and its first step called `deno task menu`, a task the repo no longer defines.
+      Folded across as new tickets: the four release gates as P1 to P4, the two session save as C10,
+      and the share link drive rewritten into U4, which used to cite a CHECKLIST line number. The
+      "must not happen" block moved into the standing rules below. Dropped on purpose: steps 1 to 9
+      drove terminal screens that no longer exist and are already covered by U2, W3, W8, G1, R2 and
+      F4, step 18 asked for `git init`, which landed as commit 5f5792e, and step 19 named an aidos
+      scratch prompt that no ticket here tracks. One capability in it has no home, recorded as U9.
+- [ ] U9 decide the fate of the no account summary. The terminal push flow offered "Write one short
+      summary instead. No Splitwise login needed." when no Splitwise key was configured, and it
+      saved a summary file beside the source file. No string like it survives anywhere in the tree,
+      so the browser app dropped the capability with no decision on record. Needs a user decision:
+      rebuild it in the push flow, or retire it in writing. Eval: either the push flow offers it
+      when no key is configured, or this plan states why it is gone.
 - [ ] W6 file pick: the last open gap (descriptions, polling, entry onConfirm all shipped). Eval:
       user picks a split file through the dialog in push flow.
 
@@ -123,6 +164,16 @@ K9 yet. G17 above adopts them.
 - Ported copy needs proof: every old user-facing string maps to a new home or a written reason, in
   docs/copy-audit.md.
 
+### Must not happen, anywhere, ever
+
+Folded here from the retired CHECKLIST.md. These rules hold for every ticket.
+
+- `state/`, env files, or token files reach the public repo.
+- An unredacted secret appears in a run log. Spot check one log after each live run.
+- A user facing line shows a bare path, a command, a fingerprint, or an id. The AI setup block is
+  the one deliberate exception, because the user's AI tool reads it, not the user.
+- The words "meta wizard" appear in copy, or a platform is named "custom".
+
 ## Human review queue
 
 Every entry here names work that is code complete and green. It counts as done only after the user
@@ -131,6 +182,21 @@ it.
 
 - [ ] R3 push source hand-drive: the source screen lists your assigned runs, newest first, and
       starts on the newest. A run id typed into Other run still wins.
+- [ ] G32 reset hand-drive: sign in to Splitwise, run a factory reset, then open the push flow. It
+      must ask you to connect again. The old cache copy used to survive a reset and get copied back
+      on the next read, which left you signed in.
+- [ ] G31 pick list hand-drive: finish a gather. The last screen lists every order with a tick box,
+      none ticked. Select all ticks every row and Select none clears them. Next with nothing ticked
+      refuses. Tick two, and the split walks only those two lines.
+- [ ] G30 sign in hand-drive (your bug): press Sign in to Zepto. A browser window opens for the sign
+      in. The panel shows one sentence when it lands. No banner, no "Ready to start?", and no line
+      about opening a main menu.
+- [ ] G23 Splitwise approve hand-drive (your bug): open Settings, paste a key pair, press Save keys
+      and connect. The approve link shows with a verifier box under it. Reaching that screen with no
+      handshake shows one plain line plus an Open Settings button, and no Next that asks for a box
+      the screen never drew.
+- [ ] G24 usage screen hand-drive (your bug): the first run screen shows one heading, one muted
+      line, then the choices. No third block of text sits between them.
 - [ ] Z2 Zomato hand-drive: with no saved sign in, the accounts screen takes your phone, sends the
       code, verifies it, and saves a city, with no terminal at any point.
 - [ ] M1 manual row hand-drive: type a store with no amount and press Next. The screen names the row
@@ -182,7 +248,21 @@ it.
 - [ ] F6 hand-drive: dry push prints the plan and writes nothing; resume picker routes each status
       to the right step
 - [ ] F8 handoff hand-drive: Finish offers Push, lands on push-source with the run loaded
-- [ ] U4 live share hand-drive: paste a real friend link, push lands, per CHECKLIST.md line 15
+- [ ] U4 live share hand-drive: make a share link, then consume it through the push flow by pasting
+      the link. Both paste.rs and the dpaste fallback must round trip live.
+- [ ] C10 conflict copy hand-drive: open one run in two browser sessions and save both. The newer
+      file must survive, and the loser must land beside it as a `.conflict-<unix>` copy in the run
+      dir. src/splitstate.ts holds the guard, and tests/splitstate.test.ts covers it, so this drive
+      checks the user facing half only.
+- [ ] P1 release gate: replace every YOURUSER placeholder. Three files hold them today: README.md
+      install one liners plus the issues link, install.sh, and install.ps1.
+- [ ] P2 release gate: cold box install. Follow README.md alone on one clean Linux box and one
+      Windows box. A VM counts. The installers passed a syntax check only, so nobody has run them.
+- [ ] P3 release gate: real data sweep before the first public push. Search the tree that git would
+      publish for real names and brands. The fixtures are synthetic and verified. Check docs and
+      comments too. `state/` is ignored, so confirm with `git status`.
+- [ ] P4 after one full flow: delete the `expense-split` skill from dotfiles-ai. The final Python
+      version is committed there at `be1523d`.
 - [ ] F3 live push hand-drive: one real order to Splitwise, rerun skips it by fingerprint, report
       counts match; duplicate names show the pick list, unknown names take a hand id
 - [ ] F4/F5 hand-drive: leave a split mid-way, come back, continue keeps assignments; one
@@ -210,8 +290,8 @@ it.
       centered stage index, Stages clicks, draft resume bar, action strips, 25-line helper shape in
       demo.ts
 - [ ] D1 demo: serve `desktop/demo.ts` and click all three steps in a window, confirm every core
-      widget renders and answers echo
-Dropped from this queue: T6 kit demo, T7 splitter run, and T7b decision screen. They drove the
-Cliffy, exotui and MepCLI terminal builds, which the Desktop port retired. U5 above still removes
-the code. The behaviour they checked lives on in this queue: the end to end split of a real run sits
-in W8, skipped lines and the fee note sit in G1, and the question that asks for names sits in N1.
+      widget renders and answers echo Dropped from this queue: T6 kit demo, T7 splitter run, and T7b
+      decision screen. They drove the Cliffy, exotui and MepCLI terminal builds, which the Desktop
+      port retired. U5 above still removes the code. The behaviour they checked lives on in this
+      queue: the end to end split of a real run sits in W8, skipped lines and the fee note sit in
+      G1, and the question that asks for names sits in N1.
