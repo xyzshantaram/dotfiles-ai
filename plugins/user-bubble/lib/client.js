@@ -133,7 +133,120 @@ var HLJS_THEME_CSS = [
 ].join("");
 
 // css-text:/home/sid/repos/dotfiles-ai/plugins/user-bubble/src/client.module.css
-var client_default = "/*\n * Bubble chrome for the user-bubble takeover (#125). The shipped bubble CSS\n * is internal to the conversation package, so the takeover restyles from\n * scratch; upstream restyles stop propagating (accepted in the loss list).\n * Class names are literal: the build injects this file as raw text.\n */\n.user-bubble-row {\n  display: flex;\n  align-items: flex-end;\n  justify-content: flex-end;\n  gap: 8px;\n  padding: 1px 0;\n}\n.user-bubble-stack {\n  display: flex;\n  flex-direction: column;\n  align-items: flex-end;\n  gap: 4px;\n  min-width: 0;\n  max-width: 80%;\n}\n.user-bubble-body {\n  background: var(--dsw-alias-fill-l2, rgba(128, 128, 128, 0.14));\n  border-radius: 14px 14px 4px 14px;\n  padding: 7px 12px;\n  overflow-wrap: anywhere;\n  font-size: 13px;\n  line-height: 20px;\n}\n.user-bubble-chip {\n  display: inline-block;\n  background: var(--dsw-alias-fill-l3, rgba(128, 128, 128, 0.22));\n  border-radius: 5px;\n  padding: 0 5px;\n  margin: 0 1px;\n  font-size: 12px;\n  line-height: 18px;\n  vertical-align: baseline;\n  white-space: nowrap;\n}\n.user-bubble-refs {\n  font-size: 11px;\n  color: var(--dsw-alias-label-tertiary, #8a8a8a);\n}\n.user-bubble-actions {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  flex: none;\n  opacity: 0;\n  transition: opacity 120ms ease;\n}\n.user-bubble-row:hover .user-bubble-actions,\n.user-bubble-row:focus-within .user-bubble-actions {\n  opacity: 1;\n}\n.user-bubble-time {\n  font-size: 11px;\n  color: var(--dsw-alias-label-tertiary, #8a8a8a);\n  white-space: nowrap;\n}\n.user-bubble-action {\n  display: grid;\n  place-items: center;\n  width: 20px;\n  height: 20px;\n  padding: 0;\n  border: none;\n  border-radius: 5px;\n  background: transparent;\n  color: var(--dsw-alias-label-tertiary, #8a8a8a);\n  cursor: pointer;\n}\n.user-bubble-action:hover {\n  color: var(--dsw-alias-label-primary, #f0f0f0);\n  background: var(--dsw-alias-fill-l2, rgba(128, 128, 128, 0.14));\n}\n";
+var client_default = `/*
+ * Bubble chrome for the user-bubble takeover (#125). The shipped bubble CSS
+ * is internal to the conversation package, so the takeover restyles from
+ * scratch; upstream restyles stop propagating (accepted in the loss list).
+ * Class names are literal: the build injects this file as raw text.
+ */
+/*
+ * THE AXIS IS LOAD-BEARING, and getting it wrong is what the owner reported
+ * on 2026-09-17: "the timestamp is rendering to the right of the message
+ * instead of below it which pushes the entire chat bubble to the left".
+ *
+ * The actions row is a SIBLING of the bubble stack, so in a horizontal row it
+ * consumes width beside the bubble and \u2014 because the row is right-aligned \u2014
+ * displaces every bubble leftward by the width of the clock. The shipped
+ * component stacks them: its .gdEzaW_userRow is \`flex-direction: column;
+ * align-items: flex-end; gap: 6px\`. Keep this a COLUMN, and the existing JSX
+ * needs no sibling-shuffling to put the clock underneath.
+ *
+ * THE SPLIT WITH UPSTREAM IS DELIBERATE (owner, 2026-09-17), not a migration
+ * someone abandoned half way. We KEEP OUR colours and type scale (the fill
+ * token below, 13px/20px) because the owner prefers them to the shipped
+ * 16px/24px, and we TAKE UPSTREAM'S shape metrics (radius 22px, padding
+ * 10px 16px, gaps 6px/8px, max-width min(525px, 82%)) so the bubble sits in
+ * the same geometry as the assistant rows around it. Do NOT "finish the job"
+ * by pulling the shipped font size across: the smaller type is the choice.
+ */
+.user-bubble-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 1px 0;
+}
+.user-bubble-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  min-width: 0;
+  max-width: min(525px, 82%);
+}
+.user-bubble-body {
+  background: var(--dsw-alias-fill-l2, rgba(128, 128, 128, 0.14));
+  /* Upstream's radius against our smaller line-height makes a short bubble a
+     full pill. That is a CONSEQUENCE of the owner's split, not a defect. */
+  border-radius: 22px;
+  padding: 10px 16px;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 20px;
+}
+.user-bubble-chip {
+  display: inline-block;
+  background: var(--dsw-alias-fill-l3, rgba(128, 128, 128, 0.22));
+  border-radius: 5px;
+  padding: 0 5px;
+  margin: 0 1px;
+  font-size: 12px;
+  line-height: 18px;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+.user-bubble-refs {
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary, #8a8a8a);
+}
+/*
+ * THE RESERVED HEIGHT IS NOT DEAD SPACE \u2014 do not reclaim it. The row is
+ * invisible until hover, so without a height of its own the page would
+ * reflow under the pointer and every message would jump as the cursor
+ * crossed it: worse than the misplacement this rule set fixes. Upstream
+ * reserves the same 28px (.p-xYUq_actions).
+ *
+ * WE FADE THE WHOLE ROW, upstream fades only the clock (its .p-xYUq_action
+ * carries no opacity rule). Chosen deliberately: a copy button on every user
+ * message is visual noise in a long transcript, and the affordance is still
+ * one hover away. Flip this by moving the opacity pair onto .user-bubble-time
+ * alone.
+ */
+.user-bubble-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 28px;
+  flex: none;
+  opacity: 0;
+  transition: opacity 80ms ease;
+}
+.user-bubble-row:hover .user-bubble-actions,
+.user-bubble-row:focus-within .user-bubble-actions {
+  opacity: 1;
+}
+.user-bubble-time {
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary, #8a8a8a);
+  white-space: nowrap;
+}
+.user-bubble-action {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary, #8a8a8a);
+  cursor: pointer;
+}
+.user-bubble-action:hover {
+  color: var(--dsw-alias-label-primary, #f0f0f0);
+  background: var(--dsw-alias-fill-l2, rgba(128, 128, 128, 0.14));
+}
+`;
 
 // plugins/user-bubble/src/client.tsx
 var MarkdownText2 = primitives.MarkdownText;

@@ -4,25 +4,47 @@
  * scratch; upstream restyles stop propagating (accepted in the loss list).
  * Class names are literal: the build injects this file as raw text.
  */
+/*
+ * THE AXIS IS LOAD-BEARING, and getting it wrong is what the owner reported
+ * on 2026-09-17: "the timestamp is rendering to the right of the message
+ * instead of below it which pushes the entire chat bubble to the left".
+ *
+ * The actions row is a SIBLING of the bubble stack, so in a horizontal row it
+ * consumes width beside the bubble and — because the row is right-aligned —
+ * displaces every bubble leftward by the width of the clock. The shipped
+ * component stacks them: its .gdEzaW_userRow is `flex-direction: column;
+ * align-items: flex-end; gap: 6px`. Keep this a COLUMN, and the existing JSX
+ * needs no sibling-shuffling to put the clock underneath.
+ *
+ * THE SPLIT WITH UPSTREAM IS DELIBERATE (owner, 2026-09-17), not a migration
+ * someone abandoned half way. We KEEP OUR colours and type scale (the fill
+ * token below, 13px/20px) because the owner prefers them to the shipped
+ * 16px/24px, and we TAKE UPSTREAM'S shape metrics (radius 22px, padding
+ * 10px 16px, gaps 6px/8px, max-width min(525px, 82%)) so the bubble sits in
+ * the same geometry as the assistant rows around it. Do NOT "finish the job"
+ * by pulling the shipped font size across: the smaller type is the choice.
+ */
 .user-bubble-row {
   display: flex;
+  flex-direction: column;
   align-items: flex-end;
-  justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
   padding: 1px 0;
 }
 .user-bubble-stack {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 4px;
+  gap: 8px;
   min-width: 0;
-  max-width: 80%;
+  max-width: min(525px, 82%);
 }
 .user-bubble-body {
   background: var(--dsw-alias-fill-l2, rgba(128, 128, 128, 0.14));
-  border-radius: 14px 14px 4px 14px;
-  padding: 7px 12px;
+  /* Upstream's radius against our smaller line-height makes a short bubble a
+     full pill. That is a CONSEQUENCE of the owner's split, not a defect. */
+  border-radius: 22px;
+  padding: 10px 16px;
   overflow-wrap: anywhere;
   font-size: 13px;
   line-height: 20px;
@@ -42,13 +64,27 @@
   font-size: 11px;
   color: var(--dsw-alias-label-tertiary, #8a8a8a);
 }
+/*
+ * THE RESERVED HEIGHT IS NOT DEAD SPACE — do not reclaim it. The row is
+ * invisible until hover, so without a height of its own the page would
+ * reflow under the pointer and every message would jump as the cursor
+ * crossed it: worse than the misplacement this rule set fixes. Upstream
+ * reserves the same 28px (.p-xYUq_actions).
+ *
+ * WE FADE THE WHOLE ROW, upstream fades only the clock (its .p-xYUq_action
+ * carries no opacity rule). Chosen deliberately: a copy button on every user
+ * message is visual noise in a long transcript, and the affordance is still
+ * one hover away. Flip this by moving the opacity pair onto .user-bubble-time
+ * alone.
+ */
 .user-bubble-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 10px;
+  height: 28px;
   flex: none;
   opacity: 0;
-  transition: opacity 120ms ease;
+  transition: opacity 80ms ease;
 }
 .user-bubble-row:hover .user-bubble-actions,
 .user-bubble-row:focus-within .user-bubble-actions {
