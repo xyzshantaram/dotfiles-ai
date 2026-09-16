@@ -5,8 +5,8 @@ import { codeToKey, encryptForShare, fetchShareLink } from "../src/share.ts";
 import {
   prepareShareImport,
   prepareSource,
+  pushSessionFor,
   resetPush,
-  session,
 } from "../wizards/expense-split/push-engine.ts";
 import { stateRoot } from "../src/runstate.ts";
 
@@ -41,7 +41,6 @@ const BLOB_LINK = BLOB_URL + "#" + CODE;
 const PAGE_LINK = PAGE_URL + "#" + CODE;
 
 const root = await Deno.makeTempDir({ prefix: "push-share-test-" });
-Deno.env.set("SPLITWISE_PUSHED_FILE", root + "/pushed.json");
 Deno.env.set("SPLIT_UTILS_STATE", root + "/state");
 
 const key = await codeToKey(CODE);
@@ -68,43 +67,47 @@ Deno.test("share link retries the .txt form for rendered pages", async () => {
 });
 
 Deno.test("share import saves under share/imports and stages the push", async () => {
-  resetPush();
-  const res = await prepareShareImport(BLOB_LINK);
+  const sid = "t-share-1";
+  resetPush(sid);
+  const res = await prepareShareImport(sid, BLOB_LINK);
   assert(res.ok, "import loads");
   const prefix = stateRoot() + "/share/imports/";
-  assert(session.file.startsWith(prefix), "file sits under share/imports");
-  const base = session.file.slice(prefix.length);
+  const live = pushSessionFor(sid);
+  assert(live.file.startsWith(prefix), "file sits under share/imports");
+  const base = live.file.slice(prefix.length);
   assert(/^\d+-import\.json$/.test(base), "file name holds unix time: " + base);
-  const saved = await Deno.readTextFile(session.file);
+  const saved = await Deno.readTextFile(live.file);
   assert(saved === docText(), "saved import matches the plaintext");
-  assert(session.runId === null, "imports carry no run id");
-  assert(JSON.stringify(session.people) === '["Ann","Bob"]', "people staged");
-  assert(session.groups.length === 1, "one order staged");
+  assert(live.runId === null, "imports carry no run id");
+  assert(JSON.stringify(live.people) === '["Ann","Bob"]', "people staged");
+  assert(live.groups.length === 1, "one order staged");
   assert(
-    session.shareNote === "Link opened. Starting the push flow.",
+    live.shareNote === "Link opened. Starting the push flow.",
     "share note set",
   );
 });
 
 Deno.test("share import copy on empty and bad links", async () => {
-  resetPush();
-  const empty = await prepareShareImport("   ");
+  const sid = "t-share-2";
+  resetPush(sid);
+  const empty = await prepareShareImport(sid, "   ");
   assert(
     !empty.ok && empty.error === "Nothing pasted. Try again when ready.",
     "empty link copy",
   );
-  const bad = await prepareShareImport("https://paste.rs/u4missing#" + CODE);
+  const bad = await prepareShareImport(sid, "https://paste.rs/u4missing#" + CODE);
   if (bad.ok) throw new Error("assert failed: bad link must fail");
   assert(bad.error === "That link did not open. Check it and try again.", "bad link copy");
   assert(!bad.error.includes("u4missing"), "error hides the link");
 });
 
 Deno.test("plain source clears the share note", async () => {
-  resetPush();
-  const imported = await prepareShareImport(BLOB_LINK);
+  const sid = "t-share-3";
+  resetPush(sid);
+  const imported = await prepareShareImport(sid, BLOB_LINK);
   assert(imported.ok, "import loads");
-  assert(session.shareNote !== null, "share note set after import");
-  const src = await prepareSource("Split JSON file", "", session.file);
+  assert(pushSessionFor(sid).shareNote !== null, "share note set after import");
+  const src = await prepareSource(sid, "Split JSON file", "", pushSessionFor(sid).file);
   assert(src.ok, "plain source loads");
-  assert(session.shareNote === null, "share note cleared");
+  assert(pushSessionFor(sid).shareNote === null, "share note cleared");
 });

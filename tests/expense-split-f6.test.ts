@@ -12,11 +12,12 @@ import {
   prepareSource,
   prepareSplitwise,
   type PushApi,
+  pushSessionFor,
   resetPush,
-  session,
 } from "../wizards/expense-split/push-engine.ts";
 import { backupFailedRun, isDryMap, listRunsSync } from "../src/runstate.ts";
 import type { Step } from "../wizardkit/mod.ts";
+import type { StepFn } from "../wizardkit/mod.ts";
 
 // Fail the test when a condition misses.
 function assert(cond: boolean, msg: string): void {
@@ -56,9 +57,6 @@ function nodeKinds(step: Step): string {
 // Env keys this file touches, saved and restored around each test.
 const ENV_KEYS = [
   "SPLIT_UTILS_STATE",
-  "SPLITWISE_PUSHED_FILE",
-  "SPLITWISE_TOKEN_FILE",
-  "SPLITWISE_ENV",
 ];
 
 function saveEnv(): Map<string, string | undefined> {
@@ -76,13 +74,10 @@ function restoreEnv(saved: Map<string, string | undefined>): void {
 }
 
 // Fresh state root plus an empty pushed map. Returns the root.
-async function freshRoot(prefix: string): Promise<string> {
+async function freshRoot(prefix: string, sid: string): Promise<string> {
   const root = await Deno.makeTempDir({ prefix });
   Deno.env.set("SPLIT_UTILS_STATE", root);
-  Deno.env.set("SPLITWISE_PUSHED_FILE", root + "/pushed.json");
-  Deno.env.set("SPLITWISE_TOKEN_FILE", root + "/token.json");
-  Deno.env.delete("SPLITWISE_ENV");
-  resetPush();
+  resetPush(sid);
   return root;
 }
 
@@ -139,32 +134,35 @@ function fakeApi() {
 
 // Step function entries of a steps array, called with the answers map.
 function callStep(
-  entries: Array<Step | ((m: Map<string, string[]>) => Step)>,
+  entries: Array<Step | StepFn>,
   index: number,
   m: Map<string, string[]>,
+  sid?: string,
 ): Step {
   const entry = entries[index];
-  if (typeof entry === "function") return entry(m);
+  const ctx = sid !== undefined ? { sessionId: sid } : undefined;
+  if (typeof entry === "function") return (entry as StepFn)(m, ctx);
   return entry;
 }
 
 Deno.test("f6 dry push writes no expense and no fingerprint", async () => {
   const saved = saveEnv();
   try {
-    const root = await freshRoot("f6-dry-push-");
+    const sid = "t-f6-1";
+    const root = await freshRoot("f6-dry-push-", sid);
     const file = root + "/output.json";
     await Deno.writeTextFile(file, JSON.stringify(pushDoc()));
-    const src = await prepareSource("Split JSON file", "", file);
+    const src = await prepareSource(sid, "Split JSON file", "", file);
     assert(src.ok, "source loads");
     const { api, expenses } = fakeApi();
-    const sw = await prepareSplitwise(api);
+    const sw = await prepareSplitwise(sid, api);
     assert(sw.ok, "splitwise prepares");
-    const cut = applyCutoff("2026-01-06");
+    const cut = applyCutoff(sid, "2026-01-06");
     assert(cut.ok, "cutoff valid");
-    session.groupId = 7;
-    const done = await executePush({ o1: "Push", o2: "Push" }, { dry: true });
+    pushSessionFor(sid).groupId = 7;
+    const done = await executePush(sid, { o1: "Push", o2: "Push" }, { dry: true });
     assert(done.ok, "dry run ok");
-    const out = session.outcome!;
+    const out = pushSessionFor(sid).outcome!;
     assert(out.dry, "outcome marked dry");
     assert(out.pushed === 2, "two orders would push, got " + out.pushed);
     assert(out.skippedByChoice === 1, "o3 skipped by choice");
@@ -179,7 +177,7 @@ Deno.test("f6 dry push writes no expense and no fingerprint", async () => {
     assert(out.aggregateFile === null, "no summary file");
     assert(out.archived === false, "no archive");
     // The report step shows the dry plan, not a live landing.
-    const report = callStep(pushSteps(), 6, new Map());
+    const report = callStep(pushSteps(), 6, new Map(), sid);
     assert(report.id === "push-report", "report step found");
     const body = stepText(report);
     assert(body.includes("Dry run"), "report names the dry run");
@@ -192,7 +190,7 @@ Deno.test("f6 dry push writes no expense and no fingerprint", async () => {
 Deno.test("f6 failed run surfaces with reason and routes to gather", async () => {
   const saved = saveEnv();
   try {
-    const root = await freshRoot("f6-failed-");
+    const root = await freshRoot("f6-failed-", "t-f6-2");
     const dir = root + "/share/runs/r-fail";
     await Deno.mkdir(dir, { recursive: true });
     await Deno.writeTextFile(
@@ -228,7 +226,7 @@ Deno.test("f6 failed run surfaces with reason and routes to gather", async () =>
 Deno.test("f6 each status routes to its next step", async () => {
   const saved = saveEnv();
   try {
-    const root = await freshRoot("f6-route-");
+    const root = await freshRoot("f6-route-", "t-f6-3");
     const cases: Array<[string, string, string]> = [
       // The split flow asks which run first, so a gathered run opens
       // that step, and the resume pick carries into it.
@@ -271,7 +269,7 @@ Deno.test("f6 each status routes to its next step", async () => {
 Deno.test("f6 dry gather review shows the plan and keeps every action out", async () => {
   const saved = saveEnv();
   try {
-    await freshRoot("f6-dry-gather-");
+    await freshRoot("f6-dry-gather-", "t-f6-4");
     const m = new Map<string, string[]>([
       ["platforms", ["Zepto", "Manual"]],
       ["range", ["30"]],
@@ -302,7 +300,7 @@ Deno.test("f6 dry gather review shows the plan and keeps every action out", asyn
 Deno.test("f6 dry manual step writes no run dir", async () => {
   const saved = saveEnv();
   try {
-    const root = await freshRoot("f6-dry-manual-");
+    const root = await freshRoot("f6-dry-manual-", "t-f6-5");
     const m = new Map<string, string[]>([
       ["platforms", ["Manual"]],
       ["range", ["30"]],
@@ -373,11 +371,11 @@ Deno.test("f6 dry split export writes no output and keeps gathered status", asyn
       ["run", [dir]],
       ["resume", ["Continue where you left off?"]],
     ]);
-    const item = itemStep(m);
+    const item = itemStep(m, { sessionId: "t-f6-6" });
     assert(stepText(item).includes("All 1 lines are split"), "split reads done");
     const dryM = new Map(m);
     dryM.set("dry", ["dry"]);
-    const out = exportStep(dryM);
+    const out = exportStep(dryM, { sessionId: "t-f6-6" });
     assert(out.id === "split-export", "export step found");
     const body = stepText(out);
     assert(body.includes("Split dry run"), "export names the dry run");
@@ -401,8 +399,8 @@ Deno.test("f6 dry split export writes no output and keeps gathered status", asyn
 Deno.test("f6 dry confirm step names the plan before submit", async () => {
   const saved = saveEnv();
   try {
-    await freshRoot("f6-dry-confirm-");
-    const confirm = callStep(pushSteps(), 5, new Map([["dry", ["dry"]]]));
+    await freshRoot("f6-dry-confirm-", "t-f6-7");
+    const confirm = callStep(pushSteps(), 5, new Map([["dry", ["dry"]]]), "t-f6-7");
     assert(confirm.id === "push-confirm", "confirm step found");
     assert(
       stepText(confirm).includes("Dry run is on"),

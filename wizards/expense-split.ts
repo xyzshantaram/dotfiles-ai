@@ -6,17 +6,17 @@
 import {
   buttons,
   createWizard,
-  markdown,
   radio,
   type Step,
   step,
   type StepFn,
 } from "../wizardkit/mod.ts";
 import {
+  gatherPickRunId,
   gatherSteps,
-  manualPicked,
   manualRowProblems,
   persistManualRun,
+  setPickOverride,
 } from "./expense-split/gather.ts";
 import {
   createSplitShareLink,
@@ -28,7 +28,13 @@ import {
 } from "./expense-split/split.ts";
 import { pushSteps, sourceStep } from "./expense-split/push.ts";
 import { settingsSteps } from "./expense-split/settings.ts";
-import { completeHandshake, envPath, realApi, startHandshake } from "./expense-split/connect.ts";
+import {
+  completeHandshake,
+  currentAuthorizeUrl,
+  envPath,
+  realApi,
+  startHandshake,
+} from "./expense-split/connect.ts";
 
 // Menu copy mirrors wizards/meta.ts: titles plus descriptions, same order.
 interface MenuItem {
@@ -81,8 +87,10 @@ const MENU: MenuItem[] = [
 ];
 
 import { loadSettings, saveSettings, USAGE_MODES, validCurrencyCode } from "../src/settings.ts";
+import { field, answers } from "../src/answers.ts";
 import { factoryReset } from "../src/reset.ts";
-import { listRunsSync, readRun, stateRoot } from "../src/runstate.ts";
+import { listRunsSync, readRun, setRunPicked, stateRoot } from "../src/runstate.ts";
+import { configDir, splitwiseEnvPath } from "../src/paths.ts";
 import { manualRows } from "./expense-split/gather.ts";
 import {
   applyCutoff,
@@ -90,16 +98,21 @@ import {
   prepareShareImport,
   prepareSource,
   prepareSplitwise,
+  pushSessionFor,
   resolveNamePicks,
-  session as pushSession,
   SHARE_SOURCE,
 } from "./expense-split/push-engine.ts";
+import {
+  sessionStore,
+  sidOf,
+} from "../src/sessionstore.ts";
+import type { WizardCtx } from "../wizardkit/mod.ts";
 
 // Push source step with the finished split run preloaded. The export
 // step jumps here with goto:push-source, so the Run entry carries the
 // run of the last split session. A value typed by hand wins.
-export function pushSourceStep(m: Map<string, string[]>): Step {
-  return sourceStep(m, splitRunId());
+export function pushSourceStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
+  return sourceStep(m, splitRunId(sidOf(ctx)));
 }
 
 // pushSteps() returns its own source slot first. Drop that slot and
@@ -135,10 +148,9 @@ function startUsageStep(): Step {
     "start-usage",
     "How do you wish to use this app?",
     [
-      markdown(
-        "Looks like you are using split-utils for the first time. Let us get set up.",
-      ),
-      radio("Usage", "usage", [
+      // No label: the step heading above already asks this question, and
+      // a second heading here made the screen state it twice.
+      radio("", "usage", [
         {
           value: "With an AI helper",
           hint: "An AI assistant runs this app for you and handles the details.",
@@ -162,7 +174,7 @@ function startUsageStep(): Step {
         "split",
       ),
     ],
-    "First of three quick questions. Pick one, then press Next.",
+    "Your first run. This is the first of three quick questions. Pick one, then press Next.",
   );
 }
 
@@ -185,14 +197,17 @@ function menuStep(): Step {
   );
 }
 
-// Every answer posted so far, by field name. The submit hook receives
-// only the current step, so this carries earlier answers to the
-// decisions that need them.
-const seen = new Map<string, string[]>();
+// Every answer posted so far, by field name and by browser session.
+// The submit hook receives only the current step, so this carries
+// earlier answers to the decisions that need them. The store replaces
+// the module level seen map, which two browsers used to share.
+const seenStore = sessionStore((): Map<string, string[]> => new Map());
 
-// True while the first-run chain runs. firstRun() cannot carry it: the
-// first saved answer makes that check false for the rest of the chain.
-let onboarding = false;
+// First-run chain flags, one per browser session. firstRun() cannot
+// carry it: the first saved answer makes that check false for the rest
+// of the chain. The store replaces the module level onboarding flag,
+// which two browsers used to share.
+const onboardingStore = sessionStore((): { value: boolean } => ({ value: false }));
 
 // Step id for one picked menu title. The menu jumps straight there,
 // so no confirmation screen sits between the pick and the task.
@@ -206,8 +221,8 @@ function menuTarget(picked: string): string {
 // Write the Splitwise key pair to config/splitwise.env, owner only.
 // Same shape as src/splitwise-setup.ts so both paths stay identical.
 async function writeSplitwiseEnv(key: string, secret: string): Promise<void> {
-  const dir = stateRoot() + "/config";
-  const envPath = dir + "/splitwise.env";
+  const dir = configDir();
+  const envPath = splitwiseEnvPath();
   await Deno.mkdir(dir, { recursive: true });
   // Write owner only so secrets stay private.
   await Deno.writeTextFile(
@@ -223,11 +238,6 @@ async function writeSplitwiseEnv(key: string, secret: string): Promise<void> {
   }
 }
 
-// First posted value for a field, trimmed. Empty string when absent.
-function field(fields: Record<string, string[]>, name: string): string {
-  return (fields[name]?.[0] ?? "").trim();
-}
-
 // First-run onboarding route. The usage answer picks the next screen:
 // the AI helper path skips the currency and Splitwise steps, because the
 // assistant sets those up. Later runs use the plain step order.
@@ -236,7 +246,11 @@ export async function onSubmit(
   fields: Record<string, string[]>,
   stepId: string,
   action = "",
+  ctx?: WizardCtx,
 ): Promise<{ errors?: string[]; goto?: string } | void> {
+  const sessionId = sidOf(ctx);
+  const seen = seenStore.for(sessionId);
+  const onboardingHeld = onboardingStore.for(sessionId);
   // Remember every posted answer. The hook sees one step of fields,
   // yet some decisions need an answer from an earlier step. PLAN.md
   // tracks that toolkit gap as K3 and K4.
@@ -255,15 +269,11 @@ export async function onSubmit(
       await saveSettings({ ...(await loadSettings()), usage });
     }
     if (wasFirstRun) {
-      onboarding = true;
+      onboardingHeld.value = true;
       // The single settings screen holds every tab, so one target
       // covers the AI path and the manual path alike.
       return { goto: "settings" };
     }
-  }
-  if (stepId === "gather-accounts" && !manualPicked(seen)) {
-    // Nobody picked Manual, so skip the Manual expenses screen.
-    return { goto: "gather-review" };
   }
   if (stepId === "gather-manual") {
     // Refuse a half typed row before anything saves. A back move never
@@ -272,19 +282,47 @@ export async function onSubmit(
     if (rowProblems.length > 0) return { errors: rowProblems };
     // The step writes nothing while it renders. The rows save here,
     // when the user presses Next.
-    if (!(fields["dry"] ?? []).includes("dry")) persistManualRun(seen);
+    if (!(fields["dry"] ?? []).includes("dry")) persistManualRun(sessionId, seen);
+  }
+  if (stepId === "gather-pick" && action !== "back") {
+    // Select all and Select none only re-render the same screen.
+    // They save nothing.
+    if (action === "pick-all") {
+      setPickOverride(sessionId, "all");
+      return { goto: "gather-pick" };
+    }
+    if (action === "pick-none") {
+      setPickOverride(sessionId, "none");
+      return { goto: "gather-pick" };
+    }
+    // Next needs at least one ticked order. Back never reaches here.
+    const picked = (fields["pick"] ?? [])
+      .map((value) => Number(value))
+      .filter((n) => Number.isInteger(n) && n >= 0)
+      .sort((a, b) => a - b);
+    if (picked.length === 0) {
+      return { errors: ["Tick at least one order to split."] };
+    }
+    const runId = gatherPickRunId(seen, sessionId);
+    if (runId === null) {
+      // Saving nothing here would drop the ticks without a word.
+      return {
+        errors: ["The gathered run is gone. Press Back and fetch the orders again."],
+      };
+    }
+    setRunPicked(runId, picked);
   }
   if (stepId === "split-people" && action !== "back") {
     // Keep the posted names before the check. A rejected post never
     // reaches the answers map, so the step seeds its entries from this
     // instead of losing what the user typed. Back never validates: a
     // user leaving the step must not be held by it.
-    rememberPeoplePost(fields);
+    rememberPeoplePost(sessionId, fields);
     const problems = roleErrors(fields);
     if (problems.length > 0) return { errors: problems };
   }
   if (stepId === "split-share") {
-    const made = await createSplitShareLink(seen);
+    const made = await createSplitShareLink(sessionId, seen);
     if (!made.ok) return { errors: [made.error] };
     return { goto: "split-share-done" };
   }
@@ -326,7 +364,7 @@ export async function onSubmit(
         }
       }
       if (havePair) {
-        const started = await startHandshake(await realApi());
+        const started = await startHandshake(sessionId, await realApi());
         if (!started.ok) return { errors: [started.error] };
         return { goto: "settings-connect" };
       }
@@ -355,13 +393,22 @@ export async function onSubmit(
     }
   }
   if (stepId === "settings-connect") {
+    // No handshake for this browser means the screen drew no verifier
+    // box, so asking for one names a control the user cannot see.
+    if (currentAuthorizeUrl(sessionId) === null) {
+      return {
+        errors: [
+          "No approval is waiting. Open Settings, then press Save keys and connect on the Splitwise tab.",
+        ],
+      };
+    }
     const raw = fields["sw-verifier"]?.[0] ?? "";
     if (raw.trim() === "") {
       return {
         errors: ["Paste the verifier code, or the full callback URL, first."],
       };
     }
-    const done = await completeHandshake(raw, await realApi());
+    const done = await completeHandshake(sessionId, raw, await realApi());
     if (!done.ok) return { errors: [done.error] };
     return { goto: "settings-connect-done" };
   }
@@ -371,20 +418,21 @@ export async function onSubmit(
     // share/imports before the same push flow continues on it.
     const source = fields["source"]?.[0] ?? "";
     if (source === SHARE_SOURCE) {
-      const imported = await prepareShareImport(fields["share-link"]?.[0] ?? "");
+      const imported = await prepareShareImport(sessionId, fields["share-link"]?.[0] ?? "");
       if (!imported.ok) return { errors: [imported.error] };
     } else {
       const typed = field(fields, "run-id-other");
       const listed = field(fields, "run-id");
       const runId = typed !== "" ? typed : listed;
       const prepared = await prepareSource(
+        sessionId,
         source,
         runId,
         fields["split-file"]?.[0] ?? "",
       );
       if (!prepared.ok) return { errors: [prepared.error] };
     }
-    const sw = await prepareSplitwise();
+    const sw = await prepareSplitwise(sessionId);
     if (!sw.ok) {
       // Ambiguous or unmatched names route to the picker step, like
       // the pusher pick list. Everything else shows the error.
@@ -394,30 +442,30 @@ export async function onSubmit(
     // Live access needs no access screen: the state rides along on
     // the next step. Aggregate mode keeps it, because that screen
     // explains the summary path.
-    return { goto: pushSession.mode === "live" ? "push-group" : "push-setup" };
+    return { goto: pushSessionFor(sessionId).mode === "live" ? "push-group" : "push-setup" };
   }
   if (stepId === "push-names") {
-    const picked = resolveNamePicks(fields);
+    const picked = resolveNamePicks(sessionId, fields);
     if (!picked.ok) return { errors: [picked.error] };
     // The stashed choices let the setup finish this time.
-    const sw = await prepareSplitwise();
+    const sw = await prepareSplitwise(sessionId);
     if (!sw.ok) return { errors: [sw.error] };
     // Live access needs no access screen: the state rides along on
     // the next step. Aggregate mode keeps it, because that screen
     // explains the summary path.
-    return { goto: pushSession.mode === "live" ? "push-group" : "push-setup" };
+    return { goto: pushSessionFor(sessionId).mode === "live" ? "push-group" : "push-setup" };
   }
   if (stepId === "push-setup") {
     // Live access picks a group first. The aggregate path skips it.
-    return { goto: pushSession.mode === "live" ? "push-group" : "push-cutoff" };
+    return { goto: pushSessionFor(sessionId).mode === "live" ? "push-group" : "push-cutoff" };
   }
   if (stepId === "push-group") {
     const picked = Number(fields["push-group"]?.[0] ?? "0");
-    pushSession.groupId = Number.isFinite(picked) ? picked : 0;
+    pushSessionFor(sessionId).groupId = Number.isFinite(picked) ? picked : 0;
     return { goto: "push-cutoff" };
   }
   if (stepId === "push-cutoff") {
-    const cut = applyCutoff(fields["cutoff"]?.[0] ?? "");
+    const cut = applyCutoff(sessionId, fields["cutoff"]?.[0] ?? "");
     if (!cut.ok) return { errors: [cut.error] };
     return { goto: "push-confirm" };
   }
@@ -430,7 +478,7 @@ export async function onSubmit(
     for (const [name, values] of Object.entries(fields)) {
       if (name.startsWith("order-")) choices[name.slice("order-".length)] = values[0] ?? "";
     }
-    const done = await executePush(choices, dry ? { dry: true } : undefined);
+    const done = await executePush(sessionId, choices, dry ? { dry: true } : undefined);
     if (!done.ok) return { errors: [done.error] };
     return { goto: "push-report" };
   }
@@ -441,7 +489,7 @@ export async function onSubmit(
     // The platforms answer lands on an earlier step, so read it from
     // the remembered answers. Reading the review post instead finds an
     // empty list, and the gate then lets every user straight through.
-    const picked = (seen.get("platforms") ?? [])
+    const picked = (answers(seen, "platforms"))
       .map((value) => value.toLowerCase())
       .filter((value, index, all) => all.indexOf(value) === index);
     const runs = listRunsSync();
@@ -473,8 +521,8 @@ export async function onSubmit(
   // saves its answer, so an in-memory flag carries the chain instead
   // of that file check. One tabbed screen covers the whole chain, so
   // one branch routes it back to the menu.
-  if (onboarding && stepId === "settings") {
-    onboarding = false;
+  if (onboardingHeld.value && stepId === "settings") {
+    onboardingHeld.value = false;
     return { goto: "menu" };
   }
 }

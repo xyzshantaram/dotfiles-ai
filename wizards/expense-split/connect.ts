@@ -10,7 +10,11 @@ import {
   saveToken,
   SplitwiseAPI,
 } from "../../src/splitwise.ts";
-import { stateRoot } from "../../src/runstate.ts";
+import { splitwiseEnvPath } from "../../src/paths.ts";
+import {
+  sessionStore,
+  sidOf,
+} from "../../src/sessionstore.ts";
 
 // The part of SplitwiseAPI that the handshake needs. Tests pass a fake.
 export interface HandshakeApi {
@@ -24,7 +28,7 @@ export interface HandshakeApi {
 
 // Path of the saved key pair, same file the key step writes.
 export function envPath(): string {
-  return stateRoot() + "/config/splitwise.env";
+  return splitwiseEnvPath();
 }
 
 // Real client built from the saved key pair.
@@ -33,30 +37,36 @@ export async function realApi(): Promise<HandshakeApi> {
   return new SplitwiseAPI(credentials);
 }
 
-// One handshake in flight. The link and request token live in module
-// state between renders, not on disk and not in wizard answers, so the
-// token secrets never land in a page, a draft, or a log line.
-let pending: { url: string; requestToken: AccessToken } | null = null;
-let signedInAs: string | null = null;
+// One handshake in flight per session. The link and request token live
+// in a per-session store between renders, not on disk and not in wizard
+// answers, so the token secrets never land in a page, a draft, or a log
+// line. The store replaces the module level pending and signedInAs
+// values, which two browsers used to share.
+const handshakes = sessionStore((): {
+  pending: { url: string; requestToken: AccessToken } | null;
+  signedInAs: string | null;
+} => ({ pending: null, signedInAs: null }));
 
 // Authorize link of the handshake in flight, or null.
-export function currentAuthorizeUrl(): string | null {
-  return pending?.url ?? null;
+export function currentAuthorizeUrl(sessionId: string): string | null {
+  return handshakes.for(sidOf({ sessionId })).pending?.url ?? null;
 }
 
 // Display name of the account from the last finished handshake.
-export function currentSignedInAs(): string | null {
-  return signedInAs;
+export function currentSignedInAs(sessionId: string): string | null {
+  return handshakes.for(sidOf({ sessionId })).signedInAs;
 }
 
 // Step 1: ask Splitwise for a request token and the authorize link.
 // The error text stays generic: a raw error could quote the key pair.
 export async function startHandshake(
+  sessionId: string,
   api: HandshakeApi,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sid = sidOf({ sessionId });
   try {
-    pending = await api.getAuthorizeUrl();
-    signedInAs = null;
+    handshakes.for(sid).pending = await api.getAuthorizeUrl();
+    handshakes.for(sid).signedInAs = null;
     return { ok: true };
   } catch {
     return {
@@ -71,11 +81,14 @@ export async function startHandshake(
 // and confirm who signed in. Accepts a bare code or the full callback
 // URL, like the old pusher flow. `save` swaps the cache write in tests.
 export async function completeHandshake(
+  sessionId: string,
   raw: string,
   api: HandshakeApi,
   save: (token: AccessToken) => Promise<void> = saveToken,
 ): Promise<{ ok: true; name: string } | { ok: false; error: string }> {
-  if (pending === null) {
+  const sid = sidOf({ sessionId });
+  const held = handshakes.for(sid);
+  if (held.pending === null) {
     return {
       ok: false,
       error: "The approval link is not ready. Go back one step, then press Next again.",
@@ -83,14 +96,14 @@ export async function completeHandshake(
   }
   try {
     const token = await api.getAccessToken(
-      pending.requestToken,
+      held.pending.requestToken,
       parseVerifier(raw),
     );
     await save(token);
     const me = await api.getCurrentUser();
     const name = fullName(me);
-    signedInAs = name;
-    pending = null;
+    held.signedInAs = name;
+    held.pending = null;
     return { ok: true, name };
   } catch {
     return {

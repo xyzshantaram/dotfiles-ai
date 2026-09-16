@@ -33,8 +33,12 @@ import {
   savePushed,
   SplitwiseAPI,
 } from "../../src/splitwise.ts";
-import { envPath } from "./connect.ts";
+import { splitwiseEnvPath } from "../../src/paths.ts";
 import { OUTPUT_FILE } from "../../src/splitstate.ts";
+import {
+  sessionStore,
+  sidOf,
+} from "../../src/sessionstore.ts";
 
 // One order groups split lines from one platform order.
 type Order = SplitEntry[];
@@ -106,9 +110,16 @@ export interface PushOutcome {
   note: string;
 }
 
-// One session per process. The wizard serves one human, so this stays
-// simple. resetPush gives tests a clean slate.
-export const session: PushSession = freshSession();
+// Push sessions, one per browser session. The wizard serves many
+// humans, so each browser keeps its own staged source, name map, and
+// outcome. The store replaces the module level session value, which
+// two browsers used to share.
+const pushSessions = sessionStore(freshSession);
+
+// Live push session for one session id.
+export function pushSessionFor(sessionId: string): PushSession {
+  return pushSessions.for(sidOf({ sessionId }));
+}
 
 function freshSession(): PushSession {
   return {
@@ -137,9 +148,9 @@ function freshSession(): PushSession {
   };
 }
 
-// Clear all push state. Tests call this between cases.
-export function resetPush(): void {
-  Object.assign(session, freshSession());
+// Clear push state for one session. Tests call this between cases.
+export function resetPush(sessionId: string): void {
+  Object.assign(pushSessionFor(sessionId), freshSession());
 }
 
 // Sum one order to the currency units.
@@ -243,9 +254,11 @@ export async function buildNameMap(
 // person. A hand-typed id wins over the radio, like pusher.ts. Every
 // pending person needs a whole positive id.
 export function resolveNamePicks(
+  sessionId: string,
   fields: Record<string, string[]>,
 ): { ok: true } | { ok: false; error: string } {
-  for (const pick of session.namePicks) {
+  const live = pushSessionFor(sessionId);
+  for (const pick of live.namePicks) {
     const person = pick.person;
     const manual = (fields["manual:" + person]?.[0] ?? "").trim();
     let value: number;
@@ -265,9 +278,9 @@ export function resolveNamePicks(
       }
       value = Number(picked);
     }
-    session.nameChoices.set(person, value);
+    live.nameChoices.set(person, value);
   }
-  session.namePicks = [];
+  live.namePicks = [];
   return { ok: true };
 }
 
@@ -318,6 +331,7 @@ export const SHARE_SOURCE = "Share link from a friend";
 // Read the finished output doc and stage the orders. Shared by
 // prepareSource and prepareShareImport after each resolves its file.
 async function stageFile(
+  sessionId: string,
   file: string,
   id: string | null,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -337,7 +351,7 @@ async function stageFile(
     const fp = orderFingerprint(order);
     if (Object.hasOwn(onDisk, fp)) dupes.add(fp);
   }
-  Object.assign(session, {
+  Object.assign(pushSessionFor(sessionId), {
     file,
     runId: id,
     people: doc.people,
@@ -356,10 +370,12 @@ async function stageFile(
 // Read the finished output doc and stage the orders. `source` picks the
 // run-id entry or the file entry, mirroring pusher.ts source resolution.
 export async function prepareSource(
+  sessionId: string,
   source: string,
   runId: string,
   splitFile: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sid = sidOf({ sessionId });
   let file = "";
   let id: string | null = null;
   if (source === "Split JSON file") {
@@ -378,8 +394,8 @@ export async function prepareSource(
     file = path;
     id = rid;
   }
-  const staged = await stageFile(file, id);
-  if (staged.ok) session.shareNote = null;
+  const staged = await stageFile(sid, file, id);
+  if (staged.ok) pushSessionFor(sid).shareNote = null;
   return staged;
 }
 
@@ -389,9 +405,11 @@ export async function prepareSource(
 // plaintext never reach any log. `fetchFn` stands in for fetchShareLink
 // in tests so no network call happens.
 export async function prepareShareImport(
+  sessionId: string,
   link: string,
   fetchFn: (link: string) => Promise<string> = fetchShareLink,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sid = sidOf({ sessionId });
   const trimmed = link.trim();
   if (trimmed === "") {
     return { ok: false, error: "Nothing pasted. Try again when ready." };
@@ -417,9 +435,9 @@ export async function prepareShareImport(
     }
   }
   await Deno.writeTextFile(target, plaintext);
-  const staged = await stageFile(target, null);
+  const staged = await stageFile(sid, target, null);
   if (!staged.ok) return staged;
-  session.shareNote = "Link opened. Starting the push flow.";
+  pushSessionFor(sid).shareNote = "Link opened. Starting the push flow.";
   return { ok: true };
 }
 
@@ -446,11 +464,13 @@ function signInCheckError(value: unknown): string {
 // path, like the pusher no-access fallback. A hand-built api overrides
 // discovery so tests never touch the network.
 export async function prepareSplitwise(
+  sessionId: string,
   apiOverride?: PushApi,
 ): Promise<{ ok: true } | { ok: false; error: string; needsNamePick?: true }> {
-  session.setupError = null;
+  const live = pushSessionFor(sessionId);
+  live.setupError = null;
   const currency = (await loadSettings()).currency;
-  session.currency = currency;
+  live.currency = currency;
   if (apiOverride !== undefined) {
     let name = "";
     try {
@@ -460,16 +480,16 @@ export async function prepareSplitwise(
     }
     let mapped: Awaited<ReturnType<typeof buildNameMap>>;
     try {
-      mapped = await buildNameMap(apiOverride, session.people, session.nameChoices);
+      mapped = await buildNameMap(apiOverride, live.people, live.nameChoices);
     } catch (err) {
-      session.mode = "aggregate";
-      session.api = null;
-      session.setupError = signInCheckError(err);
+      live.mode = "aggregate";
+      live.api = null;
+      live.setupError = signInCheckError(err);
       return { ok: true };
     }
     if (mapped.pending.length > 0) {
-      session.mode = "idle";
-      session.namePicks = mapped.pending;
+      live.mode = "idle";
+      live.namePicks = mapped.pending;
       return { ok: false, error: namePickError(mapped.pending), needsNamePick: true };
     }
     let choices: { id: number; name: string }[] = [];
@@ -481,7 +501,7 @@ export async function prepareSplitwise(
     } catch {
       choices = [];
     }
-    Object.assign(session, {
+    Object.assign(live, {
       mode: "live",
       api: apiOverride,
       nameMap: mapped.map,
@@ -492,8 +512,8 @@ export async function prepareSplitwise(
     });
     return { ok: true };
   }
-  // Discover the key pair: state config first, then SPLITWISE_ENV.
-  let discovered = envPath();
+  // Discover the key pair at the shared config path only.
+  let discovered = splitwiseEnvPath();
   try {
     const info = await Deno.stat(discovered);
     if (!info.isFile) discovered = "";
@@ -501,45 +521,41 @@ export async function prepareSplitwise(
     discovered = "";
   }
   if (discovered === "") {
-    const override = Deno.env.get("SPLITWISE_ENV");
-    if (override) discovered = override;
-  }
-  if (discovered === "") {
     // No Splitwise access at all: the aggregate fallback.
-    session.mode = "aggregate";
-    session.api = null;
+    live.mode = "aggregate";
+    live.api = null;
     return { ok: true };
   }
   let credentials: { consumerKey: string; consumerSecret: string };
   try {
     credentials = await loadCredentials(discovered);
   } catch (err) {
-    session.mode = "aggregate";
-    session.api = null;
-    session.setupError = credentialsReadError(err);
+    live.mode = "aggregate";
+    live.api = null;
+    live.setupError = credentialsReadError(err);
     return { ok: true };
   }
   // The F2 handshake owns auth. Push reuses the cached token only.
   const token: AccessToken | null = await loadToken();
   if (token === null) {
-    session.mode = "aggregate";
-    session.api = null;
+    live.mode = "aggregate";
+    live.api = null;
     return { ok: true };
   }
   const api = new SplitwiseAPI(credentials, token) as unknown as PushApi;
   try {
     const me = await api.getCurrentUser();
-    session.signedInAs = fullName(me);
+    live.signedInAs = fullName(me);
   } catch (err) {
-    session.mode = "aggregate";
-    session.api = null;
-    session.setupError = signInCheckError(err);
+    live.mode = "aggregate";
+    live.api = null;
+    live.setupError = signInCheckError(err);
     return { ok: true };
   }
-  const mapped = await buildNameMap(api, session.people, session.nameChoices);
+  const mapped = await buildNameMap(api, live.people, live.nameChoices);
   if (mapped.pending.length > 0) {
-    session.mode = "idle";
-    session.namePicks = mapped.pending;
+    live.mode = "idle";
+    live.namePicks = mapped.pending;
     return { ok: false, error: namePickError(mapped.pending), needsNamePick: true };
   }
   let choices: { id: number; name: string }[] = [];
@@ -551,7 +567,7 @@ export async function prepareSplitwise(
   } catch {
     choices = [];
   }
-  Object.assign(session, {
+  Object.assign(live, {
     mode: "live",
     api,
     nameMap: mapped.map,
@@ -570,12 +586,16 @@ function namePickError(pending: NamePick[]): string {
 
 // Validate the cutoff and drop later orders. From pusher.ts cutoff.
 // A blank value clears the cutoff and keeps every order.
-export function applyCutoff(raw: string): { ok: true } | { ok: false; error: string } {
+export function applyCutoff(
+  sessionId: string,
+  raw: string,
+): { ok: true } | { ok: false; error: string } {
+  const live = pushSessionFor(sessionId);
   const cutoff = raw.trim();
   if (cutoff === "") {
-    session.cutoff = "";
-    session.groups = groupOrders(session.splits);
-    session.droppedByCutoff = 0;
+    live.cutoff = "";
+    live.groups = groupOrders(live.splits);
+    live.droppedByCutoff = 0;
     return { ok: true };
   }
   if (!validCutoff(cutoff)) {
@@ -584,7 +604,7 @@ export function applyCutoff(raw: string): { ok: true } | { ok: false; error: str
   const end = cutoffEnd(cutoff);
   const kept: Order[] = [];
   let dropped = 0;
-  for (const order of session.groups) {
+  for (const order of live.groups) {
     const date = parseDate(order[0].date);
     if (date && date.getTime() >= end) {
       dropped += 1;
@@ -592,9 +612,9 @@ export function applyCutoff(raw: string): { ok: true } | { ok: false; error: str
     }
     kept.push(order);
   }
-  session.cutoff = cutoff;
-  session.groups = kept;
-  session.droppedByCutoff = dropped;
+  live.cutoff = cutoff;
+  live.groups = kept;
+  live.droppedByCutoff = dropped;
   return { ok: true };
 }
 
@@ -606,10 +626,12 @@ export function applyCutoff(raw: string): { ok: true } | { ok: false; error: str
 // writes nothing: no expense, no fingerprint, no summary file, no
 // archive, no run meta change.
 export async function executePush(
+  sessionId: string,
   choices: Record<string, string>,
   opts?: { dry?: boolean },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const groups = session.groups;
+  const live = pushSessionFor(sessionId);
+  const groups = live.groups;
   const pushed = await loadPushed();
   const outcome: PushOutcome = {
     pushed: 0,
@@ -649,11 +671,11 @@ export async function executePush(
     outcome.note = "Dry run. Nothing went to Splitwise. " + outcome.pushed +
       " order(s) would push, " +
       (outcome.skippedDupes + outcome.skippedByChoice) + " skipped. Total " +
-      formatMoney(outcome.totalRs, session.currency) + " would push.";
-    session.outcome = outcome;
+      formatMoney(outcome.totalRs, live.currency) + " would push.";
+    live.outcome = outcome;
     return { ok: true };
   }
-  if (session.mode !== "live") {
+  if (live.mode !== "live") {
     // Aggregate fallback: rebuild the summary from the orders the API
     // never pushed, and write it beside the source file.
     const remaining = groups.filter((order) => !Object.hasOwn(pushed, orderFingerprint(order)));
@@ -662,29 +684,29 @@ export async function executePush(
     if (remaining.length > 0) {
       const block = buildAggregateSummary(
         remaining,
-        session.people,
-        session.payer,
-        session.settlements,
-        session.currency + " ",
+        live.people,
+        live.payer,
+        live.settlements,
+        live.currency + " ",
       );
-      const dir = session.file.includes("/")
-        ? session.file.slice(0, session.file.lastIndexOf("/"))
+      const dir = live.file.includes("/")
+        ? live.file.slice(0, live.file.lastIndexOf("/"))
         : ".";
       const path = dir + "/aggregate-" + Math.floor(Date.now() / 1000) + ".txt";
       try {
         await Deno.writeTextFile(path, block + "\n");
       } catch {
-        session.outcome = { ...outcome, failed: true, note: "Could not write the summary file." };
+        live.outcome = { ...outcome, failed: true, note: "Could not write the summary file." };
         return { ok: false, error: "Could not write the summary file at " + path + "." };
       }
       outcome.aggregateFile = path;
     }
     outcome.note =
       "No Splitwise access, so a summary file took the place of a push. Enter the amounts in Splitwise by hand.";
-    session.outcome = outcome;
+    live.outcome = outcome;
     return { ok: true };
   }
-  const api = session.api;
+  const api = live.api;
   if (api === null) {
     return { ok: false, error: "Splitwise access is missing. Set it up in Settings first." };
   }
@@ -716,11 +738,11 @@ export async function executePush(
       const eid = await pushOneOrder(
         api,
         order,
-        session.people,
-        session.nameMap,
-        session.payer,
-        session.groupId,
-        session.currency,
+        live.people,
+        live.nameMap,
+        live.payer,
+        live.groupId,
+        live.currency,
       );
       if (eid === null) {
         // No expense id means the fingerprint stays unsaved, so a rerun
@@ -728,7 +750,7 @@ export async function executePush(
         outcome.failed = true;
         outcome.note = "Splitwise gave no expense id for order " + oid +
           ". The order was not marked as sent. Check Splitwise, then push again.";
-        session.outcome = outcome;
+        live.outcome = outcome;
         return { ok: false, error: outcome.note };
       }
       // loadPushed returns numeric ids, so store the id as a number.
@@ -740,13 +762,13 @@ export async function executePush(
       outcome.failed = true;
       outcome.note = "The push failed on order " + oid +
         ". The order was not marked as sent, so a rerun will offer it again. Check Splitwise before you retry.";
-      session.outcome = outcome;
+      live.outcome = outcome;
       return { ok: false, error: outcome.note };
     }
   }
-  if (session.runId !== null && !stop && !outcome.failed) {
+  if (live.runId !== null && !stop && !outcome.failed) {
     try {
-      await archiveRun(session.runId);
+      await archiveRun(live.runId);
       outcome.archived = true;
     } catch {
       outcome.note = "The push finished but the run could not be archived.";
@@ -754,6 +776,6 @@ export async function executePush(
   } else if (stop) {
     outcome.note = "The run stopped early and stays in place. Push again to send the rest.";
   }
-  session.outcome = outcome;
+  live.outcome = outcome;
   return { ok: true };
 }

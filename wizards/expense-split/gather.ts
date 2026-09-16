@@ -2,7 +2,7 @@
 
 import {
   action,
-  answers,
+  answers as showAnswers,
   buttons,
   checkbox,
   markdown,
@@ -14,9 +14,15 @@ import {
   type StepFn,
   textEntry,
 } from "../../wizardkit/mod.ts";
-import { isDryMap, runsDir, stateRoot } from "../../src/runstate.ts";
+import { isDryMap, listRunsSync, readRunOrders, runsDir, stateRoot } from "../../src/runstate.ts";
+import { answers } from "../../src/answers.ts";
+import {
+  sessionStore,
+  sidOf,
+} from "../../src/sessionstore.ts";
+import type { WizardCtx } from "../../wizardkit/mod.ts";
 import { dryBox, dryNote } from "./dry.ts";
-import { formatDayISO, parseDate } from "../../src/common.ts";
+import { fmtRs, formatDayISO, parseDate } from "../../src/common.ts";
 import { DEFAULT_LOCATION, TOKENS_FILE } from "../../src/zomato.ts";
 import type { Order } from "../../src/common.ts";
 
@@ -78,7 +84,7 @@ function hasCached(id: PlatformId): boolean {
 // Build the gather-accounts step from the picked platforms.
 function accountsStep(answerMap: Map<string, string[]>): Step {
   const dry = isDryMap(answerMap);
-  const picked = (answerMap.get("platforms") ?? [])
+  const picked = (answers(answerMap, "platforms"))
     .map((value) => value.toLowerCase())
     .filter((value): value is PlatformId => (PLATFORMS as readonly string[]).includes(value))
     .filter((id, index, all) => all.indexOf(id) === index);
@@ -200,7 +206,7 @@ function accountsStep(answerMap: Map<string, string[]>): Step {
             "--allow-sys",
             "--allow-net",
             "wizards/gatherer.ts",
-            "--platforms=" + id,
+            "--login=" + id,
           ],
           "now",
           true,
@@ -271,6 +277,7 @@ export function gatherSteps(): Array<Step | StepFn> {
     accountsStep,
     manualStep,
     reviewStep,
+    pickStep,
   ];
 }
 
@@ -282,16 +289,28 @@ interface ManualRow {
   amount: number;
 }
 
-// The run this wizard wrote for the posted manual rows. The step
-// builder re-runs on every request, so the signature keeps the write
-// to once per distinct set of rows.
-let manualRun: { signature: string; id: string; count: number } | null = null;
+// The run this wizard wrote for the posted manual rows, one per
+// session. The step builder re-runs on every request, so the signature
+// keeps the write to once per distinct set of rows. The store replaces
+// the module level manualRun value, which two browsers used to share.
+const manualRuns = sessionStore((): {
+  current: { signature: string; id: string; count: number } | null;
+} => ({ current: null }));
+
+// Read the manual run for one session id.
+function manualRunFor(sessionId: string): {
+  signature: string;
+  id: string;
+  count: number;
+} | null {
+  return manualRuns.for(sidOf({ sessionId })).current;
+}
 
 // Faults in the posted manual rows, in row order. Row numbers count
 // every posted row from one, so they match the rows the user sees.
 export function manualRowProblems(m: Map<string, string[]>): string[] {
-  const stores = m.get("store") ?? [];
-  const amounts = m.get("amount") ?? [];
+  const stores = answers(m, "store");
+  const amounts = answers(m, "amount");
   const problems: string[] = [];
   for (let i = 0; i < stores.length; i++) {
     const store = (stores[i] ?? "").trim();
@@ -311,10 +330,10 @@ export function manualRowProblems(m: Map<string, string[]>): string[] {
 // Zip the posted repeating fields into rows. A row counts when it
 // holds a store or an amount; blanks from spare rows drop out.
 export function manualRows(m: Map<string, string[]>): ManualRow[] {
-  const stores = m.get("store") ?? [];
-  const dates = m.get("date") ?? [];
-  const items = m.get("item") ?? [];
-  const amounts = m.get("amount") ?? [];
+  const stores = answers(m, "store");
+  const dates = answers(m, "date");
+  const items = answers(m, "item");
+  const amounts = answers(m, "amount");
   const rows: ManualRow[] = [];
   for (let i = 0; i < stores.length; i++) {
     const store = (stores[i] ?? "").trim();
@@ -393,22 +412,27 @@ function writeManualRunSync(rows: ManualRow[], days: number): string {
 }
 
 // Persist posted manual rows once, and remember the run for review.
-export function persistManualRun(m: Map<string, string[]>): void {
+export function persistManualRun(
+  sessionId: string,
+  m: Map<string, string[]>,
+): void {
+  const sid = sidOf({ sessionId });
   const rows = manualRows(m);
   const days = Number(m.get("range")?.[0] ?? "") || 30;
   const signature = JSON.stringify([rows, days]);
-  if (manualRun !== null && manualRun.signature === signature) return;
+  const held = manualRuns.for(sid);
+  if (held.current !== null && held.current.signature === signature) return;
   if (rows.length === 0) {
-    manualRun = null;
+    held.current = null;
     return;
   }
   const id = writeManualRunSync(rows, days);
-  manualRun = { signature, id, count: rows.length };
+  held.current = { signature, id, count: rows.length };
 }
 
 // True when the platforms answer holds Manual.
 export function manualPicked(m: Map<string, string[]>): boolean {
-  return (m.get("platforms") ?? [])
+  return (answers(m, "platforms"))
     .map((value) => value.toLowerCase())
     .includes("manual");
 }
@@ -439,14 +463,18 @@ function manualStep(m: Map<string, string[]>): Step {
       ),
     ],
     "Type each expense by hand: store, date, item, and amount. Add a row per expense. The rows save into a Run when you press Next.",
+    // Only a user who picked Manual walks this screen. The flow used to
+    // jump over it from the accounts step instead.
+    (answers) => manualPicked(answers),
   );
 }
 
 // Build the gather-review step from the picked platforms. A ticked
 // dry box renders the would-do plan in the live shape and drops the
 // scrape actions, so dry output matches live shape and writes nothing.
-function reviewStep(answerMap: Map<string, string[]>): Step {
-  const picked = (answerMap.get("platforms") ?? [])
+function reviewStep(answerMap: Map<string, string[]>, ctx?: WizardCtx): Step {
+  const sessionId = sidOf(ctx);
+  const picked = (answers(answerMap, "platforms"))
     .map((value) => value.toLowerCase())
     .filter((value): value is PlatformId => (PLATFORMS as readonly string[]).includes(value))
     .filter((id, index, all) => all.indexOf(id) === index);
@@ -503,7 +531,7 @@ function reviewStep(answerMap: Map<string, string[]>): Step {
   // State the picks this review acts on. An empty answers node drew a
   // heading with nothing under it.
   const nodes: Node[] = [
-    answers("Gather", [
+    showAnswers("Gather", [
       {
         name: "Platforms",
         values: picked.length > 0 ? picked.map(platformName) : ["none picked"],
@@ -514,6 +542,7 @@ function reviewStep(answerMap: Map<string, string[]>): Step {
   // Manual rows already live in a written run. Name it here so the
   // split stage can find it; a scrape action would be dead.
   if (picked.includes("manual")) {
+    const manualRun = manualRunFor(sessionId);
     nodes.push(
       markdown(
         manualRun !== null
@@ -584,5 +613,126 @@ function reviewStep(answerMap: Map<string, string[]>): Step {
       ),
     ],
     "Press Fetch on each platform below to load your orders. The output shows under the button while it runs, and it can take a while. Wait for every one to finish, then press Next. Manual rows are already saved.",
+  );
+}
+
+// Select all or Select none override for one browser session.
+// One press affects one render. The builder clears it after it reads it.
+const pickOverrides = sessionStore((): { value: "all" | "none" | null } => ({ value: null }));
+
+// Set the pick override for one session.
+export function setPickOverride(sessionId: string, mode: "all" | "none"): void {
+  pickOverrides.for(sidOf({ sessionId })).value = mode;
+}
+
+// Run id the pick step shows. Manual uses the manual run.
+// Other platforms use the newest run covering a picked platform.
+export function gatherPickRunId(
+  m: Map<string, string[]>,
+  sessionId: string,
+): string | null {
+  const sid = sidOf({ sessionId });
+  if (manualPicked(m)) {
+    const manual = manualRunFor(sid);
+    return manual !== null ? manual.id : null;
+  }
+  const picked = (answers(m, "platforms")).map((value) => value.toLowerCase());
+  if (picked.length === 0) return null;
+  for (const run of listRunsSync()) {
+    if (run.platforms.some((p) => picked.includes(p.toLowerCase()))) return run.id;
+  }
+  return null;
+}
+
+// Label for one order on the pick screen.
+function pickLabel(platform: string, date: string, paid: number, count: number): string {
+  const name = platform.charAt(0).toUpperCase() + platform.slice(1);
+  const unit = count === 1 ? " item" : " items";
+  return name + " · " + date + " · " + fmtRs(paid) + " · " + count + unit;
+}
+
+// Pick step. It lists one checkbox per order of the gathered run.
+// No row starts ticked. Dry runs skip this screen.
+function pickStep(answerMap: Map<string, string[]>, ctx?: WizardCtx): Step {
+  const sessionId = sidOf(ctx);
+  const runId = gatherPickRunId(answerMap, sessionId);
+  if (runId === null) {
+    return step(
+      "gather-pick",
+      "Pick orders",
+      [
+        markdown("The gather produced no run yet."),
+        buttons([{ label: "Back", action: "back" }], undefined, "split"),
+      ],
+      "Tick the orders to split. The gather produced no run yet.",
+      (m) => !isDryMap(m),
+    );
+  }
+  let orders: Order[];
+  try {
+    orders = readRunOrders(runId);
+  } catch {
+    return step(
+      "gather-pick",
+      "Pick orders",
+      [
+        markdown("The gather produced no run yet."),
+        buttons([{ label: "Back", action: "back" }], undefined, "split"),
+      ],
+      "Tick the orders to split. The gather produced no run yet.",
+      (m) => !isDryMap(m),
+    );
+  }
+  if (orders.length === 0) {
+    return step(
+      "gather-pick",
+      "Pick orders",
+      [
+        markdown("The run holds no orders."),
+        buttons([{ label: "Back", action: "back" }], undefined, "split"),
+      ],
+      "Tick the orders to split. The run holds no orders.",
+      (m) => !isDryMap(m),
+    );
+  }
+  const held = pickOverrides.for(sessionId);
+  const mode = held.value;
+  held.value = null;
+  const options = orders.map((order, index) => ({
+    value: String(index),
+    label: pickLabel(
+      order.platform ?? "",
+      order.date ?? "",
+      order.paid ?? 0,
+      (order.items ?? []).length,
+    ),
+  }));
+  const valid = new Set(options.map((option) => option.value));
+  let ticked: string[];
+  if (mode === "all") {
+    ticked = options.map((option) => option.value);
+  } else if (mode === "none") {
+    ticked = [];
+  } else {
+    ticked = (answers(answerMap, "pick")).filter((value) => valid.has(value));
+  }
+  return step(
+    "gather-pick",
+    "Pick orders",
+    [
+      checkbox("", "pick", options, ticked),
+      buttons(
+        [
+          { label: "Back", action: "back" },
+          { label: "Select all", action: "pick-all" },
+          { label: "Select none", action: "pick-none" },
+          { label: "Next", action: "next", primary: true },
+        ],
+        undefined,
+        "split",
+      ),
+    ],
+    "Tick each order to split. Only ticked orders reach the split flow.",
+    (m) => !isDryMap(m),
   );
 }

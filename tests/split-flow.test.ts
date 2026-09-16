@@ -16,11 +16,7 @@ import {
   shareDoneStep,
   summaryStep,
 } from "../wizards/expense-split/split.ts";
-import {
-  freshState,
-  type SplitStateDoc,
-  writeSplitState,
-} from "../src/splitstate.ts";
+import { freshState, type SplitStateDoc, writeSplitState } from "../src/splitstate.ts";
 import type { Node } from "../wizardkit/mod.ts";
 import type { Order } from "../src/common.ts";
 
@@ -125,13 +121,13 @@ Deno.test("resume mid-way keeps saved assignments", async () => {
   const root = await Deno.makeTempDir();
   const dir = makeRun(root, "r1", savedDoc("Ann"));
   // First render asks the resume question.
-  const ask = itemStep(answers(dir));
+  const ask = itemStep(answers(dir), { sessionId: "t-split-1" });
   assertStringIncludes(stepText(ask.nodes), "Continue where you left off?");
   // Nothing overwrote the saved state while asking.
   const onDisk = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
   assertEquals(onDisk.assignments["0"].amounts, { Ann: 5, Ben: 5 });
   // Continue renders the finished state, line 0 stays assigned.
-  const done = itemStep(answers(dir, "Continue where you left off?"));
+  const done = itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-1" });
   assertStringIncludes(stepText(done.nodes), "All 1 lines are split");
   const after = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
   assertEquals(after.assignments["0"].amounts, { Ann: 5, Ben: 5 });
@@ -141,8 +137,8 @@ Deno.test("resume mid-way keeps saved assignments", async () => {
 Deno.test("start over clears saved assignments", async () => {
   const root = await Deno.makeTempDir();
   const dir = makeRun(root, "r2", savedDoc("Ann"));
-  itemStep(answers(dir));
-  const fresh = itemStep(answers(dir, "Start over"));
+  itemStep(answers(dir), { sessionId: "t-split-2" });
+  const fresh = itemStep(answers(dir, "Start over"), { sessionId: "t-split-2" });
   assertStringIncludes(stepText(fresh.nodes), "Line 1 of 1");
   // saveState writes in the background, so wait for the cleared file.
   for (let i = 0; i < 50; i++) {
@@ -156,8 +152,8 @@ Deno.test("start over clears saved assignments", async () => {
 Deno.test("finished split updates meta to assigned", async () => {
   const root = await Deno.makeTempDir();
   const dir = makeRun(root, "r3", savedDoc("Ann"));
-  itemStep(answers(dir, "Continue where you left off?"));
-  const out = exportStep(answers(dir, "Continue where you left off?"));
+  itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-3" });
+  const out = exportStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-3" });
   assertStringIncludes(stepText(out.nodes), "pays Ann"); // settlements render
   const meta = readMeta(dir);
   assertEquals(meta["status"], "assigned");
@@ -175,8 +171,8 @@ Deno.test("validator failure blocks finish and assigned", async () => {
   const root = await Deno.makeTempDir();
   // Amounts 3 + 3 do not cover the 10.00 price, so validation must fail.
   const dir = makeRun(root, "r4", savedDoc("Ann", [3, 3]));
-  itemStep(answers(dir, "Continue where you left off?"));
-  const out = exportStep(answers(dir, "Continue where you left off?"));
+  itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-4" });
+  const out = exportStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-4" });
   assertStringIncludes(stepText(out.nodes), "failed its own check");
   assertStringIncludes(stepText(out.nodes), "FAIL");
   const meta = readMeta(dir);
@@ -194,11 +190,11 @@ Deno.test("currency label follows settings", async () => {
   );
   Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
-    assertEquals(await loadCurrency(), "USD");
+    assertEquals(await loadCurrency("t-split-5"), "USD");
     const dir = makeRun(root, "r5", savedDoc("Ann"));
-    const item = itemStep(answers(dir, "Continue where you left off?"));
+    const item = itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-5" });
     assertStringIncludes(stepText(item.nodes), "USD 10.00");
-    const out = exportStep(answers(dir, "Continue where you left off?"));
+    const out = exportStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-5" });
     assertStringIncludes(stepText(out.nodes), "USD 5.00");
   } finally {
     Deno.env.delete("SPLIT_UTILS_STATE");
@@ -258,8 +254,8 @@ Deno.test("export handoff lands on push-source with the run preloaded", async ()
         status: "gathered",
       }) + "\n",
     );
-    itemStep(answers(dir, "Continue where you left off?"));
-    const out = exportStep(answers(dir, "Continue where you left off?"));
+    itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-6" });
+    const out = exportStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-6" });
     // The export step offers the jump into the push flow.
     assertStringIncludes(stepText(out.nodes), "Send these to Splitwise now?");
     assertStringIncludes(
@@ -267,9 +263,9 @@ Deno.test("export handoff lands on push-source with the run preloaded", async ()
       "goto:push-source",
     );
     // Following the handoff: the push-source step carries the run id.
-    assertEquals(runIdValue(pushSourceStep(new Map())), "r6");
+    assertEquals(runIdValue(pushSourceStep(new Map(), { sessionId: "t-split-6" })), "r6");
     // The Other run entry starts empty beside the list.
-    assertEquals(otherRunValue(pushSourceStep(new Map())), "");
+    assertEquals(otherRunValue(pushSourceStep(new Map(), { sessionId: "t-split-6" })), "");
   } finally {
     Deno.env.delete("SPLIT_UTILS_STATE");
   }
@@ -277,15 +273,12 @@ Deno.test("export handoff lands on push-source with the run preloaded", async ()
 
 Deno.test("push source prefers the typed other run over the radio pick", async () => {
   const { onSubmit } = await import("../wizards/expense-split.ts");
-  const { resetPush, session } = await import(
+  const { pushSessionFor, resetPush } = await import(
     "../wizards/expense-split/push-engine.ts"
   );
   const root = await Deno.makeTempDir();
   Deno.env.set("SPLIT_UTILS_STATE", root);
-  Deno.env.set("SPLITWISE_PUSHED_FILE", root + "/pushed.json");
-  Deno.env.set("SPLITWISE_TOKEN_FILE", root + "/token.json");
-  Deno.env.delete("SPLITWISE_ENV");
-  resetPush();
+  resetPush("t-split-7");
   try {
     for (const id of ["r-a", "r-b"]) {
       const dir = root + "/share/runs/" + id;
@@ -324,18 +317,20 @@ Deno.test("push source prefers the typed other run over the radio pick", async (
     await onSubmit(
       { source: ["Assigned run"], "run-id": ["r-a"], "run-id-other": ["r-b"] },
       "push-source",
+      "",
+      { sessionId: "t-split-7" },
     );
-    assertEquals(session.runId, "r-b");
-    resetPush();
+    assertEquals(pushSessionFor("t-split-7").runId, "r-b");
+    resetPush("t-split-7");
     await onSubmit(
       { source: ["Assigned run"], "run-id": ["r-a"], "run-id-other": [""] },
       "push-source",
+      "",
+      { sessionId: "t-split-7" },
     );
-    assertEquals(session.runId, "r-a");
+    assertEquals(pushSessionFor("t-split-7").runId, "r-a");
   } finally {
     Deno.env.delete("SPLIT_UTILS_STATE");
-    Deno.env.delete("SPLITWISE_PUSHED_FILE");
-    Deno.env.delete("SPLITWISE_TOKEN_FILE");
   }
 });
 
@@ -388,7 +383,7 @@ Deno.test("a fresh line ticks the me person by default", async () => {
   const m = answers(dir);
   m.set("person", ["Ann", "Ben"]);
   m.set("me", ["Ben"]);
-  const step = itemStep(m);
+  const step = itemStep(m, { sessionId: "t-split-10" });
   assertEquals(tickedOf(step.nodes, "who-0"), ["Ben"]);
 });
 
@@ -408,8 +403,8 @@ function answerNames(nodes: Node[]): string[] {
 Deno.test("settlement rows read in second person for the me person", async () => {
   const root = await Deno.makeTempDir();
   const dir = makeRun(root, "r8", savedDoc("Ann"));
-  itemStep(answers(dir, "Continue where you left off?"));
-  const out = exportStep(answers(dir, "Continue where you left off?", "Ann"));
+  itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-11" });
+  const out = exportStep(answers(dir, "Continue where you left off?", "Ann"), { sessionId: "t-split-11" });
   const text = stepText(out.nodes);
   // Ann is the me person: her row reads in second person and her
   // total comes first under her own label.
@@ -431,8 +426,8 @@ function textareaValue(nodes: Node[], name: string): string {
 Deno.test("export offers push, summary, and share finish paths", async () => {
   const root = await Deno.makeTempDir();
   const dir = makeRun(root, "r9", savedDoc("Ann"));
-  itemStep(answers(dir, "Continue where you left off?"));
-  const out = exportStep(answers(dir, "Continue where you left off?"));
+  itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-12" });
+  const out = exportStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-12" });
   const actions = buttonActions(out.nodes);
   assertStringIncludes(actions, "goto:push-source");
   assertStringIncludes(actions, "goto:split-summary");
@@ -444,9 +439,9 @@ Deno.test("export offers push, summary, and share finish paths", async () => {
 Deno.test("split-summary renders the summary text in a textarea", async () => {
   const root = await Deno.makeTempDir();
   const dir = makeRun(root, "r10", savedDoc("Ann"));
-  itemStep(answers(dir, "Continue where you left off?"));
-  exportStep(answers(dir, "Continue where you left off?"));
-  const found = summaryStep(answers(dir, "Continue where you left off?"));
+  itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-13" });
+  exportStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-13" });
+  const found = summaryStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-13" });
   assertEquals(found.id, "split-summary");
   assertStringIncludes(
     textareaValue(found.nodes, "summary-text"),
@@ -458,26 +453,26 @@ Deno.test("split-summary renders the summary text in a textarea", async () => {
 Deno.test("split-share-done renders a stored link", async () => {
   const root = await Deno.makeTempDir();
   const dir = makeRun(root, "r11", savedDoc("Ann"));
-  itemStep(answers(dir, "Continue where you left off?"));
-  exportStep(answers(dir, "Continue where you left off?"));
+  itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-14" });
+  exportStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-14" });
   // Stub the paste upload so no network call happens in a test.
   const realFetch = globalThis.fetch;
   globalThis.fetch = () =>
     Promise.resolve(new Response("https://paste.rs/abc123\n", { status: 200 }));
   try {
-    const made = await createSplitShareLink(
+    const made = await createSplitShareLink("t-split-14", 
       answers(dir, "Continue where you left off?"),
     );
     assertEquals(made, { ok: true });
   } finally {
     globalThis.fetch = realFetch;
   }
-  const done = shareDoneStep(new Map());
+  const done = shareDoneStep(new Map(), { sessionId: "t-split-14" });
   assertEquals(done.id, "split-share-done");
   const value = textareaValue(done.nodes, "share-link-out");
   assertStringIncludes(value, "https://paste.rs/abc123");
   assertStringIncludes(value, "#");
-  assertEquals(currentShareLink(), value);
+  assertEquals(currentShareLink("t-split-14"), value);
 });
 
 Deno.test("fresh item line still ticks only the me person", async () => {
@@ -486,7 +481,7 @@ Deno.test("fresh item line still ticks only the me person", async () => {
   const m = answers(dir);
   m.set("person", ["Ann", "Ben"]);
   m.set("me", ["Ben"]);
-  const found = itemStep(m);
+  const found = itemStep(m, { sessionId: "t-split-15" });
   assertEquals(tickedOf(found.nodes, "who-0"), ["Ben"]);
   assertEquals(pickedOf(found.nodes, "mode-0"), "Equal");
   assertEquals(stepText(found.nodes).includes("Fee default"), false);
@@ -499,7 +494,7 @@ Deno.test("fresh fee line ticks everyone and preselects equal", async () => {
   first.set("person", ["Ann", "Ben"]);
   first.set("me", ["Ben"]);
   // Line 0 is the Pizza item: only the me person ticks.
-  const item = itemStep(first);
+  const item = itemStep(first, { sessionId: "t-split-16" });
   assertEquals(tickedOf(item.nodes, "who-0"), ["Ben"]);
   // Commit line 0 to Ben alone, so line 1 renders the delivery fee.
   const m = answers(dir);
@@ -507,7 +502,7 @@ Deno.test("fresh fee line ticks everyone and preselects equal", async () => {
   m.set("me", ["Ben"]);
   m.set("mode-0", ["Equal"]);
   m.set("who-0", ["Ben"]);
-  const fee = itemStep(m);
+  const fee = itemStep(m, { sessionId: "t-split-16" });
   assertEquals(tickedOf(fee.nodes, "who-1"), ["Ann", "Ben"]);
   assertEquals(pickedOf(fee.nodes, "mode-1"), "Equal");
   assertStringIncludes(stepText(fee.nodes), "Fee default");
@@ -530,13 +525,13 @@ Deno.test("fee line with a saved assignment keeps the saved people", async () =>
     amounts: { Ann: 5 },
   };
   const dir = makeRun(root, "fee-saved", doc, FEE_ORDERS);
-  const done = itemStep(answers(dir, "Continue where you left off?"));
+  const done = itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-17" });
   assertStringIncludes(stepText(done.nodes), "All 2 lines are split");
   assertEquals(stepText(done.nodes).includes("Fee default"), false);
   const after = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
   assertEquals(after.assignments["1"].people, ["Ann"]);
   assertEquals(after.assignments["1"].amounts, { Ann: 5 });
-  exportStep(answers(dir, "Continue where you left off?"));
+  exportStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-17" });
   assertEquals(
     JSON.parse(Deno.readTextFileSync(dir + "/output.json")).totals,
     { Ann: 10, Ben: 5 },
@@ -552,14 +547,14 @@ Deno.test("fee copy names the per person amount with the settings currency", asy
   );
   Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
-    assertEquals(await loadCurrency(), "EUR");
+    assertEquals(await loadCurrency("t-split-18"), "EUR");
     const dir = makeRun(root, "fee-copy", null, FEE_ORDERS);
     const m = answers(dir);
     m.set("person", ["Ann", "Ben"]);
     m.set("me", ["Ben"]);
     m.set("mode-0", ["Equal"]);
     m.set("who-0", ["Ben"]);
-    const fee = itemStep(m);
+    const fee = itemStep(m, { sessionId: "t-split-18" });
     // The 5.00 fee split two ways names EUR 2.50 each.
     assertStringIncludes(
       stepText(fee.nodes),
@@ -568,7 +563,7 @@ Deno.test("fee copy names the per person amount with the settings currency", asy
     assertStringIncludes(stepText(fee.nodes), "You may change it");
   } finally {
     Deno.env.delete("SPLIT_UTILS_STATE");
-    await loadCurrency();
+    await loadCurrency("t-split-18");
   }
 });
 
@@ -599,9 +594,9 @@ Deno.test("rename through the save path keeps the assignment reachable", async (
   const m = answers(dir, "Continue where you left off?");
   m.set("person", ["Ann", "Bobby"]);
   m.set("me", ["Ann"]);
-  const done = itemStep(m);
+  const done = itemStep(m, { sessionId: "t-split-20" });
   assertStringIncludes(stepText(done.nodes), "All 1 lines are split");
-  const out = exportStep(m);
+  const out = exportStep(m, { sessionId: "t-split-20" });
   assertStringIncludes(stepText(out.nodes), "Bobby pays you");
   const written = JSON.parse(Deno.readTextFileSync(dir + "/output.json"));
   assertEquals(written.people, ["Ann", "Bobby"]);
@@ -621,8 +616,8 @@ Deno.test("a failed save shows its reason until the next save lands", async () =
   const root = await Deno.makeTempDir();
   const dir = makeRun(root, "save-warn", null, FEE_ORDERS);
   // First render opens the session on line 0.
-  itemStep(freshFeeAnswers(dir));
-  assertEquals(lastSaveError(), "");
+  itemStep(freshFeeAnswers(dir), { sessionId: "t-split-21" });
+  assertEquals(lastSaveError("t-split-21"), "");
   // Force the next save to fail.
   setSaveWriterForTests(() => Promise.reject(new Error("disk is full")));
   try {
@@ -630,12 +625,12 @@ Deno.test("a failed save shows its reason until the next save lands", async () =
     const first = freshFeeAnswers(dir);
     first.set("mode-0", ["Equal"]);
     first.set("who-0", ["Ben"]);
-    itemStep(first);
-    await pendingSaves();
+    itemStep(first, { sessionId: "t-split-21" });
+    await pendingSaves("t-split-21");
     // Check the session holds the reason.
-    assertEquals(lastSaveError(), "disk is full");
+    assertEquals(lastSaveError("t-split-21"), "disk is full");
     // Check the item step shows one muted warning line.
-    const warned = itemStep(first);
+    const warned = itemStep(first, { sessionId: "t-split-21" });
     assertStringIncludes(
       stepText(warned.nodes),
       "The last save did not land: disk is full. Your answers stay in this window until a save lands.",
@@ -649,10 +644,116 @@ Deno.test("a failed save shows its reason until the next save lands", async () =
   second.set("who-0", ["Ben"]);
   second.set("mode-1", ["Equal"]);
   second.set("who-1", ["Ann", "Ben"]);
-  itemStep(second);
-  await pendingSaves();
-  assertEquals(lastSaveError(), "");
-  const clean = itemStep(second);
+  itemStep(second, { sessionId: "t-split-21" });
+  await pendingSaves("t-split-21");
+  assertEquals(lastSaveError("t-split-21"), "");
+  const clean = itemStep(second, { sessionId: "t-split-21" });
   assertStringIncludes(stepText(clean.nodes), "All 2 lines are split");
   assertEquals(stepText(clean.nodes).includes("did not land"), false);
+});
+
+Deno.test("a split session opened under A does not serve B", async () => {
+  const root = await Deno.makeTempDir();
+  const dirA = makeRun(root, "iso-split-a", null, [{
+    id: "o1",
+    platform: "swiggy",
+    date: "2026-09-01 10:00 AM",
+    paid: 10,
+    items: [{ name: "PizzaA-x1", price: 10, quantity: 1 }],
+    fees: { delivery: 0, packaging: 0 },
+  }]);
+  const dirB = makeRun(root, "iso-split-b", null, [{
+    id: "o1",
+    platform: "swiggy",
+    date: "2026-09-01 10:00 AM",
+    paid: 10,
+    items: [{ name: "PizzaB-y2", price: 10, quantity: 1 }],
+    fees: { delivery: 0, packaging: 0 },
+  }]);
+  const sidA = "iso-split-A";
+  const sidB = "iso-split-B";
+  const mapFor = (dir: string) => {
+    const m = new Map<string, string[]>();
+    m.set("run", [dir]);
+    m.set("person", ["Ann", "Ben"]);
+    m.set("me", ["Ann"]);
+    return m;
+  };
+  const shownA = stepText(itemStep(mapFor(dirA), { sessionId: sidA }).nodes);
+  const shownB = stepText(itemStep(mapFor(dirB), { sessionId: sidB }).nodes);
+  assertStringIncludes(shownA, "PizzaA-x1");
+  assertStringIncludes(shownB, "PizzaB-y2");
+  // Re-render A after B opened: A still shows its own run.
+  const againA = stepText(itemStep(mapFor(dirA), { sessionId: sidA }).nodes);
+  assertStringIncludes(againA, "PizzaA-x1");
+  assertEquals(againA.includes("PizzaB-y2"), false);
+  assertEquals(shownB.includes("PizzaA-x1"), false);
+});
+
+// Two one line orders with distinct item names for the pick tests.
+function pickOrders(): Order[] {
+  return [
+    {
+      id: "o1",
+      platform: "zepto",
+      date: "2026-09-08",
+      paid: 100,
+      items: [{ name: "MilkA-pick", price: 100, quantity: 1 }],
+      fees: { delivery: 0, packaging: 0 },
+    },
+    {
+      id: "o2",
+      platform: "zepto",
+      date: "2026-09-09",
+      paid: 50,
+      items: [{ name: "MilkB-pick", price: 50, quantity: 1 }],
+      fees: { delivery: 0, packaging: 0 },
+    },
+  ];
+}
+
+// Write meta.json with a picked list for one run dir.
+function writePickedMeta(dir: string, id: string, picked: number[]): void {
+  Deno.writeTextFileSync(
+    dir + "/meta.json",
+    JSON.stringify({
+      id,
+      label: "shop " + id,
+      createdAt: "2026-09-08T09:00:00Z",
+      platforms: ["zepto"],
+      rangeDays: 7,
+      status: "gathered",
+      picked,
+    }) + "\n",
+  );
+}
+
+Deno.test("fresh split session skips the lines of unpicked orders", async () => {
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "pick-fresh", null, pickOrders());
+  writePickedMeta(dir, "pick-fresh", [1]);
+  const m = answers(dir);
+  m.set("person", ["Ann", "Ben"]);
+  m.set("me", ["Ann"]);
+  const found = itemStep(m, { sessionId: "t-pick-6" });
+  const text = stepText(found.nodes);
+  // Line 0 belongs to the unpicked order, so the session opens on line 2.
+  assertStringIncludes(text, "Line 2 of 2");
+  assertStringIncludes(text, "MilkB-pick");
+});
+
+Deno.test("resumed split session keeps its saved skipped map", async () => {
+  const root = await Deno.makeTempDir();
+  const doc = freshState(["Ann", "Ben"], "Ann");
+  doc.skipped["0"] = true;
+  const dir = makeRun(root, "pick-resume", doc, pickOrders());
+  writePickedMeta(dir, "pick-resume", [0]);
+  const m = answers(dir, "Continue where you left off?");
+  const found = itemStep(m, { sessionId: "t-pick-7" });
+  const text = stepText(found.nodes);
+  // The saved skip on line 0 stays. Line 1 stays open.
+  assertStringIncludes(text, "Line 2 of 2");
+  assertEquals(text.includes("All 2 lines are split"), false);
+  const after = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
+  assertEquals(after.skipped, { "0": true });
 });

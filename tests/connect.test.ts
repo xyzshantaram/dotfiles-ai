@@ -80,17 +80,17 @@ Deno.test("fullName joins the name parts", () => {
 
 Deno.test("startHandshake stores the authorize link", async () => {
   const { api } = fakeApi();
-  const out = await startHandshake(api);
+  const out = await startHandshake("t-connect-1", api);
   assert(out.ok, "start ok");
   assert(
-    currentAuthorizeUrl() === "https://example.test/authorize?oauth_token=req-tok",
+    currentAuthorizeUrl("t-connect-1") === "https://example.test/authorize?oauth_token=req-tok",
     "link stored",
   );
 });
 
 Deno.test("startHandshake failure stays generic", async () => {
   const { api } = fakeApi({ failStart: true });
-  const error = assertFails(await startHandshake(api), "start failed");
+  const error = assertFails(await startHandshake("t-connect-2", api), "start failed");
   assert(error.includes("Could not reach Splitwise"), "generic error");
   assert(!error.includes("down"), "no raw error text");
 });
@@ -100,15 +100,16 @@ const noSave = () => Promise.resolve();
 
 Deno.test("completeHandshake accepts bare code and callback URL", async () => {
   const bare = fakeApi();
-  await startHandshake(bare.api);
-  const one = await completeHandshake("ab12cd", bare.api, noSave);
+  await startHandshake("t-connect-3", bare.api);
+  const one = await completeHandshake("t-connect-3", "ab12cd", bare.api, noSave);
   assert(one.ok && one.name === "Ada Lovelace", "bare path signs in");
   assert(bare.seenVerifiers[0] === "ab12cd", "bare verifier passed through");
-  assert(currentSignedInAs() === "Ada Lovelace", "sign-in state set");
+  assert(currentSignedInAs("t-connect-3") === "Ada Lovelace", "sign-in state set");
 
   const cb = fakeApi();
-  await startHandshake(cb.api);
+  await startHandshake("t-connect-3b", cb.api);
   const two = await completeHandshake(
+    "t-connect-3b",
     "https://example.test/cb?oauth_token=req&oauth_verifier=xy99z",
     cb.api,
     noSave,
@@ -119,9 +120,9 @@ Deno.test("completeHandshake accepts bare code and callback URL", async () => {
 
 Deno.test("completeHandshake caches the token through save", async () => {
   const { api } = fakeApi();
-  await startHandshake(api);
+  await startHandshake("t-connect-4", api);
   let saved: AccessToken | null = null;
-  const out = await completeHandshake("ab12cd", api, (t) => {
+  const out = await completeHandshake("t-connect-4", "ab12cd", api, (t) => {
     saved = t;
     return Promise.resolve();
   });
@@ -132,19 +133,72 @@ Deno.test("completeHandshake caches the token through save", async () => {
 
 Deno.test("completeHandshake without a started handshake errors cleanly", async () => {
   const { api } = fakeApi();
-  const error = assertFails(await completeHandshake("ab12cd", api), "asks to restart");
+  const error = assertFails(await completeHandshake("t-connect-5", "ab12cd", api), "asks to restart");
   assert(error.includes("not ready"), "asks to restart");
 });
 
 Deno.test("completeHandshake failure stays generic and keeps the link", async () => {
   const { api } = fakeApi({ failExchange: true });
-  await startHandshake(api);
-  const error = assertFails(await completeHandshake("wrong", api), "exchange failed");
+  await startHandshake("t-connect-6", api);
+  const error = assertFails(await completeHandshake("t-connect-6", "wrong", api), "exchange failed");
   assert(error.includes("did not accept the verifier"), "generic error");
   assert(
     !error.includes("hushhush") && !error.includes("wrong"),
     "no raw error or verifier",
   );
-  assert(currentAuthorizeUrl() !== null, "link kept for a retry");
-  assert(currentSignedInAs() === null, "no sign-in on failure");
+  assert(currentAuthorizeUrl("t-connect-6") !== null, "link kept for a retry");
+  assert(currentSignedInAs("t-connect-6") === null, "no sign-in on failure");
+});
+
+Deno.test("the handshake started under A is invisible to B", async () => {
+  const sidA = "iso-handshake-A";
+  const sidB = "iso-handshake-B";
+  const apiFor = (url: string): HandshakeApi => ({
+    getAuthorizeUrl: () =>
+      Promise.resolve({
+        url,
+        requestToken: { oauth_token: "req-" + url, oauth_token_secret: "sec" },
+      }),
+    getAccessToken: () =>
+      Promise.resolve({ oauth_token: "at-ok", oauth_token_secret: "ats-ok" }),
+    getCurrentUser: () => Promise.resolve({ first_name: "Ada", last_name: "Lovelace" }),
+  });
+  const outA = await startHandshake(sidA, apiFor("https://example.test/a"));
+  assert(outA.ok, "A starts");
+  assert(currentAuthorizeUrl(sidA) === "https://example.test/a", "A keeps its link");
+  assert(currentAuthorizeUrl(sidB) === null, "B sees no link before it starts");
+  const outB = await startHandshake(sidB, apiFor("https://example.test/b"));
+  assert(outB.ok, "B starts");
+  assert(currentAuthorizeUrl(sidB) === "https://example.test/b", "B keeps its link");
+  assert(currentAuthorizeUrl(sidA) === "https://example.test/a", "A keeps its own link");
+  const done = await completeHandshake(sidA, "code-a", apiFor("https://example.test/a"), noSave);
+  assert(done.ok, "A finishes");
+  assert(currentSignedInAs(sidA) === "Ada Lovelace", "A signs in");
+  assert(currentSignedInAs(sidB) === null, "B stays signed out");
+  assert(currentAuthorizeUrl(sidA) === null, "A link clears after use");
+  assert(currentAuthorizeUrl(sidB) === "https://example.test/b", "B link survives");
+});
+
+// The handshake belongs to one browser. The approve screen must read it
+// under the session that started it, or every live link hides behind the
+// not-ready branch. That branch must also never offer Next, because it
+// draws no verifier box for Next to validate.
+Deno.test("the approve screen shows the link only to the browser that started it", async () => {
+  const { api } = fakeApi();
+  const { settingsSteps } = await import("../wizards/expense-split/settings.ts");
+  await startHandshake("sid-A", api);
+  const connect = settingsSteps()[1] as (
+    m: Map<string, string[]>,
+    ctx?: { sessionId?: string },
+  ) => { nodes: unknown[] };
+
+  const mine = JSON.stringify(connect(new Map(), { sessionId: "sid-A" }).nodes);
+  assert(mine.includes("example.test/authorize"), "starter sees the approve link");
+  assert(mine.includes("sw-verifier"), "starter sees the verifier box");
+
+  const other = JSON.stringify(connect(new Map(), { sessionId: "sid-B" }).nodes);
+  assert(other.includes("No approval is waiting"), "other browser sees the plain line");
+  assert(!other.includes("sw-verifier"), "other browser sees no verifier box");
+  assert(other.includes("goto:settings"), "the dead end offers a way back to settings");
+  assert(!other.includes('"next"'), "the dead end offers no Next to validate");
 });

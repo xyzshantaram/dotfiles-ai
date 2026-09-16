@@ -19,7 +19,11 @@ import { buildAggregateSummary, orderFingerprint } from "../../src/render.ts";
 import { formatDayISO, formatMoney, parseDate } from "../../src/common.ts";
 import { isDryMap, listRunsSync, runHint } from "../../src/runstate.ts";
 import { dryBox, dryNote } from "./dry.ts";
-import { session, SHARE_SOURCE } from "./push-engine.ts";
+import { pushSessionFor, SHARE_SOURCE } from "./push-engine.ts";
+import {
+  sidOf,
+} from "../../src/sessionstore.ts";
+import type { WizardCtx } from "../../wizardkit/mod.ts";
 
 // Choices for the source stage: an assigned run, a split file, or a
 // friend's share link, as pusher.ts reads them.
@@ -27,15 +31,15 @@ const SOURCE_CHOICES = ["Assigned run", "Split JSON file", SHARE_SOURCE];
 
 // One line naming the Splitwise access state for the current session.
 // Null when nothing is known yet.
-export function accessNote(): Node | null {
-  if (session.mode === "live") {
-    return markdown("Signed in as " + session.signedInAs + ".");
+export function accessNote(sessionId: string): Node | null {
+  const live = pushSessionFor(sidOf({ sessionId }));
+  if (live.mode === "live") {
+    return markdown("Signed in as " + live.signedInAs + ".");
   }
-  if (session.mode === "aggregate") {
-    const fallback =
-      "No Splitwise access is configured. The push writes one summary file instead.";
-    if (session.setupError !== null) {
-      return markdown(session.setupError + "\n\n" + fallback);
+  if (live.mode === "aggregate") {
+    const fallback = "No Splitwise access is configured. The push writes one summary file instead.";
+    if (live.setupError !== null) {
+      return markdown(live.setupError + "\n\n" + fallback);
     }
     return markdown(fallback);
   }
@@ -56,9 +60,7 @@ export function sourceStep(m: Map<string, string[]>, prefillRunId: string): Step
       nodes.push(markdown("No assigned run exists yet. The split stage creates one."));
       nodes.push(textEntry("Other run", "run-id-other", ""));
     } else {
-      const start = assigned.some((run) => run.id === prefillRunId)
-        ? prefillRunId
-        : assigned[0].id;
+      const start = assigned.some((run) => run.id === prefillRunId) ? prefillRunId : assigned[0].id;
       nodes.push(
         radio(
           "Run",
@@ -97,20 +99,21 @@ export function sourceStep(m: Map<string, string[]>, prefillRunId: string): Step
 
 // Splitwise access status, from pusher.ts splitwise stage. Shows the
 // signed-in name in live mode, or the no-access fallback note.
-function setupStep(): Step {
+function setupStep(_m?: Map<string, string[]>, ctx?: WizardCtx): Step {
+  const live = pushSessionFor(sidOf(ctx));
   const nodes = [];
-  if (session.shareNote !== null) {
-    nodes.push(markdown(session.shareNote));
+  if (live.shareNote !== null) {
+    nodes.push(markdown(live.shareNote));
   }
-  if (session.mode === "live") {
+  if (live.mode === "live") {
     nodes.push(markdown(
-      "Signed in as " + session.signedInAs + ".\n\n" +
+      "Signed in as " + live.signedInAs + ".\n\n" +
         "Each person maps to one Splitwise member. Push target currency is " +
-        session.currency + ".",
+        live.currency + ".",
     ));
-  } else if (session.mode === "aggregate") {
-    if (session.setupError !== null) {
-      nodes.push(markdown(session.setupError));
+  } else if (live.mode === "aggregate") {
+    if (live.setupError !== null) {
+      nodes.push(markdown(live.setupError));
     }
     nodes.push(markdown(
       "No Splitwise access is configured.\n\n" +
@@ -119,7 +122,7 @@ function setupStep(): Step {
     ));
   } else {
     nodes.push(markdown(
-      session.setupError ??
+      live.setupError ??
         "Pick a source in the step before this one, then come back.",
     ));
   }
@@ -143,14 +146,15 @@ function setupStep(): Step {
 // Splitwise matches as a radio plus a hand-typed id entry. Unmatched
 // people show the carried no-match copy plus the id entry. The posted
 // answers go through resolveNamePicks in the engine.
-function namePickStep(): Step {
+function namePickStep(_m?: Map<string, string[]>, ctx?: WizardCtx): Step {
+  const live = pushSessionFor(sidOf(ctx));
   const nodes = [];
-  if (session.namePicks.length === 0) {
+  if (live.namePicks.length === 0) {
     nodes.push(markdown(
       "Every person maps to one Splitwise member. Nothing to pick here.",
     ));
   }
-  for (const pick of session.namePicks) {
+  for (const pick of live.namePicks) {
     if (pick.candidates.length > 0) {
       nodes.push(markdown(
         "More than one Splitwise member matches " + pick.person + ". Pick one:",
@@ -195,11 +199,13 @@ function namePickStep(): Step {
 }
 
 // Group picker, from pusher.ts group select. Live mode only.
-function groupStep(): Step {
+function groupStep(_m?: Map<string, string[]>, ctx?: WizardCtx): Step {
+  const sessionId = sidOf(ctx);
+  const live = pushSessionFor(sessionId);
   const nodes = [];
-  const note = accessNote();
+  const note = accessNote(sessionId);
   if (note !== null) nodes.push(note);
-  if (session.mode !== "live") {
+  if (live.mode !== "live") {
     nodes.push(markdown("Splitwise is not connected, so no group pick is needed."));
   } else {
     nodes.push(
@@ -208,7 +214,7 @@ function groupStep(): Step {
         "push-group",
         [
           { value: "0", hint: "No group, a plain expense" },
-          ...session.groupChoices.map((group) => ({
+          ...live.groupChoices.map((group) => ({
             value: String(group.id),
             hint: group.name + " (id " + group.id + ")",
           })),
@@ -238,7 +244,8 @@ function groupStep(): Step {
 // Push/Skip/Stop choice per order, and the choices drive the real
 // push outcomes. A ticked dry box marks the answers, so the submit
 // runs the dry plan instead of the live push.
-function confirmStep(m?: Map<string, string[]>): Step {
+function confirmStep(m?: Map<string, string[]>, ctx?: WizardCtx): Step {
+  const live = pushSessionFor(sidOf(ctx));
   const dry = m !== undefined && isDryMap(m);
   const nodes = [];
   if (dry) {
@@ -246,30 +253,30 @@ function confirmStep(m?: Map<string, string[]>): Step {
       "Dry run is on. Press Next to see the plan. Nothing will be written.",
     ));
   }
-  if (session.groups.length === 0 && session.droppedByCutoff === 0) {
+  if (live.groups.length === 0 && live.droppedByCutoff === 0) {
     nodes.push(markdown(
       "No orders reached this step. Check the source and cutoff steps.",
     ));
   } else {
-    if (session.droppedByCutoff > 0) {
+    if (live.droppedByCutoff > 0) {
       nodes.push(markdown(
-        "Cutoff " + session.cutoff + " leaves out " + session.droppedByCutoff +
+        "Cutoff " + live.cutoff + " leaves out " + live.droppedByCutoff +
           " later order(s).",
       ));
     }
-    for (const order of session.groups) {
+    for (const order of live.groups) {
       const oid = order[0].order_id ?? "unknown";
       const total = order.reduce((sum, item) => sum + item.price, 0);
-      if (session.dupes.has(orderFingerprint(order))) {
+      if (live.dupes.has(orderFingerprint(order))) {
         nodes.push(markdown(
-          "Order " + oid + " (total " + formatMoney(total, session.currency) +
+          "Order " + oid + " (total " + formatMoney(total, live.currency) +
             ") — already sent to Splitwise. It skips.",
         ));
         continue;
       }
       nodes.push(
         radio(
-          "Order " + oid + " (total " + formatMoney(total, session.currency) + ")",
+          "Order " + oid + " (total " + formatMoney(total, live.currency) + ")",
           "order-" + oid,
           ["Push", "Skip", "Stop"],
         ),
@@ -299,8 +306,9 @@ function confirmStep(m?: Map<string, string[]>): Step {
 
 // Summary text for the aggregate report step. The written file wins,
 // so the box matches the file. A rebuild covers a missing file.
-function aggregateText(): string | null {
-  const file = session.outcome?.aggregateFile ?? null;
+function aggregateText(sessionId: string): string | null {
+  const live = pushSessionFor(sidOf({ sessionId }));
+  const file = live.outcome?.aggregateFile ?? null;
   if (file !== null) {
     try {
       const text = Deno.readTextFileSync(file);
@@ -311,11 +319,11 @@ function aggregateText(): string | null {
   }
   try {
     return buildAggregateSummary(
-      session.groups,
-      session.people,
-      session.payer,
-      session.settlements,
-      session.currency + " ",
+      live.groups,
+      live.people,
+      live.payer,
+      live.settlements,
+      live.currency + " ",
     );
   } catch {
     return null;
@@ -324,8 +332,10 @@ function aggregateText(): string | null {
 
 // Report step. Shows the real counts from the engine outcome, not the
 // raw radio counts. A dry outcome leads with its plan banner.
-function reportStep(): Step {
-  const outcome = session.outcome;
+function reportStep(_m?: Map<string, string[]>, ctx?: WizardCtx): Step {
+  const sessionId = sidOf(ctx);
+  const live = pushSessionFor(sessionId);
+  const outcome = live.outcome;
   const nodes = [];
   if (outcome === null) {
     nodes.push(markdown("Nothing is pushed yet. Walk the steps before this one."));
@@ -351,7 +361,7 @@ function reportStep(): Step {
       lines.push("You stopped early. The remaining orders stay ready for another push.");
     }
     if (outcome.archived) {
-      lines.push("Run " + (session.runId ?? "") + " is archived.");
+      lines.push("Run " + (live.runId ?? "") + " is archived.");
     }
     if (outcome.aggregateFile !== null) {
       lines.push("Summary file written to " + outcome.aggregateFile + ".");
@@ -361,11 +371,11 @@ function reportStep(): Step {
     }
     lines.push(
       (outcome.dry ? "Total that would push: " : "Total pushed amount: ") +
-        formatMoney(outcome.totalRs, session.currency) + ".",
+        formatMoney(outcome.totalRs, live.currency) + ".",
     );
     nodes.push(markdown(lines.join("\n\n")));
-    if (session.mode === "aggregate") {
-      const text = aggregateText();
+    if (live.mode === "aggregate") {
+      const text = aggregateText(sessionId);
       if (text !== null) {
         nodes.push(
           textarea("Summary", "aggregate-summary", {
@@ -415,14 +425,16 @@ export function pushSteps(): Array<Step | StepFn> {
 // Cutoff step. The field starts at the newest order date in the
 // current session, formatted as YYYY-MM-DD. A typed value wins over
 // the prefill, and a blank field means no cutoff.
-function cutoffStep(m: Map<string, string[]>): Step {
+function cutoffStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
+  const sessionId = sidOf(ctx);
+  const live = pushSessionFor(sessionId);
   const nodes = [];
-  const note = accessNote();
+  const note = accessNote(sessionId);
   if (note !== null) nodes.push(note);
   let prefill = m.get("cutoff")?.[0] ?? "";
   if (prefill === "") {
     let newest: Date | null = null;
-    for (const order of session.groups) {
+    for (const order of live.groups) {
       const date = parseDate(order[0].date);
       if (date && (newest === null || date.getTime() > newest.getTime())) {
         newest = date;

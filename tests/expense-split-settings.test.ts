@@ -165,3 +165,38 @@ Deno.test("saved manual usage opens settings on the first tab", async () => {
   }
   assert(tabs.selected === 0, "saved manual usage picks the first tab");
 });
+
+Deno.test("the answers map and the onboarding flag stay apart for A and B", async () => {
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "iso-hub-" });
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  const sidA = "iso-hub-A";
+  const sidB = "iso-hub-B";
+  // The manual screen used to be skipped by a routing jump checked
+  // here. The step states that condition itself now, so this test keeps
+  // only the onboarding half. The gather suite covers both the manual
+  // run isolation and the step condition.
+  // Onboarding stays apart: A walks start-usage, then its settings
+  // post returns to the menu. B never started, so its settings post
+  // saves and stays.
+  const usageA = await onSubmit(
+    { usage: ["By myself, push manually"] },
+    "start-usage",
+    "",
+    { sessionId: sidA },
+  );
+  assert(usageA?.goto === "settings", "A enters onboarding");
+  const doneA = await onSubmit(
+    { currency: ["USD"] },
+    "settings",
+    "",
+    { sessionId: sidA },
+  );
+  assert(doneA?.goto === "menu", "A leaves onboarding to the menu");
+  const doneB = await onSubmit(
+    { currency: ["USD"] },
+    "settings",
+    "",
+    { sessionId: sidB },
+  );
+  assert(doneB === undefined || doneB.goto === undefined, "B never entered onboarding");
+});

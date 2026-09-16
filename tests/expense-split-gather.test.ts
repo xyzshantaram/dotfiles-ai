@@ -3,7 +3,13 @@
 // proves the Zomato phone and OTP fields are gone.
 
 import { createWizard } from "../wizardkit/mod.ts";
-import { gatherSteps, manualPicked, manualRowProblems, manualRows, persistManualRun } from "../wizards/expense-split/gather.ts";
+import {
+  gatherSteps,
+  manualPicked,
+  manualRowProblems,
+  manualRows,
+  persistManualRun,
+} from "../wizards/expense-split/gather.ts";
 import { DEFAULT_LOCATION } from "../src/zomato.ts";
 import { splitSteps } from "../wizards/expense-split/split.ts";
 import { runsDir } from "../src/runstate.ts";
@@ -35,6 +41,11 @@ async function manualRunNames(): Promise<string[]> {
 function assertMatch(value: string, re: RegExp): void {
   if (!re.test(value)) throw new Error(value + " fails " + String(re));
 }
+// One cookie jar per wizard handle. The toolkit now keys its state by a
+// wizard-sid cookie, so a walk that forgets the cookie starts a new
+// session on every post and loses every earlier answer.
+const jars = new WeakMap<(req: Request) => Promise<Response>, string>();
+
 async function post(
   handle: (req: Request) => Promise<Response>,
   fields: Record<string, string | string[]>,
@@ -45,10 +56,24 @@ async function post(
       form.append(key, v);
     }
   }
+  const headers = new Headers();
+  const held = jars.get(handle);
+  if (held !== undefined) headers.set("cookie", held);
   const res = await handle(
-    new Request("http://x/step", { method: "POST", body: form }),
+    new Request("http://x/step", { method: "POST", body: form, headers }),
   );
+  const set = res.headers.get("set-cookie");
+  if (set !== null) jars.set(handle, set.split(";")[0]);
   return await res.text();
+}
+
+// Session id the wizard handle owns in its cookie jar. Falls back to
+// the default session before the first response sets a cookie.
+function jarSid(handle: (req: Request) => Promise<Response>): string {
+  const held = jars.get(handle);
+  if (held === undefined) return "default";
+  const found = held.match(/wizard-sid=([^;]+)/);
+  return found ? decodeURIComponent(found[1]) : "default";
 }
 
 Deno.test("manual expenses become a run and split end to end", async () => {
@@ -86,8 +111,10 @@ Deno.test("manual expenses become a run and split end to end", async () => {
   assert(manualPicked(rowMap), "manualPicked missed Manual");
   assert(!manualPicked(new Map([["platforms", ["Zepto"]]])), "manualPicked fired on Zepto");
 
-  // The write happens here, not during render.
-  persistManualRun(rowMap);
+  // The write happens here, not during render. The wizard handle owns
+  // its own browser session id in the cookie jar, so the save uses
+  // that same id and the later review render reads it back.
+  persistManualRun(jarSid(handle), rowMap);
 
   // The run exists with the gathered shape.
   const ids = await manualRunNames();
@@ -114,7 +141,7 @@ Deno.test("manual expenses become a run and split end to end", async () => {
     item: ["Chips", "Apples"],
     amount: ["120", "80"],
   });
-  persistManualRun(rowMap);
+  persistManualRun(jarSid(handle), rowMap);
   const again = await manualRunNames();
   if (again.length !== 1) {
     throw new Error("duplicate manual runs: " + again.join(", "));
@@ -199,6 +226,7 @@ Deno.test("manual step render writes no run until persistManualRun runs", async 
     if (body.includes("Saved")) throw new Error("render still names a saved run");
     // Direct persist writes exactly one run with one order.
     persistManualRun(
+      "t-gather-1",
       new Map([
         ["store", ["Kirana Store"]],
         ["date", ["2026-01-02"]],
@@ -238,7 +266,7 @@ function assertEqualsRunShape(got: unknown, want: string[]): void {
   }
 }
 
-Deno.test("zomato step has no dead phone or otp fields", async () => {
+Deno.test("zomato step offers the live login fields, not the dead ones", async () => {
   const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "f5-zom-" });
   Deno.env.set("SPLIT_UTILS_STATE", root);
   const handle = createWizard({ title: "F5 zomato", steps: gatherSteps() });
@@ -674,5 +702,277 @@ Deno.test("zomato city entries prefill the default city values", async () => {
     if (prev === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
     else Deno.env.set("SPLIT_UTILS_STATE", prev);
     await cleanup(root);
+  }
+});
+
+Deno.test("manual rows saved under session A do not appear for session B", async () => {
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "iso-manual-" });
+  const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    const sidA = "iso-manual-A";
+    const sidB = "iso-manual-B";
+    persistManualRun(sidA, new Map([
+      ["store", ["Store A"]],
+      ["date", ["2026-01-02"]],
+      ["item", ["Chips"]],
+      ["amount", ["111"]],
+      ["range", ["30"]],
+    ]));
+    persistManualRun(sidB, new Map([
+      ["store", ["Store B1", "Store B2"]],
+      ["date", ["2026-01-02", "2026-01-03"]],
+      ["item", ["Chips", "Apples"]],
+      ["amount", ["50", "60"]],
+      ["range", ["30"]],
+    ]));
+    const entries = gatherSteps();
+    const reviewEntry = entries[4];
+    if (typeof reviewEntry !== "function") throw new Error("review step is not a function");
+    const show = (sid: string) => {
+      const made = (reviewEntry as (
+        m: Map<string, string[]>,
+        ctx?: { sessionId: string },
+      ) => { nodes: unknown[] })(
+        new Map([["platforms", ["Manual"]]]),
+        { sessionId: sid },
+      );
+      return fullStepText(made);
+    };
+    const bodyA = show(sidA);
+    const bodyB = show(sidB);
+    if (!bodyA.includes("1 orders saved")) throw new Error("A misses its single order: " + bodyA);
+    if (!bodyB.includes("2 orders saved")) throw new Error("B misses its two orders: " + bodyB);
+    const idA = bodyA.match(/run (\S+?)\./)?.[1] ?? "";
+    const idB = bodyB.match(/run (\S+?)\./)?.[1] ?? "";
+    if (idA === "" || idB === "") throw new Error("a review names no run id");
+    if (idA === idB) throw new Error("both sessions share one run id");
+    // The trailing period pins the full id: B's id extends A's prefix
+    // with a counter suffix, so a bare substring check misfires.
+    if (bodyA.includes(idB + ".")) throw new Error("A leaks the B run id");
+    if (bodyB.includes(idA + ".")) throw new Error("B leaks the A run id");
+  } finally {
+    if (prev === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
+    else Deno.env.set("SPLIT_UTILS_STATE", prev);
+    await cleanup(root);
+  }
+});
+
+// Write one pick run with meta plus orders under the live runs dir.
+function writePickRun(id: string, platforms: string[], orders: unknown[]): string {
+  const dir = runsDir() + "/" + id;
+  Deno.mkdirSync(dir, { recursive: true });
+  Deno.writeTextFileSync(
+    dir + "/meta.json",
+    JSON.stringify({
+      id,
+      label: "shop " + id,
+      createdAt: "2026-09-08T09:00:00Z",
+      platforms,
+      rangeDays: 7,
+      status: "gathered",
+    }) + "\n",
+  );
+  Deno.writeTextFileSync(dir + "/orders.json", JSON.stringify(orders) + "\n");
+  return dir;
+}
+
+// One pick order with a fixed shape.
+function pickOrder(platform: string, date: string, paid: number, names: string[]) {
+  return {
+    id: platform + "-" + date,
+    platform,
+    date,
+    paid,
+    items: names.map((name) => ({ name, price: 10, quantity: 1 })),
+    fees: { delivery: 0, packaging: 0 },
+  };
+}
+
+// Build the gather-pick step for one answers map plus session id.
+function pickStepFor(m: Map<string, string[]>, sid: string): { id: string; nodes: unknown[]; when?: (m: Map<string, string[]>) => boolean } {
+  const entries = gatherSteps();
+  const entry = entries[entries.length - 1];
+  if (typeof entry !== "function") throw new Error("pick step is not a function");
+  return (entry as (m: Map<string, string[]>, ctx?: { sessionId: string }) => { id: string; nodes: unknown[]; when?: (m: Map<string, string[]>) => boolean })(m, { sessionId: sid });
+}
+
+// Checkbox node named pick in one step.
+function pickBox(step: { nodes: unknown[] }): Record<string, unknown> {
+  for (const node of step.nodes) {
+    const rec = node as Record<string, unknown>;
+    if (rec["kind"] === "checkbox" && rec["name"] === "pick") return rec;
+  }
+  throw new Error("no checkbox named pick");
+}
+
+Deno.test("pick step lists one option per order with nothing ticked", async () => {
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-list-" });
+  const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    writePickRun("pick-r1", ["zepto"], [
+      pickOrder("zepto", "2026-09-08", 530, ["A", "B", "C", "D"]),
+      pickOrder("zepto", "2026-09-09", 120, ["E"]),
+      pickOrder("blinkit", "2026-09-10", 80, ["F", "G"]),
+    ]);
+    const found = pickStepFor(new Map([["platforms", ["Zepto"]]]), "t-pick-list-1");
+    if (found.id !== "gather-pick") throw new Error("wrong step id: " + found.id);
+    const box = pickBox(found);
+    const options = box["options"] as Array<Record<string, unknown>>;
+    const ticked = box["ticked"] as string[];
+    if (options.length !== 3) throw new Error("expected 3 options, got " + options.length);
+    if (ticked.length !== 0) throw new Error("a row starts ticked");
+    const labels = options.map((o) => String(o["label"] ?? ""));
+    const values = options.map((o) => String(o["value"] ?? ""));
+    if (JSON.stringify(values) !== JSON.stringify(["0", "1", "2"])) {
+      throw new Error("option values wrong: " + JSON.stringify(values));
+    }
+    if (!labels.includes("Zepto · 2026-09-08 · 530.00 · 4 items")) {
+      throw new Error("first label wrong: " + JSON.stringify(labels));
+    }
+  } finally {
+    if (prev === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
+    else Deno.env.set("SPLIT_UTILS_STATE", prev);
+    await cleanup(root);
+  }
+});
+
+Deno.test("pick next with nothing ticked returns the tick error", async () => {
+  const { onSubmit } = await import("../wizards/expense-split.ts");
+  const out = await onSubmit({}, "gather-pick", "next", { sessionId: "t-pick-err-1" });
+  if (JSON.stringify(out?.errors ?? null) !== JSON.stringify(["Tick at least one order to split."])) {
+    throw new Error("wrong errors: " + JSON.stringify(out));
+  }
+});
+
+Deno.test("pick next with two orders ticked writes the indexes", async () => {
+  const { onSubmit } = await import("../wizards/expense-split.ts");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-save-" });
+  const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    const sid = "t-pick-save-1";
+    writePickRun("pick-r2", ["zepto"], [
+      pickOrder("zepto", "2026-09-08", 530, ["A"]),
+      pickOrder("zepto", "2026-09-09", 120, ["B"]),
+      pickOrder("zepto", "2026-09-10", 80, ["C"]),
+    ]);
+    await onSubmit({ platforms: ["zepto"] }, "gather-platforms", "next", { sessionId: sid });
+    const out = await onSubmit({ pick: ["2", "0"] }, "gather-pick", "next", { sessionId: sid });
+    if (out?.errors) throw new Error("expected no errors, got " + JSON.stringify(out.errors));
+    const meta = JSON.parse(await Deno.readTextFile(runsDir() + "/pick-r2/meta.json"));
+    if (JSON.stringify(meta.picked) !== JSON.stringify([0, 2])) {
+      throw new Error("picked wrong: " + JSON.stringify(meta.picked));
+    }
+  } finally {
+    if (prev === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
+    else Deno.env.set("SPLIT_UTILS_STATE", prev);
+    await cleanup(root);
+  }
+});
+
+Deno.test("pick-all re-renders the same step with every option ticked", async () => {
+  const { onSubmit } = await import("../wizards/expense-split.ts");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-all-" });
+  const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    const sid = "t-pick-all-1";
+    writePickRun("pick-r3", ["zepto"], [
+      pickOrder("zepto", "2026-09-08", 530, ["A"]),
+      pickOrder("zepto", "2026-09-09", 120, ["B"]),
+    ]);
+    await onSubmit({ platforms: ["zepto"] }, "gather-platforms", "next", { sessionId: sid });
+    const out = await onSubmit({}, "gather-pick", "pick-all", { sessionId: sid });
+    if (out?.goto !== "gather-pick") throw new Error("pick-all misses the re-render: " + JSON.stringify(out));
+    const found = pickStepFor(new Map([["platforms", ["zepto"]]]), sid);
+    const ticked = pickBox(found)["ticked"] as string[];
+    if (JSON.stringify(ticked) !== JSON.stringify(["0", "1"])) {
+      throw new Error("pick-all ticks wrong: " + JSON.stringify(ticked));
+    }
+    const meta = JSON.parse(await Deno.readTextFile(runsDir() + "/pick-r3/meta.json"));
+    if ("picked" in meta) throw new Error("pick-all saved the pick");
+  } finally {
+    if (prev === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
+    else Deno.env.set("SPLIT_UTILS_STATE", prev);
+    await cleanup(root);
+  }
+});
+
+Deno.test("pick-none re-renders with nothing ticked", async () => {
+  const { onSubmit } = await import("../wizards/expense-split.ts");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-none-" });
+  const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    const sid = "t-pick-none-1";
+    writePickRun("pick-r4", ["zepto"], [
+      pickOrder("zepto", "2026-09-08", 530, ["A"]),
+      pickOrder("zepto", "2026-09-09", 120, ["B"]),
+    ]);
+    await onSubmit({ platforms: ["zepto"] }, "gather-platforms", "next", { sessionId: sid });
+    const out = await onSubmit({ pick: ["0", "1"] }, "gather-pick", "pick-none", { sessionId: sid });
+    if (out?.goto !== "gather-pick") throw new Error("pick-none misses the re-render: " + JSON.stringify(out));
+    const found = pickStepFor(
+      new Map([["platforms", ["zepto"]], ["pick", ["0", "1"]]]),
+      sid,
+    );
+    const ticked = pickBox(found)["ticked"] as string[];
+    if (ticked.length !== 0) throw new Error("pick-none leaves a tick: " + JSON.stringify(ticked));
+  } finally {
+    if (prev === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
+    else Deno.env.set("SPLIT_UTILS_STATE", prev);
+    await cleanup(root);
+  }
+});
+
+Deno.test("pick step is skipped when the dry run box is ticked", () => {
+  const live = pickStepFor(new Map([["platforms", ["Zepto"]]]), "t-pick-dry-1");
+  if (live.id !== "gather-pick") throw new Error("pick step misses its id");
+  if (typeof live.when !== "function") throw new Error("pick step misses its condition");
+  if (live.when(new Map([["dry", ["dry"]]])) !== false) {
+    throw new Error("dry run does not skip the pick step");
+  }
+  if (live.when(new Map()) !== true) throw new Error("live run skips the pick step");
+});
+
+Deno.test("sign in action for zepto carries the login flag", async () => {
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-login-" });
+  const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    const nodes = accountsNodes(new Map([["platforms", ["Zepto"]]]));
+    const command = actionCommand(nodes, "Sign in to Zepto");
+    if (!command.includes("--login=zepto")) {
+      throw new Error("sign in misses the login flag: " + JSON.stringify(command));
+    }
+    if (command.some((part) => part.startsWith("--platforms="))) {
+      throw new Error("sign in still carries a platforms flag: " + JSON.stringify(command));
+    }
+  } finally {
+    if (prev === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
+    else Deno.env.set("SPLIT_UTILS_STATE", prev);
+    await cleanup(root);
+  }
+});
+
+// The manual screen states its own condition now. A jump from the
+// accounts step used to skip it, which kept the rule in the submit hook
+// rather than on the step it governs.
+Deno.test("the manual screen applies only when Manual is picked", () => {
+  const built = gatherSteps().map((entry) =>
+    typeof entry === "function" ? entry(new Map([["platforms", ["Manual"]]])) : entry
+  );
+  const manual = built.find((s) => (s as { id: string }).id === "gather-manual") as
+    | { when?: (m: Map<string, string[]>) => boolean }
+    | undefined;
+  if (manual === undefined) throw new Error("no gather-manual step");
+  if (manual.when === undefined) throw new Error("gather-manual carries no condition");
+  if (manual.when(new Map([["platforms", ["Manual"]]])) !== true) {
+    throw new Error("the screen must apply when Manual is picked");
+  }
+  if (manual.when(new Map([["platforms", ["Zepto"]]])) !== false) {
+    throw new Error("the screen must not apply without Manual");
   }
 });

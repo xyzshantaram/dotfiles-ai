@@ -2,7 +2,7 @@
 // Loads a real run, splits one flat line per post, and previews the export.
 
 import {
-  answers,
+  answers as showAnswers,
   buttons,
   checkbox,
   markdown,
@@ -47,9 +47,14 @@ import {
   scaleRepeat,
   singleShare,
 } from "../../src/splitengine.ts";
-import { isDryMap, listRunsSync, runHint, type RunMeta, runsDir } from "../../src/runstate.ts";
+import { isDryMap, listRunsSync, readRunOrders, runHint, type RunMeta, runsDir } from "../../src/runstate.ts";
+import { answer, answers } from "../../src/answers.ts";
+import {
+  sessionStore,
+  sidOf,
+} from "../../src/sessionstore.ts";
+import type { WizardCtx } from "../../wizardkit/mod.ts";
 import { dryBox, dryNote } from "./dry.ts";
-import type { Order } from "../../src/common.ts";
 
 // Split modes the radio offers, with the engine type each one stores.
 const MODES = [
@@ -82,8 +87,23 @@ interface Session {
   saveError: string;
 }
 
-// Session for the run named in the answers. One wizard run at a time.
-let session: Session | null = null;
+// Live split sessions, one per browser session. Each doc is the source
+// of truth between posts; writeSplitState mirrors it to disk after each
+// commit. The store replaces the module level session value, which two
+// browsers used to share.
+const splitSessions = sessionStore((): {
+  current: Session | null;
+} => ({ current: null }));
+
+// Read the live session for one session id.
+function sessionFor(sessionId: string): Session | null {
+  return splitSessions.for(sidOf({ sessionId })).current;
+}
+
+// Store the live session for one session id.
+function setSessionFor(sessionId: string, value: Session | null): void {
+  splitSessions.for(sidOf({ sessionId })).current = value;
+}
 
 // Engine type for a radio label.
 function modeType(label: string): string {
@@ -95,27 +115,33 @@ function modeLabel(type: string): string {
   return MODES.find((mode) => mode.type === type)?.label ?? "Equal";
 }
 
-// Currency label from settings.json. Loads once at startup, and tests
-// can reload it after they change SPLIT_UTILS_STATE.
-let currency = "INR";
+// Currency labels, one per browser session. The store replaces the
+// module level currency value, which two browsers used to share. Loads
+// once at startup for the default session, and tests can reload it
+// after they change SPLIT_UTILS_STATE.
+const currencies = sessionStore((): { value: string } => ({ value: "INR" }));
 
-// Read the currency label from settings. Falls back to INR.
-export async function loadCurrency(): Promise<string> {
-  try {
-    currency = (await loadSettings()).currency;
-  } catch {
-    currency = "INR";
-  }
-  return currency;
+// Read the currency label for one session id.
+function currencyFor(sessionId: string): string {
+  return currencies.for(sidOf({ sessionId })).value;
 }
 
-void loadCurrency();
+// Read the currency label from settings. Falls back to INR.
+export async function loadCurrency(sessionId: string): Promise<string> {
+  const sid = sidOf({ sessionId });
+  try {
+    currencies.for(sid).value = (await loadSettings()).currency;
+  } catch {
+    currencies.for(sid).value = "INR";
+  }
+  return currencies.for(sid).value;
+}
 
 // People from the people step, blanks dropped. The step posts a
 // dynamic person list; the three fixed keys stay for old drafts.
 export function collectedPeople(m: Map<string, string[]>): string[] {
   const names = [
-    ...(m.get("person") ?? []),
+    ...(answers(m, "person")),
     ...["person-1", "person-2", "person-3"].map(
       (key) => m.get(key)?.[0] ?? "",
     ),
@@ -126,23 +152,6 @@ export function collectedPeople(m: Map<string, string[]>): string[] {
     if (name.length > 0 && !out.includes(name)) out.push(name);
   }
   return out;
-}
-
-// Read orders.json from a run dir path or a run id.
-function readOrders(run: string): Order[] {
-  const clean = run.replace(/\/+$/, "");
-  const candidates = [
-    clean + "/orders.json",
-    runsDir() + "/" + clean + "/orders.json",
-  ];
-  for (const path of candidates) {
-    try {
-      return JSON.parse(Deno.readTextFileSync(path)) as Order[];
-    } catch {
-      // Try the next candidate.
-    }
-  }
-  throw new Error("no orders.json under " + run);
 }
 
 // True when a saved doc holds real progress worth a resume question.
@@ -169,7 +178,7 @@ function resolveRunDir(run: string): string {
 // Load one run into a live session. A saved splitstate wins over a
 // fresh doc, so a mid-way run resumes with its assignments intact.
 function loadSession(runDir: string, people: string[], payer: string): Session {
-  const flat = flattenOrders(readOrders(runDir));
+  const flat = flattenOrders(readRunOrders(runDir));
   if (flat.length === 0) throw new Error("the run holds no items");
   const dir = resolveRunDir(runDir);
   let baseline = 0;
@@ -180,6 +189,26 @@ function loadSession(runDir: string, people: string[], payer: string): Session {
   }
   const saved = loadSplitStateSync(dir);
   const doc = saved ?? freshState(people, payer);
+  if (saved === null) {
+    // A fresh session honours the gather pick list. Saved work stays untouched.
+    try {
+      const meta = JSON.parse(Deno.readTextFileSync(dir + "/meta.json")) as {
+        picked?: unknown;
+      };
+      if (Array.isArray(meta.picked)) {
+        const keep = new Set(
+          meta.picked.filter((n): n is number =>
+            typeof n === "number" && Number.isInteger(n)
+          ),
+        );
+        flat.forEach((line, index) => {
+          if (!keep.has(line.orderPos)) doc.skipped[String(index)] = true;
+        });
+      }
+    } catch {
+      // No meta or bad JSON: leave every line open.
+    }
+  }
   const orderCount = flat.length > 0 ? flat[flat.length - 1].orderPos + 1 : 0;
   const done = countDoneOrders(flat, orderCount, doc);
   const lastPayer = doc.payer.length > 0 ? doc.payer : payer;
@@ -213,13 +242,13 @@ export function setSaveWriterForTests(fn: typeof writeSplitState): void {
 }
 
 // Promise for the saves queued so far. Tests await it.
-export function pendingSaves(): Promise<void> {
-  return session?.saveChain ?? Promise.resolve();
+export function pendingSaves(sessionId: string): Promise<void> {
+  return sessionFor(sessionId)?.saveChain ?? Promise.resolve();
 }
 
 // Reason the last save missed. Empty when the last save landed.
-export function lastSaveError(): string {
-  return session?.saveError ?? "";
+export function lastSaveError(sessionId: string): string {
+  return sessionFor(sessionId)?.saveError ?? "";
 }
 
 // Persist the session through the splitstate writer. Fire and forget;
@@ -336,7 +365,7 @@ function commitPosted(
     s.doc = remapPeople(s.doc, people);
     s.doc.people = [...people];
   }
-  const payer = m.get("payer")?.[0]?.trim() ?? "";
+  const payer = answer(m, "payer");
   if (payer.length > 0) s.doc.payer = payer;
   for (;;) {
     const i = firstUnfinished(s.flat.length, s.doc.assignments, s.doc.skipped);
@@ -350,7 +379,7 @@ function commitPosted(
       updateProgressMeta(s);
       continue;
     }
-    const who = (m.get("who-" + i) ?? []).filter((name) => people.includes(name));
+    const who = (answers(m, "who-" + i)).filter((name) => people.includes(name));
     if (who.length === 0) return;
     let amounts: Record<string, number>;
     try {
@@ -387,18 +416,26 @@ function savedPeople(m: Map<string, string[]>): string[] {
 
 // Name the person gave for themselves on the People step.
 function meName(m: Map<string, string[]>): string {
-  return m.get("me")?.[0]?.trim() ?? "";
+  return answer(m, "me");
 }
 
 // People, payer, and you in one step. Saved names come back as filled
 // text entries named person, so they merge with the repeating rows.
-// Names, payer, and you from the most recent People post. A rejected
-// post never reaches the answers map, so without this the re-render
-// drops every name the user just typed, and the step can never pass.
-let lastPeoplePost: { names: string[]; payer: string; me: string } | null = null;
+// Names, payer, and you from the most recent People post, one map per
+// browser session. A rejected post never reaches the answers map, so
+// without this the re-render drops every name the user just typed, and
+// the step can never pass. The store replaces the module level
+// lastPeoplePost value, which two browsers used to share.
+const peoplePosts = sessionStore((): {
+  current: { names: string[]; payer: string; me: string } | null;
+} => ({ current: null }));
 
 /** Remember one People post before the completeness check runs. */
-export function rememberPeoplePost(fields: Record<string, string[]>): void {
+export function rememberPeoplePost(
+  sessionId: string,
+  fields: Record<string, string[]>,
+): void {
+  const sid = sidOf({ sessionId });
   const names: string[] = [];
   for (const key of ["person", "person-1", "person-2", "person-3"]) {
     for (const raw of fields[key] ?? []) {
@@ -406,14 +443,23 @@ export function rememberPeoplePost(fields: Record<string, string[]>): void {
       if (name.length > 0 && !names.includes(name)) names.push(name);
     }
   }
-  lastPeoplePost = {
+  peoplePosts.for(sid).current = {
     names,
     payer: (fields["payer"]?.[0] ?? "").trim(),
     me: (fields["me"]?.[0] ?? "").trim(),
   };
 }
 
-function peopleStep(m: Map<string, string[]>): Step {
+// Read the last People post for one session id.
+function lastPeoplePostFor(
+  sessionId: string,
+): { names: string[]; payer: string; me: string } | null {
+  return peoplePosts.for(sidOf({ sessionId })).current;
+}
+
+function peopleStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
+  const sessionId = sidOf(ctx);
+  const lastPeoplePost = lastPeoplePostFor(sessionId);
   const known = collectedPeople(m);
   // Order of truth: answers already recorded, then the post this step
   // just rejected, then the names saved with the run.
@@ -495,11 +541,11 @@ export function roleErrors(fields: Record<string, string[]>): string[] {
 // pick. A run picked on the resume screen comes last, so a user who
 // resumes a session never answers the same question twice.
 function pickedRun(m: Map<string, string[]>): string {
-  const other = m.get("run-other")?.[0]?.trim() ?? "";
+  const other = answer(m, "run-other");
   if (other.length > 0) return other;
-  const picked = m.get("run")?.[0]?.trim() ?? "";
+  const picked = answer(m, "run");
   if (picked.length > 0) return picked;
-  return m.get("resume-pick")?.[0]?.trim() ?? "";
+  return answer(m, "resume-pick");
 }
 
 // Run picker. Lists every live run, plus a free text entry for a run
@@ -546,7 +592,9 @@ function runStep(m: Map<string, string[]>): Step {
 }
 
 // Item step. One flat line per render, driven by the answers map.
-export function itemStep(m: Map<string, string[]>): Step {
+export function itemStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
+  const sessionId = sidOf(ctx);
+  const currency = currencyFor(sessionId);
   const fieldPeople = collectedPeople(m);
   const dir = pickedRun(m);
   if (dir.length === 0) {
@@ -560,13 +608,15 @@ export function itemStep(m: Map<string, string[]>): Step {
       "Go back and pick a run, then return here.",
     );
   }
-  if (session === null || session.runDir !== resolveRunDir(dir)) {
+  let live = sessionFor(sessionId);
+  if (live === null || live.runDir !== resolveRunDir(dir)) {
     try {
-      session = loadSession(
+      live = loadSession(
         dir,
         fieldPeople,
         m.get("payer")?.[0] ?? "",
       );
+      setSessionFor(sessionId, live);
     } catch {
       return step(
         "split-item",
@@ -579,7 +629,7 @@ export function itemStep(m: Map<string, string[]>): Step {
       );
     }
   }
-  const s = session;
+  const s = live;
   const people = fieldPeople.length > 0 ? fieldPeople : s.doc.people;
   // Ask once when a saved run holds progress. The answer decides
   // between resume and a clean start.
@@ -610,7 +660,7 @@ export function itemStep(m: Map<string, string[]>): Step {
   if (s.pendingResume) {
     s.pendingResume = false;
     if (m.get("resume")?.[0] === "Start over") {
-      const payer = m.get("payer")?.[0]?.trim() ?? "";
+      const payer = answer(m, "payer");
       s.doc = freshState(people, payer.length > 0 ? payer : s.doc.payer);
       saveState(s);
     }
@@ -774,6 +824,7 @@ function runValidatorSync(outPath: string): { ok: boolean; output: string } {
 function settlementLine(
   row: { from: string; to: string; amount: number },
   me: string,
+  currency: string,
 ): string {
   if (me.length > 0 && row.from === me) {
     return "You pay " + row.to + " " + formatMoney(row.amount, currency);
@@ -787,10 +838,13 @@ function settlementLine(
 // Export step. Finish writes output.json for the run dir, runs the
 // validator over it, then marks the run assigned. A validator failure
 // renders as a step error and blocks Finish.
-export function exportStep(m: Map<string, string[]>): Step {
+export function exportStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
+  const sessionId = sidOf(ctx);
+  const currency = currencyFor(sessionId);
   const people = collectedPeople(m);
-  const payer = m.get("payer")?.[0]?.trim() ?? "";
-  if (session === null) {
+  const payer = answer(m, "payer");
+  const live = sessionFor(sessionId);
+  if (live === null) {
     return step(
       "split-export",
       "Export",
@@ -801,7 +855,7 @@ export function exportStep(m: Map<string, string[]>): Step {
       "There is nothing to export yet. Split a run first.",
     );
   }
-  const s = session;
+  const s = live;
   // Dry plan first, before any write. It mirrors the live shape
   // (counts, payloads, totals) and writes nothing: no output.json,
   // no validator run, no meta patch.
@@ -823,7 +877,7 @@ export function exportStep(m: Map<string, string[]>): Step {
       ...Object.keys(doc.totals).map((name) =>
         "Total " + name + ": " + formatMoney(doc.totals[name] ?? 0, currency)
       ),
-      ...doc.settlements.map((row) => settlementLine(row, meName(m))),
+      ...doc.settlements.map((row) => settlementLine(row, meName(m), currency)),
       "",
       "Would write output.json and mark the run assigned.",
     ];
@@ -836,7 +890,7 @@ export function exportStep(m: Map<string, string[]>): Step {
         buttons(
           [
             { label: "Back", action: "back" },
-            { label: "Finish", action: "done", primary: true },
+            { label: "Back to menu", action: "goto:menu", primary: true },
           ],
           undefined,
           "split",
@@ -928,12 +982,12 @@ export function exportStep(m: Map<string, string[]>): Step {
       values: [formatMoney(doc.totals[name] ?? 0, currency)],
     })),
   ];
-  const rows = doc.settlements.map((row) => settlementLine(row, me));
+  const rows = doc.settlements.map((row) => settlementLine(row, me, currency));
   return step(
     "split-export",
     "Export",
     [
-      answers("Totals", entries),
+      showAnswers("Totals", entries),
       markdown(
         "## Settlements\n" +
           (rows.length > 0 ? rows.join("\n") : "Nothing to settle."),
@@ -959,17 +1013,23 @@ export function exportStep(m: Map<string, string[]>): Step {
   );
 }
 
-// Stored share link for the finished split. The orchestrator fills it
-// through createSplitShareLink, and split-share-done reads it back.
-let storedShare: ShareLink | null = null;
+// Stored share links, one per browser session. The orchestrator fills
+// one through createSplitShareLink, and split-share-done reads it back.
+// The store replaces the module level storedShare value, which two
+// browsers used to share.
+const shareLinks = sessionStore((): {
+  current: ShareLink | null;
+} => ({ current: null }));
 
 // Summary text for the finished split, built without writing files.
-function finishedSummaryText(m: Map<string, string[]>): string | null {
-  if (session === null || !session.exported) return null;
-  const s = session;
+function finishedSummaryText(m: Map<string, string[]>, sessionId: string): string | null {
+  const live = sessionFor(sessionId);
+  if (live === null || !live.exported) return null;
+  const s = live;
+  const currency = currencyFor(sessionId);
   const fieldPeople = collectedPeople(m);
   const names = fieldPeople.length > 0 ? fieldPeople : s.doc.people;
-  const payer = m.get("payer")?.[0]?.trim() || s.doc.payer;
+  const payer = answer(m, "payer") || s.doc.payer;
   const doc = buildOutputDoc({
     flat: s.flat,
     assignments: s.doc.assignments,
@@ -993,8 +1053,8 @@ function rowsFor(text: string): number {
 
 // Summary step. Shows the aggregate summary text for the finished
 // split inside a textarea, so the user can copy it by hand.
-export function summaryStep(m: Map<string, string[]>): Step {
-  const text = finishedSummaryText(m);
+export function summaryStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
+  const text = finishedSummaryText(m, sidOf(ctx));
   if (text === null) {
     return step(
       "split-summary",
@@ -1055,7 +1115,8 @@ export function shareStep(_m: Map<string, string[]>): Step {
 }
 
 // Share done step. Shows the created link and its code.
-export function shareDoneStep(_m: Map<string, string[]>): Step {
+export function shareDoneStep(_m: Map<string, string[]>, ctx?: WizardCtx): Step {
+  const storedShare = shareLinks.for(sidOf(ctx)).current;
   if (storedShare === null) {
     return step(
       "split-share-done",
@@ -1098,16 +1159,18 @@ export function shareDoneStep(_m: Map<string, string[]>): Step {
 // orchestrator calls this from the submit hook for split-share. It
 // stores the link for split-share-done and never logs secrets.
 export async function createSplitShareLink(
+  sessionId: string,
   m: Map<string, string[]>,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sid = sidOf({ sessionId });
   try {
     const picked = pickedRun(m);
-    const dir = picked.length > 0 ? resolveRunDir(picked) : session?.runDir ?? "";
+    const dir = picked.length > 0 ? resolveRunDir(picked) : sessionFor(sid)?.runDir ?? "";
     if (dir.length === 0) {
       return { ok: false, error: "Finish a split first, then share it." };
     }
     const jsonText = await Deno.readTextFile(dir + "/output.json");
-    storedShare = await createShareLink(jsonText);
+    shareLinks.for(sid).current = await createShareLink(jsonText);
     return { ok: true };
   } catch {
     return { ok: false, error: "The share upload failed. Try again later." };
@@ -1115,16 +1178,18 @@ export async function createSplitShareLink(
 }
 
 // Link text stored by createSplitShareLink, or null before upload.
-export function currentShareLink(): string | null {
-  return storedShare === null ? null : storedShare.link;
+export function currentShareLink(sessionId: string): string | null {
+  const held = shareLinks.for(sidOf({ sessionId })).current;
+  return held === null ? null : held.link;
 }
 
 // Run id of the live split session, or "" when no session runs. The
 // export step hands this to the push flow, and the push source step
 // prefills its run id entry with it.
-export function splitRunId(): string {
-  if (session === null) return "";
-  const parts = session.runDir.replace(/\/+$/, "").split("/");
+export function splitRunId(sessionId: string): string {
+  const live = sessionFor(sessionId);
+  if (live === null) return "";
+  const parts = live.runDir.replace(/\/+$/, "").split("/");
   return parts[parts.length - 1] ?? "";
 }
 

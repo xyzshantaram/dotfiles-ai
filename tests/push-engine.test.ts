@@ -7,11 +7,12 @@ import {
   prepareSource,
   prepareSplitwise,
   type PushApi,
+  pushSessionFor,
   resetPush,
   resolveNamePicks,
-  session,
 } from "../wizards/expense-split/push-engine.ts";
 import { loadPushed } from "../src/splitwise.ts";
+import { pushedFilePath } from "../src/paths.ts";
 import { pushSteps, sourceStep } from "../wizards/expense-split/push.ts";
 
 // Fail the test when a condition misses.
@@ -80,44 +81,45 @@ function fakeApi(options?: { failExpense?: boolean }) {
 
 // Per-test scratch dirs and env, set once for this file.
 const root = await Deno.makeTempDir({ prefix: "push-engine-test-" });
-Deno.env.set("SPLITWISE_PUSHED_FILE", root + "/pushed.json");
-Deno.env.set("SPLITWISE_TOKEN_FILE", root + "/token.json");
 Deno.env.set("SPLIT_UTILS_STATE", root + "/state");
-Deno.env.delete("SPLITWISE_ENV");
 const SPLIT_FILE = root + "/output.json";
 await Deno.writeTextFile(SPLIT_FILE, JSON.stringify(doc()));
 
 // Reusable cleanup between tests. Each test gets its own pushed map,
 // so fingerprints from one test never leak into the next.
 let runCounter = 0;
-function fresh(): void {
-  resetPush();
+async function fresh(...sids: string[]): Promise<void> {
+  for (const sid of sids) resetPush(sid);
   runCounter += 1;
-  Deno.env.set("SPLITWISE_PUSHED_FILE", root + "/pushed-" + runCounter + ".json");
+  try {
+    await Deno.remove(pushedFilePath());
+  } catch {
+    // Missing file means a clean map already.
+  }
 }
 
 Deno.test("push flow: cutoff filters, choices push and skip, fingerprint lands", async () => {
-  await fresh();
-  const src = await prepareSource("Split JSON file", "", SPLIT_FILE);
+  await fresh("t-push-1");
+  const src = await prepareSource("t-push-1", "Split JSON file", "", SPLIT_FILE);
   assert(src.ok, "source loads");
   const { api, expenses, comments } = fakeApi();
-  const sw = await prepareSplitwise(api);
+  const sw = await prepareSplitwise("t-push-1", api);
   assert(sw.ok, "splitwise prepares");
-  assert(session.mode === "live", "live mode");
-  assert(session.signedInAs === "Ann", "signed in as Ann");
-  assert(session.nameMap.get("Ann") === 1, "Ann mapped");
-  assert(session.nameMap.get("Bob") === 2, "Bob mapped by first name");
+  assert(pushSessionFor("t-push-1").mode === "live", "live mode");
+  assert(pushSessionFor("t-push-1").signedInAs === "Ann", "signed in as Ann");
+  assert(pushSessionFor("t-push-1").nameMap.get("Ann") === 1, "Ann mapped");
+  assert(pushSessionFor("t-push-1").nameMap.get("Bob") === 2, "Bob mapped by first name");
 
-  const cut = applyCutoff("2026-01-02");
+  const cut = applyCutoff("t-push-1", "2026-01-02");
   assert(cut.ok, "cutoff valid");
-  assert(session.droppedByCutoff === 1, "o3 dropped by cutoff");
-  assert(session.groups.length === 2, "two orders kept");
-  assert(session.groups.every((o) => o[0].order_id !== "o3"), "o3 excluded");
+  assert(pushSessionFor("t-push-1").droppedByCutoff === 1, "o3 dropped by cutoff");
+  assert(pushSessionFor("t-push-1").groups.length === 2, "two orders kept");
+  assert(pushSessionFor("t-push-1").groups.every((o) => o[0].order_id !== "o3"), "o3 excluded");
 
-  session.groupId = 7;
-  const done = await executePush({ o1: "Push", o2: "Skip" });
+  pushSessionFor("t-push-1").groupId = 7;
+  const done = await executePush("t-push-1", { o1: "Push", o2: "Skip" });
   assert(done.ok, "push ok");
-  const out = session.outcome!;
+  const out = pushSessionFor("t-push-1").outcome!;
   assert(out.pushed === 1, "one order pushed");
   assert(out.skippedByChoice === 1, "one order skipped by choice");
   assert(out.skippedDupes === 0, "no dupes first run");
@@ -135,51 +137,51 @@ Deno.test("push flow: cutoff filters, choices push and skip, fingerprint lands",
 });
 
 Deno.test("rerun skips the already-sent order by fingerprint", async () => {
-  await fresh();
-  await prepareSource("Split JSON file", "", SPLIT_FILE);
-  await prepareSplitwise(fakeApi().api);
-  applyCutoff("2026-01-02");
-  const first = await executePush({ o1: "Push", o2: "Skip" });
+  await fresh("t-push-2");
+  await prepareSource("t-push-2", "Split JSON file", "", SPLIT_FILE);
+  await prepareSplitwise("t-push-2", fakeApi().api);
+  applyCutoff("t-push-2", "2026-01-02");
+  const first = await executePush("t-push-2", { o1: "Push", o2: "Skip" });
   assert(first.ok, "first push ok");
   // Rerun against the same pushed store. No choices at all: unpicked
   // orders stay out, and o1 is now a dupe.
-  resetPush();
-  await prepareSource("Split JSON file", "", SPLIT_FILE);
+  resetPush("t-push-2");
+  await prepareSource("t-push-2", "Split JSON file", "", SPLIT_FILE);
   const { api, expenses } = fakeApi();
-  await prepareSplitwise(api);
-  applyCutoff("2026-01-02");
-  const done = await executePush({});
+  await prepareSplitwise("t-push-2", api);
+  applyCutoff("t-push-2", "2026-01-02");
+  const done = await executePush("t-push-2", {});
   assert(done.ok, "rerun ok");
-  const out = session.outcome!;
+  const out = pushSessionFor("t-push-2").outcome!;
   assert(out.skippedDupes === 1, "o1 skipped as dupe");
   assert(out.pushed === 0, "nothing pushed twice");
   assert(expenses.length === 0, "no createExpense on rerun");
 });
 
 Deno.test("stop choice ends the loop and keeps later orders out", async () => {
-  await fresh();
-  await prepareSource("Split JSON file", "", SPLIT_FILE);
+  await fresh("t-push-3");
+  await prepareSource("t-push-3", "Split JSON file", "", SPLIT_FILE);
   const { api, expenses } = fakeApi();
-  await prepareSplitwise(api);
-  applyCutoff("2026-01-02");
-  const done = await executePush({ o1: "Stop" });
+  await prepareSplitwise("t-push-3", api);
+  applyCutoff("t-push-3", "2026-01-02");
+  const done = await executePush("t-push-3", { o1: "Stop" });
   assert(done.ok, "stop run ok");
-  const out = session.outcome!;
+  const out = pushSessionFor("t-push-3").outcome!;
   assert(out.stopped, "stopped flag set");
   assert(out.pushed === 0, "stop before push");
   assert(expenses.length === 0, "no expense after stop");
 });
 
 Deno.test("failed createExpense takes the failPush path, fingerprint unsaved", async () => {
-  await fresh();
-  await prepareSource("Split JSON file", "", SPLIT_FILE);
+  await fresh("t-push-4");
+  await prepareSource("t-push-4", "Split JSON file", "", SPLIT_FILE);
   const { api } = fakeApi({ failExpense: true });
-  await prepareSplitwise(api);
-  applyCutoff("2026-01-02");
-  const done = await executePush({ o1: "Push" });
+  await prepareSplitwise("t-push-4", api);
+  applyCutoff("t-push-4", "2026-01-02");
+  const done = await executePush("t-push-4", { o1: "Push" });
   assert(!done.ok, "push reports failure");
   assert(!done.ok && !done.error.includes("hushhush"), "no raw error text");
-  const out = session.outcome!;
+  const out = pushSessionFor("t-push-4").outcome!;
   assert(out.failed, "outcome marked failed");
   assert(out.pushed === 0, "nothing counted as pushed");
   const pushedMap = await loadPushed();
@@ -187,23 +189,23 @@ Deno.test("failed createExpense takes the failPush path, fingerprint unsaved", a
 });
 
 Deno.test("no Splitwise access falls back to an aggregate summary file", async () => {
-  await fresh();
+  await fresh("t-push-5");
   // Push one order live first, so the fallback has a dupe to exclude.
-  await prepareSource("Split JSON file", "", SPLIT_FILE);
-  await prepareSplitwise(fakeApi().api);
-  applyCutoff("2026-01-02");
-  const first = await executePush({ o1: "Push", o2: "Skip" });
+  await prepareSource("t-push-5", "Split JSON file", "", SPLIT_FILE);
+  await prepareSplitwise("t-push-5", fakeApi().api);
+  applyCutoff("t-push-5", "2026-01-02");
+  const first = await executePush("t-push-5", { o1: "Push", o2: "Skip" });
   assert(first.ok, "first push ok");
-  resetPush();
-  await prepareSource("Split JSON file", "", SPLIT_FILE);
+  resetPush("t-push-5");
+  await prepareSource("t-push-5", "Split JSON file", "", SPLIT_FILE);
   // No api override: env discovery finds nothing, so aggregate mode.
-  const sw = await prepareSplitwise();
+  const sw = await prepareSplitwise("t-push-5");
   assert(sw.ok, "fallback prepares");
-  assert(session.mode === "aggregate", "aggregate mode");
-  applyCutoff("2026-01-02");
-  const done = await executePush({});
+  assert(pushSessionFor("t-push-5").mode === "aggregate", "aggregate mode");
+  applyCutoff("t-push-5", "2026-01-02");
+  const done = await executePush("t-push-5", {});
   assert(done.ok, "aggregate run ok");
-  const out = session.outcome!;
+  const out = pushSessionFor("t-push-5").outcome!;
   assert(out.aggregateFile !== null, "summary file written");
   if (out.aggregateFile !== null) {
     const text = await Deno.readTextFile(out.aggregateFile);
@@ -215,7 +217,7 @@ Deno.test("no Splitwise access falls back to an aggregate summary file", async (
 });
 
 Deno.test("full push through a run id archives the run", async () => {
-  await fresh();
+  await fresh("t-push-6");
   // Stage one assigned run under the state root.
   const runDir = root + "/state/share/runs/r1";
   await Deno.mkdir(runDir, { recursive: true });
@@ -234,15 +236,15 @@ Deno.test("full push through a run id archives the run", async () => {
   const runOut = root + "/state/share/runs/r1-only-output.json";
   await Deno.writeTextFile(runOut, JSON.stringify(doc()));
   await Deno.writeTextFile(runDir + "/output.json", JSON.stringify(doc()));
-  const src = await prepareSource("Assigned run id", "r1", "");
+  const src = await prepareSource("t-push-6", "Assigned run id", "r1", "");
   assert(src.ok, "run id resolves");
-  assert(session.runId === "r1", "run id staged");
+  assert(pushSessionFor("t-push-6").runId === "r1", "run id staged");
   const { api } = fakeApi();
-  await prepareSplitwise(api);
-  applyCutoff("2026-01-06");
-  const done = await executePush({ o1: "Push", o2: "Push" });
+  await prepareSplitwise("t-push-6", api);
+  applyCutoff("t-push-6", "2026-01-06");
+  const done = await executePush("t-push-6", { o1: "Push", o2: "Push" });
   assert(done.ok, "push ok");
-  const out = session.outcome!;
+  const out = pushSessionFor("t-push-6").outcome!;
   assert(out.pushed === 2, "both kept orders pushed");
   assert(out.archived, "run archived");
   // The live run dir moves into the cache archive.
@@ -255,7 +257,7 @@ Deno.test("full push through a run id archives the run", async () => {
   assert(liveGone, "live run dir removed");
   await Deno.stat(root + "/state/cache/runs/r1");
   // Stop with a run id keeps the run in place.
-  await fresh();
+  await fresh("t-push-6");
   await Deno.mkdir(runDir, { recursive: true });
   await Deno.writeTextFile(
     runDir + "/meta.json",
@@ -268,12 +270,12 @@ Deno.test("full push through a run id archives the run", async () => {
       status: "assigned",
     }),
   );
-  await prepareSource("Assigned run id", "r1", "");
-  await prepareSplitwise(fakeApi().api);
-  applyCutoff("2026-01-06");
-  const stopRun = await executePush({ o1: "Stop" });
+  await prepareSource("t-push-6", "Assigned run id", "r1", "");
+  await prepareSplitwise("t-push-6", fakeApi().api);
+  applyCutoff("t-push-6", "2026-01-06");
+  const stopRun = await executePush("t-push-6", { o1: "Stop" });
   assert(stopRun.ok, "stopped run ok");
-  assert(session.outcome!.archived === false, "no archive on stop");
+  assert(pushSessionFor("t-push-6").outcome!.archived === false, "no archive on stop");
 });
 
 // Fake API where two members share the first name Bob.
@@ -293,62 +295,62 @@ function dupApi() {
 }
 
 Deno.test("ambiguous name shows candidates and the radio pick resolves it", async () => {
-  await fresh();
-  await prepareSource("Split JSON file", "", SPLIT_FILE);
-  const sw = await prepareSplitwise(dupApi());
+  await fresh("t-push-7");
+  await prepareSource("t-push-7", "Split JSON file", "", SPLIT_FILE);
+  const sw = await prepareSplitwise("t-push-7", dupApi());
   assert(!sw.ok && sw.needsNamePick === true, "setup routes to the name picker");
-  assert(session.namePicks.length === 1, "one pending person");
-  assert(session.namePicks[0].person === "Bob", "Bob is the pending person");
+  assert(pushSessionFor("t-push-7").namePicks.length === 1, "one pending person");
+  assert(pushSessionFor("t-push-7").namePicks[0].person === "Bob", "Bob is the pending person");
   assert(
-    JSON.stringify(session.namePicks[0].candidates.map((m) => m.id)) === "[2,3]",
+    JSON.stringify(pushSessionFor("t-push-7").namePicks[0].candidates.map((m) => m.id)) === "[2,3]",
     "both Bobs listed as candidates",
   );
   // A missing pick is an error, not a silent skip.
-  const empty = resolveNamePicks({});
+  const empty = resolveNamePicks("t-push-7", {});
   assert(!empty.ok, "no pick errors out");
   // The radio pick stashes a resolution and the setup completes.
-  const picked = resolveNamePicks({ "pick:Bob": ["3"] });
+  const picked = resolveNamePicks("t-push-7", { "pick:Bob": ["3"] });
   assert(picked.ok, "radio pick accepted");
-  const sw2 = await prepareSplitwise(dupApi());
+  const sw2 = await prepareSplitwise("t-push-7", dupApi());
   assert(sw2.ok, "setup finishes after the pick");
-  assert(session.nameMap.get("Bob") === 3, "Bob maps to the picked id 3");
-  applyCutoff("2026-01-02");
-  session.groupId = 7;
-  const done = await executePush({ o1: "Push" });
+  assert(pushSessionFor("t-push-7").nameMap.get("Bob") === 3, "Bob maps to the picked id 3");
+  applyCutoff("t-push-7", "2026-01-02");
+  pushSessionFor("t-push-7").groupId = 7;
+  const done = await executePush("t-push-7", { o1: "Push" });
   assert(done.ok, "push ok");
   const pushedMap = await loadPushed();
   assert(Object.keys(pushedMap).length === 1, "order pushed once");
 });
 
 Deno.test("unmatched person accepts a hand-typed id", async () => {
-  await fresh();
+  await fresh("t-push-8");
   const caraFile = root + "/output-cara.json";
   await Deno.writeTextFile(caraFile, JSON.stringify(doc(["Ann", "Cara"])));
-  await prepareSource("Split JSON file", "", caraFile);
-  const sw = await prepareSplitwise(fakeApi().api);
+  await prepareSource("t-push-8", "Split JSON file", "", caraFile);
+  const sw = await prepareSplitwise("t-push-8", fakeApi().api);
   assert(!sw.ok && sw.needsNamePick === true, "setup routes to the name picker");
-  assert(session.namePicks.length === 1, "one pending person");
-  assert(session.namePicks[0].person === "Cara", "Cara is the pending person");
-  assert(session.namePicks[0].candidates.length === 0, "no candidates for Cara");
+  assert(pushSessionFor("t-push-8").namePicks.length === 1, "one pending person");
+  assert(pushSessionFor("t-push-8").namePicks[0].person === "Cara", "Cara is the pending person");
+  assert(pushSessionFor("t-push-8").namePicks[0].candidates.length === 0, "no candidates for Cara");
   // A bad hand-typed id errors before anything is stashed.
-  const bad = resolveNamePicks({ "manual:Cara": ["abc"] });
+  const bad = resolveNamePicks("t-push-8", { "manual:Cara": ["abc"] });
   assert(!bad.ok, "bad id errors out");
-  const good = resolveNamePicks({ "manual:Cara": ["9"] });
+  const good = resolveNamePicks("t-push-8", { "manual:Cara": ["9"] });
   assert(good.ok, "manual id accepted");
-  const sw2 = await prepareSplitwise(fakeApi().api);
+  const sw2 = await prepareSplitwise("t-push-8", fakeApi().api);
   assert(sw2.ok, "setup finishes after the manual id");
-  assert(session.nameMap.get("Cara") === 9, "Cara maps to id 9");
-  applyCutoff("2026-01-02");
-  session.groupId = 7;
-  const done = await executePush({ o1: "Push" });
+  assert(pushSessionFor("t-push-8").nameMap.get("Cara") === 9, "Cara maps to id 9");
+  applyCutoff("t-push-8", "2026-01-02");
+  pushSessionFor("t-push-8").groupId = 7;
+  const done = await executePush("t-push-8", { o1: "Push" });
   assert(done.ok, "push ok");
   const pushedMap = await loadPushed();
   assert(Object.keys(pushedMap).length === 1, "order pushed once");
 });
 
 Deno.test("unique first name maps straight away with no pick", async () => {
-  await fresh();
-  await prepareSource("Split JSON file", "", SPLIT_FILE);
+  await fresh("t-push-9");
+  await prepareSource("t-push-9", "Split JSON file", "", SPLIT_FILE);
   // Full names carry last names here, so only the first names match.
   const api: PushApi = {
     getCurrentUser: () => Promise.resolve({ first_name: "Ann", last_name: "Jones", id: 1 }),
@@ -357,11 +359,11 @@ Deno.test("unique first name maps straight away with no pick", async () => {
     createExpense: () => Promise.resolve({ expenses: [{ id: 101 }] }),
     createComment: () => Promise.resolve(),
   };
-  const sw = await prepareSplitwise(api);
+  const sw = await prepareSplitwise("t-push-9", api);
   assert(sw.ok, "setup finishes with no name pick");
-  assert(session.nameMap.get("Ann") === 1, "Ann maps by unique first name");
-  assert(session.nameMap.get("Bob") === 2, "Bob maps by unique first name");
-  assert(session.signedInAs === "Ann Jones", "signed in name keeps the last name");
+  assert(pushSessionFor("t-push-9").nameMap.get("Ann") === 1, "Ann maps by unique first name");
+  assert(pushSessionFor("t-push-9").nameMap.get("Bob") === 2, "Bob maps by unique first name");
+  assert(pushSessionFor("t-push-9").signedInAs === "Ann Jones", "signed in name keeps the last name");
 });
 
 // Helpers to pull nodes out of a step by kind.
@@ -525,39 +527,39 @@ Deno.test("source step with no assigned run shows the line plus the free text en
 });
 
 Deno.test("empty cutoff keeps every order and pushes the oldest", async () => {
-  await fresh();
-  await prepareSource("Split JSON file", "", SPLIT_FILE);
+  await fresh("t-push-10");
+  await prepareSource("t-push-10", "Split JSON file", "", SPLIT_FILE);
   const { api, expenses } = fakeApi();
-  await prepareSplitwise(api);
-  const cut = applyCutoff("");
+  await prepareSplitwise("t-push-10", api);
+  const cut = applyCutoff("t-push-10", "");
   assert(cut.ok, "empty cutoff accepted");
-  assert(session.cutoff === "", "cutoff cleared");
-  assert(session.droppedByCutoff === 0, "nothing dropped");
-  assert(session.groups.length === 3, "all orders kept");
-  session.groupId = 7;
-  const done = await executePush({ o1: "Push", o2: "Skip", o3: "Skip" });
+  assert(pushSessionFor("t-push-10").cutoff === "", "cutoff cleared");
+  assert(pushSessionFor("t-push-10").droppedByCutoff === 0, "nothing dropped");
+  assert(pushSessionFor("t-push-10").groups.length === 3, "all orders kept");
+  pushSessionFor("t-push-10").groupId = 7;
+  const done = await executePush("t-push-10", { o1: "Push", o2: "Skip", o3: "Skip" });
   assert(done.ok, "push ok");
-  assert(session.outcome!.pushed === 1, "oldest order pushed");
-  assert(session.outcome!.totalRs === 100, "total is the oldest order");
+  assert(pushSessionFor("t-push-10").outcome!.pushed === 1, "oldest order pushed");
+  assert(pushSessionFor("t-push-10").outcome!.totalRs === 100, "total is the oldest order");
   assert(expenses.length === 1, "one expense sent");
 });
 
 Deno.test("spaces-only cutoff keeps every order", async () => {
-  await fresh();
-  await prepareSource("Split JSON file", "", SPLIT_FILE);
-  await prepareSplitwise(fakeApi().api);
-  const cut = applyCutoff("   ");
+  await fresh("t-push-11");
+  await prepareSource("t-push-11", "Split JSON file", "", SPLIT_FILE);
+  await prepareSplitwise("t-push-11", fakeApi().api);
+  const cut = applyCutoff("t-push-11", "   ");
   assert(cut.ok, "spaces cutoff accepted");
-  assert(session.cutoff === "", "cutoff cleared");
-  assert(session.groups.length === 3, "all orders kept");
-  assert(session.droppedByCutoff === 0, "nothing dropped");
+  assert(pushSessionFor("t-push-11").cutoff === "", "cutoff cleared");
+  assert(pushSessionFor("t-push-11").groups.length === 3, "all orders kept");
+  assert(pushSessionFor("t-push-11").droppedByCutoff === 0, "nothing dropped");
 });
 
 Deno.test("bad cutoff date still reports the error", async () => {
-  await fresh();
-  await prepareSource("Split JSON file", "", SPLIT_FILE);
-  await prepareSplitwise(fakeApi().api);
-  const cut = applyCutoff("not-a-date");
+  await fresh("t-push-12");
+  await prepareSource("t-push-12", "Split JSON file", "", SPLIT_FILE);
+  await prepareSplitwise("t-push-12", fakeApi().api);
+  const cut = applyCutoff("t-push-12", "not-a-date");
   assert(!cut.ok, "bad date rejected");
   if (!cut.ok) {
     assert(cut.error === "Use the form YYYY-MM-DD for the cutoff date.", "message kept");
@@ -565,73 +567,73 @@ Deno.test("bad cutoff date still reports the error", async () => {
 });
 
 Deno.test("throwing sign in check falls back to aggregate with setupError", async () => {
-  await fresh();
-  await prepareSource("Split JSON file", "", SPLIT_FILE);
+  await fresh("t-push-13");
+  await prepareSource("t-push-13", "Split JSON file", "", SPLIT_FILE);
   const base = fakeApi().api;
   const api: PushApi = {
     ...base,
     getCurrentUser: () => Promise.reject(new Error("boom-token-expired")),
   };
-  const sw = await prepareSplitwise(api);
+  const sw = await prepareSplitwise("t-push-13", api);
   assert(sw.ok, "fallback prepares");
-  assert(session.mode === "aggregate", "aggregate mode");
-  assert(session.setupError !== null, "setupError set");
-  assert(session.setupError!.includes("boom-token-expired"), "reason named");
+  assert(pushSessionFor("t-push-13").mode === "aggregate", "aggregate mode");
+  assert(pushSessionFor("t-push-13").setupError !== null, "setupError set");
+  assert(pushSessionFor("t-push-13").setupError!.includes("boom-token-expired"), "reason named");
 });
 
 Deno.test("missing keys leave setupError null", async () => {
-  await fresh();
-  await prepareSource("Split JSON file", "", SPLIT_FILE);
-  const sw = await prepareSplitwise();
+  await fresh("t-push-14");
+  await prepareSource("t-push-14", "Split JSON file", "", SPLIT_FILE);
+  const sw = await prepareSplitwise("t-push-14");
   assert(sw.ok, "fallback prepares");
-  assert(session.mode === "aggregate", "aggregate mode");
-  assert(session.setupError === null, "no setupError without access");
+  assert(pushSessionFor("t-push-14").mode === "aggregate", "aggregate mode");
+  assert(pushSessionFor("t-push-14").setupError === null, "no setupError without access");
 });
 
 Deno.test("second prepare clears an earlier setupError", async () => {
-  await fresh();
-  await prepareSource("Split JSON file", "", SPLIT_FILE);
+  await fresh("t-push-15");
+  await prepareSource("t-push-15", "Split JSON file", "", SPLIT_FILE);
   const base = fakeApi().api;
   const bad: PushApi = {
     ...base,
     getCurrentUser: () => Promise.reject(new Error("temp-network-blip")),
   };
-  const first = await prepareSplitwise(bad);
+  const first = await prepareSplitwise("t-push-15", bad);
   assert(first.ok, "first fallback prepares");
-  assert(session.setupError !== null, "first run sets setupError");
-  const second = await prepareSplitwise(fakeApi().api);
+  assert(pushSessionFor("t-push-15").setupError !== null, "first run sets setupError");
+  const second = await prepareSplitwise("t-push-15", fakeApi().api);
   assert(second.ok, "second run prepares");
-  assert(session.mode === "live", "live mode again");
-  assert(session.setupError === null, "setupError cleared");
+  assert(pushSessionFor("t-push-15").mode === "live", "live mode again");
+  assert(pushSessionFor("t-push-15").setupError === null, "setupError cleared");
 });
 
 Deno.test("very long reason stays within its limit", async () => {
-  await fresh();
-  await prepareSource("Split JSON file", "", SPLIT_FILE);
+  await fresh("t-push-16");
+  await prepareSource("t-push-16", "Split JSON file", "", SPLIT_FILE);
   const base = fakeApi().api;
   const longMsg = "x".repeat(500);
   const api: PushApi = {
     ...base,
     getCurrentUser: () => Promise.reject(new Error(longMsg)),
   };
-  const sw = await prepareSplitwise(api);
+  const sw = await prepareSplitwise("t-push-16", api);
   assert(sw.ok, "fallback prepares");
-  assert(session.setupError !== null, "setupError set");
+  assert(pushSessionFor("t-push-16").setupError !== null, "setupError set");
   const prefix = "Splitwise access is set up, but the sign in check failed: ";
   const suffix = ". The push writes a summary file instead. Try again in a moment.";
   assert(
-    session.setupError!.length <= prefix.length + 120 + suffix.length,
+    pushSessionFor("t-push-16").setupError!.length <= prefix.length + 120 + suffix.length,
     "reason cut keeps the text within its limit",
   );
-  assert(!session.setupError!.includes("x".repeat(121)), "long body cut");
+  assert(!pushSessionFor("t-push-16").setupError!.includes("x".repeat(121)), "long body cut");
 });
 
 Deno.test("cutoff step prefills the newest order date and keeps typed values", async () => {
-  await fresh();
-  await prepareSource("Split JSON file", "", SPLIT_FILE);
+  await fresh("t-push-17");
+  await prepareSource("t-push-17", "Split JSON file", "", SPLIT_FILE);
   const entries = pushSteps();
   const cutoff = entries
-    .map((entry) => (typeof entry === "function" ? entry(new Map()) : entry))
+    .map((entry) => (typeof entry === "function" ? entry(new Map(), { sessionId: "t-push-17" }) : entry))
     .find((s) => s.id === "push-cutoff");
   assert(cutoff !== undefined, "cutoff step exists in pushSteps");
   const texts = textNodes(cutoff!);
@@ -640,13 +642,13 @@ Deno.test("cutoff step prefills the newest order date and keeps typed values", a
   // A typed value wins over the prefill.
   const cutoff2 = entries
     .map((entry) =>
-      typeof entry === "function" ? entry(new Map([["cutoff", ["2026-01-02"]]])) : entry
+      typeof entry === "function" ? entry(new Map([["cutoff", ["2026-01-02"]]]), { sessionId: "t-push-17" }) : entry
     )
     .find((s) => s.id === "push-cutoff");
   const texts2 = textNodes(cutoff2!);
   assert(texts2[0].value === "2026-01-02", "typed cutoff wins over the prefill");
   // The step order matches the forward path.
-  const ids = entries.map((entry) => typeof entry === "function" ? entry(new Map()).id : entry.id);
+  const ids = entries.map((entry) => typeof entry === "function" ? entry(new Map(), { sessionId: "t-push-17" }).id : entry.id);
   assert(
     JSON.stringify(ids) ===
       JSON.stringify([
@@ -660,4 +662,27 @@ Deno.test("cutoff step prefills the newest order date and keeps typed values", a
       ]),
     "step order matches the forward path",
   );
+});
+
+Deno.test("the push session prepared under A does not serve B", async () => {
+  await fresh("iso-push-A", "iso-push-B");
+  const fileA = root + "/iso-push-a.json";
+  const fileB = root + "/iso-push-b.json";
+  await Deno.writeTextFile(fileA, JSON.stringify(doc(["Ann", "Bob"])));
+  await Deno.writeTextFile(
+    fileB,
+    JSON.stringify(doc(["Cara", "Dev"])),
+  );
+  const { pushSessionFor } = await import("../wizards/expense-split/push-engine.ts");
+  const srcA = await prepareSource("iso-push-A", "Split JSON file", "", fileA);
+  assert(srcA.ok, "A source loads");
+  const srcB = await prepareSource("iso-push-B", "Split JSON file", "", fileB);
+  assert(srcB.ok, "B source loads");
+  const liveA = pushSessionFor("iso-push-A");
+  const liveB = pushSessionFor("iso-push-B");
+  assert(JSON.stringify(liveA.people) === '["Ann","Bob"]', "A keeps its people");
+  assert(JSON.stringify(liveB.people) === '["Cara","Dev"]', "B keeps its people");
+  assert(liveA.file === fileA, "A keeps its file");
+  assert(liveB.file === fileB, "B keeps its file");
+  assert(liveA.file !== liveB.file, "the two sessions stage apart");
 });

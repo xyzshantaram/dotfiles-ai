@@ -12,6 +12,8 @@ import {
   textEntry,
 } from "../../wizardkit/mod.ts";
 import { currentAuthorizeUrl, currentSignedInAs } from "./connect.ts";
+import type { WizardCtx } from "../../wizardkit/mod.ts";
+import { sidOf } from "../../src/sessionstore.ts";
 import { aiSetupMessage } from "../../src/ai-setup.ts";
 import { loadSettingsSync, USAGE_MODES } from "../../src/settings.ts";
 
@@ -39,17 +41,40 @@ const AI_GUIDANCE =
 const RESET_GUIDANCE =
   "Factory reset clears this app's saved data on this machine:\n\n- the Splitwise access token file\n- the pushed expense fingerprint file\n- the config directory, with settings and the Splitwise key pair\n- share/runs, with every gathered run\n- share/profiles\n- share/zomato-tokens.json\n- share/zomato-login-state.json\n\nIt keeps everything else. Type RESET in the box below, then press Factory reset.";
 
-// Handshake step. The key step starts the OAuth handshake, then this
-// step shows the approve link (clickable, plus copyable text) and takes
-// the verifier. A bare code or the full callback URL both work.
-function connectStep(_: Map<string, string[]>): Step {
-  const url = currentAuthorizeUrl();
+// Handshake step. The Splitwise tab of the settings step starts the
+// OAuth handshake, then this step shows the approve link (clickable,
+// plus copyable text) and takes the verifier. A bare code or the full
+// callback URL both work.
+function connectStep(_: Map<string, string[]>, ctx?: WizardCtx): Step {
+  // The handshake belongs to the browser that started it, so this read
+  // must use the same session id the start used. Reading the default
+  // session here hid every live link behind the not-ready branch.
+  const url = currentAuthorizeUrl(sidOf(ctx));
   const nodes: Step["nodes"] = [];
   if (url === null) {
+    // No handshake is waiting for this browser. Next would ask for a
+    // verifier box that this branch never draws, so the only way on is
+    // the button that starts the handshake.
     nodes.push(
       markdown(
-        "The approval link is not ready. Press Back, then press Next on the Splitwise key step again.",
+        "No approval is waiting. Open Settings, then press Save keys and connect on the Splitwise tab.",
       ),
+    );
+    nodes.push(
+      buttons(
+        [
+          { label: "Back", action: "back" },
+          { label: "Open Settings", action: "goto:settings", primary: true },
+        ],
+        undefined,
+        "split",
+      ),
+    );
+    return step(
+      "settings-connect",
+      "Approve Splitwise access",
+      nodes,
+      "One-time check that this app may talk to Splitwise.",
     );
   } else {
     nodes.push(
@@ -89,8 +114,8 @@ function connectStep(_: Map<string, string[]>): Step {
 }
 
 // Confirmation step for a finished handshake.
-function connectDoneStep(_: Map<string, string[]>): Step {
-  const name = currentSignedInAs();
+function connectDoneStep(_: Map<string, string[]>, ctx?: WizardCtx): Step {
+  const name = currentSignedInAs(sidOf(ctx));
   const line = name !== null && name !== ""
     ? "Signed in as " + name + "."
     : "Signed in to Splitwise.";
