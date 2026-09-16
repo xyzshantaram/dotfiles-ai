@@ -5,7 +5,7 @@
 // Bill paths stay open until one live capture pins them.
 
 import { formatISTDate, type Order } from "./common.ts";
-import { shareDir } from "./paths.ts";
+import { legacyZomatoConfigPath, shareDir, zomatoConfigPath } from "./paths.ts";
 
 export const BASE = "https://api.zomato.com";
 export const ACCOUNTS = "https://accounts.zomato.com";
@@ -26,17 +26,12 @@ export interface ZomatoConfig {
   appVersionCode: string;
 }
 
-// Config file the dev constants wizard writes. It lives under share.
-// The old state/config path stays as a read fallback.
-const CONFIG_FILE = new URL("../state/share/config/zomato.json", import.meta.url);
-const LEGACY_CONFIG_FILE = new URL("../state/config/zomato.json", import.meta.url);
-
 let cachedConfig: ZomatoConfig | null = null;
 
 // Read one JSON file and return an empty record on any failure.
-function readJsonFile(url: URL): Partial<ZomatoConfig> {
+function readJsonFile(path: string): Partial<ZomatoConfig> {
   try {
-    return JSON.parse(Deno.readTextFileSync(url)) as Partial<ZomatoConfig>;
+    return JSON.parse(Deno.readTextFileSync(path)) as Partial<ZomatoConfig>;
   } catch {
     // Missing or invalid file: defaults apply.
     return {};
@@ -47,10 +42,10 @@ function readJsonFile(url: URL): Partial<ZomatoConfig> {
 // to the defaults field by field. Missing keys fail loudly.
 export function loadConfig(): ZomatoConfig {
   if (cachedConfig) return cachedConfig;
-  // Read the new path first, then the old path.
+  // Read the old path first. Let the new path win.
   const file: Partial<ZomatoConfig> = {
-    ...readJsonFile(LEGACY_CONFIG_FILE),
-    ...readJsonFile(CONFIG_FILE),
+    ...readJsonFile(legacyZomatoConfigPath()),
+    ...readJsonFile(zomatoConfigPath()),
   };
   const apiKey = typeof file.apiKey === "string" && file.apiKey ? file.apiKey : DEFAULT_API_KEY;
   const clientId = typeof file.clientId === "string" && file.clientId

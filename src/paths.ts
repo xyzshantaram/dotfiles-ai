@@ -31,6 +31,18 @@ export function shareDir(): string {
   return stateRoot() + "/share";
 }
 
+// Read the Zomato constants file under the share dir.
+export function zomatoConfigPath(): string {
+  // Join the share dir and the fixed file name.
+  return shareDir() + "/config/zomato.json";
+}
+
+// Read the old Zomato constants file under the config dir.
+export function legacyZomatoConfigPath(): string {
+  // Join the config dir and the fixed file name.
+  return configDir() + "/zomato.json";
+}
+
 // Read the live runs dir under the state root.
 export function runsDir(): string {
   // Join the root and the share runs path.

@@ -5,6 +5,7 @@
 // Write the config file only with the write flag.
 
 import { $ } from "zx";
+import { legacyZomatoConfigPath, stateRoot, zomatoConfigPath } from "../src/paths.ts";
 import { say } from "../src/wizardkit.ts";
 
 // zx escape hatch: use $`cmd args` for shell, e.g. await $`gh auth status`.
@@ -27,13 +28,6 @@ const SELFTEST_ROOT = "/tmp/dsh/zomato-re/decoded";
 const SELFTEST_API_KEY_RE = /^[0-9a-fA-F]{32}$/;
 const SELFTEST_CLIENT_ID_RE =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-
-// Repo root sits two levels above this script file.
-// Import meta keeps the path stable outside the launch folder.
-function repoRoot(): string {
-  const dir = new URL("../..", import.meta.url).pathname;
-  return dir.endsWith("/") ? dir.slice(0, -1) : dir;
-}
 
 // One raw hit pairs a value with its file path and line number.
 interface Candidate {
@@ -267,7 +261,7 @@ if (SELFTEST) {
     Deno.exit(1);
   }
   if (apk.toLowerCase().endsWith(".xapk")) {
-    const workDir = repoRoot() + "/state/tmp/zomato-apk";
+    const workDir = stateRoot() + "/tmp/zomato-apk";
     await Deno.mkdir(workDir, { recursive: true });
     try {
       await $`unzip -o ${apk} base.apk -d ${workDir}`;
@@ -284,7 +278,7 @@ if (SELFTEST) {
   }
   // Decode the APK with apktool.
   const apktool = await findApktool();
-  const root = repoRoot() + "/state/tmp/zomato-apk";
+  const root = stateRoot() + "/tmp/zomato-apk";
   const decodedDir = root + "/decoded";
   await decodeOrAbort(apktool, decodedDir, apk, true);
   let yml = "";
@@ -338,11 +332,10 @@ if (SELFTEST) {
     appVersionCode: parsed.versionCode,
   };
   // Compare fresh values with the stored config.
-  const configRoot = repoRoot();
-  const configPath = configRoot + "/state/share/config/zomato.json";
+  const configPath = zomatoConfigPath();
   // Old installs keep values under state/config. Read that path
   // as a fallback so they migrate on first write.
-  const legacyPath = configRoot + "/state/config/zomato.json";
+  const legacyPath = legacyZomatoConfigPath();
   // Read old values from the config file only.
   const old = await readOldConfig(configPath) ?? await readOldConfig(legacyPath);
   const rows: Array<{ key: string; was: string; next: string }> = [
@@ -374,7 +367,8 @@ if (SELFTEST) {
     appVersion: fresh.appVersion,
     appVersionCode: fresh.appVersionCode,
   };
-  await Deno.mkdir(configRoot + "/state/share/config", { recursive: true });
+  // Make the parent dir before the write.
+  await Deno.mkdir(configPath.slice(0, configPath.lastIndexOf("/")), { recursive: true });
   // Write owner only so secrets stay private.
   await Deno.writeTextFile(configPath, JSON.stringify(out, null, 2) + "\n", { mode: 0o600 });
   // Fix the mode again for existing files.
