@@ -1,7 +1,8 @@
 # Wizard skill: ship a desktop wizard from one script
 
 Build interactive wizards (forms, splitters, dashboards, small apps) on wizardkit. One dependency
-only: Deno. The browser pulls HTMX from CDN.
+only: Deno. HTMX and the Web Awesome controls ship inside wizardkit and are served from `/vendor`,
+so a wizard works with no network.
 
 ## Layout
 
@@ -33,15 +34,60 @@ const handle = createWizard({
 Deno.serve({ port: 8471 }, handle);
 ```
 
+## Navigation
+
+A step declares its footer, and the toolkit renders one bar stuck to the foot of the window, so Back
+and Next stay in reach on a long screen. Set `nav` on the step:
+
+```ts
+{
+  id: "pick",
+  title: "Pick orders",
+  nodes,
+  nav: {
+    back: true, // true gives the label Back, or pass your own label
+    next: { label: "Next", run: onNext }, // one forward button only
+    actions: [ // screen-wide actions, left of the forward button
+      { id: "all", label: "Select all", run: selectAll },
+    ],
+  },
+}
+```
+
+- One forward button per step. Declare `next`, `done` or `goto`, never two of them.
+- A handler takes `(answers, fields, ctx)`: the answers from earlier steps, the fields just posted,
+  and the wizard context. `answers` does not yet hold this post, so read the current screen from
+  `fields`. Merge the two when a check spans both.
+- A `next` handler that returns nothing advances. A custom action that returns nothing re-renders
+  the same screen, which is what a Select all button wants.
+- Return `{ errors: ["..."] }` to hold the screen and show the message. Return `{ goto: "step-id" }`
+  to move somewhere else.
+- A step handler replaces the central `onSubmit` for that post, so one screen has exactly one owner.
+- Back never blocks and takes no handler.
+- Per-item buttons stay in the page as ordinary `buttons` nodes. The bar carries navigation and
+  actions that apply to the whole screen.
+
+## Arrival and departure
+
+Two hooks bracket a step. Both swallow their own errors, and neither can block.
+
+- `onEnter(answers, ctx)` runs once when a move lands on the step, before it renders. Arrival work
+  belongs here. It does not belong in the step builder, which runs on every render.
+- `onLeave(dir, answers, ctx)` runs just before a move away. `dir` is `back`, `next`, `done` or
+  `goto`. Save a draft here.
+
 ## Rules that matter
 
 - State is an event log. Every post appends `{ action, step, fields }`; answers fold from it.
   Restart clears it. Nothing is permanent until Done: mark side-effecting actions `run: "onConfirm"`
   and they execute in order on the confirmation page.
-- Buttons: one primary per step (`primary: true`, autofocused). Rows default right-aligned;
-  `layout: "split"` puts Back left, Next right.
-- Forms survive refresh: field drafts persist to localStorage with a resume bar. The footer shows
-  the draft status.
+- Buttons: declare navigation through `nav` above. A `buttons` node is for rows that sit in the page
+  beside what they act on. One primary per step (`primary: true`, autofocused). Rows default
+  right-aligned, and `layout: "split"` puts Back left, Next right.
+- Forms survive refresh: field drafts persist to localStorage, and a resume bar offers Restore or
+  Discard. The draft holds one step's fields, and the bar appears only while that same step is on
+  screen. It does not carry the reader back to the step they left. The footer shows the draft
+  status.
 - Theming: light and dark ship together (`prefers-color-scheme`). Neutrals carry surfaces; one
   pastel tint per node kind carries edges.
 - Text imports only (`style.css` pattern). No build step, ever.

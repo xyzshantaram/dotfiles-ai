@@ -233,6 +233,8 @@ export interface Step {
   note?: string;
   when?: StepWhen;
   onEnter?: StepOnEnter;
+  nav?: StepNav;
+  onLeave?: StepOnLeave;
 }
 
 // Session context for one browser. The toolkit passes one per request.
@@ -244,6 +246,54 @@ export interface WizardCtx {
 // context. It may return a promise. The wizard runs it once when a
 // move lands on the step, before the step renders.
 export type StepOnEnter = (
+  answers: Map<string, string[]>,
+  ctx: WizardCtx,
+) => void | Promise<void>;
+
+// Name one direction that leaves a step.
+export type LeaveDir = "back" | "next" | "done" | "goto";
+
+// Hold errors or a jump from one nav handler.
+export interface NavOutcome {
+  errors?: string[];
+  goto?: string;
+}
+
+// Run one nav button handler. Take the answers map plus the posted
+// fields plus the wizard context.
+export type NavHandler = (
+  answers: Map<string, string[]>,
+  fields: Record<string, string[]>,
+  ctx: WizardCtx,
+) => void | NavOutcome | Promise<void | NavOutcome>;
+
+// Name one forward button label plus its handler.
+export interface NavButton {
+  label: string;
+  run?: NavHandler;
+}
+
+// Name one custom action plus its handler.
+export interface NavAction {
+  id: string;
+  label: string;
+  run?: NavHandler;
+}
+
+// Declare one step footer bar. Back takes no handler, because Back
+// can never be blocked. The bar holds one forward button at most.
+export interface StepNav {
+  back?: boolean | string;
+  next?: string | NavButton;
+  done?: string | NavButton;
+  goto?: { step: string; label: string; run?: NavHandler };
+  actions?: NavAction[];
+}
+
+// Run one leave hook before a move. Take the direction plus the
+// answers map plus the wizard context.
+export type StepOnLeave = (
+  dir: LeaveDir,
   answers: Map<string, string[]>,
   ctx: WizardCtx,
 ) => void | Promise<void>;
@@ -767,6 +817,94 @@ export function stepApplies(
   }
 }
 
+// Check one forward button. A string needs non-blank text. An
+// object needs a non-blank label plus a function run when set. The
+// goto form also needs a non-blank step. Never throws.
+function validateNavForward(
+  value: unknown,
+  tag: string,
+  name: string,
+  needsStep: boolean,
+): string[] {
+  if (value === undefined) return [];
+  if (isTitle(value)) return [];
+  if (!isRecord(value)) {
+    return [tag + ": " + name + " must be a label or an object"];
+  }
+  const at = tag + ": " + name;
+  const errors: string[] = [];
+  const item = value as { label?: unknown; run?: unknown; step?: unknown };
+  if (!isTitle(item.label)) errors.push(at + " label must be non-blank");
+  if (item.run !== undefined && typeof item.run !== "function") {
+    errors.push(at + " run must be a function");
+  }
+  if (needsStep && !isTitle(item.step)) {
+    errors.push(at + " step must be non-blank");
+  }
+  return errors;
+}
+
+// Check the custom action list. Each entry needs a non-blank id plus
+// a non-blank label plus a function run when set. Ids stay unique.
+function validateNavActions(value: unknown, tag: string): string[] {
+  if (!Array.isArray(value)) return [tag + ": actions must be a list"];
+  const errors: string[] = [];
+  const seen = new Set<string>();
+  value.forEach((entry, i) => {
+    const at = tag + ": action " + i;
+    if (!isRecord(entry)) {
+      errors.push(at + " must be an object");
+      return;
+    }
+    const item = entry as { id?: unknown; label?: unknown; run?: unknown };
+    if (!isTitle(item.id)) {
+      errors.push(at + " id must be non-blank");
+    } else {
+      if (seen.has(item.id)) errors.push(at + " id " + item.id + " repeats");
+      seen.add(item.id);
+    }
+    if (!isTitle(item.label)) errors.push(at + " label must be non-blank");
+    if (item.run !== undefined && typeof item.run !== "function") {
+      errors.push(at + " run must be a function");
+    }
+  });
+  return errors;
+}
+
+// Check one step footer bar. Every error names the tag nav.
+function validateStepNav(nav: unknown): string[] {
+  const tag = "nav";
+  if (!isRecord(nav)) return [tag + ": nav must be an object"];
+  const errors: string[] = [];
+  const item = nav as {
+    back?: unknown;
+    next?: unknown;
+    done?: unknown;
+    goto?: unknown;
+    actions?: unknown;
+  };
+  if (
+    item.back !== undefined &&
+    typeof item.back !== "boolean" &&
+    !isTitle(item.back)
+  ) {
+    errors.push(tag + ": back must be a boolean or a non-blank label");
+  }
+  errors.push(...validateNavForward(item.next, tag, "next", false));
+  errors.push(...validateNavForward(item.done, tag, "done", false));
+  errors.push(...validateNavForward(item.goto, tag, "goto", true));
+  const forward = [item.next, item.done, item.goto].filter(
+    (entry) => entry !== undefined,
+  );
+  if (forward.length > 1) {
+    errors.push(tag + ": only one of next, done, or goto may be present");
+  }
+  if (item.actions !== undefined) {
+    errors.push(...validateNavActions(item.actions, tag));
+  }
+  return errors;
+}
+
 // Check a full step. Return error strings. Never throw.
 export function validateStep(step: unknown): string[] {
   const errors: string[] = [];
@@ -783,6 +921,9 @@ export function validateStep(step: unknown): string[] {
   step.nodes.forEach((node, index) => {
     errors.push(...validateNodeAt(node, "node " + index));
   });
+  if (step.nav !== undefined) {
+    errors.push(...validateStepNav(step.nav));
+  }
   return errors;
 }
 

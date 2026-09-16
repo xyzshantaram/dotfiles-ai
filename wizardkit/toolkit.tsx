@@ -25,8 +25,11 @@ import type {
   ButtonsNode,
   CheckboxNode,
   CopyableNode,
+  LeaveDir,
   MarkdownNode,
   MenuNode,
+  NavHandler,
+  NavOutcome,
   Node,
   NumberEntryNode,
   ProgressNode,
@@ -35,6 +38,7 @@ import type {
   SpoilerNode,
   StagesNode,
   Step,
+  StepNav,
   TableNode,
   TabsNode,
   TextareaNode,
@@ -141,18 +145,20 @@ export function resolveCommandMarkers(
 }
 
 // Render one option label with an optional muted hint line beneath it.
+// A present hint always renders, whether the option shows a label or
+// a value.
 function OptionLabel(props: { option: WizardOption }) {
   const option = props.option;
   if (typeof option === "string") return <>{option}</>;
-  if (option.label !== undefined && option.label !== "") {
-    return <>{option.label}</>;
-  }
+  const text = option.label !== undefined && option.label !== ""
+    ? option.label
+    : option.value;
   if (option.hint === undefined || option.hint === "") {
-    return <>{option.value}</>;
+    return <>{text}</>;
   }
   return (
     <>
-      {option.value}
+      {text}
       <small class="option-hint">{option.hint}</small>
     </>
   );
@@ -683,6 +689,82 @@ export function renderNode(node: Node): string {
   return renderToString(<NodeView node={node} />);
 }
 
+// Render one step footer bar. Back opens the row, actions fill the
+// middle, the forward button closes it. Each button posts its action
+// with the step form.
+function NavBar(props: { nav: StepNav }) {
+  const nav = props.nav;
+  let fwdAction = "";
+  let fwdLabel = "";
+  if (typeof nav.next === "string") {
+    fwdAction = "next";
+    fwdLabel = nav.next;
+  } else if (nav.next !== undefined) {
+    fwdAction = "next";
+    fwdLabel = nav.next.label;
+  } else if (typeof nav.done === "string") {
+    fwdAction = "done";
+    fwdLabel = nav.done;
+  } else if (nav.done !== undefined) {
+    fwdAction = "done";
+    fwdLabel = nav.done.label;
+  } else if (typeof nav.goto === "string") {
+    fwdAction = "goto:" + nav.goto;
+    fwdLabel = "Next";
+  } else if (nav.goto !== undefined) {
+    fwdAction = "goto:" + nav.goto.step;
+    fwdLabel = nav.goto.label;
+  }
+  const showBack = nav.back !== undefined && nav.back !== false;
+  const backLabel = nav.back === true ? "Back" : String(nav.back);
+  const acts = nav.actions ?? [];
+  return (
+    <div class="wiz-nav">
+      <div class="wiz-nav-back">
+        {showBack
+          ? (
+            <wa-button
+              variant="neutral"
+              type="submit"
+              name="action"
+              value="back"
+            >
+              {backLabel}
+            </wa-button>
+          )
+          : null}
+      </div>
+      <div class="wiz-nav-mid">
+        {acts.map((item) => (
+          <wa-button
+            variant="neutral"
+            type="submit"
+            name="action"
+            value={"act:" + item.id}
+          >
+            {item.label}
+          </wa-button>
+        ))}
+      </div>
+      <div class="wiz-nav-fwd">
+        {fwdAction !== ""
+          ? (
+            <wa-button
+              variant="primary"
+              type="submit"
+              name="action"
+              value={fwdAction}
+              autofocus
+            >
+              {fwdLabel}
+            </wa-button>
+          )
+          : null}
+      </div>
+    </div>
+  );
+}
+
 // Render one step as a form. It posts the step id plus answers to /step.
 // The plain method plus action keep it working when HTMX is absent.
 // A step holding one tabs node renders as a root tabbed view.
@@ -704,6 +786,7 @@ export function renderStepFragment(input: Step): string {
       >
         <input type="hidden" name="step" value={input.id} />
         {input.nodes.map((node, i) => <NodeView key={i} node={node} />)}
+        {input.nav !== undefined ? <NavBar nav={input.nav} /> : null}
       </form>
     </section>,
   );
@@ -1189,6 +1272,66 @@ export function createWizard(
     }
   }
 
+  // Run the leave hook once before a move. A throw never breaks
+  // the move. The caller catches nothing. Never throws.
+  async function runLeave(
+    target: Step | undefined,
+    dir: LeaveDir,
+    answers: Map<string, string[]>,
+    ctx: WizardCtx,
+  ): Promise<void> {
+    if (target === undefined) return;
+    const hook = target.onLeave;
+    if (typeof hook !== "function") return;
+    try {
+      await hook(dir, answers, ctx);
+    } catch {
+      // Keep the wizard running. The move continues below.
+    }
+  }
+
+  // Run one declared nav handler for a posted action. found is true
+  // when a declared button owns the action, even when its handler
+  // stays silent. found is false when no button owns the action, so
+  // the post falls through to onSubmit.
+  async function runNavButton(
+    postedStep: Step,
+    action: string,
+    answers: Map<string, string[]>,
+    fields: Record<string, string[]>,
+    ctx: WizardCtx,
+  ): Promise<{ found: boolean; outcome?: NavOutcome }> {
+    const nav = postedStep.nav;
+    if (nav === undefined) return { found: false };
+    let run: NavHandler | undefined;
+    if (action === "next") {
+      run = typeof nav.next === "string" ? undefined : nav.next?.run;
+    } else if (action === "done") {
+      run = typeof nav.done === "string" ? undefined : nav.done?.run;
+    } else if (action.startsWith("goto:")) {
+      const target = action.slice(5);
+      if (typeof nav.goto === "string") {
+        if (nav.goto !== target) return { found: false };
+      } else {
+        if (nav.goto === undefined || nav.goto.step !== target) {
+          return { found: false };
+        }
+        run = nav.goto.run;
+      }
+    } else if (action.startsWith("act:")) {
+      const id = action.slice(4);
+      const item = nav.actions?.find((entry) => entry.id === id);
+      if (item === undefined) return { found: false };
+      run = item.run;
+    } else {
+      return { found: false };
+    }
+    if (typeof run !== "function") return { found: false };
+    const outcome = await run(answers, fields, ctx);
+    if (outcome === undefined) return { found: true };
+    return { found: true, outcome };
+  }
+
   // Resolve a target step to its render step. Keep shared arrival work in one place.
   async function arrive(
     target: Step,
@@ -1556,12 +1699,36 @@ export function createWizard(
       if (values !== undefined) heldFields[name] = values;
       delete fields[name];
     }
-    const outcome = await opts.onSubmit?.(fields, stepId, action, ctx);
+    // Step that posted this form. Nav handlers plus the leave hook
+    // read it below.
+    const postedStep = posted.find((item) => item.id === stepId);
+    // Run one declared nav handler instead of onSubmit. Back never
+    // runs a handler, so it always falls through.
+    let navResult: { found: boolean; outcome?: NavOutcome } = {
+      found: false,
+    };
+    if (postedStep !== undefined && action !== "back" && action !== "restart") {
+      navResult = await runNavButton(
+        postedStep,
+        action,
+        currentAnswersFor(state),
+        fields,
+        ctx,
+      );
+    }
+    const outcome = navResult.found
+      ? undefined
+      : await opts.onSubmit?.(fields, stepId, action, ctx);
     // A veto never blocks a backward move. Back plus restart still
     // call the hook above, so apps record what was typed, but the
     // errors below never reject the post here.
     const backward = action === "back" || action === "restart";
-    if (!backward && outcome?.errors !== undefined && outcome.errors.length > 0) {
+    // Errors from a nav handler re-render exactly like an onSubmit
+    // veto. Nothing logs and no move runs.
+    const hookErrors = navResult.found
+      ? navResult.outcome?.errors
+      : outcome?.errors;
+    if (!backward && hookErrors !== undefined && hookErrors.length > 0) {
       // Reject the post. Nothing appends. Re-render the current step
       // with the joined errors on the first node error field.
       // Build the step again here, after the hook ran. A hook that
@@ -1574,17 +1741,21 @@ export function createWizard(
         posted.find((item) => item.id === stepId) ?? rebuilt[0];
       const nodes = cur.nodes.length > 0
         ? [
-          { ...cur.nodes[0], error: outcome.errors.join(" ") },
+          { ...cur.nodes[0], error: hookErrors.join(" ") },
           ...cur.nodes.slice(1),
         ]
-        : [markdown(outcome.errors.join(" "))];
+        : [markdown(hookErrors.join(" "))];
       return reply(req, { ...cur, nodes }, state, {
         built: rebuilt,
         applies: vetoApplies,
       });
     }
-    if (!backward && outcome?.insert !== undefined) {
-      state.inserted.push({ after: stepId, step: outcome.insert });
+    // A nav handler names no insert. Its goto rides the same path
+    // as an onSubmit goto below.
+    const hookInsert = navResult.found ? undefined : outcome?.insert;
+    const hookGoto = navResult.found ? navResult.outcome?.goto : outcome?.goto;
+    if (!backward && hookInsert !== undefined) {
+      state.inserted.push({ after: stepId, step: hookInsert });
     }
     state.events.push({ action, step: stepId, fields, at: Date.now() });
     if (action === "restart") {
@@ -1599,10 +1770,25 @@ export function createWizard(
     if (built.length === 0) {
       return new Response("No steps", { status: 500 });
     }
+    // Leave direction for the pressed button. A custom action leaves
+    // as goto only when its handler names a step.
+    let leaveDir: LeaveDir | undefined;
+    if (action === "back") leaveDir = "back";
+    else if (action === "next") leaveDir = "next";
+    else if (action === "done") leaveDir = "done";
+    else if (action.startsWith("goto:")) leaveDir = "goto";
+    else if (
+      action.startsWith("act:") &&
+      navResult.found &&
+      navResult.outcome?.goto !== undefined
+    ) {
+      leaveDir = "goto";
+    }
     if (action === "done") {
       for (const [name, values] of Object.entries(heldFields)) {
         answers.set(name, values);
       }
+      await runLeave(postedStep, "done", answers, ctx);
       let total = 0;
       for (const values of answers.values()) total += values.length;
       const outNodes: Node[] = [
@@ -1699,6 +1885,7 @@ export function createWizard(
         if (at >= 0 && applies[at] === true) {
           const found = built[at];
           if (found !== undefined) {
+            await runLeave(postedStep, "back", answers, ctx);
             const resolvedBack = await arrive(found, state, answers, ctx, nav);
             return reply(req, resolvedBack.step, state, resolvedBack.nav);
           }
@@ -1733,14 +1920,14 @@ export function createWizard(
         if (found >= 0) index = found;
       }
     }
-    if (!backward && outcome?.insert !== undefined) {
-      const at = built.findIndex((entry) => entry.id === outcome.insert?.id);
+    if (!backward && hookInsert !== undefined) {
+      const at = built.findIndex((entry) => entry.id === hookInsert?.id);
       if (at >= 0) {
         index = at;
         dir = "forward";
       }
-    } else if (!backward && outcome?.goto !== undefined) {
-      const at = built.findIndex((entry) => entry.id === outcome.goto);
+    } else if (!backward && hookGoto !== undefined) {
+      const at = built.findIndex((entry) => entry.id === hookGoto);
       if (at >= 0) {
         index = at;
         dir = "forward";
@@ -1761,6 +1948,11 @@ export function createWizard(
     const pick = built[clamp(index, built.length - 1)];
     if (pick === undefined) {
       return new Response("No steps", { status: 500 });
+    }
+    // Run the leave hook once before a real move. A re-render keeps
+    // the step id, so the hook stays silent there.
+    if (leaveDir !== undefined && pick.id !== stepId) {
+      await runLeave(postedStep, leaveDir, answers, ctx);
     }
     const resolvedMove = await arrive(pick, state, answers, ctx, nav, action === "restart");
     const finalPick = resolvedMove.step;

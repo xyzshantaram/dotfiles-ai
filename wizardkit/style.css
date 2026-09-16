@@ -278,3 +278,44 @@ wa-tab-group::part(tabs) {
     padding: 0.5rem 1rem;
   }
 }
+/* Step footer bar. It sinks to the foot on short content and sticks
+   there on long content. Back opens the row, actions fill the middle,
+   forward closes it. */
+.wiz-nav {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  margin: auto -1rem 0;
+  padding: 0.5rem 1rem;
+  background: var(--wa-color-surface-default);
+  border-top: 1px solid var(--wa-color-surface-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+.wiz-nav-back {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 0.5rem;
+}
+.wiz-nav-mid {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.wiz-nav-fwd {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.5rem;
+}
+@media (max-width: 480px) {
+  .wiz-nav {
+    margin: auto -0.75rem 0;
+    padding: 0.5rem 0.75rem;
+  }
+}

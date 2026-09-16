@@ -2381,3 +2381,178 @@ Deno.test("a whitespace input label is still an error", () => {
   if (problems.length === 0) throw new Error("expected a validation error");
   if (!problems[0].includes("label")) throw new Error("error does not name the label");
 });
+
+Deno.test("silent next handler advances to the following step", async () => {
+  // Post next on a step whose nav next owns a silent handler.
+  const handle = wiz({
+    title: "T",
+    steps: [
+      {
+        ...step("a", "First", [markdown("one")]),
+        nav: { next: { label: "Continue", run: () => {} } },
+      },
+      step("b", "Second", [markdown("two")]),
+    ],
+  });
+  const page = await handle(stepPost("a", "next"));
+  assert((await page.text()).includes("Second"), "silent next advances");
+});
+
+Deno.test("silent custom action re-renders the same step", async () => {
+  // Post a custom action whose handler stays silent.
+  const handle = wiz({
+    title: "T",
+    steps: [
+      {
+        ...step("a", "First", [markdown("one")]),
+        nav: {
+          next: "Continue",
+          actions: [{ id: "all", label: "Select all", run: () => {} }],
+        },
+      },
+      step("b", "Second", [markdown("two")]),
+    ],
+  });
+  const page = await handle(stepPost("a", "act:all"));
+  const body = await page.text();
+  assert(body.includes("First"), "custom action stays put");
+  assert(!body.includes("Second"), "custom action does not advance");
+});
+
+Deno.test("handler errors re-render the same step with error text", async () => {
+  // Post next on a step whose handler reports errors.
+  const handle = wiz({
+    title: "T",
+    steps: [
+      {
+        ...step("a", "First", [textEntry("Run name", "run"), markdown("one")]),
+        nav: {
+          next: {
+            label: "Continue",
+            run: () => ({ errors: ["Name is missing"] }),
+          },
+        },
+      },
+      step("b", "Second", [markdown("two")]),
+    ],
+  });
+  const page = await handle(stepPost("a", "next"));
+  const body = await page.text();
+  assert(body.includes("Name is missing"), "error text appears");
+  assert(body.includes("First"), "post stays put");
+  assert(!body.includes("Second"), "post does not advance");
+});
+
+Deno.test("handler goto lands on the named step", async () => {
+  // Post next on a step whose handler names step three.
+  const handle = wiz({
+    title: "T",
+    steps: [
+      {
+        ...step("a", "First", [markdown("one")]),
+        nav: { next: { label: "Continue", run: () => ({ goto: "c" }) } },
+      },
+      step("b", "Second", [markdown("two")]),
+      step("c", "Third", [markdown("three")]),
+    ],
+  });
+  const page = await handle(stepPost("a", "next"));
+  assert((await page.text()).includes("Third"), "goto lands on step three");
+});
+
+Deno.test("declared next handler never reaches onSubmit", async () => {
+  // Post next on a step whose nav next owns the post.
+  let calls = 0;
+  const handle = wiz({
+    title: "T",
+    steps: [
+      {
+        ...step("a", "First", [markdown("one")]),
+        nav: { next: { label: "Continue", run: () => {} } },
+      },
+      step("b", "Second", [markdown("two")]),
+    ],
+    onSubmit: () => {
+      calls += 1;
+    },
+  });
+  const page = await handle(stepPost("a", "next"));
+  assert((await page.text()).includes("Second"), "silent next advances");
+  assert(calls === 0, "onSubmit stays silent");
+});
+
+Deno.test("back runs no handler and reports back to onLeave", async () => {
+  // Walk forward, then post back from a step with a next handler.
+  let runs = 0;
+  const dirs: string[] = [];
+  const handle = wiz({
+    title: "T",
+    steps: [
+      step("a", "First", [markdown("one")]),
+      {
+        ...step("b", "Second", [markdown("two")]),
+        nav: {
+          back: true,
+          next: {
+            label: "Continue",
+            run: () => {
+              runs += 1;
+            },
+          },
+        },
+        onLeave: (dir) => {
+          dirs.push(dir);
+        },
+      },
+      step("c", "Third", [markdown("three")]),
+    ],
+  });
+  await handle(stepPost("a", "next"));
+  const back = await handle(stepPost("b", "back"));
+  const body = await back.text();
+  assert(body.includes("First"), "back still moves back");
+  assert(runs === 0, "back runs no handler");
+  assert(dirs.join(",") === "back", "onLeave sees back");
+});
+
+Deno.test("onLeave receives next on a forward move", async () => {
+  // Post next on a step with a silent handler plus a leave hook.
+  const dirs: string[] = [];
+  const handle = wiz({
+    title: "T",
+    steps: [
+      {
+        ...step("a", "First", [markdown("one")]),
+        nav: { next: { label: "Continue", run: () => {} } },
+        onLeave: (dir) => {
+          dirs.push(dir);
+        },
+      },
+      step("b", "Second", [markdown("two")]),
+    ],
+  });
+  const page = await handle(stepPost("a", "next"));
+  assert((await page.text()).includes("Second"), "next advances");
+  assert(dirs.join(",") === "next", "onLeave sees next");
+});
+
+Deno.test("labelled option with hint renders both lines", () => {
+  // Render a radio option carrying a label plus a hint.
+  const html = renderNode(
+    radio("Fee", "fee", [{ value: "equal", label: "Equal", hint: "Split evenly" }]),
+  );
+  assert(html.includes("Equal"), "label line shows");
+  assert(html.includes("Split evenly"), "hint line shows");
+  assert(html.includes("option-hint"), "hint keeps its class");
+});
+
+Deno.test("validateStep rejects a nav with both next and done", () => {
+  // Declare two forward buttons on one step.
+  const st = {
+    ...step("s", "S", [markdown("ok")]),
+    nav: { next: "Next", done: "Done" },
+  };
+  const errors = validateStep(st);
+  assert(errors.length > 0, "double forward fails");
+  assert(namesKind(errors, "nav"), "error names nav");
+});
