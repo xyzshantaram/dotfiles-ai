@@ -10,30 +10,46 @@ small apps from the same nodes.
 
 ## Checklist
 
-Open work only. Closed tickets move to the human review queue at the foot of this file, where the
-user drives the real screen before the work counts as finished.
+Open work only. A closed ticket leaves this file. Git holds its history, and anything worth
+remembering moves to Critical context. Work the user must drive by hand moves to the review queue.
 
-G3 splits into the two tickets below. One browser can read another one's answers today. The user
-chose the full fix: real per session state, in the toolkit first, then in every module.
+### N series: the declared navigation bar
 
-- [x] G18 one reader for a posted field. Closed. src/answers.ts now holds field(), answer(),
-      answers() and isDryMap(), each defined once. isDryMap keeps a re-export from src/runstate.ts
-      so old import paths still work. About twenty hand written reads collapsed into it. The raw
-      reads left behind are listed in the report: each one converts a number, tests for a missing
-      key, or matches an exact string, so the trimmed reader would change its meaning.
+Settled with the user on 2026-09-17. A step declares its own footer instead of hand building a
+buttons row, the toolkit renders that footer stuck to the foot of the window, and each screen owns
+its own submit logic. This retires G17, which planned to spread the old `nav()` helper instead.
 
-- [ ] G17 nav() adoption across the step modules. Parked with a reason, not forgotten: nav() fixes
-      the label of a goto row to "Next", so a sweep would silently rewrite copy such as "Back to
-      menu". Blocked on K12. The other two parts of G17 landed: the People list now uses seeded
-      repeating rows, and the AI setup uses copyable().
-
-### Closed with a reason, not with code
-
-- K1 gave the toolkit a custom done screen. This app does not need one. Every flow already ends on a
-  purpose built screen with a Back to menu button, and one shared done screen would serve three
-  flows badly. The single button that still posted `done` sat on the dry run export, where it hit
-  the toolkit summary and left the user stuck. That button now returns to the menu, matching the
-  live export path, and no `action: "done"` remains in the app.
+- [ ] N2 the wizard skill teaches the new contract. wizard/SKILL.md gains the nav declaration, the
+      handler signatures, the silent return rules, and the onEnter and onLeave pair. The app skill
+      gains nothing: SKILL.md is how to build wizards. Eval: a reader with only SKILL.md can write a
+      step with a nav bar, one custom action, and an onLeave hook, without reading toolkit source.
+- [ ] N3 the gather flow moves to the bar, and its branches move out of onSubmit into step handlers.
+      Eval: every gather screen shows the sticky bar, Select all and Select none still re-render
+      without advancing, no gather branch remains in onSubmit, suite green.
+- [ ] N10 a handler receives an answers map that does not hold the post which triggered it, so any
+      check spanning both has to merge them by hand. `manualNext` in gather.ts already does, at
+      gather.ts line 436, and every later migration meets the same wall. Wanted: the toolkit passes
+      one map that already folds the current post in, with `fields` kept as the convenience view. Do
+      it with N4, before the split flow copies the merge. Eval: no app handler builds its own merged
+      map, and a handler reading a field posted on its own screen finds it in `answers`.
+- [ ] N4 the split flow moves the same way. It holds 21 hand built rows, the most of any module.
+      Eval: as N3, plus Repeat last still copies the previous assignment.
+- [ ] N5 the push flow moves the same way. Eval: as N3, plus the dry run export Finish still returns
+      to the menu.
+- [ ] N6 settings and the app shell move the same way. Then delete the app's `seen` store, which
+      duplicates the toolkit answers map, and delete the unused `nav()` helper. Eval: a search for
+      seenStore returns nothing, onSubmit holds only genuinely shared work or is gone, suite green.
+- [ ] N9 the saved draft cannot carry you back to where you were, which is the second half of the
+      report that produced N8. Measured in wizardkit/toolkit.tsx: the draft script stores one record
+      of `{version, step, fields}` in localStorage, and its resume bar checks
+      `saved.step !==
+      sid(form)` and returns when they differ. So the bar appears only while
+      the very step you left is already on screen. Come back after the server session ends and you
+      land on the menu, where the saved draft for `gather-manual` stays invisible for ever, and a
+      successful post clears it. Wanted: a draft that names where you were and offers to go there,
+      for example "You were on Manual expenses. Continue or Discard", with Continue posting a goto
+      to that step. Eval: fill a middle step, drop the session, reopen the wizard, and the bar
+      offers that step by name and lands on it with the fields restored.
 
 ### Final gate, after every ticket above is closed
 
@@ -41,21 +57,10 @@ chose the full fix: real per session state, in the toolkit first, then in every 
       duplicated logic across modules, near copies that differ by one argument, duplicated type
       definitions, and hand rolled code that a small well scoped dependency would replace. Review
       the wizards, the toolkit, and src together, not module by module. Eval: every finding lands as
-      its own ticket here, or as a written reason to leave it alone. Four findings came out of the
-      pre commit diff read. The first three are fixed. The fourth stays open as the starting point:
-      1. Fixed. wizardkit/toolkit.tsx repeated one block four times: run onEnter, rebuild every
-      step, recompute applicability, find the step again, then reply. One helper named `arrive` owns
-      it now. Only the custom done screen keeps its own shape, because it re-runs `opts.done` rather
-      than `buildAll`. 2. Fixed. The three empty pick screens in gather.ts fold into
-      `pickPlaceholder`, which takes the one sentence that differed. Every user facing string stayed
-      the same. 3. Fixed. The reader is now `answerList`, so the toolkit node builder keeps the
-      plain name `answers`. Fourteen call sites changed, and both `showAnswers` aliases are gone. 4.
-      wizards/expense-split/gather.ts defines its own `LEGACY_TOKENS_FILE` constant, which
-      duplicates the one in src/zomato.ts, and it repeats that module's read chain of current path,
-      then old path, then older path. The chain belongs in one place. Checked while fixing U11: the
-      token and login state reads keep their fixed repo paths on purpose, as the second and third
-      entries of a migration chain whose first entry honours the state root, so those are correct as
-      they stand.
+      its own ticket here, or as a written reason to leave it alone. One finding from the pre commit
+      diff read is still open and starts the pass: wizards/expense-split/gather.ts defines its own
+      `LEGACY_TOKENS_FILE`, duplicating the one in src/zomato.ts, and repeats that module's read
+      chain of current path, then old path, then older path. The chain belongs in one place.
 
 ### Deferred: wizardkit footguns found by the C-series audit
 
@@ -71,55 +76,10 @@ later, and the next app does not pay the same cost.
       clears itself so the Start over write runs once. So this is a design fault with no known user
       visible symptom. Do it when the core loop is not about to be hand driven. Eval: a repeated
       render of one item writes nothing, and a posted assignment still saves once.
-- [x] U5 purge old UI stacks, stage one: delete the retired terminal wizards. Closed. Twenty files
-      left the tree: splitter.ts, pusher.ts, splitter-kit.ts, splitter-cliffy.ts, meta.ts,
-      settings.ts, _template.ts, kitchen-sink.ts, cliffy-kit.ts, splitwise-setup.ts, the whole
-      src/kit tree, and four test files that tested only deleted code. src/wizardkit.ts lost
-      seventeen dead exports. src/settings.ts lost the terminal pickCurrency. deno.json lost exotui,
-      exotui/app, crayon, five cliffy packages, and the menu task. Gates: 358 tests, check clean,
-      fixtures ALL MATCH, lint over 88 files. docs/copy-audit.md keeps the deleted names on purpose
-      as the record.
-- [x] U6 strip the interactive half of wizards/gatherer.ts. Closed. The file fell from 2622 lines to
-      2148. Stage one deleted the terminal wizard entry, runDry, gatherManual, askLocation,
-      zomatoLogin, the dead interactive branch of gatherZomato, and seven wizardkit imports. Stage
-      two deleted the loginWait timeout menu with its noPrompt and confirmChoice options, the Zepto
-      confirmChoice block, the dead login branch of gatherBrowserPlatform, and the MepCLI import.
-      The site URL ternary became the helper platformSiteUrl, shared by the two callers. Verified by
-      me on the real binary: a bare run prints the five modes and exits 1, --login=nosuch and
-      --zomato-city and --zomato-login-start each still print their one human line, and no MepCLI
-      call remains. Gates green at every step.
-- [x] U7 decided by the user: keep the tool, drop MepCLI, keep zx. Closed.
-      wizards/dev-zomato-consts.ts is now a linear non interactive script, 480 lines down to 395. It
-      takes an APK or XAPK path plus an optional `--write`. It prints the fresh values by default
-      and writes the config only with the flag. The drop folder polling loop, the file manager
-      question, and the write question are gone. Its `--selftest` used to die with a raw readDirSync
-      stack trace, because the decoded tree at /tmp/dsh/zomato-re/decoded no longer exists, and it
-      now states that in one line. With the last MepCLI call gone, src/wizardkit.ts fell from 297
-      lines to 101 and lost twelve dead exports: APP_VERSION, setTotalStages, clearScreen,
-      selectHint, installProcessGuards, createWizard, banner, readyGate, warn, open_url, confirm,
-      and finish. Nine print helpers remain. `mepcli` is out of deno.json. zx stays, and a real bash
-      command through the toolkit `$` is proven to run.
-- [x] U11 the Zomato constants file ignored the state root override. Fixed. src/paths.ts now owns
-      `zomatoConfigPath()` and `legacyZomatoConfigPath()`. src/zomato.ts reads through them, and the
-      dev script writes through them, so no `import.meta.url` path remains for the constants. The
-      dev script also takes its work dir from `stateRoot()`, which retired its own `repoRoot()`
-      helper. Proven by running the resolver twice: with `SPLIT_UTILS_STATE=/tmp/dsh/zcfg-probe` it
-      returns `/tmp/dsh/zcfg-probe/share/config/zomato.json`, and with no override it returns the
-      repo state dir. The token and login state reads keep their fixed paths on purpose, as the
-      later entries of a migration chain whose first entry honours the root.
 - [ ] U10 the zx version sits in three files: deno.json, wizardkit/deno.json, and wizardkit/mod.ts,
       which hardcodes `npm:zx@8.8.5` so the published package resolves with no import map. A bump
       needs three edits today, and nothing fails when one is missed. Eval: one place states the
       version, or a check fails when the three disagree.
-- [x] U8 retire CHECKLIST.md. Closed. The file is deleted, so one list survives: the human review
-      queue at the foot of this file. Its header certified a machine run from 2026-09-10 that no
-      longer held, and its first step called `deno task menu`, a task the repo no longer defines.
-      Folded across as new tickets: the four release gates as P1 to P4, the two session save as C10,
-      and the share link drive rewritten into U4, which used to cite a CHECKLIST line number. The
-      "must not happen" block moved into the standing rules below. Dropped on purpose: steps 1 to 9
-      drove terminal screens that no longer exist and are already covered by U2, W3, W8, G1, R2 and
-      F4, step 18 asked for `git init`, which landed as commit 5f5792e, and step 19 named an aidos
-      scratch prompt that no ticket here tracks. One capability in it has no home, recorded as U9.
 - [ ] U9 the aggregate summary survives, but nobody can choose it. I searched for the old sentence
       and found none, then read the engine and found the whole capability alive. push-engine.ts
       carries a mode of idle, aggregate, or live. It falls to aggregate when the key pair is
@@ -143,6 +103,15 @@ later, and the next app does not pay the same cost.
 
 ## Critical context
 
+- The toolkit replays every post into one answers map per session, so any app level copy of the
+  answers is duplication. This is why N6 deletes the `seen` store rather than feeding it.
+- Back is unblockable by construction: the toolkit resolves a backward move before any app code
+  runs. Departure work goes in `onLeave`, which takes the direction and cannot block.
+- The terminal era is over. One script still runs from a shell, `wizards/gatherer.ts`, and it takes
+  machine modes only. `wizards/dev-zomato-consts.ts` is a dev tool that takes an APK path. mepcli,
+  exotui, crayon and cliffy are gone, and zx stays because wizard authors run bash through it.
+- State paths all resolve through src/paths.ts and honour `SPLIT_UTILS_STATE`. Token and login state
+  reads keep two fixed repo paths on purpose, as the later entries of a migration chain.
 - Splitwise facts (verified Sep 2026): app registration at secure.splitwise.com/apps is free and
   yields a consumer key plus consumer secret. Free accounts cap at a few expenses a day, so a full
   push needs Pro on one group account.
@@ -198,6 +167,17 @@ Every entry here names work that is code complete and green. It counts as done o
 drives the real screen. Restart the server first. A fix cannot reach a process that started before
 it.
 
+- [ ] NAV hand-drive (your smoke test): run a real Zepto gather once N3 lands. The Back and Next bar
+      must stay at the foot of the window while a long screen scrolls, Select all and Select none
+      must tick and untick without leaving the screen, and Next must refuse an empty pick list with
+      one message. I proved every rule on a scratch wizard over HTTP, but nothing has scrolled in a
+      real window yet.
+- [ ] PICK detail hand-drive: on Pick orders each row now carries a second line naming up to five
+      items with their quantities, then a count of the rest. Confirm it reads well on a real grocery
+      order, which is the thing that made price and count too little to decide on.
+- [ ] RESUME hand-drive: gather a run, leave the wizard, come back through Pick up where you left
+      off, and confirm you land on Pick orders with your earlier ticks already set, not in the split
+      flow. Change one tick, press Next, and confirm the split opens on that run with the change.
 - [ ] R3 push source hand-drive: the source screen lists your assigned runs, newest first, and
       starts on the newest. A run id typed into Other run still wins.
 - [ ] G32 reset hand-drive: sign in to Splitwise, run a factory reset, then open the push flow. It

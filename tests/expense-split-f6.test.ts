@@ -228,9 +228,10 @@ Deno.test("f6 each status routes to its next step", async () => {
   try {
     const root = await freshRoot("f6-route-", "t-f6-3");
     const cases: Array<[string, string, string]> = [
-      // The split flow asks which run first, so a gathered run opens
-      // that step, and the resume pick carries into it.
-      ["r-gathered", "gathered", "split-run"],
+      // A gathered run opens the pick screen, so the user chooses which
+      // orders to split before the split flow starts. The resume pick
+      // carries into it, and Next then leads to the split run step.
+      ["r-gathered", "gathered", "gather-pick"],
       ["r-assigned", "assigned", "push-source"],
       ["r-pushed", "pushed", "resume-done"],
     ];
@@ -249,7 +250,7 @@ Deno.test("f6 each status routes to its next step", async () => {
         }),
       );
     }
-    assert(routeStatus("gathered") === "split-run", "gathered routes to the run step");
+    assert(routeStatus("gathered") === "gather-pick", "gathered routes to the pick screen");
     assert(routeStatus("assigned") === "push-source", "assigned routes to push");
     assert(routeStatus("pushed") === "resume-done", "pushed routes to done");
     for (const [id, _status, want] of cases) {

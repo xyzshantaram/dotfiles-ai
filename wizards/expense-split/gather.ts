@@ -3,7 +3,6 @@
 import {
   action,
   answers,
-  buttons,
   checkbox,
   markdown,
   type Node,
@@ -14,12 +13,17 @@ import {
   type StepFn,
   textEntry,
 } from "../../wizardkit/mod.ts";
-import { isDryMap, listRunsSync, readRunOrders, runsDir, stateRoot } from "../../src/runstate.ts";
-import { answerList } from "../../src/answers.ts";
 import {
-  sessionStore,
-  sidOf,
-} from "../../src/sessionstore.ts";
+  isDryMap,
+  listRunsSync,
+  readRunMetaSync,
+  readRunOrders,
+  runsDir,
+  setRunPicked,
+  stateRoot,
+} from "../../src/runstate.ts";
+import { answer, answerList } from "../../src/answers.ts";
+import { sessionStore, sidOf } from "../../src/sessionstore.ts";
 import type { WizardCtx } from "../../wizardkit/mod.ts";
 import { dryBox, dryNote } from "./dry.ts";
 import { fmtRs, formatDayISO, parseDate } from "../../src/common.ts";
@@ -214,29 +218,24 @@ function accountsStep(answerMap: Map<string, string[]>): Step {
       );
     }
   }
-  return step(
-    "gather-accounts",
-    "Accounts",
-    [
-      ...nodes,
-      ...(dry ? [dryNote()] : []),
-      buttons(
-        [
-          { label: "Back", action: "back" },
-          { label: "Next", action: "next", primary: true },
-        ],
-        undefined,
-        "split",
-      ),
-    ],
-    "Press the button below to open the sign-in window. The app continues by itself once the sign in lands.",
-  );
+  return {
+    ...step(
+      "gather-accounts",
+      "Accounts",
+      [
+        ...nodes,
+        ...(dry ? [dryNote()] : []),
+      ],
+      "Press the button below to open the sign-in window. The app continues by itself once the sign in lands.",
+    ),
+    nav: { back: true, next: "Next" },
+  };
 }
 
 export function gatherSteps(): Array<Step | StepFn> {
   return [
-    (answerMap: Map<string, string[]>): Step =>
-      step(
+    (answerMap: Map<string, string[]>): Step => ({
+      ...step(
         "gather-platforms",
         "Pick platforms",
         [
@@ -247,33 +246,22 @@ export function gatherSteps(): Array<Step | StepFn> {
             [],
           ),
           dryBox(isDryMap(answerMap)),
-          buttons(
-            [
-              { label: "Back", action: "back" },
-              { label: "Next", action: "next", primary: true },
-            ],
-            undefined,
-            "split",
-          ),
         ],
         "Pick where your orders come from. Zepto, Blinkit, Zomato, Swiggy, or enter expenses by hand.",
       ),
-    step(
-      "gather-range",
-      "Day range",
-      [
-        numberEntry("Days back", "range", 30),
-        buttons(
-          [
-            { label: "Back", action: "back" },
-            { label: "Next", action: "next", primary: true },
-          ],
-          undefined,
-          "split",
-        ),
-      ],
-      "Gather collects orders from the last days you type here.",
-    ),
+      nav: { back: true, next: "Next" },
+    }),
+    {
+      ...step(
+        "gather-range",
+        "Day range",
+        [
+          numberEntry("Days back", "range", 30),
+        ],
+        "Gather collects orders from the last days you type here.",
+      ),
+      nav: { back: true, next: "Next" },
+    },
     accountsStep,
     manualStep,
     reviewStep,
@@ -437,36 +425,72 @@ export function manualPicked(m: Map<string, string[]>): boolean {
     .includes("manual");
 }
 
-// Manual expenses step. Rows save when the user presses Next, so the
-// orchestrator calls persistManualRun from the submit hook. Render
-// writes nothing.
+// Validate manual rows on Next.
+// Reject bad rows with errors.
+// Save good rows unless dry runs.
+export function manualNext(
+  answers: Map<string, string[]>,
+  fields: Record<string, string[]>,
+  ctx: WizardCtx,
+): { errors?: string[] } | void {
+  const combined = new Map(answers);
+  for (const [name, values] of Object.entries(fields)) combined.set(name, values);
+  const problems = manualRowProblems(combined);
+  if (problems.length > 0) return { errors: problems };
+  if (!isDryMap(combined)) persistManualRun(ctx.sessionId, combined);
+}
+
+// Manual expenses step. Rows save when the user presses Next, through
+// the manualNext handler on its own nav bar. Render writes nothing.
 function manualStep(m: Map<string, string[]>): Step {
   const dry = isDryMap(m);
-  return step(
-    "gather-manual",
-    "Manual expenses",
-    [
-      repeating("Expense", "expenses", [
-        { kind: "text", label: "Store", name: "store" },
-        { kind: "text", label: "Date", name: "date" },
-        { kind: "text", label: "Item", name: "item" },
-        { kind: "number", label: "Amount", name: "amount" },
-      ]),
-      ...(dry ? [dryNote()] : []),
-      buttons(
-        [
-          { label: "Back", action: "back" },
-          { label: "Next", action: "next", primary: true },
-        ],
-        undefined,
-        "split",
-      ),
-    ],
-    "Type each expense by hand: store, date, item, and amount. Add a row per expense. The rows save into a Run when you press Next.",
-    // Only a user who picked Manual walks this screen. The flow used to
-    // jump over it from the accounts step instead.
-    (answers) => manualPicked(answers),
-  );
+  return {
+    ...step(
+      "gather-manual",
+      "Manual expenses",
+      [
+        repeating("Expense", "expenses", [
+          { kind: "text", label: "Store", name: "store" },
+          { kind: "text", label: "Date", name: "date" },
+          { kind: "text", label: "Item", name: "item" },
+          { kind: "number", label: "Amount", name: "amount" },
+        ]),
+        ...(dry ? [dryNote()] : []),
+      ],
+      "Type each expense by hand: store, date, item, and amount. Add a row per expense. The rows save into a Run when you press Next.",
+      // Only a user who picked Manual walks this screen. The flow used to
+      // jump over it from the accounts step instead.
+      (answers) => manualPicked(answers),
+    ),
+    nav: { back: true, next: { label: "Next", run: manualNext } },
+  };
+}
+
+// Gate Review Next on gathered runs.
+// Let dry plans pass through.
+// Block missing platforms with errors.
+export function reviewNext(
+  answers: Map<string, string[]>,
+  _fields: Record<string, string[]>,
+  _ctx: WizardCtx,
+): { errors?: string[] } | void {
+  if (isDryMap(answers)) return;
+  const picked = (answerList(answers, "platforms"))
+    .map((value) => value.toLowerCase())
+    .filter((value, index, all) => all.indexOf(value) === index);
+  const runs = listRunsSync();
+  const missing = picked.filter((id) => {
+    if (id === "manual") return manualRows(answers).length === 0;
+    return !runs.some((run) => run.platforms.includes(id));
+  });
+  if (missing.length > 0) {
+    return {
+      errors: [
+        "No orders loaded for " + missing.join(", ") +
+        " yet. Press Fetch on each one, wait for it to finish, then press Next.",
+      ],
+    };
+  }
 }
 
 // Build the gather-review step from the picked platforms. A ticked
@@ -510,23 +534,18 @@ function reviewStep(answerMap: Map<string, string[]>, ctx?: WizardCtx): Step {
         ),
       );
     }
-    return step(
-      "gather-review",
-      "Review gather",
-      [
-        ...plan,
-        dryNote(),
-        buttons(
-          [
-            { label: "Back", action: "back" },
-            { label: "Next", action: "next", primary: true },
-          ],
-          undefined,
-          "split",
-        ),
-      ],
-      "Dry run is on. This is the plan only. Press Back to the first screen of this flow to change it.",
-    );
+    return {
+      ...step(
+        "gather-review",
+        "Review gather",
+        [
+          ...plan,
+          dryNote(),
+        ],
+        "Dry run is on. This is the plan only. Press Back to the first screen of this flow to change it.",
+      ),
+      nav: { back: true, next: { label: "Next", run: reviewNext } },
+    };
   }
   // State the picks this review acts on. An empty answers node drew a
   // heading with nothing under it.
@@ -598,22 +617,17 @@ function reviewStep(answerMap: Map<string, string[]>, ctx?: WizardCtx): Step {
       ),
     );
   }
-  return step(
-    "gather-review",
-    "Review gather",
-    [
-      ...nodes,
-      buttons(
-        [
-          { label: "Back", action: "back" },
-          { label: "Next", action: "next", primary: true },
-        ],
-        undefined,
-        "split",
-      ),
-    ],
-    "Press Fetch on each platform below to load your orders. The output shows under the button while it runs, and it can take a while. Wait for every one to finish, then press Next. Manual rows are already saved.",
-  );
+  return {
+    ...step(
+      "gather-review",
+      "Review gather",
+      [
+        ...nodes,
+      ],
+      "Press Fetch on each platform below to load your orders. The output shows under the button while it runs, and it can take a while. Wait for every one to finish, then press Next. Manual rows are already saved.",
+    ),
+    nav: { back: true, next: { label: "Next", run: reviewNext } },
+  };
 }
 
 // Select all or Select none override for one browser session.
@@ -632,6 +646,9 @@ export function gatherPickRunId(
   sessionId: string,
 ): string | null {
   const sid = sidOf({ sessionId });
+  // A run carried in from the resume screen wins over every rule.
+  const resumed = answer(m, "resume-pick");
+  if (resumed.length > 0) return resumed;
   if (manualPicked(m)) {
     const manual = manualRunFor(sid);
     return manual !== null ? manual.id : null;
@@ -644,6 +661,62 @@ export function gatherPickRunId(
   return null;
 }
 
+// Tick every order on Select all.
+// Return nothing to re-render.
+export function pickAll(
+  _answers: Map<string, string[]>,
+  _fields: Record<string, string[]>,
+  ctx: WizardCtx,
+): void {
+  setPickOverride(ctx.sessionId, "all");
+}
+
+// Clear every tick on Select none.
+// Return nothing to re-render.
+export function pickNone(
+  _answers: Map<string, string[]>,
+  _fields: Record<string, string[]>,
+  ctx: WizardCtx,
+): void {
+  setPickOverride(ctx.sessionId, "none");
+}
+
+// Save ticked orders on Next.
+// Reject empty picks with errors.
+// Block missing runs with errors.
+export function pickNext(
+  answers: Map<string, string[]>,
+  fields: Record<string, string[]>,
+  ctx: WizardCtx,
+): { errors?: string[] } | void {
+  const picked = (fields["pick"] ?? [])
+    .map((value) => Number(value))
+    .filter((n) => Number.isInteger(n) && n >= 0)
+    .sort((a, b) => a - b);
+  if (picked.length === 0) return { errors: ["Tick at least one order to split."] };
+  const runId = gatherPickRunId(answers, ctx.sessionId);
+  if (runId === null) {
+    return {
+      errors: ["The gathered run is gone. Press Back and fetch the orders again."],
+    };
+  }
+  setRunPicked(runId, picked);
+}
+
+// One line summary of the order contents for the pick screen.
+// Names the first five items, then counts the rest.
+function pickHint(items: Array<{ name: string; quantity?: number }>): string | undefined {
+  if (items.length === 0) return undefined;
+  const shown = items.slice(0, 5).map((item) =>
+    item.quantity !== undefined && item.quantity > 1
+      ? String(item.quantity) + " " + item.name
+      : item.name
+  );
+  const head = shown.join(", ");
+  if (items.length <= 5) return head;
+  return head + " +" + String(items.length - 5) + " more";
+}
+
 // Label for one order on the pick screen.
 function pickLabel(platform: string, date: string, paid: number, count: number): string {
   const name = platform.charAt(0).toUpperCase() + platform.slice(1);
@@ -654,20 +727,38 @@ function pickLabel(platform: string, date: string, paid: number, count: number):
 // Show this screen when no run or no orders exist.
 // Pass the reason sentence for the empty state.
 function pickPlaceholder(sentence: string): Step {
-  return step(
-    "gather-pick",
-    "Pick orders",
-    [
-      markdown(sentence),
-      buttons([{ label: "Back", action: "back" }], undefined, "split"),
-    ],
-    "Tick the orders to split. " + sentence,
-    (m) => !isDryMap(m),
-  );
+  return {
+    ...step(
+      "gather-pick",
+      "Pick orders",
+      [
+        markdown(sentence),
+      ],
+      "Tick the orders to split. " + sentence,
+      (m) => !isDryMap(m),
+    ),
+    nav: { back: true },
+  };
+}
+
+// Ticks saved on the run record. Falls back to none when the run
+// misses the field or holds an index outside the order range.
+function savedPickTicks(runId: string, count: number): string[] {
+  const meta = readRunMetaSync(runId);
+  if (meta === null || !Array.isArray(meta.picked)) return [];
+  const out: string[] = [];
+  for (const n of meta.picked) {
+    if (typeof n !== "number" || !Number.isInteger(n)) continue;
+    if (n < 0 || n >= count) continue;
+    const value = String(n);
+    if (!out.includes(value)) out.push(value);
+  }
+  return out;
 }
 
 // Pick step. It lists one checkbox per order of the gathered run.
-// No row starts ticked. Dry runs skip this screen.
+// Rows start ticked from the saved run when this session posted none.
+// Dry runs skip this screen.
 function pickStep(answerMap: Map<string, string[]>, ctx?: WizardCtx): Step {
   const sessionId = sidOf(ctx);
   const runId = gatherPickRunId(answerMap, sessionId);
@@ -686,15 +777,20 @@ function pickStep(answerMap: Map<string, string[]>, ctx?: WizardCtx): Step {
   const held = pickOverrides.for(sessionId);
   const mode = held.value;
   held.value = null;
-  const options = orders.map((order, index) => ({
-    value: String(index),
-    label: pickLabel(
-      order.platform ?? "",
-      order.date ?? "",
-      order.paid ?? 0,
-      (order.items ?? []).length,
-    ),
-  }));
+  const options = orders.map((order, index) => {
+    const option: { value: string; label: string; hint?: string } = {
+      value: String(index),
+      label: pickLabel(
+        order.platform ?? "",
+        order.date ?? "",
+        order.paid ?? 0,
+        (order.items ?? []).length,
+      ),
+    };
+    const hint = pickHint(order.items ?? []);
+    if (hint !== undefined) option.hint = hint;
+    return option;
+  });
   const valid = new Set(options.map((option) => option.value));
   let ticked: string[];
   if (mode === "all") {
@@ -702,25 +798,31 @@ function pickStep(answerMap: Map<string, string[]>, ctx?: WizardCtx): Step {
   } else if (mode === "none") {
     ticked = [];
   } else {
-    ticked = (answerList(answerMap, "pick")).filter((value) => valid.has(value));
+    const posted = answerList(answerMap, "pick");
+    if (posted.length > 0) {
+      ticked = posted.filter((value) => valid.has(value));
+    } else {
+      // No ticks posted in this session. Seed from the saved run.
+      ticked = savedPickTicks(runId, orders.length);
+    }
   }
-  return step(
-    "gather-pick",
-    "Pick orders",
-    [
-      checkbox("", "pick", options, ticked),
-      buttons(
-        [
-          { label: "Back", action: "back" },
-          { label: "Select all", action: "pick-all" },
-          { label: "Select none", action: "pick-none" },
-          { label: "Next", action: "next", primary: true },
-        ],
-        undefined,
-        "split",
-      ),
-    ],
-    "Tick each order to split. Only ticked orders reach the split flow.",
-    (m) => !isDryMap(m),
-  );
+  return {
+    ...step(
+      "gather-pick",
+      "Pick orders",
+      [
+        checkbox("", "pick", options, ticked),
+      ],
+      "Tick each order to split. Only ticked orders reach the split flow.",
+      (m) => !isDryMap(m),
+    ),
+    nav: {
+      back: true,
+      actions: [
+        { id: "pick-all", label: "Select all", run: pickAll },
+        { id: "pick-none", label: "Select none", run: pickNone },
+      ],
+      next: { label: "Next", run: pickNext },
+    },
+  };
 }

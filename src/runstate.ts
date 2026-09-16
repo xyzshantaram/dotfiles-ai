@@ -341,6 +341,25 @@ export async function backupFailedRun(id: string, reason: string): Promise<void>
   await writeJson(metaPath(found.dir), meta);
 }
 
+// Read meta.json from a run dir path or a run id. Returns null when
+// the record is missing or unreadable, because every caller treats a
+// missing record as no saved state rather than as a fault.
+export function readRunMetaSync(run: string): RunMeta | null {
+  const clean = run.replace(/\/+$/, "");
+  const candidates = [
+    clean + "/meta.json",
+    runsDir() + "/" + clean + "/meta.json",
+  ];
+  for (const path of candidates) {
+    try {
+      return JSON.parse(Deno.readTextFileSync(path)) as RunMeta;
+    } catch {
+      // Try the next candidate.
+    }
+  }
+  return null;
+}
+
 // Read orders.json from a run dir path or a run id.
 export function readRunOrders(run: string): Order[] {
   const clean = run.replace(/\/+$/, "");

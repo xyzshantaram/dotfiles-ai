@@ -12,11 +12,7 @@ import {
   type StepFn,
 } from "../wizardkit/mod.ts";
 import {
-  gatherPickRunId,
   gatherSteps,
-  manualRowProblems,
-  persistManualRun,
-  setPickOverride,
 } from "./expense-split/gather.ts";
 import {
   createSplitShareLink,
@@ -87,11 +83,10 @@ const MENU: MenuItem[] = [
 ];
 
 import { loadSettings, saveSettings, USAGE_MODES, validCurrencyCode } from "../src/settings.ts";
-import { field, answerList } from "../src/answers.ts";
+import { field } from "../src/answers.ts";
 import { factoryReset } from "../src/reset.ts";
-import { listRunsSync, readRun, setRunPicked, stateRoot } from "../src/runstate.ts";
+import { readRun, stateRoot } from "../src/runstate.ts";
 import { configDir, splitwiseEnvPath } from "../src/paths.ts";
-import { manualRows } from "./expense-split/gather.ts";
 import {
   applyCutoff,
   executePush,
@@ -275,43 +270,6 @@ export async function onSubmit(
       return { goto: "settings" };
     }
   }
-  if (stepId === "gather-manual") {
-    // Refuse a half typed row before anything saves. A back move never
-    // reaches this check, because the toolkit ignores errors on one.
-    const rowProblems = manualRowProblems(seen);
-    if (rowProblems.length > 0) return { errors: rowProblems };
-    // The step writes nothing while it renders. The rows save here,
-    // when the user presses Next.
-    if (!(fields["dry"] ?? []).includes("dry")) persistManualRun(sessionId, seen);
-  }
-  if (stepId === "gather-pick" && action !== "back") {
-    // Select all and Select none only re-render the same screen.
-    // They save nothing.
-    if (action === "pick-all") {
-      setPickOverride(sessionId, "all");
-      return { goto: "gather-pick" };
-    }
-    if (action === "pick-none") {
-      setPickOverride(sessionId, "none");
-      return { goto: "gather-pick" };
-    }
-    // Next needs at least one ticked order. Back never reaches here.
-    const picked = (fields["pick"] ?? [])
-      .map((value) => Number(value))
-      .filter((n) => Number.isInteger(n) && n >= 0)
-      .sort((a, b) => a - b);
-    if (picked.length === 0) {
-      return { errors: ["Tick at least one order to split."] };
-    }
-    const runId = gatherPickRunId(seen, sessionId);
-    if (runId === null) {
-      // Saving nothing here would drop the ticks without a word.
-      return {
-        errors: ["The gathered run is gone. Press Back and fetch the orders again."],
-      };
-    }
-    setRunPicked(runId, picked);
-  }
   if (stepId === "split-people" && action !== "back") {
     // Keep the posted names before the check. A rejected post never
     // reaches the answers map, so the step seeds its entries from this
@@ -481,30 +439,6 @@ export async function onSubmit(
     const done = await executePush(sessionId, choices, dry ? { dry: true } : undefined);
     if (!done.ok) return { errors: [done.error] };
     return { goto: "push-report" };
-  }
-  if (stepId === "gather-review") {
-    // Done means Continue only after something was gathered. Dry runs
-    // show the plan instead, so they skip this gate.
-    if ((fields["dry"] ?? []).includes("dry")) return;
-    // The platforms answer lands on an earlier step, so read it from
-    // the remembered answers. Reading the review post instead finds an
-    // empty list, and the gate then lets every user straight through.
-    const picked = (answerList(seen, "platforms"))
-      .map((value) => value.toLowerCase())
-      .filter((value, index, all) => all.indexOf(value) === index);
-    const runs = listRunsSync();
-    const missing = picked.filter((id) => {
-      if (id === "manual") return manualRows(seen).length === 0;
-      return !runs.some((run) => run.platforms.includes(id));
-    });
-    if (missing.length > 0) {
-      return {
-        errors: [
-          "No orders loaded for " + missing.join(", ") +
-          " yet. Press Fetch on each one, wait for it to finish, then press Next.",
-        ],
-      };
-    }
   }
   if (stepId === "resume") {
     // Route the picked session by its status, like meta.ts resumeMenu:

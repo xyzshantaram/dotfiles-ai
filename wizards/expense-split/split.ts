@@ -47,12 +47,17 @@ import {
   scaleRepeat,
   singleShare,
 } from "../../src/splitengine.ts";
-import { isDryMap, listRunsSync, readRunOrders, runHint, type RunMeta, runsDir } from "../../src/runstate.ts";
-import { answer, answerList } from "../../src/answers.ts";
 import {
-  sessionStore,
-  sidOf,
-} from "../../src/sessionstore.ts";
+  isDryMap,
+  listRunsSync,
+  readRunMetaSync,
+  readRunOrders,
+  runHint,
+  type RunMeta,
+  runsDir,
+} from "../../src/runstate.ts";
+import { answer, answerList } from "../../src/answers.ts";
+import { sessionStore, sidOf } from "../../src/sessionstore.ts";
 import type { WizardCtx } from "../../wizardkit/mod.ts";
 import { dryBox, dryNote } from "./dry.ts";
 
@@ -191,22 +196,15 @@ function loadSession(runDir: string, people: string[], payer: string): Session {
   const doc = saved ?? freshState(people, payer);
   if (saved === null) {
     // A fresh session honours the gather pick list. Saved work stays untouched.
-    try {
-      const meta = JSON.parse(Deno.readTextFileSync(dir + "/meta.json")) as {
-        picked?: unknown;
-      };
-      if (Array.isArray(meta.picked)) {
-        const keep = new Set(
-          meta.picked.filter((n): n is number =>
-            typeof n === "number" && Number.isInteger(n)
-          ),
-        );
-        flat.forEach((line, index) => {
-          if (!keep.has(line.orderPos)) doc.skipped[String(index)] = true;
-        });
-      }
-    } catch {
-      // No meta or bad JSON: leave every line open.
+    // A missing or unreadable record leaves every line open.
+    const meta = readRunMetaSync(dir);
+    if (meta !== null && Array.isArray(meta.picked)) {
+      const keep = new Set(
+        meta.picked.filter((n): n is number => typeof n === "number" && Number.isInteger(n)),
+      );
+      flat.forEach((line, index) => {
+        if (!keep.has(line.orderPos)) doc.skipped[String(index)] = true;
+      });
     }
   }
   const orderCount = flat.length > 0 ? flat[flat.length - 1].orderPos + 1 : 0;
@@ -1193,14 +1191,13 @@ export function splitRunId(sessionId: string): string {
   return parts[parts.length - 1] ?? "";
 }
 
-// Next step for one run status. Mirrors the meta.ts resumeMenu
-// branches: gathered splits, assigned pushes, failed restarts at
-// gather, pushed is done.
+// Next step for one run status. A gathered run opens gather-pick
+// so the user picks orders before the split flow opens. Assigned
+// runs push, failed runs restart at gather, pushed runs are done.
 export function routeStatus(status: RunMeta["status"]): string {
-  // A gathered run opens the run step, which now leads the split flow.
-  // The run the user picked on the resume screen carries through, so
-  // that step shows it already chosen.
-  if (status === "gathered") return "split-run";
+  // A gathered run opens the pick step. The user picks which orders
+  // to split before the split flow opens.
+  if (status === "gathered") return "gather-pick";
   if (status === "assigned") return "push-source";
   if (status === "failed") return "gather-platforms";
   return "resume-done";

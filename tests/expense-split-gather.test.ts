@@ -4,14 +4,19 @@
 
 import { createWizard } from "../wizardkit/mod.ts";
 import {
+  gatherPickRunId,
   gatherSteps,
   manualPicked,
   manualRowProblems,
   manualRows,
   persistManualRun,
+  pickAll,
+  pickNext,
+  pickNone,
+  reviewNext,
 } from "../wizards/expense-split/gather.ts";
 import { DEFAULT_LOCATION } from "../src/zomato.ts";
-import { splitSteps } from "../wizards/expense-split/split.ts";
+import { routeStatus, splitSteps } from "../wizards/expense-split/split.ts";
 import { runsDir } from "../src/runstate.ts";
 
 // Fail the test when a condition misses.
@@ -209,7 +214,7 @@ Deno.test("manual step render writes no run until persistManualRun runs", async 
     await post(handle, { step: "gather-platforms", action: "next", platforms: "Manual" });
     await post(handle, { step: "gather-range", action: "next", range: "30" });
     await post(handle, { step: "gather-accounts", action: "next" });
-    // Render the manual step with rows posted. It must write nothing.
+    // Post rows with Next. The bar handler saves them.
     const body = await post(handle, {
       step: "gather-manual",
       action: "next",
@@ -220,13 +225,13 @@ Deno.test("manual step render writes no run until persistManualRun runs", async 
     });
     if (body.includes("Saved")) throw new Error("render still names a saved run");
     const before = await manualRunNames();
-    if (before.length !== 0) {
-      throw new Error("render wrote a run: " + before.join(", "));
+    if (before.length !== 1) {
+      throw new Error("Next wrote no single run: " + before.join(", "));
     }
     if (body.includes("Saved")) throw new Error("render still names a saved run");
-    // Direct persist writes exactly one run with one order.
+    // Save same rows again. The store keeps one run.
     persistManualRun(
-      "t-gather-1",
+      jarSid(handle),
       new Map([
         ["store", ["Kirana Store"]],
         ["date", ["2026-01-02"]],
@@ -379,12 +384,15 @@ function fullStepText(step: { nodes: unknown[] }): string {
 }
 
 Deno.test("review Done needs a run before Continue", async () => {
-  const { onSubmit } = await import("../wizards/expense-split.ts");
   const root = await Deno.makeTempDir({ prefix: "b4-state-" });
   Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
     // No runs on disk: Next is refused and names the Fetch button.
-    const bare = await onSubmit({ platforms: ["zepto"] }, "gather-review");
+    const bare = await reviewNext(
+      new Map([["platforms", ["zepto"]]]),
+      {},
+      { sessionId: "t-review-1" },
+    );
     if (!bare?.errors?.[0]?.includes("Fetch")) {
       throw new Error("expected a Fetch-first error, got " + JSON.stringify(bare));
     }
@@ -395,7 +403,11 @@ Deno.test("review Done needs a run before Continue", async () => {
       dir + "/meta.json",
       JSON.stringify({ id: "r1", platforms: ["zepto"] }),
     );
-    const open = await onSubmit({ platforms: ["zepto"] }, "gather-review");
+    const open = await reviewNext(
+      new Map([["platforms", ["zepto"]]]),
+      {},
+      { sessionId: "t-review-1" },
+    );
     if (open?.errors) {
       throw new Error("expected no errors, got " + JSON.stringify(open.errors));
     }
@@ -839,15 +851,13 @@ Deno.test("pick step lists one option per order with nothing ticked", async () =
 });
 
 Deno.test("pick next with nothing ticked returns the tick error", async () => {
-  const { onSubmit } = await import("../wizards/expense-split.ts");
-  const out = await onSubmit({}, "gather-pick", "next", { sessionId: "t-pick-err-1" });
+  const out = await pickNext(new Map(), {}, { sessionId: "t-pick-err-1" });
   if (JSON.stringify(out?.errors ?? null) !== JSON.stringify(["Tick at least one order to split."])) {
     throw new Error("wrong errors: " + JSON.stringify(out));
   }
 });
 
 Deno.test("pick next with two orders ticked writes the indexes", async () => {
-  const { onSubmit } = await import("../wizards/expense-split.ts");
   const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-save-" });
   const prev = Deno.env.get("SPLIT_UTILS_STATE");
   Deno.env.set("SPLIT_UTILS_STATE", root);
@@ -858,8 +868,11 @@ Deno.test("pick next with two orders ticked writes the indexes", async () => {
       pickOrder("zepto", "2026-09-09", 120, ["B"]),
       pickOrder("zepto", "2026-09-10", 80, ["C"]),
     ]);
-    await onSubmit({ platforms: ["zepto"] }, "gather-platforms", "next", { sessionId: sid });
-    const out = await onSubmit({ pick: ["2", "0"] }, "gather-pick", "next", { sessionId: sid });
+    const out = await pickNext(
+      new Map([["platforms", ["zepto"]]]),
+      { pick: ["2", "0"] },
+      { sessionId: sid },
+    );
     if (out?.errors) throw new Error("expected no errors, got " + JSON.stringify(out.errors));
     const meta = JSON.parse(await Deno.readTextFile(runsDir() + "/pick-r2/meta.json"));
     if (JSON.stringify(meta.picked) !== JSON.stringify([0, 2])) {
@@ -873,7 +886,6 @@ Deno.test("pick next with two orders ticked writes the indexes", async () => {
 });
 
 Deno.test("pick-all re-renders the same step with every option ticked", async () => {
-  const { onSubmit } = await import("../wizards/expense-split.ts");
   const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-all-" });
   const prev = Deno.env.get("SPLIT_UTILS_STATE");
   Deno.env.set("SPLIT_UTILS_STATE", root);
@@ -883,9 +895,8 @@ Deno.test("pick-all re-renders the same step with every option ticked", async ()
       pickOrder("zepto", "2026-09-08", 530, ["A"]),
       pickOrder("zepto", "2026-09-09", 120, ["B"]),
     ]);
-    await onSubmit({ platforms: ["zepto"] }, "gather-platforms", "next", { sessionId: sid });
-    const out = await onSubmit({}, "gather-pick", "pick-all", { sessionId: sid });
-    if (out?.goto !== "gather-pick") throw new Error("pick-all misses the re-render: " + JSON.stringify(out));
+    const out = await pickAll(new Map(), {}, { sessionId: sid });
+    if (out !== undefined) throw new Error("pick-all misses the silent re-render: " + JSON.stringify(out));
     const found = pickStepFor(new Map([["platforms", ["zepto"]]]), sid);
     const ticked = pickBox(found)["ticked"] as string[];
     if (JSON.stringify(ticked) !== JSON.stringify(["0", "1"])) {
@@ -901,7 +912,6 @@ Deno.test("pick-all re-renders the same step with every option ticked", async ()
 });
 
 Deno.test("pick-none re-renders with nothing ticked", async () => {
-  const { onSubmit } = await import("../wizards/expense-split.ts");
   const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-none-" });
   const prev = Deno.env.get("SPLIT_UTILS_STATE");
   Deno.env.set("SPLIT_UTILS_STATE", root);
@@ -911,15 +921,51 @@ Deno.test("pick-none re-renders with nothing ticked", async () => {
       pickOrder("zepto", "2026-09-08", 530, ["A"]),
       pickOrder("zepto", "2026-09-09", 120, ["B"]),
     ]);
-    await onSubmit({ platforms: ["zepto"] }, "gather-platforms", "next", { sessionId: sid });
-    const out = await onSubmit({ pick: ["0", "1"] }, "gather-pick", "pick-none", { sessionId: sid });
-    if (out?.goto !== "gather-pick") throw new Error("pick-none misses the re-render: " + JSON.stringify(out));
+    const out = await pickNone(new Map(), { pick: ["0", "1"] }, { sessionId: sid });
+    if (out !== undefined) throw new Error("pick-none misses the silent re-render: " + JSON.stringify(out));
     const found = pickStepFor(
       new Map([["platforms", ["zepto"]], ["pick", ["0", "1"]]]),
       sid,
     );
     const ticked = pickBox(found)["ticked"] as string[];
     if (ticked.length !== 0) throw new Error("pick-none leaves a tick: " + JSON.stringify(ticked));
+  } finally {
+    if (prev === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
+    else Deno.env.set("SPLIT_UTILS_STATE", prev);
+    await cleanup(root);
+  }
+});
+
+Deno.test("pick screen declares its bar with both actions and next", async () => {
+  // Build one run. Read its bar. Check both actions plus Next.
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-bar-" });
+  const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    writePickRun("pick-bar-1", ["zepto"], [
+      pickOrder("zepto", "2026-09-08", 530, ["A"]),
+    ]);
+    const found = pickStepFor(new Map([["platforms", ["Zepto"]]]), "t-pick-bar-1") as unknown as {
+      id: string;
+      nav?: {
+        back?: boolean;
+        actions?: Array<{ id: string; label: string; run?: unknown }>;
+        next?: { label: string; run?: unknown };
+      };
+    };
+    if (found.id !== "gather-pick") throw new Error("wrong step id: " + found.id);
+    const nav = found.nav;
+    if (nav?.back !== true) throw new Error("bar misses Back");
+    const actions = nav.actions ?? [];
+    if (actions.length !== 2) throw new Error("bar misses one action");
+    if (actions[0].id !== "pick-all") throw new Error("first action misses its id");
+    if (actions[0].label !== "Select all") throw new Error("first action misses its label");
+    if (typeof actions[0].run !== "function") throw new Error("first action misses its run");
+    if (actions[1].id !== "pick-none") throw new Error("second action misses its id");
+    if (actions[1].label !== "Select none") throw new Error("second action misses its label");
+    if (typeof actions[1].run !== "function") throw new Error("second action misses its run");
+    if (nav.next?.label !== "Next") throw new Error("bar misses Next");
+    if (typeof nav.next?.run !== "function") throw new Error("Next misses its run");
   } finally {
     if (prev === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
     else Deno.env.set("SPLIT_UTILS_STATE", prev);
@@ -954,6 +1000,154 @@ Deno.test("sign in action for zepto carries the login flag", async () => {
     if (prev === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
     else Deno.env.set("SPLIT_UTILS_STATE", prev);
     await cleanup(root);
+  }
+});
+
+Deno.test("pick option hint names the first five items plus the rest", async () => {
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-hint-" });
+  const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    writePickRun("pick-h1", ["zepto"], [{
+      id: "zepto-2026-09-08",
+      platform: "zepto",
+      date: "2026-09-08",
+      paid: 530,
+      items: [
+        { name: "Milk", price: 10, quantity: 2 },
+        { name: "Bread", price: 10, quantity: 1 },
+        { name: "Eggs", price: 10, quantity: 3 },
+        { name: "Butter", price: 10, quantity: 1 },
+        { name: "Rice", price: 10, quantity: 1 },
+        { name: "Sugar", price: 10, quantity: 1 },
+      ],
+      fees: { delivery: 0, packaging: 0 },
+    }]);
+    const found = pickStepFor(new Map([["platforms", ["Zepto"]]]), "t-pick-hint-1");
+    const options = pickBox(found)["options"] as Array<Record<string, unknown>>;
+    if (options.length !== 1) throw new Error("expected 1 option");
+    if (options[0]["label"] !== "Zepto · 2026-09-08 · 530.00 · 6 items") {
+      throw new Error("label changed: " + JSON.stringify(options[0]["label"]));
+    }
+    if (options[0]["hint"] !== "2 Milk, Bread, 3 Eggs, Butter, Rice +1 more") {
+      throw new Error("hint wrong: " + JSON.stringify(options[0]["hint"]));
+    }
+  } finally {
+    if (prev === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
+    else Deno.env.set("SPLIT_UTILS_STATE", prev);
+    await cleanup(root);
+  }
+});
+
+Deno.test("pick option hint for a single item names it with no plus marker", async () => {
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-hint-one-" });
+  const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    writePickRun("pick-h2", ["zepto"], [{
+      id: "zepto-2026-09-08",
+      platform: "zepto",
+      date: "2026-09-08",
+      paid: 40,
+      items: [{ name: "Bread", price: 40, quantity: 1 }],
+      fees: { delivery: 0, packaging: 0 },
+    }]);
+    const found = pickStepFor(new Map([["platforms", ["Zepto"]]]), "t-pick-hint-2");
+    const options = pickBox(found)["options"] as Array<Record<string, unknown>>;
+    if (options[0]["hint"] !== "Bread") {
+      throw new Error("hint wrong: " + JSON.stringify(options[0]["hint"]));
+    }
+    if (String(options[0]["hint"] ?? "").includes("+")) {
+      throw new Error("single item hint carries a plus marker");
+    }
+  } finally {
+    if (prev === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
+    else Deno.env.set("SPLIT_UTILS_STATE", prev);
+    await cleanup(root);
+  }
+});
+
+Deno.test("pick option for an order with no items has no hint", async () => {
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-hint-empty-" });
+  const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    writePickRun("pick-h3", ["zepto"], [{
+      id: "zepto-2026-09-08",
+      platform: "zepto",
+      date: "2026-09-08",
+      paid: 0,
+      items: [],
+      fees: { delivery: 0, packaging: 0 },
+    }]);
+    const found = pickStepFor(new Map([["platforms", ["Zepto"]]]), "t-pick-hint-3");
+    const options = pickBox(found)["options"] as Array<Record<string, unknown>>;
+    if ("hint" in options[0]) {
+      throw new Error("empty order carries a hint: " + JSON.stringify(options[0]["hint"]));
+    }
+  } finally {
+    if (prev === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
+    else Deno.env.set("SPLIT_UTILS_STATE", prev);
+    await cleanup(root);
+  }
+});
+
+Deno.test("gatherPickRunId prefers the resume choice over the newest run", async () => {
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-resume-" });
+  const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    writePickRun("pick-rs-a", ["zepto"], [
+      pickOrder("zepto", "2026-09-08", 530, ["A"]),
+    ]);
+    writePickRun("pick-rs-b", ["zepto"], [
+      pickOrder("zepto", "2026-09-09", 120, ["B"]),
+    ]);
+    const found = gatherPickRunId(
+      new Map([["platforms", ["zepto"]], ["resume-pick", ["pick-rs-a"]]]),
+      "t-pick-resume-1",
+    );
+    if (found !== "pick-rs-a") {
+      throw new Error("resume choice lost: " + JSON.stringify(found));
+    }
+  } finally {
+    if (prev === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
+    else Deno.env.set("SPLIT_UTILS_STATE", prev);
+    await cleanup(root);
+  }
+});
+
+Deno.test("pick step seeds ticks from the saved run when none were posted", async () => {
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-seed-" });
+  const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    writePickRun("pick-s1", ["zepto"], [
+      pickOrder("zepto", "2026-09-08", 530, ["A"]),
+      pickOrder("zepto", "2026-09-09", 120, ["B"]),
+      pickOrder("zepto", "2026-09-10", 80, ["C"]),
+    ]);
+    const metaPath = runsDir() + "/pick-s1/meta.json";
+    const meta = JSON.parse(await Deno.readTextFile(metaPath));
+    meta.picked = [0, 2, 9];
+    await Deno.writeTextFile(metaPath, JSON.stringify(meta, null, 2) + "\n");
+    const found = pickStepFor(new Map([["platforms", ["zepto"]]]), "t-pick-seed-1");
+    const ticked = pickBox(found)["ticked"] as string[];
+    if (JSON.stringify(ticked) !== JSON.stringify(["0", "2"])) {
+      throw new Error("seeded ticks wrong: " + JSON.stringify(ticked));
+    }
+  } finally {
+    if (prev === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
+    else Deno.env.set("SPLIT_UTILS_STATE", prev);
+    await cleanup(root);
+  }
+});
+
+// The routeStatus tests live in tests/expense-split-f6.test.ts, which this
+// pass leaves untouched. This one covers the new gathered route here.
+Deno.test("gathered runs resume on the pick orders screen", () => {
+  if (routeStatus("gathered") !== "gather-pick") {
+    throw new Error("gathered misses gather-pick: " + routeStatus("gathered"));
   }
 });
 
