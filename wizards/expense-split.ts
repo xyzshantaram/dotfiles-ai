@@ -87,7 +87,7 @@ const MENU: MenuItem[] = [
 ];
 
 import { loadSettings, saveSettings, USAGE_MODES, validCurrencyCode } from "../src/settings.ts";
-import { field, answers } from "../src/answers.ts";
+import { field, answerList } from "../src/answers.ts";
 import { factoryReset } from "../src/reset.ts";
 import { listRunsSync, readRun, setRunPicked, stateRoot } from "../src/runstate.ts";
 import { configDir, splitwiseEnvPath } from "../src/paths.ts";
@@ -489,7 +489,7 @@ export async function onSubmit(
     // The platforms answer lands on an earlier step, so read it from
     // the remembered answers. Reading the review post instead finds an
     // empty list, and the gate then lets every user straight through.
-    const picked = (answers(seen, "platforms"))
+    const picked = (answerList(seen, "platforms"))
       .map((value) => value.toLowerCase())
       .filter((value, index, all) => all.indexOf(value) === index);
     const runs = listRunsSync();

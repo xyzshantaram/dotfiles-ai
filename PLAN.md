@@ -41,16 +41,21 @@ chose the full fix: real per session state, in the toolkit first, then in every 
       duplicated logic across modules, near copies that differ by one argument, duplicated type
       definitions, and hand rolled code that a small well scoped dependency would replace. Review
       the wizards, the toolkit, and src together, not module by module. Eval: every finding lands as
-      its own ticket here, or as a written reason to leave it alone.
-      Three findings already came out of the pre commit diff read, so start from them:
-      1. wizardkit/toolkit.tsx repeats one block four times: run onEnter, rebuild every step,
-         recompute applicability, find the step again, then reply. It sits on the root GET, the back
-         move, the done goto, and the main move. One helper should own it.
-      2. wizards/expense-split/gather.ts builds the same empty pick screen three times, differing
-         only in one sentence of the note.
-      3. The reader `answers` in src/answers.ts collides with the node builder `answers` from the
-         toolkit, so gather.ts imports one of them as `showAnswers`. One of the two names should
-         change.
+      its own ticket here, or as a written reason to leave it alone. Four findings came out of the
+      pre commit diff read. The first three are fixed. The fourth stays open as the starting point:
+      1. Fixed. wizardkit/toolkit.tsx repeated one block four times: run onEnter, rebuild every
+      step, recompute applicability, find the step again, then reply. One helper named `arrive` owns
+      it now. Only the custom done screen keeps its own shape, because it re-runs `opts.done` rather
+      than `buildAll`. 2. Fixed. The three empty pick screens in gather.ts fold into
+      `pickPlaceholder`, which takes the one sentence that differed. Every user facing string stayed
+      the same. 3. Fixed. The reader is now `answerList`, so the toolkit node builder keeps the
+      plain name `answers`. Fourteen call sites changed, and both `showAnswers` aliases are gone. 4.
+      wizards/expense-split/gather.ts defines its own `LEGACY_TOKENS_FILE` constant, which
+      duplicates the one in src/zomato.ts, and it repeats that module's read chain of current path,
+      then old path, then older path. The chain belongs in one place. Checked while fixing U11: the
+      token and login state reads keep their fixed repo paths on purpose, as the second and third
+      entries of a migration chain whose first entry honours the state root, so those are correct as
+      they stand.
 
 ### Deferred: wizardkit footguns found by the C-series audit
 
@@ -94,13 +99,14 @@ later, and the next app does not pay the same cost.
       selectHint, installProcessGuards, createWizard, banner, readyGate, warn, open_url, confirm,
       and finish. Nine print helpers remain. `mepcli` is out of deno.json. zx stays, and a real bash
       command through the toolkit `$` is proven to run.
-- [ ] U11 the Zomato constants file ignores the state root override. src/zomato.ts reads its tokens
-      and its login state through `shareDir()`, which honours `SPLIT_UTILS_STATE`, but it reads the
-      constants from a fixed repo relative URL at lines 31 and 32. The dev script writes that same
-      fixed path, so the two agree with each other and disagree with every other state read. An
-      installed binary with a state root elsewhere would read constants from beside the module. This
-      predates the purge, so I report it and leave it alone. Eval: one resolver serves all three
-      reads, or a written reason says why the constants differ.
+- [x] U11 the Zomato constants file ignored the state root override. Fixed. src/paths.ts now owns
+      `zomatoConfigPath()` and `legacyZomatoConfigPath()`. src/zomato.ts reads through them, and the
+      dev script writes through them, so no `import.meta.url` path remains for the constants. The
+      dev script also takes its work dir from `stateRoot()`, which retired its own `repoRoot()`
+      helper. Proven by running the resolver twice: with `SPLIT_UTILS_STATE=/tmp/dsh/zcfg-probe` it
+      returns `/tmp/dsh/zcfg-probe/share/config/zomato.json`, and with no override it returns the
+      repo state dir. The token and login state reads keep their fixed paths on purpose, as the
+      later entries of a migration chain whose first entry honours the root.
 - [ ] U10 the zx version sits in three files: deno.json, wizardkit/deno.json, and wizardkit/mod.ts,
       which hardcodes `npm:zx@8.8.5` so the published package resolves with no import map. A bump
       needs three edits today, and nothing fails when one is missed. Eval: one place states the
@@ -114,12 +120,24 @@ later, and the next app does not pay the same cost.
       drove terminal screens that no longer exist and are already covered by U2, W3, W8, G1, R2 and
       F4, step 18 asked for `git init`, which landed as commit 5f5792e, and step 19 named an aidos
       scratch prompt that no ticket here tracks. One capability in it has no home, recorded as U9.
-- [ ] U9 decide the fate of the no account summary. The terminal push flow offered "Write one short
-      summary instead. No Splitwise login needed." when no Splitwise key was configured, and it
-      saved a summary file beside the source file. No string like it survives anywhere in the tree,
-      so the browser app dropped the capability with no decision on record. Needs a user decision:
-      rebuild it in the push flow, or retire it in writing. Eval: either the push flow offers it
-      when no key is configured, or this plan states why it is gone.
+- [ ] U9 the aggregate summary survives, but nobody can choose it. I searched for the old sentence
+      and found none, then read the engine and found the whole capability alive. push-engine.ts
+      carries a mode of idle, aggregate, or live. It falls to aggregate when the key pair is
+      missing, when the credentials fail to read, when no token is cached, and when the sign in
+      check throws. It writes `aggregate-<unix>.txt` beside the source file, which matches the old
+      behaviour, and the report step shows the text. push.ts states it plainly: "No Splitwise access
+      is configured. The push writes one summary file instead." Two tests cover the fallback and two
+      more cover the arithmetic. So one gap remains, and only one: the path is a fallback, never a
+      choice. A user who has Splitwise set up cannot ask for the summary on purpose, which the old
+      menu allowed. Eval: the push flow offers the summary as a choice with access configured, and
+      the automatic fallback still works with no access.
+- [ ] U12 re-run the parity audit against the current tree. docs/function-audit.md is the list that
+      caught this class of loss, and it is now stale in the other direction: it still marks as GAP
+      the OAuth handshake, the group picker, cutoff validation and filtering, the manual expense
+      loop, resume routing by status, the failPush path, archiveRun, and the aggregate summary. Each
+      of those exists today. A parity list that cries GAP on closed work stops being read, which is
+      how a real loss slips past. Eval: every row states its live state, and each true gap becomes a
+      ticket here.
 - [ ] W6 file pick: the last open gap (descriptions, polling, entry onConfirm all shipped). Eval:
       user picks a split file through the dialog in push flow.
 

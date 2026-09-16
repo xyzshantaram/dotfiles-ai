@@ -2,7 +2,7 @@
 
 import {
   action,
-  answers as showAnswers,
+  answers,
   buttons,
   checkbox,
   markdown,
@@ -15,7 +15,7 @@ import {
   textEntry,
 } from "../../wizardkit/mod.ts";
 import { isDryMap, listRunsSync, readRunOrders, runsDir, stateRoot } from "../../src/runstate.ts";
-import { answers } from "../../src/answers.ts";
+import { answerList } from "../../src/answers.ts";
 import {
   sessionStore,
   sidOf,
@@ -84,7 +84,7 @@ function hasCached(id: PlatformId): boolean {
 // Build the gather-accounts step from the picked platforms.
 function accountsStep(answerMap: Map<string, string[]>): Step {
   const dry = isDryMap(answerMap);
-  const picked = (answers(answerMap, "platforms"))
+  const picked = (answerList(answerMap, "platforms"))
     .map((value) => value.toLowerCase())
     .filter((value): value is PlatformId => (PLATFORMS as readonly string[]).includes(value))
     .filter((id, index, all) => all.indexOf(id) === index);
@@ -309,8 +309,8 @@ function manualRunFor(sessionId: string): {
 // Faults in the posted manual rows, in row order. Row numbers count
 // every posted row from one, so they match the rows the user sees.
 export function manualRowProblems(m: Map<string, string[]>): string[] {
-  const stores = answers(m, "store");
-  const amounts = answers(m, "amount");
+  const stores = answerList(m, "store");
+  const amounts = answerList(m, "amount");
   const problems: string[] = [];
   for (let i = 0; i < stores.length; i++) {
     const store = (stores[i] ?? "").trim();
@@ -330,10 +330,10 @@ export function manualRowProblems(m: Map<string, string[]>): string[] {
 // Zip the posted repeating fields into rows. A row counts when it
 // holds a store or an amount; blanks from spare rows drop out.
 export function manualRows(m: Map<string, string[]>): ManualRow[] {
-  const stores = answers(m, "store");
-  const dates = answers(m, "date");
-  const items = answers(m, "item");
-  const amounts = answers(m, "amount");
+  const stores = answerList(m, "store");
+  const dates = answerList(m, "date");
+  const items = answerList(m, "item");
+  const amounts = answerList(m, "amount");
   const rows: ManualRow[] = [];
   for (let i = 0; i < stores.length; i++) {
     const store = (stores[i] ?? "").trim();
@@ -432,7 +432,7 @@ export function persistManualRun(
 
 // True when the platforms answer holds Manual.
 export function manualPicked(m: Map<string, string[]>): boolean {
-  return (answers(m, "platforms"))
+  return (answerList(m, "platforms"))
     .map((value) => value.toLowerCase())
     .includes("manual");
 }
@@ -474,7 +474,7 @@ function manualStep(m: Map<string, string[]>): Step {
 // scrape actions, so dry output matches live shape and writes nothing.
 function reviewStep(answerMap: Map<string, string[]>, ctx?: WizardCtx): Step {
   const sessionId = sidOf(ctx);
-  const picked = (answers(answerMap, "platforms"))
+  const picked = (answerList(answerMap, "platforms"))
     .map((value) => value.toLowerCase())
     .filter((value): value is PlatformId => (PLATFORMS as readonly string[]).includes(value))
     .filter((id, index, all) => all.indexOf(id) === index);
@@ -531,7 +531,7 @@ function reviewStep(answerMap: Map<string, string[]>, ctx?: WizardCtx): Step {
   // State the picks this review acts on. An empty answers node drew a
   // heading with nothing under it.
   const nodes: Node[] = [
-    showAnswers("Gather", [
+    answers("Gather", [
       {
         name: "Platforms",
         values: picked.length > 0 ? picked.map(platformName) : ["none picked"],
@@ -636,7 +636,7 @@ export function gatherPickRunId(
     const manual = manualRunFor(sid);
     return manual !== null ? manual.id : null;
   }
-  const picked = (answers(m, "platforms")).map((value) => value.toLowerCase());
+  const picked = (answerList(m, "platforms")).map((value) => value.toLowerCase());
   if (picked.length === 0) return null;
   for (const run of listRunsSync()) {
     if (run.platforms.some((p) => picked.includes(p.toLowerCase()))) return run.id;
@@ -651,49 +651,37 @@ function pickLabel(platform: string, date: string, paid: number, count: number):
   return name + " · " + date + " · " + fmtRs(paid) + " · " + count + unit;
 }
 
+// Show this screen when no run or no orders exist.
+// Pass the reason sentence for the empty state.
+function pickPlaceholder(sentence: string): Step {
+  return step(
+    "gather-pick",
+    "Pick orders",
+    [
+      markdown(sentence),
+      buttons([{ label: "Back", action: "back" }], undefined, "split"),
+    ],
+    "Tick the orders to split. " + sentence,
+    (m) => !isDryMap(m),
+  );
+}
+
 // Pick step. It lists one checkbox per order of the gathered run.
 // No row starts ticked. Dry runs skip this screen.
 function pickStep(answerMap: Map<string, string[]>, ctx?: WizardCtx): Step {
   const sessionId = sidOf(ctx);
   const runId = gatherPickRunId(answerMap, sessionId);
   if (runId === null) {
-    return step(
-      "gather-pick",
-      "Pick orders",
-      [
-        markdown("The gather produced no run yet."),
-        buttons([{ label: "Back", action: "back" }], undefined, "split"),
-      ],
-      "Tick the orders to split. The gather produced no run yet.",
-      (m) => !isDryMap(m),
-    );
+    return pickPlaceholder("The gather produced no run yet.");
   }
   let orders: Order[];
   try {
     orders = readRunOrders(runId);
   } catch {
-    return step(
-      "gather-pick",
-      "Pick orders",
-      [
-        markdown("The gather produced no run yet."),
-        buttons([{ label: "Back", action: "back" }], undefined, "split"),
-      ],
-      "Tick the orders to split. The gather produced no run yet.",
-      (m) => !isDryMap(m),
-    );
+    return pickPlaceholder("The gather produced no run yet.");
   }
   if (orders.length === 0) {
-    return step(
-      "gather-pick",
-      "Pick orders",
-      [
-        markdown("The run holds no orders."),
-        buttons([{ label: "Back", action: "back" }], undefined, "split"),
-      ],
-      "Tick the orders to split. The run holds no orders.",
-      (m) => !isDryMap(m),
-    );
+    return pickPlaceholder("The run holds no orders.");
   }
   const held = pickOverrides.for(sessionId);
   const mode = held.value;
@@ -714,7 +702,7 @@ function pickStep(answerMap: Map<string, string[]>, ctx?: WizardCtx): Step {
   } else if (mode === "none") {
     ticked = [];
   } else {
-    ticked = (answers(answerMap, "pick")).filter((value) => valid.has(value));
+    ticked = (answerList(answerMap, "pick")).filter((value) => valid.has(value));
   }
   return step(
     "gather-pick",

@@ -9,7 +9,9 @@ export function answer(m: Map<string, string[]>, name: string): string {
   return (m.get(name)?.[0] ?? "").trim();
 }
 
-export function answers(m: Map<string, string[]>, name: string): string[] {
+// Every posted value for one field, untrimmed and in post order.
+// The name avoids the toolkit node builder, which is called answers.
+export function answerList(m: Map<string, string[]>, name: string): string[] {
   return m.get(name) ?? [];
 }
 

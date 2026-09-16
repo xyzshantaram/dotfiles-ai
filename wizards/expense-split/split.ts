@@ -2,7 +2,7 @@
 // Loads a real run, splits one flat line per post, and previews the export.
 
 import {
-  answers as showAnswers,
+  answers,
   buttons,
   checkbox,
   markdown,
@@ -48,7 +48,7 @@ import {
   singleShare,
 } from "../../src/splitengine.ts";
 import { isDryMap, listRunsSync, readRunOrders, runHint, type RunMeta, runsDir } from "../../src/runstate.ts";
-import { answer, answers } from "../../src/answers.ts";
+import { answer, answerList } from "../../src/answers.ts";
 import {
   sessionStore,
   sidOf,
@@ -141,7 +141,7 @@ export async function loadCurrency(sessionId: string): Promise<string> {
 // dynamic person list; the three fixed keys stay for old drafts.
 export function collectedPeople(m: Map<string, string[]>): string[] {
   const names = [
-    ...(answers(m, "person")),
+    ...(answerList(m, "person")),
     ...["person-1", "person-2", "person-3"].map(
       (key) => m.get(key)?.[0] ?? "",
     ),
@@ -379,7 +379,7 @@ function commitPosted(
       updateProgressMeta(s);
       continue;
     }
-    const who = (answers(m, "who-" + i)).filter((name) => people.includes(name));
+    const who = (answerList(m, "who-" + i)).filter((name) => people.includes(name));
     if (who.length === 0) return;
     let amounts: Record<string, number>;
     try {
@@ -987,7 +987,7 @@ export function exportStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
     "split-export",
     "Export",
     [
-      showAnswers("Totals", entries),
+      answers("Totals", entries),
       markdown(
         "## Settlements\n" +
           (rows.length > 0 ? rows.join("\n") : "Nothing to settle."),

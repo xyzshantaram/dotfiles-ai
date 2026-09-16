@@ -1189,6 +1189,29 @@ export function createWizard(
     }
   }
 
+  // Resolve a target step to its render step. Keep shared arrival work in one place.
+  async function arrive(
+    target: Step,
+    state: SessionRecord,
+    answers: Map<string, string[]>,
+    ctx: WizardCtx,
+    nav: NavContext,
+    force = false,
+  ): Promise<{ step: Step; nav: NavContext }> {
+    if (typeof target.onEnter !== "function") return { step: target, nav };
+    if (force === false && isArrival(target.id, state) === false) {
+      return { step: target, nav };
+    }
+    await runEnter(target, answers, ctx);
+    const fresh = buildAll(answers, ctx, state.inserted);
+    const freshApplies = applicability(fresh, answers);
+    const refound = fresh.find((entry) => entry.id === target.id);
+    if (refound !== undefined) {
+      return { step: refound, nav: { built: fresh, applies: freshApplies } };
+    }
+    return { step: target, nav };
+  }
+
   // True when the move lands on a new step. The wizard compares the
   // target id against the last rendered id. A re-render keeps the
   // same id, so the hook stays silent.
@@ -1618,22 +1641,8 @@ export function createWizard(
           if (hit >= 0) {
             const pick = built[hit];
             if (pick !== undefined) {
-              if (
-                typeof pick.onEnter === "function" &&
-                isArrival(pick.id, state)
-              ) {
-                await runEnter(pick, answers, ctx);
-                const fresh = buildAll(answers, ctx, state.inserted);
-                const freshApplies = applicability(fresh, answers);
-                const refound = fresh.find((entry) => entry.id === pick.id);
-                if (refound !== undefined) {
-                  return reply(req, refound, state, {
-                    built: fresh,
-                    applies: freshApplies,
-                  });
-                }
-              }
-              return reply(req, pick, state, doneNav);
+              const resolvedGoto = await arrive(pick, state, answers, ctx, doneNav);
+              return reply(req, resolvedGoto.step, state, resolvedGoto.nav);
             }
           }
         }
@@ -1690,22 +1699,8 @@ export function createWizard(
         if (at >= 0 && applies[at] === true) {
           const found = built[at];
           if (found !== undefined) {
-            if (
-              typeof found.onEnter === "function" &&
-              isArrival(found.id, state)
-            ) {
-              await runEnter(found, answers, ctx);
-              const fresh = buildAll(answers, ctx, state.inserted);
-              const freshApplies = applicability(fresh, answers);
-              const refound = fresh.find((entry) => entry.id === found.id);
-              if (refound !== undefined) {
-                return reply(req, refound, state, {
-                  built: fresh,
-                  applies: freshApplies,
-                });
-              }
-            }
-            return reply(req, found, state, nav);
+            const resolvedBack = await arrive(found, state, answers, ctx, nav);
+            return reply(req, resolvedBack.step, state, resolvedBack.nav);
           }
         }
       }
@@ -1767,20 +1762,9 @@ export function createWizard(
     if (pick === undefined) {
       return new Response("No steps", { status: 500 });
     }
-    let finalPick = pick;
-    let finalNav = nav;
-    const wantsEnter = typeof finalPick.onEnter === "function" &&
-      (action === "restart" || isArrival(finalPick.id, state));
-    if (wantsEnter) {
-      await runEnter(finalPick, answers, ctx);
-      const fresh = buildAll(answers, ctx, state.inserted);
-      const freshApplies = applicability(fresh, answers);
-      const refound = fresh.find((entry) => entry.id === finalPick.id);
-      if (refound !== undefined) {
-        finalPick = refound;
-        finalNav = { built: fresh, applies: freshApplies };
-      }
-    }
+    const resolvedMove = await arrive(pick, state, answers, ctx, nav, action === "restart");
+    const finalPick = resolvedMove.step;
+    const finalNav = resolvedMove.nav;
     // Push the left step on a real forward move. Back, restart,
     // plus done never push. Unknown actions that hold the place
     // also leave the path alone.
@@ -1811,17 +1795,13 @@ export function createWizard(
       const rootHit = scanForward(rootBuilt, rootApplies, 0);
       let first = rootBuilt[rootHit >= 0 ? rootHit : 0];
       if (first === undefined) return new Response("No steps", { status: 500 });
-      if (typeof first.onEnter === "function" && isArrival(first.id, state)) {
-        await runEnter(first, rootAnswers, ctx);
-        const fresh = buildAll(rootAnswers, ctx, state.inserted);
-        const freshApplies = applicability(fresh, rootAnswers);
-        const refound = fresh.find((entry) => entry.id === first.id);
-        if (refound !== undefined) {
-          first = refound;
-          rootBuilt = fresh;
-          rootApplies = freshApplies;
-        }
-      }
+      const resolvedRoot = await arrive(first, state, rootAnswers, ctx, {
+        built: rootBuilt,
+        applies: rootApplies,
+      });
+      first = resolvedRoot.step;
+      rootBuilt = resolvedRoot.nav.built;
+      rootApplies = resolvedRoot.nav.applies;
       return reply(req, first, state, {
         built: rootBuilt,
         applies: rootApplies,
