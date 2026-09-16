@@ -3,18 +3,18 @@
 // pushed-tracking work from either implementation.
 
 import { OAuth } from "oauth";
+import {
+  legacyPushedFilePath,
+  legacyTokenFilePath,
+  migrateIfMissing,
+  pushedFilePath,
+  tokenFilePath,
+} from "./paths.ts";
+
+export { pushedFilePath, tokenFilePath };
 
 const BASE = "https://secure.splitwise.com/api/v3.0";
 const OAUTH_BASE = "https://secure.splitwise.com";
-
-export function tokenFilePath(): string {
-  return Deno.env.get("SPLITWISE_TOKEN_FILE") ??
-    `${Deno.env.get("HOME")}/.cache/ordersplit/splitwise_token.json`;
-}
-export function pushedFilePath(): string {
-  return Deno.env.get("SPLITWISE_PUSHED_FILE") ??
-    `${Deno.env.get("HOME")}/.cache/ordersplit/splitwise_pushed.json`;
-}
 
 export interface AccessToken {
   oauth_token: string;
@@ -247,6 +247,7 @@ interface TokenCache {
 
 export async function loadToken(): Promise<AccessToken | null> {
   try {
+    await migrateIfMissing(tokenFilePath(), legacyTokenFilePath(), true);
     const cache: TokenCache = JSON.parse(await Deno.readTextFile(tokenFilePath()));
     const t = cache.access_token;
     return t?.oauth_token && t?.oauth_token_secret ? t : null;
@@ -260,6 +261,7 @@ export async function saveToken(
   consumerKey?: string,
   consumerSecret?: string,
 ): Promise<void> {
+  await migrateIfMissing(tokenFilePath(), legacyTokenFilePath(), true);
   let cache: TokenCache | null = null;
   try {
     cache = JSON.parse(await Deno.readTextFile(tokenFilePath()));
@@ -284,6 +286,7 @@ export async function saveToken(
 
 export async function loadPushed(): Promise<Record<string, number>> {
   try {
+    await migrateIfMissing(pushedFilePath(), legacyPushedFilePath(), true);
     const data = JSON.parse(await Deno.readTextFile(pushedFilePath()));
     return data.pushed ?? {};
   } catch {
@@ -292,6 +295,7 @@ export async function loadPushed(): Promise<Record<string, number>> {
 }
 
 export async function savePushed(pushed: Record<string, number>): Promise<void> {
+  await migrateIfMissing(pushedFilePath(), legacyPushedFilePath(), true);
   await Deno.mkdir(new URL(".", `file://${pushedFilePath()}`), { recursive: true });
   await Deno.writeTextFile(pushedFilePath(), JSON.stringify({ pushed }, null, 2));
 }

@@ -5,6 +5,7 @@
 // Bill paths stay open until one live capture pins them.
 
 import { formatISTDate, type Order } from "./common.ts";
+import { shareDir } from "./paths.ts";
 
 export const BASE = "https://api.zomato.com";
 export const ACCOUNTS = "https://accounts.zomato.com";
@@ -23,22 +24,6 @@ export interface ZomatoConfig {
   clientId: string;
   appVersion: string;
   appVersionCode: string;
-}
-
-// Shared state dir under the repo or the env override.
-// Token and config files live here since the gatherer build.
-function shareDir(): string {
-  // Prefer the env override for tests and installs.
-  const override = Deno.env.get("SPLIT_UTILS_STATE");
-  // Use the override when it holds a value.
-  if (override !== undefined && override.length > 0) {
-    // Strip trailing slashes for stable joins.
-    return (override.replace(/\/+$/, "") || "/") + "/share";
-  }
-  // Fall back to repo state beside this module.
-  const path = decodeURIComponent(new URL("../state/share/", import.meta.url).pathname);
-  // Strip trailing slashes for stable joins.
-  return (path.replace(/\/+$/, "") || "/");
 }
 
 // Config file the dev constants wizard writes. It lives under share.

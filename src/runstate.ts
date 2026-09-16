@@ -1,6 +1,11 @@
 // Run state spine for split-utils. One dir holds one gather to push cycle.
 // Meta lives in share runs. Archives live in cache runs.
 
+import type { Order } from "./common.ts";
+import { runsDir, stateRoot } from "./paths.ts";
+
+export { runsDir, stateRoot };
+
 // One run record stored as meta.json in the run dir.
 export interface RunMeta {
   id: string;
@@ -17,6 +22,8 @@ export interface RunMeta {
   // Splitter progress. Partial sessions keep status gathered with counts.
   ordersDone?: number;
   ordersTotal?: number;
+  // Indexes of the orders ticked on the gather pick screen.
+  picked?: number[];
 }
 
 // Flag unsafe run ids and file names before disk use.
@@ -28,27 +35,6 @@ function isUnsafe(value: string): boolean {
   // Block parent climbs by name.
   if (value.includes("..")) return true;
   return false;
-}
-
-// Read the state root from the env or the repo layout.
-export function stateRoot(): string {
-  // Prefer the env override for tests and installs.
-  const override = Deno.env.get("SPLIT_UTILS_STATE");
-  // Use the override when it holds a value.
-  if (override !== undefined && override.length > 0) {
-    // Strip trailing slashes for stable joins.
-    return override.replace(/\/+$/, "") || "/";
-  }
-  // Fall back to repo state beside src.
-  const path = decodeURIComponent(new URL("../state/", import.meta.url).pathname);
-  // Strip trailing slashes for stable joins.
-  return path.replace(/\/+$/, "") || "/";
-}
-
-// Read the live runs dir under the state root.
-export function runsDir(): string {
-  // Join the root and the share path.
-  return stateRoot() + "/share/runs";
 }
 
 // Write a value as indented JSON with a trailing newline.
@@ -164,11 +150,7 @@ export function listRunsSync(): RunMeta[] {
   return out;
 }
 
-// True when the posted answers tick the Dry run box. Every stage
-// reads the same field, so one pattern covers all three flows.
-export function isDryMap(m: Map<string, string[]>): boolean {
-  return (m.get("dry") ?? []).includes("dry");
-}
+export { isDryMap } from "./answers.ts";
 export async function createRun(
   label: string,
   platforms: string[],
@@ -357,4 +339,33 @@ export async function backupFailedRun(id: string, reason: string): Promise<void>
   const meta: RunMeta = { ...found.meta, status: "failed", failureReason: reason };
   // Persist the marked record to the original dir.
   await writeJson(metaPath(found.dir), meta);
+}
+
+// Read orders.json from a run dir path or a run id.
+export function readRunOrders(run: string): Order[] {
+  const clean = run.replace(/\/+$/, "");
+  const candidates = [
+    clean + "/orders.json",
+    runsDir() + "/" + clean + "/orders.json",
+  ];
+  for (const path of candidates) {
+    try {
+      return JSON.parse(Deno.readTextFileSync(path)) as Order[];
+    } catch {
+      // Try the next candidate.
+    }
+  }
+  throw new Error("no orders.json under " + run);
+}
+
+// Record the ticked order indexes on one run. Keeps every other field.
+export function setRunPicked(runId: string, picked: number[]): void {
+  // Throw for unsafe ids.
+  if (isUnsafe(runId)) throw new Error("bad run id " + runId);
+  // Load the stored record.
+  const path = runsDir() + "/" + runId + "/meta.json";
+  const meta = JSON.parse(Deno.readTextFileSync(path)) as RunMeta;
+  // Set the picked indexes and write the record back.
+  meta.picked = [...picked];
+  Deno.writeTextFileSync(path, JSON.stringify(meta, null, 2) + "\n");
 }

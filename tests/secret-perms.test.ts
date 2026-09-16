@@ -2,6 +2,7 @@
 // Each case checks one save path from the T15 ticket.
 
 import { saveToken } from "../src/splitwise.ts";
+import { tokenFilePath } from "../src/paths.ts";
 
 // Throw on a false check with a plain message.
 function assert(cond: boolean, msg: string): void {
@@ -10,10 +11,11 @@ function assert(cond: boolean, msg: string): void {
 }
 
 Deno.test("saveToken ends at mode 600 on new and old files", async () => {
-  // Point the token cache at a fresh temp file.
+  // Point the state root at a fresh temp dir.
   const dir = await Deno.makeTempDir();
-  const path = dir + "/splitwise_token.json";
-  Deno.env.set("SPLITWISE_TOKEN_FILE", path);
+  const saved = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", dir);
+  const path = tokenFilePath();
   try {
     // Write once to cover the new file path.
     await saveToken({ oauth_token: "token-one", oauth_token_secret: "secret-one" });
@@ -29,6 +31,7 @@ Deno.test("saveToken ends at mode 600 on new and old files", async () => {
     assert((second.mode! & 0o777) === 0o600, "old secret file ends at 600");
   } finally {
     // Drop the override so later tests stay clean.
-    Deno.env.delete("SPLITWISE_TOKEN_FILE");
+    if (saved === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
+    else Deno.env.set("SPLIT_UTILS_STATE", saved);
   }
 });
