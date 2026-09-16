@@ -193,6 +193,12 @@ small.option-hint {
 .repeat-row wa-input {
   flex: 1 1 8rem;
 }
+.repeat-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1 1 8rem;
+}
 .copyable-row {
   display: flex;
   flex-direction: column;

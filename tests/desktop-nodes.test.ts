@@ -1730,3 +1730,654 @@ Deno.test("staged action fills its marker from saved answers on Done", async () 
   assert(text.includes("Staged say"), "staged label shows");
   assert(text.includes("Friday"), "Done output holds the saved value");
 });
+
+Deno.test("first request sets the session cookie once", async () => {
+  // Open the wizard with no cookie.
+  const handle = createWizard({
+    title: "T",
+    steps: [step("a", "First", [markdown("Hi")])],
+  });
+  const first = await handle(new Request("http://local/"));
+  const set = first.headers.get("set-cookie") ?? "";
+  assert(set.includes("wizard-sid="), "first response sets the cookie");
+  assert(set.includes("Path=/"), "cookie carries the root path");
+  assert(set.includes("HttpOnly"), "cookie carries http only");
+  assert(set.includes("SameSite=Strict"), "cookie carries strict same site");
+  assert(set.includes("Max-Age=86400"), "cookie carries a one day age");
+  const m = set.match(/wizard-sid=([^;]+)/);
+  assert(m !== null && (m[1] ?? "") !== "", "cookie holds a value");
+  // Send the cookie back. No new cookie lands.
+  const second = await handle(
+    new Request("http://local/", {
+      headers: { cookie: "wizard-sid=" + (m as RegExpMatchArray)[1] },
+    }),
+  );
+  assert(
+    second.headers.get("set-cookie") === null,
+    "second request sets no cookie",
+  );
+});
+
+Deno.test("two sessions keep separate answers", async () => {
+  // Post a field as A. Read the echo step as B.
+  const handle = createWizard({
+    title: "T",
+    steps: [
+      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
+      step("b", "Second", [
+        textEntry("Run name", "run"),
+        buttons([
+          { label: "B", action: "back" },
+          { label: "N", action: "next" },
+        ]),
+      ]),
+      (answers) =>
+        step("c", "Third", [
+          markdown(answers.get("run")?.join(", ") ?? "none"),
+        ]),
+    ],
+  });
+  function post(
+    cookie: string,
+    sid: string,
+    act: string,
+    extra: Record<string, string> = {},
+  ): Promise<Response> {
+    const params = new URLSearchParams({ step: sid, action: act, ...extra });
+    return handle(
+      new Request("http://local/step", {
+        method: "POST",
+        headers: { cookie },
+        body: params,
+      }),
+    );
+  }
+  await post("wizard-sid=A", "a", "next");
+  await post("wizard-sid=A", "b", "next", { run: "Friday" });
+  const own = await post("wizard-sid=A", "a", "goto:2");
+  assert((await own.text()).includes("Friday"), "owner keeps the value");
+  const other = await post("wizard-sid=B", "a", "goto:2");
+  const body = await other.text();
+  assert(!body.includes("Friday"), "other session never sees the value");
+  assert(body.includes("none"), "other session starts empty");
+});
+
+Deno.test("a foreign poll never sees the job output", async () => {
+  // Start a slow live job as A. Poll it as B and as A.
+  const handle = createWizard({
+    title: "T",
+    steps: [
+      step("a", "Live", [
+        action("Run it", "run-it", ["sleep", "5"], "now", true),
+        buttons([{ label: "N", action: "next" }]),
+      ]),
+    ],
+  });
+  await handle(
+    new Request("http://local/", { headers: { cookie: "wizard-sid=A" } }),
+  );
+  const started = await handle(
+    new Request("http://local/action", {
+      method: "POST",
+      headers: { cookie: "wizard-sid=A", "hx-request": "true" },
+      body: new URLSearchParams({ id: "run-it" }),
+    }),
+  );
+  const startedBody = await started.text();
+  const parts = startedBody.split('hx-get="/task/');
+  assert(parts.length > 1, "start returns a poll fragment");
+  const jobId = (parts[1] as string).split('"')[0] as string;
+  const foreign = await handle(
+    new Request("http://local/task/" + jobId, {
+      headers: { cookie: "wizard-sid=B", "hx-request": "true" },
+    }),
+  );
+  const foreignBody = await foreign.text();
+  assert(foreignBody.includes("finished"), "foreign poll says finished");
+  assert(!foreignBody.includes("hx-get"), "foreign poll keeps no poll target");
+  const owner = await handle(
+    new Request("http://local/task/" + jobId, {
+      headers: { cookie: "wizard-sid=A", "hx-request": "true" },
+    }),
+  );
+  const ownerBody = await owner.text();
+  assert(ownerBody.includes("hx-get"), "owner poll keeps the poll target");
+});
+
+Deno.test("a step function sees the session id", async () => {
+  // Record the context value. Open the wizard with one cookie.
+  let seen = "";
+  const handle = createWizard({
+    title: "T",
+    steps: [
+      (_answers, ctx) => {
+        seen = ctx?.sessionId ?? "";
+        return step("a", "First", [markdown("Hi")]);
+      },
+    ],
+  });
+  await handle(
+    new Request("http://local/", { headers: { cookie: "wizard-sid=probe-1" } }),
+  );
+  assert(seen === "probe-1", "step sees the session id");
+});
+
+Deno.test("the session cap drops the oldest session", async () => {
+  // Fill the map past fifty. The first session drops out.
+  const handle = createWizard({
+    title: "T",
+    steps: [
+      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
+      step("b", "Second", [
+        textEntry("Run name", "run"),
+        buttons([
+          { label: "B", action: "back" },
+          { label: "N", action: "next" },
+        ]),
+      ]),
+      (answers) =>
+        step("c", "Third", [
+          markdown(answers.get("run")?.join(", ") ?? "none"),
+        ]),
+    ],
+  });
+  function post(
+    cookie: string,
+    sid: string,
+    act: string,
+    extra: Record<string, string> = {},
+  ): Promise<Response> {
+    const params = new URLSearchParams({ step: sid, action: act, ...extra });
+    return handle(
+      new Request("http://local/step", {
+        method: "POST",
+        headers: { cookie },
+        body: params,
+      }),
+    );
+  }
+  function open(cookie: string): Promise<Response> {
+    return handle(new Request("http://local/", { headers: { cookie } }));
+  }
+  await post("wizard-sid=cap-old", "a", "next");
+  await post("wizard-sid=cap-old", "b", "next", { run: "Friday" });
+  for (let i = 0; i < 49; i++) await open("wizard-sid=cap-" + i);
+  await post("wizard-sid=cap-new", "a", "next");
+  await post("wizard-sid=cap-new", "b", "next", { run: "Kept" });
+  const dropped = await post("wizard-sid=cap-old", "a", "goto:2");
+  const droppedBody = await dropped.text();
+  assert(!droppedBody.includes("Friday"), "oldest session loses its value");
+  assert(droppedBody.includes("none"), "oldest session starts over");
+  const kept = await post("wizard-sid=cap-new", "a", "goto:2");
+  assert((await kept.text()).includes("Kept"), "newest session keeps its value");
+});
+
+Deno.test("repeating check renders one checkbox per row index", () => {
+  // Render a check field with two seeded rows plus the blank row.
+  const html = renderNode(
+    repeating("Tasks", "tasks", [
+      { kind: "check", label: "Split later", name: "later" },
+    ], [{}, {}]),
+  );
+  assert(html.includes('type="checkbox"'), "check uses a checkbox");
+  assert(html.includes('name="later"'), "check keeps its name");
+  assert(html.includes('value="0"'), "first row posts zero");
+  assert(html.includes('value="1"'), "second row posts one");
+  assert(html.includes('value="2"'), "blank row posts two");
+  const hits = html.split('type="checkbox"').length - 1;
+  assert(hits === 3, "three rows render three boxes: " + hits);
+});
+
+Deno.test("repeating check seeds ticked from 1 and unticked from 0", () => {
+  // Seed one row with 1 and one row with 0.
+  const html = renderNode(
+    repeating("Tasks", "tasks", [
+      { kind: "check", label: "Split later", name: "later" },
+    ], [{ "later": "1" }, { "later": "0" }]),
+  );
+  const inputs = html.match(/<input[^>]*>/g) ?? [];
+  const boxes = inputs.filter((tag) => tag.includes('name="later"'));
+  assert(boxes.length === 3, "two seeded rows plus blank: " + boxes.length);
+  assert((boxes[0] ?? "").includes("checked"), "1 renders ticked");
+  assert(!(boxes[1] ?? "").includes("checked"), "0 renders unticked");
+});
+
+Deno.test("repeating text plus number keep their markup", () => {
+  // Render one text field plus one number field.
+  const html = renderNode(
+    repeating("Guests", "guests", [
+      { kind: "text", label: "Name", name: "guest-name" },
+      { kind: "number", label: "Age", name: "guest-age" },
+    ]),
+  );
+  assert(html.includes('type="text"'), "text keeps its type");
+  assert(html.includes('type="number"'), "number keeps its type");
+  assert(html.includes('name="guest-name"'), "text keeps its name");
+  assert(html.includes('name="guest-age"'), "number keeps its name");
+  assert(html.includes("<wa-input"), "fields use wa-input");
+  assert(!html.includes('type="checkbox"'), "no checkbox appears");
+});
+
+Deno.test("nav with a plain goto string renders Next", () => {
+  // Render nav with a step id string.
+  const html = renderNode(nav({ goto: "menu" }));
+  assert(html.includes(">Next<"), "plain goto keeps Next");
+  assert(html.includes('value="goto:menu"'), "plain goto posts the step");
+});
+
+Deno.test("nav with a goto object renders its label", () => {
+  // Render nav with a step plus label object.
+  const html = renderNode(nav({ goto: { step: "menu", label: "Back to menu" } }));
+  assert(html.includes(">Back to menu<"), "object goto keeps its label");
+  assert(html.includes('value="goto:menu"'), "object goto posts the step");
+});
+
+Deno.test("nav with a blank goto label throws and names nav", () => {
+  // Feed a goto object with a blank label.
+  let message = "";
+  try {
+    nav({ goto: { step: "menu", label: "  " } });
+  } catch (err) {
+    message = err instanceof Error ? err.message : String(err);
+  }
+  assert(message.includes("nav"), "error names nav");
+  assert(message.includes("label"), "error names the label field");
+});
+
+// A three-step wizard with a conditional middle step. The middle step
+// carries a when function, so every move must skip it when false.
+function conditionalWizard(
+  when: (answers: Map<string, string[]>) => boolean,
+) {
+  return wiz({
+    title: "T",
+    steps: [
+      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
+      step("b", "Second", [markdown("middle")], undefined, when),
+      step("c", "Third", [markdown("tail")]),
+    ],
+  });
+}
+
+Deno.test("conditional next skips a step whose condition is false", async () => {
+  // Post next from the first step. The wizard lands on the third one.
+  const handle = conditionalWizard(() => false);
+  const page = await handle(stepPost("a", "next"));
+  const body = await page.text();
+  assert(body.includes("Third"), "next lands on the following step");
+  assert(body.includes("tail"), "following step content shows");
+  assert(!body.includes("Second"), "next skips the gated step");
+});
+
+Deno.test("conditional back skips the same step in reverse", async () => {
+  // Walk forward past the gated step, then post back from the third.
+  const handle = conditionalWizard(() => false);
+  await handle(stepPost("a", "next"));
+  const back = await handle(stepPost("c", "back"));
+  const body = await back.text();
+  assert(body.includes("First"), "back returns to the step before");
+  assert(!body.includes("Second"), "back skips the gated step");
+});
+
+// A wizard whose middle step applies only when the posted mode is show.
+function answerWizard() {
+  return wiz({
+    title: "T",
+    steps: [
+      step("a", "First", [
+        textEntry("Mode", "mode"),
+        buttons([{ label: "N", action: "next" }]),
+      ]),
+      step(
+        "b",
+        "Second",
+        [markdown("middle")],
+        undefined,
+        (answers) => (answers.get("mode") ?? []).includes("show"),
+      ),
+      step("c", "Third", [markdown("tail")]),
+    ],
+  });
+}
+
+Deno.test("a condition reading a posted answer decides both ways", async () => {
+  // Post hide. Next skips the middle step and back skips it too.
+  const hidden = answerWizard();
+  const past = await hidden(stepPost("a", "next", { mode: "hide" }));
+  assert((await past.text()).includes("Third"), "next skips when false");
+  const back = await hidden(stepPost("c", "back"));
+  const backBody = await back.text();
+  assert(backBody.includes("First"), "back skips when false");
+  assert(!backBody.includes("Second"), "skipped step stays hidden");
+  // Post show. Next lands on the middle step and back returns to it.
+  const shown = answerWizard();
+  const middle = await shown(stepPost("a", "next", { mode: "show" }));
+  assert((await middle.text()).includes("Second"), "next lands when true");
+  await shown(stepPost("b", "next"));
+  const again = await shown(stepPost("c", "back"));
+  assert((await again.text()).includes("Second"), "back lands when true");
+});
+
+Deno.test("a goto naming a skipped step lands past it", async () => {
+  // Name the gated step id. The wizard lands on the next applying one.
+  const handle = conditionalWizard(() => false);
+  const page = await handle(stepPost("a", "goto:b"));
+  const body = await page.text();
+  assert(body.includes("Third"), "goto lands on the next applying step");
+  assert(!body.includes("Second"), "goto skips the named step");
+});
+
+// A staged wizard with one stage per step. The middle step never
+// applies, so its stage must drop out of the marker.
+function stagedConditionalWizard() {
+  const names = ["One", "Two", "Three"];
+  const stageOf = (id: string) => {
+    if (id === "s1") return 0;
+    if (id === "s2") return 1;
+    if (id === "s3") return 2;
+    return null;
+  };
+  return wiz({
+    title: "T",
+    steps: [
+      step("s1", "Alpha", [markdown("a")]),
+      step("s2", "Beta", [markdown("b")], undefined, () => false),
+      step("s3", "Gamma", [markdown("c")]),
+    ],
+    stages: { names, stageOf },
+  });
+}
+
+Deno.test("the stage marker counts only the applying steps", async () => {
+  // Open the first step. The marker names One plus Three, not Two.
+  const handle = stagedConditionalWizard();
+  const first = await (await handle(new Request("http://local/"))).text();
+  assert(first.includes("Alpha"), "first step shows");
+  assert(first.includes("One"), "marker keeps the first stage");
+  assert(first.includes("Three"), "marker keeps the last stage");
+  assert(!first.includes("Two"), "marker drops the skipped stage");
+  assert(first.includes("1/2"), "marker counts two stages");
+  assert(!first.includes("3/"), "marker shows no third slot");
+  // Walk forward. The last step marks now on the second slot.
+  const last = await (await handle(stepPost("s1", "next"))).text();
+  assert(last.includes("Gamma"), "next lands past the skipped step");
+  assert(last.includes("2/2"), "marker names the last slot");
+  const at = last.indexOf("stage-row is-now");
+  assert(at >= 0, "one stage marks now");
+  assert(last.slice(at, at + 200).includes("Three"), "now names Three");
+});
+
+Deno.test("a step with no condition walks every screen", async () => {
+  // Drive three plain steps forward and back. Every screen appears.
+  const handle = wiz({
+    title: "T",
+    steps: [
+      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
+      step("b", "Second", [markdown("middle")]),
+      step("c", "Third", [markdown("tail")]),
+    ],
+  });
+  const second = await handle(stepPost("a", "next"));
+  assert((await second.text()).includes("Second"), "next lands on step two");
+  const third = await handle(stepPost("b", "next"));
+  assert((await third.text()).includes("Third"), "next lands on step three");
+  const back = await handle(stepPost("c", "back"));
+  assert((await back.text()).includes("Second"), "back returns to step two");
+});
+
+Deno.test("a throwing condition keeps the step visible", async () => {
+  // The condition throws. The step still applies and renders.
+  const handle = conditionalWizard(() => {
+    throw new Error("boom");
+  });
+  const page = await handle(stepPost("a", "next"));
+  const body = await page.text();
+  assert(body.includes("Second"), "throwing condition keeps the step");
+  assert(!body.includes("Third"), "wizard does not skip past it");
+});
+
+Deno.test("default done summary stays with no done option", async () => {
+  // Post done with no done option. The summary keeps its shape.
+  const handle = wiz({
+    title: "T",
+    steps: [
+      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
+      step("b", "Second", [
+        textEntry("Run name", "run"),
+        buttons([{ label: "D", action: "done", primary: true }]),
+      ]),
+    ],
+  });
+  await handle(stepPost("a", "next"));
+  const done = await handle(stepPost("b", "done", { run: "Friday" }));
+  const body = await done.text();
+  assert(body.includes("Done"), "summary keeps Done");
+  assert(body.includes("1 answers recorded."), "summary keeps count");
+  assert(body.includes("Start over"), "summary keeps restart");
+  assert(!body.includes("Custom tail"), "no custom content leaks");
+});
+
+Deno.test("custom done step renders and Back returns to prior step", async () => {
+  // Post done with a static custom step. Back returns to step two.
+  const handle = wiz({
+    title: "T",
+    steps: [
+      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
+      step("b", "Second", [
+        buttons([{ label: "D", action: "done", primary: true }]),
+      ]),
+    ],
+    done: step("fin", "Finished", [
+      markdown("Custom tail"),
+      buttons([{ label: "B", action: "back" }]),
+    ]),
+  });
+  await handle(stepPost("a", "next"));
+  const done = await handle(stepPost("b", "done"));
+  const body = await done.text();
+  assert(body.includes("Finished"), "custom title shows");
+  assert(body.includes("Custom tail"), "custom content shows");
+  assert(!body.includes("answers recorded."), "default summary stays hidden");
+  const back = await handle(stepPost("fin", "back"));
+  assert((await back.text()).includes("Second"), "Back returns to prior step");
+});
+
+Deno.test("goto from custom done lands on named step", async () => {
+  // The done function reads answers. A goto from it lands on menu.
+  const handle = wiz({
+    title: "T",
+    steps: [
+      step("a", "First", [
+        textEntry("Run name", "run"),
+        buttons([{ label: "N", action: "next" }]),
+      ]),
+      step("b", "Second", [
+        buttons([{ label: "D", action: "done", primary: true }]),
+      ]),
+      step("menu", "Menu", [markdown("menu tail")]),
+    ],
+    done: (answers) =>
+      step("fin", "Finished", [
+        markdown("Custom for " + (answers.get("run")?.join(", ") ?? "none")),
+        buttons([{ label: "Go", action: "goto:menu", primary: true }]),
+      ]),
+  });
+  await handle(stepPost("a", "next", { run: "Friday" }));
+  const done = await handle(stepPost("b", "done"));
+  assert(
+    (await done.text()).includes("Custom for Friday"),
+    "custom function sees answers",
+  );
+  const jump = await handle(stepPost("fin", "goto:menu"));
+  assert((await jump.text()).includes("Menu"), "goto lands on menu");
+});
+
+Deno.test("onEnter runs once on arrival not on re-render", async () => {
+  // The hook sets a flag. The step function reads it, so the flag
+  // proves the hook ran before render.
+  let calls = 0;
+  let mode = "cold";
+  const handle = wiz({
+    title: "T",
+    steps: [
+      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
+      (_answers) =>
+        step(
+          "b",
+          "Second",
+          [markdown("mode:" + mode)],
+          undefined,
+          undefined,
+          () => {
+            calls += 1;
+            mode = "warm";
+          },
+        ),
+    ],
+  });
+  const second = await handle(stepPost("a", "next"));
+  const secondBody = await second.text();
+  assert(secondBody.includes("Second"), "arrival lands");
+  assert(secondBody.includes("mode:warm"), "write shows in render");
+  assert(calls === 1, "hook runs once");
+  const same = await handle(stepPost("b", "bogus"));
+  assert((await same.text()).includes("Second"), "re-render stays");
+  assert(calls === 1, "hook stays silent on re-render");
+});
+
+Deno.test("rejected post keeps onEnter silent", async () => {
+  // The hook vetoes step two. The veto re-renders without the hook.
+  let calls = 0;
+  const handle = wiz({
+    title: "T",
+    steps: [
+      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
+      step(
+        "b",
+        "Second",
+        [
+          textEntry("Run name", "run"),
+          buttons([{ label: "N", action: "next" }]),
+        ],
+        undefined,
+        undefined,
+        () => {
+          calls += 1;
+        },
+      ),
+      step("c", "Third", [markdown("tail")]),
+    ],
+    onSubmit: (_fields, stepId) => {
+      if (stepId === "b") return { errors: ["veto says no"] };
+    },
+  });
+  await handle(stepPost("a", "next"));
+  assert(calls === 1, "arrival runs once");
+  const veto = await handle(stepPost("b", "next", { run: "Friday" }));
+  const body = await veto.text();
+  assert(body.includes("veto says no"), "veto shows");
+  assert(!body.includes("Third"), "veto holds place");
+  assert(calls === 1, "veto re-render skips hook");
+});
+
+Deno.test("leaving and returning runs onEnter again", async () => {
+  // Walk to step two, back to step one, then forward again.
+  let calls = 0;
+  const handle = wiz({
+    title: "T",
+    steps: [
+      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
+      step(
+        "b",
+        "Second",
+        [
+          buttons([
+            { label: "B", action: "back" },
+            { label: "N", action: "next" },
+          ]),
+        ],
+        undefined,
+        undefined,
+        () => {
+          calls += 1;
+        },
+      ),
+    ],
+  });
+  await handle(stepPost("a", "next"));
+  assert(calls === 1, "first arrival runs");
+  const back = await handle(stepPost("b", "back"));
+  assert((await back.text()).includes("First"), "back leaves");
+  assert(calls === 1, "back skips the hook");
+  await handle(stepPost("a", "next"));
+  assert(calls === 2, "return runs again");
+});
+
+Deno.test("throwing onEnter still renders the step", async () => {
+  // The hook throws. The wizard catches it and renders step two.
+  const handle = wiz({
+    title: "T",
+    steps: [
+      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
+      step(
+        "b",
+        "Second",
+        [markdown("tail")],
+        undefined,
+        undefined,
+        () => {
+          throw new Error("boom");
+        },
+      ),
+    ],
+  });
+  const page = await handle(stepPost("a", "next"));
+  assert(page.status === 200, "render keeps 200");
+  assert((await page.text()).includes("Second"), "step still renders");
+});
+
+Deno.test("onEnter sees the session id from context", async () => {
+  // Record the context value. Open the wizard with one cookie.
+  let seen = "";
+  const handle = createWizard({
+    title: "T",
+    steps: [
+      step(
+        "a",
+        "First",
+        [markdown("Hi")],
+        undefined,
+        undefined,
+        (_answers, ctx) => {
+          seen = ctx.sessionId;
+        },
+      ),
+    ],
+  });
+  await handle(
+    new Request("http://local/", {
+      headers: { cookie: "wizard-sid=probe-enter" },
+    }),
+  );
+  assert(seen === "probe-enter", "hook sees session id");
+});
+
+// A one-question screen states the question in its own heading, so the
+// input must be able to draw no heading of its own. Whitespace stays an
+// error: a blank-looking label is a mistake, an empty one is intent.
+Deno.test("an empty input label draws no heading", () => {
+  const html = renderStepFragment(
+    step("one", "How do you wish to use this app?", [radio("", "usage", ["A", "B"])]),
+  );
+  const headings = (html.match(/<h3>/g) ?? []).length;
+  if (headings !== 0) throw new Error("expected no h3, found " + headings);
+  if (!html.includes('name="usage"')) throw new Error("radio missing");
+});
+
+Deno.test("a whitespace input label is still an error", () => {
+  const problems = validateStep(
+    step("one", "Pick one", [radio("   ", "usage", ["A", "B"])]),
+  );
+  if (problems.length === 0) throw new Error("expected a validation error");
+  if (!problems[0].includes("label")) throw new Error("error does not name the label");
+});

@@ -151,8 +151,12 @@ export interface ActionNode {
   output?: string;
 }
 
+// A check field posts the row index as its value. An unchecked box
+// posts nothing, so a fixed value would shift later rows when the app
+// zips arrays by index. The app reads it by building a set from the
+// posted values, then testing the row index against that set.
 export interface RepeatingField {
-  kind: "text" | "number";
+  kind: "text" | "number" | "check";
   label: string;
   name: string;
 }
@@ -218,17 +222,31 @@ export type Node =
   | RepeatingNode
   | CopyableNode;
 
+// A step condition. Takes the answers map and returns true when the
+// step applies. A step with no condition always applies.
+export type StepWhen = (answers: Map<string, string[]>) => boolean;
+
 export interface Step {
   id: string;
   title: string;
   nodes: Node[];
   note?: string;
+  when?: StepWhen;
+  onEnter?: StepOnEnter;
 }
 
 // Session context for one browser. The toolkit passes one per request.
 export interface WizardCtx {
   sessionId: string;
 }
+
+// Arrival hook for one step. It takes the answers map plus the wizard
+// context. It may return a promise. The wizard runs it once when a
+// move lands on the step, before the step renders.
+export type StepOnEnter = (
+  answers: Map<string, string[]>,
+  ctx: WizardCtx,
+) => void | Promise<void>;
 
 // True when value is a plain object.
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -238,6 +256,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 // True when value is text with at least one non-space char.
 function isTitle(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+// An input label may be the empty string, which means the node draws no
+// heading of its own. A screen that asks one question in its own step
+// heading would otherwise state that question twice. Whitespace only is
+// still a mistake rather than an intent, so it stays an error.
+function isLabel(value: unknown): value is string {
+  return typeof value === "string" && (value === "" || value.trim().length > 0);
 }
 
 // Value of a plain string or {value, hint} option.
@@ -295,7 +321,9 @@ function validateOptionsPrologue(
   requiredName: boolean,
 ): { errors: string[]; ok: boolean } {
   const errors: string[] = [];
-  if (!isTitle(node.label)) errors.push(tag + ": label must be non-blank");
+  if (!isLabel(node.label)) {
+    errors.push(tag + ": label must be non-blank, or empty for no heading");
+  }
   if (requiredName) {
     if (!isTitle(node.name)) errors.push(tag + ": name must be non-blank");
   } else if (node.name !== undefined && !isTitle(node.name)) {
@@ -378,7 +406,9 @@ function validateCheckbox(node: CheckboxNode, tag: string): string[] {
 
 function validateTextEntry(node: TextEntryNode, tag: string): string[] {
   const errors: string[] = [];
-  if (!isTitle(node.label)) errors.push(tag + ": label must be non-blank");
+  if (!isLabel(node.label)) {
+    errors.push(tag + ": label must be non-blank, or empty for no heading");
+  }
   if (!isTitle(node.name)) errors.push(tag + ": name must be non-blank");
   if (node.value !== undefined && typeof node.value !== "string") {
     errors.push(tag + ": value must be text");
@@ -394,7 +424,9 @@ function validateTextEntry(node: TextEntryNode, tag: string): string[] {
 
 function validateNumberEntry(node: NumberEntryNode, tag: string): string[] {
   const errors: string[] = [];
-  if (!isTitle(node.label)) errors.push(tag + ": label must be non-blank");
+  if (!isLabel(node.label)) {
+    errors.push(tag + ": label must be non-blank, or empty for no heading");
+  }
   if (!isTitle(node.name)) errors.push(tag + ": name must be non-blank");
   if (
     node.value !== undefined &&
@@ -407,7 +439,9 @@ function validateNumberEntry(node: NumberEntryNode, tag: string): string[] {
 
 function validateTextarea(node: TextareaNode, tag: string): string[] {
   const errors: string[] = [];
-  if (!isTitle(node.label)) errors.push(tag + ": label must be non-blank");
+  if (!isLabel(node.label)) {
+    errors.push(tag + ": label must be non-blank, or empty for no heading");
+  }
   if (!isTitle(node.name)) errors.push(tag + ": name must be non-blank");
   if (node.value !== undefined && typeof node.value !== "string") {
     errors.push(tag + ": value must be text");
@@ -677,9 +711,10 @@ function validateRepeating(node: RepeatingNode, tag: string): string[] {
     const at = tag + " field " + String(field?.name);
     if (
       !isRecord(field) ||
-      (field.kind !== "text" && field.kind !== "number")
+      (field.kind !== "text" && field.kind !== "number" &&
+        field.kind !== "check")
     ) {
-      errors.push(at + ": kind must be text or number");
+      errors.push(at + ": kind must be text, number, or check");
       continue;
     }
     if (!isTitle(field.label)) errors.push(at + ": label must be non-blank");
@@ -715,6 +750,21 @@ function validateCopyable(node: CopyableNode, tag: string): string[] {
   if (!isTitle(node.name)) errors.push(tag + ": name must be non-blank");
   if (typeof node.text !== "string") errors.push(tag + ": text must be text");
   return errors;
+}
+
+// True when the step applies to these answers. A missing condition
+// always applies. A throwing condition also applies, so a broken
+// predicate never hides a screen. Never throws.
+export function stepApplies(
+  step: Step,
+  answers: Map<string, string[]>,
+): boolean {
+  if (typeof step.when !== "function") return true;
+  try {
+    return step.when(answers) !== false;
+  } catch {
+    return true;
+  }
 }
 
 // Check a full step. Return error strings. Never throw.
@@ -881,18 +931,24 @@ export function copyable(
   return { kind: "copyable", label, name, text };
 }
 
+export interface NavGoto {
+  step: string;
+  label: string;
+}
+
 export interface NavOptions {
   back?: boolean | string;
   next?: string;
   done?: string;
-  goto?: string;
+  goto?: string | NavGoto;
   extra?: ButtonItem[];
 }
 
 // Standard button row, so no author writes it by hand. back is true
 // for the label Back or a string for a custom label. next, done, and
 // goto pick the forward button: a next or done label, or a jump to a
-// step id labelled Next. extra buttons sit between back and forward.
+// step id labelled Next. goto also takes an object with a step id and
+// a label for a custom label. extra buttons sit between back and forward.
 // The row uses the split layout with a primary forward button.
 export function nav(opts: NavOptions): ButtonsNode {
   const forward = [opts.next, opts.done, opts.goto].filter(
@@ -910,7 +966,18 @@ export function nav(opts: NavOptions): ButtonsNode {
   if (opts.done !== undefined && !isTitle(opts.done)) {
     throw new Error("nav: done label must be non-blank");
   }
-  if (opts.goto !== undefined && !isTitle(opts.goto)) {
+  if (typeof opts.goto === "string") {
+    if (!isTitle(opts.goto)) {
+      throw new Error("nav: goto step id must be non-blank");
+    }
+  } else if (isRecord(opts.goto)) {
+    if (!isTitle(opts.goto.step)) {
+      throw new Error("nav: goto step must be non-blank");
+    }
+    if (!isTitle(opts.goto.label)) {
+      throw new Error("nav: goto label must be non-blank");
+    }
+  } else if (opts.goto !== undefined) {
     throw new Error("nav: goto step id must be non-blank");
   }
   const list: ButtonItem[] = [];
@@ -924,10 +991,17 @@ export function nav(opts: NavOptions): ButtonsNode {
     list.push({ label: opts.next, action: "next", primary: true });
   } else if (opts.done !== undefined) {
     list.push({ label: opts.done, action: "done", primary: true });
-  } else {
+  } else if (typeof opts.goto === "string") {
     list.push({
       label: "Next",
-      action: "goto:" + (opts.goto as string),
+      action: "goto:" + opts.goto,
+      primary: true,
+    });
+  } else {
+    const target = opts.goto as NavGoto;
+    list.push({
+      label: target.label,
+      action: "goto:" + target.step,
       primary: true,
     });
   }
@@ -939,6 +1013,8 @@ export function step(
   title: string,
   nodes: Node[],
   note?: string,
+  when?: StepWhen,
+  onEnter?: StepOnEnter,
 ): Step {
-  return omitUndefined({ id, title, nodes, note });
+  return omitUndefined({ id, title, nodes, note, when, onEnter });
 }

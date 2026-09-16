@@ -18,7 +18,7 @@ import { renderToString } from "preact-render-to-string";
 import { micromark } from "micromark";
 import cssText from "./style.css" with { type: "text" };
 import "./jsx-types.ts";
-import { buttons, markdown, optionValue, stages, step } from "./nodes.ts";
+import { buttons, markdown, optionValue, stages, step, stepApplies } from "./nodes.ts";
 import type {
   ActionNode,
   AnswersNode,
@@ -473,6 +473,12 @@ function TableView(props: { node: TableNode }) {
   );
 }
 
+// True when a seeded check value means ticked. Only 1, true, and on
+// count. Any other value leaves the box unticked.
+function isCheckTicked(raw: unknown): boolean {
+  return raw === "1" || raw === "true" || raw === "on";
+}
+
 function RepeatingView(props: { node: RepeatingNode }) {
   const node = props.node;
   const seeded = node.rows ?? [];
@@ -482,6 +488,20 @@ function RepeatingView(props: { node: RepeatingNode }) {
         {seeded.map((record, i) => (
           <div class="repeat-row" key={i}>
             {node.fields.map((field) => {
+              if (field.kind === "check") {
+                const checked = isCheckTicked(record[field.name]);
+                return (
+                  <label class="repeat-check">
+                    <input
+                      type="checkbox"
+                      name={field.name}
+                      value={String(i)}
+                      checked={checked}
+                    />
+                    {field.label}
+                  </label>
+                );
+              }
               const raw = record[field.name];
               const value = typeof raw === "string" && raw !== "" ? raw : undefined;
               return (
@@ -497,14 +517,29 @@ function RepeatingView(props: { node: RepeatingNode }) {
           </div>
         ))}
         <div class="repeat-row">
-          {node.fields.map((field) => (
-            <wa-input
-              type={field.kind}
-              name={field.name}
-              label={field.label}
-              placeholder={field.label}
-            />
-          ))}
+          {node.fields.map((field) => {
+            if (field.kind === "check") {
+              return (
+                <label class="repeat-check">
+                  <input
+                    type="checkbox"
+                    name={field.name}
+                    value={String(seeded.length)}
+                    checked={false}
+                  />
+                  {field.label}
+                </label>
+              );
+            }
+            return (
+              <wa-input
+                type={field.kind}
+                name={field.name}
+                label={field.label}
+                placeholder={field.label}
+              />
+            );
+          })}
         </div>
         <wa-button type="button" data-add-row>
           Add entry
@@ -582,9 +617,7 @@ function TabsView(props: { node: TabsNode }) {
           <wa-tab
             slot="nav"
             panel={"tab-" + i}
-            {...(selected !== undefined && i === selected
-              ? { active: true }
-              : {})}
+            {...(selected !== undefined && i === selected ? { active: true } : {})}
           >
             {tab.label}
           </wa-tab>
@@ -592,9 +625,7 @@ function TabsView(props: { node: TabsNode }) {
         {node.tabs.map((tab, i) => (
           <wa-tab-panel
             name={"tab-" + i}
-            {...(selected !== undefined && i === selected
-              ? { active: true }
-              : {})}
+            {...(selected !== undefined && i === selected ? { active: true } : {})}
           >
             {tab.nodes.map((kid, k) => <NodeView key={k} node={kid} />)}
           </wa-tab-panel>
@@ -867,11 +898,16 @@ export type StepFn = (answers: Map<string, string[]>, ctx?: WizardCtx) => Step;
 
 export type { WizardCtx };
 
+// A custom done screen. It holds a Step, or a function that takes
+// the answers map and returns a Step.
+export type DoneStep = Step | ((answers: Map<string, string[]>) => Step);
+
 export interface WizardOptions {
   title: string;
   steps: Array<Step | StepFn>;
   actions?: Record<string, { command: string[] }>;
   files?: { root: string; prefix?: string };
+  done?: DoneStep;
   stages?: {
     names: string[];
     stageOf: (stepId: string) => number | null;
@@ -1097,20 +1133,136 @@ export function createWizard(
     return built;
   }
 
+  // Navigation context for one request. built holds every step in
+  // order, applies holds one flag per step. Each condition runs once
+  // per navigation decision, never once per node.
+  interface NavContext {
+    built: Step[];
+    applies: boolean[];
+  }
+
+  // One flag per built step, in order. Runs every condition once
+  // against the answers the wizard holds right now. Never throws.
+  function applicability(
+    built: Step[],
+    answers: Map<string, string[]>,
+  ): boolean[] {
+    return built.map((entry) => stepApplies(entry, answers));
+  }
+
+  // First applying index at or after from. Returns -1 when none
+  // applies, so the caller picks the fallback.
+  function scanForward(
+    built: Step[],
+    applies: boolean[],
+    from: number,
+  ): number {
+    for (let i = from; i < built.length; i++) {
+      if (applies[i] === true) return i;
+    }
+    return -1;
+  }
+
+  // First applying index at or before from. Returns -1 when none
+  // applies, so the caller picks the fallback.
+  function scanBackward(applies: boolean[], from: number): number {
+    for (let i = from; i >= 0; i--) {
+      if (applies[i] === true) return i;
+    }
+    return -1;
+  }
+
+  // Run the arrival hook once before render. A throw never breaks
+  // the render. The caller catches nothing. Never throws.
+  async function runEnter(
+    target: Step | undefined,
+    answers: Map<string, string[]>,
+    ctx: WizardCtx,
+  ): Promise<void> {
+    if (target === undefined) return;
+    const hook = target.onEnter;
+    if (typeof hook !== "function") return;
+    try {
+      await hook(answers, ctx);
+    } catch {
+      // Keep the wizard running. Render continues below.
+    }
+  }
+
+  // True when the move lands on a new step. The wizard compares the
+  // target id against the last rendered id. A re-render keeps the
+  // same id, so the hook stays silent.
+  function isArrival(targetId: string, state: SessionRecord): boolean {
+    return state.lastStepId !== targetId;
+  }
+
+  // Narrow a stage list to the live stage indexes. current remaps to
+  // its rank among the live ones. A dead current falls to the next
+  // live stage at or after it, else the last live stage.
+  function narrowStages(
+    names: string[],
+    current: number,
+    live: number[],
+  ): { names: string[]; current: number } {
+    const kept = live.filter((at) => at >= 0 && at < names.length);
+    if (kept.length === 0 || kept.length === names.length) {
+      return { names, current };
+    }
+    const next = live.indexOf(current) >= 0
+      ? current
+      : (live.find((at) => at > current) ?? live[live.length - 1] as number);
+    return {
+      names: kept.map((at) => names[at] as string),
+      current: kept.indexOf(next),
+    };
+  }
+
   // Prepend one stages marker when the wizard names stages and the
   // step sits inside the staged flow. Builds a new node list and
-  // leaves the built step untouched.
-  function withStages(entry: Step): Step {
+  // leaves the built step untouched. When navigation context arrives,
+  // stages holding no applying step drop out of the marker, so the
+  // user never sees a number that counts a screen they never walk.
+  // A static marker that repeats the configured names narrows the
+  // same way. Without context the marker renders exactly as before.
+  function withStages(entry: Step, nav?: NavContext): Step {
     const cfg = opts.stages;
     if (cfg === undefined) return entry;
     const current = cfg.stageOf(entry.id);
     if (typeof current !== "number") return entry;
-    return { ...entry, nodes: [stages("Stages", cfg.names, current), ...entry.nodes] };
+    if (nav === undefined) {
+      return {
+        ...entry,
+        nodes: [stages("Stages", cfg.names, current), ...entry.nodes],
+      };
+    }
+    const live: number[] = [];
+    // Stages with no step at all in this wizard stay: they belong to
+    // a wider flow. A stage drops out only when the wizard holds its
+    // steps and every one of them skips.
+    for (let s = 0; s < cfg.names.length; s++) {
+      let present = false;
+      let kept = false;
+      nav.built.forEach((item, i) => {
+        if (cfg.stageOf(item.id) !== s) return;
+        present = true;
+        if (nav.applies[i] === true) kept = true;
+      });
+      if (!present || kept) live.push(s);
+    }
+    const head = narrowStages(cfg.names, current, live);
+    const nodes = entry.nodes.map((node) => {
+      if (node.kind !== "stages") return node;
+      if (node.stages.length !== cfg.names.length) return node;
+      if (!node.stages.every((name, i) => name === cfg.names[i])) return node;
+      const narrow = narrowStages(node.stages, node.current, live);
+      return stages(node.label, narrow.names, narrow.current);
+    });
+    return { ...entry, nodes: [stages("Stages", head.names, head.current), ...nodes] };
   }
 
-  function reply(req: Request, step: Step, state: SessionRecord): Response {
+  function reply(req: Request, step: Step, state: SessionRecord, nav?: NavContext): Response {
     state.lastStepId = step.id;
-    const fragment = renderStepFragment(withStages(step));
+    const fragment = renderStepFragment(withStages(step, nav));
     if (req.headers.get("hx-request") === "true") return html(fragment);
     return html(renderPage(opts.title, fragment));
   }
@@ -1352,12 +1504,15 @@ export function createWizard(
     const form = await req.formData();
     const stepId = String(form.get("step") ?? "");
     const action = String(form.get("action") ?? "next");
-    // A stray button after Done re-renders the summary.
+    // A stray button after Done re-renders the summary. A custom
+    // done screen navigates like any other step, so this path
+    // applies only to the default summary.
     if (
       stepId === "done" &&
       action !== "restart" &&
       action !== "done" &&
-      state.doneStep
+      state.doneStep &&
+      opts.done === undefined
     ) {
       return reply(req, state.doneStep, state);
     }
@@ -1389,7 +1544,9 @@ export function createWizard(
       // Build the step again here, after the hook ran. A hook that
       // records the rejected post needs that record to reach this
       // render, or the user loses whatever they just typed.
-      const rebuilt = buildAll(currentAnswersFor(state), ctx, state.inserted);
+      const vetoAnswers = currentAnswersFor(state);
+      const rebuilt = buildAll(vetoAnswers, ctx, state.inserted);
+      const vetoApplies = applicability(rebuilt, vetoAnswers);
       const cur = rebuilt.find((item) => item.id === stepId) ??
         posted.find((item) => item.id === stepId) ?? rebuilt[0];
       const nodes = cur.nodes.length > 0
@@ -1398,7 +1555,10 @@ export function createWizard(
           ...cur.nodes.slice(1),
         ]
         : [markdown(outcome.errors.join(" "))];
-      return reply(req, { ...cur, nodes }, state);
+      return reply(req, { ...cur, nodes }, state, {
+        built: rebuilt,
+        applies: vetoApplies,
+      });
     }
     if (!backward && outcome?.insert !== undefined) {
       state.inserted.push({ after: stepId, step: outcome.insert });
@@ -1447,40 +1607,130 @@ export function createWizard(
       }
       state.pending.length = 0;
       const target = (await opts.onDone?.(answers))?.goto;
+      const doneApplies = applicability(built, answers);
+      const doneNav: NavContext = { built, applies: doneApplies };
       if (target !== undefined) {
         const at = built.findIndex((entry) => entry.id === target);
         if (at >= 0) {
-          const pick = built[at];
-          if (pick !== undefined) return reply(req, pick, state);
+          // A goto naming a skipped step lands on the next applying
+          // step after it. No applying step keeps the summary screen.
+          const hit = scanForward(built, doneApplies, at);
+          if (hit >= 0) {
+            const pick = built[hit];
+            if (pick !== undefined) {
+              if (
+                typeof pick.onEnter === "function" &&
+                isArrival(pick.id, state)
+              ) {
+                await runEnter(pick, answers, ctx);
+                const fresh = buildAll(answers, ctx, state.inserted);
+                const freshApplies = applicability(fresh, answers);
+                const refound = fresh.find((entry) => entry.id === pick.id);
+                if (refound !== undefined) {
+                  return reply(req, refound, state, {
+                    built: fresh,
+                    applies: freshApplies,
+                  });
+                }
+              }
+              return reply(req, pick, state, doneNav);
+            }
+          }
+        }
+      }
+      if (opts.done !== undefined) {
+        let custom: Step | undefined;
+        try {
+          custom = typeof opts.done === "function"
+            ? opts.done(answers)
+            : opts.done;
+        } catch {
+          custom = undefined;
+        }
+        if (custom !== undefined) {
+          if (
+            typeof custom.onEnter === "function" &&
+            isArrival(custom.id, state)
+          ) {
+            await runEnter(custom, answers, ctx);
+            try {
+              const again = typeof opts.done === "function"
+                ? opts.done(answers)
+                : opts.done;
+              custom = again;
+            } catch {
+              // Keep the first custom step.
+            }
+          }
+          if (custom.id !== stepId) {
+            state.history.push(stepId);
+            while (state.history.length > 50) state.history.shift();
+          }
+          state.doneStep = custom;
+          return reply(req, custom, state, doneNav);
         }
       }
       state.doneStep = step("done", "Done", [
         ...outNodes,
         buttons([{ label: "Start over", action: "restart" }]),
       ]);
-      return reply(req, state.doneStep, state);
+      return reply(req, state.doneStep, state, doneNav);
     }
+    // One flag per step, in order. Every condition runs once here
+    // against the posted answers, and every move below reuses it.
+    const applies = applicability(built, answers);
+    const nav: NavContext = { built, applies };
     // Back pops the visit path. A hook goto or insert never
-    // redirects a backward move.
+    // redirects a backward move. A popped step whose condition now
+    // fails keeps popping, so Back skips the same steps in reverse.
     if (action === "back") {
-      if (state.history.length > 0) {
+      while (state.history.length > 0) {
         const prev = state.history.pop() as string;
-        const found = built.find((entry) => entry.id === prev);
-        if (found !== undefined) return reply(req, found, state);
+        const at = built.findIndex((entry) => entry.id === prev);
+        if (at >= 0 && applies[at] === true) {
+          const found = built[at];
+          if (found !== undefined) {
+            if (
+              typeof found.onEnter === "function" &&
+              isArrival(found.id, state)
+            ) {
+              await runEnter(found, answers, ctx);
+              const fresh = buildAll(answers, ctx, state.inserted);
+              const freshApplies = applicability(fresh, answers);
+              const refound = fresh.find((entry) => entry.id === found.id);
+              if (refound !== undefined) {
+                return reply(req, refound, state, {
+                  built: fresh,
+                  applies: freshApplies,
+                });
+              }
+            }
+            return reply(req, found, state, nav);
+          }
+        }
       }
       // Empty history falls through to the neighbour entry below.
     }
     let current = built.findIndex((step) => step.id === stepId);
     if (current < 0) current = 0;
+    current = clamp(current, built.length - 1);
     let index = current;
-    if (action === "next") index = current + 1;
-    else if (action === "back") index = current - 1;
-    else if (action === "restart") index = 0;
-    else if (action.startsWith("goto:")) {
+    let dir: "forward" | "backward" | "stay" = "stay";
+    if (action === "next") {
+      index = current + 1;
+      dir = "forward";
+    } else if (action === "back") {
+      index = current - 1;
+      dir = "backward";
+    } else if (action === "restart") {
+      index = 0;
+      dir = "forward";
+    } else if (action.startsWith("goto:")) {
+      dir = "forward";
       const raw = action.slice(5);
       const at = parseInt(raw, 10);
       if (!Number.isNaN(at) && String(at) === raw) {
-        index = at;
+        index = clamp(at, built.length - 1);
       } else {
         // Button targets name a step id. The built list holds steps
         // that raw entry indices cannot see, so ids stay correct.
@@ -1490,25 +1740,57 @@ export function createWizard(
     }
     if (!backward && outcome?.insert !== undefined) {
       const at = built.findIndex((entry) => entry.id === outcome.insert?.id);
-      if (at >= 0) index = at;
+      if (at >= 0) {
+        index = at;
+        dir = "forward";
+      }
     } else if (!backward && outcome?.goto !== undefined) {
       const at = built.findIndex((entry) => entry.id === outcome.goto);
-      if (at >= 0) index = at;
+      if (at >= 0) {
+        index = at;
+        dir = "forward";
+      }
+    }
+    // Next plus goto land on the first applying step at or after the
+    // target. Back lands on the first applying step at or before it.
+    // A move with nowhere to go holds its place.
+    if (dir === "forward") {
+      const hit = scanForward(built, applies, index);
+      index = hit >= 0 ? hit : current;
+    } else if (dir === "backward") {
+      const hit = scanBackward(applies, index);
+      index = hit >= 0 ? hit : current;
+    } else {
+      index = clamp(index, built.length - 1);
     }
     const pick = built[clamp(index, built.length - 1)];
     if (pick === undefined) {
       return new Response("No steps", { status: 500 });
     }
+    let finalPick = pick;
+    let finalNav = nav;
+    const wantsEnter = typeof finalPick.onEnter === "function" &&
+      (action === "restart" || isArrival(finalPick.id, state));
+    if (wantsEnter) {
+      await runEnter(finalPick, answers, ctx);
+      const fresh = buildAll(answers, ctx, state.inserted);
+      const freshApplies = applicability(fresh, answers);
+      const refound = fresh.find((entry) => entry.id === finalPick.id);
+      if (refound !== undefined) {
+        finalPick = refound;
+        finalNav = { built: fresh, applies: freshApplies };
+      }
+    }
     // Push the left step on a real forward move. Back, restart,
     // plus done never push. Unknown actions that hold the place
     // also leave the path alone.
     if (action !== "back" && action !== "restart" && action !== "done") {
-      if (pick.id !== stepId) {
+      if (finalPick.id !== stepId) {
         state.history.push(stepId);
         while (state.history.length > 50) state.history.shift();
       }
     }
-    return reply(req, pick, state);
+    return reply(req, finalPick, state, finalNav);
   }
 
   async function route(
@@ -1522,9 +1804,28 @@ export function createWizard(
       return serveFile(url.pathname, "/vendor", vendorRoot());
     }
     if (req.method === "GET" && url.pathname === "/") {
-      const first = buildAll(currentAnswersFor(state), ctx, state.inserted)[0];
+      const rootAnswers = currentAnswersFor(state);
+      let rootBuilt = buildAll(rootAnswers, ctx, state.inserted);
+      if (rootBuilt.length === 0) return new Response("No steps", { status: 500 });
+      let rootApplies = applicability(rootBuilt, rootAnswers);
+      const rootHit = scanForward(rootBuilt, rootApplies, 0);
+      let first = rootBuilt[rootHit >= 0 ? rootHit : 0];
       if (first === undefined) return new Response("No steps", { status: 500 });
-      return reply(req, first, state);
+      if (typeof first.onEnter === "function" && isArrival(first.id, state)) {
+        await runEnter(first, rootAnswers, ctx);
+        const fresh = buildAll(rootAnswers, ctx, state.inserted);
+        const freshApplies = applicability(fresh, rootAnswers);
+        const refound = fresh.find((entry) => entry.id === first.id);
+        if (refound !== undefined) {
+          first = refound;
+          rootBuilt = fresh;
+          rootApplies = freshApplies;
+        }
+      }
+      return reply(req, first, state, {
+        built: rootBuilt,
+        applies: rootApplies,
+      });
     }
     if (req.method === "POST" && url.pathname === "/step") {
       // Serialize step posts. One in flight holds the others.
@@ -1677,8 +1978,9 @@ export function createWizard(
     const ctx: WizardCtx = { sessionId };
     const res = await route(req, sessionId, state, ctx);
     if (isNew) {
-      const value =
-        `${SESSION_COOKIE}=${encodeURIComponent(sessionId)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400`;
+      const value = `${SESSION_COOKIE}=${
+        encodeURIComponent(sessionId)
+      }; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400`;
       res.headers.append("Set-Cookie", value);
     }
     return res;
