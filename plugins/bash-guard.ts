@@ -1281,7 +1281,10 @@ function containsPipeline(node: UnbashScript | UnbashNode): boolean {
  * unattributable. Any control flow (if/while/case/subshell/function/...)
  * or conditional (&&/||) anywhere disqualifies the script too: with
  * branching, which pipeline runs LAST is not decidable from the source,
- * and a confidently wrong label is worse than none.
+ * and a confidently wrong label is worse than none. A statement backgrounded
+ * at or after the last pipeline (`cmd &`) disqualifies as well: the &
+ * returns control immediately, and the probe on ticket #142 (bash 5.3.9)
+ * showed the epilogue's PIPESTATUS is then empty or stale.
  */
 function finalPipelineNaming(
   command: string,
@@ -1311,6 +1314,22 @@ function finalPipelineNaming(
         return;
       case "Statement":
         walk(node.command);
+        // A backgrounded statement AT OR AFTER the last pipeline (`cmd &`,
+        // including `cmd1 | cmd2 &`) disqualifies: the & returns control
+        // immediately and the epilogue's PIPESTATUS is either EMPTY (nothing
+        // ever wrote it) or STALE — still describing an earlier FOREGROUND
+        // pipeline (live probe, GNU bash 5.3.9, recorded on ticket #142:
+        // `false | cat &` -> [], `true | false; false | cat &` -> [0 1]).
+        // A backgrounded statement BEFORE the last pipeline is left alone:
+        // the foreground pipeline overwrites PIPESTATUS afterwards either
+        // way, so naming it stays honest.
+        if (
+          node.background === true &&
+          last !== undefined &&
+          node.pos >= last.pos
+        ) {
+          flat = false;
+        }
         return;
       case "Pipeline":
         last = node;
@@ -1369,6 +1388,10 @@ export function planPipeCapture(command: string): PipeCapturePlan {
     if (
       inner !== undefined &&
       inner.type === "Pipeline" &&
+      // A backgrounded pipeline (`cmd &`) must not claim names either: the
+      // epilogue's PIPESTATUS is empty or stale under `&` (probe on ticket
+      // #142), so the names would not match the reported codes.
+      only.background !== true &&
       inner.commands.length > 0 &&
       inner.commands.every((stage) => stage.type === "Command")
     ) {

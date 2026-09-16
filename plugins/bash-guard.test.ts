@@ -673,6 +673,39 @@ describe("pipeline stage capture", () => {
     expect(planPipeCapture("{ false | cat; }").finalNames).toBeNull();
   });
 
+  it("declines stage names when the final statement is backgrounded", () => {
+    // Live probe (GNU bash 5.3.9, ticket #142): under a trailing `&` the
+    // epilogue's PIPESTATUS is either EMPTY (`false | cat &` -> []) or STALE,
+    // still describing an earlier FOREGROUND pipeline (`true | false;
+    // false | cat &` -> [0 1]). Stage names would pair with wrong-or-absent
+    // exit codes, so a backgrounded final pipeline gets no names — same
+    // family as control flow above.
+    expect(planPipeCapture("false | cat &").finalNames).toBeNull();
+    expect(planPipeCapture("false | cat &").finalLeading).toBeNull();
+    // The stale-array case: the backgrounded tail must not inherit names.
+    expect(planPipeCapture("true | false; false | cat &").finalNames).toBeNull();
+    // The legacy single-pipeline names path declines too.
+    expect(planPipeCapture("false | cat &").names).toBeNull();
+    // Not over-disqualified: a foreground pipeline after a backgrounded
+    // statement still names its final pipeline (the background job does not
+    // touch the epilogue's PIPESTATUS when it is not waited for — and a
+    // confidently wrong label is worse than a missed honest one, so only the
+    // `&` itself is treated as disqualifying for its own statement).
+    expect(planPipeCapture("sleep 1 & true | false").finalNames).toEqual([
+      "true",
+      "false",
+    ]);
+  });
+
+  it("still names a plain foreground pipeline (background rule is narrow)", () => {
+    expect(planPipeCapture("false | cat")).toEqual({
+      hasPipe: true,
+      names: ["false", "cat"],
+      finalNames: ["false", "cat"],
+      finalLeading: "false",
+    });
+  });
+
   it("skips commands without a pipeline and commands that do not parse", () => {
     expect(planPipeCapture("echo hello")).toEqual({
       hasPipe: false,

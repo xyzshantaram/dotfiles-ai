@@ -12895,6 +12895,9 @@ function finalPipelineNaming(command, script) {
         return;
       case "Statement":
         walk2(node.command);
+        if (node.background === true && last !== void 0 && node.pos >= last.pos) {
+          flat = false;
+        }
         return;
       case "Pipeline":
         last = node;
@@ -12933,7 +12936,7 @@ function planPipeCapture(command) {
   if (script.commands.length === 1) {
     const only = script.commands[0];
     const inner = only !== void 0 && only.type === "Statement" ? only.command : void 0;
-    if (inner !== void 0 && inner.type === "Pipeline" && inner.commands.length > 0 && inner.commands.every((stage) => stage.type === "Command")) {
+    if (inner !== void 0 && inner.type === "Pipeline" && only.background !== true && inner.commands.length > 0 && inner.commands.every((stage) => stage.type === "Command")) {
       names = inner.commands.map(
         (stage) => (
           // Group 0: the group id only links operators for display, and a
