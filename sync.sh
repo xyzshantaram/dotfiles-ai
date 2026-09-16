@@ -462,6 +462,9 @@ step_install_plugins() {
 		# Pending-approval indicator beside the overflow trigger, with a
 		# modal that lists every pending approval and can jump to its call.
 		pnpm_ins "$HERE/plugins/composer-approvals"
+		# Markdown user/steering bubbles with hard breaks outside fenced code;
+		# pasted absolute paths stop chipping as skill references.
+		pnpm_ins "$HERE/plugins/user-bubble"
 		pnpm_ins "$HERE/plugins/log-viewer"
 		# Background job output buffer, replacement job_list/job_output/job_kill
 		# tools, HTTP routes, completion delivery, and the replacement dropdown.
@@ -541,6 +544,7 @@ step_report_extra_plugins() {
 		"context-meter"
 		"composer-menu"
 		"composer-approvals"
+		"user-bubble"
 		"dsh-at-file"
 		"dsh-better-markdown"
 		"dsh-input-history"

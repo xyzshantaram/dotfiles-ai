@@ -335,6 +335,24 @@ await wrapClientBundle(
   "composer-approvals",
 );
 
+// user-bubble: markdown user/steering bubbles with hard breaks outside
+// fenced code; pasted paths stop chipping as skill references. Same plain
+// client-plugin split as composer-approvals.
+await build({
+  entryPoints: [join(here, "plugins/user-bubble/src/index.ts")],
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  external: ["@deepseek-ai/*", "node:*"],
+  outfile: join(here, "plugins/user-bubble/lib/index.js"),
+  logLevel: "info",
+});
+await wrapClientBundle(
+  join(here, "plugins/user-bubble/src/client.tsx"),
+  join(here, "plugins/user-bubble/lib/client.js"),
+  "user-bubble",
+);
+
 // restart-pause: the Debug settings panel. The host half tracks agents
 // mid-turn and owns the /restart-pause/* routes; the client half is the
 // panel. Same esbuild/wrapClientBundle split as session-archive.

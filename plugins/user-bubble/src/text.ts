@@ -10,6 +10,16 @@
 //
 // React-free so vitest reaches both without a browser.
 
+/**
+ * WHICH KEYS THIS PLUGIN TAKES OVER (#125). The shipped conversation package
+ * registers `user` (client.js:9668) and `steering` (:9673) to the SAME
+ * component, UserMessageNodeView, so covering only one leaves half the
+ * transcript broken. The list lives in the pure model so the registration
+ * list is pinned by unit tests rather than read from the shipped client at
+ * runtime.
+ */
+export const CHAT_NODE_KEYS: readonly string[] = ["user", "steering"];
+
 /** One piece of a user message body. */
 export type UserSegment =
   | { kind: "text"; text: string }

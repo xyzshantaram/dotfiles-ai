@@ -1,0 +1,77 @@
+/*
+ * Bubble chrome for the user-bubble takeover (#125). The shipped bubble CSS
+ * is internal to the conversation package, so the takeover restyles from
+ * scratch; upstream restyles stop propagating (accepted in the loss list).
+ * Class names are literal: the build injects this file as raw text.
+ */
+.user-bubble-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 1px 0;
+}
+.user-bubble-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  min-width: 0;
+  max-width: 80%;
+}
+.user-bubble-body {
+  background: var(--dsw-alias-fill-l2, rgba(128, 128, 128, 0.14));
+  border-radius: 14px 14px 4px 14px;
+  padding: 7px 12px;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 20px;
+}
+.user-bubble-chip {
+  display: inline-block;
+  background: var(--dsw-alias-fill-l3, rgba(128, 128, 128, 0.22));
+  border-radius: 5px;
+  padding: 0 5px;
+  margin: 0 1px;
+  font-size: 12px;
+  line-height: 18px;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+.user-bubble-refs {
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary, #8a8a8a);
+}
+.user-bubble-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.user-bubble-row:hover .user-bubble-actions,
+.user-bubble-row:focus-within .user-bubble-actions {
+  opacity: 1;
+}
+.user-bubble-time {
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary, #8a8a8a);
+  white-space: nowrap;
+}
+.user-bubble-action {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary, #8a8a8a);
+  cursor: pointer;
+}
+.user-bubble-action:hover {
+  color: var(--dsw-alias-label-primary, #f0f0f0);
+  background: var(--dsw-alias-fill-l2, rgba(128, 128, 128, 0.14));
+}

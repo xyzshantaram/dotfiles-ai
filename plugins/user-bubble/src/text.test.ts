@@ -9,6 +9,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  CHAT_NODE_KEYS,
   hardBreakOutsideFences,
   joinSegments,
   splitReferences,
@@ -147,5 +148,32 @@ describe("hardBreakOutsideFences: typed breaks survive, code does not change", (
     expect(hardBreakOutsideFences("")).toBe("");
     expect(hardBreakOutsideFences(undefined)).toBe("");
     expect(hardBreakOutsideFences(null)).toBe("");
+  });
+
+  it("DISCRIMINATES: differs from a blanket newline replace exactly inside fences", () => {
+    // The fence-aware transform must not be replaceable by a blanket
+    // `text.replace(/\n/g, "  \n")`. Both agree in paragraphs; only the
+    // blanket version corrupts fenced code. If this fails because the
+    // transform was simplified into a blanket replace, pasted code breaks.
+    const text = ["intro", "```js", "const a = 1", "const b = 2", "```", "outro"].join("\n");
+    const blanket = text.replace(/\n/gu, "  \n");
+    const out = hardBreakOutsideFences(text);
+    expect(out).not.toBe(blanket);
+    expect(blanket).toContain("const a = 1  \n");
+    expect(out).toContain("const a = 1\n");
+    // And the paragraph behaviour the blanket version delivers is kept.
+    expect(out).toContain("intro  \n```js");
+    // The final line still never gains a stray break.
+    expect(out.endsWith("outro")).toBe(true);
+  });
+});
+
+describe("CHAT_NODE_KEYS: both shipped keys are taken over", () => {
+  // `user` and `steering` map to the same shipped component, so taking only
+  // one leaves half the transcript rendering through the broken projector.
+  it("covers user and steering, without duplicates", () => {
+    expect(CHAT_NODE_KEYS).toContain("user");
+    expect(CHAT_NODE_KEYS).toContain("steering");
+    expect(new Set(CHAT_NODE_KEYS).size).toBe(CHAT_NODE_KEYS.length);
   });
 });

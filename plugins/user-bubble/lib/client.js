@@ -1,0 +1,251 @@
+window.__ModuleLoader__.load({
+	id: "user-bubble",
+	factory: (require) => {
+		var module = { exports: {} };
+		var exports = module.exports;
+		Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
+var __create = Object.create;
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __export = (target, all) => {
+  for (var name2 in all)
+    __defProp(target, name2, { get: all[name2], enumerable: true });
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+// plugins/user-bubble/src/client.tsx
+var client_exports = {};
+__export(client_exports, {
+  apply: () => apply,
+  inject: () => inject,
+  name: () => name
+});
+module.exports = __toCommonJS(client_exports);
+var react = __toESM(require("react"), 1);
+var primitives = __toESM(require("@deepseek-ai/dsh-client-ui-primitives"), 1);
+
+// plugins/user-bubble/src/text.ts
+var CHAT_NODE_KEYS = ["user", "steering"];
+var REFERENCE_RE = /(^|\s)(\/[\w-]+(?![\w\-/.])|@"[^"\n]+"|@[^\s]+)/gu;
+function refKindOf(label, sessionLabels) {
+  if (sessionLabels.has(label)) return "session";
+  return label.startsWith("@") ? "file" : "skill";
+}
+function splitReferences(text, sessionLabels = /* @__PURE__ */ new Set()) {
+  if (typeof text !== "string" || text === "") return [];
+  const out = [];
+  let cursor = 0;
+  REFERENCE_RE.lastIndex = 0;
+  let match;
+  while ((match = REFERENCE_RE.exec(text)) !== null) {
+    const lead = match[1];
+    const label = match[2];
+    const tokenStart = match.index + lead.length;
+    if (tokenStart > cursor) out.push({ kind: "text", text: text.slice(cursor, tokenStart) });
+    out.push({ kind: "ref", raw: label, label, refKind: refKindOf(label, sessionLabels) });
+    cursor = tokenStart + label.length;
+  }
+  if (cursor < text.length) out.push({ kind: "text", text: text.slice(cursor) });
+  return out;
+}
+var FENCE_RE = /^ {0,3}(`{3,}|~{3,})/;
+function hardBreakOutsideFences(text) {
+  if (typeof text !== "string" || text === "") return "";
+  const lines = text.split("\n");
+  let fence = null;
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const fenceMatch = FENCE_RE.exec(line);
+    if (fence === null) {
+      if (fenceMatch !== null) {
+        fence = { marker: fenceMatch[1], char: fenceMatch[1][0] };
+        out.push(line);
+        continue;
+      }
+    } else {
+      const closes = fenceMatch !== null && fenceMatch[1][0] === fence.char && fenceMatch[1].length >= fence.marker.length && line.slice(fenceMatch[0].length).trim() === "";
+      out.push(line);
+      if (closes) fence = null;
+      continue;
+    }
+    const next = i + 1 < lines.length ? lines[i + 1] : null;
+    const isLast = next === null;
+    const nextBlank = next !== null && next.trim() === "";
+    const alreadyBroken = /( {2}|\\)$/.test(line);
+    const indentedCode = /^ {4,}\S/.test(line);
+    if (line.trim() === "" || isLast || nextBlank || alreadyBroken || indentedCode) {
+      out.push(line);
+      continue;
+    }
+    out.push(line + "  ");
+  }
+  return out.join("\n");
+}
+
+// plugins/shared/client-util.ts
+function injectStyle(pluginName, styleId, cssText) {
+  if (typeof document === "undefined") return;
+  if (document.querySelector(
+    'style[data-plugin-css="' + (typeof CSS !== "undefined" && CSS.escape ? CSS.escape(styleId) : String(styleId).replace(/"/g, '\\"')) + '"]'
+  ) !== null)
+    return;
+  const tag = document.createElement("style");
+  tag.dataset.plugin = pluginName;
+  tag.dataset.pluginCss = styleId;
+  tag.textContent = cssText;
+  document.head.appendChild(tag);
+}
+var HLJS_THEME_CSS = [
+  ".hljs-doctag,.hljs-keyword,.hljs-meta .hljs-keyword,.hljs-template-tag,.hljs-template-variable,.hljs-type,.hljs-variable.language_{color:#ff7b72}",
+  ".hljs-title,.hljs-title.class_,.hljs-title.class_.inherited__,.hljs-title.function_{color:#d2a8ff}",
+  ".hljs-attr,.hljs-attribute,.hljs-literal,.hljs-meta,.hljs-number,.hljs-operator,.hljs-variable,.hljs-selector-attr,.hljs-selector-class,.hljs-selector-id{color:#79c0ff}",
+  ".hljs-regexp,.hljs-string,.hljs-meta .hljs-string{color:#a5d6ff}",
+  ".hljs-built_in,.hljs-symbol{color:#ffa657}",
+  ".hljs-comment,.hljs-code,.hljs-formula{color:#8b949e}",
+  ".hljs-name,.hljs-quote,.hljs-selector-tag,.hljs-selector-pseudo{color:#7ee787}",
+  ".hljs-subst{color:#c9d1d9}",
+  ".hljs-section{color:#1f6feb;font-weight:bold}",
+  ".hljs-bullet{color:#f2cc60}",
+  ".hljs-emphasis{color:#c9d1d9;font-style:italic}",
+  ".hljs-strong{color:#c9d1d9;font-weight:bold}",
+  ".hljs-addition{color:#aff5b4;background-color:#033a16}",
+  ".hljs-deletion{color:#ffdcd7;background-color:#67060c}"
+].join("");
+
+// css-text:/home/sid/repos/dotfiles-ai/plugins/user-bubble/src/client.module.css
+var client_default = "/*\n * Bubble chrome for the user-bubble takeover (#125). The shipped bubble CSS\n * is internal to the conversation package, so the takeover restyles from\n * scratch; upstream restyles stop propagating (accepted in the loss list).\n * Class names are literal: the build injects this file as raw text.\n */\n.user-bubble-row {\n  display: flex;\n  align-items: flex-end;\n  justify-content: flex-end;\n  gap: 8px;\n  padding: 1px 0;\n}\n.user-bubble-stack {\n  display: flex;\n  flex-direction: column;\n  align-items: flex-end;\n  gap: 4px;\n  min-width: 0;\n  max-width: 80%;\n}\n.user-bubble-body {\n  background: var(--dsw-alias-fill-l2, rgba(128, 128, 128, 0.14));\n  border-radius: 14px 14px 4px 14px;\n  padding: 7px 12px;\n  overflow-wrap: anywhere;\n  font-size: 13px;\n  line-height: 20px;\n}\n.user-bubble-chip {\n  display: inline-block;\n  background: var(--dsw-alias-fill-l3, rgba(128, 128, 128, 0.22));\n  border-radius: 5px;\n  padding: 0 5px;\n  margin: 0 1px;\n  font-size: 12px;\n  line-height: 18px;\n  vertical-align: baseline;\n  white-space: nowrap;\n}\n.user-bubble-refs {\n  font-size: 11px;\n  color: var(--dsw-alias-label-tertiary, #8a8a8a);\n}\n.user-bubble-actions {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  flex: none;\n  opacity: 0;\n  transition: opacity 120ms ease;\n}\n.user-bubble-row:hover .user-bubble-actions,\n.user-bubble-row:focus-within .user-bubble-actions {\n  opacity: 1;\n}\n.user-bubble-time {\n  font-size: 11px;\n  color: var(--dsw-alias-label-tertiary, #8a8a8a);\n  white-space: nowrap;\n}\n.user-bubble-action {\n  display: grid;\n  place-items: center;\n  width: 20px;\n  height: 20px;\n  padding: 0;\n  border: none;\n  border-radius: 5px;\n  background: transparent;\n  color: var(--dsw-alias-label-tertiary, #8a8a8a);\n  cursor: pointer;\n}\n.user-bubble-action:hover {\n  color: var(--dsw-alias-label-primary, #f0f0f0);\n  background: var(--dsw-alias-fill-l2, rgba(128, 128, 128, 0.14));\n}\n";
+
+// plugins/user-bubble/src/client.tsx
+var MarkdownText2 = primitives.MarkdownText;
+var JsonBlock2 = primitives.JsonBlock;
+var Tooltip2 = primitives.Tooltip;
+var IconCopyOutline162 = primitives.IconCopyOutline16;
+var IconCheckOutline162 = primitives.IconCheckOutline16;
+var writeClipboard2 = primitives.writeClipboard;
+var PLUGIN_NAME = "user-bubble";
+var SLOT = "conversation.chat.node";
+var SHADOW_PRIORITY = -100;
+var LOCALE = "conversation";
+function contentParts(content) {
+  var texts = [];
+  var images = [];
+  var rest = [];
+  for (var block of content) {
+    if (block.type === "text" && typeof block.text === "string") texts.push(block.text);
+    else if (block.type === "image" && block.attachment !== void 0) images.push({ attachment: block.attachment });
+    else rest.push(block);
+  }
+  return { text: texts.join(""), images, rest };
+}
+function pad2(n) {
+  return n < 10 ? "0" + n : String(n);
+}
+function formatMessageClock(time, t) {
+  var d = new Date(time);
+  var n = /* @__PURE__ */ new Date();
+  var clock = pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+  var sameDay = d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
+  if (sameDay) return clock;
+  var params = { y: d.getFullYear(), m: d.getMonth() + 1, d: d.getDate() };
+  return (d.getFullYear() === n.getFullYear() ? t("clock.md", params) : t("clock.ymd", params)) + " " + clock;
+}
+function chipDisplayLabel(segment) {
+  var label = segment.label;
+  if (segment.refKind === "session") return label.slice(1);
+  if (segment.refKind === "skill") return label;
+  return label.slice(1).replace(/^"|"$/g, "").split(/[\\/]/).filter(Boolean).at(-1) ?? label.slice(1);
+}
+function RefChip({ segment, key }) {
+  var dataRefChip = segment.refKind === "skill" ? "skill" : segment.refKind;
+  return /* @__PURE__ */ react.createElement("span", { className: "user-bubble-chip", "data-ref-chip": dataRefChip, title: segment.label }, chipDisplayLabel(segment));
+}
+function BubbleActions({ text, time, t }) {
+  var copied = react.useState(false);
+  var setCopied = copied[1];
+  var onCopy = react.useCallback(
+    function() {
+      if (copied[0]) return;
+      writeClipboard2(text).then(function(ok) {
+        if (!ok) return;
+        setCopied(true);
+        window.setTimeout(function() {
+          setCopied(false);
+        }, 1e3);
+      });
+    },
+    [copied[0], text]
+  );
+  return /* @__PURE__ */ react.createElement("div", { className: "user-bubble-actions" }, time !== void 0 ? /* @__PURE__ */ react.createElement("span", { className: "user-bubble-time" }, formatMessageClock(time, t)) : null, /* @__PURE__ */ react.createElement(Tooltip2, { label: copied[0] ? t("copied") : t("copy"), side: "bottom" }, /* @__PURE__ */ react.createElement(
+    "button",
+    {
+      type: "button",
+      className: "user-bubble-action",
+      "aria-label": copied[0] ? t("copied") : t("copy"),
+      onClick: onCopy
+    },
+    copied[0] ? /* @__PURE__ */ react.createElement(IconCheckOutline162, null) : /* @__PURE__ */ react.createElement(IconCopyOutline162, null)
+  )));
+}
+var UserBubbleNodeView = react.memo(function UserBubbleNodeView2({ node, renderMessageImages, t }) {
+  var data = node.data;
+  var parts = contentParts(data.content);
+  var body = hardBreakOutsideFences(parts.text);
+  var sessionLabels = new Set(
+    (data.referenceLabels ?? []).map(function(label) {
+      return "@" + label;
+    })
+  );
+  var segments = splitReferences(body, sessionLabels);
+  var showBubble = body !== "" || parts.rest.length > 0;
+  var truncated = function(total) {
+    return t("json.truncated", { total });
+  };
+  return /* @__PURE__ */ react.createElement("div", { className: "user-bubble-row", "data-time-hover-root": "true" }, /* @__PURE__ */ react.createElement("div", { className: "user-bubble-stack" }, renderMessageImages({ images: parts.images, align: "end" }), showBubble ? /* @__PURE__ */ react.createElement("div", { className: "user-bubble-body" }, segments.map(function(segment, i) {
+    return segment.kind === "text" ? /* @__PURE__ */ react.createElement(MarkdownText2, { key: i, text: segment.text }) : /* @__PURE__ */ react.createElement(RefChip, { key: i, segment });
+  }), parts.rest.map(function(block, i) {
+    return /* @__PURE__ */ react.createElement(JsonBlock2, { key: i, label: t("message.extraBlock"), payload: block, truncatedLabel: truncated });
+  })) : null, data.referenceLabels !== void 0 && data.referenceLabels.length > 0 ? /* @__PURE__ */ react.createElement("div", { className: "user-bubble-refs" }, t("message.referenceSummary", {
+    labels: data.referenceLabels.join(t("message.referenceSeparator"))
+  })) : null), /* @__PURE__ */ react.createElement(BubbleActions, { text: body, time: data.time, t }));
+});
+var name = PLUGIN_NAME;
+var inject = ["slots"];
+function apply(ctx) {
+  injectStyle(PLUGIN_NAME, "user-bubble", client_default);
+  for (var key of CHAT_NODE_KEYS) {
+    ctx.slots.inject(SLOT, function* () {
+      yield ctx.slots.register(
+        {
+          name: SLOT,
+          key,
+          priority: SHADOW_PRIORITY,
+          locale: LOCALE
+        },
+        UserBubbleNodeView
+      );
+    });
+  }
+}
+		return module.exports;
+	}
+});
