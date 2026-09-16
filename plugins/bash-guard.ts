@@ -1324,6 +1324,10 @@ function finalPipelineNaming(
         // the foreground pipeline overwrites PIPESTATUS afterwards either
         // way, so naming it stays honest.
         if (
+          // `cmd &` at/after the last pipeline: PIPESTATUS is empty or stale
+          // (#142 probe, bash 5.3.9). Inline so the BUNDLE carries the reason
+          // too -- esbuild drops standalone comments here, and the artifact is
+          // what a reader lands in when debugging a live guard decision.
           node.background === true &&
           last !== undefined &&
           node.pos >= last.pos

@@ -12895,7 +12895,13 @@ function finalPipelineNaming(command, script) {
         return;
       case "Statement":
         walk2(node.command);
-        if (node.background === true && last !== void 0 && node.pos >= last.pos) {
+        if (
+          // `cmd &` at/after the last pipeline: PIPESTATUS is empty or stale
+          // (#142 probe, bash 5.3.9). Inline so the BUNDLE carries the reason
+          // too -- esbuild drops standalone comments here, and the artifact is
+          // what a reader lands in when debugging a live guard decision.
+          node.background === true && last !== void 0 && node.pos >= last.pos
+        ) {
           flat = false;
         }
         return;
