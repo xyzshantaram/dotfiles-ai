@@ -95,6 +95,21 @@ function chipDisplayLabel(segment) {
   );
 }
 
+/**
+ * TWO DELIBERATE DEPARTURES from the shipped chip, written down so a later
+ * reader does not file them as regressions (#125 review, subagent 435b851f):
+ *
+ *  - NO GLYPH. The shipped chip drew a ReferenceIcon from internals we cannot
+ *    import. The ticket's loss list allowed "rebuilt from primitives (close,
+ *    not identical)"; we dropped it instead, because a near-miss glyph sitting
+ *    beside the real ones reads as a rendering bug, while plain text reads as
+ *    a different-but-deliberate style. Rebuild it only with a primitive that
+ *    matches the surrounding optical weight.
+ *  - EVERY @-ref IS data-ref-chip="file". The shipped component distinguished
+ *    "folder" by a trailing slash on the label. That attribute is a CSS hook
+ *    only and nothing in this bundle styles the two differently; restore the
+ *    split here first if a stylesheet ever needs it.
+ */
 function RefChip({ segment, key }: { segment: any; key?: any }) {
   var dataRefChip = segment.refKind === "skill" ? "skill" : segment.refKind;
   return (

@@ -31,7 +31,11 @@ describe("splitReferences: paths are text, not skills", () => {
   });
 
   it("leaves other path-ish tokens alone", () => {
-    for (const text of ["/etc/passwd", "/usr/bin/env", "/a.b", "/tmp/x-y/z", "/var/"]) {
+    // `./rel/path` rides in this vector deliberately: it never matched the
+    // shipped pattern either, because the anchor requires the slash to follow
+    // whitespace or a line start. Pinning it here states that the lookahead
+    // left the relative-path case alone rather than accidentally owning it.
+    for (const text of ["/etc/passwd", "/usr/bin/env", "/a.b", "/tmp/x-y/z", "/var/", "./rel/path"]) {
       expect(refs(splitReferences("path " + text))).toEqual([]);
     }
   });
