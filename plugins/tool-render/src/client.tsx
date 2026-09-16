@@ -189,6 +189,14 @@ import {
   summariseGuardPromptReason,
 } from "./verdict-tip";
 import * as primitives from "@deepseek-ai/dsh-client-ui-primitives";
+// ---- lucide-react: per-glyph icon imports, INLINED by esbuild. ----
+// Named per-glyph imports only (`{ Image }`, never `*`): the package is
+// sideEffects-free with one ESM module per icon, so the bundle keeps the
+// glyphs named here and drops the other ~1500. It stays OUT of
+// dsh.client.inject for the same reason highlight.js does: inject names
+// loader-seed externals, and esbuild inlines this package instead. #124
+// takes { Timer } the same way.
+import { Image as LucideImageIcon } from "lucide-react";
 var useState = react.useState;
 var useEffect = react.useEffect;
 var useRef = react.useRef;
@@ -3560,7 +3568,13 @@ function ReadImageRow(props) {
     callId: props.callId,
     useSession: props.useSession, useProjection: props.useProjection,
     toolName: "Read image",
-    icon: <IconBrowseOutline16 size={14} />,
+    // Lucide Image, not a shipped primitive: the primitives set has no image
+    // or clock glyph (owner decision 2026-09-09, #114), and this row shared
+    // IconBrowseOutline16 with unrelated rows. Per-glyph import above keeps
+    // tree-shaking; never hand-inline SVG here. Pending owner's eye: lucide
+    // is stroke-based (24-grid, stroke-width 2) while the shipped icons are
+    // fill-based (16/14-grid), so the weight match is structural, not visual.
+    icon: <LucideImageIcon size={14} />,
     title: "Read image",
     summary: summary,
     path: path,

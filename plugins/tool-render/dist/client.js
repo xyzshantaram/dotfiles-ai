@@ -9862,7 +9862,7 @@ function diff(hljs) {
 }
 
 // plugins/tool-render/src/client.tsx
-var import_react = __toESM(require("react"), 1);
+var import_react4 = __toESM(require("react"), 1);
 
 // node_modules/.pnpm/yaml@2.9.0/node_modules/yaml/browser/dist/nodes/identity.js
 var ALIAS = /* @__PURE__ */ Symbol.for("yaml.alias");
@@ -16267,6 +16267,240 @@ function composeVerdictTooltip(rewriteReason, promptReason) {
 
 // plugins/tool-render/src/client.tsx
 var primitives = __toESM(require("@deepseek-ai/dsh-client-ui-primitives"), 1);
+
+// node_modules/.pnpm/lucide-react@1.46.0_react@19.3.0/node_modules/lucide-react/dist/esm/createLucideIcon.mjs
+var import_react3 = require("react");
+
+// node_modules/.pnpm/lucide-react@1.46.0_react@19.3.0/node_modules/lucide-react/dist/esm/shared/src/utils/toKebabCase.mjs
+var toKebabCase = (string2) => string2?.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+
+// node_modules/.pnpm/lucide-react@1.46.0_react@19.3.0/node_modules/lucide-react/dist/esm/shared/src/utils/toLucideIconData.mjs
+function toLucideIconData(iconName, iconNode, aliases = []) {
+  if (iconNode == null) {
+    throw new Error("[lucide]: iconNode is required when icon name is used");
+  }
+  return {
+    name: toKebabCase(iconName),
+    size: 24,
+    node: iconNode,
+    ...aliases.length > 0 ? { aliases } : {}
+  };
+}
+
+// node_modules/.pnpm/lucide-react@1.46.0_react@19.3.0/node_modules/lucide-react/dist/esm/shared/src/utils/toCamelCase.mjs
+var toCamelCase = (string2) => {
+  let out = "";
+  let upperNext = false;
+  for (const ch of string2) {
+    if (ch === "-" || ch === "_" || ch <= " ") {
+      upperNext = out.length > 0;
+      continue;
+    }
+    if (out.length === 0) {
+      out += ch.toLowerCase();
+    } else {
+      out += upperNext ? ch.toUpperCase() : ch;
+    }
+    upperNext = false;
+  }
+  return out;
+};
+
+// node_modules/.pnpm/lucide-react@1.46.0_react@19.3.0/node_modules/lucide-react/dist/esm/shared/src/utils/toPascalCase.mjs
+var toPascalCase = (string2) => {
+  const camelCase = toCamelCase(string2);
+  return camelCase.charAt(0).toUpperCase() + camelCase.slice(1);
+};
+
+// node_modules/.pnpm/lucide-react@1.46.0_react@19.3.0/node_modules/lucide-react/dist/esm/Icon.mjs
+var import_react2 = require("react");
+
+// node_modules/.pnpm/lucide-react@1.46.0_react@19.3.0/node_modules/lucide-react/dist/esm/shared/src/utils/mergeClasses.mjs
+var mergeClasses = (...classes) => classes.filter((className, index, array) => {
+  return Boolean(className) && className.trim() !== "" && array.indexOf(className) === index;
+}).join(" ").trim();
+
+// node_modules/.pnpm/lucide-react@1.46.0_react@19.3.0/node_modules/lucide-react/dist/esm/shared/src/build/defaultAttributes.mjs
+var defaultAttributes = {
+  xmlns: "http://www.w3.org/2000/svg",
+  width: 24,
+  height: 24,
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  "stroke-width": 2,
+  "stroke-linecap": "round",
+  "stroke-linejoin": "round"
+};
+
+// node_modules/.pnpm/lucide-react@1.46.0_react@19.3.0/node_modules/lucide-react/dist/esm/shared/src/build/buildLucideIconNode.mjs
+function isDefined(value) {
+  return value !== null && value !== void 0;
+}
+function buildLucideIconNode(icon, params = {}) {
+  const attributeNames = params.attributeNames ?? {};
+  const getAttributeName = (attributeName) => attributeNames[attributeName] ?? attributeName;
+  const viewBoxWidth = icon.size ?? icon.width ?? defaultAttributes["width"];
+  const viewBoxHeight = icon.size ?? icon.height ?? defaultAttributes["height"];
+  const aliasClassNames = icon.aliases?.filter((alias) => typeof alias === "string" && alias.trim() !== "").map((alias) => `lucide-${alias}`) ?? [];
+  const iconClassNames = [...icon.name ? [`lucide-${icon.name}`] : [], ...aliasClassNames];
+  const classNamesFromClassName = params.className?.split(" ").filter(Boolean) ?? [];
+  const className = params.includeDefaultClasses === false ? mergeClasses(...classNamesFromClassName) : mergeClasses("lucide", ...iconClassNames, ...classNamesFromClassName);
+  const calculatedStrokeWidth = params.absoluteStrokeWidth ? Number(params.strokeWidth ?? defaultAttributes["stroke-width"]) * Number(icon.size ?? icon.width ?? defaultAttributes["width"]) / Number(params.size ?? params.width ?? defaultAttributes["width"]) : params.strokeWidth ?? defaultAttributes["stroke-width"];
+  const attributes = {
+    ...Object.entries(defaultAttributes).reduce((attrs, [attrName, value]) => {
+      attrs[getAttributeName(attrName)] = value;
+      return attrs;
+    }, {}),
+    ..."color" in params && params.color && {
+      [getAttributeName("stroke")]: params.color
+    },
+    ..."size" in params && isDefined(params.size) && {
+      [getAttributeName("width")]: params.size,
+      [getAttributeName("height")]: params.size
+    },
+    ..."width" in params && isDefined(params.width) && {
+      [getAttributeName("width")]: params.width
+    },
+    ..."height" in params && isDefined(params.height) && {
+      [getAttributeName("height")]: params.height
+    },
+    [getAttributeName("stroke-width")]: calculatedStrokeWidth,
+    ...className && {
+      [getAttributeName("class")]: className
+    },
+    [getAttributeName("viewBox")]: `0 0 ${viewBoxWidth} ${viewBoxHeight}`,
+    ...params.hasA11yProp === false ? {
+      [getAttributeName("aria-hidden")]: "true"
+    } : {},
+    ..."attributes" in params && params.attributes
+  };
+  return [
+    "svg",
+    attributes,
+    icon.node.map((child) => {
+      const [name2, attrs, children] = child;
+      const nextAttrs = params.nonScalingStroke ? { [getAttributeName("vector-effect")]: "non-scaling-stroke", ...attrs } : attrs;
+      return children ? [name2, nextAttrs, children] : [name2, nextAttrs];
+    })
+  ];
+}
+
+// node_modules/.pnpm/lucide-react@1.46.0_react@19.3.0/node_modules/lucide-react/dist/esm/shared/src/build/buildLucideIconForReact.mjs
+function buildLucideIconForReact(icon, params = {}) {
+  return buildLucideIconNode(icon, {
+    ...params,
+    attributeNames: {
+      ...params.attributeNames,
+      class: "className",
+      "stroke-width": "strokeWidth",
+      "stroke-linecap": "strokeLinecap",
+      "stroke-linejoin": "strokeLinejoin",
+      "vector-effect": "vectorEffect"
+    }
+  });
+}
+
+// node_modules/.pnpm/lucide-react@1.46.0_react@19.3.0/node_modules/lucide-react/dist/esm/shared/src/utils/hasA11yProp.mjs
+var hasA11yProp = (props) => {
+  for (const prop in props) {
+    if (prop.startsWith("aria-") || prop === "role" || prop === "title") {
+      return true;
+    }
+  }
+  return false;
+};
+
+// node_modules/.pnpm/lucide-react@1.46.0_react@19.3.0/node_modules/lucide-react/dist/esm/context.mjs
+var import_react = require("react");
+var LucideContext = (0, import_react.createContext)({});
+var useLucideContext = () => (0, import_react.useContext)(LucideContext);
+
+// node_modules/.pnpm/lucide-react@1.46.0_react@19.3.0/node_modules/lucide-react/dist/esm/Icon.mjs
+var Icon = (0, import_react2.forwardRef)(
+  ({
+    color,
+    size,
+    width,
+    height,
+    strokeWidth,
+    absoluteStrokeWidth,
+    nonScalingStroke,
+    className = "",
+    children,
+    iconNode = [],
+    icon = {
+      node: iconNode,
+      aliases: [],
+      size: 24
+    },
+    ...rest
+  }, ref) => {
+    const {
+      size: contextSize = 24,
+      strokeWidth: contextStrokeWidth = 2,
+      absoluteStrokeWidth: contextAbsoluteStrokeWidth = false,
+      nonScalingStroke: contextNonScalingStroke = false,
+      color: contextColor = "currentColor",
+      className: contextClass = ""
+    } = useLucideContext() ?? {};
+    const hasAccessibleProp = Boolean(children) || hasA11yProp(rest);
+    const [name2, svgAttributes, builtIconNode = []] = buildLucideIconForReact(icon, {
+      color: color ?? contextColor,
+      width: width ?? size ?? contextSize,
+      height: height ?? size ?? contextSize,
+      strokeWidth: strokeWidth ?? contextStrokeWidth,
+      absoluteStrokeWidth: absoluteStrokeWidth ?? contextAbsoluteStrokeWidth,
+      nonScalingStroke: nonScalingStroke ?? contextNonScalingStroke,
+      className: mergeClasses(contextClass, className),
+      hasA11yProp: hasAccessibleProp,
+      attributes: rest
+    });
+    return (0, import_react2.createElement)(
+      name2,
+      {
+        ref,
+        ...svgAttributes
+      },
+      [
+        ...builtIconNode.map(([tag, attrs]) => (0, import_react2.createElement)(tag, attrs)),
+        ...Array.isArray(children) ? children : [children]
+      ]
+    );
+  }
+);
+
+// node_modules/.pnpm/lucide-react@1.46.0_react@19.3.0/node_modules/lucide-react/dist/esm/createLucideIcon.mjs
+function createLucideIcon(iconDataOrName, iconNode = [], aliases = []) {
+  const iconData = typeof iconDataOrName === "string" ? toLucideIconData(iconDataOrName, iconNode, aliases) : iconDataOrName;
+  const Component = (0, import_react3.forwardRef)(
+    ({ className, ...props }, ref) => (0, import_react3.createElement)(Icon, {
+      ref,
+      icon: iconData,
+      className,
+      ...props
+    })
+  );
+  if (iconData.name) {
+    Component.displayName = toPascalCase(iconData.name);
+  }
+  return Component;
+}
+
+// node_modules/.pnpm/lucide-react@1.46.0_react@19.3.0/node_modules/lucide-react/dist/esm/icons/image.mjs
+var __iconData = {
+  name: "image",
+  size: 24,
+  node: [
+    ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2", ry: "2", key: "1m3agn" }],
+    ["circle", { cx: "9", cy: "9", r: "2", key: "af1f0g" }],
+    ["path", { d: "m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21", key: "1xmnt7" }]
+  ]
+};
+__iconData.node;
+var Image = createLucideIcon(__iconData);
+
+// plugins/tool-render/src/client.tsx
 var languageModules = {
   javascript,
   typescript,
@@ -16332,9 +16566,9 @@ var EXTENSION_LANGUAGE = {
   diff: "diff",
   patch: "diff"
 };
-var useState = import_react.default.useState;
-var useEffect = import_react.default.useEffect;
-var useRef = import_react.default.useRef;
+var useState = import_react4.default.useState;
+var useEffect = import_react4.default.useEffect;
+var useRef = import_react4.default.useRef;
 var IconBrowseOutline162 = primitives.IconBrowseOutline16;
 var IconEditOutline162 = primitives.IconEditOutline16;
 var IconApiOutline142 = primitives.IconApiOutline14;
@@ -16539,19 +16773,19 @@ function toolNameBadge(toolName, icon, state) {
   var background = isError ? "color-mix(in srgb, var(--dsw-alias-state-error-primary) 85%, black)" : isBash ? "color-mix(in srgb, var(--dsh-outline-guard) 55%, var(--dsw-alias-bg-tertiary))" : "color-mix(in srgb, hsl(" + hue + " 65% 45%) 55%, var(--dsw-alias-bg-tertiary))";
   var border = isError ? "#fff" : isBash ? "var(--dsh-outline-guard)" : "hsl(" + hue + " 55% 60%)";
   var color = isError ? "#fff" : void 0;
-  return /* @__PURE__ */ import_react.default.createElement(
+  return /* @__PURE__ */ import_react4.default.createElement(
     "span",
     {
       className: "tool-render-name-badge",
       style: { background, borderColor: border, color }
     },
-    /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-name-badge-icon" }, icon),
-    /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-name-badge-text", title: toolName, "data-dsh-tip": "" }, toolName)
+    /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-name-badge-icon" }, icon),
+    /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-name-badge-text", title: toolName, "data-dsh-tip": "" }, toolName)
   );
 }
 function toolRenderRow(options) {
   var answerable = options.callId !== void 0 && options.callId !== null && typeof options.useSession === "function";
-  return answerable ? /* @__PURE__ */ import_react.default.createElement(ToolRenderAnswerableCard, { options }) : renderToolRenderCard(options, false);
+  return answerable ? /* @__PURE__ */ import_react4.default.createElement(ToolRenderAnswerableCard, { options }) : renderToolRenderCard(options, false);
 }
 function ToolRenderAnswerableCard(props) {
   var options = props.options;
@@ -16567,7 +16801,7 @@ function renderToolRenderCard(options, approvalOpen) {
   var summary;
   var showsError = options.state === "error" && options.errorSummary !== void 0;
   if (!showsError && options.path !== void 0 && options.path !== null && options.onOpenFile !== void 0) {
-    summary = /* @__PURE__ */ import_react.default.createElement(
+    summary = /* @__PURE__ */ import_react4.default.createElement(
       "span",
       {
         className: "tool-render-path",
@@ -16590,7 +16824,7 @@ function renderToolRenderCard(options, approvalOpen) {
       options.summary
     );
   } else {
-    summary = /* @__PURE__ */ import_react.default.createElement(
+    summary = /* @__PURE__ */ import_react4.default.createElement(
       "span",
       {
         className: "tool-render-summary",
@@ -16599,7 +16833,7 @@ function renderToolRenderCard(options, approvalOpen) {
       options.errorSummary !== void 0 ? options.errorSummary : options.summary
     );
   }
-  return /* @__PURE__ */ import_react.default.createElement(
+  return /* @__PURE__ */ import_react4.default.createElement(
     "div",
     {
       className: "tool-render-card",
@@ -16612,7 +16846,7 @@ function renderToolRenderCard(options, approvalOpen) {
       "data-error": options.state === "error" || void 0,
       "data-stopped": options.state === "stopped" || void 0
     },
-    /* @__PURE__ */ import_react.default.createElement(
+    /* @__PURE__ */ import_react4.default.createElement(
       "div",
       {
         className: "tool-render-row",
@@ -16629,12 +16863,12 @@ function renderToolRenderCard(options, approvalOpen) {
           }
         } : void 0
       },
-      interactive ? /* @__PURE__ */ import_react.default.createElement(
+      interactive ? /* @__PURE__ */ import_react4.default.createElement(
         IconChevronDownOutline142,
         {
           className: open ? "tool-render-chevron tool-render-chevron-open" : "tool-render-chevron"
         }
-      ) : /* @__PURE__ */ import_react.default.createElement(
+      ) : /* @__PURE__ */ import_react4.default.createElement(
         IconChevronDownOutline142,
         {
           className: "tool-render-chevron tool-render-chevron-disabled",
@@ -16642,9 +16876,9 @@ function renderToolRenderCard(options, approvalOpen) {
         }
       ),
       leading,
-      leading === null ? /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-title" }, options.title) : null,
-      options.badge !== void 0 && options.badge !== null && options.badge !== "" ? /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-badge" }, options.badge) : null,
-      options.callId !== void 0 && options.callId !== null && typeof options.useSession === "function" ? /* @__PURE__ */ import_react.default.createElement(
+      leading === null ? /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-title" }, options.title) : null,
+      options.badge !== void 0 && options.badge !== null && options.badge !== "" ? /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-badge" }, options.badge) : null,
+      options.callId !== void 0 && options.callId !== null && typeof options.useSession === "function" ? /* @__PURE__ */ import_react4.default.createElement(
         ToolRenderApprovalVerdict,
         {
           callId: options.callId,
@@ -16653,11 +16887,11 @@ function renderToolRenderCard(options, approvalOpen) {
           tip: options.verdictTip
         }
       ) : null,
-      /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-sep", "aria-hidden": true }),
+      /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-sep", "aria-hidden": true }),
       summary
     ),
-    open === true ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-body" }, options.body !== null && options.body !== void 0 ? options.body : options.state === "error" && options.errorText !== null && options.errorText !== void 0 && options.errorText !== "" ? /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output", "tool-render-error": true }, options.errorText) : null, options.inspect !== void 0 ? /* @__PURE__ */ import_react.default.createElement("button", { type: "button", className: "tool-render-inspect", onClick: options.inspect }, /* @__PURE__ */ import_react.default.createElement(IconInspectOutline122, null), " Inspect") : null) : null,
-    options.callId !== void 0 && options.callId !== null && typeof options.useSession === "function" ? /* @__PURE__ */ import_react.default.createElement(
+    open === true ? /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-body" }, options.body !== null && options.body !== void 0 ? options.body : options.state === "error" && options.errorText !== null && options.errorText !== void 0 && options.errorText !== "" ? /* @__PURE__ */ import_react4.default.createElement("pre", { className: "tool-render-output", "tool-render-error": true }, options.errorText) : null, options.inspect !== void 0 ? /* @__PURE__ */ import_react4.default.createElement("button", { type: "button", className: "tool-render-inspect", onClick: options.inspect }, /* @__PURE__ */ import_react4.default.createElement(IconInspectOutline122, null), " Inspect") : null) : null,
+    options.callId !== void 0 && options.callId !== null && typeof options.useSession === "function" ? /* @__PURE__ */ import_react4.default.createElement(
       ToolRenderApprovalBar,
       {
         callId: options.callId,
@@ -16673,14 +16907,14 @@ function ToolRenderApprovalVerdict(props) {
   var outcome = decidedRecord !== null && decidedRecord !== void 0 ? decidedRecord.outcomes[props.callId] : void 0;
   var label = outcome === "allowed-once" || outcome === "approved" ? "approved" : outcome === "rejected" ? "rejected" : null;
   if (label === null) return null;
-  return /* @__PURE__ */ import_react.default.createElement(
+  return /* @__PURE__ */ import_react4.default.createElement(
     "span",
     {
       className: "tool-render-verdict",
       "data-outcome": label,
       title: props.tip !== null && props.tip !== void 0 ? props.tip : void 0
     },
-    /* @__PURE__ */ import_react.default.createElement(
+    /* @__PURE__ */ import_react4.default.createElement(
       "svg",
       {
         className: "tool-render-verdict-shield",
@@ -16690,7 +16924,7 @@ function ToolRenderApprovalVerdict(props) {
         "aria-hidden": true,
         focusable: "false"
       },
-      /* @__PURE__ */ import_react.default.createElement(
+      /* @__PURE__ */ import_react4.default.createElement(
         "path",
         {
           d: "M8 1.5 3 3.4v4.2c0 3.1 2.1 5.9 5 6.9 2.9-1 5-3.8 5-6.9V3.4L8 1.5Z",
@@ -16701,7 +16935,7 @@ function ToolRenderApprovalVerdict(props) {
         }
       )
     ),
-    /* @__PURE__ */ import_react.default.createElement("span", null, label === "approved" ? "APPROVED" : "REJECTED")
+    /* @__PURE__ */ import_react4.default.createElement("span", null, label === "approved" ? "APPROVED" : "REJECTED")
   );
 }
 function pendingApprovalOf(snapshot, callId) {
@@ -16872,7 +17106,7 @@ function ToolRenderApprovalBar(props) {
   var pendingPayload = pending !== null && pending !== void 0 ? pending.payload : void 0;
   var pendingReason = pendingPayload !== null && pendingPayload !== void 0 ? pendingPayload.reason : void 0;
   var reasonText = argsEscalation !== null ? null : typeof pendingReason === "string" && pendingReason.trim() !== "" && !isBashGuardReason(pendingReason) ? pendingReason : null;
-  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-approval-strip" }, reasonText === null ? null : /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-approval-reason" }, reasonText), /* @__PURE__ */ import_react.default.createElement(
+  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-approval-strip" }, reasonText === null ? null : /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-approval-reason" }, reasonText), /* @__PURE__ */ import_react4.default.createElement(
     "button",
     {
       type: "button",
@@ -16884,7 +17118,7 @@ function ToolRenderApprovalBar(props) {
       }
     },
     commentOpen ? "hide comment" : "add comment"
-  ), commentOpen ? /* @__PURE__ */ import_react.default.createElement(
+  ), commentOpen ? /* @__PURE__ */ import_react4.default.createElement(
     "textarea",
     {
       className: "tool-render-approval-comment",
@@ -16899,7 +17133,7 @@ function ToolRenderApprovalBar(props) {
       },
       onKeyDown: onCommentKeyDown
     }
-  ) : null, /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-approval-actions" }, /* @__PURE__ */ import_react.default.createElement(
+  ) : null, /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-approval-actions" }, /* @__PURE__ */ import_react4.default.createElement(
     "button",
     {
       type: "button",
@@ -16909,7 +17143,7 @@ function ToolRenderApprovalBar(props) {
       onClick: onReject
     },
     armed && !hasDraft ? "? Confirm reject" : "\u2717 Reject"
-  ), /* @__PURE__ */ import_react.default.createElement(
+  ), /* @__PURE__ */ import_react4.default.createElement(
     "button",
     {
       type: "button",
@@ -16937,11 +17171,11 @@ function ReadRow(props) {
   var body = null;
   if (output !== null && output !== "") {
     if (state === "error") {
-      body = /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output", "tool-render-error": true }, output);
+      body = /* @__PURE__ */ import_react4.default.createElement("pre", { className: "tool-render-output", "tool-render-error": true }, output);
     } else {
       var rows = numberedReadRows(output, readStartLine(args, output));
       var language = languageFor(path !== void 0 ? path : "");
-      body = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-code" }, readLineRows(rows, language));
+      body = /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-code" }, readLineRows(rows, language));
     }
   }
   return toolRenderRow({
@@ -16949,7 +17183,7 @@ function ReadRow(props) {
     useSession: props.useSession,
     useProjection: props.useProjection,
     toolName: "Read file",
-    icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
+    icon: /* @__PURE__ */ import_react4.default.createElement(IconBrowseOutline162, { size: 14 }),
     title: "Read",
     summary,
     escalated: escalatedOf(args),
@@ -16968,14 +17202,14 @@ function ReadRow(props) {
   });
 }
 function escalationBanner(detail, settled) {
-  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-escalation" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-cmd-label" }, escalationLabel(settled), /* @__PURE__ */ import_react.default.createElement(
+  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-escalation" }, /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-cmd-label" }, escalationLabel(settled), /* @__PURE__ */ import_react4.default.createElement(
     "code",
     {
       className: "tool-render-escalation-mode",
       title: "requested sandbox mode: " + detail.mode
     },
     detail.mode
-  )), /* @__PURE__ */ import_react.default.createElement("div", { className: escalationReasonClassName(settled) }, detail.justification));
+  )), /* @__PURE__ */ import_react4.default.createElement("div", { className: escalationReasonClassName(settled) }, detail.justification));
 }
 function BashRow(props) {
   var expandedState = useState(false);
@@ -17037,10 +17271,10 @@ function BashRow(props) {
         var commandHtml = highlightCode(text, "bash");
         var parts = [];
         if (label !== null) {
-          parts.push(/* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-cmd-label" }, label));
+          parts.push(/* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-cmd-label" }, label));
         }
         parts.push(
-          /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-command" }, label === null ? "$ " : null, /* @__PURE__ */ import_react.default.createElement(
+          /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-command" }, label === null ? "$ " : null, /* @__PURE__ */ import_react4.default.createElement(
             "code",
             {
               className: "hljs",
@@ -17064,17 +17298,17 @@ function BashRow(props) {
     }
     if (output !== null && output !== "") {
       inner.push(
-        /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output", "tool-render-error": state === "error" || void 0 }, stripAnsi(output))
+        /* @__PURE__ */ import_react4.default.createElement("pre", { className: "tool-render-output", "tool-render-error": state === "error" || void 0 }, stripAnsi(output))
       );
     }
-    body = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-io" }, inner);
+    body = /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-io" }, inner);
   }
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
     useProjection: props.useProjection,
     toolName: "Run bash",
-    icon: /* @__PURE__ */ import_react.default.createElement(IconApiOutline142, { size: 14 }),
+    icon: /* @__PURE__ */ import_react4.default.createElement(IconApiOutline142, { size: 14 }),
     title: "Bash",
     summary,
     escalated,
@@ -17302,7 +17536,7 @@ function diffFallbackBody(diffs, language) {
     }
   }
   var children = [
-    /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-fallback-note" }, onlyDels ? "After text unavailable" : "Before text unavailable")
+    /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-fallback-note" }, onlyDels ? "After text unavailable" : "Before text unavailable")
   ];
   var lines = [];
   var numbers = [];
@@ -17320,7 +17554,7 @@ function diffFallbackBody(diffs, language) {
   for (var i = 0; i < lines.length; i++) {
     children.push(diffLineRow(onlyDels ? "del" : "add", lines[i], numbers[i], width, language));
   }
-  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-diff-fallback" }, children);
+  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diff-fallback" }, children);
 }
 function resolveEffectiveCwd(props) {
   if (typeof props.useSessions === "function") {
@@ -17358,7 +17592,7 @@ function makeEditRow(toolTitle) {
         useSession: props.useSession,
         useProjection: props.useProjection,
         toolName: editBadgeLabel(callNameOf(block), toolTitle),
-        icon: /* @__PURE__ */ import_react.default.createElement(IconEditOutline162, { size: 14 }),
+        icon: /* @__PURE__ */ import_react4.default.createElement(IconEditOutline162, { size: 14 }),
         title: toolTitle,
         summary: toolTitle,
         state: "ok",
@@ -17401,7 +17635,7 @@ function makeEditRow(toolTitle) {
         body = editDiffBody(diffs);
       }
     } else if (output !== null && output !== "") {
-      body = /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output", "tool-render-error": state === "error" || void 0 }, output);
+      body = /* @__PURE__ */ import_react4.default.createElement("pre", { className: "tool-render-output", "tool-render-error": state === "error" || void 0 }, output);
     }
     return toolRenderRow({
       callId: props.callId,
@@ -17411,7 +17645,7 @@ function makeEditRow(toolTitle) {
       // registrations. The block carries the real call name, so the badge
       // shows the right human-readable label for the exact call being rendered.
       toolName: editBadgeLabel(callNameOf(block), toolTitle),
-      icon: /* @__PURE__ */ import_react.default.createElement(IconEditOutline162, { size: 14 }),
+      icon: /* @__PURE__ */ import_react4.default.createElement(IconEditOutline162, { size: 14 }),
       title: toolTitle,
       summary,
       escalated: escalatedOf(args),
@@ -17442,7 +17676,7 @@ function gutterWidthCh(numbers) {
   return max + 2 + "ch";
 }
 function gutterSpan(number, width) {
-  return /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-gutter", "aria-hidden": true, style: { width } }, number === null || number === void 0 ? "" : String(number));
+  return /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-gutter", "aria-hidden": true, style: { width } }, number === null || number === void 0 ? "" : String(number));
 }
 function readLineRows(rows, language) {
   var numbers = [];
@@ -17451,7 +17685,7 @@ function readLineRows(rows, language) {
   var out = [];
   for (var i = 0; i < rows.length; i++) {
     out.push(
-      /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-code-row" }, gutterSpan(rows[i].number, width), /* @__PURE__ */ import_react.default.createElement(
+      /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-code-row" }, gutterSpan(rows[i].number, width), /* @__PURE__ */ import_react4.default.createElement(
         "code",
         {
           className: "tool-render-line-cell hljs",
@@ -17464,7 +17698,7 @@ function readLineRows(rows, language) {
   return out;
 }
 function diffLineRow(type, text, number, width, language) {
-  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-diff-row" + (type === "same" ? "" : " tool-render-line-" + type) }, diffMarker(type === "same" ? null : type), gutterSpan(number, width), /* @__PURE__ */ import_react.default.createElement(
+  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diff-row" + (type === "same" ? "" : " tool-render-line-" + type) }, diffMarker(type === "same" ? null : type), gutterSpan(number, width), /* @__PURE__ */ import_react4.default.createElement(
     "code",
     {
       className: "tool-render-line-cell hljs",
@@ -17510,7 +17744,7 @@ function alignDiffOps(ops, startOld) {
   return rows;
 }
 function diffMarker(kind) {
-  return /* @__PURE__ */ import_react.default.createElement(
+  return /* @__PURE__ */ import_react4.default.createElement(
     "span",
     {
       className: "tool-render-diff-marker" + (kind === null ? "" : " tool-render-diff-marker-" + kind),
@@ -17520,7 +17754,7 @@ function diffMarker(kind) {
   );
 }
 function diffCell(kind, text, number, width, language) {
-  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-diff-cell" + (kind === "same" ? "" : " tool-render-line-" + kind) }, diffMarker(kind === "same" ? null : kind), gutterSpan(number, width), /* @__PURE__ */ import_react.default.createElement(
+  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diff-cell" + (kind === "same" ? "" : " tool-render-line-" + kind) }, diffMarker(kind === "same" ? null : kind), gutterSpan(number, width), /* @__PURE__ */ import_react4.default.createElement(
     "code",
     {
       className: "tool-render-line-cell hljs",
@@ -17530,9 +17764,9 @@ function diffCell(kind, text, number, width, language) {
   ));
 }
 function diffPairRow(row, leftWidth, rightWidth, language) {
-  var left = row.left === null ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-diff-cell" }, diffMarker(null), gutterSpan(null, leftWidth)) : diffCell(row.left.kind, row.left.text, row.oldNum, leftWidth, language);
-  var right = row.right === null ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-diff-cell" }, diffMarker(null), gutterSpan(null, rightWidth)) : diffCell(row.right.kind, row.right.text, row.newNum, rightWidth, language);
-  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-diff-pair" }, left, right);
+  var left = row.left === null ? /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diff-cell" }, diffMarker(null), gutterSpan(null, leftWidth)) : diffCell(row.left.kind, row.left.text, row.oldNum, leftWidth, language);
+  var right = row.right === null ? /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diff-cell" }, diffMarker(null), gutterSpan(null, rightWidth)) : diffCell(row.right.kind, row.right.text, row.newNum, rightWidth, language);
+  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diff-pair" }, left, right);
 }
 function editDiffBody(diffs) {
   var children = [];
@@ -17542,11 +17776,11 @@ function editDiffBody(diffs) {
     var filePath = typeof file.path === "string" ? file.path : "";
     var language = languageFor(filePath);
     if (filePath !== previousPath) {
-      children.push(/* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-diff-path" }, filePath));
+      children.push(/* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diff-path" }, filePath));
       previousPath = filePath;
     } else {
       children.push(
-        /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-diff-sep", "aria-hidden": true }, "\u22EF")
+        /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diff-sep", "aria-hidden": true }, "\u22EF")
       );
     }
     var oldText = deIndent(typeof file.oldText === "string" ? file.oldText : "");
@@ -17585,12 +17819,12 @@ function editDiffBody(diffs) {
       }
     }
   }
-  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-write-diff" }, children);
+  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-write-diff" }, children);
 }
 function writeBody(path, before, newText) {
   var language = languageFor(path !== void 0 ? path : "");
   if (before === null || before === "") {
-    return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-write" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-write-note" }, "No earlier version on record; new content below"), /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-code" }, readLineRows(numberedReadRows(newText, 1), language)));
+    return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-write" }, /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-write-note" }, "No earlier version on record; new content below"), /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-code" }, readLineRows(numberedReadRows(newText, 1), language)));
   }
   var cleaned = cleanReadTextForDiff(before);
   var ops = diffLines(deIndent(cleaned.content), deIndent(newText));
@@ -17627,7 +17861,7 @@ function writeBody(path, before, newText) {
       lines.push(diffLineRow(type, parts[i], numbers[i], width, language));
     }
   }
-  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-write-diff" }, lines);
+  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-write-diff" }, lines);
 }
 function WriteRow(props) {
   var expandedState = useState(false);
@@ -17655,14 +17889,14 @@ function WriteRow(props) {
   if (done && state === "ok") {
     body = writeBody(path, before, newText);
   } else if (output !== null && output !== "") {
-    body = /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output", "tool-render-error": state === "error" || void 0 }, output);
+    body = /* @__PURE__ */ import_react4.default.createElement("pre", { className: "tool-render-output", "tool-render-error": state === "error" || void 0 }, output);
   }
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
     useProjection: props.useProjection,
     toolName: "Write file",
-    icon: /* @__PURE__ */ import_react.default.createElement(IconEditOutline162, { size: 14 }),
+    icon: /* @__PURE__ */ import_react4.default.createElement(IconEditOutline162, { size: 14 }),
     title: "Write",
     summary,
     escalated: escalatedOf(args),
@@ -17707,10 +17941,10 @@ function planBody(todos) {
     var todo = todos[i];
     var attrs = todo.status === "completed" ? { "data-done": true } : todo.status === "in_progress" ? { "data-active": true } : { "data-pending": true };
     children.push(
-      /* @__PURE__ */ import_react.default.createElement("div", { className: "dsh-plan-item", ...attrs }, /* @__PURE__ */ import_react.default.createElement("span", { className: "dsh-plan-checkbox", "aria-hidden": true }), /* @__PURE__ */ import_react.default.createElement("span", { className: "dsh-plan-content" }, todo.content))
+      /* @__PURE__ */ import_react4.default.createElement("div", { className: "dsh-plan-item", ...attrs }, /* @__PURE__ */ import_react4.default.createElement("span", { className: "dsh-plan-checkbox", "aria-hidden": true }), /* @__PURE__ */ import_react4.default.createElement("span", { className: "dsh-plan-content" }, todo.content))
     );
   }
-  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-plan" }, children);
+  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-plan" }, children);
 }
 function TodoRow(props) {
   var expandedState = useState(false);
@@ -17748,7 +17982,7 @@ function TodoRow(props) {
     useSession: props.useSession,
     useProjection: props.useProjection,
     toolName: "To-do list",
-    icon: /* @__PURE__ */ import_react.default.createElement(IconChecklistOutline142, { size: 14 }),
+    icon: /* @__PURE__ */ import_react4.default.createElement(IconChecklistOutline142, { size: 14 }),
     title: "To-do list",
     summary,
     state,
@@ -17824,7 +18058,7 @@ function askBody(questions, answers) {
       var label = option.label;
       var isSelected = picked !== null && picked.indexOf(label) !== -1;
       rows.push(
-        /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-option", "data-selected": isSelected || void 0 }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-option-marker", "aria-hidden": true }, isSelected ? "\u25C9" : "\u25CB"), /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-option-text" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-option-label" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: label })), option.description !== null && option.description !== void 0 ? /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-option-description" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: option.description })) : null))
+        /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-option", "data-selected": isSelected || void 0 }, /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-option-marker", "aria-hidden": true }, isSelected ? "\u25C9" : "\u25CB"), /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-option-text" }, /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-option-label" }, /* @__PURE__ */ import_react4.default.createElement(MarkdownText2, { text: label })), option.description !== null && option.description !== void 0 ? /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-option-description" }, /* @__PURE__ */ import_react4.default.createElement(MarkdownText2, { text: option.description })) : null))
       );
     }
     if (picked !== null) {
@@ -17838,20 +18072,20 @@ function askBody(questions, answers) {
         }
         if (!known) {
           rows.push(
-            /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-option", "data-selected": true }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-option-marker", "aria-hidden": true }, "\u25C9"), /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-option-label" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: picked[j] })))
+            /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-option", "data-selected": true }, /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-option-marker", "aria-hidden": true }, "\u25C9"), /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-option-label" }, /* @__PURE__ */ import_react4.default.createElement(MarkdownText2, { text: picked[j] })))
           );
         }
       }
     }
     var note = null;
     if (answer !== void 0 && typeof answer.custom === "string" && answer.custom !== "") {
-      note = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-answer-note" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: answer.custom }));
+      note = /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-answer-note" }, /* @__PURE__ */ import_react4.default.createElement(MarkdownText2, { text: answer.custom }));
     }
     children.push(
-      /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-question" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-question-prompt" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: q.question })), rows, note)
+      /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-question" }, /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-question-prompt" }, /* @__PURE__ */ import_react4.default.createElement(MarkdownText2, { text: q.question })), rows, note)
     );
   }
-  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-ask" }, children);
+  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-ask" }, children);
 }
 function isQuestionComposing(event) {
   var native = event !== null && event !== void 0 ? event.nativeEvent : void 0;
@@ -17861,7 +18095,7 @@ function isQuestionComposing(event) {
 function renderQuestionOption(option, optionIndex, multi, selected, busy, onChoose) {
   if (option === null || typeof option !== "object" || typeof option.label !== "string") return null;
   var display = parseRecommendedLabel(option.label);
-  return /* @__PURE__ */ import_react.default.createElement(
+  return /* @__PURE__ */ import_react4.default.createElement(
     "button",
     {
       type: "button",
@@ -17875,8 +18109,8 @@ function renderQuestionOption(option, optionIndex, multi, selected, busy, onChoo
         onChoose(option.label);
       }
     },
-    /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-qoption-marker", "aria-hidden": true }, multi ? selected ? "\u2611" : "\u2610" : optionIndex + 1),
-    /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-qoption-text" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-qoption-line" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-qoption-label" }, display.label), display.recommended ? /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-qbadge" }, "Recommended") : null, typeof option.description === "string" && option.description !== "" ? /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-qoption-description" }, option.description) : null))
+    /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-qoption-marker", "aria-hidden": true }, multi ? selected ? "\u2611" : "\u2610" : optionIndex + 1),
+    /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-qoption-text" }, /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-qoption-line" }, /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-qoption-label" }, display.label), display.recommended ? /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-qbadge" }, "Recommended") : null, typeof option.description === "string" && option.description !== "" ? /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-qoption-description" }, option.description) : null))
   );
 }
 function AskAnswerForm(props) {
@@ -17999,7 +18233,7 @@ function AskAnswerForm(props) {
     );
     if (rendered !== null) optionRows.push(rendered);
   }
-  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-qform" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-qheader" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-qheading" }, typeof question.header === "string" && question.header !== "" ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-qeyebrow" }, question.header) : null, /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-qtitle" }, question.question)), /* @__PURE__ */ import_react.default.createElement(
+  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-qform" }, /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-qheader" }, /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-qheading" }, typeof question.header === "string" && question.header !== "" ? /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-qeyebrow" }, question.header) : null, /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-qtitle" }, question.question)), /* @__PURE__ */ import_react4.default.createElement(
     "button",
     {
       type: "button",
@@ -18010,21 +18244,21 @@ function AskAnswerForm(props) {
       onClick: cancelFlow
     },
     "Dismiss"
-  )), /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-qbody" }, typeof question.detail === "string" && question.detail !== "" ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-qdetail" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: question.detail })) : null, /* @__PURE__ */ import_react.default.createElement(
+  )), /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-qbody" }, typeof question.detail === "string" && question.detail !== "" ? /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-qdetail" }, /* @__PURE__ */ import_react4.default.createElement(MarkdownText2, { text: question.detail })) : null, /* @__PURE__ */ import_react4.default.createElement(
     "div",
     {
       className: "tool-render-qoptions",
       role: multi ? "group" : "radiogroup"
     },
     optionRows,
-    hasOptions ? /* @__PURE__ */ import_react.default.createElement(
+    hasOptions ? /* @__PURE__ */ import_react4.default.createElement(
       "div",
       {
         className: "tool-render-qcustom-row",
         "data-active": draft.custom !== "" || void 0
       },
-      /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-qoption-marker", "aria-hidden": true }, "\u270E"),
-      /* @__PURE__ */ import_react.default.createElement(
+      /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-qoption-marker", "aria-hidden": true }, "\u270E"),
+      /* @__PURE__ */ import_react4.default.createElement(
         "input",
         {
           type: "text",
@@ -18037,7 +18271,7 @@ function AskAnswerForm(props) {
           onKeyDown: continueFromCustom
         }
       )
-    ) : /* @__PURE__ */ import_react.default.createElement(
+    ) : /* @__PURE__ */ import_react4.default.createElement(
       "textarea",
       {
         className: "tool-render-qcustom-textarea",
@@ -18050,7 +18284,7 @@ function AskAnswerForm(props) {
         onKeyDown: continueFromCustom
       }
     )
-  )), /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-qfooter" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-qpager" }, /* @__PURE__ */ import_react.default.createElement(
+  )), /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-qfooter" }, /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-qpager" }, /* @__PURE__ */ import_react4.default.createElement(
     "button",
     {
       type: "button",
@@ -18063,7 +18297,7 @@ function AskAnswerForm(props) {
       }
     },
     "\u2039"
-  ), /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-qprogress" }, index + 1, " / ", questions.length), /* @__PURE__ */ import_react.default.createElement(
+  ), /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-qprogress" }, index + 1, " / ", questions.length), /* @__PURE__ */ import_react4.default.createElement(
     "button",
     {
       type: "button",
@@ -18076,7 +18310,7 @@ function AskAnswerForm(props) {
       }
     },
     "\u203A"
-  )), /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-qfeedback", role: "status" }, errorText), /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-qactions" }, /* @__PURE__ */ import_react.default.createElement(
+  )), /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-qfeedback", role: "status" }, errorText), /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-qactions" }, /* @__PURE__ */ import_react4.default.createElement(
     "button",
     {
       type: "button",
@@ -18085,7 +18319,7 @@ function AskAnswerForm(props) {
       onClick: skipQuestion
     },
     "Skip this question"
-  ), /* @__PURE__ */ import_react.default.createElement(
+  ), /* @__PURE__ */ import_react4.default.createElement(
     "button",
     {
       type: "button",
@@ -18138,7 +18372,7 @@ function AskRow(props) {
   var questionState;
   if (questionOpen) {
     questionState = "pending";
-    body = /* @__PURE__ */ import_react.default.createElement(AskAnswerForm, { key: questionKey, pending: livePending, questions: pendingQuestions });
+    body = /* @__PURE__ */ import_react4.default.createElement(AskAnswerForm, { key: questionKey, pending: livePending, questions: pendingQuestions });
   } else if (questions !== null && output !== null && output !== "" && state !== "error") {
     body = askBody(questions, answers);
     if (answers !== null) questionState = "answered";
@@ -18148,7 +18382,7 @@ function AskRow(props) {
     useSession: props.useSession,
     useProjection: props.useProjection,
     toolName: "Ask user",
-    icon: /* @__PURE__ */ import_react.default.createElement(IconQuestionOutline142, { size: 14 }),
+    icon: /* @__PURE__ */ import_react4.default.createElement(IconQuestionOutline142, { size: 14 }),
     title: "Ask user",
     summary,
     state,
@@ -18187,14 +18421,14 @@ function SubagentRow(props) {
   var summary = description !== void 0 ? firstLine(relativizeToCwd(description, props.cwd)) : title;
   var body = null;
   if (state !== "error" && prompt !== null) {
-    body = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: prompt }));
+    body = /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react4.default.createElement(MarkdownText2, { text: prompt }));
   }
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
     useProjection: props.useProjection,
     toolName: "Dispatch",
-    icon: /* @__PURE__ */ import_react.default.createElement(IconAgentPresetOutline162, { size: 14 }),
+    icon: /* @__PURE__ */ import_react4.default.createElement(IconAgentPresetOutline162, { size: 14 }),
     title,
     summary,
     state,
@@ -18230,13 +18464,13 @@ function JobOutputRow(props) {
   var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
   var statusMatch = output !== null ? JOB_STATUS_RE.exec(output) : null;
   var summary = statusMatch !== null ? "status: " + statusMatch[1] : "Job output";
-  var body = state !== "error" && output !== null && output !== "" ? /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output" }, stripAnsi(output)) : null;
+  var body = state !== "error" && output !== null && output !== "" ? /* @__PURE__ */ import_react4.default.createElement("pre", { className: "tool-render-output" }, stripAnsi(output)) : null;
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
     useProjection: props.useProjection,
     toolName: "Job output",
-    icon: /* @__PURE__ */ import_react.default.createElement(IconApiOutline142, null),
+    icon: /* @__PURE__ */ import_react4.default.createElement(IconApiOutline142, null),
     title: "Job output",
     badge: jobId,
     summary,
@@ -18275,13 +18509,13 @@ function PackageRow(props) {
   var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
   var title = packageActionTitle(action);
   var summary = target !== void 0 && target !== "" ? target : title;
-  var body = state !== "error" && output !== null && output !== "" ? /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output" }, stripAnsi(output)) : null;
+  var body = state !== "error" && output !== null && output !== "" ? /* @__PURE__ */ import_react4.default.createElement("pre", { className: "tool-render-output" }, stripAnsi(output)) : null;
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
     useProjection: props.useProjection,
     toolName: "Manage package",
-    icon: /* @__PURE__ */ import_react.default.createElement(IconApiOutline142, null),
+    icon: /* @__PURE__ */ import_react4.default.createElement(IconApiOutline142, null),
     title,
     badge: ecosystem,
     summary,
@@ -18307,13 +18541,13 @@ function SendMessageRow(props) {
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
   var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
-  var body = state !== "error" && args !== null ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: args.message })) : null;
+  var body = state !== "error" && args !== null ? /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react4.default.createElement(MarkdownText2, { text: args.message })) : null;
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
     useProjection: props.useProjection,
     toolName: "Message",
-    icon: /* @__PURE__ */ import_react.default.createElement(IconAgentPresetOutline162, { size: 14 }),
+    icon: /* @__PURE__ */ import_react4.default.createElement(IconAgentPresetOutline162, { size: 14 }),
     title: "Message",
     badge: args !== null ? args.subagent_id : void 0,
     summary: args !== null ? firstLine(args.message) : "Message",
@@ -18342,7 +18576,7 @@ function InterruptAgentRow(props) {
     useSession: props.useSession,
     useProjection: props.useProjection,
     toolName: "Interrupt agent",
-    icon: /* @__PURE__ */ import_react.default.createElement(IconStopFill162, { size: 14 }),
+    icon: /* @__PURE__ */ import_react4.default.createElement(IconStopFill162, { size: 14 }),
     title: "Interrupt agent",
     summary: agentId !== void 0 ? agentId : "Interrupt agent",
     state,
@@ -18376,16 +18610,16 @@ function ListAgentsRow(props) {
   var state = rowStateOf(block);
   var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
   var entries = state === "error" || output === null ? [] : parseAgentLines(output);
-  var body = entries.length > 0 ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-agents" }, entries.map(function(entry, index) {
+  var body = entries.length > 0 ? /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-agents" }, entries.map(function(entry, index) {
     var depth = typeof entry.depth === "number" && entry.depth > 0 ? entry.depth : 0;
-    return /* @__PURE__ */ import_react.default.createElement(
+    return /* @__PURE__ */ import_react4.default.createElement(
       "div",
       {
         key: String(index),
         className: "tool-render-agent",
         style: depth > 0 ? { paddingLeft: String(depth * 0.75) + "rem" } : void 0
       },
-      /* @__PURE__ */ import_react.default.createElement(
+      /* @__PURE__ */ import_react4.default.createElement(
         "span",
         {
           className: "tool-render-agent-status",
@@ -18393,8 +18627,8 @@ function ListAgentsRow(props) {
         },
         entry.status !== null ? entry.status : entry.reason
       ),
-      /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-agent-id", title: entry.id, "data-dsh-tip": "" }, entry.id),
-      /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-agent-label" }, entry.label)
+      /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-agent-id", title: entry.id, "data-dsh-tip": "" }, entry.id),
+      /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-agent-label" }, entry.label)
     );
   })) : null;
   return toolRenderRow({
@@ -18402,7 +18636,7 @@ function ListAgentsRow(props) {
     useSession: props.useSession,
     useProjection: props.useProjection,
     toolName: "List agents",
-    icon: /* @__PURE__ */ import_react.default.createElement(IconAgentPresetOutline162, { size: 14 }),
+    icon: /* @__PURE__ */ import_react4.default.createElement(IconAgentPresetOutline162, { size: 14 }),
     title: "List agents",
     summary: state === "running" ? "List agents" : agentsSummaryText(entries),
     state,
@@ -18458,7 +18692,7 @@ function FailoverRow(props) {
   var errorText = detail !== "" ? detail : void 0;
   return toolRenderRow({
     toolName: "LLM failover",
-    icon: /* @__PURE__ */ import_react.default.createElement(IconApiOutline142, { size: 14 }),
+    icon: /* @__PURE__ */ import_react4.default.createElement(IconApiOutline142, { size: 14 }),
     title: "LLM failover",
     summary,
     state: "error",
@@ -18469,7 +18703,7 @@ function FailoverRow(props) {
     },
     errorSummary,
     errorText,
-    body: errorText !== void 0 ? /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-output", "tool-render-error": true }, errorText) : null
+    body: errorText !== void 0 ? /* @__PURE__ */ import_react4.default.createElement("pre", { className: "tool-render-output", "tool-render-error": true }, errorText) : null
   });
 }
 function pluginSourceKey(source) {
@@ -18483,22 +18717,22 @@ function markdownWithReminders(text) {
   if (segments.length === 0) return null;
   return segments.map(function(segment, index) {
     if (!segment.reminder) {
-      return /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { key: index, text: segment.text });
+      return /* @__PURE__ */ import_react4.default.createElement(MarkdownText2, { key: index, text: segment.text });
     }
-    return /* @__PURE__ */ import_react.default.createElement("div", { key: index, className: "tool-render-reminder" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-reminder-chip" }, "System reminder"), /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: segment.text }));
+    return /* @__PURE__ */ import_react4.default.createElement("div", { key: index, className: "tool-render-reminder" }, /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-reminder-chip" }, "System reminder"), /* @__PURE__ */ import_react4.default.createElement(MarkdownText2, { text: segment.text }));
   });
 }
 function SkillContentCard(props) {
   var expandedState = useState(false);
   var expanded = expandedState[0];
   var setExpanded = expandedState[1];
-  var body = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement("table", { className: "tool-render-skill-table" }, /* @__PURE__ */ import_react.default.createElement("tbody", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", null, "Name"), /* @__PURE__ */ import_react.default.createElement("td", null, props.name)), /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", null, "Resources"), /* @__PURE__ */ import_react.default.createElement("td", null, props.resourceHint)))), markdownWithReminders(props.instructions));
+  var body = /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react4.default.createElement("table", { className: "tool-render-skill-table" }, /* @__PURE__ */ import_react4.default.createElement("tbody", null, /* @__PURE__ */ import_react4.default.createElement("tr", null, /* @__PURE__ */ import_react4.default.createElement("th", null, "Name"), /* @__PURE__ */ import_react4.default.createElement("td", null, props.name)), /* @__PURE__ */ import_react4.default.createElement("tr", null, /* @__PURE__ */ import_react4.default.createElement("th", null, "Resources"), /* @__PURE__ */ import_react4.default.createElement("td", null, props.resourceHint)))), markdownWithReminders(props.instructions));
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
     useProjection: props.useProjection,
     toolName: "Skill",
-    icon: /* @__PURE__ */ import_react.default.createElement(IconChecklistOutline142, null),
+    icon: /* @__PURE__ */ import_react4.default.createElement(IconChecklistOutline142, null),
     title: "Skill",
     badge: props.name,
     summary: props.name,
@@ -18518,7 +18752,7 @@ function GenericContextCard(props) {
   var text = contextText(props.content);
   var skill = parseSkillContent(text);
   if (skill !== null) {
-    return /* @__PURE__ */ import_react.default.createElement(
+    return /* @__PURE__ */ import_react4.default.createElement(
       SkillContentCard,
       {
         name: skill.name,
@@ -18530,13 +18764,13 @@ function GenericContextCard(props) {
   var recall = provenance !== null && provenance !== void 0 && provenance.role === "recall";
   var title = recall ? "Recalled context" : "Context";
   var badge = provenance !== null && provenance !== void 0 && typeof provenance.label === "string" && provenance.label !== "" ? provenance.label : void 0;
-  var body = text !== "" ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, markdownWithReminders(text)) : null;
+  var body = text !== "" ? /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-markdown-body" }, markdownWithReminders(text)) : null;
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
     useProjection: props.useProjection,
     toolName: title,
-    icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
+    icon: /* @__PURE__ */ import_react4.default.createElement(IconBrowseOutline162, { size: 14 }),
     title,
     badge,
     summary: text !== "" ? firstLine(text) : title,
@@ -18555,7 +18789,7 @@ function ContextRow(props) {
   var source = data !== null && data !== void 0 ? data.source : void 0;
   var provenance = data !== null && data !== void 0 ? data.provenance : void 0;
   var form = data !== null && data !== void 0 ? data.form : void 0;
-  var fallback = /* @__PURE__ */ import_react.default.createElement(GenericContextCard, { content, source, provenance, form });
+  var fallback = /* @__PURE__ */ import_react4.default.createElement(GenericContextCard, { content, source, provenance, form });
   var sourceKey = pluginSourceKey(source);
   if (sourceKey === void 0 || typeof props.renderSlot !== "function") return fallback;
   return props.renderSlot(
@@ -18575,7 +18809,7 @@ function SkillRow(props) {
   var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
   var skill = state !== "error" && done ? parseSkillContent(resultTextOf(block)) : null;
   if (skill !== null) {
-    return /* @__PURE__ */ import_react.default.createElement(
+    return /* @__PURE__ */ import_react4.default.createElement(
       SkillContentCard,
       {
         name: skill.name,
@@ -18591,7 +18825,7 @@ function SkillRow(props) {
     useSession: props.useSession,
     useProjection: props.useProjection,
     toolName: "Load skill",
-    icon: /* @__PURE__ */ import_react.default.createElement(IconChecklistOutline142, null),
+    icon: /* @__PURE__ */ import_react4.default.createElement(IconChecklistOutline142, null),
     title: "Skill",
     summary: skillName !== void 0 ? skillName : "Skill",
     state,
@@ -18630,9 +18864,9 @@ function EmbedImage(props) {
   var setBroken = brokenState[1];
   var src = imageRouteUrl(props.filePath);
   if (broken) {
-    return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-image-broken" }, "Image unavailable: " + props.filePath);
+    return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-image-broken" }, "Image unavailable: " + props.filePath);
   }
-  return /* @__PURE__ */ import_react.default.createElement("a", { className: "tool-render-image-link", href: src, target: "_blank", rel: "noreferrer" }, /* @__PURE__ */ import_react.default.createElement(
+  return /* @__PURE__ */ import_react4.default.createElement("a", { className: "tool-render-image-link", href: src, target: "_blank", rel: "noreferrer" }, /* @__PURE__ */ import_react4.default.createElement(
     "img",
     {
       className: "tool-render-image",
@@ -18675,14 +18909,20 @@ function ReadImageRow(props) {
   var summary = meta !== null ? basenameOf(meta.path) + " \xB7 " + meta.width + "x" + meta.height + " \xB7 " + formatBytes(meta.bytes) : path !== void 0 ? relativizeToCwd(path, props.cwd) : "Read image";
   var body = null;
   if (meta !== null) {
-    body = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-image-body" }, /* @__PURE__ */ import_react.default.createElement(EmbedImage, { filePath: meta.path, alt: basenameOf(meta.path) }), /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-image-meta" }, /* @__PURE__ */ import_react.default.createElement("div", null, basenameOf(meta.path)), /* @__PURE__ */ import_react.default.createElement("div", null, meta.mediaType), /* @__PURE__ */ import_react.default.createElement("div", null, meta.path)));
+    body = /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-image-body" }, /* @__PURE__ */ import_react4.default.createElement(EmbedImage, { filePath: meta.path, alt: basenameOf(meta.path) }), /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-image-meta" }, /* @__PURE__ */ import_react4.default.createElement("div", null, basenameOf(meta.path)), /* @__PURE__ */ import_react4.default.createElement("div", null, meta.mediaType), /* @__PURE__ */ import_react4.default.createElement("div", null, meta.path)));
   }
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
     useProjection: props.useProjection,
     toolName: "Read image",
-    icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
+    // Lucide Image, not a shipped primitive: the primitives set has no image
+    // or clock glyph (owner decision 2026-09-09, #114), and this row shared
+    // IconBrowseOutline16 with unrelated rows. Per-glyph import above keeps
+    // tree-shaking; never hand-inline SVG here. Pending owner's eye: lucide
+    // is stroke-based (24-grid, stroke-width 2) while the shipped icons are
+    // fill-based (16/14-grid), so the weight match is structural, not visual.
+    icon: /* @__PURE__ */ import_react4.default.createElement(Image, { size: 14 }),
     title: "Read image",
     summary,
     path,
@@ -18720,13 +18960,13 @@ function SeeRow(props) {
   var needsClamp = description !== null && description.length > 400;
   var body = null;
   if (done && state !== "error" && (description !== null || imagePath !== void 0)) {
-    body = /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-image-body" }, description !== null && description !== "" ? /* @__PURE__ */ import_react.default.createElement(
+    body = /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-image-body" }, description !== null && description !== "" ? /* @__PURE__ */ import_react4.default.createElement(
       "div",
       {
         className: needsClamp && showMore !== true ? "tool-render-markdown-body tool-render-see-desc" : "tool-render-markdown-body"
       },
-      /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: description })
-    ) : null, needsClamp ? /* @__PURE__ */ import_react.default.createElement(
+      /* @__PURE__ */ import_react4.default.createElement(MarkdownText2, { text: description })
+    ) : null, needsClamp ? /* @__PURE__ */ import_react4.default.createElement(
       "button",
       {
         type: "button",
@@ -18736,14 +18976,14 @@ function SeeRow(props) {
         }
       },
       showMore ? "Show less" : "Show more"
-    ) : null, imagePath !== void 0 ? /* @__PURE__ */ import_react.default.createElement(EmbedImage, { filePath: imagePath, alt: basenameOf(imagePath) }) : null, imagePath !== void 0 ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-image-meta" }, imagePath) : null);
+    ) : null, imagePath !== void 0 ? /* @__PURE__ */ import_react4.default.createElement(EmbedImage, { filePath: imagePath, alt: basenameOf(imagePath) }) : null, imagePath !== void 0 ? /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-image-meta" }, imagePath) : null);
   }
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
     useProjection: props.useProjection,
     toolName: "See image",
-    icon: /* @__PURE__ */ import_react.default.createElement(IconQuestionOutline142, { size: 14 }),
+    icon: /* @__PURE__ */ import_react4.default.createElement(IconQuestionOutline142, { size: 14 }),
     title: "See",
     summary,
     state,
@@ -18789,13 +19029,13 @@ function WebSearchRow(props) {
   var state = rowStateOf(block);
   var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
   var summary = searchSummary(queries, state, output);
-  var body = state !== "error" && output !== null && output !== "" ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: output })) : null;
+  var body = state !== "error" && output !== null && output !== "" ? /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react4.default.createElement(MarkdownText2, { text: output })) : null;
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
     useProjection: props.useProjection,
     toolName: "Web search",
-    icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
+    icon: /* @__PURE__ */ import_react4.default.createElement(IconBrowseOutline162, { size: 14 }),
     title: "Web search",
     summary,
     state,
@@ -18825,14 +19065,14 @@ function WebFetchRow(props) {
   var summary = url !== void 0 ? firstLine(url) : "Web fetch";
   var body = null;
   if (state !== "error" && output !== null && output !== "") {
-    body = looksLikeRawHtml(output) ? /* @__PURE__ */ import_react.default.createElement("pre", { className: "tool-render-fetch-body tool-render-fetch-raw" }, output) : /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-fetch-body" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: output }));
+    body = looksLikeRawHtml(output) ? /* @__PURE__ */ import_react4.default.createElement("pre", { className: "tool-render-fetch-body tool-render-fetch-raw" }, output) : /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-fetch-body" }, /* @__PURE__ */ import_react4.default.createElement(MarkdownText2, { text: output }));
   }
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
     useProjection: props.useProjection,
     toolName: "Web fetch",
-    icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
+    icon: /* @__PURE__ */ import_react4.default.createElement(IconBrowseOutline162, { size: 14 }),
     title: "Web fetch",
     summary,
     state,
@@ -18913,32 +19153,32 @@ function compactionBody(view, rows) {
     var row = rows[i];
     if (row.kind === "message") {
       children.push(
-        /* @__PURE__ */ import_react.default.createElement("div", { key: i, className: "tool-render-compaction-line" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-compaction-role" }, row.role), /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-compaction-text", title: row.text, "data-dsh-tip": "" }, row.text))
+        /* @__PURE__ */ import_react4.default.createElement("div", { key: i, className: "tool-render-compaction-line" }, /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-compaction-role" }, row.role), /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-compaction-text", title: row.text, "data-dsh-tip": "" }, row.text))
       );
     } else if (row.kind === "toolStrip") {
       children.push(
-        /* @__PURE__ */ import_react.default.createElement("div", { key: i, className: "tool-render-compaction-strip" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-compaction-text" }, row.count + " " + row.tool + " calls"), /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-badge" }, String(row.count)), /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-badge" }, "seq " + row.seq))
+        /* @__PURE__ */ import_react4.default.createElement("div", { key: i, className: "tool-render-compaction-strip" }, /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-compaction-text" }, row.count + " " + row.tool + " calls"), /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-badge" }, String(row.count)), /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-badge" }, "seq " + row.seq))
       );
     } else if (row.kind === "elided") {
       children.push(
-        /* @__PURE__ */ import_react.default.createElement("div", { key: i, className: "tool-render-compaction-note" }, row.note)
+        /* @__PURE__ */ import_react4.default.createElement("div", { key: i, className: "tool-render-compaction-note" }, row.note)
       );
     } else if (row.kind === "media") {
       children.push(
-        /* @__PURE__ */ import_react.default.createElement("div", { key: i, className: "tool-render-compaction-line" }, /* @__PURE__ */ import_react.default.createElement("span", { className: "tool-render-compaction-text" }, row.label))
+        /* @__PURE__ */ import_react4.default.createElement("div", { key: i, className: "tool-render-compaction-line" }, /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-compaction-text" }, row.label))
       );
     }
   }
   var stats = view.stats;
   children.push(
-    /* @__PURE__ */ import_react.default.createElement("div", { key: "stats", className: "tool-render-compaction-stats" }, "dropped ~" + stats.droppedResultTokens + " tokens of tool results, " + stats.erroredCalls + " errored calls hidden, " + stats.hiddenCalls + " hidden calls")
+    /* @__PURE__ */ import_react4.default.createElement("div", { key: "stats", className: "tool-render-compaction-stats" }, "dropped ~" + stats.droppedResultTokens + " tokens of tool results, " + stats.erroredCalls + " errored calls hidden, " + stats.hiddenCalls + " hidden calls")
   );
   if (view.tail !== null && view.tail !== void 0) {
     children.push(
-      /* @__PURE__ */ import_react.default.createElement("div", { key: "tail", className: "tool-render-compaction-stats" }, "verbatim tail: " + view.tail.count + " nodes / ~" + view.tail.tokens + " tokens from seq " + view.tail.fromSeq)
+      /* @__PURE__ */ import_react4.default.createElement("div", { key: "tail", className: "tool-render-compaction-stats" }, "verbatim tail: " + view.tail.count + " nodes / ~" + view.tail.tokens + " tokens from seq " + view.tail.fromSeq)
     );
   }
-  return /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-compaction" }, children);
+  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-compaction" }, children);
 }
 function CompactionRow(props) {
   var expandedState = useState(false);
@@ -18956,13 +19196,13 @@ function CompactionRow(props) {
   var rows = view !== null && view !== void 0 ? prettyRows(view) : null;
   if (rows === null || rows.length === 0) {
     var fallbackText = stripOuterFence(summary);
-    var fallbackBody = fallbackText !== "" ? /* @__PURE__ */ import_react.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react.default.createElement(MarkdownText2, { text: fallbackText })) : null;
+    var fallbackBody = fallbackText !== "" ? /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react4.default.createElement(MarkdownText2, { text: fallbackText })) : null;
     return toolRenderRow({
       callId: props.callId,
       useSession: props.useSession,
       useProjection: props.useProjection,
       toolName: "Compaction",
-      icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
+      icon: /* @__PURE__ */ import_react4.default.createElement(IconBrowseOutline162, { size: 14 }),
       title: "Compaction",
       summary: commandError !== null ? "Compaction" : counts !== null ? counts : fallbackText !== "" ? firstLine(fallbackText) : "Compaction",
       state: commandError !== null ? "error" : void 0,
@@ -18982,7 +19222,7 @@ function CompactionRow(props) {
     useSession: props.useSession,
     useProjection: props.useProjection,
     toolName: "Compaction",
-    icon: /* @__PURE__ */ import_react.default.createElement(IconBrowseOutline162, { size: 14 }),
+    icon: /* @__PURE__ */ import_react4.default.createElement(IconBrowseOutline162, { size: 14 }),
     title: "Compaction",
     summary: compactionSummaryText(rows, pretty.span),
     expandable: true,
@@ -19198,6 +19438,29 @@ function apply(ctx) {
     );
   });
 }
+/*! Bundled license information:
+
+lucide-react/dist/esm/shared/src/utils/toKebabCase.mjs:
+lucide-react/dist/esm/shared/src/utils/toLucideIconData.mjs:
+lucide-react/dist/esm/shared/src/utils/toCamelCase.mjs:
+lucide-react/dist/esm/shared/src/utils/toPascalCase.mjs:
+lucide-react/dist/esm/shared/src/utils/mergeClasses.mjs:
+lucide-react/dist/esm/shared/src/build/defaultAttributes.mjs:
+lucide-react/dist/esm/shared/src/build/buildLucideIconNode.mjs:
+lucide-react/dist/esm/shared/src/build/buildLucideIconForReact.mjs:
+lucide-react/dist/esm/shared/src/utils/hasA11yProp.mjs:
+lucide-react/dist/esm/context.mjs:
+lucide-react/dist/esm/Icon.mjs:
+lucide-react/dist/esm/createLucideIcon.mjs:
+lucide-react/dist/esm/icons/image.mjs:
+lucide-react/dist/esm/lucide-react.mjs:
+  (**
+   * @license lucide-react v1.46.0 - ISC
+   *
+   * This source code is licensed under the ISC license.
+   * See the LICENSE file in the root directory of this source tree.
+   *)
+*/
 		return module.exports;
 	}
 });
