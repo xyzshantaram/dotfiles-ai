@@ -1,4 +1,8 @@
 html {
+  /* Height of the draft strip at the foot of the page. The nav bar
+     lifts by this much while that strip shows, so the two never
+     overlap. */
+  --wiz-foot-h: 2.5rem;
   color-scheme: light dark;
   background: light-dark(
     var(--wa-color-neutral-95),
@@ -53,7 +57,10 @@ body {
   margin: 0 auto;
   padding: 1.5rem 1rem 0;
   flex: 1;
-  overflow-y: auto;
+  /* No overflow here. An overflow value makes this element the scrollport
+     for the sticky nav bar inside it, and this element never scrolls,
+     because the document does. The bar then sits still and scrolls away
+     with the page. The document stays the one scroll context. */
   display: flex;
   flex-direction: column;
   background: var(--wa-color-surface-default);
@@ -88,6 +95,9 @@ body {
   position: sticky;
   bottom: 0;
   z-index: 20;
+  /* One stated height, so the nav bar above can offset by exactly this
+     much. The strip holds one line of text. */
+  height: var(--wiz-foot-h);
 }
 /* The footer only says something while a draft is alive: hide the
    strip entirely when idle so the nav bar sits flush at the bottom. */
@@ -293,6 +303,11 @@ wa-tab-group::part(tabs) {
   justify-content: space-between;
   align-items: center;
   gap: 0.5rem;
+}
+/* The draft strip sits at the very bottom while a draft is alive, so
+   the bar rides above it instead of hiding behind it. */
+body:has(#draft-status:not(:empty)) .wiz-nav {
+  bottom: var(--wiz-foot-h);
 }
 .wiz-nav-back {
   display: flex;
