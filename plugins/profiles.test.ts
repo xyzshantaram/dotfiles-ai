@@ -44,6 +44,24 @@ describe("levelsForDepth", () => {
     expect(levels.indexOf(last)).toBe(levels.lastIndexOf(last));
   });
 
+  it("an OFF-CHAIN proposal is appended after every rung — the deliberate-model path", () => {
+    // THE BRANCH THE OTHER TESTS NEVER REACH (#81 review, subagent 0200183f).
+    // The fixture chain above CONTAINS the proposal, so the last-resort test
+    // above is satisfied by the no-duplicate branch rather than by the append
+    // branch. A deliberate caller-supplied model that is on no rung is the
+    // only input that executes `[head, ...rest, proposalRoute]`, and it is
+    // exactly the case the owner decision promised would still run: the
+    // chain leads, but the caller's choice is never discarded.
+    const offChain = { provider: "electronhub", model: "glm-5.3" };
+    const levels = levelsForDepth(offChain, chain, 1);
+    expect(levels).toEqual([...chain, offChain]);
+    expect(levels[0]).toEqual(chain[0]);
+    expect(levels[levels.length - 1]).toEqual(offChain);
+    // Depth-0 with the same off-chain proposal still leads with it, so the
+    // append branch cannot leak into orchestrator routing.
+    expect(levelsForDepth(offChain, chain, 0)).toEqual([offChain, ...chain]);
+  });
+
   it("a proposal already equal to the chain head produces no duplicate rung", () => {
     const head = { provider: "meridian", model: "claude-haiku-4-5" };
     const levels = levelsForDepth(head, chain, 1);
