@@ -1500,7 +1500,17 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
    fit. An overflowed pipe row reads as one band cut at its right edge with
    a scroll affordance -- nothing like the stacked vertical sequence, whose
    members have no lateral overflow (-- #162 criterion 0's stated answer:
-   horizontal scroll, plus equal-share shrink, below). */
+   horizontal scroll, plus content-proportional shrink, below). */
+/* #167 criterion 8: equal HEIGHT stays — a measured decision, not the
+   default. The screenshot's empty boxes had TWO causes: equal width (fixed
+   in the stage rule below) and every item stretching to the tallest. Both
+   were measured on the owner's command (see the ticket report): the width
+   fix drops the row from four lines to two, so keeping `align-items:
+   stretch` leaves each short box one line emptier than its content; hugging
+   (`flex-start`) removes that line but breaks the row into ragged bottoms —
+   and a ragged pipe row stops reading as ONE band, which is the axis
+   contract's whole claim above. One line of dead space keeps the band; the
+   declaration below is the decision, not an inheritance. */
 .tool-render-diagram-flow {
   display: flex;
   flex-flow: row nowrap;
@@ -1508,18 +1518,31 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
   gap: 0.25rem;
   overflow-x: auto;
 }
-/* Equal-share stage blocks (#162 criteria 0+1): flex-basis 0 makes the row
-   fill the pane and every stage take an equal slice, so long pipelines stop
-   wrapping and the freed width goes to the parsed-argument chips instead.
-   min-width 0 plus the words block's pre-wrap lets long content wrap INSIDE
-   its slice; a genuinely unbreakable token slides the row into its own
-   horizontal scroll (-- #162: the pipe row never becomes a stack). */
+/* Content-proportional stage blocks (#167 criterion 6, narrowing #162's
+   equal-share a second time). #162 set `flex: 1 1 0%` DELIBERATELY, to spend
+   horizontal width rather than waste it (the freed width goes to the
+   parsed-argument chips). #165 narrowed it once: a LONE stage hugs content,
+   because it has nothing to share with — but kept equal-share where several
+   stages share a row. The owner's screenshot sanctions narrowing it again:
+   equal slices give the `rg` stage (regex plus a long path) one fifth of the
+   row, so it wraps to four lines and sets a row height four nearly-empty
+   boxes inherit. `flex: 1 1 auto` keeps the GROW (the row still spends its
+   full width — #162's criterion is honoured, not reverted) but sizes from
+   CONTENT (flex-basis auto): free space beyond the content bases still
+   spreads evenly, so a longer stage gets more width and wraps less, which
+   drops the row height for every box in it. THE TRADE, stated plainly: short
+   stages no longer soak an equal share, and rows whose natural widths exceed
+   the pane reach their horizontal scroll sooner (C0 below: they scroll, they
+   never wrap). min-width 0 plus the words block's pre-wrap still lets long
+   content wrap INSIDE its share; a genuinely unbreakable token still slides
+   the row into its own horizontal scroll (-- #162: the pipe row never
+   becomes a stack). */
 .tool-render-diagram-stage {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  flex: 1 1 0%;
+  flex: 1 1 auto;
   min-width: 0;
   background: var(--dsw-alias-markdown-code-block);
   border: 1px solid var(--dsw-alias-border-l3);
@@ -1689,21 +1712,27 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
 .tool-render-diagram-seq .tool-render-diagram {
   margin: 0;
 }
-/* #162 criterion 2: the unconditional boundary is a plain vertical
-   CONNECTOR with no word and no glyph — v2's "then ↓" chip disappeared on
-   purpose. The edge between two unconditional members is a hair rail; a
-   comment riding the separator still shows (content, not chrome) beside the
-   rail. The conditional boundary is marked ON the dependent member's own
-   panel instead (see .tool-render-diagram-conditional), so an unmarked edge
-   can never be confused with a conditional one: one is nothing, the other
-   is prominent text. */
+/* #167 criterion 1: NO RAIL between independent statements. #162 made the
+   unconditional boundary a rail-with-no-word so it could never be mistaken
+   for a conditional one — "one is nothing, the other is prominent text".
+   The rail still drew a connector between statements that are INDEPENDENT
+   (the second runs whether or not the first succeeded), implying a
+   dependency that does not exist — the same class of falsehood #162 removed
+   the `then` marker for. The boundary is now genuinely nothing: an empty
+   separator paints no box at all (its padding/min-height is pure vertical
+   rhythm, kept wider than the in-panel card gap so statement edges breathe
+   more than chain-part edges). A comment riding the separator is CONTENT,
+   not chrome, and still renders verbatim in its muted voice beside nothing
+   — removing the rail must never remove the comment with it (pinned). The
+   conditional boundary stays marked ON the dependent part's own panel (see
+   .tool-render-diagram-conditional): one is nothing, the other is prominent
+   text — that distinction never touched the rail. */
 .tool-render-diagram-seq-sep {
   display: flex;
   flex-flow: row nowrap;
   align-items: baseline;
   gap: 0.5rem;
   margin-left: 0.375rem;
-  border-left: 2px solid var(--dsw-alias-border-l3);
   padding: 0.0625rem 0 0.0625rem 0.5rem;
   min-height: 0.375rem;
 }
@@ -1745,12 +1774,12 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
   min-width: 0;
   max-width: 100%;
 }
-/* #165: one `&&`/`||` chain as ONE panel, rows as cards inside it. The panel
-   owns the single outline for the whole script line (border-l2, 0.75rem
-   radius — the same voice as .tool-render-card above, deliberately, per the
-   owner's named target); each part is a card in that card's style (same
-   border, layer-1 background, and the card's tight 0.15625rem vertical
-   padding — the restraint that makes the target read clean). The part, not
+/* #165: one `&&`/`||` chain as ONE panel, rows as cards inside it. #167
+   changed the panel's voice from outline to weight (see the rule below):
+   the panel is a weighted field (darker than the card in the dark theme),
+   and each part keeps its card outline exactly
+   (same border, layer-1 background, tight 0.15625rem vertical padding — the
+   restraint that makes the target read clean). The part, not
    the stage box, is now the outline unit: stages inside a part go FLAT
    (borderless, backgroundless, paddingless — see the descendant rule below),
    which removes the second outline level the ticket calls excessive. A
@@ -1762,12 +1791,23 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
    horizontal nowrap band with `|`/`→` glyphs and its own scroll (C0 below,
    untouched). max-width + min-width keep an overlong pipeline's scroll
    inside the card instead of breaking the pane. */
+/* #167 criteria 3-5, THE TOKEN CHOICE: bg-base. These aliases are ELEVATION,
+   not literal darkness — base is the canvas layer-1 sits on in BOTH themes,
+   so a base field stays distinguishable from the layer-1 tool card behind
+   it either way (darker field in the dark theme, lighter field in the light
+   one: the direction flips, the region-vs-objects read does not). layer-2
+   would elevate the WRONG way (a raised surface, not a field); mask/primary/
+   tertiary are overlays and accents, not surfaces. The parts reuse layer-1
+   exactly as before, so the field cannot collide with them: base and
+   layer-1 are adjacent but distinct steps on the scale, and every part keeps
+   its own border-l2 outline on top. Radius and padding stay: they shape the
+   field and inset the cards, not draw an outline. */
 .tool-render-diagram-chainpanel {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 0.375rem;
-  border: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-base);
   border-radius: 0.75rem;
   padding: 0.375rem 0.5rem;
   min-width: 0;
@@ -1792,16 +1832,18 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
   background: transparent;
   padding: 0;
 }
-/* #165, THE DELIBERATE TRADE against #162 criterion 1. #162 set
-   `flex: 1 1 0%` — equal-share stages — ON PURPOSE, to spend horizontal width
-   rather than waste it (the freed width goes to the parsed-argument chips).
+/* #165, THE DELIBERATE TRADE against #162 criterion 1 — kept by #167.
+   #162 set equal-share stages ON PURPOSE, to spend horizontal width rather
+   than waste it (the freed width goes to the parsed-argument chips).
    Equal-share is exactly what stretches a SHORT command across a wide row:
    a single stage has nothing to share its row WITH, so equal-share there is
    pure stretch — the "negative space created by the empty portion of a
    command line" the owner is describing. The reversal is therefore NARROW:
    single-stage flows (data-stages="1", set by BashCommandDiagram) size to
-   content (`flex: 0 1 auto`), while multi-stage pipelines keep equal-share —
-   #162's decision stands everywhere multiple stages genuinely share a row.
+   content with NO grow (`flex: 0 1 auto`), while multi-stage pipelines now
+   size from content WITH grow (`flex: 1 1 auto` above, #167) — #162's
+   spend-the-width decision stands everywhere as grow, but no stage starts
+   from a zero base anymore.
    #162's C0 re-checked in the same breath: the flow rule above stays
    `flex-flow: row nowrap` with `overflow-x: auto`, so a pipeline row still
    never wraps into a column (a wrapped pipe row is indistinguishable from a

@@ -126,16 +126,29 @@ describe("the view is WIRED to the panel seam, not around it", () => {
     expect(paints).toHaveLength(1);
   });
 
-  it("in-panel separators vanish when contentless; sequence separators keep the rail", () => {
+  it("in-panel separators vanish when contentless; sequence separators render rail-free", () => {
     // The card stack itself is the in-panel boundary; an empty rail div would
-    // paint a second connector saying the same thing.
+    // paint a second connector saying the same thing. #167 removed the
+    // sequence-level rail as well (a connector between independent statements
+    // implies a dependency that does not exist) — the statement boundary is
+    // whitespace now, pinned in the CSS describe below.
     expect(view).toContain("hideWhenEmpty={true}");
-    // The sequence-level boundary keeps #162's deliberate rail: exactly one
-    // separator site passes hideWhenEmpty (the panel's), the statement-level
-    // site does not.
+    // The sequence-level boundary keeps #162's deliberate separation: exactly
+    // one separator site passes hideWhenEmpty (the panel's), the
+    // statement-level site does not.
     const chromeless = view.match(/hideWhenEmpty=\{/g) ?? [];
     expect(chromeless).toHaveLength(1);
     expect(view).toContain("props.hideWhenEmpty");
+  });
+
+  it("a comment riding the separator still renders verbatim (the rail removal must not take it)", () => {
+    // The defect this pins: deleting the rail by deleting the whole branch.
+    // The comment element's classes appear in exactly one JSX site — the
+    // carriesContent branch — so removing that branch reddens here. Comment
+    // mentions do not match: the quotes anchor this to the JSX attribute.
+    const paints = view.match(/className="hljs tool-render-diagram-seq-sep-text"/g) ?? [];
+    expect(paints).toHaveLength(1);
+    expect(view).toContain("carriesContent");
   });
 
   it("the flow names its stage count for the single-stage hug rule", () => {
@@ -143,60 +156,113 @@ describe("the view is WIRED to the panel seam, not around it", () => {
   });
 });
 
-describe("the panel's CSS voice: card style reused, stage chrome removed", () => {
+/** Extract one rule's `{ ... }` block, anchored to `selector {` at a line
+ *  start. Every CSS pin below asserts INSIDE the returned block: #165 proved
+ *  bare-substring matches stay green on their own mutants (one matched its
+ *  own comment text, two matched text outside the intended rule), so no pin
+ *  here uses a whole-file substring for a value that appears anywhere else
+ *  in this file. */
+function ruleBlock(css: string, selector: string): string {
+  const at = css.indexOf("\n" + selector + " {");
+  expect(at).toBeGreaterThan(-1);
+  const open = css.indexOf("{", at);
+  const close = css.indexOf("}", open);
+  expect(close).toBeGreaterThan(open);
+  return css.slice(open, close + 1);
+}
+
+describe("the #167 CSS voice: no rail, weighted panel, content widths", () => {
   // Source assertions again, same honesty note: without a render harness
   // nothing here proves paint — only that the rules exist with the values
   // the criteria name. A screenshot test in a live browser would replace
   // these, not join them.
   const css = readFileSync(new URL("./client.module.css", import.meta.url), "utf8");
 
-  it("the panel and its parts reuse the run_code nested-card voice", () => {
-    // Criterion 1 names .tool-render-card as the visual target: border-l2,
-    // 0.75rem radius, layer-1 background, 0.15625rem vertical padding. The
-    // panel takes the card's outline; the part takes the whole voice at a
-    // nested radius — a reuse, not a third card style.
-    expect(css).toContain(".tool-render-diagram-chainpanel");
-    expect(css).toContain(".tool-render-diagram-part");
-    const panel = css.slice(css.indexOf(".tool-render-diagram-chainpanel"));
-    expect(panel).toContain("border: 1px solid var(--dsw-alias-border-l2)");
+  it("no rail between independent statements; the comment voice survives (criteria 1-2)", () => {
+    // The connector is gone from the rule block: no border of any kind draws
+    // here anymore — neither the old `border-left` rail nor a `border`
+    // shorthand smuggled back in. The character class keeps `border-radius`
+    // out of the match (no radius lives in this block, but the pin must not
+    // be hostage to that).
+    const sep = ruleBlock(css, ".tool-render-diagram-seq-sep");
+    expect(sep).not.toMatch(/border(-left|-right|-top|-bottom)?\s*:/);
+    // What must NOT be lost: a comment riding the separator still renders in
+    // its muted voice — the sep-text rule keeps its tertiary color and
+    // wrapping.
+    const text = ruleBlock(css, ".tool-render-diagram-seq-sep-text");
+    expect(text).toContain("color: var(--dsw-alias-label-tertiary)");
+    expect(text).toContain("white-space: pre-wrap");
+    // The boundary still breathes as whitespace: the empty separator keeps
+    // its vertical rhythm, wider than the in-panel card gap.
+    expect(sep).toContain("min-height: 0.375rem");
+  });
+
+  it("the outer panel is a weighted field, not an outline (criterion 3)", () => {
+    // Criterion 5's token choice lands here: bg-base, the canvas layer-1
+    // sits on in both themes. Block-scoped: bg-base appears fourteen times
+    // in this file, so a bare match proves nothing.
+    const panel = ruleBlock(css, ".tool-render-diagram-chainpanel");
+    expect(panel).toContain("background: var(--dsw-alias-bg-base)");
+    // No outline of any kind: neither a `border` shorthand nor a longhand.
+    // `border-radius` is excluded from the match — it shapes the field and
+    // is pinned present just below.
+    expect(panel).not.toMatch(/border(-left|-right|-top|-bottom|-color|-style|-width)?\s*:/);
+    // Radius and padding stay: they shape the field and inset the cards,
+    // they draw no outline.
     expect(panel).toContain("border-radius: 0.75rem");
-    const part = css.slice(css.indexOf(".tool-render-diagram-part {"));
+    expect(panel).toContain("padding: 0.375rem 0.5rem");
+  });
+
+  it("the command parts keep their outlines exactly (criterion 4)", () => {
+    // Do not flatten, restyle, or "harmonise": the part block below repeats
+    // every value #165 set, so any touch reddens here.
+    const part = ruleBlock(css, ".tool-render-diagram-part");
+    expect(part).toContain("border: 1px solid var(--dsw-alias-border-l2)");
+    expect(part).toContain("border-radius: 0.5rem");
     expect(part).toContain("background: var(--dsw-alias-bg-layer-1)");
     expect(part).toContain("padding: 0.15625rem 0.5rem");
   });
 
-  it("stages inside a part go flat: the part owns the only outline", () => {
-    // The "excessive outlining" was panel border + every stage's own border,
-    // background and 0.375rem/0.5rem padding. Inside a part the stage box is
-    // redundant with the part card, so it loses border, background and
-    // padding — one outline level per drawn unit.
-    expect(css).toContain(".tool-render-diagram-part .tool-render-diagram-stage");
-    expect(css).toContain("border-color: transparent");
+  it("stages inside a part stay flat: the part owns the only outline", () => {
+    // Block-scoped where the old pin was bare: "border-color: transparent"
+    // matches three rules in this file, so the whole-file pin stayed green
+    // with the descendant rule deleted.
+    const flat = ruleBlock(css, ".tool-render-diagram-part .tool-render-diagram-stage");
+    expect(flat).toContain("border-color: transparent");
+    expect(flat).toContain("background: transparent");
+    expect(flat).toContain("padding: 0");
   });
 
-  it("single-stage flows size to content instead of stretching (narrow #162-C1 reversal)", () => {
-    // Criterion 4's dead space IS #162's equal-share flex on a row with
-    // nothing to share with. The reversal is narrow on purpose: only
-    // data-stages="1" hugs; multi-stage pipelines keep equal-share (pinned
-    // next), because #162 spent that width deliberately. Scoped to the hug
-    // rule's block, like the C0 pin below: bare substrings proved blind.
-    const hugAt = css.indexOf('[data-stages="1"]');
-    expect(hugAt).toBeGreaterThan(-1);
-    expect(css.slice(hugAt, hugAt + 200)).toContain("flex: 0 1 auto");
+  it("stage width follows content, still spending the row (criterion 6)", () => {
+    // `flex: 1 1 auto` keeps #162's grow (the row still fills the pane) but
+    // sizes from content instead of zero — the sanctioned second narrowing
+    // of #162's equal-share (see the rule's own trade comment). Block-scoped:
+    // `flex: 1 1 auto` appears eight times in this file.
+    const stage = ruleBlock(css, ".tool-render-diagram-stage");
+    expect(stage).toContain("flex: 1 1 auto");
+    expect(stage).not.toContain("flex: 1 1 0%");
   });
 
-  it("equal-share and the nowrap pipe row survive for multi-stage pipelines (#162 C0 + C1)", () => {
-    // Scoped to the RULE BLOCKS, not bare substrings: `flex-flow: row nowrap`
-    // also appears on the sequence separator, so a bare toContain stays green
-    // when the FLOW rule alone wraps — the M7 mutant proved it. The base
-    // stage rule still shares width equally, and the flow still never wraps:
-    // a wrapped pipe row is indistinguishable from a stacked sequence, so an
-    // overlong pipeline scrolls instead.
-    const flowRule = css.slice(css.indexOf(".tool-render-diagram-flow {"));
-    expect(flowRule.slice(0, 300)).toContain("flex-flow: row nowrap");
-    expect(flowRule.slice(0, 300)).toContain("overflow-x: auto");
-    const stageRule = css.slice(css.indexOf(".tool-render-diagram-stage {"));
-    expect(stageRule.slice(0, 600)).toContain("flex: 1 1 0%");
+  it("single-stage flows still hug with no grow (the #165 narrowing, kept)", () => {
+    // Block-scoped: `flex: 0 1 auto` appears three times counting the rule's
+    // own trade comment, so the old fixed-window slice could match the
+    // comment instead of the declaration.
+    const hug = ruleBlock(css, '.tool-render-diagram-flow[data-stages="1"] .tool-render-diagram-stage');
+    expect(hug).toContain("flex: 0 1 auto");
+  });
+
+  it("the pipe row never wraps and scrolls instead; equal height is deliberate (criteria 7-8)", () => {
+    // Scoped to the flow rule block: `flex-flow: row nowrap` also appears on
+    // the sequence separator, so a bare toContain stays green when the FLOW
+    // rule alone wraps — the M7 mutant proved it. The flow still never
+    // wraps: a wrapped pipe row is indistinguishable from a stacked
+    // sequence, so an overlong pipeline scrolls instead. And criterion 8's
+    // decision: boxes keep matching the row's tallest — the declaration is
+    // the decision, since ragged bottoms would break the one-band read.
+    const flow = ruleBlock(css, ".tool-render-diagram-flow");
+    expect(flow).toContain("flex-flow: row nowrap");
+    expect(flow).toContain("overflow-x: auto");
+    expect(flow).toContain("align-items: stretch");
   });
 });
 

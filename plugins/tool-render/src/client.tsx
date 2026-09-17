@@ -1252,12 +1252,14 @@ function escalationBanner(detail, settled) {
 //
 // v2 joined them with a "then ↓" marker; #162 removed it. Labelling EVERY
 // boundary meant nothing stood out, and the one case that genuinely needs
-// explaining — a conditional — looked like just another chip. Now the
-// unconditional boundary renders no word and no glyph (the rail is the
-// connector), and conditionality is a property of the EDGE, stated as
-// prominent text at the top of the DEPENDENT row's own panel. The base row
-// of a chain carries no marker: it runs unconditionally, so a chain-wide
-// badge stated something false about it.
+// explaining — a conditional — looked like just another chip. #167 removed
+// #162's rail too: a connector between INDEPENDENT statements implies a
+// dependency that does not exist. Now the unconditional boundary renders no
+// word, no glyph, and no rail — separation is carried by the stacked blocks
+// themselves plus whitespace — and conditionality is a property of the EDGE,
+// stated as prominent text at the top of the DEPENDENT row's own panel. The
+// base row of a chain carries no marker: it runs unconditionally, so a
+// chain-wide badge stated something false about it.
 function BashDiagramHeredoc(props) {
   var endpoint = props.endpoint;
   var heredoc = endpoint.heredoc;
@@ -1476,12 +1478,15 @@ function BashSequenceTextGroup(props) {
     </div>
   );
 }
-// ---- #160, amended by #162: the boundary between two sequence members.
-// Deliberately NOT a pipe arrow — no operator glyph of any kind. v2 drew a
-// vertical `↓` and the literal word "then" here; v3 removed both, because
-// labelling every boundary meant the one boundary that needed explaining (a
-// conditional) looked like just another chip. The boundary is the CSS rail
-// alone, and the condition is stated on the dependent row's own panel.
+// ---- #160, amended by #162 and #167: the boundary between two sequence
+// members. Deliberately NOT a pipe arrow — no operator glyph of any kind.
+// v2 drew a vertical `↓` and the literal word "then" here; v3 removed both,
+// because labelling every boundary meant the one boundary that needed
+// explaining (a conditional) looked like just another chip; #167 then
+// removed v3's rail as well, because a connector between independent
+// statements implies a dependency that does not exist. The boundary is
+// genuinely nothing — whitespace between stacked blocks — and the condition
+// is stated on the dependent row's own panel.
 // The verbatim separator (`;`, newline, or a chain's ` && `) is pure order or
 // pure condition and needs no display; a comment riding in the separator is
 // content, so it renders VERBATIM alongside — never with the operator snipped
@@ -1489,9 +1494,10 @@ function BashSequenceTextGroup(props) {
 // appeared in the command.
 function BashSequenceSeparator(props) {
   var separator = props.text;
-  // #162 criterion 2: an unconditional boundary (`;`/newline) carries NO
-  // word and no glyph — the CSS rail is the connector. A comment riding the
-  // separator is content: muted text beside the rail.
+  // #162 criterion 2, as narrowed by #167 criterion 1: an unconditional
+  // boundary (`;`/newline) carries NO word, no glyph, and no rail — the
+  // separator div paints nothing. A comment riding the separator is content:
+  // muted text beside nothing, rendered verbatim.
   //
   // A CHAIN separator passes its operator here (#162 review): `" && "` is not
   // content, it is the condition — already stated as prominent text on the
