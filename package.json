@@ -13,6 +13,8 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@babel/core": "^8.0.5",
+    "@babel/eslint-parser": "^8.0.5",
     "@deepseek-ai/cordis": "4.0.1",
     "@deepseek-ai/dsh-agent": "0.1.0-rc.8",
     "@deepseek-ai/dsh-agent-presets": "0.1.0-rc.8",
@@ -32,6 +34,8 @@
     "@types/node": "26.2.0",
     "@types/semver": "7.8.0",
     "esbuild": "0.28.2",
+    "eslint": "^10.10.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "prettier": "^3.9.6",
     "semver": "7.8.5",
     "typescript": "^7.0.2",
@@ -46,6 +50,7 @@
     "rank-chains": "deno run --no-lock --allow-read --allow-net --allow-env scripts/rank-chains.ts",
     "test": "vitest run",
     "pin-aidos": "bash scripts/pin-aidos.sh",
-    "check:sh": "shellcheck -S warning sync.sh scripts/*.sh"
+    "check:sh": "shellcheck -S warning sync.sh scripts/*.sh",
+    "lint": "eslint plugins"
   }
 }

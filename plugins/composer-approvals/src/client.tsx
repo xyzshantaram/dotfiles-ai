@@ -869,7 +869,8 @@ function makeIndicator() {
           window.clearTimeout(remove);
         };
       },
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+      // exhaustive-deps is deliberately NOT enabled repo-wide (#154: narrow
+      // by default), so there is no suppression here -- just the deps.
       [paint.next, questionInputs.answered, fade.faded, fade.zeroed],
     );
 
