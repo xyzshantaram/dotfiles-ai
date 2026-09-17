@@ -154,6 +154,49 @@ describe("the view is WIRED to the panel seam, not around it", () => {
   it("the flow names its stage count for the single-stage hug rule", () => {
     expect(view).toContain("data-stages={model.stages.length}");
   });
+
+  it("the conditional chip shows the operator alone; the sentence lives in the tooltip", () => {
+    // #168 criterion 4: the chip text is `{model.conditional}` and nothing
+    // else — re-adding a painted sentence span (`<span>{why}</span>`)
+    // reddens here, as does losing the operator. The sentence survives on
+    // hover: the title still carries it, and the element opts into the
+    // styled tooltip WITHOUT dropping the title (the plugin reads FROM
+    // title and a screen reader announces it — one string, both surfaces).
+    expect(view).toContain("<span>{model.conditional}</span>");
+    expect(view).not.toContain("<span>{why}</span>");
+    expect(view).toContain('title={"conditional step: " + why');
+    const chipTips =
+      view.match(/className="tool-render-diagram-conditional"[^>]*data-dsh-tip=""/g) ?? [];
+    expect(chipTips).toHaveLength(1);
+  });
+
+  it("a bare chip row draws no stage box; earned boxes keep theirs", () => {
+    // #168: the box goes away exactly when the stage is chips-only. The
+    // predicate names all three conjuncts — dropping any one (redirects,
+    // exit, chip-rendered) reddens its own line. One application site: a
+    // second bare-class site is a branch going around the predicate.
+    expect(view).toContain("stage.redirects.length === 0");
+    expect(view).toContain("stage.exitCode === undefined");
+    expect(view).toContain("stage.args.args.length > 1");
+    const bares = view.match(/tool-render-diagram-stage-bare"/g) ?? [];
+    expect(bares).toHaveLength(1);
+  });
+
+  it("the diagram opts into styled tooltips without touching other surfaces (criteria 5-6)", () => {
+    // 4 pre-existing opt-ins (name badge, path option, agent id,
+    // compaction text) plus the 9 diagram sites: heredoc x2, conditional,
+    // time, !, arrow, argument chip, redirect endpoint, exit pill. The
+    // COUNT pins both directions at once: a missed diagram site reads 12,
+    // an out-of-scope conversion (verdict badge, sandbox mode, dismiss
+    // button) reads 14. Every diagram opt-in keeps its title alongside the
+    // marker — spot-pinned on the endpoint — so no conversion here may
+    // bless moving the text out of `title` or adding a drifting aria-label.
+    const tips = view.match(/data-dsh-tip=""/g) ?? [];
+    expect(tips).toHaveLength(13);
+    expect(view).toMatch(
+      /className="tool-render-diagram-endpoint"[^>]*title=\{[^}]*\}[^>]*data-dsh-tip=""/,
+    );
+  });
 });
 
 /** Extract one rule's `{ ... }` block, anchored to `selector {` at a line
@@ -193,8 +236,10 @@ describe("the #167 CSS voice: no rail, weighted panel, content widths", () => {
     expect(text).toContain("color: var(--dsw-alias-label-tertiary)");
     expect(text).toContain("white-space: pre-wrap");
     // The boundary still breathes as whitespace: the empty separator keeps
-    // its vertical rhythm, wider than the in-panel card gap.
-    expect(sep).toContain("min-height: 0.375rem");
+    // its vertical rhythm, wider than the in-panel card gap. #168 tightened
+    // both proportionally (×2/3): separator 0.375→0.25rem, both gaps
+    // 0.375→0.25rem — the boundary stays the wider of the two, pinned below.
+    expect(sep).toContain("min-height: 0.25rem");
   });
 
   it("the outer panel is a weighted field, not an outline (criterion 3)", () => {
@@ -263,6 +308,73 @@ describe("the #167 CSS voice: no rail, weighted panel, content widths", () => {
     expect(flow).toContain("flex-flow: row nowrap");
     expect(flow).toContain("overflow-x: auto");
     expect(flow).toContain("align-items: stretch");
+  });
+});
+
+describe("the #168 CSS voice: conditional chip, earned boxes, tighter rhythm", () => {
+  // Same honesty note as above: source assertions, not paint proofs. Every
+  // pin is block-scoped through ruleBlock — four pins in this file first
+  // passed against their own mutants on bare substrings, so no pin here
+  // matches a value that also appears outside its rule.
+  const css = readFileSync(new URL("./client.module.css", import.meta.url), "utf8");
+
+  it("the conditional is a chip, visually distinct from an argument chip", () => {
+    // Chip-sized (not the old full-line flex row), bold, dashed outline —
+    // the solid-outline regular-weight argument chips answer it at a
+    // glance. Block-scoped: `dashed` also describes the value chip and the
+    // heredoc button, `700`/`inline-flex` appear nowhere else in this file
+    // but the pin must not be hostage to that.
+    const chip = ruleBlock(css, ".tool-render-diagram-conditional");
+    expect(chip).toContain("display: inline-flex");
+    expect(chip).toContain("font-weight: 700");
+    expect(chip).toContain("border: 1px dashed var(--dsw-alias-border-l2)");
+    expect(chip).toContain("padding: 0 0.375rem");
+    expect(chip).toContain("margin-bottom: 0.25rem");
+    // The old prominent-text row is gone: no wrapping flex row with a gap
+    // for the painted sentence. `gap:` appears in a dozen rules, so the
+    // absence is scoped to this block.
+    expect(chip).not.toContain("gap:");
+    expect(chip).not.toMatch(/font-weight:\s*600/);
+  });
+
+  it("a bare stage removes chrome, never layout", () => {
+    // The earned-box rule removes border, background and padding — and
+    // nothing else. Scoped where the old pin was bare: "border-color:
+    // transparent" matches three rules, "background: transparent" and
+    // "padding: 0" match several more. The negative pins keep a `border`
+    // shorthand (or a margin/display/flex smuggle) from sneaking back in;
+    // `border-radius` is excluded from the match, as in the panel pin.
+    const bare = ruleBlock(css, ".tool-render-diagram-stage-bare");
+    expect(bare).toContain("border-color: transparent");
+    expect(bare).toContain("background: transparent");
+    // Exact match with the semicolon: `padding: 0.375rem` also contains the
+    // substring `padding: 0`, so a bare toContain stays green while the
+    // padding is back — the M8 mutant proved it on this very pin.
+    expect(bare).toMatch(/padding:\s*0\s*;/);
+    expect(bare).not.toMatch(/border(-left|-right|-top|-bottom)?\s*:/);
+    expect(bare).not.toContain("display:");
+    expect(bare).not.toContain("margin");
+  });
+
+  it("tighter vertical rhythm, boundary still wider than the card gap", () => {
+    // #168: both gaps tighten proportionally (×2/3) and the separator with
+    // them — the BETWEEN-STATEMENT boundary must stay the wider of the two,
+    // or independent statements stop reading as separate (#167). Measured
+    // stack between adjacent statements: seq gap + separator box + seq gap
+    // = 0.25 + (0.25 min-height + 0.125 padding) + 0.25 = 0.875rem, against
+    // 0.25rem between in-panel cards. Reverting any one value reddens.
+    const seq = ruleBlock(css, ".tool-render-diagram-seq");
+    expect(seq).toContain("gap: 0.25rem");
+    const sep = ruleBlock(css, ".tool-render-diagram-seq-sep");
+    expect(sep).toContain("min-height: 0.25rem");
+    expect(sep).not.toMatch(/border(-left|-right|-top|-bottom)?\s*:/);
+    const panel = ruleBlock(css, ".tool-render-diagram-chainpanel");
+    expect(panel).toContain("gap: 0.25rem");
+    // The panel's voice is untouched by the tightening: still a weighted
+    // field, still no outline, same radius and padding.
+    expect(panel).toContain("background: var(--dsw-alias-bg-base)");
+    expect(panel).toContain("border-radius: 0.75rem");
+    expect(panel).toContain("padding: 0.375rem 0.5rem");
   });
 });
 

@@ -1257,7 +1257,7 @@ function escalationBanner(detail, settled) {
 // dependency that does not exist. Now the unconditional boundary renders no
 // word, no glyph, and no rail — separation is carried by the stacked blocks
 // themselves plus whitespace — and conditionality is a property of the EDGE,
-// stated as prominent text at the top of the DEPENDENT row's own panel. The
+// stated as a chip at the top of the DEPENDENT row's own panel. The
 // base row of a chain carries no marker: it runs unconditionally, so a
 // chain-wide badge stated something false about it.
 function BashDiagramHeredoc(props) {
@@ -1274,6 +1274,7 @@ function BashDiagramHeredoc(props) {
       <button
         className="tool-render-diagram-heredoc"
         title="heredoc body: one collapsed element, never one per line"
+        data-dsh-tip=""
         onClick={function () {
           setOpen(true);
         }}
@@ -1287,6 +1288,7 @@ function BashDiagramHeredoc(props) {
       <button
         className="tool-render-diagram-heredoc"
         title="heredoc body"
+        data-dsh-tip=""
         onClick={function () {
           setOpen(false);
         }}
@@ -1300,18 +1302,29 @@ function BashDiagramHeredoc(props) {
 function BashCommandDiagram(props) {
   var model = props.model;
   var head = [];
-  // #162 criterion 2 (amended): the condition is PROMINENT TEXT at the top
-  // of THIS row's own panel — never a chip, never on a chain's base row
-  // (2b). It leads the block; the command's stages sit under it.
+  // #162 criterion 2 (amended by #168): the condition is a CHIP at the top
+  // of THIS row's own panel — never on a chain's base row (2b). The chip
+  // shows just `&&` / `||`; the plain-language sentence rides the tooltip.
+  // ONE STRING FEEDS BOTH SURFACES: the title text is what the tooltip
+  // plugin shows AND what a screen reader announces, so no aria-label is
+  // introduced that could drift from the visual. The chip stays
+  // distinguishable from an argument chip by POSITION (it leads the card
+  // above the stage flow, never inline in the chip row), by TREATMENT
+  // (bold operator, dashed outline — argument chips are regular-weight with
+  // solid outlines), and by BEHAVIOR (it claims control flow on hover,
+  // while an argument chip's title names a token role).
   if (model.conditional === "&&" || model.conditional === "||") {
     var why =
       model.conditional === "&&"
         ? "runs only if the previous step succeeded"
         : "runs only if the previous step failed";
     head.push(
-      <div className="tool-render-diagram-conditional" title={"conditional step: " + why + " — unlike `;`, this step may not run at all"}>
+      <div
+        className="tool-render-diagram-conditional"
+        title={"conditional step: " + why + " — unlike `;`, this step may not run at all"}
+        data-dsh-tip=""
+      >
         <span>{model.conditional}</span>
-        <span>{why}</span>
       </div>,
     );
   }
@@ -1320,6 +1333,7 @@ function BashCommandDiagram(props) {
       <span
         className="tool-render-diagram-badge"
         title="`time` prefix: the command was timed, which changes what its exit code means"
+        data-dsh-tip=""
       >
         time
       </span>,
@@ -1330,6 +1344,7 @@ function BashCommandDiagram(props) {
       <span
         className="tool-render-diagram-badge"
         title="`!` negation: the pipeline exit code is inverted"
+        data-dsh-tip=""
       >
         !
       </span>,
@@ -1352,6 +1367,7 @@ function BashCommandDiagram(props) {
           title={
             carriesStderr ? "pipe stdout and stderr together (|&)" : "pipe stdout only (|)"
           }
+          data-dsh-tip=""
         >
           {arrow.operator + " \u2192"}
         </span>,
@@ -1382,6 +1398,7 @@ function BashCommandDiagram(props) {
               (a === 0 ? " tool-render-diagram-arg-cmd" : "")
             }
             title={roleLabel}
+            data-dsh-tip=""
           >
             {arg.slice}
           </code>,
@@ -1408,6 +1425,7 @@ function BashCommandDiagram(props) {
           <span
             className="tool-render-diagram-endpoint"
             title={"redirect (" + redirect.operator + ")"}
+            data-dsh-tip=""
           >
             <code
               className="hljs"
@@ -1431,12 +1449,35 @@ function BashCommandDiagram(props) {
               ? "stage exit code " + String(stage.exitCode) + " (failed)"
               : "stage exit code 0"
           }
+          data-dsh-tip=""
         >
           {"exit " + String(stage.exitCode)}
         </span>,
       );
     }
-    flow.push(<div className="tool-render-diagram-stage">{parts}</div>);
+    // #168: the stage box is drawn ONLY when it earns its place. Chips are
+    // already self-delimiting (each with its own border and background), so
+    // a box around a bare chip row draws a third outline to say what the
+    // chips already said. The box stays exactly when the stage carries
+    // something BELOW the command line that needs grouping — a redirect
+    // list (including the heredoc disclosure) or an exit pill — or when the
+    // stage fell back to verbatim words (no chips to delimit it). Wrapping
+    // alone never earns a box: boxing does not delimit wrapped content, and
+    // wrap is viewport-dependent, so no static rule could award it evenly.
+    var bare =
+      stage.redirects.length === 0 &&
+      stage.exitCode === undefined &&
+      stage.args !== undefined &&
+      stage.args.args.length > 1;
+    flow.push(
+      <div
+        className={
+          "tool-render-diagram-stage" + (bare ? " tool-render-diagram-stage-bare" : "")
+        }
+      >
+        {parts}
+      </div>,
+    );
   }
   var tail = [];
   for (var t = 0; t < model.trailing.length; t++) {
@@ -1500,7 +1541,7 @@ function BashSequenceSeparator(props) {
   // muted text beside nothing, rendered verbatim.
   //
   // A CHAIN separator passes its operator here (#162 review): `" && "` is not
-  // content, it is the condition — already stated as prominent text on the
+  // content, it is the condition — already stated as a chip on the
   // dependent row below. Left in, it rendered as muted `&&` debris between
   // every chain row, which is the chrome 2b exists to remove. Note what is
   // NOT done: the operator is never SNIPPED out of a separator that also
@@ -1556,7 +1597,7 @@ function BashChainPanel(props) {
   for (var r = 0; r < parts.length; r++) {
     if (r > 0) {
       // The chain's own separators (space + the &&/|| + space) are pure
-      // condition chrome: the marker line on the part below says the
+      // condition chrome: the chip on the part below says the
       // condition, so a contentless separator renders nothing at all — while
       // a comment riding one still shows VERBATIM (same contract as ever).
       children.push(
@@ -1640,7 +1681,7 @@ function BashTabStrip(props) {
   var idPrefix = props.idPrefix;
   var order = ["graph", "command"];
   var labelOf = function (id) {
-    return id === "graph" ? "Graph" : "Command";
+    return id === "graph" ? "Visual" : "Command";
   };
   var onKeyDown = function (event) {
     var key = event.key;

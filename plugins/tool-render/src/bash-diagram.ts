@@ -242,16 +242,65 @@ function classifyInner(inner: any): ClassifiedInner | null {
 }
 
 /**
+ * Source-span key for one redirect node, or null when the node carries no
+ * usable offsets. Two redirect NODES describing the same bytes share a key
+ * even when they are distinct objects.
+ */
+function redirectSpanKey(r: any): string | null {
+  if (r === null || typeof r !== "object") return null;
+  if (typeof r.pos !== "number" || typeof r.end !== "number") return null;
+  return r.pos + ":" + r.end;
+}
+
+/**
+ * Append one redirect onto a stage list exactly once: skip it when the same
+ * object is already there (the aliasing case below) or when another node
+ * already covers its source span (the same bytes reported on two nodes,
+ * which current unbash shapes never produce but a parser upgrade could).
+ * Redirect lists are a handful of entries, so the linear scan is the whole
+ * cost story.
+ */
+function pushRedirectOnce(target: any[], r: any): void {
+  if (target.includes(r)) return;
+  const key = redirectSpanKey(r);
+  if (key !== null) {
+    for (const existing of target) {
+      if (redirectSpanKey(existing) === key) return;
+    }
+  }
+  target.push(r);
+}
+
+/**
  * Attribute statement-level redirects defensively onto the stage lists.
  * Statement-level redirects are vanishingly rare for Command/Pipeline inners
  * (probes always found them on the inner node): the single stage, or the
  * last pipeline stage, owns them.
+ *
+ * #168: the append stays, the double-attribution goes. The chain path calls
+ * this with an operand AS its own statement (prepareStatementUnit passes the
+ * AndOr operand as `st`, and for a Command operand rawStages[0] === that
+ * operand), so the operand's redirects are ALREADY in the lists — appending
+ * `statement.redirects` again drew every redirect twice (`>/dev/null, 2>&1`
+ * rendered as four rows). Runtime reading of the owner's command confirmed
+ * this shape: the outer statement carries NO redirects and unbash reports
+ * each redirect on exactly one node, so the second copy came from this
+ * single call site appending a list to its own copy — not from two call
+ * sites both firing, and not from a double-reporting parser. The guard fixes
+ * all three shapes at once, and the append itself is load-bearing (a span no
+ * stage owns still lands exactly once), so deleting it to silence the
+ * duplicate would drop redirects instead.
+ *
+ * Exported as a test seam (same precedent as sequenceUnitDiagramModel and
+ * chainPanelRows): no drawable command in the corpus carries
+ * statement-level redirects, so only a direct unit test can prove both
+ * directions — the duplicate gone AND the legitimate append kept.
  */
-function attributeStatementRedirects(statement: any, rawStages: any[]): any[][] {
+export function attributeStatementRedirects(statement: any, rawStages: any[]): any[][] {
   const statementRedirects: any[] = Array.isArray(statement.redirects) ? statement.redirects : [];
   const lists: any[][] = rawStages.map((s) => (Array.isArray(s.redirects) ? s.redirects.slice() : []));
   for (const r of statementRedirects) {
-    lists[lists.length - 1].push(r);
+    pushRedirectOnce(lists[lists.length - 1], r);
   }
   return lists;
 }
@@ -1053,9 +1102,14 @@ function buildChainGroup(command: string, st: any): { chain: BashSequenceChainGr
     if (pen.specs.length > 0) return null;
   }
   // Subcommand a chain statement's own redirects onto its last row, exactly
-  // as the plain path does for the last stage (rare, defensive).
+  // as the plain path does for the last stage (rare, defensive). #168: the
+  // same exactly-once guard as attributeStatementRedirects — for the owner's
+  // input this list is empty (the redirects live on the operand, already
+  // attributed above), but an outer redirect covering bytes the last row
+  // already owns must not double-draw if a parser ever reports it twice.
   const statementRedirects = Array.isArray(st.redirects) ? st.redirects : [];
-  for (const r of statementRedirects) pends[pends.length - 1].lists[pends[pends.length - 1].lists.length - 1].push(r);
+  const lastLists = pends[pends.length - 1].lists;
+  for (const r of statementRedirects) pushRedirectOnce(lastLists[lastLists.length - 1], r);
   // Span sanity: operands ordered inside the statement, non-overlapping.
   for (let i = 0; i < cmdsIn.length; i++) {
     const op = cmdsIn[i];

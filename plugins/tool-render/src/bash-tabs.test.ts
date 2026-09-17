@@ -23,7 +23,7 @@ import {
 } from "./bash-diagram";
 
 describe("resolveBashTab: which tabs exist and which leads", () => {
-  it("a drawable pipeline shows both tabs with Graph first", () => {
+  it("a drawable pipeline shows both tabs with Visual first", () => {
     const command = "a | b";
     const tabs = resolveBashTab(command, false);
     expect(tabs.drawable).toBe(true);
@@ -32,7 +32,7 @@ describe("resolveBashTab: which tabs exist and which leads", () => {
     expect(tabs.commandText).toBe(command);
   });
 
-  it("a drawable sequence shows both tabs with Graph first", () => {
+  it("a drawable sequence shows both tabs with Visual first", () => {
     const command = "a | b; c | d";
     expect(getBashSequenceDiagram(command)).not.toBeNull();
     const tabs = resolveBashTab(command, false);
@@ -161,6 +161,18 @@ describe("the view is WIRED to the seam: one call, verbatim text, real controls"
   // If a render harness ever lands, these should be REPLACED by tests that
   // click Graph/Command and assert the painted panel, not kept alongside them.
   const source = readFileSync(new URL("./client.tsx", import.meta.url), "utf8");
+
+  it("the strip labels the diagram tab Visual, not Graph", () => {
+    // #168 rename: the tab reads "Visual". Pinned on the labelOf MAPPING
+    // (`id === "graph" ? "Visual" : "Command"`), not the bare word — the
+    // file's history comments still say "Graph" (and the tab id is still
+    // "graph"), so a plain toContain("Visual") stays green while the label
+    // reads anything at all.
+    const labelMaps = source.match(/id === "graph" \? "[^"]+" : "[^"]+"/g) ?? [];
+    expect(labelMaps).toHaveLength(1);
+    expect(labelMaps[0]).toBe('id === "graph" ? "Visual" : "Command"');
+    expect(source).not.toMatch(/id === "graph" \? "Graph"/);
+  });
 
   it("BashRow resolves the tabs through the seam exactly once (the funnel)", () => {
     // One call whose object feeds BOTH the strip and the panel. A second call
