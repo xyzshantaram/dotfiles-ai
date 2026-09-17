@@ -141,6 +141,27 @@ body {
 .node {
   margin: 0.75rem 0;
 }
+.node-label {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  font-weight: 500;
+}
+/* Busy line for a submit in flight. htmx marks the requesting form with
+   htmx-request, so one rule covers every step. A slow step, such as a
+   push of 38 orders, otherwise looks like a dead button. */
+.wiz-busy {
+  display: none;
+  align-self: center;
+  color: var(--wa-color-text-quiet);
+}
+form.htmx-request .wiz-busy {
+  display: inline-block;
+}
+small.node-hint {
+  display: block;
+  margin: 0 0 0.4rem;
+  color: var(--wa-color-text-quiet);
+}
 /* Let the mounted component fill the step column. */
 .wiz-mount {
   width: 100%;
@@ -273,6 +294,10 @@ small.option-hint {
   color: var(--wa-color-text-normal);
   border: 1px solid var(--wa-color-surface-border);
   border-radius: var(--wa-border-radius-s);
+}
+.copyable-mono {
+  font-family: var(--wa-font-family-code, monospace);
+  white-space: pre;
 }
 .copyable-done {
   color: var(--wa-color-text-quiet);

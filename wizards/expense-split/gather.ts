@@ -27,7 +27,7 @@ import { sessionStore, sidOf } from "../../src/sessionstore.ts";
 import { setSplitRun } from "./split.ts";
 import type { WizardCtx } from "../../wizardkit/mod.ts";
 import { dryBox, dryNote } from "./dry.ts";
-import { fmtRs, formatDayISO, parseDate } from "../../src/common.ts";
+import { fmtRs, formatDayISO, isLedgerRow, itemSummary, parseDate } from "../../src/common.ts";
 import { DEFAULT_LOCATION, TOKENS_FILE } from "../../src/zomato.ts";
 import type { Order } from "../../src/common.ts";
 
@@ -718,58 +718,6 @@ export function pickNext(
   return { goto: "split-people" };
 }
 
-// Treat [Fees], [Rounding] and [Screenshot only] as ledger rows.
-// Drop them before the pick line shows items.
-export function isLedgerRow(name: string): boolean {
-  const trimmed = name.trim();
-  return trimmed.startsWith("[") && trimmed.endsWith("]");
-}
-
-// Match a number plus a pack, weight, volume or count unit.
-const SIZE_PATTERN = /\d+\s*(kg|ml|ltr|litre|liter|pieces|piece|pcs|pc|packs|pack|combo|g|l)\b/i;
-
-// Strip one trailing size group like pack, weight or volume.
-// Repeat the strip while the new tail still states a size.
-export function tidyProductName(name: string): string {
-  let out = name.trim();
-  while (out.endsWith(")")) {
-    let depth = 0;
-    let open = -1;
-    for (let i = out.length - 1; i >= 0; i--) {
-      if (out[i] === ")") depth += 1;
-      if (out[i] === "(") {
-        depth -= 1;
-        if (depth === 0) {
-          open = i;
-          break;
-        }
-      }
-    }
-    if (open < 0) break;
-    const inner = out.slice(open + 1, out.length - 1).trim();
-    const lower = inner.toLowerCase();
-    const bare = lower === "pack" || lower === "pcs" || lower === "combo";
-    if (!bare && !SIZE_PATTERN.test(inner)) break;
-    out = out.slice(0, open).trim();
-  }
-  return out;
-}
-
-// One line summary of the order contents for the pick screen.
-// Names the first five items, then counts the rest.
-function pickHint(items: Array<{ name: string; quantity?: number }>): string | undefined {
-  const products = items.filter((item) => !isLedgerRow(item.name ?? ""));
-  if (products.length === 0) return undefined;
-  const shown = products.slice(0, 5).map((item) =>
-    item.quantity !== undefined && item.quantity > 1
-      ? String(item.quantity) + " " + tidyProductName(item.name)
-      : tidyProductName(item.name)
-  );
-  const head = shown.join(", ");
-  if (products.length <= 5) return head;
-  return head + " +" + String(products.length - 5) + " more";
-}
-
 // Label for one order on the pick screen.
 function pickLabel(platform: string, date: string, paid: number, count: number): string {
   const name = platform.charAt(0).toUpperCase() + platform.slice(1);
@@ -845,7 +793,7 @@ function pickStep(answerMap: Map<string, string[]>, ctx?: WizardCtx): Step {
         visible.length,
       ),
     };
-    const hint = pickHint(visible);
+    const hint = itemSummary(visible);
     if (hint !== undefined) option.hint = hint;
     return option;
   });

@@ -25,20 +25,16 @@ import { archiveRun, readRun, runFilePath, stateRoot } from "../../src/runstate.
 import { loadSettings } from "../../src/settings.ts";
 import { fetchShareLink } from "../../src/share.ts";
 import {
-  type AccessToken,
+  type Credentials,
   fullName,
   loadCredentials,
   loadPushed,
-  loadToken,
   savePushed,
   SplitwiseAPI,
 } from "../../src/splitwise.ts";
 import { splitwiseEnvPath } from "../../src/paths.ts";
 import { OUTPUT_FILE } from "../../src/splitstate.ts";
-import {
-  sessionStore,
-  sidOf,
-} from "../../src/sessionstore.ts";
+import { sessionStore, sidOf } from "../../src/sessionstore.ts";
 
 // One order groups split lines from one platform order.
 type Order = SplitEntry[];
@@ -100,7 +96,6 @@ export interface PushOutcome {
   pushed: number;
   skippedDupes: number;
   skippedByChoice: number;
-  stopped: boolean;
   failed: boolean;
   // True for a dry run. Counts name what would push; nothing lands.
   dry: boolean;
@@ -526,7 +521,7 @@ export async function prepareSplitwise(
     live.api = null;
     return { ok: true };
   }
-  let credentials: { consumerKey: string; consumerSecret: string };
+  let credentials: Credentials;
   try {
     credentials = await loadCredentials(discovered);
   } catch (err) {
@@ -535,14 +530,7 @@ export async function prepareSplitwise(
     live.setupError = credentialsReadError(err);
     return { ok: true };
   }
-  // The F2 handshake owns auth. Push reuses the cached token only.
-  const token: AccessToken | null = await loadToken();
-  if (token === null) {
-    live.mode = "aggregate";
-    live.api = null;
-    return { ok: true };
-  }
-  const api = new SplitwiseAPI(credentials, token) as unknown as PushApi;
+  const api = new SplitwiseAPI(credentials) as unknown as PushApi;
   try {
     const me = await api.getCurrentUser();
     live.signedInAs = fullName(me);
@@ -619,10 +607,9 @@ export function applyCutoff(
 }
 
 // Run the push loop. `choices` maps order id to the radio value. Orders
-// already sent (fingerprint on disk) skip without asking. Stop ends the
-// loop early and keeps the run unarchived. A failed call takes the
-// failPush path: a plain error, no fingerprint saved, push halted.
-// A dry run walks the same loop and counts the would-push plan, but it
+// already sent (fingerprint on disk) skip without asking. A failed call
+// takes the failPush path: a plain error, no fingerprint saved, push
+// halted. A dry run walks the same loop and counts the would-push plan, but it
 // writes nothing: no expense, no fingerprint, no summary file, no
 // archive, no run meta change.
 export async function executePush(
@@ -637,7 +624,6 @@ export async function executePush(
     pushed: 0,
     skippedDupes: 0,
     skippedByChoice: 0,
-    stopped: false,
     failed: false,
     dry: opts?.dry === true,
     totalRs: 0,
@@ -647,7 +633,7 @@ export async function executePush(
   };
   if (outcome.dry) {
     // Mirror the live loop shape: dupes skip, Push counts, Skip and
-    // Stop end or skip, unpicked orders stay out.
+    // unpicked orders stay out.
     for (const order of groups) {
       const fingerprint = orderFingerprint(order);
       const oid = order[0].order_id ?? "unknown";
@@ -656,11 +642,6 @@ export async function executePush(
         continue;
       }
       const choice = choices[oid];
-      if (choice === "Stop") {
-        outcome.stopped = true;
-        outcome.skippedByChoice += 1;
-        break;
-      }
       if (choice !== "Push") {
         outcome.skippedByChoice += 1;
         continue;
@@ -689,9 +670,7 @@ export async function executePush(
         live.settlements,
         live.currency + " ",
       );
-      const dir = live.file.includes("/")
-        ? live.file.slice(0, live.file.lastIndexOf("/"))
-        : ".";
+      const dir = live.file.includes("/") ? live.file.slice(0, live.file.lastIndexOf("/")) : ".";
       const path = dir + "/aggregate-" + Math.floor(Date.now() / 1000) + ".txt";
       try {
         await Deno.writeTextFile(path, block + "\n");
@@ -710,7 +689,6 @@ export async function executePush(
   if (api === null) {
     return { ok: false, error: "Splitwise access is missing. Set it up in Settings first." };
   }
-  let stop = false;
   for (const order of groups) {
     const fingerprint = orderFingerprint(order);
     const oid = order[0].order_id ?? "unknown";
@@ -719,12 +697,6 @@ export async function executePush(
       continue;
     }
     const choice = choices[oid];
-    if (choice === "Stop") {
-      outcome.stopped = true;
-      outcome.skippedByChoice += 1;
-      stop = true;
-      break;
-    }
     if (choice === "Skip") {
       outcome.skippedByChoice += 1;
       continue;
@@ -766,15 +738,13 @@ export async function executePush(
       return { ok: false, error: outcome.note };
     }
   }
-  if (live.runId !== null && !stop && !outcome.failed) {
+  if (live.runId !== null && !outcome.failed) {
     try {
       await archiveRun(live.runId);
       outcome.archived = true;
     } catch {
       outcome.note = "The push finished but the run could not be archived.";
     }
-  } else if (stop) {
-    outcome.note = "The run stopped early and stays in place. Push again to send the rest.";
   }
   live.outcome = outcome;
   return { ok: true };

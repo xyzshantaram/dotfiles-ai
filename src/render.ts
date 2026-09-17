@@ -3,7 +3,15 @@
 //
 // CLI: deno run --allow-read --allow-write src/render.ts <orders.json> <outdir>
 
-import { compact, fmtRs, isFeeItem, type OutputDoc, parseDate, type SplitEntry } from "./common.ts";
+import {
+  compact,
+  fmtRs,
+  isFeeItem,
+  itemSummary,
+  type OutputDoc,
+  parseDate,
+  type SplitEntry,
+} from "./common.ts";
 
 type Order = SplitEntry[];
 
@@ -175,19 +183,27 @@ export function renderOrderTree(
   return renderTree(root, lines);
 }
 
-export function formatTitle(order: Order, cur: string = "₹"): string {
-  const platform = titleCaseSpaced(order[0].platform);
-  // Sum the order total the same way the title line does.
-  const total = order.reduce((s, i) => s + i.price, 0);
-  const dt = parseDate(order[0].date);
-  // Fall back to merchant plus total when the date misses.
-  if (dt === null) return `${platform} — ${cur}${fmtRs(total)}`;
+function formatWhen(dateText: string): string | null {
+  const dt = parseDate(dateText);
+  if (dt === null) return null;
   const mm = String(dt.getMonth() + 1).padStart(2, "0");
   const dd = String(dt.getDate()).padStart(2, "0");
   const h24 = dt.getHours();
   const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
   const ampm = h24 < 12 ? "AM" : "PM";
-  return `${platform} order ${mm}-${dd} ${h12}:${String(dt.getMinutes()).padStart(2, "0")} ${ampm}`;
+  return `${mm}-${dd} ${h12}:${String(dt.getMinutes()).padStart(2, "0")} ${ampm}`;
+}
+
+export function formatTitle(order: Order, cur: string = "₹"): string {
+  const platform = titleCaseSpaced(order[0].platform);
+  const summary = itemSummary(order.map((entry) => ({ name: entry.item })));
+  if (summary !== undefined) return `${summary} [${platform}]`;
+  // Sum the order total the same way the title line does.
+  const total = order.reduce((s, i) => s + i.price, 0);
+  const when = formatWhen(order[0].date);
+  // Fall back to merchant plus total when the date misses.
+  if (when === null) return `${platform} — ${cur}${fmtRs(total)}`;
+  return `${platform} order ${when}`;
 }
 
 function initialsFor(people: string[]): Map<string, string> {
@@ -207,11 +223,16 @@ function initialsFor(people: string[]): Map<string, string> {
 
 export function buildItemizedComment(order: Order, people: string[]): string {
   const initials = initialsFor(people);
+  const platform = titleCaseSpaced(order[0].platform);
+  const when = formatWhen(order[0].date) ?? order[0].date;
   const shares = (assignments: Record<string, number>): string =>
     people.filter((p) => assignments[p]).map((p) => `${initials.get(p)}:${compact(assignments[p])}`)
       .join(" ");
 
-  const lines: string[] = [people.map((p) => `${initials.get(p)}=${p}`).join(" ")];
+  const lines: string[] = [
+    `${platform} — ${when}`,
+    people.map((p) => `${initials.get(p)}=${p}`).join(" "),
+  ];
 
   let feeTotal = 0;
   const feeAssignments: Record<string, number> = {};
@@ -287,11 +308,11 @@ export function buildAggregateSummary(
   // Reuse short initials for the per order shares.
   const initials = initialsFor(people);
   groups.forEach((order, i) => {
-    // Split the title into merchant and date parts.
-    const title = formatTitle(order, cur);
-    const cut = title.indexOf(" order ");
-    const merchant = title.slice(0, cut);
-    const dateText = title.slice(cut + " order ".length);
+    // Read the merchant and the time from the order itself. This line
+    // used to slice them back out of the title text, which broke the
+    // moment the title stopped naming a date.
+    const merchant = titleCaseSpaced(order[0].platform);
+    const dateText = formatWhen(order[0].date) ?? order[0].date;
     const total = order.reduce((s, item) => s + item.price, 0);
     // Show each share with two decimals.
     const shares = people
@@ -301,6 +322,8 @@ export function buildAggregateSummary(
       })
       .join(" · ");
     lines.push(`   ${i + 1}. ${merchant} — ${dateText} — ${cur}${fmtRs(total)} — ${shares}`);
+    const goods = itemSummary(order.map((entry) => ({ name: entry.item })));
+    if (goods !== undefined) lines.push("      " + goods);
   });
   lines.push(sep);
   lines.push("Paste the itemized part as a comment. Title the expense anything you");

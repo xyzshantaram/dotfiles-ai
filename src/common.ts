@@ -99,3 +99,62 @@ export function formatISTDate(isoUtc: string): string {
     pad(ist.getUTCMinutes())
   } ${ampm}`;
 }
+
+// Treat [Fees], [Rounding] and [Screenshot only] as ledger rows.
+// Drop them before the pick line shows items.
+export function isLedgerRow(name: string): boolean {
+  const trimmed = name.trim();
+  return trimmed.startsWith("[") && trimmed.endsWith("]");
+}
+
+// Match a number plus a pack, weight, volume or count unit.
+const SIZE_PATTERN = /\d+\s*(kg|ml|ltr|litre|liter|pieces|piece|pcs|pc|packs|pack|combo|g|l)\b/i;
+
+// Strip one trailing size group like pack, weight or volume.
+// Repeat the strip while the new tail still states a size.
+export function tidyProductName(name: string): string {
+  let out = name.trim();
+  while (out.endsWith(")")) {
+    let depth = 0;
+    let open = -1;
+    for (let i = out.length - 1; i >= 0; i--) {
+      if (out[i] === ")") depth += 1;
+      if (out[i] === "(") {
+        depth -= 1;
+        if (depth === 0) {
+          open = i;
+          break;
+        }
+      }
+    }
+    if (open < 0) break;
+    const inner = out.slice(open + 1, out.length - 1).trim();
+    const lower = inner.toLowerCase();
+    const bare = lower === "pack" || lower === "pcs" || lower === "combo";
+    if (!bare && !SIZE_PATTERN.test(inner)) break;
+    out = out.slice(0, open).trim();
+  }
+  return out;
+}
+
+// One line summary of the order contents for the pick screen.
+// Names the first five items, then counts the rest.
+export function itemSummary(items: Array<{ name: string; quantity?: number }>): string | undefined {
+  const merged: Array<{ name: string; quantity: number }> = [];
+  for (const item of items) {
+    const raw = item.name ?? "";
+    if (isLedgerRow(raw)) continue;
+    const tidy = tidyProductName(raw);
+    const qty = item.quantity ?? 1;
+    const found = merged.find((entry) => entry.name === tidy);
+    if (found === undefined) merged.push({ name: tidy, quantity: qty });
+    else found.quantity += qty;
+  }
+  if (merged.length === 0) return undefined;
+  const shown = merged.slice(0, 5).map((entry) =>
+    entry.quantity > 1 ? String(entry.quantity) + " " + entry.name : entry.name
+  );
+  const head = shown.join(", ");
+  if (merged.length <= 5) return head;
+  return head + " +" + String(merged.length - 5) + " more";
+}

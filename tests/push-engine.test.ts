@@ -12,7 +12,7 @@ import {
   resolveNamePicks,
 } from "../wizards/expense-split/push-engine.ts";
 import { loadPushed } from "../src/splitwise.ts";
-import { pushedFilePath } from "../src/paths.ts";
+import { pushedFilePath, splitwiseEnvPath } from "../src/paths.ts";
 import { pushSteps, sourceStep } from "../wizards/expense-split/push.ts";
 
 // Fail the test when a condition misses.
@@ -158,18 +158,18 @@ Deno.test("rerun skips the already-sent order by fingerprint", async () => {
   assert(expenses.length === 0, "no createExpense on rerun");
 });
 
-Deno.test("stop choice ends the loop and keeps later orders out", async () => {
+Deno.test("skip choice keeps the order out without ending the loop", async () => {
   await fresh("t-push-3");
   await prepareSource("t-push-3", "Split JSON file", "", SPLIT_FILE);
   const { api, expenses } = fakeApi();
   await prepareSplitwise("t-push-3", api);
   applyCutoff("t-push-3", "2026-01-02");
-  const done = await executePush("t-push-3", { o1: "Stop" });
-  assert(done.ok, "stop run ok");
+  const done = await executePush("t-push-3", { o1: "Skip", o2: "Push" });
+  assert(done.ok, "skip run ok");
   const out = pushSessionFor("t-push-3").outcome!;
-  assert(out.stopped, "stopped flag set");
-  assert(out.pushed === 0, "stop before push");
-  assert(expenses.length === 0, "no expense after stop");
+  assert(out.skippedByChoice === 1, "skipped order counted");
+  assert(out.pushed === 1, "later order still pushes");
+  assert(expenses.length === 1, "one expense after skip");
 });
 
 Deno.test("failed createExpense takes the failPush path, fingerprint unsaved", async () => {
@@ -256,13 +256,15 @@ Deno.test("full push through a run id archives the run", async () => {
   }
   assert(liveGone, "live run dir removed");
   await Deno.stat(root + "/state/cache/runs/r1");
-  // Stop with a run id keeps the run in place.
+  // Skip with a run id archives the run. Skip replaced Stop, and Skip
+  // no longer holds the run in place.
   await fresh("t-push-6");
-  await Deno.mkdir(runDir, { recursive: true });
+  const runDir2 = root + "/state/share/runs/r2";
+  await Deno.mkdir(runDir2, { recursive: true });
   await Deno.writeTextFile(
-    runDir + "/meta.json",
+    runDir2 + "/meta.json",
     JSON.stringify({
-      id: "r1",
+      id: "r2",
       label: "test",
       createdAt: "2026-01-06",
       platforms: ["zepto"],
@@ -270,12 +272,21 @@ Deno.test("full push through a run id archives the run", async () => {
       status: "assigned",
     }),
   );
-  await prepareSource("t-push-6", "Assigned run id", "r1", "");
+  await Deno.writeTextFile(runDir2 + "/output.json", JSON.stringify(doc()));
+  const src2 = await prepareSource("t-push-6", "Assigned run id", "r2", "");
+  assert(src2.ok, "run id resolves");
   await prepareSplitwise("t-push-6", fakeApi().api);
   applyCutoff("t-push-6", "2026-01-06");
-  const stopRun = await executePush("t-push-6", { o1: "Stop" });
-  assert(stopRun.ok, "stopped run ok");
-  assert(pushSessionFor("t-push-6").outcome!.archived === false, "no archive on stop");
+  const skipRun = await executePush("t-push-6", { o1: "Skip" });
+  assert(skipRun.ok, "skipped run ok");
+  assert(pushSessionFor("t-push-6").outcome!.archived === true, "skip archives the run");
+  let liveGone2 = false;
+  try {
+    await Deno.stat(runDir2);
+  } catch {
+    liveGone2 = true;
+  }
+  assert(liveGone2, "live run dir removed on skip");
 });
 
 // Fake API where two members share the first name Bob.
@@ -363,7 +374,10 @@ Deno.test("unique first name maps straight away with no pick", async () => {
   assert(sw.ok, "setup finishes with no name pick");
   assert(pushSessionFor("t-push-9").nameMap.get("Ann") === 1, "Ann maps by unique first name");
   assert(pushSessionFor("t-push-9").nameMap.get("Bob") === 2, "Bob maps by unique first name");
-  assert(pushSessionFor("t-push-9").signedInAs === "Ann Jones", "signed in name keeps the last name");
+  assert(
+    pushSessionFor("t-push-9").signedInAs === "Ann Jones",
+    "signed in name keeps the last name",
+  );
 });
 
 // Helpers to pull nodes out of a step by kind.
@@ -633,7 +647,9 @@ Deno.test("cutoff step prefills the newest order date and keeps typed values", a
   await prepareSource("t-push-17", "Split JSON file", "", SPLIT_FILE);
   const entries = pushSteps();
   const cutoff = entries
-    .map((entry) => (typeof entry === "function" ? entry(new Map(), { sessionId: "t-push-17" }) : entry))
+    .map((
+      entry,
+    ) => (typeof entry === "function" ? entry(new Map(), { sessionId: "t-push-17" }) : entry))
     .find((s) => s.id === "push-cutoff");
   assert(cutoff !== undefined, "cutoff step exists in pushSteps");
   const texts = textNodes(cutoff!);
@@ -642,13 +658,17 @@ Deno.test("cutoff step prefills the newest order date and keeps typed values", a
   // A typed value wins over the prefill.
   const cutoff2 = entries
     .map((entry) =>
-      typeof entry === "function" ? entry(new Map([["cutoff", ["2026-01-02"]]]), { sessionId: "t-push-17" }) : entry
+      typeof entry === "function"
+        ? entry(new Map([["cutoff", ["2026-01-02"]]]), { sessionId: "t-push-17" })
+        : entry
     )
     .find((s) => s.id === "push-cutoff");
   const texts2 = textNodes(cutoff2!);
   assert(texts2[0].value === "2026-01-02", "typed cutoff wins over the prefill");
   // The step order matches the forward path.
-  const ids = entries.map((entry) => typeof entry === "function" ? entry(new Map(), { sessionId: "t-push-17" }).id : entry.id);
+  const ids = entries.map((entry) =>
+    typeof entry === "function" ? entry(new Map(), { sessionId: "t-push-17" }).id : entry.id
+  );
   assert(
     JSON.stringify(ids) ===
       JSON.stringify([
@@ -715,7 +735,9 @@ Deno.test("confirm screen shows the summary text when orders are staged", async 
   assert(found !== undefined, "confirm step exists in pushSteps");
   const body = markdownTexts(found!).join("\n");
   assert(body.includes("Read this summary before you push."), "heading names the summary");
-  assert(body.includes("Summary expense"), "summary text shows on the confirm screen");
+  const boxes = copyableNodes(found!);
+  assert(boxes.length === 1, "one copyable summary shows");
+  assert(boxes[0].text.includes("Summary expense"), "summary text shows in the copyable box");
 });
 
 // Prove the confirm screen hides the summary when no orders arrive.
@@ -744,6 +766,16 @@ function tableNodes(step: { nodes: { kind: string }[] }) {
   }[];
 }
 
+// Helpers to pull copyable nodes out of a step.
+function copyableNodes(step: { nodes: { kind: string }[] }) {
+  return step.nodes.filter((n) => n.kind === "copyable") as {
+    kind: string;
+    label: string;
+    name: string;
+    text: string;
+  }[];
+}
+
 // Stage two orders and return the confirm step for one session.
 async function confirmStepFor(sid: string, cutoff: string) {
   await prepareSource(sid, "Split JSON file", "", SPLIT_FILE);
@@ -751,53 +783,84 @@ async function confirmStepFor(sid: string, cutoff: string) {
   applyCutoff(sid, cutoff);
   const entries = pushSteps();
   const found = entries
-    .map((entry) =>
-      typeof entry === "function" ? entry(new Map(), { sessionId: sid }) : entry
-    )
+    .map((entry) => typeof entry === "function" ? entry(new Map(), { sessionId: sid }) : entry)
     .find((s) => s.id === "push-confirm");
   assert(found !== undefined, "confirm step exists in pushSteps");
   return found!;
 }
 
-// Prove the confirm screen lists every staged order in one table.
-Deno.test("confirm screen lists every order in one table", async () => {
+// Prove the confirm screen holds the summary in a copyable node, with no table.
+Deno.test("confirm screen holds the summary in a copyable node", async () => {
   await fresh("t-push-confirm-4");
   const found = await confirmStepFor("t-push-confirm-4", "2026-01-02");
-  const tables = tableNodes(found);
-  assert(tables.length === 1, "one expense table shows");
-  assert(tables[0].label === "Expenses to send", "table names the expenses to send");
+  assert(tableNodes(found).length === 0, "no expense table shows");
   const body = markdownTexts(found).join("\n");
-  assert(body.includes("These are the expenses that will be sent."), "line names the table");
-  const groups = pushSessionFor("t-push-confirm-4").groups;
-  assert(tables[0].rows.length === groups.length, "one row per order");
-  assert(tables[0].rows.length === 2, "two kept orders give two rows");
-  const cells = tables[0].rows.map((row) => row.join(" ")).join("\n");
-  assert(cells.includes("2026-01-01"), "first order date shows");
-  assert(cells.includes("2026-01-02"), "second order date shows");
-  assert(cells.includes("INR 100.00"), "first order total shows");
-  assert(cells.includes("INR 50.00"), "second order total shows");
+  assert(body.includes("Read this summary before you push."), "line names the summary");
+  const boxes = copyableNodes(found);
+  assert(boxes.length === 1, "one copyable summary shows");
+  assert(boxes[0].label === "Summary", "box names the summary");
+  assert(boxes[0].name === "push-summary", "box uses the push-summary field");
+  assert(boxes[0].text.includes("Summary expense"), "box holds the summary text");
 });
 
-// Prove each row carries the per person amounts under the right columns.
-Deno.test("confirm table puts each share under the right person", async () => {
-  await fresh("t-push-confirm-5");
-  const found = await confirmStepFor("t-push-confirm-5", "2026-01-02");
-  const tables = tableNodes(found);
-  assert(tables.length === 1, "one expense table shows");
-  const headings = tables[0].columns.map((col) => col.heading);
-  assert(
-    JSON.stringify(headings) === JSON.stringify(["Date", "Description", "Total", "Ann", "Bob"]),
-    "columns name the date, the description, the total, then each person",
+// Prove a radio label names the goods and the total.
+Deno.test("confirm radio label names the goods and the total", async () => {
+  await fresh("t-push-confirm-7");
+  const found = await confirmStepFor("t-push-confirm-7", "2026-01-02");
+  const first = radioByName(found, "order-o1");
+  assert(first !== undefined, "first order radio shows");
+  const label = String((first as unknown as Record<string, unknown>)["label"] ?? "");
+  assert(label.includes("Milk"), "label names the goods");
+  assert(label.includes("INR 100.00"), "label names the total");
+});
+
+// Prove an order of fee rows alone falls back to the order id and total.
+Deno.test("confirm radio falls back to the order id for fee rows alone", async () => {
+  await fresh("t-push-confirm-8");
+  const feeFile = root + "/output-fee.json";
+  await Deno.writeTextFile(
+    feeFile,
+    JSON.stringify({
+      split_at: "2026-01-06T09:00:00Z",
+      people: ["Ann", "Bob"],
+      splits: [line("[Delivery fee]", "ofee", "2026-01-01T10:00:00", 30, 15, 15)],
+      totals: { Ann: 15, Bob: 15 },
+      settlements: [{ from: "Bob", to: "Ann", amount: 15 }],
+    }),
   );
-  const ann = headings.indexOf("Ann");
-  const bob = headings.indexOf("Bob");
-  const first = tables[0].rows.find((row) => row[0] === "2026-01-01");
-  const second = tables[0].rows.find((row) => row[0] === "2026-01-02");
-  assert(first !== undefined && second !== undefined, "both order rows exist");
-  assert(first![ann] === "INR 60.00", "Ann share of the first order shows");
-  assert(first![bob] === "INR 40.00", "Bob share of the first order shows");
-  assert(second![ann] === "INR 25.00", "Ann share of the second order shows");
-  assert(second![bob] === "INR 25.00", "Bob share of the second order shows");
+  await prepareSource("t-push-confirm-8", "Split JSON file", "", feeFile);
+  await prepareSplitwise("t-push-confirm-8", fakeApi().api);
+  const entries = pushSteps();
+  const found = entries
+    .map((entry) =>
+      typeof entry === "function" ? entry(new Map(), { sessionId: "t-push-confirm-8" }) : entry
+    )
+    .find((s) => s.id === "push-confirm");
+  assert(found !== undefined, "confirm step exists in pushSteps");
+  const feeRadio = radioByName(found!, "order-ofee");
+  assert(feeRadio !== undefined, "fee order radio shows");
+  const label = String((feeRadio as unknown as Record<string, unknown>)["label"] ?? "");
+  assert(label === "Order ofee — INR 30.00", "fee order falls back to the order id and total");
+});
+
+// Prove each order radio offers Push and Skip alone.
+Deno.test("confirm radio offers Push and Skip alone", async () => {
+  await fresh("t-push-confirm-9");
+  const found = await confirmStepFor("t-push-confirm-9", "2026-01-02");
+  const radios = found.nodes.filter((n) => n.kind === "radio");
+  assert(radios.length === 2, "one radio per kept order");
+  for (const node of radios) {
+    const values = ((node as unknown as Record<string, unknown>)["options"] as Array<
+      Record<string, unknown>
+    >).map((o) => String(o["value"] ?? o));
+    assert(
+      JSON.stringify(values) === JSON.stringify(["Push", "Skip"]),
+      "radio offers Push and Skip alone",
+    );
+  }
+  const note = String((found as unknown as Record<string, unknown>)["note"] ?? "");
+  assert(note.includes("Push") && note.includes("Skip"), "note names Push and Skip");
+  assert(!note.includes("Stop"), "note drops Stop");
 });
 
 // Prove the confirm screen with no orders shows no table.
@@ -811,7 +874,10 @@ Deno.test("confirm screen with no orders shows no table", async () => {
     .find((s) => s.id === "push-confirm");
   assert(found !== undefined, "confirm step exists in pushSteps");
   assert(tableNodes(found!).length === 0, "no table without orders");
-  assert(markdownTexts(found!).join("\n").includes("No orders reached this step."), "empty note stays");
+  assert(
+    markdownTexts(found!).join("\n").includes("No orders reached this step."),
+    "empty note stays",
+  );
 });
 // Prove the confirm screen writes no file beside the source.
 Deno.test("confirm screen writes no file beside the source", async () => {
@@ -833,7 +899,110 @@ Deno.test("confirm screen writes no file beside the source", async () => {
     )
     .find((s) => s.id === "push-confirm");
   assert(found !== undefined, "confirm step exists in pushSteps");
-  assert(markdownTexts(found!).join("\n").includes("Summary expense"), "summary renders first");
+  const boxes = copyableNodes(found!);
+  assert(boxes.length === 1, "one copyable summary shows");
+  assert(boxes[0].text.includes("Summary expense"), "summary renders in the copyable box");
   const after = await listNames(root);
   assert(JSON.stringify(after) === JSON.stringify(before), "no new file appears");
+});
+
+// A valid key file reaches live mode with no api override. The stub
+// fetch stands in for the Splitwise network calls.
+Deno.test("valid key file reaches live mode without an override", async () => {
+  await fresh("t-push-key");
+  await prepareSource("t-push-key", "Split JSON file", "", SPLIT_FILE);
+  const envPath = splitwiseEnvPath();
+  await Deno.mkdir(envPath.slice(0, envPath.lastIndexOf("/")), { recursive: true });
+  await Deno.writeTextFile(envPath, "API_KEY=test-key-123\n");
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = ((url: string | URL | Request) => {
+    const text = String(url);
+    if (text.includes("get_current_user")) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ user: { first_name: "Ann", last_name: "", id: 1 } }), {
+          status: 200,
+        }),
+      );
+    }
+    if (text.includes("get_friends")) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ friends: [{ first_name: "Bob", last_name: "", id: 2 }] }), {
+          status: 200,
+        }),
+      );
+    }
+    return Promise.resolve(
+      new Response(JSON.stringify({ groups: [{ name: "Trip", id: 7 }] }), { status: 200 }),
+    );
+  }) as typeof fetch;
+  try {
+    const sw = await prepareSplitwise("t-push-key");
+    assert(sw.ok, "key file prepares");
+    assert(pushSessionFor("t-push-key").mode === "live", "live mode");
+    assert(pushSessionFor("t-push-key").signedInAs === "Ann", "signed in as Ann");
+    assert(pushSessionFor("t-push-key").nameMap.get("Bob") === 2, "Bob mapped by first name");
+  } finally {
+    globalThis.fetch = realFetch;
+    await Deno.remove(envPath);
+  }
+});
+
+// Prove every order radio arrives picked as Push.
+Deno.test("confirm order radios arrive picked as Push", async () => {
+  await fresh("t-push-confirm-pick");
+  const found = await confirmStepFor("t-push-confirm-pick", "2026-01-02");
+  const radios = found.nodes.filter((n) => n.kind === "radio");
+  assert(radios.length === 2, "one radio per kept order");
+  for (const node of radios) {
+    const picked = String((node as unknown as Record<string, unknown>)["picked"] ?? "");
+    assert(picked === "Push", "radio arrives picked as Push");
+  }
+});
+
+// Prove a prior posted Skip survives a re-render.
+Deno.test("confirm order radio keeps a prior Skip choice", async () => {
+  await fresh("t-push-confirm-prior");
+  await prepareSource("t-push-confirm-prior", "Split JSON file", "", SPLIT_FILE);
+  await prepareSplitwise("t-push-confirm-prior", fakeApi().api);
+  applyCutoff("t-push-confirm-prior", "2026-01-02");
+  const prior = new Map([["order-o1", ["Skip"]]]);
+  const entries = pushSteps();
+  const found = entries
+    .map((entry) =>
+      typeof entry === "function" ? entry(prior, { sessionId: "t-push-confirm-prior" }) : entry
+    )
+    .find((s) => s.id === "push-confirm");
+  assert(found !== undefined, "confirm step exists in pushSteps");
+  const first = radioByName(found!, "order-o1");
+  assert(first !== undefined, "first order radio shows");
+  assert((first as unknown as Record<string, unknown>)["picked"] === "Skip", "prior Skip survives");
+  const second = radioByName(found!, "order-o2");
+  assert(
+    (second as unknown as Record<string, unknown>)["picked"] === "Push",
+    "unpicked radio stays Push",
+  );
+});
+
+// Prove the radio hint names each person and their amount for that order.
+Deno.test("confirm order radio hint names each person and amount", async () => {
+  await fresh("t-push-confirm-hint");
+  await prepareSource("t-push-confirm-hint", "Split JSON file", "", SPLIT_FILE);
+  await prepareSplitwise("t-push-confirm-hint", fakeApi().api);
+  applyCutoff("t-push-confirm-hint", "");
+  const entries = pushSteps();
+  const found = entries
+    .map((entry) =>
+      typeof entry === "function" ? entry(new Map(), { sessionId: "t-push-confirm-hint" }) : entry
+    )
+    .find((s) => s.id === "push-confirm");
+  assert(found !== undefined, "confirm step exists in pushSteps");
+  const first = radioByName(found!, "order-o1") as unknown as Record<string, unknown>;
+  assert(first !== undefined, "first order radio shows");
+  const hint = String(first["hint"] ?? "");
+  assert(hint.includes("Ann 60.00"), "hint names Ann and her amount");
+  assert(hint.includes("Bob 40.00"), "hint names Bob and his amount");
+  const third = radioByName(found!, "order-o3") as unknown as Record<string, unknown>;
+  assert(third !== undefined, "third order radio shows");
+  const zeroHint = String(third["hint"] ?? "");
+  assert(zeroHint.includes("Bob 0.00"), "hint names a person who owes nothing");
 });

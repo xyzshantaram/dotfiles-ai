@@ -49,6 +49,7 @@ export interface RadioNode {
   name: string;
   options: WizardOption[];
   picked?: string;
+  hint?: string;
   error?: string;
 }
 
@@ -177,6 +178,10 @@ export interface CopyableNode {
   label: string;
   name: string;
   text: string;
+  // Fixed width text, such as an aligned report. Renders monospace.
+  mono?: boolean;
+  // Visible line count. Defaults to 4, which suits a short message.
+  rows?: number;
   error?: string;
 }
 
@@ -451,6 +456,9 @@ function validateProgress(node: ProgressNode, tag: string): string[] {
 function validateRadio(node: RadioNode, tag: string): string[] {
   const { errors, ok } = validateOptionsPrologue(node, tag, true);
   if (!ok) return errors;
+  if (node.hint !== undefined && typeof node.hint !== "string") {
+    errors.push(tag + ": hint must be text");
+  }
   if (
     node.picked !== undefined &&
     !node.options.some((option) => optionValue(option) === node.picked)
@@ -844,6 +852,12 @@ function validateCopyable(node: CopyableNode, tag: string): string[] {
   if (!isTitle(node.label)) errors.push(tag + ": label must be non-blank");
   if (!isTitle(node.name)) errors.push(tag + ": name must be non-blank");
   if (typeof node.text !== "string") errors.push(tag + ": text must be text");
+  if (node.mono !== undefined && typeof node.mono !== "boolean") {
+    errors.push(tag + ": mono must be true or false");
+  }
+  if (node.rows !== undefined && (typeof node.rows !== "number" || node.rows < 1)) {
+    errors.push(tag + ": rows must be a positive number");
+  }
   return errors;
 }
 
@@ -998,8 +1012,9 @@ export function radio(
   name: string,
   options: WizardOption[],
   picked?: string,
+  hint?: string,
 ): RadioNode {
-  return omitUndefined({ kind: "radio", label, name, options, picked });
+  return omitUndefined({ kind: "radio", label, name, options, picked, hint });
 }
 
 export function checkbox(
@@ -1127,8 +1142,16 @@ export function copyable(
   label: string,
   name: string,
   text: string,
+  opts?: { mono?: boolean; rows?: number },
 ): CopyableNode {
-  return { kind: "copyable", label, name, text };
+  return omitUndefined({
+    kind: "copyable",
+    label,
+    name,
+    text,
+    mono: opts?.mono,
+    rows: opts?.rows,
+  }) as CopyableNode;
 }
 
 export interface NavGoto {

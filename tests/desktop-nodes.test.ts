@@ -1472,6 +1472,37 @@ Deno.test("copyable renders a read only textarea plus a Copy button", () => {
   assert(validateStep(st).length === 0, "good copyable passes");
 });
 
+Deno.test("copyable stays plain and four rows with no options", () => {
+  // Build a copyable node with no options.
+  const node = copyable("Share link", "link", "x");
+  assert(node.mono === undefined, "mono stays absent");
+  assert(node.rows === undefined, "rows stays absent");
+  const html = renderNode(node);
+  assert(html.includes('rows="4"'), "default box shows four rows");
+  assert(!html.includes("copyable-mono"), "default box stays proportional");
+});
+
+Deno.test("copyable carries the mono class and the asked row count", () => {
+  // Build a fixed width box for an aligned report.
+  const html = renderNode(
+    copyable("Summary", "sum", "a\nb", { mono: true, rows: 12 }),
+  );
+  assert(html.includes("copyable-mono"), "mono box names the mono class");
+  assert(html.includes('rows="12"'), "box shows the asked row count");
+});
+
+Deno.test("copyable rejects a row count below one", () => {
+  // Ask for zero rows, which renders nothing readable.
+  const st = step("s1", "Sample", [
+    copyable("Summary", "sum", "x", { rows: 0 }),
+  ]);
+  const errors = validateStep(st);
+  assert(
+    errors.length > 0 && namesKind(errors, "copyable"),
+    "bad row count names copyable",
+  );
+});
+
 Deno.test("copyable rejects a blank name", () => {
   // Blank the field name.
   const st = step("s1", "Sample", [copyable("Share link", "  ", "x")]);
@@ -1600,11 +1631,12 @@ Deno.test("plain action shows its label once", () => {
 });
 
 Deno.test("confirm action keeps its heading", () => {
-  // Render a confirm action and check its heading.
+  // Render a confirm action and check its label line.
   const html = renderNode(
     action("Wipe cache", "wipe", ["rm", "-rf"], "now", undefined, "Wipe all cached files?"),
   );
-  assert(html.includes("<h3>Wipe cache</h3>"), "confirm heading keeps the label");
+  assert(html.includes('<p class="node-label">Wipe cache</p>'), "confirm label keeps the text");
+  assert(!html.includes("<h3>"), "confirm label uses no heading");
 });
 
 Deno.test("tabs with a chosen index mark only that tab active", () => {
@@ -2375,6 +2407,21 @@ Deno.test("an empty input label draws no heading", () => {
   if (!html.includes('name="usage"')) throw new Error("radio missing");
 });
 
+// A slow step, such as a push of 38 orders, took 26 seconds with no sign
+// on screen. The form must say it is working and must refuse a second
+// press, because two pushes at once would send every expense twice.
+Deno.test("a step form shows a busy line and disables its buttons while it posts", () => {
+  const html = renderStepFragment({
+    ...step("one", "Pick one", [radio("Choice", "c", ["A", "B"])]),
+    nav: { back: true, next: "Next" },
+  });
+  if (!html.includes('hx-disabled-elt="find wa-button"')) {
+    throw new Error("form does not disable its buttons during a post");
+  }
+  if (!html.includes('class="wiz-busy"')) throw new Error("nav carries no busy line");
+  if (!html.includes("Working")) throw new Error("busy line names no state");
+});
+
 Deno.test("a whitespace input label is still an error", () => {
   const problems = validateStep(
     step("one", "Pick one", [radio("   ", "usage", ["A", "B"])]),
@@ -2840,4 +2887,29 @@ Deno.test("app scripts render as module tags after toolkit scripts", async () =>
   const plain = await (await bare(new Request("http://local/"))).text();
   assert(!plain.includes("/app/one.js"), "bare wizard omits the first path");
   assert(!plain.includes("/app/two.js"), "bare wizard omits the second path");
+});
+
+Deno.test("node label renders as plain text not a heading", () => {
+  // Render one radio and check its label line.
+  const html = renderNode(radio("Fee", "fee", ["Equal", "Skip"]));
+  assert(html.includes('<p class="node-label">Fee</p>'), "label keeps its class");
+  assert(!html.includes("<h3>"), "label uses no heading");
+});
+
+Deno.test("radio hint renders one muted line when present", () => {
+  // Render one radio with a hint and one without.
+  const withHint = renderNode(radio("Fee", "fee", ["Equal", "Skip"], "Equal", "Ann 60.00"));
+  assert(withHint.includes("node-hint"), "hint keeps its class");
+  assert(withHint.includes("Ann 60.00"), "hint keeps its text");
+  const plain = renderNode(radio("Fee", "fee", ["Equal", "Skip"]));
+  assert(!plain.includes("node-hint"), "absent hint renders no line");
+});
+
+Deno.test("validation rejects a radio with a non-text hint", () => {
+  // Feed a number where text belongs.
+  const node = radio("Fee", "fee", ["Equal", "Skip"]);
+  (node as unknown as { hint: number }).hint = 42;
+  const errors = validateStep(step("s1", "Sample", [node]));
+  assert(errors.length > 0 && namesKind(errors, "radio"), "hint error names radio");
+  assert(errors.some((item) => item.includes("hint")), "error names the hint field");
 });

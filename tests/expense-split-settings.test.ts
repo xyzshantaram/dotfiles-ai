@@ -3,11 +3,7 @@
 // and accepts real ISO 4217 codes only.
 
 import { startUsageNext } from "../wizards/expense-split.ts";
-import {
-  settingsNext,
-  settingsReset,
-  settingsSteps,
-} from "../wizards/expense-split/settings.ts";
+import { settingsNext, settingsReset, settingsSteps } from "../wizards/expense-split/settings.ts";
 import { loadSettings, saveSettings } from "../src/settings.ts";
 
 // Fail the test when a condition misses.
@@ -239,7 +235,7 @@ Deno.test("settings screen declares its bar", () => {
   const actions = nav.actions ?? [];
   assert(actions.length === 2, "bar holds both tab actions");
   assert(actions[0].id === "connect", "first action keeps its id");
-  assert(actions[0].label === "Save keys and connect", "first action keeps its label");
+  assert(actions[0].label === "Save key and connect", "first action keeps its label");
   assert(typeof actions[0].run === "function", "first action keeps its run");
   assert(actions[1].id === "reset", "second action keeps its id");
   assert(actions[1].label === "Factory reset", "second action keeps its label");

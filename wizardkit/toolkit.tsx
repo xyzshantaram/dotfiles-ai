@@ -80,11 +80,15 @@ function Shell(props: {
   kind: string;
   label: string;
   error?: string;
+  hint?: string;
   children?: ComponentChildren;
 }) {
   return (
     <section class={"node node-" + props.kind}>
-      {props.label !== "" ? <h3>{props.label}</h3> : null}
+      {props.label !== "" ? <p class="node-label">{props.label}</p> : null}
+      {props.hint !== undefined && props.hint !== ""
+        ? <small class="node-hint">{props.hint}</small>
+        : null}
       {props.children}
       <ErrorLine error={props.error} />
     </section>
@@ -219,7 +223,7 @@ function RadioView(props: { node: RadioNode }) {
   // it carries the name and the picked value. Children stay nameless;
   // the group syncs the selection down from its value.
   return (
-    <Shell kind="radio" label={node.label} error={node.error}>
+    <Shell kind="radio" label={node.label} error={node.error} hint={node.hint}>
       <wa-radio-group name={node.name} value={node.picked ?? ""}>
         {node.options.map((option) => (
           <wa-radio value={optionValue(option)}>
@@ -510,17 +514,15 @@ function TableView(props: { node: TableNode }) {
 // Escape open brackets so a close tag inside data never ends the island early.
 function MountView(props: { node: MountNode }) {
   const node = props.node;
-  const island = node.data === undefined
-    ? null
-    : (
-      <script
-        type="application/json"
-        data-mount-data={node.id}
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify(node.data).replace(/</g, "\\u003c"),
-        }}
-      />
-    );
+  const island = node.data === undefined ? null : (
+    <script
+      type="application/json"
+      data-mount-data={node.id}
+      dangerouslySetInnerHTML={{
+        __html: JSON.stringify(node.data).replace(/</g, "\\u003c"),
+      }}
+    />
+  );
   return (
     <Shell kind="mount" label={node.label ?? ""}>
       <div class="wiz-mount" data-mount={node.id} />
@@ -611,10 +613,10 @@ function CopyableView(props: { node: CopyableNode }) {
     <Shell kind="copyable" label={node.label} error={node.error}>
       <div class="copyable-row" data-copyable={node.name}>
         <textarea
-          class="copyable-text"
+          class={node.mono === true ? "copyable-text copyable-mono" : "copyable-text"}
           name={node.name}
           readOnly
-          rows={4}
+          rows={node.rows ?? 4}
         >
           {node.text}
         </textarea>
@@ -797,6 +799,7 @@ function NavBar(props: { nav: StepNav }) {
             {item.label}
           </wa-button>
         ))}
+        <span class="wiz-busy" role="status">Working…</span>
       </div>
       <div class="wiz-nav-fwd">
         {fwdAction !== ""
@@ -835,6 +838,7 @@ export function renderStepFragment(input: Step): string {
         hx-post="/step"
         hx-target="#step"
         hx-swap="outerHTML"
+        hx-disabled-elt="find wa-button"
       >
         <input type="hidden" name="step" value={input.id} />
         {input.nodes.map((node, i) => <NodeView key={i} node={node} />)}
@@ -2342,7 +2346,13 @@ export function createWizard(
       const command = node?.command ?? opts.actions?.[id]?.command;
       if (command === undefined) {
         return html(
-          renderPage(opts.title, renderToString(<p>Unknown action.</p>), undefined, undefined, opts.scripts),
+          renderPage(
+            opts.title,
+            renderToString(<p>Unknown action.</p>),
+            undefined,
+            undefined,
+            opts.scripts,
+          ),
         );
       }
       if (node?.run === "onConfirm") {

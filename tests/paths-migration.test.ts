@@ -1,14 +1,16 @@
-// Migration proof for the single state root. A token saved under the
-// old cache dir moves forward to the config dir on first read.
-import { loadToken } from "../src/splitwise.ts";
-import { tokenFilePath } from "../src/paths.ts";
+// Migration proof for the single state root. A fingerprint file saved
+// under the old cache dir moves forward to the config dir on first
+// read. Ticket A1 retargeted this from the OAuth1 token file, which no
+// longer exists, to the pushed file, which still migrates.
+import { loadPushed } from "../src/splitwise.ts";
+import { pushedFilePath } from "../src/paths.ts";
 
 // Fail the test when a condition misses.
 function assert(cond: boolean, msg: string): void {
   if (!cond) throw new Error("assert failed: " + msg);
 }
 
-Deno.test("legacy token file moves forward to the state root", async () => {
+Deno.test("legacy pushed file moves forward to the state root", async () => {
   const savedHome = Deno.env.get("HOME");
   const savedState = Deno.env.get("SPLIT_UTILS_STATE");
   const home = await Deno.makeTempDir({ prefix: "paths-home-" });
@@ -16,21 +18,13 @@ Deno.test("legacy token file moves forward to the state root", async () => {
   try {
     Deno.env.set("HOME", home);
     Deno.env.set("SPLIT_UTILS_STATE", root);
-    const oldPath = home + "/.cache/ordersplit/splitwise_token.json";
+    const oldPath = home + "/.cache/ordersplit/splitwise_pushed.json";
     await Deno.mkdir(oldPath.slice(0, oldPath.lastIndexOf("/")), { recursive: true });
-    const cache = {
-      consumer_key: "key",
-      consumer_secret: "secret",
-      access_token: { oauth_token: "token-one", oauth_token_secret: "secret-one" },
-    };
-    await Deno.writeTextFile(oldPath, JSON.stringify(cache, null, 2));
-    const token = await loadToken();
-    assert(token !== null, "token loads from the old path");
-    assert(token!.oauth_token === "token-one", "token value matches");
-    assert(token!.oauth_token_secret === "secret-one", "token secret matches");
-    const fresh = JSON.parse(await Deno.readTextFile(tokenFilePath()));
-    assert(fresh.access_token.oauth_token === "token-one", "new path holds the token");
-    assert(fresh.access_token.oauth_token_secret === "secret-one", "new path holds the secret");
+    await Deno.writeTextFile(oldPath, JSON.stringify({ pushed: { "fp-one": 4242 } }, null, 2));
+    const pushed = await loadPushed();
+    assert(pushed["fp-one"] === 4242, "fingerprint loads from the old path");
+    const fresh = JSON.parse(await Deno.readTextFile(pushedFilePath()));
+    assert(fresh.pushed["fp-one"] === 4242, "new path holds the fingerprint");
   } finally {
     if (savedHome === undefined) Deno.env.delete("HOME");
     else Deno.env.set("HOME", savedHome);

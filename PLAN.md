@@ -35,31 +35,27 @@ skip and number keys for the split modes; the component replaces the server rend
 rather than standing beside it; the component lives in the app, never in wizardkit, and only the
 pattern goes in the wizard skill.
 
-- [ ] V1 the toolkit gains a door for an app component. Add a `mount` node holding an id, an
-      optional label and optional data, which renders an empty element plus a JSON island beside it.
-      Add a `scripts` list to the wizard options, rendered as module script tags after the toolkit
-      scripts. The toolkit never handles app markup, only an element to fill and a path to include.
-      Eval: a page with a mount node carries the element and the island, a page with a script list
-      carries the tags in order, and validateStep rejects a mount with no id.
-- [ ] V2 the app serves its own component file and patch endpoint. Wrap the server so the app
-      answers its own paths before the wizard sees them: one path serves the component file, and one
-      accepts a patch of assignments and skips for a run. The patch applies through the existing
-      split state writer, so the conflict guard and the baseline rules still hold. Eval: a patch
-      post writes the named assignments, a patch naming an unknown run answers a plain error, and no
-      patch writes a conflict copy in a single session.
-- [ ] V3 the split board itself, in plain browser JavaScript with no build step. It reads the
-      island, shows one item, moves both ways, binds the settled keys, ticks people, sets modes,
-      skips, and posts changed items on a timer and on leaving. It shows where it is in the run and
-      what is left. Eval: a 137 item run walks forward and backward with the keyboard alone, a
-      reload after a checkpoint keeps every assignment, and the item shown matches the item the keys
-      act on.
-- [ ] V4 retire the server rendered item screen. The step renders the mount node and nothing else,
-      the old builder and its helpers go, and every test that drove the old screen moves to the new
-      contract. Eval: no step builds per item nodes, and the suite is green with the old tests
-      replaced rather than deleted.
+V1 to V4 have landed. What is left of the series:
+
 - [ ] V5 record the pattern in wizard/SKILL.md. State when a wizard should reach for a component,
       how the mount node and the script list work, and the checkpoint rule that keeps the server the
       owner of the file. Eval: a reader with only the skill can build a component of their own.
+
+### A series: the Splitwise API key replaces the OAuth handshake
+
+Settled with the user on 2026-09-17. The push flow dies at the verifier swap with a 401 that reads
+`Invalid API Request: you are not logged in`. I claimed Splitwise had withdrawn OAuth 1. That claim
+was wrong. The user reports the Python pusher completes the same flow, and the API reference lists
+`OAuth ApiKeyAuth` on every endpoint, so both schemes are live and the cause of the 401 stays
+unknown. The user chose the API key anyway, because this app runs on one personal machine.
+
+Settled decisions, which no ticket may revisit: the API key replaces OAuth 1 outright, so the
+authorize screen, the verifier screen, the token cache and the `oauth` dependency all go. The key
+lives in the same 0600 file as the old pair, `<state>/config/splitwise.env`, under `API_KEY`. The
+connect step verifies the key at once with `get_current_user` and shows the account name, so a bad
+key fails on the settings screen and not halfway through a push.
+
+A1 to A4 have landed. The series is closed.
 
 ### Final gate, after every ticket above is closed
 
@@ -124,8 +120,36 @@ later, and the next app does not pay the same cost.
 - State paths all resolve through src/paths.ts and honour `SPLIT_UTILS_STATE`. Token and login state
   reads keep two fixed repo paths on purpose, as the later entries of a migration chain.
 - Splitwise facts (verified Sep 2026): app registration at secure.splitwise.com/apps is free and
-  yields a consumer key plus consumer secret. Free accounts cap at a few expenses a day, so a full
-  push needs Pro on one group account.
+  yields a personal API key. Free accounts cap at a few expenses a day, so a full push needs Pro on
+  one group account.
+- Splitwise auth is a personal API key sent as `Authorization: Bearer`, saved as `API_KEY` in
+  `<state>/config/splitwise.env` at mode 0600. The app used OAuth 1 until 2026-09-17 and the swap
+  happened because this app runs on one personal machine. Splitwise did NOT withdraw OAuth 1. I
+  claimed it had, on a web search, and the user corrected me: the Python pusher completes the same
+  handshake, and the API reference lists `OAuth ApiKeyAuth` on every endpoint. The 401 that started
+  this still has no known cause. `Invalid API Request: you are not logged in` is the generic reply
+  for any credential Splitwise does not accept, and a wrong API key returns exactly the same body.
+- The expense description names the goods, not the clock: `itemSummary` gives five tidied product
+  names plus a `+N more` tail, then the platform in brackets. Fee only orders fall back to the old
+  dated title. The date and time moved to the first line of the expense comment. This is safe
+  because `orderFingerprint` keys on platform, order id, date and total, never on the title.
+- Never render the aggregate summary through markdown. It is fixed width plain text, and its `====`
+  and `----` rules are read as setext heading underlines, which turned the whole block into giant
+  headings on 2026-09-17. It renders through `copyable` with `mono` set.
+- A slow step must say it is working. The push of 38 orders took 26 seconds of silence on
+  2026-09-17, which read as a dead button and nearly caused a second press. The step form now
+  carries `hx-disabled-elt="find wa-button"` and a `.wiz-busy` line that htmx reveals through the
+  `htmx-request` class. The disable matters more than the text: two pushes at once would beat the
+  fingerprint guard, because the guard only reads what the first push already wrote.
+- A node label is not a document heading. It rendered as `<h3>` until 2026-09-17, which shouted on a
+  screen holding 40 order rows. It renders as `p.node-label` at normal size now. The user asked for
+  the fix in wizardkit rather than a per node flag, and a screen that mixed heading labels with
+  plain ones would look broken, so the change covers every node kind.
+- The per order push rows pre-select Push, so a plain Next sends every order that is not already
+  sent. A choice the user already posted always wins over that default on a re-render.
+- The per order push screen offers Push and Skip alone. Stop was a terminal era control that meant
+  "push the orders above this one, then halt". A form shows every order at once, so Skip on the rest
+  says the same thing, and Back leaves without pushing anything.
 - Install grill verdict (author-hosts, reinstall updates, source tags, convention icons, shared
   runtime): one app per script; `deno
       install -g` owns the executable; chromeless comes from
@@ -178,6 +202,14 @@ Every entry here names work that is code complete and green. It counts as done o
 drives the real screen. Restart the server first. A fix cannot reach a process that started before
 it.
 
+- [ ] KEY hand-drive: paste a real Splitwise API key on the Settings Splitwise tab and press Save
+      key and connect. The screen must name the account. This is the one step I cannot prove, since
+      I hold no valid key. I proved the failing half live: a wrong key reaches Splitwise and the
+      screen reports `It answered 401`.
+- [ ] PUSH hand-drive: walk a real push to the confirm screen. Each order must name its goods beside
+      Push and Skip, the summary must sit in a monospace box with no giant headings, and no second
+      table may appear. Check the expense in Splitwise afterwards: the title must name the goods and
+      end with the platform, and the comment must open with the platform and the time.
 - [ ] NAV hand-drive (your smoke test): the user confirmed on 2026-09-17 that the bar stays at the
       foot of the window while a long screen scrolls. What is left to drive by hand: Select all and
       Select none tick and untick without leaving the screen, Next refuses an empty pick list with

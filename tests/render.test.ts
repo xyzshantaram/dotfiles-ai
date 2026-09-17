@@ -1,7 +1,7 @@
 // Tests for the push title builder. Run with deno test.
 // Each case checks one date path from the T15 ticket.
 
-import { formatTitle, renderOrderTree, renderTree } from "../src/render.ts";
+import { buildItemizedComment, formatTitle, renderOrderTree, renderTree } from "../src/render.ts";
 import type { SplitEntry } from "../src/common.ts";
 
 // Throw on a false check with a plain message.
@@ -23,21 +23,21 @@ function oneOrder(date: string): SplitEntry[] {
   }];
 }
 
-Deno.test("formatTitle skips a raw date and keeps merchant plus total", () => {
+Deno.test("formatTitle names the goods when the date misses", () => {
   // Feed a raw string the date parser rejects.
   const title = formatTitle(oneOrder("not-a-date"));
-  // Assert the fallback holds merchant plus total.
-  assert(title === "Swiggy — ₹100.00", "fallback keeps merchant plus total");
+  // Assert the title names the goods with the platform.
+  assert(title === "Biryani [Swiggy]", "bad date still names the goods");
 });
 
-Deno.test("formatTitle keeps the normal shape on a good date", () => {
+Deno.test("formatTitle names the goods on a good date", () => {
   // Feed a date the parser accepts.
   const title = formatTitle(oneOrder("2024-08-14 7:30 PM"));
-  // Assert the normal shape holds date parts.
-  assert(title === "Swiggy order 08-14 7:30 PM", "good date keeps normal title");
+  // Assert the title names the goods with the platform.
+  assert(title === "Biryani [Swiggy]", "good date names the goods");
 });
 
-Deno.test("formatTitle uses the passed currency label", () => {
+Deno.test("formatTitle names the goods and ignores the currency label", () => {
   // Build one order with a total of 490.
   const order: SplitEntry[] = [{
     item: "Biryani",
@@ -49,8 +49,74 @@ Deno.test("formatTitle uses the passed currency label", () => {
   }];
   // Pass the INR label with a trailing space.
   const title = formatTitle(order, "INR ");
-  // Assert the label form holds code plus amount.
-  assert(title === "Swiggy — INR 490.00", "label keeps code plus amount");
+  // Assert the goods title ignores the label.
+  assert(title === "Biryani [Swiggy]", "goods title ignores the label");
+});
+
+Deno.test("formatTitle lists several goods with the platform in brackets", () => {
+  // Build one order with three plain goods.
+  const order: SplitEntry[] = [
+    {
+      item: "Milk",
+      platform: "swiggy",
+      date: "2024-08-14 7:30 PM",
+      price: 60,
+      split_type: "equal",
+      assignments: { Sid: 60 },
+    },
+    {
+      item: "Bread",
+      platform: "swiggy",
+      date: "2024-08-14 7:30 PM",
+      price: 45,
+      split_type: "equal",
+      assignments: { Sid: 45 },
+    },
+    {
+      item: "Eggs",
+      platform: "swiggy",
+      date: "2024-08-14 7:30 PM",
+      price: 80,
+      split_type: "equal",
+      assignments: { Sid: 80 },
+    },
+  ];
+  // Assert the title names each good and ends with the platform.
+  assert(formatTitle(order) === "Milk, Bread, Eggs [Swiggy]", "title lists goods plus platform");
+});
+
+Deno.test("formatTitle falls back to the dated title for fee rows alone", () => {
+  // Build one order holding fee rows alone.
+  const order: SplitEntry[] = [
+    {
+      item: "[Delivery]",
+      platform: "swiggy",
+      date: "2024-08-14 7:30 PM",
+      price: 20,
+      split_type: "equal",
+      assignments: { Sid: 20 },
+    },
+    {
+      item: "[Handling]",
+      platform: "swiggy",
+      date: "2024-08-14 7:30 PM",
+      price: 10,
+      split_type: "equal",
+      assignments: { Sid: 10 },
+    },
+  ];
+  // Assert the fallback keeps the dated shape.
+  assert(formatTitle(order) === "Swiggy order 08-14 7:30 PM", "fee rows keep dated title");
+});
+
+Deno.test("buildItemizedComment opens with the platform and the time", () => {
+  // Feed one goods order with a good date.
+  const comment = buildItemizedComment(oneOrder("2024-08-14 7:30 PM"), ["Sid"]);
+  // Assert the first line names the platform and the time.
+  assert(
+    comment.split("\n")[0] === "Swiggy — 08-14 7:30 PM",
+    "comment opens with platform and time",
+  );
 });
 
 Deno.test("renderOrderTree marks done, current, and collapsed lines", () => {

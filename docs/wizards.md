@@ -118,17 +118,20 @@ no longer exists.
 
 Onboarding owns the "Set up Splitwise access now?" question:
 
-1. Ask whether the user has an API key (from secure.splitwise.com/oauth_clients).
-2. Yes: read the consumer key (visible) and secret (hidden), write them to
-   `<stateRoot>/config/splitwise.env` as `CONSUMER_KEY=` / `CONSUMER_SECRET=` lines (the exact
-   format `loadCredentials` parses), then offer the OAuth handshake immediately: authorize URL opens
-   in the browser, the user pastes the verifier, the token is cached. Confirm by printing the
-   signed-in user's name.
+1. Ask whether the user has a Splitwise API key (from secure.splitwise.com/apps).
+2. Yes: read the key, write it to `<stateRoot>/config/splitwise.env` as an `API_KEY=` line (the
+   exact format `loadCredentials` parses), then check the key at once with `get_current_user` and
+   confirm by printing the signed-in user's name.
 3. No: print the friend-with-premium handoff text (the README section name is fine as a placeholder)
    and stop.
 
-Pusher credential resolution order: `<stateRoot>/config/splitwise.env`, then `SPLITWISE_ENV` env
-var, then fail with a message that points at the main menu's setup question.
+The client sends the key as an `Authorization: Bearer` header. Splitwise also supports OAuth 1, and
+this app used it until 2026-09-17. The key replaced it because this app runs on one personal
+machine, so a per-user key costs less code than a handshake.
+
+Pusher credential resolution: `<stateRoot>/config/splitwise.env` only. A missing file is a supported
+state. The push falls back to aggregate mode instead of failing, because a user with no key still
+settles bills through Summary to copy or Share with a friend.
 
 ## Sharing between friends
 

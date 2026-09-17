@@ -6,7 +6,6 @@ import { createWizard } from "../wizardkit/mod.ts";
 import {
   gatherPickRunId,
   gatherSteps,
-  isLedgerRow,
   manualPicked,
   manualRowProblems,
   manualRows,
@@ -15,8 +14,8 @@ import {
   pickNext,
   pickNone,
   reviewNext,
-  tidyProductName,
 } from "../wizards/expense-split/gather.ts";
+import { isLedgerRow, itemSummary, tidyProductName } from "../src/common.ts";
 import { DEFAULT_LOCATION } from "../src/zomato.ts";
 import { routeStatus, splitSteps } from "../wizards/expense-split/split.ts";
 import { runsDir } from "../src/runstate.ts";
@@ -1375,4 +1374,41 @@ Deno.test("pick next sends the user to the People step after a good tick post", 
     else Deno.env.set("SPLIT_UTILS_STATE", prev);
     await cleanup(root);
   }
+});
+
+// Prove the shared summary names four items with no tail.
+Deno.test("item summary names four items with no tail", () => {
+  const got = itemSummary([
+    { name: "A" },
+    { name: "B" },
+    { name: "C" },
+    { name: "D" },
+  ]);
+  if (got !== "A, B, C, D") throw new Error("summary wrong: " + JSON.stringify(got));
+});
+
+// Prove the shared summary names five items and counts the rest.
+Deno.test("item summary names five items and counts the rest", () => {
+  const got = itemSummary([
+    { name: "A" },
+    { name: "B" },
+    { name: "C" },
+    { name: "D" },
+    { name: "E" },
+    { name: "F" },
+    { name: "G" },
+  ]);
+  if (got !== "A, B, C, D, E +2 more") {
+    throw new Error("summary wrong: " + JSON.stringify(got));
+  }
+});
+
+// Prove the shared summary merges repeats and drops ledger rows.
+Deno.test("item summary merges repeats and drops ledger rows", () => {
+  const got = itemSummary([
+    { name: "Latte (250 ml)" },
+    { name: "Latte (250 ml)" },
+    { name: "[Fees]" },
+  ]);
+  if (got !== "2 Latte") throw new Error("summary wrong: " + JSON.stringify(got));
 });

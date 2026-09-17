@@ -1,22 +1,21 @@
 // Push wizard steps for the expense-split flow.
-// Source choice, cutoff handling, and the per-order Push/Skip/Stop
+// Source choice, cutoff handling, and the per-order Push/Skip
 // shape come from wizards/pusher.ts. The real push logic lives in
 // push-engine.ts; these steps only show its state and collect choices.
 
 import {
   answers,
+  copyable,
   markdown,
   type Node,
   radio,
   type Step,
   step,
   type StepFn,
-  table,
-  textarea,
   textEntry,
 } from "../../wizardkit/mod.ts";
-import { buildAggregateSummary, formatTitle, orderFingerprint } from "../../src/render.ts";
-import { formatDayISO, formatMoney, parseDate } from "../../src/common.ts";
+import { buildAggregateSummary, orderFingerprint } from "../../src/render.ts";
+import { fmtRs, formatDayISO, formatMoney, itemSummary, parseDate } from "../../src/common.ts";
 import { isDryMap, listRunsSync, runHint } from "../../src/runstate.ts";
 import { dryBox, dryNote } from "./dry.ts";
 import {
@@ -30,9 +29,7 @@ import {
   SHARE_SOURCE,
 } from "./push-engine.ts";
 import { field } from "../../src/answers.ts";
-import {
-  sidOf,
-} from "../../src/sessionstore.ts";
+import { sidOf } from "../../src/sessionstore.ts";
 import type { WizardCtx } from "../../wizardkit/mod.ts";
 
 // Choices for the source stage: an assigned run, a split file, or a
@@ -327,7 +324,7 @@ function groupStep(_m?: Map<string, string[]>, ctx?: WizardCtx): Step {
 
 // Confirm step. Orders already sent show as auto-skips from the
 // fingerprint set the engine staged. Everything else shows one
-// Push/Skip/Stop choice per order, and the choices drive the real
+// Push/Skip choice per order, and the choices drive the real
 // push outcomes. A ticked dry box marks the answers, so the submit
 // runs the dry plan instead of the live push.
 function confirmStep(m?: Map<string, string[]>, ctx?: WizardCtx): Step {
@@ -353,18 +350,26 @@ function confirmStep(m?: Map<string, string[]>, ctx?: WizardCtx): Step {
     for (const order of live.groups) {
       const oid = order[0].order_id ?? "unknown";
       const total = order.reduce((sum, item) => sum + item.price, 0);
+      const goods = itemSummary(order.map((entry) => ({ name: entry.item })));
+      const label = goods !== undefined
+        ? goods + " — " + formatMoney(total, live.currency)
+        : "Order " + oid + " — " + formatMoney(total, live.currency);
       if (live.dupes.has(orderFingerprint(order))) {
         nodes.push(markdown(
-          "Order " + oid + " (total " + formatMoney(total, live.currency) +
-            ") — already sent to Splitwise. It skips.",
+          label + " — already sent to Splitwise. It skips.",
         ));
         continue;
       }
       nodes.push(
         radio(
-          "Order " + oid + " (total " + formatMoney(total, live.currency) + ")",
+          label,
           "order-" + oid,
-          ["Push", "Skip", "Stop"],
+          ["Push", "Skip"],
+          m?.get("order-" + oid)?.[0] ?? "Push",
+          live.people.map((person) => {
+            const share = order.reduce((sum, item) => sum + (item.assignments[person] ?? 0), 0);
+            return `${person} ${fmtRs(share)}`;
+          }).join(" · "),
         ),
       );
     }
@@ -372,41 +377,17 @@ function confirmStep(m?: Map<string, string[]>, ctx?: WizardCtx): Step {
   if (dry) {
     nodes.push(dryNote());
   }
-  // List every expense the push will send. The table sits above
-  // the totals so the reader checks the detail first. A dry run
-  // keeps the same table because the dry run exists to be read.
-  if (live.groups.length > 0) {
-    nodes.push(markdown("These are the expenses that will be sent."));
-    const columns = [
-      { heading: "Date" },
-      { heading: "Description" },
-      { heading: "Total" },
-      ...live.people.map((person) => ({ heading: person })),
-    ];
-    const rows = live.groups.map((order) => {
-      const total = order.reduce((sum, item) => sum + item.price, 0);
-      const parsed = parseDate(order[0].date);
-      const day = parsed === null ? order[0].date : formatDayISO(parsed);
-      const owed = new Map<string, number>();
-      for (const item of order) {
-        for (const [name, amount] of Object.entries(item.assignments)) {
-          owed.set(name, (owed.get(name) ?? 0) + amount);
-        }
-      }
-      return [
-        day,
-        formatTitle(order, live.currency + " "),
-        formatMoney(total, live.currency),
-        ...live.people.map((person) => formatMoney(owed.get(person) ?? 0, live.currency)),
-      ];
-    });
-    nodes.push(table("Expenses to send", columns, rows));
-  }
   // Show the summary under the notes. Keep the screen read only.
   if (!(live.groups.length === 0 && live.droppedByCutoff === 0)) {
     const summary = aggregateText(sidOf(ctx));
     if (summary !== null) {
-      nodes.push(markdown("Read this summary before you push.\n\n" + summary));
+      nodes.push(markdown("Read this summary before you push."));
+      nodes.push(
+        copyable("Summary", "push-summary", summary, {
+          mono: true,
+          rows: Math.max(8, Math.min(30, summary.split("\n").length + 2)),
+        }),
+      );
     }
   }
   return {
@@ -414,7 +395,7 @@ function confirmStep(m?: Map<string, string[]>, ctx?: WizardCtx): Step {
       "push-confirm",
       "Confirm orders",
       nodes,
-      "Pick Push, Skip, or Stop for each order. Push sends that order to Splitwise as one expense. Unpicked orders stay out.",
+      "Pick Push or Skip for each order. Push sends that order to Splitwise as one expense. Unpicked orders stay out.",
     ),
     nav: { back: true, next: { label: "Next", run: pushConfirmNext } },
   };
@@ -473,9 +454,6 @@ function reportStep(_m?: Map<string, string[]>, ctx?: WizardCtx): Step {
     if (outcome.skippedByChoice > 0) {
       lines.push("Skipped by your choice: " + outcome.skippedByChoice + ".");
     }
-    if (outcome.stopped) {
-      lines.push("You stopped early. The remaining orders stay ready for another push.");
-    }
     if (outcome.archived) {
       lines.push("Run " + (live.runId ?? "") + " is archived.");
     }
@@ -494,8 +472,8 @@ function reportStep(_m?: Map<string, string[]>, ctx?: WizardCtx): Step {
       const text = aggregateText(sessionId);
       if (text !== null) {
         nodes.push(
-          textarea("Summary", "aggregate-summary", {
-            value: text,
+          copyable("Summary", "aggregate-summary", text, {
+            mono: true,
             rows: Math.max(8, Math.min(30, text.split("\n").length + 2)),
           }),
         );
