@@ -1,6 +1,7 @@
 {
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.19",
+    "@std/cli": "jsr:@std/cli@^1.0.32",
     "micromark": "npm:micromark@4.0.2",
     "preact": "npm:preact@10.26.4",
     "preact-render-to-string": "npm:preact-render-to-string@6.6.2",
@@ -9,7 +10,7 @@
     "playwright": "npm:playwright@1.57.0"
   },
   "tasks": {
-    "check": "deno check --no-lock src/*.ts wizards/*.ts wizards/expense-split/*.ts desktop/*.ts wizardkit/*.ts wizardkit/examples/*.ts",
+    "check": "deno check --no-lock cli.ts src/*.ts wizards/*.ts wizards/expense-split/*.ts desktop/*.ts wizardkit/*.ts wizardkit/examples/*.ts",
     "test": "deno test --no-lock --allow-read --allow-write --allow-env --allow-sys --allow-run tests/",
     "test:fixtures": "bash tests/run.sh",
     "dev": "deno run --no-lock -A",

@@ -77,18 +77,15 @@ access, and the user's own API key. An agent asks rather than guessing, accepts 
 as per person affinities and a fallback owner with a cap, and asks the user where to persist those
 rules using whatever the host offers, because split-utils stores none of it.
 
-- [ ] W1 browser libraries load from a CDN again. The vendored tree is 5.7 MB, it contradicts the
-      stated principle in Critical context, and its Web Awesome version is recorded nowhere, so it
-      cannot be rebuilt. Keep the import map, because the Web Awesome dist imports bare specifiers,
-      and repoint every entry at a pinned CDN URL. Identify the vendored Web Awesome version by
-      matching the loader against published releases, so the look does not change. Delete
-      `wizardkit/vendor` and the route that serves it. Eval: every gate stays green, and a real
-      browser shows the same screen as today.
-- [ ] W2 the push, aggregate and share work becomes pure functions that take their inputs and return
-      their results, with no session store and no wizard types in the signatures. Eval: the wizard
-      behaves exactly as it does now, and each function is called by a test with plain data.
-- [ ] W3 the CLI over that core, with the six verbs. Eval: a gather, a dry push, an aggregate write
-      and a share create all run from one command with no browser.
+W1, W2 and W3 have landed. The CLI is `cli.ts` at the repository root, with six verbs. The browser libraries load from pinned CDN URLs, and the push work is a
+callable core in `src/pushcore.ts`.
+
+- [ ] W3b drop `buttons()` from wizardkit before the first publish. The nav bar replaced it, no app
+      file uses it, and a new package must not ship two ways to build one footer. Eval: no export
+      named buttons survives, and the suite is green.
+- [ ] W3c rename `src/wizardkit.ts` to `src/term.ts`. It is the terminal output helper for the two
+      remaining CLI scripts, and it has nothing to do with the library. Four files import it. Eval:
+      no file named wizardkit.ts sits under src/.
 - [ ] W4 move wizardkit to `~/repos/wizardkit` as a JSR package with `src/` and `tests/`. Eval:
       `deno publish --dry-run` passes there.
 - [ ] W5 split-utils imports `jsr:@xyzshantaram/wizardkit`. Eval: the app runs with no local

@@ -4,6 +4,7 @@
 // the aggregate file, archiving the run, and storing the outcome.
 import { fmtRs, formatMoney, type SplitEntry } from "./common.ts";
 import { buildItemizedComment, formatTitle, orderFingerprint } from "./render.ts";
+import { fullName } from "./splitwise.ts";
 
 // One order groups split lines from one platform order.
 export type Order = SplitEntry[];
@@ -29,6 +30,83 @@ export interface PushOutcome {
   aggregateFile: string | null;
   archived: boolean;
   note: string;
+}
+
+// One person the auto name map could not settle. Empty candidates
+// mean no Splitwise member matched at all.
+export interface NamePick {
+  person: string;
+  candidates: { id: number; name: string }[];
+}
+
+// Read the numeric id from a Splitwise user record.
+function userId(user: Record<string, unknown>): number {
+  return Number(user.id);
+}
+
+// Append one user to a name lookup list.
+function pushTo(
+  map: Map<string, Record<string, unknown>[]>,
+  key: string,
+  user: Record<string, unknown>,
+): void {
+  const list = map.get(key) ?? [];
+  list.push(user);
+  map.set(key, list);
+}
+
+// Map each local person to a Splitwise user id. A unique full-name or
+// first-name match maps straight away. An ambiguous or unmatched
+// person lands in `pending` so the caller can ask, because a guess
+// would push money to the wrong person. A stored resolution from
+// `resolutions` wins over the search.
+export async function buildNameMap(
+  api: PushApi,
+  people: string[],
+  resolutions?: Map<string, number>,
+): Promise<{ ok: true; map: Map<string, number>; pending: NamePick[] }> {
+  const me = await api.getCurrentUser();
+  const friends = await api.getFriends();
+  const all: Record<string, unknown>[] = [me, ...friends];
+  const byFull = new Map<string, Record<string, unknown>[]>();
+  const byFirst = new Map<string, Record<string, unknown>[]>();
+  for (const user of all) {
+    pushTo(byFull, fullName(user), user);
+    pushTo(byFirst, String(user.first_name ?? ""), user);
+  }
+  const out = new Map<string, number>();
+  const pending: NamePick[] = [];
+  for (const person of people) {
+    const resolved = resolutions?.get(person);
+    if (resolved !== undefined) {
+      out.set(person, resolved);
+      continue;
+    }
+    const fullHit = byFull.get(person) ?? [];
+    if (fullHit.length === 1) {
+      out.set(person, userId(fullHit[0]));
+      continue;
+    }
+    // A unique first name maps straight away. A first name shared by
+    // more than one member stays pending: a guess there would push
+    // money to the wrong person.
+    const first = person.split(/\s+/)[0];
+    const firstHit = byFirst.get(first) ?? [];
+    if (firstHit.length === 1) {
+      out.set(person, userId(firstHit[0]));
+      continue;
+    }
+    const hits = fullHit.length > 1 ? fullHit : firstHit.length > 1 ? firstHit : [];
+    if (hits.length > 0) {
+      pending.push({
+        person,
+        candidates: hits.map((user) => ({ id: userId(user), name: fullName(user) })),
+      });
+    } else {
+      pending.push({ person, candidates: [] });
+    }
+  }
+  return { ok: true, map: out, pending };
 }
 
 // Sum one order to the currency units.
