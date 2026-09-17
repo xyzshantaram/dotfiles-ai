@@ -1753,3 +1753,50 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
   color: var(--dsw-alias-label-tertiary);
   margin-bottom: 0.375rem;
 }
+/* #164: Graph / Command tabs on the expanded bash row. The strip reuses the
+   repo's existing chrome rather than inventing a tab language: the button
+   reset and focus ring come from the run_code spoiler
+   (.tool-render-runcode-spoiler), the mono small-label voice from the IN/OUT
+   section labels (.tool-render-code-out-label), and the selected-border idiom
+   from the ask form's selected option (.tool-render-qoption[data-selected]).
+   The selected paint keys on the SAME aria-selected attribute assistive
+   technology reads, so the two cannot disagree. */
+.tool-render-bash-tabs {
+  display: flex;
+  flex-flow: row nowrap;
+  gap: 0.25rem;
+  margin: 0.375rem 0 0 0.25rem;
+}
+.tool-render-bash-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 0.125rem 0.375rem;
+  cursor: pointer;
+  font-family: var(--ds-font-family-code);
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  color: var(--dsw-alias-label-tertiary);
+  text-align: left;
+}
+.tool-render-bash-tab:hover {
+  color: var(--dsw-alias-label-primary);
+}
+.tool-render-bash-tab[aria-selected="true"] {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 600;
+  border-bottom-color: var(--dsw-alias-state-business-primary);
+}
+.tool-render-bash-tab:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 0.125rem;
+  border-radius: 0.25rem;
+}
+/* The tab panel is a neutral container: the graph and the command keep their
+   own margins and scrolling, so switching tabs changes the content, never
+   the card's shape language. */
+.tool-render-bash-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}

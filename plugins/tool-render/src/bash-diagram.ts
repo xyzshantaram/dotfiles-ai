@@ -1329,3 +1329,65 @@ export function attributeSequenceStages(
     trailing: model.trailing,
   };
 }
+
+// ---- #164: Graph / Command tabs on the expanded bash row. ----
+//
+// THE TAB SEAM, and the ONLY one. BashRow calls this ONCE per render and
+// hands the SAME object to both the tab strip and the tab panel, so the two
+// can never disagree about whether tabs exist or which tab leads. Two
+// hand-rolled answers to those questions is the defect class #162's reviews
+// kept finding (the unit model right, the screen wrong); a single builder is
+// the fix, same as sequenceUnitDiagramModel.
+//
+// `commandText` is the ORIGINAL command string, campo a campo — never a
+// re-serialisation of the model, never `reconstruct*` output, never a
+// normalised form. The model slices plus gaps DO reproduce the command byte
+// for byte when drawable, which is exactly why reading the Command tab off
+// the model would look right while being the wrong guarantee: the day the
+// model refuses a command (background jobs, unparseable input, heredoc
+// chains) there IS no model to read from, and a tab that sources its text
+// from two different places depending on drawability is how a diagram lies.
+// The Command tab therefore carries no model of its own; the view renders
+// this field and nothing else.
+//
+// Undrawable commands show NO tabs at all (`showTabs` false): the Command
+// text renders directly, exactly as the row does today. A Graph tab with
+// nothing to draw — or with an apology where the diagram should be — is an
+// empty tab that looks broken, and the ticket forbids it. The rewrite pair
+// (guard rewrote the command: "wrote" plus "ran") likewise shows no tabs:
+// two texts and a graph do not fit a two-tab strip, and both texts stay
+// visible, as today.
+
+/** One tab of the expanded bash row. */
+export type BashTabId = "graph" | "command";
+
+export interface BashTabModel {
+  /** Whether any diagram model exists for this command (v1 or v2). */
+  drawable: boolean;
+  /** Whether to render the tab strip. False renders the command text with
+   *  no tabs — never an empty Graph tab. */
+  showTabs: boolean;
+  /** The selected tab before the user clicks. "graph" exactly when drawable. */
+  defaultTab: BashTabId;
+  /** The Command tab's text: the original command string, verbatim. Null
+   *  only when the call carried no command at all. */
+  commandText: string | null;
+}
+
+/**
+ * THE tab seam: resolve the strip, the default, and the verbatim text in
+ * one call. `rewritten` is whether the row shows the guard rewrite pair
+ * (two command texts); a pair shows no tabs. Pure: no module state, so two
+ * rows resolve independently — per-row tab state lives in each BashRow's
+ * own useState, never here.
+ */
+export function resolveBashTab(command: string | undefined, rewritten: boolean): BashTabModel {
+  const commandText = typeof command === "string" ? command : null;
+  if (commandText === null || rewritten === true) {
+    return { drawable: false, showTabs: false, defaultTab: "command", commandText };
+  }
+  const drawable = getBashDiagram(commandText) !== null || getBashSequenceDiagram(commandText) !== null;
+  return drawable
+    ? { drawable: true, showTabs: true, defaultTab: "graph", commandText }
+    : { drawable: false, showTabs: false, defaultTab: "command", commandText };
+}

@@ -183,7 +183,7 @@ var EXTENSION_LANGUAGE = {
 // ---- Platform modules: resolved by the shell loader seed at runtime. ----
 import React from "react";
 import { isBashGuardReason } from "./guard";
-import { attributePipeStages, attributeSequenceStages, sequenceUnitDiagramModel, getBashDiagram, getBashSequenceDiagram } from "./bash-diagram";
+import { attributePipeStages, attributeSequenceStages, sequenceUnitDiagramModel, resolveBashTab, getBashDiagram, getBashSequenceDiagram } from "./bash-diagram";
 import { escalationDetailOf, escalationLabel, escalationReasonClassName } from "./escalation";
 import {
   composeVerdictTooltip,
@@ -1578,10 +1578,101 @@ function BashSequenceDiagram(props) {
   }
   return <div className="tool-render-diagram tool-render-diagram-seq">{children}</div>;
 }
+// ---- #164: Graph / Command tabs on the expanded bash row. ----
+// The strip is stateless on purpose: the selection lives in BashRow's own
+// useState (one per row, so two bash cards switch independently), and this
+// component only renders it. Buttons are real <button type="button"> elements
+// with the tablist/tab/tabpanel roles, so they are Tab-reachable with
+// Enter/Space native, arrow keys move between the two tabs (automatic
+// activation: focus follows selection), and aria-selected exposes the state —
+// never divs with onClick. The visual selected state keys on the SAME
+// aria-selected attribute (see client.module.css), so the paint cannot
+// disagree with what assistive technology reads.
+//
+// The labelled-by wiring (id/aria-controls/aria-labelledby) exists only when
+// the row carries a callId; without one two rows would mint the same ids, so
+// the strip then leans on its aria-label and aria-selected alone rather than
+// pointing at a colliding panel.
+function BashTabStrip(props) {
+  var tab = props.tab;
+  var onSelect = props.onSelect;
+  var idPrefix = props.idPrefix;
+  var order = ["graph", "command"];
+  var labelOf = function (id) {
+    return id === "graph" ? "Graph" : "Command";
+  };
+  var onKeyDown = function (event) {
+    var key = event.key;
+    if (key !== "ArrowLeft" && key !== "ArrowRight" && key !== "Home" && key !== "End")
+      return;
+    event.preventDefault();
+    var next;
+    if (key === "Home") next = "graph";
+    else if (key === "End") next = "command";
+    else {
+      var at = order.indexOf(tab);
+      var step = key === "ArrowRight" ? 1 : order.length - 1;
+      next = order[(at + step) % order.length];
+    }
+    onSelect(next);
+    var list = event.currentTarget.querySelectorAll('[role="tab"]');
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].getAttribute("data-tab") === next) {
+        list[i].focus();
+        break;
+      }
+    }
+  };
+  var buttons = order.map(function (id) {
+    var selected = tab === id;
+    return (
+      <button
+        key={id}
+        type="button"
+        role="tab"
+        data-tab={id}
+        id={idPrefix !== null ? idPrefix + "-" + id : undefined}
+        aria-selected={selected}
+        aria-controls={idPrefix !== null ? idPrefix + "-panel" : undefined}
+        tabIndex={selected ? 0 : -1}
+        className="tool-render-bash-tab"
+        onClick={function () {
+          onSelect(id);
+        }}
+      >
+        {labelOf(id)}
+      </button>
+    );
+  });
+  return (
+    <div
+      className="tool-render-bash-tabs"
+      role="tablist"
+      aria-label="Bash command view"
+      onKeyDown={onKeyDown}
+    >
+      {buttons}
+    </div>
+  );
+}
 function BashRow(props) {
   var expandedState = useState(false);
   var expanded = expandedState[0];
   var setExpanded = expandedState[1];
+  // #164: the per-row tab selection. One useState per BashRow instance, so
+  // two bash cards on screen switch independently and switching one never
+  // moves the other. null means "the user has not clicked yet" and the seam's
+  // default (graph when drawable, command otherwise) leads; the effective tab
+  // below is a derivation, not mount-only state, so a command changing under
+  // a mounted row follows its new default until the user clicks. The choice
+  // does NOT survive a remount: a trajectory re-render that unmounts the row
+  // resets to the default. That is stated, not accidental — tabs are a
+  // reading aid for the current view, not a persisted preference — and the
+  // default (graph when there is one) is the useful landing either way.
+  // Unconditional, like every hook in this row (#150: no conditional hooks).
+  var bashTabUserState = useState(null);
+  var bashTabUser = bashTabUserState[0];
+  var setBashTabUser = bashTabUserState[1];
   var block = props.block;
   var done = doneOf(block);
   var argsObj = parseArgs(argsRawOf(block));
@@ -1696,17 +1787,26 @@ function BashRow(props) {
         );
         return parts;
       };
-      if (guardRewrite !== null && guardRewrite.ran !== command) {
+      // #164: THE tab seam. One call whose object feeds BOTH the strip and
+      // the panel below, so they cannot disagree about whether tabs exist or
+      // which tab leads. `rewrittenPair` is the guard rewrite above (two
+      // command texts, both staying visible): a pair shows no tabs. tabs'
+      // commandText is the ORIGINAL command string — the Command tab renders
+      // it and nothing else, never a re-serialisation of the model — so the
+      // surface a reader falls back to when they distrust the graph cannot
+      // drift from what ran.
+      var rewrittenPair = guardRewrite !== null && guardRewrite.ran !== command;
+      var tabs = resolveBashTab(command, rewrittenPair);
+      if (rewrittenPair) {
         inner.push.apply(
           inner,
           commandBlock("wrote", command).concat(
             commandBlock(guardRewriteLabel(command, guardRewrite.ran), guardRewrite.ran),
           ),
         );
-      } else {
+      } else if (tabs.showTabs) {
         // #149/#160: auto-diagram pipe/redirect commands and multi-statement
-        // scripts. The rewrite pair above keeps today's text rendering (both
-        // texts stay visible); only the single-command branch diagrams.
+        // scripts. Only the single-command branch diagrams.
         // getBashDiagram (one statement) and getBashSequenceDiagram (two or
         // more) parse client-side and memoise by command string; the
         // attribute* copies layer this row's meta.pipeStages onto the cached
@@ -1726,13 +1826,51 @@ function BashRow(props) {
           sequence !== null || diagramBase === null
             ? null
             : attributePipeStages(diagramBase, diagramMeta !== null ? diagramMeta.pipeStages : undefined);
-        if (sequence !== null) {
-          inner.push(<BashSequenceDiagram model={sequence} />);
-        } else if (diagram !== null) {
-          inner.push(<BashCommandDiagram model={diagram} />);
+        var activeTab = bashTabUser === null ? tabs.defaultTab : bashTabUser;
+        var tabPrefix =
+          props.callId !== undefined && props.callId !== null
+            ? "bash-tab-" + String(props.callId)
+            : null;
+        inner.push(
+          <BashTabStrip
+            tab={activeTab}
+            onSelect={function (id) {
+              setBashTabUser(id);
+            }}
+            idPrefix={tabPrefix}
+          />,
+        );
+        // The Graph panel reuses the same diagram/sequence elements the row
+        // rendered before tabs: no rebuilt model, no second seam. showTabs is
+        // true only when drawable, so one of the two branches always fills
+        // the panel; the null fallback below is unreachable, kept so a future
+        // predicate change fails to an empty panel rather than a crash.
+        var tabBody = null;
+        if (activeTab === "graph") {
+          if (sequence !== null) {
+            tabBody = <BashSequenceDiagram model={sequence} />;
+          } else if (diagram !== null) {
+            tabBody = <BashCommandDiagram model={diagram} />;
+          }
         } else {
-          inner.push.apply(inner, commandBlock(null, command));
+          tabBody = commandBlock(null, tabs.commandText ?? command);
         }
+        inner.push(
+          <div
+            className="tool-render-bash-panel"
+            role="tabpanel"
+            id={tabPrefix !== null ? tabPrefix + "-panel" : undefined}
+            aria-labelledby={tabPrefix !== null ? tabPrefix + "-" + activeTab : undefined}
+          >
+            {tabBody}
+          </div>,
+        );
+      } else {
+        // No tabs: the command cannot be drawn (background jobs, unparseable
+        // input, heredoc chains) or there is nothing to draw it against, so
+        // the verbatim text renders directly, exactly as the row does today —
+        // never an empty Graph tab.
+        inner.push.apply(inner, commandBlock(null, tabs.commandText ?? command));
       }
     }
     if (output !== null && output !== "") {

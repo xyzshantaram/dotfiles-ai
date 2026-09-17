@@ -4018,6 +4018,53 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
   color: var(--dsw-alias-label-tertiary);
   margin-bottom: 0.375rem;
 }
+/* #164: Graph / Command tabs on the expanded bash row. The strip reuses the
+   repo's existing chrome rather than inventing a tab language: the button
+   reset and focus ring come from the run_code spoiler
+   (.tool-render-runcode-spoiler), the mono small-label voice from the IN/OUT
+   section labels (.tool-render-code-out-label), and the selected-border idiom
+   from the ask form's selected option (.tool-render-qoption[data-selected]).
+   The selected paint keys on the SAME aria-selected attribute assistive
+   technology reads, so the two cannot disagree. */
+.tool-render-bash-tabs {
+  display: flex;
+  flex-flow: row nowrap;
+  gap: 0.25rem;
+  margin: 0.375rem 0 0 0.25rem;
+}
+.tool-render-bash-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 0.125rem 0.375rem;
+  cursor: pointer;
+  font-family: var(--ds-font-family-code);
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  color: var(--dsw-alias-label-tertiary);
+  text-align: left;
+}
+.tool-render-bash-tab:hover {
+  color: var(--dsw-alias-label-primary);
+}
+.tool-render-bash-tab[aria-selected="true"] {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 600;
+  border-bottom-color: var(--dsw-alias-state-business-primary);
+}
+.tool-render-bash-tab:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 0.125rem;
+  border-radius: 0.25rem;
+}
+/* The tab panel is a neutral container: the graph and the command keep their
+   own margins and scrolling, so switching tabs changes the content, never
+   the card's shape language. */
+.tool-render-bash-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
 `;
 
 // node_modules/.pnpm/highlight.js@11.12.0/node_modules/highlight.js/es/languages/javascript.js
@@ -22863,6 +22910,14 @@ function attributeSequenceStages(model, pipeStages) {
     trailing: model.trailing
   };
 }
+function resolveBashTab(command, rewritten) {
+  const commandText = typeof command === "string" ? command : null;
+  if (commandText === null || rewritten === true) {
+    return { drawable: false, showTabs: false, defaultTab: "command", commandText };
+  }
+  const drawable = getBashDiagram(commandText) !== null || getBashSequenceDiagram(commandText) !== null;
+  return drawable ? { drawable: true, showTabs: true, defaultTab: "graph", commandText } : { drawable: false, showTabs: false, defaultTab: "command", commandText };
+}
 
 // plugins/tool-render/src/escalation.ts
 var ESCALATION_LABEL = "agent requests sandbox access escalation";
@@ -24147,10 +24202,75 @@ function BashSequenceDiagram(props) {
   }
   return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram tool-render-diagram-seq" }, children);
 }
+function BashTabStrip(props) {
+  var tab = props.tab;
+  var onSelect = props.onSelect;
+  var idPrefix = props.idPrefix;
+  var order = ["graph", "command"];
+  var labelOf = function(id) {
+    return id === "graph" ? "Graph" : "Command";
+  };
+  var onKeyDown = function(event) {
+    var key = event.key;
+    if (key !== "ArrowLeft" && key !== "ArrowRight" && key !== "Home" && key !== "End")
+      return;
+    event.preventDefault();
+    var next;
+    if (key === "Home") next = "graph";
+    else if (key === "End") next = "command";
+    else {
+      var at = order.indexOf(tab);
+      var step = key === "ArrowRight" ? 1 : order.length - 1;
+      next = order[(at + step) % order.length];
+    }
+    onSelect(next);
+    var list = event.currentTarget.querySelectorAll('[role="tab"]');
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].getAttribute("data-tab") === next) {
+        list[i].focus();
+        break;
+      }
+    }
+  };
+  var buttons = order.map(function(id) {
+    var selected = tab === id;
+    return /* @__PURE__ */ import_react4.default.createElement(
+      "button",
+      {
+        key: id,
+        type: "button",
+        role: "tab",
+        "data-tab": id,
+        id: idPrefix !== null ? idPrefix + "-" + id : void 0,
+        "aria-selected": selected,
+        "aria-controls": idPrefix !== null ? idPrefix + "-panel" : void 0,
+        tabIndex: selected ? 0 : -1,
+        className: "tool-render-bash-tab",
+        onClick: function() {
+          onSelect(id);
+        }
+      },
+      labelOf(id)
+    );
+  });
+  return /* @__PURE__ */ import_react4.default.createElement(
+    "div",
+    {
+      className: "tool-render-bash-tabs",
+      role: "tablist",
+      "aria-label": "Bash command view",
+      onKeyDown
+    },
+    buttons
+  );
+}
 function BashRow(props) {
   var expandedState = useState(false);
   var expanded = expandedState[0];
   var setExpanded = expandedState[1];
+  var bashTabUserState = useState(null);
+  var bashTabUser = bashTabUserState[0];
+  var setBashTabUser = bashTabUserState[1];
   var block = props.block;
   var done = doneOf(block);
   var argsObj = parseArgs2(argsRawOf(block));
@@ -24221,26 +24341,59 @@ function BashRow(props) {
         );
         return parts;
       };
-      if (guardRewrite !== null && guardRewrite.ran !== command) {
+      var rewrittenPair = guardRewrite !== null && guardRewrite.ran !== command;
+      var tabs = resolveBashTab(command, rewrittenPair);
+      if (rewrittenPair) {
         inner.push.apply(
           inner,
           commandBlock("wrote", command).concat(
             commandBlock(guardRewriteLabel(command, guardRewrite.ran), guardRewrite.ran)
           )
         );
-      } else {
+      } else if (tabs.showTabs) {
         var diagramBase = getBashDiagram(command);
         var sequenceBase = getBashSequenceDiagram(command);
         var diagramMeta = block.meta !== null && typeof block.meta === "object" && !Array.isArray(block.meta) ? block.meta : null;
         var sequence = sequenceBase !== null ? attributeSequenceStages(sequenceBase, diagramMeta !== null ? diagramMeta.pipeStages : void 0) : null;
         var diagram = sequence !== null || diagramBase === null ? null : attributePipeStages(diagramBase, diagramMeta !== null ? diagramMeta.pipeStages : void 0);
-        if (sequence !== null) {
-          inner.push(/* @__PURE__ */ import_react4.default.createElement(BashSequenceDiagram, { model: sequence }));
-        } else if (diagram !== null) {
-          inner.push(/* @__PURE__ */ import_react4.default.createElement(BashCommandDiagram, { model: diagram }));
+        var activeTab = bashTabUser === null ? tabs.defaultTab : bashTabUser;
+        var tabPrefix = props.callId !== void 0 && props.callId !== null ? "bash-tab-" + String(props.callId) : null;
+        inner.push(
+          /* @__PURE__ */ import_react4.default.createElement(
+            BashTabStrip,
+            {
+              tab: activeTab,
+              onSelect: function(id) {
+                setBashTabUser(id);
+              },
+              idPrefix: tabPrefix
+            }
+          )
+        );
+        var tabBody = null;
+        if (activeTab === "graph") {
+          if (sequence !== null) {
+            tabBody = /* @__PURE__ */ import_react4.default.createElement(BashSequenceDiagram, { model: sequence });
+          } else if (diagram !== null) {
+            tabBody = /* @__PURE__ */ import_react4.default.createElement(BashCommandDiagram, { model: diagram });
+          }
         } else {
-          inner.push.apply(inner, commandBlock(null, command));
+          tabBody = commandBlock(null, tabs.commandText ?? command);
         }
+        inner.push(
+          /* @__PURE__ */ import_react4.default.createElement(
+            "div",
+            {
+              className: "tool-render-bash-panel",
+              role: "tabpanel",
+              id: tabPrefix !== null ? tabPrefix + "-panel" : void 0,
+              "aria-labelledby": tabPrefix !== null ? tabPrefix + "-" + activeTab : void 0
+            },
+            tabBody
+          )
+        );
+      } else {
+        inner.push.apply(inner, commandBlock(null, tabs.commandText ?? command));
       }
     }
     if (output !== null && output !== "") {
