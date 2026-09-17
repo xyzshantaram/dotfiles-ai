@@ -1494,6 +1494,13 @@ step_set_defaults() {
 	#      SYNC_ADOPT_CHAINS=1 takes the template's chains instead, which is how
 	#      a template change (e.g. the #82 overhaul) reaches an existing
 	#      instance.
+	#   3. Every OTHER top-level section the previous file has and the template
+	#      does not — e.g. `subscriptions`, where the subscriptions panel
+	#      persists provider visibility (#159). Preserved generically by
+	#      scripts/preserve-user-sections.mjs as raw text, so the next plugin
+	#      that persists a new namespace is covered without a new special
+	#      case. Sections the template owns stay template-authoritative: the
+	#      copy wins, so sync still updates settings.
 	local active
 	active="$(python3 - "$DSH_HOME/settings.yaml" <<'PY'
 import sys, yaml
@@ -1527,6 +1534,12 @@ M18PY
 	# when there is no previous file, so the "seeded from the template" and
 	# validation lines always appear in the report. Warnings never fail sync.
 	node "$HERE/scripts/preserve-chains.mjs" "${prev_settings:-/nonexistent}" "$DSH_HOME/settings.yaml" || true
+	# Carry over runtime-written sections the template does not define (#159:
+	# `subscriptions` today, any future plugin namespace tomorrow). Raw-text
+	# splice like the chains step above — never a YAML round-trip, so the
+	# `off:` byte hazard the sed note below calls out cannot bite here either.
+	# Runs before the snapshot is removed; warnings never fail sync.
+	node "$HERE/scripts/preserve-user-sections.mjs" "${prev_settings:-/nonexistent}" "$DSH_HOME/settings.yaml" || true
 	if [ -n "$prev_settings" ]; then rm -f "$prev_settings"; fi
 
 	# Byte-preserving patch of the single runtime line. A full YAML round-trip
