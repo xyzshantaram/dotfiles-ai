@@ -22,7 +22,7 @@
 // NATIVE SELECTION is never fought: appearing reads the selection without
 // touching it, mousedown on the button is preventDefaulted so clicking never
 // collapses the range, and dismissal happens on collapse, Escape, and scroll.
-import * as react from "react";
+import * as React from "react";
 import { injectStyle } from "../../shared/client-util";
 import {
   appendToDraft,
@@ -161,11 +161,11 @@ function makeQuoteButton() {
     var draft = props.useInput(function (input) {
       return input.draft;
     });
-    var stateAndSet = react.useState(null as QuoteState | null);
+    var stateAndSet = React.useState(null as QuoteState | null);
     var quote = stateAndSet[0];
     var setQuote = stateAndSet[1];
 
-    react.useEffect(function () {
+    React.useEffect(function () {
       function onSelectionChange() {
         var sel = window.getSelection();
         if (
@@ -256,7 +256,7 @@ function makeQuoteButton() {
 
     // While armed, any scroll or Escape dismisses. Attached only while the
     // button is up: nothing listens while idle.
-    react.useEffect(
+    React.useEffect(
       function () {
         if (quote === null) return undefined;
         function onScroll() {

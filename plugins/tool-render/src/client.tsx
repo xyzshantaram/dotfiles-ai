@@ -180,7 +180,7 @@ var EXTENSION_LANGUAGE = {
 };
 
 // ---- Platform modules: resolved by the shell loader seed at runtime. ----
-import react from "react";
+import React from "react";
 import { isBashGuardReason } from "./guard";
 import { attributePipeStages, getBashDiagram } from "./bash-diagram";
 import { escalationDetailOf, escalationLabel, escalationReasonClassName } from "./escalation";
@@ -198,9 +198,9 @@ import * as primitives from "@deepseek-ai/dsh-client-ui-primitives";
 // loader-seed externals, and esbuild inlines this package instead. #124
 // takes { Timer } the same way.
 import { Image as LucideImageIcon } from "lucide-react";
-var useState = react.useState;
-var useEffect = react.useEffect;
-var useRef = react.useRef;
+var useState = React.useState;
+var useEffect = React.useEffect;
+var useRef = React.useRef;
 var IconBrowseOutline16 = primitives.IconBrowseOutline16;
 var IconEditOutline16 = primitives.IconEditOutline16;
 var IconApiOutline14 = primitives.IconApiOutline14;

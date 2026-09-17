@@ -48,7 +48,7 @@
  * exactly `["slots"]`), and sync.sh installs it BEFORE any consumer, the
  * same ordering discipline toast carries. `registry.test.ts` pins both.
  */
-import react from "react";
+import React from "react";
 
 import { injectStyle } from "../../shared/client-util";
 import { PluginModal } from "../../shared/plugin-modal";
@@ -121,11 +121,11 @@ function ModalEntry(props: any) {
  * and is the price of the only cross-bundle seam available.
  */
 function ModalHost() {
-  const [open, setOpen] = react.useState(function () {
+  const [open, setOpen] = React.useState(function () {
     return registry.getOpen();
   });
 
-  react.useEffect(function () {
+  React.useEffect(function () {
     // Re-read on mount as well as subscribing: an open issued between the
     // initial state and this effect would otherwise be missed.
     setOpen(registry.getOpen());

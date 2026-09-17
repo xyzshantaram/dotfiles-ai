@@ -34,7 +34,7 @@ type ListView = {
   rowErrors?: Record<string, string> | null;
 };
 
-import react from "react";
+import React from "react";
 import { injectStyle, mergeCss, fetchJson, postJson } from "../../shared/client-util";
 import { SettingsSection } from "../../shared/settings-panel";
 import settingsCss from "../../shared/settings.css";
@@ -56,7 +56,7 @@ function statusClass(status) {
 /** Build the panel component. State stays per-registration. */
 function makePanel() {
   return function Panel() {
-    var listState = react.useState(null);
+    var listState = React.useState(null);
     var list: ListView | null = listState[0];
     var setList = listState[1];
 
@@ -76,7 +76,7 @@ function makePanel() {
       });
     };
 
-    react.useEffect(function () {
+    React.useEffect(function () {
       console.debug("[mcp-servers] panel mounted");
       load();
     }, []);

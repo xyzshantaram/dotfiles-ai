@@ -37,7 +37,7 @@
  * - No portal: renders inline into the component tree.
  */
 
-import react from "react";
+import React from "react";
 import { injectStyle } from "./client-util";
 import modalCss from "./plugin-modal.module.css";
 
@@ -128,7 +128,7 @@ export function PluginModal(props: PluginModalProps) {
   var actions = props.actions !== undefined && props.actions !== null ? props.actions : props.footer;
 
   // Close on Escape key.
-  react.useEffect(
+  React.useEffect(
     function () {
       var onKeyDown = function (event: any) {
         if (event.key === "Escape") {

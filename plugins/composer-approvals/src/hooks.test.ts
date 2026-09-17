@@ -15,7 +15,7 @@
  * shipped, and cost a live-repro session to find (owner, 2026-09-17).
  *
  * The file's own comment already stated this rule ("hooks cannot sit below
- * the badge-hidden early return") and a `react.useRef` went in below it
+ * the badge-hidden early return") and a `React.useRef` went in below it
  * anyway, 46 lines later. A comment could not enforce it; this can.
  *
  * DELIBERATELY NARROW: it polices hook PLACEMENT only. It says nothing about
@@ -58,7 +58,7 @@ describe("Indicator hook order (#150)", () => {
       // A comment NAMING a hook is not a hook call. This file leans hard on
       // its comments; a pin that tripped on prose would punish them.
       if (code.startsWith("//") || code.startsWith("*") || code.startsWith("/*")) continue;
-      // Any `useX(` call, not just `react.useX`. A CUSTOM hook below the gate
+      // Any `useX(` call, not just `React.useX`. A CUSTOM hook below the gate
       // (useBuiltInSurfaces, props.useSession) breaks hook order just as
       // fatally, and the original pattern could not see it -- named by the
       // reviewer of 5e64d9a as the one real hole left in this pin.
@@ -72,7 +72,7 @@ describe("Indicator hook order (#150)", () => {
     // The specific regression: this ref was the hook that sat below the
     // return. Pinning its position makes a revert fail rather than just
     // making the generic scan above go red.
-    const decl = LINES.findIndex((line) => line.includes("var liveHandlers = react.useRef("));
+    const decl = LINES.findIndex((line) => line.includes("var liveHandlers = React.useRef("));
     expect(decl).toBeGreaterThan(-1);
     expect(decl).toBeLessThan(GATE);
   });

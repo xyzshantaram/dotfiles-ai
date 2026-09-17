@@ -1,6 +1,6 @@
 // Durable todos panel. Shows the session todo projection in the input dock.
 // The card stays visible so the Remind button stays reachable.
-import * as react from "react";
+import * as React from "react";
 import * as primitives from "@deepseek-ai/dsh-client-ui-primitives";
 import type { DurableTodosView, TodoItem } from "./projection.js";
 import { injectStyle, PLAN_ROW_CSS } from "../../shared/client-util";
@@ -93,7 +93,7 @@ function makePanel() {
     });
     var todos = value === null || value === undefined ? null : value.todos;
     var unfinished = todos === null ? [] : todos.filter(isUnfinished);
-    var [collapsed, setCollapsed] = react.useState(true);
+    var [collapsed, setCollapsed] = React.useState(true);
     var draft = props.useInput(function (input) {
       return input.draft;
     });

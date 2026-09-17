@@ -4,17 +4,18 @@
 // would produce mass churn that gets ignored -- the same failure as the bug.
 // Exactly one rule is enabled: react-hooks/rules-of-hooks as an error.
 //
-// KNOWN BLIND SPOT (verified experimentally, #154): the v7 rule hardcodes
-// the React namespace object name as `React`, so it does NOT see hook calls
-// through this repo's universal lowercase alias (`react.useRef`,
-// `react.useState`, ...). A `react.useRef` moved below an early return --
-// the exact #150 shape -- lints SILENT, while the identical code through
-// `React.useRef` or a bare `useRef` import fails as it should. So today this
-// config catches bare-`useX` violations (it already reports five in
-// tool-render), but NOT the namespaced majority. Full coverage needs the
-// repo-wide `react` -> `React` codemod first (mechanical identifier rename;
-// recommended as the follow-up). Do not read a clean lint as proof that no
-// conditional-hook defect exists in `react.*`-style code.
+// CLOSED BLIND SPOT (verified experimentally in #154, closed by #158):
+// the v7 rule hardcodes the React namespace object name as `React`, so it
+// did NOT see hook calls through this repo's former universal lowercase
+// alias (`react.useRef`, `react.useState`, ...). A `react.useRef` moved
+// below an early return -- the exact #150 shape -- linted SILENT, while the
+// identical code through `React.useRef` or a bare `useRef` import failed as
+// it should. The repo-wide `react` -> `React` rename (#158) closed that gap:
+// every plugin source now calls hooks through `React.*`, so this config sees
+// the namespaced majority as well (it already reports five in tool-render).
+// Do not reintroduce a lowercase alias: any `react.useX` call would go blind
+// again, silently. A clean lint may now be read as no conditional-hook
+// defect in `React.*`- or bare-`useX`-style code.
 //
 // PARSER NOTE. The obvious parser, @typescript-eslint/parser, hard-refuses
 // to load under this repo's TypeScript 7 ("typescript-eslint does not

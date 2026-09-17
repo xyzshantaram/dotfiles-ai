@@ -8,8 +8,8 @@
     "moduleResolution": "bundler",
     "types": ["node"],
     "jsx": "react",
-    "jsxFactory": "react.createElement",
-    "jsxFragmentFactory": "react.Fragment"
+    "jsxFactory": "React.createElement",
+    "jsxFragmentFactory": "React.Fragment"
   },
   "include": ["plugins/**/*.ts", "plugins/**/*.tsx"],
   "exclude": ["node_modules", "plugins/**/node_modules", "plugins/**/dist", "plugins/**/lib"]

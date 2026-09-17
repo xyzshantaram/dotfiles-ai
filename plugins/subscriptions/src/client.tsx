@@ -29,7 +29,7 @@
  * `subscriptions`. The host row in cordis.patch.yml keeps the loader entry
  * alive so the client-module registry serves this bundle.
  */
-import react from "react";
+import React from "react";
 import { injectStyle, mergeCss, fetchJson, postJson, putJson } from "../../shared/client-util";
 import { SettingsSection } from "../../shared/settings-panel";
 import settingsCss from "../../shared/settings.css";
@@ -771,24 +771,24 @@ function renderEhSection(ehUsage, ehModels) {
 
 function makePanel(ctx, config) {
   return function Panel() {
-    var snapState = react.useState(null);
+    var snapState = React.useState(null);
     var snap = snapState[0];
     var setSnap = snapState[1];
 
-    var staleTsState = react.useState(null);
+    var staleTsState = React.useState(null);
     var staleTs = staleTsState[0];
     var setStaleTs = staleTsState[1];
 
-    var cacheOkState = react.useState(null);
+    var cacheOkState = React.useState(null);
     var cacheOk = cacheOkState[0];
     var setCacheOk = cacheOkState[1];
 
     // Cordis passes the composition entry config to client halves; when it is
     // absent, fetch the resolved namespace through the same-origin web route.
-    var cfgState = react.useState(config);
+    var cfgState = React.useState(config);
     var cfg = cfgState[0];
     var setCfg = cfgState[1];
-    react.useEffect(function () {
+    React.useEffect(function () {
       if (config == null) {
         fetchJson("/subscriptions/config")
           .then(function (result) {
@@ -797,7 +797,7 @@ function makePanel(ctx, config) {
           .catch(function () {});
       }
     }, []);
-    react.useEffect(function () {
+    React.useEffect(function () {
       console.debug("[subscriptions] panel mounted");
       return function () {
         console.debug("[subscriptions] panel unmounted");
@@ -891,7 +891,7 @@ function makePanel(ctx, config) {
       writeLastSnap(snapData);
     };
 
-    react.useEffect(function () {
+    React.useEffect(function () {
       var ok = storageAvailable();
       setCacheOk(ok);
       if (ok) {
@@ -922,12 +922,12 @@ function makePanel(ctx, config) {
     var ehUsage = snap ? snap.ehUsage : null;
     var ehModels = snap ? snap.ehModels : null;
     // Firefox cookie fetch state and handlers.
-    var cookieState = react.useState({ busy: false, note: null, showLogin: false });
+    var cookieState = React.useState({ busy: false, note: null, showLogin: false });
     var cookie = cookieState[0];
     var setCookie = cookieState[1];
 
     // Firefox DeepSeek platform token fetch state and handlers.
-    var dsTokenState = react.useState({ busy: false, note: null, showLogin: false });
+    var dsTokenState = React.useState({ busy: false, note: null, showLogin: false });
     var dsToken = dsTokenState[0];
     var setDsToken = dsTokenState[1];
 
@@ -1026,7 +1026,7 @@ function makePanel(ctx, config) {
     };
 
     // Provider visibility toggle state and persistence.
-    var toggleState = react.useState(null);
+    var toggleState = React.useState(null);
     var toggleBusy = toggleState[0];
     var setToggleBusy = toggleState[1];
 

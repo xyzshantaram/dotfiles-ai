@@ -4,7 +4,7 @@
 // Radix dropdown that holds the sandbox picker, moved out of the shipped
 // PermissionSelect, and any rows other plugins contribute to the child slot
 // composer.overflow.item.
-import * as react from "react";
+import * as React from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { injectStyle, postJson, shippedClass } from "../../shared/client-util";
 import localCss from "./client.module.css";
@@ -187,13 +187,13 @@ function apply(ctx: any) {
   }
 
   function Menu(props: any) {
-    react.useEffect(() => {
+    React.useEffect(() => {
       ensureShippedHidden();
       ensureModesCollapsed();
       placePickerBeforeSend();
     });
 
-    const [open, setOpen] = react.useState(false);
+    const [open, setOpen] = React.useState(false);
     const permissions = props.useProjection("permissions");
     const options =
       permissions === undefined
@@ -253,17 +253,17 @@ function apply(ctx: any) {
     function permissionIcon(value: string) {
       const paths = PERMISSION_PATHS[value];
       if (paths === undefined) return null;
-      return react.createElement(
+      return React.createElement(
         "svg",
         { width: 14, height: 14, viewBox: "0 0 16 16", fill: "none", "aria-hidden": true },
-        paths.map((path, i) => react.createElement("path", { key: i, ...path })),
+        paths.map((path, i) => React.createElement("path", { key: i, ...path })),
       );
     }
 
     /** A fresh check mark per item. One shared element would still render, but
      * building it per item keeps each row's children independently keyed. */
     const check = () =>
-      react.createElement(
+      React.createElement(
         DropdownMenu.ItemIndicator,
         { className: "composer-menu-indicator" },
         "\u2713",
@@ -274,26 +274,26 @@ function apply(ctx: any) {
      * on its own). The icon column stays present even when a row has no icon,
      * so labels still line up in a column with the rows that do. */
     const row = (label: string, icon?: any) => [
-      react.createElement("span", { key: "icon", className: "composer-menu-icon" }, icon ?? null),
-      react.createElement("span", { key: "label", className: "composer-menu-label" }, label),
-      react.createElement("span", { key: "mark", className: "composer-menu-mark" }, check()),
+      React.createElement("span", { key: "icon", className: "composer-menu-icon" }, icon ?? null),
+      React.createElement("span", { key: "label", className: "composer-menu-label" }, label),
+      React.createElement("span", { key: "mark", className: "composer-menu-mark" }, check()),
     ];
 
     let sandboxBody;
     if (permissions === undefined) {
       // A RadioItem outside a RadioGroup has no group state to read, so the
       // empty case uses a plain disabled Item.
-      sandboxBody = react.createElement(
+      sandboxBody = React.createElement(
         DropdownMenu.Item,
         { className: "composer-menu-item", disabled: true },
         row("Not available"),
       );
     } else {
-      sandboxBody = react.createElement(
+      sandboxBody = React.createElement(
         DropdownMenu.RadioGroup,
         { value: permissions.currentValue },
         options.map((option: any) =>
-          react.createElement(
+          React.createElement(
             DropdownMenu.RadioItem,
             {
               key: option.value,
@@ -312,8 +312,8 @@ function apply(ctx: any) {
     // the agent, and "off" hides the web tools entirely (handled by our own
     // host route). The submenu refetches on mount (the menu content only
     // mounts while open) and on window focus.
-    const [value, setValue] = react.useState("auto" as "force" | "auto" | "off");
-    const inFlight = react.useRef(false);
+    const [value, setValue] = React.useState("auto" as "force" | "auto" | "off");
+    const inFlight = React.useRef(false);
 
     /** Read both endpoints and compose one value.
      *
@@ -321,7 +321,7 @@ function apply(ctx: any) {
      * own host route, so a failing dsh-web-tools route must not hide it: a
      * session that is off still reads as off. A missing answer falls back to
      * "auto", which is the state the host defaults to as well. */
-    const refresh = react.useCallback(() => {
+    const refresh = React.useCallback(() => {
       Promise.all([
         postJson("/web-tools/api/search-mode/get", { sessionId: props.sessionId }),
         postJson("/composer-menu/api/web-mode/get", { sessionId: props.sessionId }),
@@ -337,7 +337,7 @@ function apply(ctx: any) {
       });
     }, [props.sessionId]);
 
-    react.useEffect(() => {
+    React.useEffect(() => {
       refresh();
       window.addEventListener("focus", refresh);
       return () => window.removeEventListener("focus", refresh);
@@ -379,11 +379,11 @@ function apply(ctx: any) {
       });
     };
 
-    const searchBody = react.createElement(
+    const searchBody = React.createElement(
       DropdownMenu.RadioGroup,
       { value: value },
       (["force", "auto", "off"] as const).map((mode) =>
-        react.createElement(
+        React.createElement(
           DropdownMenu.RadioItem,
           {
             key: mode,
@@ -396,24 +396,24 @@ function apply(ctx: any) {
       ),
     );
 
-    const searchSub = react.createElement(
+    const searchSub = React.createElement(
       DropdownMenu.Sub,
       null,
-      react.createElement(
+      React.createElement(
         DropdownMenu.SubTrigger,
         { className: "composer-menu-item" },
-        react.createElement("span", { key: "mark", className: "composer-menu-mark" }),
-        react.createElement(
+        React.createElement("span", { key: "mark", className: "composer-menu-mark" }),
+        React.createElement(
           "span",
           { key: "label", className: "composer-menu-label" },
           "Web search",
         ),
-        react.createElement("span", { key: "chev", className: "composer-menu-chevron" }, "›"),
+        React.createElement("span", { key: "chev", className: "composer-menu-chevron" }, "›"),
       ),
-      react.createElement(
+      React.createElement(
         DropdownMenu.Portal,
         null,
-        react.createElement(
+        React.createElement(
           DropdownMenu.SubContent,
           { className: "composer-menu-content" },
           searchBody,
@@ -421,20 +421,20 @@ function apply(ctx: any) {
       ),
     );
 
-    const sandboxSub = react.createElement(
+    const sandboxSub = React.createElement(
       DropdownMenu.Sub,
       null,
-      react.createElement(
+      React.createElement(
         DropdownMenu.SubTrigger,
         { className: "composer-menu-item", disabled: permissions === undefined },
-        react.createElement("span", { key: "mark", className: "composer-menu-mark" }),
-        react.createElement("span", { key: "label", className: "composer-menu-label" }, "Sandbox"),
-        react.createElement("span", { key: "chev", className: "composer-menu-chevron" }, "›"),
+        React.createElement("span", { key: "mark", className: "composer-menu-mark" }),
+        React.createElement("span", { key: "label", className: "composer-menu-label" }, "Sandbox"),
+        React.createElement("span", { key: "chev", className: "composer-menu-chevron" }, "›"),
       ),
-      react.createElement(
+      React.createElement(
         DropdownMenu.Portal,
         null,
-        react.createElement(
+        React.createElement(
           DropdownMenu.SubContent,
           { className: "composer-menu-content" },
           sandboxBody,
@@ -442,34 +442,34 @@ function apply(ctx: any) {
       ),
     );
 
-    return react.createElement(
+    return React.createElement(
       DropdownMenu.Root,
       { open: open, onOpenChange: setOpen },
-      react.createElement(
+      React.createElement(
         DropdownMenu.Trigger,
         { asChild: true },
-        react.createElement(
+        React.createElement(
           "button",
           { type: "button", className: "composer-menu-trigger", "aria-label": "More options" },
-          react.createElement(
+          React.createElement(
             "svg",
             { width: 14, height: 14, viewBox: "0 0 14 14", "aria-hidden": true },
             [
-              react.createElement("circle", {
+              React.createElement("circle", {
                 key: "a",
                 cx: 7,
                 cy: 4,
                 r: 1.3,
                 fill: "currentColor",
               }),
-              react.createElement("circle", {
+              React.createElement("circle", {
                 key: "b",
                 cx: 7,
                 cy: 7,
                 r: 1.3,
                 fill: "currentColor",
               }),
-              react.createElement("circle", {
+              React.createElement("circle", {
                 key: "c",
                 cx: 7,
                 cy: 10,
@@ -480,10 +480,10 @@ function apply(ctx: any) {
           ),
         ),
       ),
-      react.createElement(
+      React.createElement(
         DropdownMenu.Portal,
         null,
-        react.createElement(
+        React.createElement(
           DropdownMenu.Content,
           { side: "top", align: "start", sideOffset: 8, className: "composer-menu-content" },
           sandboxSub,
@@ -493,7 +493,7 @@ function apply(ctx: any) {
           // when the entry declares children, so a future edit that drops the
           // declaration would crash the menu rather than just lose the
           // contributed items. Fail soft instead.
-          react.createElement(
+          React.createElement(
             "div",
             { style: { display: "contents" } },
             typeof props.renderSlot === "function"

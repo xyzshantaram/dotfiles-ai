@@ -36,7 +36,7 @@
  */
 
 /** The browser module table resolves these platform modules. */
-import react from "react";
+import React from "react";
 import {
   injectStyle,
   mergeCss,

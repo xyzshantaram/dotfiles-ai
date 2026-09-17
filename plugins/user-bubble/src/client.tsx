@@ -17,7 +17,7 @@
 // scratch in ./client.module.css, so upstream restyles stop propagating; and
 // any FUTURE upstream addition to the user action row is silently lost. User
 // rows carry copy + timestamp only today, and both survive here.
-import * as react from "react";
+import * as React from "react";
 import * as primitives from "@deepseek-ai/dsh-client-ui-primitives";
 import {
   encodeRefsForMarkdown,
@@ -155,8 +155,8 @@ function fetchSlashNames(sessionId: string | null): Promise<ReadonlySet<string> 
 function useSlashNames(sessionId: string | null) {
   // No type argument: the react shim types the namespace as `any`, and an
   // untyped call may not take explicit type arguments (TS2347).
-  var state = react.useState(null);
-  react.useEffect(
+  var state = React.useState(null);
+  React.useEffect(
     function () {
       var cancelled = false;
       fetchSlashNames(sessionId).then(function (names) {
@@ -177,9 +177,9 @@ function useSlashNames(sessionId: string | null) {
  * are rebuilt here: the copy debounce and the 1s "copied" timer are kept.
  */
 function BubbleActions({ text, time, t }) {
-  var copied = react.useState(false);
+  var copied = React.useState(false);
   var setCopied = copied[1];
-  var onCopy = react.useCallback(
+  var onCopy = React.useCallback(
     function () {
       // The copied guard doubles as the debounce while the 1s timer runs.
       if (copied[0]) return;
@@ -215,7 +215,7 @@ function BubbleActions({ text, time, t }) {
  * fences (./text). Images go through the renderMessageImages OWNER PROP —
  * never reimplemented — so image rendering is zero-loss in the takeover.
  */
-var UserBubbleNodeView = react.memo(function UserBubbleNodeView({ node, renderMessageImages, t, sessionId }) {
+var UserBubbleNodeView = React.memo(function UserBubbleNodeView({ node, renderMessageImages, t, sessionId }) {
   var data = node.data;
   var parts = contentParts(data.content);
   // Order matters: hard breaks FIRST (so chip labels never carry break

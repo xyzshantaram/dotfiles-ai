@@ -17,7 +17,7 @@
  * until the shipped row is disabled.
  */
 
-import react from "react";
+import React from "react";
 import { createPortal } from "react-dom";
 import { AnsiUp } from "ansi_up";
 import primitives from "@deepseek-ai/dsh-client-ui-primitives";
@@ -116,33 +116,33 @@ function ordered(
 function JobOutputBody(props: any) {
   var jobId = props.jobId;
 
-  var statusState = react.useState(props.status);
+  var statusState = React.useState(props.status);
   var status = statusState[0];
   var setStatus = statusState[1];
-  var statusRef = react.useRef(props.status);
+  var statusRef = React.useRef(props.status);
 
-  var outState = react.useState(null);
+  var outState = React.useState(null);
   var out = outState[0];
   var setOut = outState[1];
 
-  var autoscrollState = react.useState(true);
+  var autoscrollState = React.useState(true);
   var autoscroll = autoscrollState[0];
   var setAutoscroll = autoscrollState[1];
 
-  var killPhaseState = react.useState("idle");
+  var killPhaseState = React.useState("idle");
   var killPhase = killPhaseState[0];
   var setKillPhase = killPhaseState[1];
 
-  var killErrorState = react.useState(null);
+  var killErrorState = React.useState(null);
   var killError = killErrorState[0];
   var setKillError = killErrorState[1];
 
-  var outputWrapRef = react.useRef(null);
+  var outputWrapRef = React.useRef(null);
 
   // One fetch now, then a poll chain while the known status stays live.
   // The cleanup cancels the chain and any pending timer, so a closed
   // modal leaves no timer behind.
-  react.useEffect(
+  React.useEffect(
     function () {
       var cancelled = false;
       var timer: any = null;
@@ -197,7 +197,7 @@ function JobOutputBody(props: any) {
 
   // Scroll the output to its bottom on new data, but only when the
   // autoscroll checkbox is checked.
-  react.useEffect(
+  React.useEffect(
     function () {
       if (!autoscroll) return;
       var wrap = outputWrapRef.current;
@@ -207,7 +207,7 @@ function JobOutputBody(props: any) {
   );
 
   // Revert the kill confirm on its own after a short wait.
-  react.useEffect(
+  React.useEffect(
     function () {
       if (killPhase !== "confirming") return;
       var timer = setTimeout(function () {
@@ -223,7 +223,7 @@ function JobOutputBody(props: any) {
   // Convert ANSI escapes to HTML once per output change. ansi_up escapes
   // plain text by default, so the result is safe for inner HTML. A fresh
   // converter per run keeps one output's dangling styles out of the next.
-  var outputHtml = react.useMemo(
+  var outputHtml = React.useMemo(
     function () {
       if (out === null || typeof out.text !== "string" || out.text === "") return "";
       return makeAnsiUp().ansi_to_html(out.text);
@@ -359,11 +359,11 @@ function makeJobViewerAction() {
     });
     var liveCount = jobs.filter(isLive).length;
 
-    var menuOpenState = react.useState(false);
+    var menuOpenState = React.useState(false);
     var menuOpen = menuOpenState[0];
     var setMenuOpen = menuOpenState[1];
 
-    var nowState = react.useState(function () {
+    var nowState = React.useState(function () {
       return Date.now();
     });
     var now = nowState[0];
@@ -373,20 +373,20 @@ function makeJobViewerAction() {
     // screen. The modal's own state lives in JobOutputBody (it renders in
     // the host's tree); the dropdown tracks only the handle it needs to
     // close the modal again.
-    var modalId = react.useRef(null);
+    var modalId = React.useRef(null);
 
-    var triggerRef = react.useRef(null);
-    var menuRef = react.useRef(null);
+    var triggerRef = React.useRef(null);
+    var menuRef = React.useRef(null);
 
     // Fixed position of the portal menu, seeded on open and refined after
     // mount measures the menu.
-    var menuPosState = react.useState(null);
+    var menuPosState = React.useState(null);
     var menuPos = menuPosState[0];
     var setMenuPos = menuPosState[1];
 
     // Tick the row durations once a second while the menu is open and a
     // job is still live. Matches the shipped dropdown's own behavior.
-    react.useEffect(
+    React.useEffect(
       function () {
         if (!menuOpen || liveCount === 0) return;
         setNow(Date.now());
@@ -404,7 +404,7 @@ function makeJobViewerAction() {
     // would overflow the viewport bottom, clamped on every side. Runs on
     // open and whenever the row count changes the menu's measured size, and
     // re-runs on scroll and resize while open.
-    react.useLayoutEffect(
+    React.useLayoutEffect(
       function () {
         if (!menuOpen) return;
         var place = function () {
@@ -442,7 +442,7 @@ function makeJobViewerAction() {
     // Close the portal menu on outside pointerdown and on Escape. The
     // trigger and the menu itself are excluded, so the trigger click still
     // toggles and row clicks still open the modal.
-    react.useEffect(
+    React.useEffect(
       function () {
         if (!menuOpen) return;
         var onPointerDown = function (event: any) {

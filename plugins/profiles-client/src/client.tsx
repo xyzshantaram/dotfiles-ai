@@ -49,7 +49,7 @@ import { entryHead, normalizeEntry, chainNameForRoutes } from "../../profile-rou
 import settingsCss from "../../shared/settings.css";
 import localCss from "./client.module.css";
 
-import * as react from "react";
+import * as React from "react";
 import {
   DndContext,
   KeyboardSensor,
@@ -128,11 +128,11 @@ function NetworkIcon14() {
     </svg>
   );
 }
-var useSyncExternalStore = react.useSyncExternalStore;
-var useCallback = react.useCallback;
-var useState = react.useState;
-var useEffect = react.useEffect;
-var useRef = react.useRef;
+var useSyncExternalStore = React.useSyncExternalStore;
+var useCallback = React.useCallback;
+var useState = React.useState;
+var useEffect = React.useEffect;
+var useRef = React.useRef;
 
 /** Stable plugin identity; also the loader entry id and CSS prefix root. */
 var PLUGIN_NAME = "profiles-client";
@@ -1886,7 +1886,7 @@ function makeProfilesPanel(models, sessions) {
                           >
                             {function (handle) {
                               return (
-                                <react.Fragment>
+                                <React.Fragment>
                                   <button
                                     type="button"
                                     className="pf-panel-grip"
@@ -1943,7 +1943,7 @@ function makeProfilesPanel(models, sessions) {
                             >
                               ×
                             </button>
-                                </react.Fragment>
+                                </React.Fragment>
                               );
                             }}
                           </SortableRung>

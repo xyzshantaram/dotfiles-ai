@@ -7,7 +7,7 @@
  * Anything needing react belongs here, and only client bundles import it, where
  * esbuild marks react external and the host supplies it.
  */
-import * as react from "react";
+import * as React from "react";
 
 /**
  * Close a popover when the user points outside it or presses Escape.
@@ -25,7 +25,7 @@ export function useDismissable(
   rootRef: { current: unknown },
   onClose: () => void,
 ): void {
-  react.useEffect(() => {
+  React.useEffect(() => {
     if (!open || typeof document === "undefined") return;
     const onPointerDown = (event: any) => {
       const root = rootRef.current as Node | null;

@@ -26,7 +26,7 @@
  * entry alive so the client-module registry serves this bundle.
  */
 
-import react from "react";
+import React from "react";
 import { injectStyle, mergeCss, fetchJson, postJson } from "../../shared/client-util";
 import { SettingsSection } from "../../shared/settings-panel";
 import settingsCss from "../../shared/settings.css";
@@ -62,21 +62,21 @@ function fmtSize(bytes) {
 /** Build the panel component. State stays per-registration. */
 function makePanel() {
   return function Panel() {
-    var listState = react.useState(null);
+    var listState = React.useState(null);
     var list = listState[0];
     var setList = listState[1];
 
-    var busyState = react.useState(null);
+    var busyState = React.useState(null);
     var busy = busyState[0];
     var setBusy = busyState[1];
 
-    var selectedState = react.useState(function () {
+    var selectedState = React.useState(function () {
       return new Set();
     });
     var selected = selectedState[0];
     var setSelected = selectedState[1];
 
-    var batchBusyState = react.useState(false);
+    var batchBusyState = React.useState(false);
     var batchBusy = batchBusyState[0];
     var setBatchBusy = batchBusyState[1];
     var load = function () {
@@ -97,7 +97,7 @@ function makePanel() {
       });
     };
 
-    react.useEffect(function () {
+    React.useEffect(function () {
       console.debug("[session-archive] panel mounted");
       load();
     }, []);

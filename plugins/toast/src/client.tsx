@@ -23,7 +23,7 @@
  * one. `plugins/shared/toast-client.ts` is that safe caller for plugins in
  * this repository; aidos does the same three-line check against the global.
  */
-import react from "react";
+import React from "react";
 
 import { injectStyle } from "../../shared/client-util";
 import localCss from "./client.module.css";
@@ -52,9 +52,9 @@ var name = PLUGIN_NAME;
  * toast happened to force a re-render.
  */
 function ToastStack() {
-  const [toasts, setToasts] = react.useState(getToasts() as readonly Toast[]);
+  const [toasts, setToasts] = React.useState(getToasts() as readonly Toast[]);
 
-  react.useEffect(function () {
+  React.useEffect(function () {
     // Re-read on mount as well as subscribing: a toast raised between the
     // initial state and this effect would otherwise be missed.
     setToasts(getToasts());

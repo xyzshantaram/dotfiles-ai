@@ -1,4 +1,4 @@
-import * as react from "react";
+import * as React from "react";
 import { useDismissable } from "../../shared/client-react";
 import { injectStyle, shippedClass } from "../../shared/client-util";
 import {
@@ -44,12 +44,12 @@ const TRUE_ROWS = [
  * of tooltips and devalue the ones that carry a real diagnosis.
  */
 function row(key: string, label: string, value: string, sub?: boolean, title?: string | null) {
-  return react.createElement(
+  return React.createElement(
     "div",
     { key: key, className: sub ? "ctx-meter-row ctx-meter-sub" : "ctx-meter-row" },
     [
-      react.createElement("dt", { key: "dt" }, label),
-      react.createElement(
+      React.createElement("dt", { key: "dt" }, label),
+      React.createElement(
         "dd",
         title === undefined || title === null ? { key: "dd" } : { key: "dd", title: title },
         value,
@@ -102,7 +102,7 @@ function apply(ctx: any) {
     yield ctx.slots.register(
       { name: "conversation.input.right", id: "true-context-meter", order: 50 },
       (props: any) =>
-        react.createElement(Meter, {
+        React.createElement(Meter, {
           useProjection: props.useProjection,
           sessionId: props.sessionId,
           pricesScope: pricesScope,
@@ -200,27 +200,27 @@ function apply(ctx: any) {
     const breakdown = useProjection("contextBreakdown");
     const pressure = useProjection("contextPressure");
     const usage = useProjection("tokenUsage");
-    const [open, setOpen] = react.useState(false);
-    const [hovering, setHovering] = react.useState(false);
-    const rootRef = react.useRef(null);
+    const [open, setOpen] = React.useState(false);
+    const [hovering, setHovering] = React.useState(false);
+    const rootRef = React.useRef(null);
 
     // Resolved prices doc ({rates, overrides}) through the scope bound in
     // apply(). A revised settings document re-resolves and re-renders, so a
     // sync-models run shows up without a reload. The subscribe closure is
     // stable: without useCallback every render would resubscribe the store.
     const pricesScope = props.pricesScope;
-    const pricesSubscribe = react.useCallback(
+    const pricesSubscribe = React.useCallback(
       (callback: any) => pricesScope.store.subscribe(callback),
       [pricesScope],
     );
-    const pricesSnap = react.useSyncExternalStore(pricesSubscribe, () =>
+    const pricesSnap = React.useSyncExternalStore(pricesSubscribe, () =>
       pricesScope.store.getSnapshot(),
     );
 
     // Late-arriving modelDirectories bumps the box version and re-renders
     // into a priced figure instead of sticking on unknown price.
     const box = props.servicesBox;
-    const boxSubscribe = react.useCallback(
+    const boxSubscribe = React.useCallback(
       (callback: any) => {
         box.listeners.add(callback);
         return () => {
@@ -229,7 +229,7 @@ function apply(ctx: any) {
       },
       [box],
     );
-    const servicesVersion = react.useSyncExternalStore(boxSubscribe, () => box.version);
+    const servicesVersion = React.useSyncExternalStore(boxSubscribe, () => box.version);
 
     // The session's live model selection, shared with the model seat through
     // the same resolver (profiles-client resolves it identically from its
@@ -238,8 +238,8 @@ function apply(ctx: any) {
     // belong in a render pass. An unknown session, or no selection yet,
     // leaves the directory null — unknown price, never a guessed rate.
     const sessionId = props.sessionId;
-    const [directory, setDirectory] = react.useState(null);
-    react.useEffect(() => {
+    const [directory, setDirectory] = React.useState(null);
+    React.useEffect(() => {
       if (box === undefined || box.models === undefined) {
         setDirectory(null);
         return;
@@ -266,11 +266,11 @@ function apply(ctx: any) {
       }
     }, [box, sessionId, servicesVersion]);
 
-    const dirSubscribe = react.useCallback(
+    const dirSubscribe = React.useCallback(
       (callback: any) => (directory === null ? () => {} : directory.store.subscribe(callback)),
       [directory],
     );
-    const dirSnap = react.useSyncExternalStore(dirSubscribe, () =>
+    const dirSnap = React.useSyncExternalStore(dirSubscribe, () =>
       directory === null ? null : directory.store.getSnapshot(),
     );
     const current = dirSnap !== null && dirSnap !== undefined ? dirSnap.current : undefined;
@@ -327,12 +327,12 @@ function apply(ctx: any) {
     // order after every render rather than only on mount. Both shipped-class
     // lookups also retry here, because at boot they can run before the shipped
     // stylesheets exist.
-    react.useEffect(() => {
+    React.useEffect(() => {
       ensureShippedHidden();
       placeAfterModelSelect(rootRef.current);
     });
 
-    const close = react.useCallback(() => setOpen(false), []);
+    const close = React.useCallback(() => setOpen(false), []);
     useDismissable(open, rootRef, close);
 
     const contextWindow = pressure === undefined ? undefined : pressure.contextWindow;
@@ -353,7 +353,7 @@ function apply(ctx: any) {
       width: trueTotal === 0 ? 0 : (percent * breakdown[part.key]) / trueTotal,
     })).filter((part) => part.width > 0);
 
-    const trigger = react.createElement(
+    const trigger = React.createElement(
       "button",
       {
         type: "button",
@@ -362,18 +362,18 @@ function apply(ctx: any) {
         "aria-expanded": open,
         onClick: () => setOpen(!open),
       },
-      react.createElement(
+      React.createElement(
         "svg",
         { width: 18, height: 18, viewBox: "0 0 18 18", "aria-hidden": true },
         [
-          react.createElement("circle", {
+          React.createElement("circle", {
             key: "track",
             className: "ctx-meter-track",
             cx: 9,
             cy: 9,
             r: RADIUS,
           }),
-          react.createElement("circle", {
+          React.createElement("circle", {
             key: "fill",
             className: "ctx-meter-fill",
             cx: 9,
@@ -386,43 +386,43 @@ function apply(ctx: any) {
       ),
     );
 
-    const trueHalf = react.createElement("div", { className: "ctx-meter-half" }, [
-      react.createElement("div", { key: "head", className: "ctx-meter-head" }, [
-        react.createElement(
+    const trueHalf = React.createElement("div", { className: "ctx-meter-half" }, [
+      React.createElement("div", { key: "head", className: "ctx-meter-head" }, [
+        React.createElement(
           "span",
           { key: "t", className: "ctx-meter-title" },
           "Prompt, as measured",
         ),
-        react.createElement(
+        React.createElement(
           "span",
           { key: "f", className: "ctx-meter-figures" },
           formatTokens(trueTotal) + " / " + formatTokens(contextWindow) + "  " + percent + "%",
         ),
       ]),
-      react.createElement(
+      React.createElement(
         "div",
         { key: "bar", className: "ctx-meter-bar" },
         segments.map((part) =>
-          react.createElement("span", {
+          React.createElement("span", {
             key: part.key,
             className: "ctx-meter-segment " + part.color,
             style: { width: part.width + "%" },
           }),
         ),
       ),
-      react.createElement(
+      React.createElement(
         "dl",
         { key: "rows", className: "ctx-meter-rows" },
         TRUE_ROWS.map((part) =>
-          react.createElement("div", { key: part.key, className: "ctx-meter-row" }, [
-            react.createElement("dt", { key: "dt" }, [
-              react.createElement("span", {
+          React.createElement("div", { key: part.key, className: "ctx-meter-row" }, [
+            React.createElement("dt", { key: "dt" }, [
+              React.createElement("span", {
                 key: "s",
                 className: "ctx-meter-swatch " + part.color,
               }),
               part.label,
             ]),
-            react.createElement("dd", { key: "dd" }, formatTokens(breakdown[part.key])),
+            React.createElement("dd", { key: "dd" }, formatTokens(breakdown[part.key])),
           ]),
         ),
       ),
@@ -430,7 +430,7 @@ function apply(ctx: any) {
 
     let providerBody;
     if (usage === undefined) {
-      providerBody = react.createElement(
+      providerBody = React.createElement(
         "div",
         { className: "ctx-meter-note" },
         "No usage reported yet.",
@@ -438,33 +438,33 @@ function apply(ctx: any) {
     } else {
       const billed = usage.uncachedInputTokens + usage.cacheReadTokens + usage.cacheWriteTokens;
       providerBody = [
-        react.createElement("dl", { key: "last", className: "ctx-meter-rows" }, [
+        React.createElement("dl", { key: "last", className: "ctx-meter-rows" }, [
           row("claim", "Prompt it says it read", formatTokens(pressure.pressureTokens)),
         ]),
-        react.createElement(
+        React.createElement(
           "div",
           { key: "g", className: "ctx-meter-group" },
           "Session totals, every call summed",
         ),
-        react.createElement("dl", { key: "totals", className: "ctx-meter-rows" }, [
+        React.createElement("dl", { key: "totals", className: "ctx-meter-rows" }, [
           row("in", "Prompt, billed", formatTokens(billed)),
           row("cr", "of which cache read", formatTokens(usage.cacheReadTokens), true),
           row("cw", "of which cache write", formatTokens(usage.cacheWriteTokens), true),
           row("out", "Output", formatTokens(usage.outputTokens)),
         ]),
-        react.createElement(
+        React.createElement(
           "div",
           { key: "cg", className: "ctx-meter-group" },
           "Session cost, approximate",
         ),
-        react.createElement("dl", { key: "cost", className: "ctx-meter-rows" }, [
+        React.createElement("dl", { key: "cost", className: "ctx-meter-rows" }, [
           // The label is now specific (prices unavailable / no model reported /
           // unpriced model) and the sentence a reader can act on rides in the
           // title, so the panel explains itself without a console.
           row("cost", "Whole session", costText ?? missing.label, false, costDetail ?? missing.detail),
           ...(rateLabel !== null ? [row("rate", "Priced at", rateLabel, true)] : []),
         ]),
-        react.createElement(
+        React.createElement(
           "div",
           { key: "cn", className: "ctx-meter-note" },
           "Per-model cache rates from models.dev. The runtime exposes no " +
@@ -474,16 +474,16 @@ function apply(ctx: any) {
       ];
     }
 
-    const providerHalf = react.createElement("div", { className: "ctx-meter-half" }, [
-      react.createElement("div", { key: "head", className: "ctx-meter-head" }, [
-        react.createElement(
+    const providerHalf = React.createElement("div", { className: "ctx-meter-half" }, [
+      React.createElement("div", { key: "head", className: "ctx-meter-head" }, [
+        React.createElement(
           "span",
           { key: "t", className: "ctx-meter-title" },
           "Provider claims, last call",
         ),
       ]),
-      react.createElement("div", { key: "body" }, providerBody),
-      react.createElement(
+      React.createElement("div", { key: "body" }, providerBody),
+      React.createElement(
         "div",
         { key: "note", className: "ctx-meter-note" },
         "Reported by the provider, not measured here. Some providers report these as running totals, which makes them larger than the prompt above.",
@@ -493,17 +493,17 @@ function apply(ctx: any) {
     const children = [trigger];
     if (open)
       children.push(
-        react.createElement("div", { key: "panel", className: "ctx-meter-panel" }, [
+        React.createElement("div", { key: "panel", className: "ctx-meter-panel" }, [
           trueHalf,
           providerHalf,
         ]),
       );
     else if (hovering)
       children.push(
-        react.createElement("div", { key: "tip", className: "ctx-meter-tip" }, tipText),
+        React.createElement("div", { key: "tip", className: "ctx-meter-tip" }, tipText),
       );
 
-    return react.createElement(
+    return React.createElement(
       "span",
       {
         ref: rootRef,

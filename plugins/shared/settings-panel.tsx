@@ -2,10 +2,10 @@
  * Shared settings-section header: title, optional refresh button, body.
  *
  * Presentational only. Used by the session-archive, subscriptions, and
- * profiles settings panels. The import stays named `react` so the classic
- * JSX factory expansion (`react.createElement`) keeps a binding in scope.
+ * profiles settings panels. The import stays named `React` so the classic
+ * JSX factory expansion (`React.createElement`) keeps a binding in scope.
  */
-import react from "react";
+import React from "react";
 
 /** One titled section of a settings page, with an optional refresh action. */
 export function SettingsSection(props: {

@@ -107,8 +107,8 @@ async function wrapClientBundle(entryPath, outPath, id) {
     // react-dom into the bundle, about 130 KB.
     external: ["react", "react-dom", "react-dom/client", "@deepseek-ai/*"],
     jsx: "transform",
-    jsxFactory: "react.createElement",
-    jsxFragment: "react.Fragment",
+    jsxFactory: "React.createElement",
+    jsxFragment: "React.Fragment",
     plugins: [cssTextPlugin],
     outfile: bundlePath,
     logLevel: "info",

@@ -37,7 +37,7 @@
 // The modal it opens is now the ATTENTION SURFACE (#103 Phase 1): tabbed,
 // with the built-in approvals and questions migrated onto it through
 // agentAskUser like any other contributing surface.
-import * as react from "react";
+import * as React from "react";
 import * as runtime from "@deepseek-ai/dsh-client-runtime/client";
 import { injectStyle } from "../../shared/client-util";
 import { closeModal, openModal } from "../../shared/modal-client";
@@ -277,7 +277,7 @@ function respondToApproval(pending: any, outcome: string): Promise<void> {
  *
  * Props: { component, bodyProps, ask, surfaceName, itemKey }.
  */
-class SafeItemBody extends react.Component {
+class SafeItemBody extends React.Component {
   props: any;
   state: any;
   constructor(props: any) {
@@ -313,7 +313,7 @@ class SafeItemBody extends react.Component {
     // always settle without the contributor's cooperation (dismissal,
     // disposal, settled elsewhere).
     merged.ask = this.props.ask;
-    return react.createElement(this.props.component, merged);
+    return React.createElement(this.props.component, merged);
   }
 }
 
@@ -367,14 +367,14 @@ function QuestionBody(props: any) {
 function AttentionCard(props: any) {
   var item = props.item as AttentionItem;
   var bodyProps = item.props as AskProps;
-  var armedState = react.useState(false);
+  var armedState = React.useState(false);
   var armed = armedState[0];
   var setArmed = armedState[1];
-  var answeredState = react.useState(false);
+  var answeredState = React.useState(false);
   var answered = answeredState[0];
   var setAnswered = answeredState[1];
-  var armTimer = react.useRef(0);
-  react.useEffect(function () {
+  var armTimer = React.useRef(0);
+  React.useEffect(function () {
     return function () {
       if (armTimer.current !== 0) window.clearTimeout(armTimer.current);
     };
@@ -383,7 +383,7 @@ function AttentionCard(props: any) {
   // checkExpiry is render-driven and side-effect free by contract; the
   // REMOVAL below is the shell's explicit effect, not the check's.
   var verdict = evaluateItemExpiry(item);
-  react.useEffect(
+  React.useEffect(
     function () {
       if (verdict === "expired") {
         (props.store as AttentionStore).removeItem(item.key);
@@ -535,9 +535,9 @@ function AttentionCard(props: any) {
  */
 function AttentionModal(props: any) {
   var store = props.store as AttentionStore;
-  var snapshot = react.useSyncExternalStore(store.subscribe, store.getSnapshot);
+  var snapshot = React.useSyncExternalStore(store.subscribe, store.getSnapshot);
   var tabs: AttentionTab[] = visibleTabsOf(snapshot, props.sessionId);
-  var activeState = react.useState(null as string | null);
+  var activeState = React.useState(null as string | null);
   var activeId = activeState[0];
   var setActiveId = activeState[1];
 
@@ -632,7 +632,7 @@ function useBuiltInSurfaces(  sessionId: string | null,
   pendingOf: (key: string) => any,
 ) {
   var store = getAttentionStore();
-  var box = react.useRef(null as BuiltInSurfacesBox | null);
+  var box = React.useRef(null as BuiltInSurfacesBox | null);
   if (box.current === null) {
     mountSeq += 1;
     var suffix = String(mountSeq);
@@ -649,7 +649,7 @@ function useBuiltInSurfaces(  sessionId: string | null,
       handlesByItem: new Map<string, AskHandle>(),
     };
   }
-  react.useEffect(function () {
+  React.useEffect(function () {
     var owned: BuiltInSurfacesBox | null = box.current;
     if (owned === null) return undefined;
     return function () {
@@ -667,7 +667,7 @@ function useBuiltInSurfaces(  sessionId: string | null,
     };
   }, []);
 
-  react.useEffect(
+  React.useEffect(
     function () {
       var owned: BuiltInSurfacesBox | null = box.current;
       if (owned === null) return;
@@ -803,16 +803,16 @@ function useBuiltInSurfaces(  sessionId: string | null,
 
 function makeIndicator() {
   return function Indicator(props: any) {
-    var selectorTools = react.useMemo(makeSelector, []);
+    var selectorTools = React.useMemo(makeSelector, []);
     var approvalRows = props.useSession(selectorTools.selectApprovals);
-    var questionTools = react.useMemo(makeQuestionSelector, []);
+    var questionTools = React.useMemo(makeQuestionSelector, []);
     var questionInputs = props.useSession(questionTools.selectQuestions);
     // The id openModal() handed back, or null while no attention modal is
     // on screen. The modal renders in the host's tree now, so the indicator
     // tracks only the handle it needs to avoid a double open.
-    var modalId = react.useRef(null);
+    var modalId = React.useRef(null);
     // callIds whose card was not found on click; their jump button disables.
-    var missingState = react.useState(function () {
+    var missingState = React.useState(function () {
       return new Set<string>();
     });
     var missing = missingState[0];
@@ -834,7 +834,7 @@ function makeIndicator() {
     // answer given while the composer is mounted. A question still PENDING at
     // mount is untouched by this: bright width reads the live pending set, so
     // an unanswered question is still marked the moment the session opens.
-    var fadeState = react.useState(function () {
+    var fadeState = React.useState(function () {
       return initialRingFade(questionInputs.answered);
     });
     var fade = fadeState[0];
@@ -847,7 +847,7 @@ function makeIndicator() {
     // raw counts), so a new answer mid-fade re-arms the hold instead of
     // joining a stale timer, while a new PENDING question changes only the
     // bright width and never disturbs the answered cycle.
-    react.useEffect(
+    React.useEffect(
       function () {
         if (paint.next === null) return undefined;
         if (paint.next === "hold") {
@@ -947,7 +947,7 @@ function makeIndicator() {
     // below, where jump/jumpableOf/handlesOf actually exist. The initial
     // value is never observed: the modal body reads `.current` only after
     // openAttention(), which cannot run while the badge is hidden.
-    var liveHandlers = react.useRef({
+    var liveHandlers = React.useRef({
       jumpableOf: function (_item: AttentionItem): boolean {
         return false;
       },

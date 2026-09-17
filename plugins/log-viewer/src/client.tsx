@@ -18,7 +18,7 @@
  * alive so the client-module registry serves this bundle.
  */
 
-import react from "react";
+import React from "react";
 import { injectStyle, mergeCss, fetchJson } from "../../shared/client-util";
 import { SettingsSection } from "../../shared/settings-panel";
 import settingsCss from "../../shared/settings.css";
@@ -33,7 +33,7 @@ var STYLE_TAG_ID = "log-viewer/settings.css";
 /** Build the panel component. State stays per-registration. */
 function makePanel() {
   return function Panel() {
-    var viewState = react.useState(null);
+    var viewState = React.useState(null);
     var view = viewState[0];
     var setView = viewState[1];
 
@@ -54,7 +54,7 @@ function makePanel() {
       });
     };
 
-    react.useEffect(function () {
+    React.useEffect(function () {
       console.debug("[log-viewer] panel mounted");
       load();
     }, []);

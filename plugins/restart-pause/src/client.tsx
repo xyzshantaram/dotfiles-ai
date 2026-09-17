@@ -25,7 +25,7 @@
  * browser, so there is no cross-origin request, no certificate question, and
  * no way for the check to be pointed at something that is not this dsh.
  */
-import react from "react";
+import React from "react";
 import { injectStyle, mergeCss, fetchJson, postJson } from "../../shared/client-util";
 import { SettingsSection } from "../../shared/settings-panel";
 import settingsCss from "../../shared/settings.css";
@@ -107,14 +107,14 @@ async function probeOnce(path: string): Promise<boolean> {
 
 function makePanel() {
   return function DebugPanel() {
-    const [status, setStatus] = react.useState(null as Status | null);
-    const [checks, setChecks] = react.useState(null as CheckResult[] | null);
-    const [busy, setBusy] = react.useState(false);
-    const [message, setMessage] = react.useState(null as string | null);
-    const [verdict, setVerdict] = react.useState(null as string | null);
-    const probing = react.useRef(false);
+    const [status, setStatus] = React.useState(null as Status | null);
+    const [checks, setChecks] = React.useState(null as CheckResult[] | null);
+    const [busy, setBusy] = React.useState(false);
+    const [message, setMessage] = React.useState(null as string | null);
+    const [verdict, setVerdict] = React.useState(null as string | null);
+    const probing = React.useRef(false);
 
-    const refresh = react.useCallback(() => {
+    const refresh = React.useCallback(() => {
       fetchJson("/restart-pause/status").then((result: unknown) => {
         const r = unwrap<Status>(result);
         if (isStatus(r)) setStatus(r);
@@ -122,7 +122,7 @@ function makePanel() {
       });
     }, []);
 
-    react.useEffect(() => {
+    React.useEffect(() => {
       refresh();
     }, [refresh]);
 
@@ -131,7 +131,7 @@ function makePanel() {
      * an "up" seen here can be believed once a "down" has preceded it --
      * which is exactly what `verdictFrom` enforces.
      */
-    const watch = react.useCallback(
+    const watch = React.useCallback(
       (healthPath: string, settleMs: number) => {
         if (probing.current) return;
         probing.current = true;
@@ -159,7 +159,7 @@ function makePanel() {
       [refresh],
     );
 
-    const runChecks = react.useCallback(() => {
+    const runChecks = React.useCallback(() => {
       setBusy(true);
       setMessage(null);
       postJson("/restart-pause/checks", {})
@@ -170,7 +170,7 @@ function makePanel() {
         .finally(() => setBusy(false));
     }, []);
 
-    const restart = react.useCallback(
+    const restart = React.useCallback(
       (force: boolean) => {
         if (status === null) return;
         setBusy(true);
@@ -221,7 +221,7 @@ function makePanel() {
       [status, watch, refresh],
     );
 
-    const toggleArm = react.useCallback(() => {
+    const toggleArm = React.useCallback(() => {
       if (status === null) return;
       const next = !status.armed;
       // Arming is the case the flash exists for: the restart fires later, at
