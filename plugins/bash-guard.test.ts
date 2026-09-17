@@ -606,6 +606,14 @@ describe("bash-guard tool wiring", () => {
     const { value } = await runReal("trap 'true' DEBUG\nfalse && echo hi | cat");
     expect(value.exitCode).toBe(1);
     expect(value.text).not.toContain("[exit codes:");
+    // The load-bearing one (#144 review). Dropping the arity backstop renders
+    // "[exit codes (unconfirmed — ...): echo 1]" — codes that really belong to
+    // `false`, attributed to a command that never ran. That misrender slips
+    // past BOTH assertions above: it contains "[exit codes (" rather than
+    // "[exit codes:", and it still prints the scope note. Without this line the
+    // backstop is pinned only at render level, and the live path — the one that
+    // actually reaches a reader — is unguarded.
+    expect(value.text).not.toContain("unconfirmed");
     expect(value.text).toContain("exit codes cover the final pipeline only");
   });
 
