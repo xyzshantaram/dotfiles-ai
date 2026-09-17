@@ -4010,6 +4010,71 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
   min-width: 0;
   max-width: 100%;
 }
+/* #165: one \`&&\`/\`||\` chain as ONE panel, rows as cards inside it. The panel
+   owns the single outline for the whole script line (border-l2, 0.75rem
+   radius \u2014 the same voice as .tool-render-card above, deliberately, per the
+   owner's named target); each part is a card in that card's style (same
+   border, layer-1 background, and the card's tight 0.15625rem vertical
+   padding \u2014 the restraint that makes the target read clean). The part, not
+   the stage box, is now the outline unit: stages inside a part go FLAT
+   (borderless, backgroundless, paddingless \u2014 see the descendant rule below),
+   which removes the second outline level the ticket calls excessive. A
+   reused single-statement diagram nested in a part keeps v1's blocks
+   untouched otherwise; only its outer margin is neutralised, as in sequences.
+   AXIS CONTRACT (criterion 3): parts stack vertically at CONTENT width
+   (align-items: flex-start \u2014 time passes, like sequence members) and never
+   sit side by side, so they cannot read as pipe stages; a pipe row keeps its
+   horizontal nowrap band with \`|\`/\`\u2192\` glyphs and its own scroll (C0 below,
+   untouched). max-width + min-width keep an overlong pipeline's scroll
+   inside the card instead of breaking the pane. */
+.tool-render-diagram-chainpanel {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 0.75rem;
+  padding: 0.375rem 0.5rem;
+  min-width: 0;
+  max-width: 100%;
+}
+.tool-render-diagram-part {
+  box-sizing: border-box;
+  align-self: flex-start;
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 0.5rem;
+  background: var(--dsw-alias-bg-layer-1);
+  padding: 0.15625rem 0.5rem;
+}
+.tool-render-diagram-part .tool-render-diagram {
+  margin: 0;
+  padding: 0;
+}
+.tool-render-diagram-part .tool-render-diagram-stage {
+  border-color: transparent;
+  background: transparent;
+  padding: 0;
+}
+/* #165, THE DELIBERATE TRADE against #162 criterion 1. #162 set
+   \`flex: 1 1 0%\` \u2014 equal-share stages \u2014 ON PURPOSE, to spend horizontal width
+   rather than waste it (the freed width goes to the parsed-argument chips).
+   Equal-share is exactly what stretches a SHORT command across a wide row:
+   a single stage has nothing to share its row WITH, so equal-share there is
+   pure stretch \u2014 the "negative space created by the empty portion of a
+   command line" the owner is describing. The reversal is therefore NARROW:
+   single-stage flows (data-stages="1", set by BashCommandDiagram) size to
+   content (\`flex: 0 1 auto\`), while multi-stage pipelines keep equal-share \u2014
+   #162's decision stands everywhere multiple stages genuinely share a row.
+   #162's C0 re-checked in the same breath: the flow rule above stays
+   \`flex-flow: row nowrap\` with \`overflow-x: auto\`, so a pipeline row still
+   never wraps into a column (a wrapped pipe row is indistinguishable from a
+   stacked sequence) \u2014 it scrolls. Single-stage hug cannot break C0: one
+   stage has no row-mate to wrap against; its chips wrap INSIDE it, as before. */
+.tool-render-diagram-flow[data-stages="1"] .tool-render-diagram-stage {
+  flex: 0 1 auto;
+}
 .tool-render-diagram-lead {
   white-space: pre-wrap;
   word-break: break-word;
@@ -22514,6 +22579,9 @@ function sequenceUnitDiagramModel(row) {
     trailing: row.groupGap === "" ? [] : [{ kind: "gap", text: row.groupGap }]
   };
 }
+function chainPanelRows(chain) {
+  return chain.rows.map((row) => sequenceUnitDiagramModel(row));
+}
 function subtreeHasHeredoc(node) {
   if (node === null || typeof node !== "object") return false;
   if (Array.isArray(node)) {
@@ -24130,7 +24198,7 @@ function BashCommandDiagram(props) {
       tail.push(/* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-lead" }, piece.text));
     }
   }
-  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram" }, head, /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-flow" }, flow), tail);
+  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram" }, head, /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-flow", "data-stages": model.stages.length }, flow), tail);
 }
 function BashSequenceTextGroup(props) {
   var group = props.group;
@@ -24148,6 +24216,7 @@ function BashSequenceSeparator(props) {
   var residue = separator.replace(/[;\s]/g, "");
   if (typeof props.operator === "string" && residue === props.operator) residue = "";
   var carriesContent = residue !== "";
+  if (carriesContent !== true && props.hideWhenEmpty === true) return null;
   return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-seq-sep" }, carriesContent ? /* @__PURE__ */ import_react4.default.createElement(
     "code",
     {
@@ -24156,6 +24225,32 @@ function BashSequenceSeparator(props) {
       dangerouslySetInnerHTML: { __html: highlightCode(separator, "bash") }
     }
   ) : null);
+}
+function BashChainPanel(props) {
+  var chain = props.chain;
+  var parts = chainPanelRows(chain);
+  var children = [];
+  if (chain.leadingGap.trim() !== "") {
+    children.push(/* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-lead" }, chain.leadingGap));
+  }
+  for (var r = 0; r < parts.length; r++) {
+    if (r > 0) {
+      children.push(
+        /* @__PURE__ */ import_react4.default.createElement(
+          BashSequenceSeparator,
+          {
+            text: chain.separators[r - 1],
+            operator: chain.operators[r - 1],
+            hideWhenEmpty: true
+          }
+        )
+      );
+    }
+    children.push(
+      /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-part" }, /* @__PURE__ */ import_react4.default.createElement(BashCommandDiagram, { model: parts[r] }))
+    );
+  }
+  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-chainpanel" }, children);
 }
 function BashSequenceDiagram(props) {
   var model = props.model;
@@ -24172,24 +24267,7 @@ function BashSequenceDiagram(props) {
       children.push(/* @__PURE__ */ import_react4.default.createElement(BashCommandDiagram, { model: sequenceUnitDiagramModel(group.unit) }));
     } else if (group.kind === "chain") {
       var chain = group.chain;
-      if (chain.leadingGap.trim() !== "") {
-        children.push(/* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-lead" }, chain.leadingGap));
-      }
-      for (var r = 0; r < chain.rows.length; r++) {
-        if (r > 0) {
-          children.push(
-            /* @__PURE__ */ import_react4.default.createElement(
-              BashSequenceSeparator,
-              {
-                text: chain.separators[r - 1],
-                operator: chain.operators[r - 1]
-              }
-            )
-          );
-        }
-        var row = chain.rows[r];
-        children.push(/* @__PURE__ */ import_react4.default.createElement(BashCommandDiagram, { model: sequenceUnitDiagramModel(row) }));
-      }
+      children.push(/* @__PURE__ */ import_react4.default.createElement(BashChainPanel, { chain }));
     } else {
       children.push(/* @__PURE__ */ import_react4.default.createElement(BashSequenceTextGroup, { group }));
     }

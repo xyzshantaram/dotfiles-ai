@@ -666,12 +666,37 @@ export function sequenceUnitDiagramModel(row: BashSequenceUnit): {
 }
 
 /**
- * One drawn `&&`/`||` CHAIN inside a statement (#162 criterion 2b): rows
- * stack exactly like sequence members, and each dependent row (i>0) carries
- * ITS OWN condition (`operators[i-1]`) as prominent text at the top of its
- * own panel. The BASE row (i=0) carries no marker of any kind: it runs
- * unconditionally, and the group-level badge v2 painted across the whole
- * chain said something false about it.
+ * The view models ONE CHAIN PANEL hands to its part cards (#165): every row
+ * of the chain through sequenceUnitDiagramModel, in order, never built by
+ * hand. This is the same defect class that seam exists to kill — a panel
+ * branch assembling per-row view objects inline is how `conditional` got
+ * dropped twice in #162's reviews (model-true, screen-false) — so the panel
+ * branch in client.tsx calls this and nothing else.
+ *
+ * What the merge preserves, and where it lives now:
+ * (a) the conditional marker still attaches ONLY to the dependent part:
+ * `conditional` rides through per row, so the base row's null reaches its
+ * card as null and the card renders no marker (a panel-wide marker would
+ * state something false about the base, which runs unconditionally);
+ * (b) each part still carries its own exit code: the row's `stages` array is
+ * shared by reference (not copied), so a per-stage `exitCode` set on the
+ * model — #143/#144 capture a code per statement — reads identically inside
+ * the panel. (In practice attributeSequenceStages leaves chain rows uncoded:
+ * a conditional script disqualifies naming host-side, so the place exists
+ * while the data never fills it. The pin below sets codes by hand to prove
+ * the place, not the pipeline.)
+ */
+export function chainPanelRows(chain: BashSequenceChainGroup): ReturnType<typeof sequenceUnitDiagramModel>[] {
+  return chain.rows.map((row) => sequenceUnitDiagramModel(row));
+}
+
+/**
+ * One drawn `&&`/`||` CHAIN inside a statement (#162 criterion 2b, panelled
+ * by #165): rows stack exactly like sequence members, and each dependent row
+ * (i>0) carries ITS OWN condition (`operators[i-1]`) as prominent text at
+ * the top of its own part card INSIDE the chain's one panel. The BASE row
+ * (i=0) carries no marker of any kind: it runs unconditionally, and a
+ * panel-wide marker would say something false about it.
  */
 export interface BashSequenceChainGroup {
   kind: "chain";

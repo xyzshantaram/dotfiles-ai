@@ -135,10 +135,17 @@ describe("ticket-named cases", () => {
     // found. If a render harness ever lands, this test should be REPLACED by
     // one that asserts the marker's presence in rendered output, not kept
     // alongside it.
+    //
+    // #165: the chain branch no longer hands a model to BashCommandDiagram
+    // directly — it renders <BashChainPanel>, which maps rows through
+    // chainPanelRows (pinned in bash-chain-panel.test.ts). So exactly ONE
+    // direct call site remains (the plain-diagram branch); the count below
+    // would redden if either branch went back to an inline literal OR if a
+    // third hand-rolled call site appeared.
     const source = readFileSync(new URL("./client.tsx", import.meta.url), "utf8");
-    // Both branches of the sequence renderer hand a model to BashCommandDiagram.
+    // The plain-diagram branch hands a model to BashCommandDiagram.
     const wired = source.match(/<BashCommandDiagram\s+model=\{sequenceUnitDiagramModel\(/g) ?? [];
-    expect(wired).toHaveLength(2);
+    expect(wired).toHaveLength(1);
     // An inline object literal is exactly how `conditional` got dropped twice.
     expect(source).not.toMatch(/<BashCommandDiagram\s+model=\{\{/);
   });

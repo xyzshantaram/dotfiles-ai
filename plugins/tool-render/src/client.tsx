@@ -183,7 +183,7 @@ var EXTENSION_LANGUAGE = {
 // ---- Platform modules: resolved by the shell loader seed at runtime. ----
 import React from "react";
 import { isBashGuardReason } from "./guard";
-import { attributePipeStages, attributeSequenceStages, sequenceUnitDiagramModel, resolveBashTab, getBashDiagram, getBashSequenceDiagram } from "./bash-diagram";
+import { attributePipeStages, attributeSequenceStages, chainPanelRows, sequenceUnitDiagramModel, resolveBashTab, getBashDiagram, getBashSequenceDiagram } from "./bash-diagram";
 import { escalationDetailOf, escalationLabel, escalationReasonClassName } from "./escalation";
 import {
   composeVerdictTooltip,
@@ -1448,7 +1448,7 @@ function BashCommandDiagram(props) {
   return (
     <div className="tool-render-diagram">
       {head}
-      <div className="tool-render-diagram-flow">{flow}</div>
+      <div className="tool-render-diagram-flow" data-stages={model.stages.length}>{flow}</div>
       {tail}
     </div>
   );
@@ -1505,6 +1505,12 @@ function BashSequenceSeparator(props) {
   var residue = separator.replace(/[;\s]/g, "");
   if (typeof props.operator === "string" && residue === props.operator) residue = "";
   var carriesContent = residue !== "";
+  // #165: inside a chain panel the boundary is the card stack itself — the
+  // rail would be a second connector saying the same thing, so a contentless
+  // in-panel separator renders NOTHING (null, not an empty rail div whose
+  // border still paints). Sequence-level separators keep the rail: #162 chose
+  // it deliberately and this ticket does not re-litigate that boundary.
+  if (carriesContent !== true && props.hideWhenEmpty === true) return null;
   return (
     <div className="tool-render-diagram-seq-sep">
       {carriesContent ? (
@@ -1516,6 +1522,55 @@ function BashSequenceSeparator(props) {
       ) : null}
     </div>
   );
+}
+// ---- #165: one `&&`/`||` chain as ONE panel, rows as cards inside it. ----
+// The owner overruled #162's per-row panels (option a) for the merge (option
+// b): a command and everything chained to it with && / || is one script line,
+// so it draws as one cohesive panel. #162's objection becomes the constraint:
+// per-row identity and the exit-code attachment points survive INSIDE the
+// panel — the conditional marker still leads only the dependent part's own
+// card (never the base's, never panel-wide), and each part's stages keep
+// their own exit pill. The model is untouched by the regrouping: this panel
+// reads chainPanelRows(chain) — one builder, never an inline literal — the
+// same seam discipline as sequenceUnitDiagramModel and resolveBashTab.
+//
+// AXIS CONTRACT (#160/#162, criterion 3): parts stack VERTICALLY at content
+// width (time passes, like sequence members) and never sit side by side, so
+// they cannot read as pipe stages; a pipe row keeps its horizontal nowrap
+// band with `|`/`→` glyphs and its own scroll. The in-panel separator passes
+// hideWhenEmpty, so the card stack itself is the only boundary: no rail, no
+// operator debris, and never a snipped operator (slice invariant).
+function BashChainPanel(props) {
+  var chain = props.chain;
+  var parts = chainPanelRows(chain);
+  var children = [];
+  if (chain.leadingGap.trim() !== "") {
+    children.push(<div className="tool-render-diagram-lead">{chain.leadingGap}</div>);
+  }
+  for (var r = 0; r < parts.length; r++) {
+    if (r > 0) {
+      // The chain's own separators (space + the &&/|| + space) are pure
+      // condition chrome: the marker line on the part below says the
+      // condition, so a contentless separator renders nothing at all — while
+      // a comment riding one still shows VERBATIM (same contract as ever).
+      children.push(
+        <BashSequenceSeparator
+          text={chain.separators[r - 1]}
+          operator={chain.operators[r - 1]}
+          hideWhenEmpty={true}
+        />,
+      );
+    }
+    // The part model comes from chainPanelRows, NOT inline: an inline literal
+    // here is what dropped `conditional` and made the marker model-true and
+    // screen-false (#162 review, twice).
+    children.push(
+      <div className="tool-render-diagram-part">
+        <BashCommandDiagram model={parts[r]} />
+      </div>,
+    );
+  }
+  return <div className="tool-render-diagram-chainpanel">{children}</div>;
 }
 // ---- #160: a multi-statement script as a vertical sequence. Each drawable
 // member reuses BashCommandDiagram (same blocks, arrows, heredoc
@@ -1539,31 +1594,11 @@ function BashSequenceDiagram(props) {
       // how the re-review showed the defect CLASS had survived (#162).
       children.push(<BashCommandDiagram model={sequenceUnitDiagramModel(group.unit)} />);
     } else if (group.kind === "chain") {
-      // #162 criterion 2b: rows stack; the operator between them was v2's
-      // group badge and is now each dependent row's own leading line.
+      // #165: the whole chain is ONE panel (BashChainPanel); its rows are
+      // cards inside it, built through chainPanelRows — never inline, never
+      // one BashCommandDiagram per row straight off the sequence.
       var chain = group.chain;
-      if (chain.leadingGap.trim() !== "") {
-        children.push(<div className="tool-render-diagram-lead">{chain.leadingGap}</div>);
-      }
-      for (var r = 0; r < chain.rows.length; r++) {
-        if (r > 0) {
-          // The chain's own separators (space + the &&/|| + space) are pure
-          // condition chrome: the marker line below says the condition, so
-          // the separator renders nothing visible unless it carries content
-          // (a comment). Same contract as a statement separator.
-          children.push(
-            <BashSequenceSeparator
-              text={chain.separators[r - 1]}
-              operator={chain.operators[r - 1]}
-            />,
-          );
-        }
-        var row = chain.rows[r];
-        // The row model is built by sequenceUnitDiagramModel, NOT inline: an
-        // inline literal here is what dropped `conditional` and made the
-        // marker model-true and screen-false (#162 review).
-        children.push(<BashCommandDiagram model={sequenceUnitDiagramModel(row)} />);
-      }
+      children.push(<BashChainPanel chain={chain} />);
     } else {
       children.push(<BashSequenceTextGroup group={group} />);
     }
