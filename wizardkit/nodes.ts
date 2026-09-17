@@ -204,6 +204,15 @@ export interface TableNode {
   rows: string[][];
 }
 
+// Hold one app component mount point.
+// Carry the element id plus optional data.
+export interface MountNode {
+  kind: "mount";
+  id: string;
+  label?: string;
+  data?: unknown;
+}
+
 export type Node =
   | MenuNode
   | TreeNode
@@ -222,7 +231,8 @@ export type Node =
   | AnswersNode
   | TableNode
   | RepeatingNode
-  | CopyableNode;
+  | CopyableNode
+  | MountNode;
 
 // A step condition. Takes the answers map and returns true when the
 // step applies. A step with no condition always applies.
@@ -641,6 +651,25 @@ function validateTable(node: TableNode, tag: string): string[] {
   return errors;
 }
 
+// Check one mount node. Name mount in every error.
+// Require a non-blank id. Require a non-blank label when present.
+function validateMount(node: MountNode, tag: string): string[] {
+  const errors: string[] = [];
+  if (!isTitle(node.id)) errors.push(tag + ": id must be non-blank");
+  if (node.label !== undefined && !isTitle(node.label)) {
+    errors.push(tag + ": label must be non-blank when present");
+  }
+  if (node.data !== undefined) {
+    try {
+      const text = JSON.stringify(node.data);
+      if (text === undefined) errors.push(tag + ": data must survive JSON.stringify");
+    } catch {
+      errors.push(tag + ": data must survive JSON.stringify");
+    }
+  }
+  return errors;
+}
+
 function validateStages(node: StagesNode, tag: string): string[] {
   const errors: string[] = [];
   if (!isTitle(node.label)) errors.push(tag + ": label must be non-blank");
@@ -758,6 +787,8 @@ function validateNodeAt(node: unknown, path: string): string[] {
       return validateRepeating(item as RepeatingNode, tag);
     case "copyable":
       return validateCopyable(item as CopyableNode, tag);
+    case "mount":
+      return validateMount(item as MountNode, tag);
     default:
       return [path + " has unknown kind " + node.kind];
   }
@@ -1075,6 +1106,12 @@ export function table(
   rows: string[][],
 ): TableNode {
   return { kind: "table", label, columns, rows };
+}
+
+// Build one mount node.
+// Omit label plus data when absent.
+export function mount(id: string, data?: unknown, label?: string): MountNode {
+  return omitUndefined({ kind: "mount", id, data, label });
 }
 
 export function repeating(

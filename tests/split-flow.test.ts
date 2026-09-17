@@ -1,7 +1,7 @@
 // Wizard-level split flow tests: resume, meta updates, validator gate,
 // and the currency label from settings.
 
-import { assertEquals, assertStringIncludes } from "@std/assert";
+import { assert, assertEquals, assertStringIncludes } from "@std/assert";
 import {
   collectedPeople,
   createSplitShareLink,
@@ -19,6 +19,7 @@ import {
   summaryStep,
 } from "../wizards/expense-split/split.ts";
 import { freshState, type SplitStateDoc, writeSplitState } from "../src/splitstate.ts";
+import { handleBoardRoute } from "../wizards/expense-split/board-routes.ts";
 import type { Node } from "../wizardkit/mod.ts";
 import type { Order } from "../src/common.ts";
 
@@ -1105,4 +1106,180 @@ Deno.test("item bar forward button reads Next item", async () => {
   const found = itemStep(m, { sessionId: "t-next-item-1" });
   const fwd = found.nav?.next as unknown as Record<string, unknown> | string;
   assertEquals(typeof fwd === "string" ? fwd : String(fwd["label"]), "Next item");
+});
+
+// Build one run under the live runs dir with meta plus state.
+function makeBoardRun(
+  root: string,
+  id: string,
+  state: SplitStateDoc | null,
+): string {
+  const dir = root + "/share/runs/" + id;
+  Deno.mkdirSync(dir, { recursive: true });
+  Deno.writeTextFileSync(
+    dir + "/meta.json",
+    JSON.stringify({
+      id,
+      label: "shop " + id,
+      createdAt: "2026-01-06T09:00:00Z",
+      platforms: ["swiggy"],
+      rangeDays: 7,
+      status: "gathered",
+    }) + "\n",
+  );
+  Deno.writeTextFileSync(dir + "/orders.json", JSON.stringify(ORDERS) + "\n");
+  if (state !== null) {
+    Deno.writeTextFileSync(
+      dir + "/split-state.json",
+      JSON.stringify(state, null, 2) + "\n",
+    );
+  }
+  return dir;
+}
+
+// Post one patch body to the board route.
+function postPatch(body: unknown): Request {
+  return new Request("http://localhost/app/split-patch", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+Deno.test("board routes ignore an unknown path", async () => {
+  // Ask for a path the board never serves.
+  // Check the wizard keeps it.
+  assertEquals(
+    await handleBoardRoute(new Request("http://localhost/nope")),
+    null,
+  );
+});
+
+Deno.test("board file answers 404 while the component misses", async () => {
+  // Ask for the component file before the later ticket writes it.
+  // Check the route answers 404 with a plain line.
+  const res = await handleBoardRoute(
+    new Request("http://localhost/app/split-board.js"),
+  );
+  assert(res !== null);
+  assertEquals(res.status, 404);
+  assertEquals(res.headers.get("content-type"), "text/plain; charset=utf-8");
+});
+
+Deno.test("board patch names an unknown run with 404", async () => {
+  // Point the state root at a fresh temp dir.
+  // Patch a run id that holds no meta.
+  // Check the route answers 404.
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    const res = await handleBoardRoute(
+      postPatch({ runId: "no-such-run", assignments: {} }),
+    );
+    assert(res !== null);
+    assertEquals(res.status, 404);
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+  }
+});
+
+Deno.test("board patch names no run with 400", async () => {
+  // Send a body with no run id.
+  // Check the route answers 400.
+  const res = await handleBoardRoute(postPatch({ assignments: {} }));
+  assert(res !== null);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("board patch writes the named assignment alone", async () => {
+  // Seed line 1 and patch line 0.
+  // Check line 0 lands and line 1 stays.
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    const seed = savedDoc("Ann");
+    seed.assignments["1"] = {
+      splitType: "single",
+      people: ["Ben"],
+      amounts: { Ben: 7 },
+    };
+    const dir = makeBoardRun(root, "board-write", seed);
+    const patch = {
+      runId: "board-write",
+      assignments: {
+        "0": { splitType: "equal", people: ["Ann"], amounts: { Ann: 10 } },
+      },
+      baseline: Date.now(),
+    };
+    const res = await handleBoardRoute(postPatch(patch));
+    assert(res !== null);
+    assertEquals(res.status, 200);
+    const reply = await res.json();
+    assertEquals(reply.ok, true);
+    assertEquals(reply.conflicted, false);
+    const after = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
+    assertEquals(after.assignments["0"], patch.assignments["0"]);
+    assertEquals(after.assignments["1"], seed.assignments["1"]);
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+  }
+});
+
+Deno.test("board patch drops a skip set false", async () => {
+  // Seed two skips and clear one.
+  // Check the cleared skip leaves and the other stays.
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    const seed = savedDoc("Ann");
+    seed.skipped["2"] = true;
+    seed.skipped["3"] = true;
+    const dir = makeBoardRun(root, "board-skip", seed);
+    const res = await handleBoardRoute(postPatch({
+      runId: "board-skip",
+      skipped: { "2": false },
+      baseline: Date.now(),
+    }));
+    assert(res !== null);
+    assertEquals(res.status, 200);
+    const after = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
+    assertEquals(after.skipped, { "3": true });
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+  }
+});
+
+Deno.test("two board patches in a row leave no conflict copy", async () => {
+  // Patch line 0, then patch line 1 with the first reply time.
+  // Check no conflict copy lands beside the state file.
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    const dir = makeBoardRun(root, "board-chain", savedDoc("Ann"));
+    const first = await handleBoardRoute(postPatch({
+      runId: "board-chain",
+      assignments: {
+        "0": { splitType: "equal", people: ["Ann"], amounts: { Ann: 10 } },
+      },
+      baseline: Date.now(),
+    }));
+    assert(first !== null);
+    const at = (await first.json()).at;
+    const second = await handleBoardRoute(postPatch({
+      runId: "board-chain",
+      assignments: {
+        "1": { splitType: "single", people: ["Ben"], amounts: { Ben: 7 } },
+      },
+      baseline: at,
+    }));
+    assert(second !== null);
+    assertEquals((await second.json()).conflicted, false);
+    const names: string[] = [];
+    for await (const entry of Deno.readDir(dir)) {
+      if (entry.name.startsWith("split-state.conflict-")) names.push(entry.name);
+    }
+    assertEquals(names.length, 0);
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+  }
 });

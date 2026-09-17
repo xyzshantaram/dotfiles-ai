@@ -13,6 +13,7 @@ import {
   type StepFn,
 } from "../wizardkit/mod.ts";
 import { gatherSteps, setResumedRun } from "./expense-split/gather.ts";
+import { handleBoardRoute } from "./expense-split/board-routes.ts";
 import { resumeStep, routeStatus, splitRunId, splitSteps } from "./expense-split/split.ts";
 import { pushSteps, sourceStep } from "./expense-split/push.ts";
 import { beginOnboarding, settingsSteps } from "./expense-split/settings.ts";
@@ -248,10 +249,13 @@ export function resumeDraft(id: string, ctx: WizardCtx): string | null {
   return routeStatus(run.status);
 }
 
-const handle = createWizard({
+const wizardHandle = createWizard({
   title: "Expense Split",
   steps: [menuStep(), ...tail],
   actions: {},
+  // The board component. The toolkit renders each entry as a module
+  // script tag, and this app serves the path itself.
+  scripts: ["/app/split-board.js"],
   drafts: {
     list: () => listResumableDrafts(),
     resume: (id, ctx) => resumeDraft(id, ctx),
@@ -266,6 +270,11 @@ const handle = createWizard({
     },
   },
 });
+
+// Board routes run before the wizard. The wizard answers the rest.
+function handle(req: Request): Promise<Response> {
+  return handleBoardRoute(req).then((hit) => hit ?? wizardHandle(req));
+}
 
 if (import.meta.main) {
   // The runtime passes WIZARD_PORT. Plain runs fall back below.

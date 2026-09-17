@@ -29,6 +29,7 @@ import type {
   LeaveDir,
   MarkdownNode,
   MenuNode,
+  MountNode,
   NavHandler,
   NavOutcome,
   Node,
@@ -505,6 +506,29 @@ function TableView(props: { node: TableNode }) {
   );
 }
 
+// Render one app mount point with its data island.
+// Escape open brackets so a close tag inside data never ends the island early.
+function MountView(props: { node: MountNode }) {
+  const node = props.node;
+  const island = node.data === undefined
+    ? null
+    : (
+      <script
+        type="application/json"
+        data-mount-data={node.id}
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(node.data).replace(/</g, "\\u003c"),
+        }}
+      />
+    );
+  return (
+    <Shell kind="mount" label={node.label ?? ""}>
+      <div class="wiz-mount" data-mount={node.id} />
+      {island}
+    </Shell>
+  );
+}
+
 // True when a seeded check value means ticked. Only 1, true, and on
 // count. Any other value leaves the box unticked.
 function isCheckTicked(raw: unknown): boolean {
@@ -707,6 +731,8 @@ function NodeView(props: { node: Node }) {
       return <RepeatingView node={node} />;
     case "copyable":
       return <CopyableView node={node} />;
+    case "mount":
+      return <MountView node={node} />;
   }
 }
 
@@ -1091,11 +1117,13 @@ const BASE_PATH_JS =
 // are trusted program output; Preact escapes every other text node.
 // A draft entry adds resume attributes to the footer strip.
 // A true first flag marks the first applying step.
+// Hold one module tag per app path after toolkit scripts.
 export function renderPage(
   title: string,
   fragment: string,
   draft?: DraftEntry | null,
   first?: boolean,
+  scripts?: string[],
 ): string {
   return "<!DOCTYPE html>\n" + renderToString(
     <html lang="en">
@@ -1147,6 +1175,7 @@ export function renderPage(
         <script dangerouslySetInnerHTML={{ __html: REPEAT_JS }} />
         <script dangerouslySetInnerHTML={{ __html: BULK_JS }} />
         <script dangerouslySetInnerHTML={{ __html: COPY_JS }} />
+        {(scripts ?? []).map((path) => <script key={path} type="module" src={path}></script>)}
       </body>
     </html>,
   );
@@ -1195,6 +1224,8 @@ export interface WizardOptions {
       ctx: WizardCtx,
     ) => string | null | Promise<string | null>;
   };
+  // Hold optional app script paths. Let the app serve each path itself.
+  scripts?: string[];
 }
 
 // Wrap HTML with an HTML response.
@@ -1659,7 +1690,7 @@ export function createWizard(
       const at = scanForward(nav.built, nav.applies, 0);
       if (at >= 0 && nav.built[at]?.id === step.id) first = true;
     }
-    return html(renderPage(opts.title, fragment, draft, first));
+    return html(renderPage(opts.title, fragment, draft, first, opts.scripts));
   }
 
   // Dir holding the vendored Web Awesome tree. Beside the binary in
@@ -2311,7 +2342,7 @@ export function createWizard(
       const command = node?.command ?? opts.actions?.[id]?.command;
       if (command === undefined) {
         return html(
-          renderPage(opts.title, renderToString(<p>Unknown action.</p>)),
+          renderPage(opts.title, renderToString(<p>Unknown action.</p>), undefined, undefined, opts.scripts),
         );
       }
       if (node?.run === "onConfirm") {
@@ -2329,7 +2360,7 @@ export function createWizard(
         } catch {
           // Fall through to the bare page below.
         }
-        return html(renderPage(opts.title, staged));
+        return html(renderPage(opts.title, staged, undefined, undefined, opts.scripts));
       }
       const resolved = resolveCommandMarkers(command, (name) => {
         const value = form.get(name);
@@ -2346,7 +2377,7 @@ export function createWizard(
         } catch {
           // Fall through to the bare page below.
         }
-        return html(renderPage(opts.title, missingBody));
+        return html(renderPage(opts.title, missingBody, undefined, undefined, opts.scripts));
       }
       const argv = resolved.argv;
       if (node?.live === true) {
@@ -2360,7 +2391,7 @@ export function createWizard(
         } catch {
           // Fall through to the bare page below.
         }
-        return html(renderPage(opts.title, body));
+        return html(renderPage(opts.title, body, undefined, undefined, opts.scripts));
       }
       const result = await runCommand(argv);
       const mark = result.ok ? "" : " (failed)";
@@ -2391,7 +2422,7 @@ export function createWizard(
         } catch {
           // Fall through to the bare page below.
         }
-        return html(renderPage(opts.title, body));
+        return html(renderPage(opts.title, body, undefined, undefined, opts.scripts));
       }
       if (job.done) {
         const mark = job.ok ? "" : " (failed)";
@@ -2408,7 +2439,7 @@ export function createWizard(
         } catch {
           // Fall through to the bare page below.
         }
-        return html(renderPage(opts.title, body));
+        return html(renderPage(opts.title, body, undefined, undefined, opts.scripts));
       }
       const body = liveFragment(id, job.output);
       if (req.headers.get("hx-request") === "true") return html(body);

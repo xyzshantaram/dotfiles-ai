@@ -9,6 +9,7 @@ import {
   copyable,
   markdown,
   menu,
+  mount,
   nav,
   numberEntry,
   progress,
@@ -2765,4 +2766,78 @@ Deno.test("draft offer flag shows only on the first screen", async () => {
   const second = await (await handle(stepPost("a", "next"))).text();
   assert(second.includes("Second"), "second screen shows");
   assert(!second.includes('data-draft-first="1"'), "later screen drops the flag");
+});
+
+Deno.test("mount builds a node and omits absent fields", () => {
+  // Build one bare mount plus one full mount.
+  const bare = mount("board");
+  assert(bare.kind === "mount", "bare mount keeps its kind");
+  assert(bare.id === "board", "bare mount keeps its id");
+  assert(!("label" in bare), "bare mount omits its label");
+  assert(!("data" in bare), "bare mount omits its data");
+  const full = mount("board", { items: [1] }, "Board");
+  assert(full.label === "Board", "full mount keeps its label");
+  assert(
+    (full.data as { items: number[] }).items[0] === 1,
+    "full mount keeps its data",
+  );
+});
+
+Deno.test("validation rejects a mount with a blank id", () => {
+  // Feed a blank id.
+  const st = step("s", "S", [mount("   ")]);
+  const errors = validateStep(st);
+  assert(errors.length > 0 && namesKind(errors, "mount"), "blank id names mount");
+});
+
+Deno.test("a rendered step carries the mount element", () => {
+  // Render one labelled mount inside a step.
+  const html = renderStepFragment(
+    step("s", "S", [mount("board", undefined, "Board")]),
+  );
+  assert(html.includes("Board"), "mount keeps its label");
+  assert(html.includes('data-mount="board"'), "mount keeps its data attribute");
+  assert(html.includes("wiz-mount"), "mount keeps its class");
+  assert(!html.includes("data-mount-data"), "absent data renders no island");
+});
+
+Deno.test("the mount island carries escaped data", () => {
+  // Render one mount holding markup inside its data.
+  const html = renderNode(mount("board", { text: "</script><script>" }));
+  assert(
+    html.includes('data-mount-data="board"'),
+    "island keeps its data attribute",
+  );
+  assert(html.includes('"text"'), "island keeps the data key");
+  assert(html.includes("\\u003c"), "island escapes the open bracket");
+  assert(
+    html.split("</script>").length - 1 === 1,
+    "island closes exactly once",
+  );
+});
+
+Deno.test("app scripts render as module tags after toolkit scripts", async () => {
+  // Build one wizard with two script paths plus one with none.
+  const withScripts = wiz({
+    title: "T",
+    steps: [step("a", "First", [markdown("Hi")])],
+    scripts: ["/app/one.js", "/app/two.js"],
+  });
+  const body = await (await withScripts(new Request("http://local/"))).text();
+  const one = body.indexOf('src="/app/one.js"');
+  const two = body.indexOf('src="/app/two.js"');
+  assert(one >= 0 && two >= 0, "both module tags render");
+  assert(one < two, "module tags keep their order");
+  assert(body.includes('type="module"'), "module tags keep their type");
+  assert(
+    one > body.indexOf("data-copy-btn"),
+    "module tags follow toolkit scripts",
+  );
+  const bare = wiz({
+    title: "T",
+    steps: [step("a", "First", [markdown("Hi")])],
+  });
+  const plain = await (await bare(new Request("http://local/"))).text();
+  assert(!plain.includes("/app/one.js"), "bare wizard omits the first path");
+  assert(!plain.includes("/app/two.js"), "bare wizard omits the second path");
 });

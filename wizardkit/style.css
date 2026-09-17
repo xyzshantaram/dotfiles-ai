@@ -141,6 +141,11 @@ body {
 .node {
   margin: 0.75rem 0;
 }
+/* Let the mounted component fill the step column. */
+.wiz-mount {
+  width: 100%;
+  margin: 0;
+}
 /* Nav buttons live at the bottom in both cases: margin-top auto sinks
    the bar when content is short, sticky pins it when content scrolls.
    It stays inside the step form so submission keeps working. */
