@@ -1,9 +1,17 @@
 /**
  * Unit tests for the run_code shadow-row derivations in run-code.ts
- * (#152, Part B). Pure string composition only: no React render, no DOM.
+ * (#152, Parts B and C). Pure string composition only: no React render, no DOM.
  */
 import { describe, expect, it } from "vitest";
-import { RUN_CODE_NO_OUTPUT, runCodeBodyText, runCodeOutputText, runCodeSummary } from "./run-code";
+import {
+  RUN_CODE_NO_OUTPUT,
+  runCodeBodyText,
+  runCodeInSummary,
+  runCodeLineCount,
+  runCodeOutSummary,
+  runCodeOutputText,
+  runCodeSummary,
+} from "./run-code";
 
 describe("runCodeSummary", () => {
   it("prefers the description's first line, like upstream deriveSummary", () => {
@@ -84,5 +92,33 @@ describe("runCodeOutputText", () => {
     expect(runCodeOutputText([], true, { name: "AbortError", code: "ABORTED" })).toBe(
       "AbortError: ABORTED",
     );
+  });
+});
+
+describe("runCodeLineCount", () => {
+  it("counts newline-separated lines, ignoring one trailing newline", () => {
+    expect(runCodeLineCount("return 1")).toBe(1);
+    expect(runCodeLineCount("a\nb\nc")).toBe(3);
+    expect(runCodeLineCount("return 1\n")).toBe(1);
+    expect(runCodeLineCount("a\n\nb")).toBe(3);
+  });
+
+  it("is zero for empty or non-string input, never a label", () => {
+    expect(runCodeLineCount("")).toBe(0);
+    expect(runCodeLineCount(undefined as unknown as string)).toBe(0);
+  });
+});
+
+describe("Part C section summaries", () => {
+  it("IN summarises as language plus line count", () => {
+    expect(runCodeInSummary("return 1")).toBe("ts [1]");
+    expect(runCodeInSummary("a\nb\nc")).toBe("ts [3]");
+    expect(runCodeInSummary("a\n".repeat(263))).toBe("ts [263]");
+  });
+
+  it("OUT summarises as a line count with correct singular/plural", () => {
+    expect(runCodeOutSummary("hello")).toBe("1 line");
+    expect(runCodeOutSummary("a\nb")).toBe("2 lines");
+    expect(runCodeOutSummary("a\nb\nc\n")).toBe("3 lines");
   });
 });

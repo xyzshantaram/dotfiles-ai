@@ -2148,6 +2148,19 @@ function runCodeOutputText(content, isError, error) {
   if (text.trim() === "") return null;
   return text;
 }
+function runCodeLineCount(text) {
+  if (typeof text !== "string" || text === "") return 0;
+  var parts = text.split("\n");
+  if (parts.length > 0 && parts[parts.length - 1] === "") parts.pop();
+  return parts.length;
+}
+function runCodeInSummary(codeText) {
+  return "ts [" + String(runCodeLineCount(codeText)) + "]";
+}
+function runCodeOutSummary(outText) {
+  var count = runCodeLineCount(outText);
+  return String(count) + (count === 1 ? " line" : " lines");
+}
 
 // plugins/shared/client-util.ts
 function injectStyle(pluginName, styleId, cssText) {
@@ -2422,12 +2435,11 @@ var client_default = `.tool-render-row {
   background: rgba(255, 85, 85, 0.08);
   font-weight: 500;
 }
-/* #152: the hoisted run_code result. A sibling of the collapsed row inside
-   the same card \u2014 visible with zero clicks \u2014 never inside the collapsible
-   body. The OUT label keeps the upstream IN/OUT vocabulary (the code
-   variant renders only OUT, since it has no IN section). The text block
-   reuses .tool-render-output; the cap below mirrors the rule the OUT row
-   has today: upstream .ioSection scrolls internally past 150px
+/* #152 Part C: IN / TOOL CALLS / OUT read as ONE card with the nested calls.
+   All three section labels reuse .tool-render-code-out-label \u2014 one visual
+   language, not a new one. The IN code block reuses .tool-render-code and the
+   OUT text reuses .tool-render-output; the cap below mirrors the rule the OUT
+   row has today: upstream .ioSection scrolls internally past 150px
    (max-height:150px; overflow-y:auto), so long output scrolls instead of
    flooding the transcript, with the full text retained in the DOM. */
 .tool-render-code-out {
@@ -2444,27 +2456,64 @@ var client_default = `.tool-render-row {
 .tool-render-output.tool-render-code-out-text {
   max-height: 9.375rem;
 }
+/* The IN/OUT section spoilers: a chevron plus a mono line-count summary
+   (\`ts [263]\`, \`2 lines\`), collapsed by default. A button element, so keyboard
+   interaction is native; the reset below strips the native button chrome so it
+   reads as a row, not a control. An errored OUT spoiler reads red even while
+   collapsed, so the failure signals without opening. */
+.tool-render-runcode-spoiler {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0.125rem 0;
+  margin: 0 0 0 0.25rem;
+  cursor: pointer;
+  font-family: var(--ds-font-family-code);
+  font-size: 0.8125rem;
+  line-height: 1.375rem;
+  color: var(--dsw-alias-label-secondary);
+  text-align: left;
+}
+.tool-render-runcode-spoiler:hover {
+  color: var(--dsw-alias-label-primary);
+}
+.tool-render-runcode-spoiler:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -0.125rem;
+}
+.tool-render-runcode-spoiler-label {
+  white-space: nowrap;
+}
+.tool-render-runcode-spoiler[tool-render-error] {
+  color: var(--dsw-alias-state-error-primary);
+  font-weight: 500;
+}
 
-/* #152 nesting layout: head -> nested calls -> OUT.
+/* #152 nesting layout: head -> IN -> TOOL CALLS label -> nested -> OUT.
 
    THE SHAPE, measured in the live DOM rather than inferred from the bundle --
    an earlier version of this block guessed and matched nothing:
 
-     div[data-chat-call-id]                  <- upstream's call row
-       div[data-slot="tool.call.toolview"]   <- THE RENDERER'S WRAPPER,
-                                                style="display: contents"
-         .tool-render-card[data-run-code]    <- our head
-         .tool-render-runcode-out            <- our output
-       div.<hashed>subCalls                  <- the nested calls
+     div[data-chat-call-id]                     <- upstream's call row
+       div[data-slot="tool.call.toolview"]      <- THE RENDERER'S WRAPPER,
+                                                    style="display: contents"
+         .tool-render-card[data-run-code]       <- our head
+         .tool-render-runcode-in                <- our IN section
+         .tool-render-runcode-calls-label       <- our TOOL CALLS label
+         .tool-render-runcode-out               <- our OUT section
+       div.<hashed>subCalls                     <- the nested calls
 
    Two consequences, and the layout hangs on both. (1) Our nodes are NOT direct
    children of the call row, so any \`:has(> .tool-render-card\u2026)\` selector fails
    silently -- which is exactly how this shipped broken once. (2) The wrapper
-   carries \`display: contents\`, so it generates no box and OUR TWO NODES BECOME
+   carries \`display: contents\`, so it generates no box and OUR FOUR NODES BECOME
    FLEX ITEMS OF THE CALL ROW ANYWAY. That is the only reason ordering can work
    across the wrapper at all; if upstream ever gives that wrapper a real display
-   value, the halves stop being siblings of .subCalls and this flattens back to
-   head/OUT/nested -- ugly, not broken.
+   value, the sections stop being siblings of .subCalls and this flattens back
+   to DOM order -- ugly, not broken.
 
    On the hook: data-chat-call-id is stamped by upstream on every call row and
    is stable and unhashed, which is why it is used here. It is NOT read by
@@ -2478,26 +2527,55 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
 .tool-render-card[data-run-code] {
   order: 0;
 }
-.tool-render-runcode-out {
-  order: 2;
-}
-/* Everything else upstream puts in the row -- today only the nested-call
-   container -- sits between the halves. Selected by excluding the slot wrapper
-   rather than by upstream's .subCalls class, which is content-hashed and turns
-   over every build. */
-div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-card[data-run-code])
-  > *:not([data-slot]) {
+.tool-render-runcode-in {
   order: 1;
 }
+.tool-render-runcode-calls-label {
+  order: 2;
+}
+.tool-render-runcode-out {
+  order: 4;
+}
+/* Everything else upstream puts in the row -- today only the nested-call
+   container -- sits between the TOOL CALLS label and OUT. Selected by
+   excluding the slot wrapper rather than by upstream's .subCalls class, which
+   is content-hashed and turns over every build. */
+div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-card[data-run-code])
+  > *:not([data-slot]) {
+  order: 3;
+}
+/* No nested calls, no TOOL CALLS heading: a card with no nested calls must
+   not show an empty label. Whether nested calls exist is unknowable from our
+   props \u2014 upstream renders them outside our view \u2014 so the row hides our label
+   when it carries no non-wrapper child. The label renders by default and only
+   this rule removes it, so dropping the wrapper step here fails LOUD (an empty
+   heading on every plain card) rather than SILENT. */
+div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-card[data-run-code]):not(:has(> *:not([data-slot]))) > [data-slot="tool.call.toolview"] > .tool-render-runcode-calls-label {
+  display: none;
+}
 
-/* The three read as ONE card: the head loses its bottom rounding, the OUT block
-   loses its top rounding, and the nested calls are indented between them with
+/* The five read as ONE card: the head loses its bottom rounding, the middle
+   sections continue the side borders, the OUT block loses its top rounding,
+   and the nested calls are indented between the TOOL CALLS label and OUT with
    the side borders continued. */
 .tool-render-card[data-run-code] {
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
   border-bottom: 0;
   margin-bottom: 0;
+}
+.tool-render-runcode-in,
+.tool-render-runcode-calls-label {
+  border-left: 1px solid var(--dsw-alias-border-l2);
+  border-right: 1px solid var(--dsw-alias-border-l2);
+  margin: 0;
+  background: var(--dsw-alias-bg-layer-1);
+}
+.tool-render-runcode-in {
+  padding: 0 0.5rem 0.375rem;
+}
+.tool-render-runcode-calls-label {
+  padding: 0 0.5rem 0.125rem;
 }
 .tool-render-runcode-out {
   border: 1px solid var(--dsw-alias-border-l2);
@@ -2513,7 +2591,6 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
   margin: 0;
   padding: 0.25rem 0.5rem 0.25rem 1.375rem;
   background: var(--dsw-alias-bg-layer-1);
-}
 }
 .tool-render-row[data-state="error"] .tool-render-title {
   color: var(--dsw-alias-state-error-primary);
@@ -25632,10 +25709,34 @@ function WebFetchRow(props) {
     inspect: props.inspect
   });
 }
+function runCodeSpoiler(open, label, onToggle, isError) {
+  return /* @__PURE__ */ import_react4.default.createElement(
+    "button",
+    {
+      type: "button",
+      className: "tool-render-runcode-spoiler",
+      "tool-render-error": isError === true || void 0,
+      "aria-expanded": open,
+      onClick: function() {
+        onToggle();
+      }
+    },
+    /* @__PURE__ */ import_react4.default.createElement(
+      IconChevronDownOutline142,
+      {
+        className: open ? "tool-render-chevron tool-render-chevron-open" : "tool-render-chevron"
+      }
+    ),
+    /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-runcode-spoiler-label" }, label)
+  );
+}
 function RunCodeRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var inOpenState = useState(false);
+  var inOpen = inOpenState[0];
+  var setInOpen = inOpenState[1];
+  var outUserState = useState(null);
+  var outUser = outUserState[0];
+  var setOutUser = outUserState[1];
   var block = props.block;
   var done = doneOf(block);
   var raw = argsRawOf(block);
@@ -25648,21 +25749,32 @@ function RunCodeRow(props) {
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
   var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
-  var body = null;
+  var outText = output;
+  if (outText === null && isError === true) {
+    var errMsg = error !== void 0 && error !== null && typeof error.message === "string" ? error.message : "";
+    if (errMsg !== "" && errMsg.trim() !== "") outText = errMsg;
+  }
+  var outOpen = outUser === null ? isError === true : outUser;
+  var inSection = null;
   if (codeText !== null && codeText !== "") {
     var rows = numberedReadRows(codeText, 1);
-    body = /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-code" }, readLineRows(rows, "typescript"));
+    inSection = /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-runcode-in" }, /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-code-out-label" }, "IN"), runCodeSpoiler(inOpen, runCodeInSummary(codeText), function() {
+      setInOpen(!inOpen);
+    }, false), inOpen === true ? /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-code" }, readLineRows(rows, "typescript")) : null);
   }
-  var below = null;
-  if (output !== null) {
-    below = /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-code-out tool-render-runcode-out" }, /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-code-out-label" }, "OUT"), /* @__PURE__ */ import_react4.default.createElement(
+  var callsLabel = /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-runcode-calls-label" }, /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-code-out-label" }, "TOOL CALLS"));
+  var outSection = null;
+  if (outText !== null) {
+    outSection = /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-code-out tool-render-runcode-out" }, /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-code-out-label" }, "OUT"), runCodeSpoiler(outOpen, runCodeOutSummary(outText), function() {
+      setOutUser(!outOpen);
+    }, state === "error"), outOpen === true ? /* @__PURE__ */ import_react4.default.createElement(
       "pre",
       {
         className: "tool-render-output tool-render-code-out-text",
         "tool-render-error": state === "error" || void 0
       },
-      output
-    ));
+      outText
+    ) : null);
   }
   var card = toolRenderRow({
     callId: props.callId,
@@ -25673,20 +25785,15 @@ function RunCodeRow(props) {
     title: "Code",
     summary,
     state,
-    expandable: body !== null,
-    expanded,
-    onToggle: function() {
-      setExpanded(!expanded);
-    },
-    body,
+    expandable: false,
+    body: null,
     below: null,
     runCode: true,
     errorSummary,
     errorText,
     inspect: props.inspect
   });
-  if (below === null) return card;
-  return /* @__PURE__ */ import_react4.default.createElement(import_react4.default.Fragment, null, card, below);
+  return /* @__PURE__ */ import_react4.default.createElement(import_react4.default.Fragment, null, card, inSection, callsLabel, outSection);
 }
 function useCompactionViews(useSession) {
   var face = null;

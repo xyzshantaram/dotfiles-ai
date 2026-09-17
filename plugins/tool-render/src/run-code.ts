@@ -23,11 +23,21 @@
 // keeps rendering through the tree exactly as today. Nothing about that
 // path is copied here and there is nothing to keep in sync.
 //
-// TRUNCATION RULE. The hoisted output keeps today's collapsed-row rule:
-// upstream's OUT section scrolls internally past 150px (.ioSection
-// max-height:150px; overflow-y:auto); the shadow's OUT block carries the
-// same cap in client.module.css (.tool-render-code-out-text). No
-// line-clamp, no elision: the full text stays in the DOM and scrolls.
+// TRUNCATION RULE. Long output keeps internal scrolling with the full text
+// in the DOM (client.module.css `.tool-render-code-out-text` mirrors
+// upstream .ioSection's 150px cap: max-height 9.375rem). No clamping, no
+// elision. Part C deliberately reverses Part B's 'visible with zero clicks'
+// rule on the owner's instruction: OUT is a collapsed line-count disclosure,
+// and empty/sentinel output renders no section at all.
+//
+// PART C LAYOUT (owner sketch, 2026-09-17). Three labelled sections read as
+// one card — IN (program, a `ts [N]` disclosure), TOOL CALLS (upstream's
+// nested cards, never reimplemented), OUT (result, an `N line(s)` disclosure
+// that opens by default on error so a failure is never hidden behind a
+// collapsed spoiler with no signal). The nested container is upstream's
+// sibling outside our view, so the sections interleave with it through CSS
+// `order` on the call row; the TOOL CALLS label hides itself by :has() when
+// no nested container exists. See RunCodeRow and client.module.css.
 
 // The host's output render for a program with neither logs nor a return
 // value (dsh-tools createRunCodeTool output.render). It is information-free,
@@ -129,4 +139,34 @@ export function runCodeOutputText(content, isError, error) {
   if (text === RUN_CODE_NO_OUTPUT) return null;
   if (text.trim() === "") return null;
   return text;
+}
+
+// ---- Part C summaries: the IN/OUT section disclosures. ----
+
+// Line count for a spoiler summary. A trailing newline does not add a line:
+// "return 1\n" is one line, not two. Empty text is zero lines (callers only
+// summarise non-empty sections, so zero never renders — it is the "do not
+// render" signal, not a label).
+export function runCodeLineCount(text) {
+  if (typeof text !== "string" || text === "") return 0;
+  var parts = text.split("\n");
+  if (parts.length > 0 && parts[parts.length - 1] === "") parts.pop();
+  return parts.length;
+}
+
+// IN disclosure summary: the program language plus its line count. The
+// language is fixed "ts": run_code programs are TypeScript and the shadow
+// highlights them with the typescript grammar today (RunCodeRow renders via
+// readLineRows(rows, "typescript")), so the label names what the expansion
+// actually shows rather than sniffing a language the renderer ignores.
+export function runCodeInSummary(codeText) {
+  return "ts [" + String(runCodeLineCount(codeText)) + "]";
+}
+
+// OUT disclosure summary: a bare line count with correct singular/plural —
+// "1 line", "2 lines". Never "0 lines": empty output renders no section at
+// all (runCodeOutputText returns null), so zero never reaches this function.
+export function runCodeOutSummary(outText) {
+  var count = runCodeLineCount(outText);
+  return String(count) + (count === 1 ? " line" : " lines");
 }

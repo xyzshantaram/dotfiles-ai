@@ -85,7 +85,7 @@ import {
   typeCustomInDraft,
 } from "./questions";
 import { countMessageRows, prettyRows } from "./pretty";
-import { runCodeBodyText, runCodeOutputText, runCodeSummary } from "./run-code";
+import { runCodeBodyText, runCodeInSummary, runCodeOutSummary, runCodeOutputText, runCodeSummary } from "./run-code";
 import {
   injectStyle,
   mergeCss,
@@ -648,9 +648,9 @@ function renderToolRenderCard(options, approvalOpen) {
       data-question-answered={options.questionState === "answered" || undefined}
       data-error={options.state === "error" || undefined}
       data-stopped={options.state === "stopped" || undefined}
-      // #152: the run_code card alone needs its OUT block OUTSIDE itself, so
-      // the ship's nested-call container can sit between the two. This marks
-      // the head half; the CSS that orders the three siblings keys on it.
+      // #152: the run_code sections live OUTSIDE the card as call-row
+      // siblings, so the ship's nested-call container can sit between them.
+      // This marks the head; the CSS that orders the siblings keys on it.
       data-run-code={options.runCode || undefined}
     >
       <div
@@ -729,10 +729,10 @@ function renderToolRenderCard(options, approvalOpen) {
           ) : null}
         </div>
       ) : null}
-      {/* #152: a permanent footer BELOW the collapsible body, never gated on
-          `open`. The run_code shadow renders the program RESULT here, so it
-          is visible with zero clicks while the code stays collapsed. Only
-          run_code passes `below` today. */}
+      {/* A permanent footer BELOW the collapsible body, never gated on `open`.
+          Unused today — the run_code shadow carried its result here in Part B
+          but renders its IN/OUT sections as call-row siblings since Part C —
+          kept as generic card capability. */}
       {options.below !== null && options.below !== undefined ? options.below : null}
       {/* The answer bar sits at the BOTTOM of the card, under the body: the
           decision is the last thing in reading order, after the command and
@@ -4114,37 +4114,54 @@ function WebFetchRow(props) {
   });
 }
 
-// ---- run_code row (#152, Part B): the RESULT is the visible content. ----
-// The owner likes the builtin Code card, including its nested subtool rows,
-// and wants exactly one change: the program output (console.log plus the
-// returned value) visible WITHOUT expanding anything, with the CODE as the
-// collapsed content behind the 'Code' summary.
+// ---- run_code row (#152, Part C): IN / TOOL CALLS / OUT. ----
+// Owner redesign, 2026-09-17: three labelled sections reading as one card.
+// The collapsed chevron line stays as it was (Run code + description, error
+// text on failure). Below it, always at section depth rather than inside any
+// disclosure: IN (the program as a `ts [N]` spoiler over highlighted
+// numbered code, collapsed by default), the TOOL CALLS label (upstream's
+// nested cards render beneath it — never reimplemented here), and OUT (the
+// result as an `N line(s)` spoiler, collapsed by default).
 //
-// MECHANISM: (2), a narrow toolview shadow — (1) CSS-only is impossible and
-// (3) upstream change is not needed. (1) fails structurally, verified in
-// the shipped bundle: DisclosureRow renders its children ONLY when open
-// (`l && g` in the web-frontend bundle), so while collapsed the OUT node
-// is not in the DOM at all and no selector can reveal it. The shadow
-// replaces only the atomic `run_code` row: nested subtool rows are rendered
-// by upstream's ToolCallTree as SIBLINGS of the toolview (the `.subCalls`
-// container under each call row), so they are preserved untouched — the
-// trap the ticket names does not trigger. What IS reimplemented is the
-// single row's own derivation, in run-code.ts beside tested mirrors of
-// upstream's summary/body/output derivation; see that module's header for
-// the exact contract and what will drift.
+// MECHANISM, unchanged from Part B: a narrow toolview shadow whose fragment
+// lands our nodes as siblings of upstream's nested-call container inside
+// div[data-chat-call-id], ordered head -> IN -> TOOL CALLS -> nested -> OUT
+// by CSS. The TOOL CALLS label is always rendered and hides itself by :has()
+// when the row has no nested container — unknowable from props, since
+// upstream renders nested calls outside our view. This REVERSES Part B's
+// 'visible with zero clicks' rule deliberately, on the owner's instruction;
+// the empty/sentinel case still renders NOTHING AT ALL.
 //
-// Layout: the collapsed row reads Code + description (error text on
-// failure, as upstream). The code rides the normal collapsible body. The
-// output rides the permanent `below` footer: a sibling of the row inside
-// the same card — the same depth the outer tool call sits at — visible
-// with zero clicks. Empty output (including the host's NO_OUTPUT
-// sentinel) renders nothing, not an empty labelled row. Long output keeps
-// today's rule: internal scroll past 150px (.tool-render-code-out-text
-// mirrors upstream .ioSection's max-height), full text retained.
+// ERROR LEGIBILITY (C5). A failed run opens OUT by default and keeps the
+// error on the collapsed head row, so the failure is never hidden behind a
+// collapsed spoiler with no signal. The default-open is a user-overridable
+// derivation (not mount-only state), so a call that settles into an error
+// live still opens; the head-row errorSummary covers the collapsed case.
+function runCodeSpoiler(open, label, onToggle, isError) {
+  return (
+    <button
+      type="button"
+      className="tool-render-runcode-spoiler"
+      tool-render-error={isError === true || undefined}
+      aria-expanded={open}
+      onClick={function () {
+        onToggle();
+      }}
+    >
+      <IconChevronDownOutline14
+        className={open ? "tool-render-chevron tool-render-chevron-open" : "tool-render-chevron"}
+      />
+      <span className="tool-render-runcode-spoiler-label">{label}</span>
+    </button>
+  );
+}
 function RunCodeRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var inOpenState = useState(false);
+  var inOpen = inOpenState[0];
+  var setInOpen = inOpenState[1];
+  var outUserState = useState(null);
+  var outUser = outUserState[0];
+  var setOutUser = outUserState[1];
   var block = props.block;
   var done = doneOf(block);
   var raw = argsRawOf(block);
@@ -4163,36 +4180,68 @@ function RunCodeRow(props) {
     state === "error" && errorText !== null && errorText !== ""
       ? firstLineOfError(errorText)
       : undefined;
-  var body = null;
+  // A failed run whose content carried no text must still show its error in
+  // OUT — otherwise the section gate below renders nothing and the failure
+  // reads only as a head-row first line. Blank-only and sentinel text stay
+  // suppressed: this promotes only a non-blank structured error message.
+  var outText = output;
+  if (outText === null && isError === true) {
+    var errMsg =
+      error !== undefined && error !== null && typeof error.message === "string"
+        ? error.message
+        : "";
+    if (errMsg !== "" && errMsg.trim() !== "") outText = errMsg;
+  }
+  // OUT opens by default on error; any user toggle wins over the default from
+  // then on, so closing it stays closed even though the error persists.
+  var outOpen = outUser === null ? isError === true : outUser;
+  var inSection = null;
   if (codeText !== null && codeText !== "") {
     var rows = numberedReadRows(codeText, 1);
-    body = <div className="tool-render-code">{readLineRows(rows, "typescript")}</div>;
-  }
-  // The hoisted result. Deliberately NOT expandable-gated: a row whose only
-  // content is output must not offer a disclosure that opens onto nothing.
-  //
-  // It is returned as a SIBLING of the card, not as the card's `below` footer,
-  // and that is the whole trick behind the nesting layout. Upstream's ToolCall
-  // renders [ our toolview output, the .subCalls container ] as children of one
-  // div[data-chat-call-id] (dsh-client-ui-tool ToolCall). A fragment therefore
-  // lands our two nodes and the nested rows as three siblings in that div, and
-  // ONLY THEN can CSS order them head -> nested calls -> OUT. Kept inside the
-  // card, the output would be stuck ABOVE every nested call, which is the
-  // layout the owner rejected.
-  var below = null;
-  if (output !== null) {
-    below = (
-      <div className="tool-render-code-out tool-render-runcode-out">
-        <div className="tool-render-code-out-label">OUT</div>
-        <pre
-          className="tool-render-output tool-render-code-out-text"
-          tool-render-error={state === "error" || undefined}
-        >
-          {output}
-        </pre>
+    inSection = (
+      <div className="tool-render-runcode-in">
+        <div className="tool-render-code-out-label">IN</div>
+        {runCodeSpoiler(inOpen, runCodeInSummary(codeText), function () {
+          setInOpen(!inOpen);
+        }, false)}
+        {inOpen === true ? (
+          <div className="tool-render-code">{readLineRows(rows, "typescript")}</div>
+        ) : null}
       </div>
     );
   }
+  // The TOOL CALLS label reads as the card's middle section; upstream's
+  // nested-call container orders directly beneath it by CSS. Always rendered:
+  // the CSS hides it when the call row carries no nested container, the only
+  // seam that can see one.
+  var callsLabel = (
+    <div className="tool-render-runcode-calls-label">
+      <div className="tool-render-code-out-label">TOOL CALLS</div>
+    </div>
+  );
+  var outSection = null;
+  if (outText !== null) {
+    outSection = (
+      <div className="tool-render-code-out tool-render-runcode-out">
+        <div className="tool-render-code-out-label">OUT</div>
+        {runCodeSpoiler(outOpen, runCodeOutSummary(outText), function () {
+          setOutUser(!outOpen);
+        }, state === "error")}
+        {outOpen === true ? (
+          <pre
+            className="tool-render-output tool-render-code-out-text"
+            tool-render-error={state === "error" || undefined}
+          >
+            {outText}
+          </pre>
+        ) : null}
+      </div>
+    );
+  }
+  // The head row is deliberately NOT expandable: the code lives in the IN
+  // spoiler now, so a head disclosure would open onto an empty body. The
+  // chevron line itself — badge, summary, error text — reads exactly as
+  // before; the sections below carry their own disclosures.
   var card = toolRenderRow({
     callId: props.callId,
     useSession: props.useSession, useProjection: props.useProjection,
@@ -4201,23 +4250,23 @@ function RunCodeRow(props) {
     title: "Code",
     summary: summary,
     state: state,
-    expandable: body !== null,
-    expanded: expanded,
-    onToggle: function () {
-      setExpanded(!expanded);
-    },
-    body: body,
+    expandable: false,
+    body: null,
     below: null,
     runCode: true,
     errorSummary: errorSummary,
     errorText: errorText,
     inspect: props.inspect,
   });
-  if (below === null) return card;
+  // Four siblings in upstream's call row: the CSS orders them head -> IN ->
+  // TOOL CALLS label -> nested calls -> OUT. Sections that render null simply
+  // leave no node (empty output means no OUT section at all, never '0 lines').
   return (
     <>
       {card}
-      {below}
+      {inSection}
+      {callsLabel}
+      {outSection}
     </>
   );
 }
@@ -4691,10 +4740,9 @@ function apply(ctx) {
       },
       WebFetchRow,
     );
-    // #152, Part B: the run_code shadow. Replaces only the atomic Code row
-    // (output hoisted visible, code collapsed); nested subtool rows stay
-    // tree-owned and untouched. See RunCodeRow above for the mechanism
-    // justification.
+    // #152, Part C: the run_code shadow. Replaces only the atomic Code row
+    // (IN / TOOL CALLS / OUT sections); nested subtool rows stay tree-owned
+    // and untouched. See RunCodeRow above for the mechanism justification.
     yield ctx.slots.register(
       {
         name: "tool.call.toolview",
