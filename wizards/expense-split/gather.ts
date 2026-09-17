@@ -430,14 +430,12 @@ export function manualPicked(m: Map<string, string[]>): boolean {
 // Save good rows unless dry runs.
 export function manualNext(
   answers: Map<string, string[]>,
-  fields: Record<string, string[]>,
+  _fields: Record<string, string[]>,
   ctx: WizardCtx,
 ): { errors?: string[] } | void {
-  const combined = new Map(answers);
-  for (const [name, values] of Object.entries(fields)) combined.set(name, values);
-  const problems = manualRowProblems(combined);
+  const problems = manualRowProblems(answers);
   if (problems.length > 0) return { errors: problems };
-  if (!isDryMap(combined)) persistManualRun(ctx.sessionId, combined);
+  if (!isDryMap(answers)) persistManualRun(ctx.sessionId, answers);
 }
 
 // Manual expenses step. Rows save when the user presses Next, through

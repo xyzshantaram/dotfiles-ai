@@ -1661,6 +1661,17 @@ export function createWizard(
     });
   }
 
+  // The stored log lacks this post.
+  // Fold the post over stored answers.
+  function navAnswersFor(
+    state: SessionRecord,
+    fields: Record<string, string[]>,
+  ): Map<string, string[]> {
+    const merged = new Map(currentAnswersFor(state));
+    for (const [name, values] of Object.entries(fields)) merged.set(name, values);
+    return merged;
+  }
+
   // Handle one step post. Split out so step posts serialize.
   async function handleStep(
     req: Request,
@@ -1711,7 +1722,7 @@ export function createWizard(
       navResult = await runNavButton(
         postedStep,
         action,
-        currentAnswersFor(state),
+        navAnswersFor(state, fields),
         fields,
         ctx,
       );

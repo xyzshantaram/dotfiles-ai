@@ -55,9 +55,9 @@ and Next stay in reach on a long screen. Set `nav` on the step:
 ```
 
 - One forward button per step. Declare `next`, `done` or `goto`, never two of them.
-- A handler takes `(answers, fields, ctx)`: the answers from earlier steps, the fields just posted,
-  and the wizard context. `answers` does not yet hold this post, so read the current screen from
-  `fields`. Merge the two when a check spans both.
+- A handler takes `(answers, fields, ctx)`. `answers` holds every answer so far, including the post
+  that triggered this handler, so a value posted now wins over the stored value of the same name.
+  `fields` is the plain view of that one post. `ctx` carries the session id.
 - A `next` handler that returns nothing advances. A custom action that returns nothing re-renders
   the same screen, which is what a Select all button wants.
 - Return `{ errors: ["..."] }` to hold the screen and show the message. Return `{ goto: "step-id" }`

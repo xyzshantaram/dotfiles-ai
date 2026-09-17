@@ -2556,3 +2556,60 @@ Deno.test("validateStep rejects a nav with both next and done", () => {
   assert(errors.length > 0, "double forward fails");
   assert(namesKind(errors, "nav"), "error names nav");
 });
+
+Deno.test("next handler reads its own posted field from answers", async () => {
+  // Post one field on a step with a next handler.
+  // Capture the answers value inside the handler.
+  let seen: string[] = [];
+  const handle = wiz({
+    title: "T",
+    steps: [
+      {
+        ...step("a", "First", [textEntry("Run name", "run")]),
+        nav: {
+          next: {
+            label: "Continue",
+            run: (answers) => {
+              seen = answers.get("run") ?? [];
+            },
+          },
+        },
+      },
+      step("b", "Second", [markdown("two")]),
+    ],
+  });
+  const page = await handle(stepPost("a", "next", { run: "Friday" }));
+  assert((await page.text()).includes("Second"), "next advances");
+  assert(seen.join(",") === "Friday", "answers hold the posted field");
+});
+
+Deno.test("posted field wins over stored answers in handler", async () => {
+  // Store one value on the first step.
+  // Post a new value for the same name on the second step.
+  let seen: string[] = [];
+  const handle = wiz({
+    title: "T",
+    steps: [
+      step("a", "First", [
+        textEntry("Run name", "run"),
+        buttons([{ label: "N", action: "next" }]),
+      ]),
+      {
+        ...step("b", "Second", [textEntry("Run name", "run")]),
+        nav: {
+          next: {
+            label: "Continue",
+            run: (answers) => {
+              seen = answers.get("run") ?? [];
+            },
+          },
+        },
+      },
+      step("c", "Third", [markdown("three")]),
+    ],
+  });
+  await handle(stepPost("a", "next", { run: "Friday" }));
+  const page = await handle(stepPost("b", "next", { run: "Monday" }));
+  assert((await page.text()).includes("Third"), "next advances");
+  assert(seen.join(",") === "Monday", "posted value wins over stored value");
+});
