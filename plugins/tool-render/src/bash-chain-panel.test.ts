@@ -378,6 +378,214 @@ describe("the #168 CSS voice: conditional chip, earned boxes, tighter rhythm", (
   });
 });
 
+describe("the #169 scale: one vocabulary for the whole file", () => {
+  // Criterion 1 pins the CONTRACT by closure: every padding, radius,
+  // type-size and gap declaration in this file must be a member of the
+  // scale in client.module.css's header. A new ad-hoc value fails here by
+  // construction — no reviewer has to notice it. Comments are stripped
+  // before extraction (run-code-layout.test.ts precedent): comment text
+  // must never satisfy a pin, per the #165 lesson. All four extractors
+  // anchor `prop\s*:` so `padding-bottom` never leaks into `padding` and
+  // `border-bottom-left-radius` never leaks into `border-radius`.
+  const css = readFileSync(new URL("./client.module.css", import.meta.url), "utf8");
+  const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
+
+  function propValues(prop: string): string[] {
+    const re = new RegExp(prop + "\\s*:([^;]+);", "g");
+    const out: string[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(bare)) !== null) out.push(m[1].trim().replace(/\s+/g, " "));
+    return out;
+  }
+
+  function unexpected(prop: string, scale: string[]): string[] {
+    return [...new Set(propValues(prop))].filter((v) => !scale.includes(v)).sort();
+  }
+
+  it("padding is closed over the scale steps", () => {
+    // The full closed set, sorted: reintroducing `5px 12px` (or any
+    // twenty-seventh value) reddens here.
+    const scale = [
+      "0",
+      "0 0 0.125rem 0.25rem",
+      "0 0.25rem",
+      "0 0.375rem",
+      "0 0.5rem 0.125rem",
+      "0 0.5rem 0.375rem",
+      "0.0625rem 0",
+      "0.0625rem 0 0.0625rem 0.25rem",
+      "0.0625rem 0 0.0625rem 0.5rem",
+      "0.0625rem 0.25rem",
+      "0.0625rem 0.375rem",
+      "0.125rem 0",
+      "0.125rem 0 0 1.625rem",
+      "0.125rem 0 0.125rem 0.25rem",
+      "0.125rem 0.375rem",
+      "0.125rem 0.5rem 0.125rem 0",
+      "0.15625rem 0.5rem",
+      "0.25rem 0 0 0.25rem",
+      "0.25rem 0 0.25rem 0.25rem",
+      "0.25rem 0.5rem",
+      "0.25rem 0.5rem 0.25rem 1.375rem",
+      "0.25rem 0.75rem",
+      "0.375rem 0.5rem",
+      "0.5rem 0",
+      "0.5rem 0.625rem",
+      "0.625rem 0.8125rem",
+    ];
+    expect(unexpected("padding", scale)).toEqual([]);
+  });
+
+  it("radius is closed over the scale steps", () => {
+    // Eight steps: six rem, the 999px pill idiom, the joined-corner flat.
+    // Reintroducing raw `4px` (or 0.4375rem) reddens here.
+    const scale = [
+      "0 0 0.375rem 0.375rem",
+      "0.0625rem",
+      "0.25rem",
+      "0.375rem",
+      "0.5rem",
+      "0.625rem",
+      "0.75rem",
+      "999px",
+    ];
+    expect(unexpected("border-radius", scale)).toEqual([]);
+  });
+
+  it("type is closed over the scale steps", () => {
+    // Five rem steps plus `inherit` (which inherits a scale step, it is not
+    // a new one). Reintroducing raw `10px` reddens here.
+    const scale = ["0.6875rem", "0.75rem", "0.8125rem", "0.875rem", "1rem", "inherit"];
+    expect(unexpected("font-size", scale)).toEqual([]);
+  });
+
+  it("gap is closed over the scale steps", () => {
+    const scale = ["0.0625rem", "0.25rem", "0.25rem 0.5rem", "0.375rem", "0.5rem", "0.625rem"];
+    expect(unexpected("gap", scale)).toEqual([]);
+  });
+
+  it("no raw pixels outside the two named idioms", () => {
+    // The only px left in declarations is the 1px physical hairline and the
+    // 999px pill idiom — both named in the contract header. Strip those two
+    // and no digit-px may remain anywhere a declaration lives.
+    const stripped = bare.replace(/999px/g, "").replace(/(?<!\d)1px/g, "");
+    expect(stripped).not.toMatch(/\dpx/);
+  });
+
+  it("no hardcoded red wash; the error surface derives from the theme token", () => {
+    // Criterion 2's named hardcoded value is gone from the whole file, and
+    // the error-output rule that carried it now mixes the theme's own error
+    // token — darker wash in the dark theme, tinted wash in the light one.
+    // Block-scoped: color-mix also describes the answered/stopped outlines,
+    // so bare substrings prove nothing about THIS rule.
+    expect(bare).not.toMatch(/255\s*,\s*85\s*,\s*85/);
+    const err = ruleBlock(css, ".tool-render-output[tool-render-error]");
+    expect(err).toContain(
+      "border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 45%, transparent)",
+    );
+    expect(err).toContain(
+      "background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 8%, transparent)",
+    );
+  });
+
+  it("hex colors are closed over the documented set", () => {
+    // #fff is absolute bright on purpose (pending ask, answered wash base,
+    // armed reject text); the two others are the diff content hues, which
+    // are deliberately NOT theme tokens. Any fourth hex reddens here.
+    const found = bare.match(/#[0-9a-fA-F]{3,8}\b/g) ?? [];
+    const allowed = ["#fff", "#ffb86c", "#7db4ff"];
+    expect([...new Set(found)].filter((h) => !allowed.includes(h)).sort()).toEqual([]);
+    expect(found.length).toBeGreaterThan(0);
+  });
+
+  it("rgba is closed over the diff content hues", () => {
+    // The red wash is color-mix now; the two surviving rgba tints are the
+    // diff del/add backgrounds — content language, not chrome. Exact
+    // membership, hue AND alpha: the first version of this pin matched the
+    // hue alone and stayed green while 0.16 became 0.17 — its own mutant
+    // proved it. A third rgba (or the red one back) reddens here.
+    const found = bare.match(/rgba\([^)]*\)/g) ?? [];
+    expect([...new Set(found)].sort()).toEqual([
+      "rgba(125, 180, 255, 0.16)",
+      "rgba(255, 166, 87, 0.16)",
+    ]);
+  });
+
+  it("verbatim blocks share one voice: code-block bg, L1 edge, R-PANEL corners", () => {
+    // Criterion 3: outputs, code, diffs all mean "bytes from the machine",
+    // so all four render the same block. The L1 edge arrives via the shared
+    // four-selector rule — scoped by regex to that rule's own block, since
+    // ruleBlock anchors a single-line selector.
+    const out = ruleBlock(css, ".tool-render-output");
+    expect(out).toContain("background: var(--dsw-alias-markdown-code-block)");
+    expect(out).toContain("border-radius: 0.75rem");
+    expect(out).toContain("padding: 0.625rem 0.8125rem");
+    const edge = bare.match(
+      /\.tool-render-output,\s*\.tool-render-code,\s*\.tool-render-write-diff,\s*\.tool-render-diff-fallback\s*\{[^}]*\}/,
+    );
+    expect(edge).not.toBeNull();
+    expect(edge![0]).toContain("border: 1px solid var(--dsw-alias-border-l1)");
+  });
+
+  it("region, object and verbatim stay three different readings", () => {
+    // The chain panel is the REGION (bg-base field, pinned above); the
+    // part and the argument chip are OBJECTS (bg-layer-1); the earned stage
+    // box is VERBATIM (markdown-code-block with the L3 glance edge). A
+    // restyle that puts the stage on layer-1, or the chip on code-block,
+    // collapses two meanings into one look and reddens here.
+    const stage = ruleBlock(css, ".tool-render-diagram-stage");
+    expect(stage).toContain("background: var(--dsw-alias-markdown-code-block)");
+    expect(stage).toContain("border: 1px solid var(--dsw-alias-border-l3)");
+    expect(stage).toContain("border-radius: 0.5rem");
+    const arg = ruleBlock(css, ".tool-render-diagram-arg");
+    expect(arg).toContain("background: var(--dsw-alias-bg-layer-1)");
+    expect(arg).toContain("border: 1px solid var(--dsw-alias-border-l3)");
+    expect(arg).toContain("border-radius: 0.25rem");
+  });
+
+  it("chrome reads as chrome: badges and pills share the hover tint", () => {
+    // The row badge and the reminder chip are both renderer-added UI, not
+    // command content, so both sit on interactive-bg-hover as pills — the
+    // same surface that says "this is chrome" in the mapping.
+    const badge = ruleBlock(css, ".tool-render-badge");
+    expect(badge).toContain("background: var(--dsw-alias-interactive-bg-hover)");
+    expect(badge).toContain("border-radius: 999px");
+    const chip = ruleBlock(css, ".tool-render-reminder-chip");
+    expect(chip).toContain("background: var(--dsw-alias-interactive-bg-hover)");
+    expect(chip).toContain("border-radius: 999px");
+  });
+
+  it("annotations stay dashed; token chips stay solid", () => {
+    // The dashed voice is a claim ABOUT the command (heredoc here; the
+    // conditional chip is pinned dashed above). The argument chip is a piece
+    // OF the command — solid. Re-dashing the chip, or un-dashing the
+    // heredoc, reddens here.
+    const heredoc = ruleBlock(css, ".tool-render-diagram-heredoc");
+    expect(heredoc).toContain("border: 1px dashed var(--dsw-alias-border-l3)");
+    const arg = ruleBlock(css, ".tool-render-diagram-arg");
+    expect(arg).not.toMatch(/dashed/);
+  });
+
+  it("state marks ride rem outlines, never backgrounds", () => {
+    // The state-mark scale: 0.1875rem for escalated/guard/pending-class,
+    // 0.125rem for error/stopped/focus-class. Pinned on the error card and
+    // the escalated card; a px width smuggled back in reddens here (and in
+    // the no-px pin above).
+    const err = ruleBlock(css, ".tool-render-card[data-error]");
+    expect(err).toMatch(/outline:\s*0\.125rem solid var\(--dsw-alias-state-error-primary\)\s*;/);
+    const esc = ruleBlock(css, ".tool-render-card[data-escalated]");
+    expect(esc).toMatch(/outline:\s*0\.1875rem solid var\(--dsh-outline-escalated\)\s*;/);
+  });
+
+  it("the contract header opens the file", () => {
+    // The scale lives at the top of the stylesheet, not in a ticket or a
+    // test: deleting the header (or moving the scale elsewhere) reddens.
+    // Anchor strings only — the closure pins above enforce the content.
+    expect(css).toContain("THE SCALE (#169)");
+    expect(css).toContain("THE THEME CONTRACT");
+  });
+});
+
 describe("slice invariant: regrouped chains reconstruct byte-exactly", () => {
   // The model is untouched, so this is a guard rail, not a discovery: a
   // regrouping that reprints text is a regression no matter how good it

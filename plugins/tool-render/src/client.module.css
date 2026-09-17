@@ -1,3 +1,103 @@
+/* ==========================================================================
+ * THE SCALE (#169) — the file's contract. Read this before adding a rule.
+ *
+ * Seven tickets (#148, #149, #160, #162, #164, #165, #167) each added
+ * surfaces to solve their own problem, and the audit counted the result:
+ * 14+ padding values, 8 radii, five rem type sizes plus raw 10/11/12px, a
+ * raw 5px 12px, a raw 4px, and one hardcoded rgba red. Every rule below is
+ * on exactly one step of each scale in this header. A value not listed here
+ * is a fifth scheme, not a judgment call.
+ *
+ * SCOPE: the whole file, deliberately. The raw pixels lived OUTSIDE the
+ * diagram (ask buttons, approval buttons, the verdict stamp, the reason
+ * lines) — a diagram-only pass would have added a scale without removing
+ * the alternatives, which is the worst outcome. So every family below —
+ * row chrome, run-code sections, card outlines, ask form, roster, bodies,
+ * approval, diagram — cites these steps.
+ *
+ * INHERITED, not revisited (#168, minutes old): the box-earning rule (a
+ * stage draws its box only for redirects, an exit pill, or verbatim words),
+ * the conditional chip, the part card values, the weighted panel voice,
+ * and the tightened rhythm (statement stack 1.25rem -> 0.875rem, in-panel
+ * gap 0.375 -> 0.25rem). If this scale ever wants one of those values
+ * changed, that is a new ticket with a screenshot, not a drive-by here.
+ * Inherited from #167 the same way: the bg-base field, content-sized
+ * stages, the rail-free boundary, nowrap+scroll (C0).
+ *
+ * PADDING steps (vertical rhythm is margin+gap as well as padding — the
+ * steps are shared). P-FLUSH 0. P-HAIR 0.0625rem. P-TIGHT 0.125rem.
+ * P-CHIP 0.25rem. P-STAMP 0.375rem. P-CARD 0.5rem. P-CODE-V 0.625rem.
+ * P-BTN-W 0.75rem. P-CODE-H 0.8125rem. Indents: 1.125rem (lists),
+ * 1.375rem (nested calls), 1.625rem (answer notes). The full closed set is
+ * pinned in bash-chain-panel.test.ts — any padding outside it fails the
+ * suite. Named idioms: pill P-HAIR P-STAMP (badges, name badge, reminder
+ * chip); chip-inline `0 P-CHIP` in dense chip rows (argument chips) vs
+ * `0 P-STAMP` for standalone stamps (conditional, exit, diagram badge);
+ * card P-STAMP P-CARD (#168 rhythm); card-tight 0.15625rem P-CARD (#165's
+ * restraint, kept verbatim); verbatim block P-CODE-V P-CODE-H; text body
+ * P-CARD P-CODE-V (steps are per-axis values and re-compose across
+ * idioms); button P-CHIP P-BTN-W (was raw 5px 12px, now exact-rem
+ * except 1px tighter vertically — flagged in the #169 report).
+ *
+ * RADIUS steps. R-DOT 0.0625rem (the sep dot only). R-CHIP 0.25rem (every
+ * chip, badge, pill, heredoc, tab focus — absorbs raw 4px exactly).
+ * R-CONTROL 0.375rem (name badge, inspect, text bodies, approval comment —
+ * absorbs 0.4375rem and the 6px join corners exactly). R-CARD 0.5rem
+ * (stage, part, ask options). R-GROUP 0.625rem (the dashed verbatim group
+ * ONLY — see below). R-PANEL 0.75rem (card, verbatim blocks, chain panel).
+ * R-PILL 999px (pills read as pills at any height). R-FLAT 0 (joined
+ * card corners where sections meet).
+ *
+ * TYPE steps, each with its line-height voice. T-STAMP 0.6875rem/1rem
+ * (chips, badges, pills, tabs, captions, the verdict stamp — absorbs raw
+ * 10px and 11px, +1px flagged). T-META 0.75rem/1.125rem (endpoints,
+ * arguments, conditional, heredoc, roster ids; the roster rows pair it
+ * with 1.25rem). T-CODE 0.8125rem/1.375rem (verbatim blocks; the diagram
+ * surface and UI prose pair 0.8125rem with 1.25rem, dense notes with
+ * 1.125rem). T-TITLE 0.875rem/1.5rem (row title; the summary override
+ * drops to 0.8125rem for de-emphasis). T-ICON 1rem/1 (pager glyphs only —
+ * an icon metric, exempt by nature). `font: inherit` is always allowed: it
+ * inherits a scale step, it is not a new one.
+ *
+ * BORDER levels — what each MEANS, not merely that three exist. L1 is a
+ * line drawn ON a surface to divide content: code-block edges, text-body
+ * edges, question separators, the compaction footer, the diff-path rule.
+ * L2 is the edge of a discrete OBJECT against its field: the card, the
+ * part, the run-code section sides, the conditional chip (dashed). L3 is
+ * glance chrome: token chips, badges, pills, the stage box, the hover
+ * lift, ask options. DASHED is the annotation voice — a claim ABOUT the
+ * command (conditional, heredoc, endpoint, verbatim group, bound value),
+ * answered at a glance against solid-outline token chips (pieces OF the
+ * command). Dashed takes the level that reads against its host (L2 on
+ * layer-1, L3 on code-block); that is contrast, not a fourth level.
+ *
+ * SURFACES — visual difference MEANS something. REGION is bg-base: the
+ * chain panel field, and markdown `pre` blocks (a region nested inside a
+ * body). OBJECT is bg-layer-1: the card, the part, argument chips, the
+ * run-code sections. VERBATIM is markdown-code-block: outputs, code,
+ * diffs, the earned stage box — bytes from the machine. CHROME is
+ * interactive-bg-hover (+solid) and label-secondary fills: badges, the
+ * reminder chip, primary buttons — UI the renderer added, not command
+ * content. GLYPH is label-caption / border-l2-as-background: the sep dot,
+ * the diff-sep rules — marks, not surfaces.
+ *
+ * STATE MARKS ride OUTLINES, never backgrounds: 0.1875rem escalated /
+ * guard / answered / pending, 0.125rem error / stopped / focus. Outlines
+ * paint outside the box, so a state change never reflows a row. #fff is
+ * absolute bright on purpose (the pending ask must win on either theme);
+ * the diff hues (orange/blue del/add, marker hexes) are a content language
+ * — a deletion is not an error — and deliberately NOT theme tokens.
+ *
+ * THE THEME CONTRACT (criterion 5): every token above is a dsw-alias —
+ * elevation, not colour. bg-base stays distinguishable from bg-layer-1
+ * either way the themes flip it (#167's proof, inherited). The error wash
+ * derives from the theme's own error token via color-mix, so it follows
+ * the theme instead of fighting it (the old hardcoded rgba red assumed
+ * one theme). The one standing px exception is the picture edge: a 2px
+ * label-tertiary border that must read against ARBITRARY image content,
+ * where the quiet border tokens are exactly wrong (commented at the rule).
+ * 1px hairlines are the other: a physical hairline is 1px in both themes.
+ * ========================================================================== */
 .tool-render-row {
   align-items: center;
   min-width: 0;
@@ -156,7 +256,7 @@
   white-space: pre-wrap;
   word-break: break-word;
   color: var(--dsw-alias-label-primary);
-  border-radius: 0.625rem;
+  border-radius: 0.75rem;
   margin: 0.25rem 0 0.25rem 0.25rem;
   padding: 0.625rem 0.8125rem;
   font-size: 0.8125rem;
@@ -166,8 +266,11 @@
 }
 .tool-render-output[tool-render-error] {
   color: var(--dsw-alias-state-error-primary);
-  border-color: rgba(255, 85, 85, 0.45);
-  background: rgba(255, 85, 85, 0.08);
+  /* #169: the error wash derives from the theme's own error token instead
+     of a hardcoded rgba red — darker wash in the dark theme, tinted wash in
+     the light one, the same 45%/8% weights either way. */
+  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 45%, transparent);
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 8%, transparent);
   font-weight: 500;
 }
 /* #152 Part C: IN / TOOL CALLS / OUT read as ONE card with the nested calls.
@@ -216,7 +319,7 @@
   color: var(--dsw-alias-label-primary);
 }
 .tool-render-runcode-spoiler:focus-visible {
-  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline: 0.125rem solid var(--dsw-alias-state-business-primary);
   outline-offset: -0.125rem;
 }
 .tool-render-runcode-spoiler-label {
@@ -315,7 +418,7 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
 .tool-render-runcode-out {
   border: 1px solid var(--dsw-alias-border-l2);
   border-top: 0;
-  border-radius: 0 0 6px 6px;
+  border-radius: 0 0 0.375rem 0.375rem;
   background: var(--dsw-alias-bg-layer-1);
   padding: 0 0.5rem 0.375rem;
 }
@@ -358,7 +461,7 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
   color: var(--dsw-alias-label-secondary);
   cursor: pointer;
   opacity: 0;
-  border-radius: 0.4375rem;
+  border-radius: 0.375rem;
   align-self: flex-start;
   align-items: center;
   gap: 0.25rem;
@@ -531,7 +634,7 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
   padding: 0.15625rem 0.5rem;
 }
 .tool-render-card[data-escalated] {
-  outline: 3px solid var(--dsh-outline-escalated);
+  outline: 0.1875rem solid var(--dsh-outline-escalated);
 }
 /* A call waiting on a bash-guard approval is outlined in electric blue, so it
    reads differently from a sandbox_permissions escalation. This rule follows
@@ -540,24 +643,24 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
    the durable result metadata. A pending approval that caused no rewrite
    loses the mark once it is answered. */
 .tool-render-card[data-guard-approval] {
-  outline: 3px solid var(--dsh-outline-guard);
+  outline: 0.1875rem solid var(--dsh-outline-guard);
 }
 /* Once answered, the outline dulls to translucent white instead of
    vanishing. This rule sits BEFORE error/stopped/guard so a failed or
    guarded call keeps its own stronger mark. */
 .tool-render-card[data-question-answered] {
-  outline: 3px solid color-mix(in srgb, #fff 40%, transparent);
+  outline: 0.1875rem solid color-mix(in srgb, #fff 40%, transparent);
 }
 /* An errored call is outlined the way an escalated one is, in red and a little
    thinner. The outline follows the card's rounded corners. It replaces the old
    tinted row background and inset left bar. */
 .tool-render-card[data-error] {
-  outline: 2px solid var(--dsw-alias-state-error-primary);
+  outline: 0.125rem solid var(--dsw-alias-state-error-primary);
 }
 /* A stopped call (interrupted) gets a dimmer red outline, since it no longer
    carries its own state dot. */
 .tool-render-card[data-stopped] {
-  outline: 2px solid color-mix(in srgb, var(--dsw-alias-state-error-primary) 55%, transparent);
+  outline: 0.125rem solid color-mix(in srgb, var(--dsw-alias-state-error-primary) 55%, transparent);
 }
 /* The guard outline outranks error and stopped, not just escalated. A
    rewritten command often exits non-zero (rg exits 1 on no match, and
@@ -567,7 +670,7 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
    three without !important, so the durable "this call was guarded" mark
    survives a failing exit. */
 .tool-render-card[data-guard-approval][data-guard-approval] {
-  outline: 3px solid var(--dsh-outline-guard);
+  outline: 0.1875rem solid var(--dsh-outline-guard);
 }
 /* A call waiting on the human's answer to its question is outlined in
    solid white at the same 3px weight as the other state outlines. This
@@ -576,7 +679,7 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
    co-occur; the doubled guard rule above still wins a true tie, which
    cannot happen because guard approvals are bash-only). */
 .tool-render-card[data-question-pending] {
-  outline: 3px solid #fff;
+  outline: 0.1875rem solid #fff;
 }
 .tool-render-card:hover {
   border-color: var(--dsw-alias-border-l3);
@@ -595,7 +698,7 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
   border: 1px solid var(--dsw-alias-border-l1);
 }
 .tool-render-row:focus-visible {
-  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline: 0.125rem solid var(--dsw-alias-state-business-primary);
   outline-offset: -0.125rem;
 }
 
@@ -934,11 +1037,11 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
   border: 1px solid var(--dsw-alias-border-l3);
   background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-label-secondary);
-  border-radius: 4px;
+  border-radius: 0.25rem;
   cursor: pointer;
-  font-size: 12px;
-  line-height: 20px;
-  padding: 5px 12px;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  padding: 0.25rem 0.75rem;
 }
 .tool-render-qbtn:hover:enabled {
   background: var(--dsw-alias-interactive-bg-hover-solid);
@@ -1056,8 +1159,8 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
 .tool-render-markdown-body :where(code):not(:where(pre code)),
 .tool-render-fetch-body :where(code):not(:where(pre code)) {
   background: var(--dsw-alias-bg-base);
-  border-radius: 0.1875rem;
-  padding: 0 0.1875rem;
+  border-radius: 0.25rem;
+  padding: 0 0.25rem;
 }
 
 /* web_fetch body. Same bounded-scroll shape as the markdown body but its
@@ -1152,7 +1255,7 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
   max-width: 100%;
   width: auto;
   height: auto;
-  border: 2px solid var(--dsw-alias-label-tertiary);
+  border: 0.125rem solid var(--dsw-alias-label-tertiary);
   border-radius: 0.25rem;
 }
 /* Metadata lines under the picture: name, type, full path. */
@@ -1293,18 +1396,20 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
 /* (The decided badge that used to live here was retired on 2026-09-08: the
    durable verdict is now a badge on the collapsed row, .tool-render-verdict,
    and the answer bar renders nothing once a decision has settled.) */
-/* Aidios review-queue button recipe, mapped onto dsw-alias tokens: 1px
-   border, surface bg, secondary text, 4px radius, 12px/20px, 5px 12px
-   padding, hover raises surface + primary text, disabled 0.45. */
+/* Aidios review-queue button recipe, mapped onto dsw-alias tokens and the
+   #169 scale: 1px hairline border, surface bg, secondary text, R-CHIP
+   radius, T-META type, P-CHIP P-BTN-W padding, hover raises surface +
+   primary text, disabled 0.45. (Was raw 5px 12px: 12px is exactly
+   P-BTN-W, 5px tightens 1px to P-CHIP — flagged in the #169 report.) */
 .tool-render-approval-btn {
   border: 1px solid var(--dsw-alias-border-l3);
   background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-label-secondary);
-  border-radius: 4px;
+  border-radius: 0.25rem;
   cursor: pointer;
-  font-size: 12px;
-  line-height: 20px;
-  padding: 5px 12px;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  padding: 0.25rem 0.75rem;
 }
 .tool-render-approval-btn:hover:enabled {
   background: var(--dsw-alias-interactive-bg-hover-solid);
@@ -1372,7 +1477,7 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
   resize: vertical;
   min-height: 2.5rem;
   border: 1px solid var(--dsw-alias-border-l3);
-  border-radius: 0.4375rem;
+  border-radius: 0.375rem;
   background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-label-primary);
   font-family: inherit;
@@ -1381,8 +1486,8 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
   padding: 0.25rem 0.5rem;
 }
 .tool-render-approval-comment:focus {
-  outline: 2px solid var(--dsw-alias-state-business-primary);
-  outline-offset: -1px;
+  outline: 0.125rem solid var(--dsw-alias-state-business-primary);
+  outline-offset: -0.0625rem;
 }
 /* The durable approval verdict on the COLLAPSED row (owner, 2026-09-08):
    [shield | APPROVED], sitting immediately after the tool-call label badge.
@@ -1396,16 +1501,16 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
 .tool-render-verdict {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 0.25rem;
   flex: none;
   border: 1px solid var(--dsw-alias-border-l3);
-  border-radius: 4px;
-  padding: 0 6px;
+  border-radius: 0.25rem;
+  padding: 0 0.375rem;
   color: var(--dsw-alias-label-secondary);
-  font-size: 10px;
+  font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.04em;
-  line-height: 18px;
+  line-height: 1.125rem;
   white-space: nowrap;
 }
 .tool-render-verdict[data-outcome="rejected"] {
@@ -1421,9 +1526,9 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
 .tool-render-approval-reason {
   align-self: stretch;
   color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
-  line-height: 18px;
-  margin-bottom: 4px;
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+  margin-bottom: 0.25rem;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
@@ -1458,8 +1563,8 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
 }
 .tool-render-escalation-reason {
   color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 0.75rem;
+  line-height: 1.125rem;
   margin: 0.125rem 0 0.25rem 0.25rem;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
@@ -1471,8 +1576,8 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
    outline), which this rule never touches. */
 .tool-render-escalation-reason-muted {
   color: var(--dsw-alias-label-caption);
-  font-size: 11px;
-  line-height: 16px;
+  font-size: 0.6875rem;
+  line-height: 1rem;
 }
 /* #149: read-only dataflow diagram for pipe/redirect bash commands. Stages
    are blocks in execution order joined by typed arrows; redirects are
@@ -1895,7 +2000,7 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
 .tool-render-bash-tab {
   background: none;
   border: none;
-  border-bottom: 2px solid transparent;
+  border-bottom: 0.125rem solid transparent;
   padding: 0.125rem 0.375rem;
   cursor: pointer;
   font-family: var(--ds-font-family-code);
@@ -1913,7 +2018,7 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
   border-bottom-color: var(--dsw-alias-state-business-primary);
 }
 .tool-render-bash-tab:focus-visible {
-  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline: 0.125rem solid var(--dsw-alias-state-business-primary);
   outline-offset: 0.125rem;
   border-radius: 0.25rem;
 }
