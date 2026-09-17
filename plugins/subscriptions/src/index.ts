@@ -24,6 +24,17 @@
  *     `_server` RPC, and save it as the OPENCODE_SESSION_COOKIE credential
  *   - POST /subscriptions/opencode-cookie/login — open opencode.ai in the
  *     browser so the user can sign in, then re-run extract
+ *   - POST /subscriptions/electronhub-session/extract — harvest the
+ *     ElectronHub browser session out of a local Firefox profile (the
+ *     api.electronhub.ai refresh_token cookie, profiles.ini-resolved,
+ *     WAL-aware read), mint a fresh session JWT at /v1/auth/refresh, validate
+ *     it against /v1/auth/subscription, and answer the dashboard surface
+ *     (subscription + permanent credits + flex credits). Explicit user action
+ *     only — never on the poll loop, because each mint rotates the stored
+ *     refresh token. Answers the login-again message when the session is
+ *     absent or expired, never a stale figure, never a synthesised number.
+ *   - POST /subscriptions/electronhub-session/login — open app.electronhub.ai
+ *     in the browser so the user can sign in, then re-run extract
  *
  * The GO usage and DeepSeek balance routes fold in what the removed
  * dsh-opencode-go-usage and ds-api-usage packages owned.
@@ -35,7 +46,7 @@
  * (`OPENCODE_SESSION_COOKIE`), never in settings.
  */
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { execFile, execFileSync, spawn } from "node:child_process";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
@@ -545,6 +556,24 @@ import {
   parseElectronHubModels,
   parseElectronHubUsage,
 } from "./eh-section-model";
+import {
+  EH_FIREFOX_COOKIE_HOST,
+  EH_FIREFOX_COOKIE_NAME,
+  EH_REFRESH_PATH,
+  EH_SESSION_ENDPOINT_PATHS,
+  EH_SESSION_EXPIRED,
+  EH_SESSION_NO_COOKIE,
+  ehDecodeJwtPayload,
+  ehIsPlausibleTokenChars,
+  ehJwtIsExpired,
+  ehParseRefreshBody,
+  ehParseRefreshSuccessor,
+  ehParseSessionFlexCredits,
+  ehParseSessionPermanentCredits,
+  ehParseSessionSubscription,
+  ehResolveFirefoxProfiles,
+  ehSessionCookieHeader,
+} from "./eh-session-model";
 
 // Re-exported for compatibility with the pre-#141 layout (these were local
 // exports of this module; the implementations moved to the fold module).
@@ -1114,7 +1143,28 @@ export function apply(ctx, config) {
     try {
       const key = await resolveElectronHubKey();
       if (!key) {
-        sendJson(res, 200, { ok: false, error: ELECTRONHUB_KEY_MISSING });
+        // No credential: render what the public endpoints support
+        // (criterion 6) instead of an error — the catalog answers keyless,
+        // and the note says exactly that. The usage route still answers the
+        // KEY_MISSING affordance, so the absent credential stays plain.
+        const catalog = await fetch(`${ELECTRONHUB_API_BASE}/models`, {
+          headers: { Accept: "application/json" },
+          signal: AbortSignal.timeout(ELECTRONHUB_TIMEOUT_MS),
+        });
+        if (!catalog.ok) {
+          throw new Error(
+            `electronhub models unavailable: public catalog HTTP ${catalog.status} ` +
+              "(no API key configured)",
+          );
+        }
+        sendJson(res, 200, {
+          ok: true,
+          models: parseElectronHubModels(await catalog.json()),
+          source: "catalog",
+          note:
+            "no ELECTRONHUB_API_KEY or ELECTRONHUB_DEVPASS_API_KEY configured — " +
+            "showing the public model catalog",
+        });
         return;
       }
       sendJson(res, 200, { ok: true, ...(await electronhubModelsOnce(key)) });
@@ -1340,6 +1390,274 @@ export function apply(ctx, config) {
       sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) });
     }
   };
+
+  // ── ElectronHub browser session (#108) ────────────────────────────────────
+  // The owner's chosen credential route (2026-09-09 grill): harvest the
+  // session JWT from the Firefox profile. Modelled on the opencode-cookie
+  // flow above (profile scan -> narrow read -> validate against the real
+  // API -> answer), with three differences the mechanism forces:
+  //   1. The harvestable token is the api.electronhub.ai `refresh_token`
+  //      cookie (the JWT itself is app-encrypted in IndexedDB and the
+  //      localStorage copy holds only profile fields). One cookie, one host
+  //      — read at harvest time, never a general credential facility.
+  //   2. The cookie read is WAL-aware: Firefox keeps cookies.sqlite in WAL
+  //      mode, so sqlite+wal are copied to scratch and the copy is queried
+  //      normally (the immutable .backup path above would skip the WAL).
+  //      The scratch copy is removed afterwards.
+  //   3. Refresh tokens ROTATE: each successful mint consumes the presented
+  //      value, so the mint's Set-Cookie successor is reflected back into
+  //      the profile row it was read from (best-effort, single-row UPDATE),
+  //      and a mint happens ONLY on this explicit extract action — never on
+  //      the panel's poll loop, which would churn the browser's own chain.
+  // Nothing credential-shaped is logged, rendered, or persisted: the mint
+  // result is used for the three dashboard fetches and dropped.
+
+  /** profiles.ini-ordered candidates (constraint 4: no hardcoded path). */
+  const firefoxElectronHubProfileDirs = () => {
+    try {
+      const iniPath = join(homedir(), ".mozilla", "firefox", "profiles.ini");
+      if (existsSync(iniPath)) {
+        const ordered = ehResolveFirefoxProfiles(readFileSync(iniPath, "utf8"), homedir());
+        if (ordered.length > 0) return ordered;
+      }
+    } catch {
+      // fall through to the directory scan
+    }
+    return firefoxProfileDirs();
+  };
+
+  /**
+   * WAL-aware single-value read: copy cookies.sqlite (+wal when present) to
+   * scratch, query the copy so SQLite replays the WAL, remove the copy.
+   * Returns the raw text or null.
+   */
+  const sqliteWalValue = async (dbPath, sql, timeoutMs = 10_000) => {
+    const scratch = mkdtempSync(join(tmpdir(), "ff-cookie-"));
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      try {
+        rmSync(scratch, { recursive: true, force: true });
+      } catch {}
+    };
+    try {
+      copyFileSync(dbPath, join(scratch, "cookies.sqlite"));
+      for (const ext of ["-wal", "-shm"]) {
+        const peer = dbPath + ext;
+        if (existsSync(peer)) copyFileSync(peer, join(scratch, "cookies.sqlite" + ext));
+      }
+    } catch {
+      cleanup();
+      return null;
+    }
+    return new Promise((resolve) => {
+      execFile(
+        "sqlite3",
+        ["-readonly", "-noheader", join(scratch, "cookies.sqlite"), sql],
+        { timeout: timeoutMs },
+        (error, stdout) => {
+          try {
+            if (error) return resolve(null);
+            const raw = String(stdout).replace(/\r?\n$/, "");
+            return resolve(raw === "" ? null : raw);
+          } finally {
+            cleanup();
+          }
+        },
+      );
+    });
+  };
+
+  /** The ONE ElectronHub session token from a profile, or null. */
+  const readElectronHubRefreshCookie = async (profileDir) => {
+    const dbPath = join(profileDir, "cookies.sqlite");
+    if (!existsSync(dbPath)) return null;
+    const sql =
+      `SELECT value FROM moz_cookies WHERE host = '${EH_FIREFOX_COOKIE_HOST}' ` +
+      `AND name = '${EH_FIREFOX_COOKIE_NAME}' LIMIT 1`;
+    const raw = await sqliteWalValue(dbPath, sql);
+    if (raw === null) return null;
+    // Fail closed on unexpected alphabets rather than minting with garbage.
+    return ehIsPlausibleTokenChars(raw) ? raw : null;
+  };
+
+  /**
+   * Mint a fresh session JWT from the harvested refresh token. A 401 here —
+   * or a minted JWT that is already expired — is the login-again state, and
+   * it throws EH_SESSION_EXPIRED rather than answering anything renderable.
+   */
+  const mintElectronHubSessionJwt = async (refreshValue) => {
+    const res = await fetch(`${ELECTRONHUB_API_BASE}${EH_REFRESH_PATH}`, {
+      method: "POST",
+      headers: {
+        Cookie: ehSessionCookieHeader(refreshValue),
+        Accept: "application/json",
+        Origin: "https://app.electronhub.ai",
+        "user-agent": USER_AGENT,
+      },
+      signal: AbortSignal.timeout(ELECTRONHUB_TIMEOUT_MS),
+    });
+    if (res.status === 401) throw new Error(EH_SESSION_EXPIRED);
+    if (!res.ok) throw new Error(`electronhub session refresh HTTP ${res.status}`);
+    let body = null;
+    try {
+      body = await res.json();
+    } catch {
+      throw new Error("electronhub session refresh returned no JSON");
+    }
+    const parsed = ehParseRefreshBody(body);
+    if (parsed === null)
+      throw new Error("electronhub session refresh returned an unrecognised payload");
+    const claims = ehDecodeJwtPayload(parsed.accessToken);
+    if (claims === null) throw new Error("electronhub session mint is not a decodable JWT");
+    if (ehJwtIsExpired(claims, Math.floor(Date.now() / 1000))) throw new Error(EH_SESSION_EXPIRED);
+    const rawSetCookie =
+      typeof res.headers.getSetCookie === "function"
+        ? res.headers.getSetCookie()
+        : res.headers.get("set-cookie");
+    return { ...parsed, successor: ehParseRefreshSuccessor(rawSetCookie) };
+  };
+
+  /**
+   * Best-effort rotation reflection: write the mint's successor back into
+   * the profile row it was read from, then verify by re-reading. Resolves
+   * true only when the stored value is the successor. Never throws — a
+   * failure still serves this harvest, it just cannot preserve the chain.
+   */
+  const reflectElectronHubRefreshCookie = async (profileDir, successor) => {
+    if (!ehIsPlausibleTokenChars(successor)) return false;
+    const dbPath = join(profileDir, "cookies.sqlite");
+    if (!existsSync(dbPath)) return false;
+    const escaped = String(successor).replace(/'/g, "''");
+    const where =
+      `WHERE host = '${EH_FIREFOX_COOKIE_HOST}' ` + `AND name = '${EH_FIREFOX_COOKIE_NAME}'`;
+    const script =
+      `UPDATE moz_cookies SET value = '${escaped}' ${where};\n` +
+      `SELECT value FROM moz_cookies ${where} LIMIT 1;`;
+    return new Promise<boolean>((resolve) => {
+      // The live DB may be writer-locked; wait briefly, then give up.
+      execFile("sqlite3", [dbPath, ".timeout 5000", script], { timeout: 10_000 }, (error, stdout) => {
+        if (error) return resolve(false);
+        resolve(String(stdout).trim() === successor);
+      });
+    });
+  };
+
+  /** GET one dashboard path with the minted JWT; any 401 is login-again. */
+  const electronhubSessionGet = async (path, jwt) => {
+    const res = await fetch(`${ELECTRONHUB_API_BASE}${path}`, {
+      headers: { Authorization: `Bearer ${jwt}`, Accept: "application/json" },
+      signal: AbortSignal.timeout(ELECTRONHUB_TIMEOUT_MS),
+    });
+    if (res.status === 401) throw new Error(EH_SESSION_EXPIRED);
+    if (!res.ok) throw new Error(`electronhub session HTTP ${res.status} on ${path}`);
+    try {
+      return await res.json();
+    } catch {
+      throw new Error(`electronhub session ${path} returned no JSON`);
+    }
+  };
+
+  /**
+   * Fetch the HAR-documented dashboard surface with the minted JWT. Blocks
+   * are independent: a block that fails non-fatally degrades to null and the
+   * harvest is marked partial, so the panel never synthesises the missing
+   * block from another source. A 401 anywhere aborts the whole harvest into
+   * the login-again state.
+   */
+  const fetchElectronHubSession = async (jwt) => {
+    const fetchedAt = new Date().toISOString();
+    const blocks: Array<[string, string, (data: unknown) => unknown]> = [
+      ["subscription", EH_SESSION_ENDPOINT_PATHS[0], ehParseSessionSubscription],
+      ["permanentCredits", EH_SESSION_ENDPOINT_PATHS[1], ehParseSessionPermanentCredits],
+      ["flexCredits", EH_SESSION_ENDPOINT_PATHS[2], ehParseSessionFlexCredits],
+    ];
+    const session: Record<string, unknown> = { fetchedAt };
+    let partial = false;
+    for (const [key, path, parse] of blocks) {
+      try {
+        session[key] = parse(await electronhubSessionGet(path, jwt));
+      } catch (error) {
+        // 401 (revoked/expired mid-harvest) is fatal to the whole harvest;
+        // anything else degrades this block only.
+        if (error instanceof Error && error.message === EH_SESSION_EXPIRED) throw error;
+        session[key] = null;
+        partial = true;
+      }
+      if (session[key] === null) partial = true;
+    }
+    session.partial = partial;
+    return session;
+  };
+
+  /**
+   * Harvest across profiles in profiles.ini order: first profile whose
+   * cookie mints wins. A dead cookie (refresh 401) moves on to the next
+   * profile; a transport/parse failure aborts with its message.
+   */
+  const harvestElectronHubSession = async () => {
+    for (const dir of firefoxElectronHubProfileDirs()) {
+      if (!existsSync(join(dir, "cookies.sqlite"))) continue;
+      const refreshValue = await readElectronHubRefreshCookie(dir);
+      if (refreshValue === null) continue;
+      let minted = null;
+      try {
+        minted = await mintElectronHubSessionJwt(refreshValue);
+      } catch (error) {
+        if (error instanceof Error && error.message === EH_SESSION_EXPIRED) continue;
+        return { ok: false as const, error: error instanceof Error ? error.message : String(error) };
+      }
+      let reflected = false;
+      if (minted.successor !== null && minted.successor !== refreshValue) {
+        try {
+          reflected = await reflectElectronHubRefreshCookie(dir, minted.successor);
+        } catch {
+          reflected = false;
+        }
+      }
+      try {
+        const session = await fetchElectronHubSession(minted.accessToken);
+        return {
+          ok: true as const,
+          session: { ...session, reflected, sessionExpiresIn: minted.expiresIn },
+        };
+      } catch (error) {
+        return { ok: false as const, error: error instanceof Error ? error.message : String(error) };
+      }
+    }
+    return null;
+  };
+
+  const handleElectronhubSessionExtract = async (_req, res) => {
+    const found = await harvestElectronHubSession();
+    if (found === null) {
+      sendJson(res, 200, { ok: false, error: EH_SESSION_NO_COOKIE });
+      return;
+    }
+    if (!found.ok) {
+      sendJson(res, 200, { ok: false, error: found.error });
+      return;
+    }
+    // The harvest result carries account figures, never the token: safe to
+    // note its presence. No credential value is logged or stored.
+    ctx.logger.info("harvested ElectronHub browser session from Firefox profile");
+    sendJson(res, 200, { ok: true, session: found.session });
+  };
+
+  // Open the dashboard (visible, detached) so the user can sign in.
+  const handleElectronhubSessionLogin = async (_req, res) => {
+    try {
+      const child = spawn("firefox", ["--new-window", "https://app.electronhub.ai"], {
+        detached: true,
+        stdio: "ignore",
+      });
+      child.unref();
+      sendJson(res, 200, { ok: true });
+    } catch (error) {
+      sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) });
+    }
+  };
   ctx.webServer.register({
     kind: "exact",
     path: "/subscriptions/meridian-quota",
@@ -1419,6 +1737,16 @@ export function apply(ctx, config) {
     kind: "exact",
     path: "/subscriptions/electronhub-models",
     handler: handleElectronhubModels,
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/electronhub-session/extract",
+    handler: handleElectronhubSessionExtract,
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/electronhub-session/login",
+    handler: handleElectronhubSessionLogin,
   });
   // ── Command Code (api.commandcode.ai) balance + usage ─────────────────────
   const CMD_API_BASE = "https://api.commandcode.ai/alpha";

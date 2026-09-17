@@ -21,7 +21,11 @@
  *   5. OpenCode Zen balance from /subscriptions/opencode-zen-balance.
  *   6. ElectronHub plan + credits from /subscriptions/electronhub-usage and
  *      the model catalog from /subscriptions/electronhub-models (Bearer
- *      ELECTRONHUB_API_KEY or ELECTRONHUB_DEVPASS_API_KEY).
+ *      ELECTRONHUB_API_KEY or ELECTRONHUB_DEVPASS_API_KEY), plus the
+ *      harvested browser session from
+ *      /subscriptions/electronhub-session/extract (Firefox profile ->
+ *      refresh_token cookie -> fresh session JWT -> the HAR-documented
+ *      dashboard endpoints; explicit user action only, never polled).
  *
  * The seam. This file is the package's `./client` source. build.mjs
  * bundles it with esbuild (browser, cjs, es2022): react external, wrapped
@@ -84,6 +88,16 @@ var EH_MODEL_ROW_CAP = 30;
 
 /** ElectronHub daily history rows rendered (most recent days win). */
 var EH_HISTORY_ROWS = 14;
+
+/**
+ * #108: the login-again line for a harvested session that has outlived its
+ * mint TTL. Mirrors the host's EH_SESSION_EXPIRED wording (the client cannot
+ * import the host half); shown instead of the session figures, never
+ * alongside zeros.
+ */
+var EH_SESSION_EXPIRED_LINE =
+  "ElectronHub browser session expired — log in to ElectronHub in Firefox again, " +
+  "then harvest the session again";
 
 /** Fill color by usage percent — themed alias tokens, light/dark safe. */
 function fillColor(percent) {
@@ -513,11 +527,44 @@ function renderCcSection(cc, ccUsage) {
  * defensively, but every field is still read through guards so a partial
  * or malformed answer degrades to empty rows instead of crashing the panel.
  */
-function renderEhSection(ehUsage, ehModels) {
-  var model = ehSectionModel(ehUsage, ehModels);
+/**
+ * #108: a harvested session outlives the panel's poll loop in the snapshot,
+ * so its figures must carry their own freshness. Alive when fetchedAt parses
+ * and the mint's TTL (when the server sent one) has not elapsed. A stale
+ * harvest never renders its figures — the caller shows the login-again line
+ * and the harvest buttons instead.
+ */
+function ehHarvestAlive(session) {
+  if (!session || typeof session !== "object") return false;
+  var at = Date.parse(session.fetchedAt);
+  if (!Number.isFinite(at)) return false;
+  var ttl = session.sessionExpiresIn;
+  if (typeof ttl !== "number" || !Number.isFinite(ttl) || ttl <= 0) return true;
+  return Date.now() - at <= ttl * 1000;
+}
+
+/**
+ * Credits are small decimals (0.25), not the large counts fmtCount serves:
+ * full precision below 1000, compact above.
+ */
+function fmtCredits(n) {
+  if (n === null || n === undefined || isNaN(n)) return "—";
+  if (Math.abs(n) >= 1000) return fmtCount(n);
+  return String(Math.round(n * 100) / 100);
+}
+
+function renderEhSection(ehUsage, ehModels, ehSession, ehSessionUi, onHarvestSession, onOpenEhLogin) {
+  // A stale harvest is folded as absent (its figures must never render); the
+  // expired line is drawn explicitly below with the harvest buttons.
+  var rawSession = ehSession && ehSession.data && ehSession.data.ok === true ? ehSession : null;
+  var harvested =
+    rawSession && rawSession.data && rawSession.data.session ? rawSession.data.session : null;
+  var sessionFresh = ehHarvestAlive(harvested);
+  var model = ehSectionModel(ehUsage, ehModels, sessionFresh ? rawSession : null);
   var errorLine = model.errorLine;
   var usage = model.usage;
   var models = model.models;
+  var session = sessionFresh ? model.session : null;
 
   // Hero: subscription tier + remaining credits headline.
   var hero = null;
@@ -719,6 +766,117 @@ function renderEhSection(ehUsage, ehModels) {
   }
 
   // Model catalog: collapsed by default, capped rows, "+N more" tail.
+  // #108: harvested browser-session surface. Field names are the captured
+  // response shapes (see eh-session-model.ts); the tier fields render as raw
+  // labeled values only — the tier-mismatch note states they are not a plan
+  // verdict (criterion 8). A stale harvest never reaches here (folded as
+  // absent above); an explicitly expired one draws the login-again line.
+  var sessionCards = [];
+  var sessionLines = [];
+  var sessionHero = null;
+  var sessionHarvestedLine = null;
+  if (session !== null) {
+    var sub = session.subscription && typeof session.subscription === "object" ? session.subscription : null;
+    var perm =
+      session.permanentCredits && typeof session.permanentCredits === "object"
+        ? session.permanentCredits
+        : null;
+    var flex =
+      session.flexCredits && typeof session.flexCredits === "object" ? session.flexCredits : null;
+    if (perm !== null) {
+      if (typeof perm.balance === "number") {
+        sessionHero = (
+          <div className="ds-hero">
+            <div className="ds-hero-total">{fmtCredits(perm.balance) + " credits"}</div>
+            <div className="ds-hero-breakdown">
+              {typeof perm.monthly_remaining === "number"
+                ? fmtCredits(perm.monthly_remaining) + " left this month"
+                : "permanent credits"}
+            </div>
+          </div>
+        );
+      }
+      if (typeof perm.monthly_spent === "number" && typeof perm.monthly_limit === "number") {
+        sessionCards.push(
+          <div className="ds-usage-card" key="eh-s-spent">
+            <div className="ds-usage-label">Monthly spend</div>
+            <div className="ds-usage-value">
+              {fmtCredits(perm.monthly_spent) + " / " + fmtCredits(perm.monthly_limit)}
+            </div>
+          </div>,
+        );
+      }
+      if (typeof perm.monthly_remaining === "number") {
+        sessionCards.push(
+          <div className="ds-usage-card" key="eh-s-remaining">
+            <div className="ds-usage-label">Monthly remaining</div>
+            <div className="ds-usage-value">{fmtCredits(perm.monthly_remaining)}</div>
+            {typeof perm.monthly_reset === "string" && perm.monthly_reset !== "" ? (
+              <div className="ds-usage-label">{"resets " + perm.monthly_reset}</div>
+            ) : null}
+          </div>,
+        );
+      }
+      if (typeof perm.rate_limit_scale_name === "string" && perm.rate_limit_scale_name !== "") {
+        sessionCards.push(
+          <div className="ds-usage-card" key="eh-s-scale">
+            <div className="ds-usage-label">Rate scale</div>
+            <div className="ds-usage-value">{perm.rate_limit_scale_name}</div>
+          </div>,
+        );
+      }
+    }
+    if (flex !== null && typeof flex.flex_credits === "number") {
+      sessionCards.push(
+        <div className="ds-usage-card" key="eh-s-flex">
+          <div className="ds-usage-label">Flex credits</div>
+          <div className="ds-usage-value">{fmtCredits(flex.flex_credits)}</div>
+          {typeof flex.weekly_save_remaining === "number" ? (
+            <div className="ds-usage-label">
+              {fmtCredits(flex.weekly_save_remaining) + " weekly save left"}
+            </div>
+          ) : null}
+        </div>,
+      );
+    }
+    if (sub !== null) {
+      var subBits = [];
+      if (typeof sub.email === "string" && sub.email !== "") subBits.push("email: " + sub.email);
+      if (typeof sub.subscription_status === "string" && sub.subscription_status !== "")
+        subBits.push("status: " + sub.subscription_status);
+      if (typeof sub.active === "boolean") subBits.push(sub.active ? "active" : "inactive");
+      if (typeof sub.expires_in_days === "number")
+        subBits.push("expires in " + sub.expires_in_days + " days");
+      if (typeof sub.payment_provider === "string" && sub.payment_provider !== "")
+        subBits.push("via " + sub.payment_provider);
+      // Raw tier fields, labelled as raw: the fold's tier note carries the
+      // unresolved-mismatch caveat, so these must not read as a verdict.
+      if (typeof sub.tier === "number") {
+        var tierLabel =
+          typeof sub.tier_label === "string" && sub.tier_label !== "" ? " (" + sub.tier_label + ")" : "";
+        subBits.push("tier: " + sub.tier + tierLabel);
+      }
+      for (var si = 0; si < subBits.length; si++) {
+        sessionLines.push(
+          <div className="ocgs-note" key={"eh-s-sub-" + si}>
+            {subBits[si]}
+          </div>,
+        );
+      }
+    }
+    if (session.partial === true) {
+      sessionLines.push(
+        <div className="ocgs-note" key="eh-s-partial">
+          {"partial harvest: a dashboard block failed, so it is omitted — nothing is estimated"}
+        </div>,
+      );
+    }
+    var harvestedAt = Date.parse(session.fetchedAt);
+    if (Number.isFinite(harvestedAt)) {
+      sessionHarvestedLine = "Session harvested " + new Date(harvestedAt).toLocaleString();
+    }
+  }
+
   var modelList = null;
   if (models !== null && models.length > 0) {
     var shown = models.slice(0, EH_MODEL_ROW_CAP);
@@ -758,6 +916,13 @@ function renderEhSection(ehUsage, ehModels) {
         );
       })}
       {hero}
+      {sessionHero}
+      {sessionHarvestedLine ? <div className="ocgs-note">{sessionHarvestedLine}</div> : null}
+      {rawSession !== null && session === null ? (
+        <div className="ocgs-note">{EH_SESSION_EXPIRED_LINE}</div>
+      ) : null}
+      {sessionLines}
+      {sessionCards.length > 0 ? <div className="ds-usage-grid">{sessionCards}</div> : null}
       {creditCards.length > 0 ? <div className="ds-usage-grid">{creditCards}</div> : null}
       {tokenCards.length > 0 ? <div className="ds-usage-grid">{tokenCards}</div> : null}
       {monthlyCards.length > 0 ? <div className="ds-usage-grid">{monthlyCards}</div> : null}
@@ -765,6 +930,17 @@ function renderEhSection(ehUsage, ehModels) {
       {endpointCards.length > 0 ? <div className="ds-usage-grid">{endpointCards}</div> : null}
       {accountUsageList}
       {modelList}
+      <div className="ocgs-cookie">
+        <button className="ocgs-btn" disabled={ehSessionUi.busy} onClick={onHarvestSession}>
+          {ehSessionUi.busy ? "Harvesting…" : "Harvest session from Firefox"}
+        </button>
+        {ehSessionUi.showLogin ? (
+          <button className="ocgs-btn" onClick={onOpenEhLogin}>
+            Open app.electronhub.ai
+          </button>
+        ) : null}
+        {ehSessionUi.note ? <span className="ocgs-cookie-note">{ehSessionUi.note}</span> : null}
+      </div>
     </div>
   );
 }
@@ -885,6 +1061,11 @@ function makePanel(ctx, config) {
         zaiUsage: results[10],
         ehUsage: results[11],
         ehModels: results[12],
+        // #108: the harvested session is user-triggered, never polled, so
+        // the poll loop carries the stored harvest forward instead of
+        // dropping it. Its own fetchedAt bounds its freshness (see
+        // ehHarvestAlive); a stale harvest renders as expired, never current.
+        ehSession: snap && snap.ehSession ? snap.ehSession : null,
       };
       setSnap(snapData);
       setStaleTs(Date.now());
@@ -921,10 +1102,18 @@ function makePanel(ctx, config) {
     var zaiUsage = snap ? snap.zaiUsage : null;
     var ehUsage = snap ? snap.ehUsage : null;
     var ehModels = snap ? snap.ehModels : null;
+    var ehSession = snap ? snap.ehSession : null;
     // Firefox cookie fetch state and handlers.
     var cookieState = React.useState({ busy: false, note: null, showLogin: false });
     var cookie = cookieState[0];
     var setCookie = cookieState[1];
+
+    // Firefox ElectronHub session harvest state and handlers (#108). The
+    // harvest is explicit and user-triggered: each mint rotates the stored
+    // refresh token, so it must never fire on the poll loop.
+    var ehSessionUiState = React.useState({ busy: false, note: null, showLogin: false });
+    var ehSessionUi = ehSessionUiState[0];
+    var setEhSessionUi = ehSessionUiState[1];
 
     // Firefox DeepSeek platform token fetch state and handlers.
     var dsTokenState = React.useState({ busy: false, note: null, showLogin: false });
@@ -975,8 +1164,54 @@ function makePanel(ctx, config) {
       }
     };
 
-    var fetchDsToken = async function () {
-      setDsToken({ busy: true, note: null, showLogin: false });
+    var fetchEhSession = async function () {
+      setEhSessionUi({ busy: true, note: null, showLogin: false });
+      console.info("[subscriptions] action: harvest ElectronHub session from Firefox");
+      var result = await postJson("/subscriptions/electronhub-session/extract");
+      if (result.data && result.data.ok === true) {
+        var merged = Object.assign({}, snap, { ehSession: result });
+        setSnap(merged);
+        writeLastSnap(merged);
+        setEhSessionUi({ busy: false, note: "Session harvested", showLogin: false });
+        console.info("[subscriptions] ElectronHub session harvested");
+      } else {
+        var err = result.error || "Harvest failed";
+        // A dead session must clear the stored harvest: the old figures
+        // must never keep rendering once the credential is gone. Anything
+        // else (transport, endpoint 5xx) keeps the labelled harvest.
+        var sessionGone = /browser session/.test(err);
+        if (sessionGone) {
+          var cleared = Object.assign({}, snap, { ehSession: null });
+          setSnap(cleared);
+          writeLastSnap(cleared);
+        }
+        setEhSessionUi({ busy: false, note: err, showLogin: sessionGone });
+        console.error("[subscriptions] ElectronHub session harvest failed", err);
+      }
+    };
+
+    var openEhLogin = async function () {
+      console.info("[subscriptions] action: open ElectronHub dashboard in Firefox");
+      var result = await postJson("/subscriptions/electronhub-session/login");
+      setEhSessionUi({
+        busy: false,
+        note:
+          result.data && result.data.ok
+            ? "Login page opened in Firefox; sign in, then harvest the session again"
+            : result.error || "Could not open Firefox",
+        showLogin: false,
+      });
+      if (result.data && result.data.ok) {
+        console.info("[subscriptions] ElectronHub login page opened");
+      } else {
+        console.error(
+          "[subscriptions] failed to open ElectronHub login page",
+          result.error || "unknown error",
+        );
+      }
+    };
+
+    var fetchDsToken = async function () {      setDsToken({ busy: true, note: null, showLogin: false });
       console.info("[subscriptions] action: fetch DeepSeek token from Firefox");
       var result = await postJson("/subscriptions/deepseek-token/extract");
       if (result.data && result.data.ok === true) {
@@ -1368,7 +1603,9 @@ function makePanel(ctx, config) {
           </div>
         ) : null}
 
-        {providerVisible(cfg, "electronhub") ? renderEhSection(ehUsage, ehModels) : null}
+        {providerVisible(cfg, "electronhub")
+          ? renderEhSection(ehUsage, ehModels, ehSession, ehSessionUi, fetchEhSession, openEhLogin)
+          : null}
       </SettingsSection>
     );
   };

@@ -432,7 +432,7 @@ var require_snappyjs = __commonJS({
 // plugins/subscriptions/src/index.ts
 var import_snappyjs = __toESM(require_snappyjs(), 1);
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { execFile, execFileSync, spawn } from "node:child_process";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
@@ -471,9 +471,217 @@ function isPlainObject(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+// plugins/subscriptions/src/eh-session-model.ts
+var EH_FIREFOX_COOKIE_HOST = "api.electronhub.ai";
+var EH_FIREFOX_COOKIE_NAME = "refresh_token";
+var EH_REFRESH_PATH = "/auth/refresh";
+var EH_SESSION_ENDPOINT_PATHS = [
+  "/v1/auth/subscription",
+  "/v1/auth/permanent-credits/info",
+  "/v1/flex-credits/info"
+];
+var EH_SESSION_NO_COOKIE = "no ElectronHub browser session in any Firefox profile \u2014 open app.electronhub.ai in Firefox and sign in, then harvest the session again";
+var EH_SESSION_EXPIRED = "ElectronHub browser session expired \u2014 log in to ElectronHub in Firefox again, then harvest the session again";
+function ehIniProfiles(text) {
+  var out = [];
+  var current = null;
+  var lines = String(text).split(/\r?\n/);
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].trim();
+    var section = /^\[([^\]]+)\]$/.exec(line);
+    if (section !== null) {
+      current = { section: section[1], fields: {} };
+      out.push(current);
+      continue;
+    }
+    if (current === null) continue;
+    var eq = line.indexOf("=");
+    if (eq === -1) continue;
+    current.fields[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
+  }
+  return out;
+}
+function ehResolveFirefoxProfiles(iniText, homeDir) {
+  var sections = ehIniProfiles(iniText);
+  var base = String(homeDir).replace(/\/+$/, "") + "/.mozilla/firefox";
+  var profiles = [];
+  var installDefaults = [];
+  for (var i = 0; i < sections.length; i++) {
+    var s = sections[i];
+    if (/^Profile\d+$/.test(s.section)) {
+      var rawPath = s.fields.Path || "";
+      if (rawPath === "") continue;
+      var dir = s.fields.IsRelative === "0" ? rawPath : base + "/" + rawPath.replace(/^\/+/, "");
+      profiles.push({ name: s.fields.Name || s.section, dir, def: s.fields.Default === "1" });
+    } else if (/^Install/i.test(s.section)) {
+      if (s.fields.Default) installDefaults.push(s.fields.Default);
+    }
+  }
+  var ordered = [];
+  var pushDir = function(dir2) {
+    if (dir2 && ordered.indexOf(dir2) === -1) ordered.push(dir2);
+  };
+  var d;
+  for (var a = 0; a < installDefaults.length; a++) {
+    var inst = installDefaults[a];
+    var abs = inst.indexOf("/") === -1 ? base + "/" + inst : inst;
+    pushDir(abs);
+  }
+  for (var b = 0; b < profiles.length; b++) if (profiles[b].def) pushDir(profiles[b].dir);
+  var rest = profiles.slice().sort(function(x, y) {
+    return x.name < y.name ? -1 : x.name > y.name ? 1 : 0;
+  });
+  for (var c = 0; c < rest.length; c++) pushDir(rest[c].dir);
+  return ordered;
+}
+function ehSessionCookieHeader(refreshValue) {
+  return EH_FIREFOX_COOKIE_NAME + "=" + refreshValue;
+}
+function ehParseRefreshBody(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+  var token = body.access_token;
+  if (typeof token !== "string" || token === "") return null;
+  var ttl = body.expires_in;
+  return {
+    accessToken: token,
+    expiresIn: typeof ttl === "number" && Number.isFinite(ttl) && ttl > 0 ? ttl : null
+  };
+}
+function ehParseRefreshSuccessor(setCookie) {
+  var headers = Array.isArray(setCookie) ? setCookie : [setCookie];
+  for (var i = 0; i < headers.length; i++) {
+    var header = headers[i];
+    if (typeof header !== "string") continue;
+    var semi = header.indexOf(";");
+    var first = (semi === -1 ? header : header.slice(0, semi)).trim();
+    var eq = first.indexOf("=");
+    if (eq === -1) continue;
+    var name2 = first.slice(0, eq).trim();
+    var value = first.slice(eq + 1).trim();
+    if (name2 === EH_FIREFOX_COOKIE_NAME && value !== "") return value;
+  }
+  return null;
+}
+function ehIsPlausibleTokenChars(value) {
+  return typeof value === "string" && value !== "" && /^[A-Za-z0-9._~+/-]+=*$/.test(value);
+}
+function ehBase64UrlDecode(segment) {
+  var padded = String(segment).replace(/-/g, "+").replace(/_/g, "/");
+  var remainder = padded.length % 4;
+  if (remainder === 2) padded += "==";
+  else if (remainder === 3) padded += "=";
+  else if (remainder !== 0) return null;
+  try {
+    if (typeof Buffer !== "undefined") return Buffer.from(padded, "base64").toString("utf8");
+    if (typeof atob !== "undefined") {
+      var binary = atob(padded);
+      var out = "";
+      for (var i = 0; i < binary.length; i++) {
+        out += "%" + ("00" + binary.charCodeAt(i).toString(16)).slice(-2);
+      }
+      return decodeURIComponent(out);
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+function ehDecodeJwtPayload(token) {
+  if (typeof token !== "string") return null;
+  var segments = token.split(".");
+  if (segments.length !== 3) return null;
+  var text = ehBase64UrlDecode(segments[1]);
+  if (text === null) return null;
+  try {
+    var claims = JSON.parse(text);
+    return claims !== null && typeof claims === "object" && !Array.isArray(claims) ? claims : null;
+  } catch {
+    return null;
+  }
+}
+function ehJwtSecondsLeft(claims, nowSec) {
+  if (!claims || typeof claims !== "object") return null;
+  var exp = claims.exp;
+  if (typeof exp !== "number" || !Number.isFinite(exp)) return null;
+  return exp - nowSec;
+}
+function ehJwtIsExpired(claims, nowSec) {
+  var left = ehJwtSecondsLeft(claims, nowSec);
+  if (left === null) return true;
+  return left <= 0;
+}
+function ehNum(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string" && value.trim() !== "") {
+    var parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+function ehStr(value) {
+  return typeof value === "string" ? value : null;
+}
+function ehBool(value) {
+  return typeof value === "boolean" ? value : null;
+}
+function ehParseSessionSubscription(data) {
+  if (data === null || typeof data !== "object" || Array.isArray(data)) return null;
+  var manage = data.manage !== null && typeof data.manage === "object" ? data.manage : {};
+  return {
+    tier: ehNum(data.tier),
+    tier_label: ehStr(data.tier_label),
+    active: ehBool(data.active),
+    subscription_status: ehStr(data.subscription_status),
+    cancel_at_period_end: ehBool(data.cancel_at_period_end),
+    current_period_end: ehStr(data.current_period_end),
+    payment_provider: ehStr(data.payment_provider),
+    period: ehStr(data.period),
+    premium_expiry: ehNum(data.premium_expiry),
+    expires_in_days: ehNum(data.expires_in_days),
+    amount: ehNum(data.amount),
+    email: ehStr(data.email),
+    email_verified: ehBool(data.email_verified),
+    last_tier_change: ehNum(data.last_tier_change),
+    manage: {
+      method: ehStr(manage.method),
+      has_portal: ehBool(manage.has_portal),
+      can_cancel: ehBool(manage.can_cancel),
+      portal_endpoint: ehStr(manage.portal_endpoint)
+    }
+  };
+}
+function ehParseSessionPermanentCredits(data) {
+  if (data === null || typeof data !== "object" || Array.isArray(data)) return null;
+  return {
+    balance: ehNum(data.balance),
+    enabled: ehBool(data.enabled),
+    total_purchased_usd: ehNum(data.total_purchased_usd),
+    current_bonus_percentage: ehNum(data.current_bonus_percentage),
+    next_discount_threshold: ehNum(data.next_discount_threshold),
+    rate_limit_scale_tier: ehNum(data.rate_limit_scale_tier),
+    rate_limit_scale_name: ehStr(data.rate_limit_scale_name),
+    rate_limit_scale_next: ehStr(data.rate_limit_scale_next),
+    monthly_limit: ehNum(data.monthly_limit),
+    monthly_spent: ehNum(data.monthly_spent),
+    monthly_remaining: ehNum(data.monthly_remaining),
+    monthly_reset: ehStr(data.monthly_reset)
+  };
+}
+function ehParseSessionFlexCredits(data) {
+  if (data === null || typeof data !== "object" || Array.isArray(data)) return null;
+  return {
+    flex_credits: ehNum(data.flex_credits),
+    flex_credits_enabled: ehBool(data.flex_credits_enabled),
+    weekly_save_limit: ehNum(data.weekly_save_limit),
+    weekly_saved: ehNum(data.weekly_saved),
+    weekly_save_remaining: ehNum(data.weekly_save_remaining),
+    total_cap: ehNum(data.total_cap)
+  };
+}
+
 // plugins/subscriptions/src/eh-section-model.ts
 var ELECTRONHUB_DEV_PREFIX = "ek-dev-";
-var ELECTRONHUB_DEV_NOTE = "usage endpoints are unavailable to dev keys (ek-dev-\u2026 answers HTTP 401 on /user/me and /user/models by design \u2014 the key is valid for inference only)";
+var ELECTRONHUB_DEV_NOTE = "usage endpoints are unavailable to dev keys: the 2026-09-17 probe showed this key class answers HTTP 401 on /user/me and /user/models, so account usage is unreachable for it \u2014 the key is valid for inference only";
 function ehIsDevKey(key) {
   return typeof key === "string" && key.slice(0, ELECTRONHUB_DEV_PREFIX.length) === ELECTRONHUB_DEV_PREFIX;
 }
@@ -1390,7 +1598,21 @@ function apply(ctx, config) {
     try {
       const key = await resolveElectronHubKey();
       if (!key) {
-        sendJson(res, 200, { ok: false, error: ELECTRONHUB_KEY_MISSING });
+        const catalog = await fetch(`${ELECTRONHUB_API_BASE}/models`, {
+          headers: { Accept: "application/json" },
+          signal: AbortSignal.timeout(ELECTRONHUB_TIMEOUT_MS)
+        });
+        if (!catalog.ok) {
+          throw new Error(
+            `electronhub models unavailable: public catalog HTTP ${catalog.status} (no API key configured)`
+          );
+        }
+        sendJson(res, 200, {
+          ok: true,
+          models: parseElectronHubModels(await catalog.json()),
+          source: "catalog",
+          note: "no ELECTRONHUB_API_KEY or ELECTRONHUB_DEVPASS_API_KEY configured \u2014 showing the public model catalog"
+        });
         return;
       }
       sendJson(res, 200, { ok: true, ...await electronhubModelsOnce(key) });
@@ -1585,6 +1807,198 @@ function apply(ctx, config) {
       sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) });
     }
   };
+  const firefoxElectronHubProfileDirs = () => {
+    try {
+      const iniPath = join(homedir(), ".mozilla", "firefox", "profiles.ini");
+      if (existsSync(iniPath)) {
+        const ordered = ehResolveFirefoxProfiles(readFileSync(iniPath, "utf8"), homedir());
+        if (ordered.length > 0) return ordered;
+      }
+    } catch {
+    }
+    return firefoxProfileDirs();
+  };
+  const sqliteWalValue = async (dbPath, sql, timeoutMs = 1e4) => {
+    const scratch = mkdtempSync(join(tmpdir(), "ff-cookie-"));
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      try {
+        rmSync(scratch, { recursive: true, force: true });
+      } catch {
+      }
+    };
+    try {
+      copyFileSync(dbPath, join(scratch, "cookies.sqlite"));
+      for (const ext of ["-wal", "-shm"]) {
+        const peer = dbPath + ext;
+        if (existsSync(peer)) copyFileSync(peer, join(scratch, "cookies.sqlite" + ext));
+      }
+    } catch {
+      cleanup();
+      return null;
+    }
+    return new Promise((resolve) => {
+      execFile(
+        "sqlite3",
+        ["-readonly", "-noheader", join(scratch, "cookies.sqlite"), sql],
+        { timeout: timeoutMs },
+        (error, stdout) => {
+          try {
+            if (error) return resolve(null);
+            const raw = String(stdout).replace(/\r?\n$/, "");
+            return resolve(raw === "" ? null : raw);
+          } finally {
+            cleanup();
+          }
+        }
+      );
+    });
+  };
+  const readElectronHubRefreshCookie = async (profileDir) => {
+    const dbPath = join(profileDir, "cookies.sqlite");
+    if (!existsSync(dbPath)) return null;
+    const sql = `SELECT value FROM moz_cookies WHERE host = '${EH_FIREFOX_COOKIE_HOST}' AND name = '${EH_FIREFOX_COOKIE_NAME}' LIMIT 1`;
+    const raw = await sqliteWalValue(dbPath, sql);
+    if (raw === null) return null;
+    return ehIsPlausibleTokenChars(raw) ? raw : null;
+  };
+  const mintElectronHubSessionJwt = async (refreshValue) => {
+    const res = await fetch(`${ELECTRONHUB_API_BASE}${EH_REFRESH_PATH}`, {
+      method: "POST",
+      headers: {
+        Cookie: ehSessionCookieHeader(refreshValue),
+        Accept: "application/json",
+        Origin: "https://app.electronhub.ai",
+        "user-agent": USER_AGENT
+      },
+      signal: AbortSignal.timeout(ELECTRONHUB_TIMEOUT_MS)
+    });
+    if (res.status === 401) throw new Error(EH_SESSION_EXPIRED);
+    if (!res.ok) throw new Error(`electronhub session refresh HTTP ${res.status}`);
+    let body = null;
+    try {
+      body = await res.json();
+    } catch {
+      throw new Error("electronhub session refresh returned no JSON");
+    }
+    const parsed = ehParseRefreshBody(body);
+    if (parsed === null)
+      throw new Error("electronhub session refresh returned an unrecognised payload");
+    const claims = ehDecodeJwtPayload(parsed.accessToken);
+    if (claims === null) throw new Error("electronhub session mint is not a decodable JWT");
+    if (ehJwtIsExpired(claims, Math.floor(Date.now() / 1e3))) throw new Error(EH_SESSION_EXPIRED);
+    const rawSetCookie = typeof res.headers.getSetCookie === "function" ? res.headers.getSetCookie() : res.headers.get("set-cookie");
+    return { ...parsed, successor: ehParseRefreshSuccessor(rawSetCookie) };
+  };
+  const reflectElectronHubRefreshCookie = async (profileDir, successor) => {
+    if (!ehIsPlausibleTokenChars(successor)) return false;
+    const dbPath = join(profileDir, "cookies.sqlite");
+    if (!existsSync(dbPath)) return false;
+    const escaped = String(successor).replace(/'/g, "''");
+    const where = `WHERE host = '${EH_FIREFOX_COOKIE_HOST}' AND name = '${EH_FIREFOX_COOKIE_NAME}'`;
+    const script = `UPDATE moz_cookies SET value = '${escaped}' ${where};
+SELECT value FROM moz_cookies ${where} LIMIT 1;`;
+    return new Promise((resolve) => {
+      execFile("sqlite3", [dbPath, ".timeout 5000", script], { timeout: 1e4 }, (error, stdout) => {
+        if (error) return resolve(false);
+        resolve(String(stdout).trim() === successor);
+      });
+    });
+  };
+  const electronhubSessionGet = async (path, jwt) => {
+    const res = await fetch(`${ELECTRONHUB_API_BASE}${path}`, {
+      headers: { Authorization: `Bearer ${jwt}`, Accept: "application/json" },
+      signal: AbortSignal.timeout(ELECTRONHUB_TIMEOUT_MS)
+    });
+    if (res.status === 401) throw new Error(EH_SESSION_EXPIRED);
+    if (!res.ok) throw new Error(`electronhub session HTTP ${res.status} on ${path}`);
+    try {
+      return await res.json();
+    } catch {
+      throw new Error(`electronhub session ${path} returned no JSON`);
+    }
+  };
+  const fetchElectronHubSession = async (jwt) => {
+    const fetchedAt = (/* @__PURE__ */ new Date()).toISOString();
+    const blocks = [
+      ["subscription", EH_SESSION_ENDPOINT_PATHS[0], ehParseSessionSubscription],
+      ["permanentCredits", EH_SESSION_ENDPOINT_PATHS[1], ehParseSessionPermanentCredits],
+      ["flexCredits", EH_SESSION_ENDPOINT_PATHS[2], ehParseSessionFlexCredits]
+    ];
+    const session = { fetchedAt };
+    let partial = false;
+    for (const [key, path, parse] of blocks) {
+      try {
+        session[key] = parse(await electronhubSessionGet(path, jwt));
+      } catch (error) {
+        if (error instanceof Error && error.message === EH_SESSION_EXPIRED) throw error;
+        session[key] = null;
+        partial = true;
+      }
+      if (session[key] === null) partial = true;
+    }
+    session.partial = partial;
+    return session;
+  };
+  const harvestElectronHubSession = async () => {
+    for (const dir of firefoxElectronHubProfileDirs()) {
+      if (!existsSync(join(dir, "cookies.sqlite"))) continue;
+      const refreshValue = await readElectronHubRefreshCookie(dir);
+      if (refreshValue === null) continue;
+      let minted = null;
+      try {
+        minted = await mintElectronHubSessionJwt(refreshValue);
+      } catch (error) {
+        if (error instanceof Error && error.message === EH_SESSION_EXPIRED) continue;
+        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      }
+      let reflected = false;
+      if (minted.successor !== null && minted.successor !== refreshValue) {
+        try {
+          reflected = await reflectElectronHubRefreshCookie(dir, minted.successor);
+        } catch {
+          reflected = false;
+        }
+      }
+      try {
+        const session = await fetchElectronHubSession(minted.accessToken);
+        return {
+          ok: true,
+          session: { ...session, reflected, sessionExpiresIn: minted.expiresIn }
+        };
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      }
+    }
+    return null;
+  };
+  const handleElectronhubSessionExtract = async (_req, res) => {
+    const found = await harvestElectronHubSession();
+    if (found === null) {
+      sendJson(res, 200, { ok: false, error: EH_SESSION_NO_COOKIE });
+      return;
+    }
+    if (!found.ok) {
+      sendJson(res, 200, { ok: false, error: found.error });
+      return;
+    }
+    ctx.logger.info("harvested ElectronHub browser session from Firefox profile");
+    sendJson(res, 200, { ok: true, session: found.session });
+  };
+  const handleElectronhubSessionLogin = async (_req, res) => {
+    try {
+      const child = spawn("firefox", ["--new-window", "https://app.electronhub.ai"], {
+        detached: true,
+        stdio: "ignore"
+      });
+      child.unref();
+      sendJson(res, 200, { ok: true });
+    } catch (error) {
+      sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) });
+    }
+  };
   ctx.webServer.register({
     kind: "exact",
     path: "/subscriptions/meridian-quota",
@@ -1664,6 +2078,16 @@ function apply(ctx, config) {
     kind: "exact",
     path: "/subscriptions/electronhub-models",
     handler: handleElectronhubModels
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/electronhub-session/extract",
+    handler: handleElectronhubSessionExtract
+  });
+  ctx.webServer.register({
+    kind: "exact",
+    path: "/subscriptions/electronhub-session/login",
+    handler: handleElectronhubSessionLogin
   });
   const CMD_API_BASE = "https://api.commandcode.ai/alpha";
   const commandCodeOrgOnce = cachedOnce(async (key) => {

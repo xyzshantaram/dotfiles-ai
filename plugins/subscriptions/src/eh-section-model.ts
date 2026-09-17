@@ -19,7 +19,17 @@
  * endpoints that will actually RENDER. The endpointCards loop in client.tsx
  * skips any entry whose `name` is not a string, so these two must agree — if
  * one changes, change both.
+ *
+ * Ticket #108: the fold accepts a third envelope (the harvested
+ * browser-session payload). The session limitation notes and the
+ * session-content predicate live in ./eh-session-model.ts; this module
+ * imports them so client.tsx keeps a single fold entry point.
  */
+import {
+  EH_SESSION_ANALYTICS_NOTE,
+  EH_SESSION_TIER_UNRESOLVED_NOTE,
+  ehSessionHasContent,
+} from "./eh-session-model";
 
 /** The failure string of one fetch result, or null. */
 export function ehResultError(result, fallback) {
@@ -44,16 +54,19 @@ export function ehResultBody(result) {
 
 // ── Account/key-type detection (#141) ───────────────────────────────────────
 
-/** Dev keys answer 401 on BOTH usage endpoints — by design, not an invalid key. */
+/** Dev keys answer 401 on BOTH usage endpoints — observed live, not an invalid key. */
 export var ELECTRONHUB_DEV_PREFIX = "ek-dev-";
 
 /**
- * The one message a dev key may ever earn from this section. It must name the
- * design fact, never say "invalid": the key works fine for inference.
+ * The one message a dev key may ever earn from this section. It names what
+ * was OBSERVED, not an assertion: the 2026-09-17 criterion-1 probe showed
+ * this key class answers HTTP 401 on /user/me and /user/models, so account
+ * usage is unreachable for it — never "invalid", the key works for inference.
  */
 export var ELECTRONHUB_DEV_NOTE =
-  "usage endpoints are unavailable to dev keys (ek-dev-… answers HTTP 401 on " +
-  "/user/me and /user/models by design — the key is valid for inference only)";
+  "usage endpoints are unavailable to dev keys: the 2026-09-17 probe showed " +
+  "this key class answers HTTP 401 on /user/me and /user/models, so account " +
+  "usage is unreachable for it — the key is valid for inference only";
 
 /** Dev key or not, decided by prefix BEFORE any request is sent. */
 export function ehIsDevKey(key) {
@@ -330,13 +343,29 @@ export var ELECTRONHUB_CODING_PLAN_NOTE =
  * invalid key; a coding-plan payload gains the console-only note exactly
  * once; and the models envelope may carry the account-scoped per-model usage,
  * which is passed through for client.tsx to render.
+ *
+ * #108 additions: an optional third envelope, the harvested browser-session
+ * payload from POST /subscriptions/electronhub-session/extract. The session
+ * carries the dashboard surface the ek- key cannot read (subscription,
+ * permanent credits, flex credits — parsed by eh-session-model.ts from the
+ * HAR-documented shapes). The session's tier fields render as raw fields
+ * only: the account/tier mismatch is recorded unresolved (criterion 8), so
+ * the fold never headlines them as the plan. The analytics limitation is
+ * stated as a note (criterion 7), never approximated.
  */
-export function ehSectionModel(ehUsage, ehModels) {
+export function ehSectionModel(ehUsage, ehModels, ehSession = null) {
   var errorLine =
-    ehResultError(ehUsage, "usage unavailable") || ehResultError(ehModels, "models unavailable");
+    ehResultError(ehUsage, "usage unavailable") ||
+    ehResultError(ehModels, "models unavailable") ||
+    ehResultError(ehSession, "session unavailable");
 
   var usage = ehResultBody(ehUsage);
   var modelsBody = ehResultBody(ehModels);
+  var sessionBody = ehResultBody(ehSession);
+  var session =
+    sessionBody !== null && sessionBody.session !== null && typeof sessionBody.session === "object"
+      ? sessionBody.session
+      : null;
   var models = modelsBody && Array.isArray(modelsBody.models) ? modelsBody.models : null;
   // The host spreads the account usage into the envelope (camelCase); if a
   // raw account-shaped body arrives without it, derive it in place.
@@ -363,11 +392,20 @@ export function ehSectionModel(ehUsage, ehModels) {
   // The coding-plan limitation, stated ONCE and plainly — never as zeros or
   // wrong numbers standing in for the WebSocket-only headroom figures.
   if (usage && usage.codingPlan === true) notes.push(ELECTRONHUB_CODING_PLAN_NOTE);
+  // #108: a harvested session states the two recorded limitations exactly
+  // once — the tier fields below are raw, not a plan verdict (criterion 8),
+  // and the analytics tabs have no callable endpoint (criterion 7).
+  var hasSessionContent = ehSessionHasContent(session);
+  if (session !== null && hasSessionContent) {
+    notes.push(EH_SESSION_TIER_UNRESOLVED_NOTE);
+    notes.push(EH_SESSION_ANALYTICS_NOTE);
+  }
 
   var hasContent =
     ehUsageHasContent(usage) ||
     (models !== null && models.length > 0) ||
-    (accountUsage !== null && accountUsage.length > 0);
+    (accountUsage !== null && accountUsage.length > 0) ||
+    hasSessionContent;
 
   // A dev key's answer IS the note: the section renders ready-with-note, not
   // an error, and never the "invalid key" reading (#74 kept honest).
@@ -375,14 +413,20 @@ export function ehSectionModel(ehUsage, ehModels) {
 
   var status;
   if (errorLine) status = "error";
-  else if (usage === null && modelsBody === null) status = "pending";
+  else if (usage === null && modelsBody === null && sessionBody === null) status = "pending";
   else if (isDevKeyAnswer) status = "ready";
   else if (!hasContent) status = "empty";
   else status = "ready";
 
   var emptyLine = null;
   if (status === "pending") emptyLine = "Loading ElectronHub usage…";
-  else if (status === "empty") emptyLine = "ElectronHub reported no usage data for this key.";
+  else if (status === "empty")
+    // A harvested-but-empty session must not borrow the key-path wording:
+    // there was no key involved, only a session that returned nothing.
+    emptyLine =
+      sessionBody !== null
+        ? "ElectronHub session returned no account data."
+        : "ElectronHub reported no usage data for this key.";
 
   return {
     status: status,
@@ -390,6 +434,7 @@ export function ehSectionModel(ehUsage, ehModels) {
     notes: notes,
     usage: usage,
     models: models,
+    session: session,
     accountUsage: accountUsage,
     totalConsumption:
       modelsBody !== null

@@ -128,6 +128,18 @@ var settings_default = "/* Shared settings-page vocabulary, normalized from the 
 // css-text:/home/sid/repos/dotfiles-ai/plugins/subscriptions/src/client.module.css
 var client_default = ".ocgs-stale {\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  color: var(--dsw-alias-label-secondary);\n  white-space: nowrap;\n}\n.ocgs-section {\n  display: flex;\n  flex-direction: column;\n  gap: 0.8125rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.875rem;\n  padding: 1.25rem;\n  background: var(--dsw-alias-bg-tertiary);\n}\n.ocgs-section-title {\n  font-size: 1.125rem;\n  font-weight: 600;\n  margin: 0;\n  line-height: 1.2;\n  color: var(--dsw-alias-label-primary);\n}\n.ocgs-balance {\n  font-size: 1.125rem;\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n}\n.ocgs-rows {\n  display: flex;\n  flex-direction: column;\n  gap: 0.8125rem;\n}\n.ocgs-row {\n  display: flex;\n  flex-direction: column;\n  gap: 0.3125rem;\n  min-width: 0;\n}\n.ocgs-row-label {\n  display: flex;\n  align-items: baseline;\n  gap: 0.625rem;\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.ocgs-row-label b {\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n  font-size: 0.9375rem;\n}\n.ocgs-row-label b:last-child {\n  margin-left: auto;\n}\n.ocgs-meta {\n  display: flex;\n  align-items: center;\n  gap: 0.625rem;\n  min-width: 0;\n}\n.ocgs-meta > span {\n  font-size: 0.8125rem;\n  line-height: 1.125rem;\n  color: var(--dsw-alias-label-secondary);\n  white-space: nowrap;\n  flex: none;\n}\n.ocgs-track {\n  box-sizing: border-box;\n  flex: 1;\n  min-width: 0;\n  height: 0.5rem;\n  border-radius: 0.4375rem;\n  background: var(--dsw-alias-border-l2);\n  overflow: hidden;\n}\n.ocgs-fill {\n  height: 100%;\n  border-radius: 0.4375rem;\n  transition: width 0.4s ease;\n}\n.ocgs-pace {\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.ocgs-cookie {\n  display: flex;\n  align-items: center;\n  gap: 0.625rem;\n  flex-wrap: wrap;\n  margin: 0.1875rem 0 0.375rem;\n}\n.ocgs-btn {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 62.4375rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n  padding: 0.4375rem 0.9375rem;\n  cursor: pointer;\n  min-height: 2.25rem;\n}\n.ocgs-btn:hover {\n  color: var(--dsw-alias-label-primary);\n  border-color: var(--dsw-alias-border-l3);\n}\n.ocgs-btn:disabled {\n  opacity: 0.5;\n  cursor: default;\n}\n.ocgs-cookie-note {\n  font-size: 0.875rem;\n  line-height: 1.125rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.ocgs-toggles {\n  display: flex;\n  flex-direction: column;\n  gap: 0.625rem;\n}\n.ocgs-toggle {\n  display: flex;\n  align-items: center;\n  gap: 0.625rem;\n  min-width: 0;\n  cursor: pointer;\n}\n.ocgs-toggle-label {\n  flex: 1;\n  min-width: 0;\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.ocgs-toggle input {\n  flex: none;\n  width: 1.5rem;\n  height: 1.5rem;\n  cursor: pointer;\n  accent-color: var(--dsw-alias-state-business-primary);\n}\n.ocgs-details {\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.75rem;\n  background: var(--dsw-alias-bg-tertiary);\n  padding: 0.8125rem;\n  margin-top: 0.25rem;\n}\n.ocgs-summary {\n  cursor: pointer;\n  font-size: 0.9375rem;\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n  list-style: none;\n}\n.ocgs-summary::-webkit-details-marker {\n  display: none;\n}\n.ocgs-details[open] .ocgs-toggles {\n  padding-top: 0.625rem;\n}\n.ds-dashboard {\n  display: flex;\n  flex-direction: column;\n  gap: 0.8125rem;\n}\n.ds-hero {\n  display: flex;\n  flex-direction: column;\n  gap: 0.3125rem;\n  padding: 0.8125rem;\n  background: var(--dsw-alias-bg-tertiary);\n  border-radius: 0.75rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n}\n.ds-hero-total {\n  font-size: 2rem;\n  font-weight: 700;\n  color: var(--dsw-alias-label-primary);\n  line-height: 1.2;\n}\n.ds-hero-breakdown {\n  font-size: 0.9375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.ds-usage-grid {\n  display: grid;\n  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));\n  gap: 0.625rem;\n}\n.ds-usage-card {\n  padding: 0.8125rem;\n  background: var(--dsw-alias-bg-tertiary);\n  border-radius: 0.75rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n}\n.ds-usage-label {\n  font-size: 0.75rem;\n  color: var(--dsw-alias-label-secondary);\n  text-transform: uppercase;\n  letter-spacing: 0.0313rem;\n}\n.ds-usage-value {\n  font-size: 1.25rem;\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n  margin-top: 0.375rem;\n}\n.ds-usage-sub {\n  font-size: 0.875rem;\n  color: var(--dsw-alias-label-secondary);\n  margin-top: 0.25rem;\n}\n.ds-token-row {\n  display: flex;\n  gap: 0.625rem;\n  flex-wrap: wrap;\n}\n.ds-token-card {\n  flex: 1;\n  min-width: 8.75rem;\n  padding: 0.6875rem;\n  background: var(--dsw-alias-bg-tertiary);\n  border-radius: 0.75rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n}\n.ds-token-label {\n  font-size: 0.75rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.ds-token-value {\n  font-size: 1.125rem;\n  font-weight: 600;\n  color: var(--dsw-alias-state-success-primary);\n}\n.ds-token-value.out {\n  color: var(--dsw-alias-state-error-primary);\n}\n.ds-empty {\n  font-size: 0.875rem;\n  color: var(--dsw-alias-label-secondary);\n  font-style: italic;\n}\n.ocgs-note {\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n:focus-visible {\n  outline: 2px solid var(--dsw-alias-state-business-primary);\n  outline-offset: -0.125rem;\n}\n";
 
+// plugins/subscriptions/src/eh-session-model.ts
+var EH_SESSION_ANALYTICS_NOTE = "Token and request usage are not shown: the analytics tabs ride an authenticated WebSocket whose message protocol is unidentified, so there is no usage endpoint to call \u2014 nothing is approximated from other figures";
+var EH_SESSION_TIER_UNRESOLVED_NOTE = "tier here is unresolved: this endpoint can report tier 0 / Free while a paid coding plan is active, so the tier fields below are not a plan verdict";
+function ehSessionHasContent(session) {
+  if (!session || typeof session !== "object") return false;
+  if (session.subscription !== null && typeof session.subscription === "object") return true;
+  if (session.permanentCredits !== null && typeof session.permanentCredits === "object")
+    return true;
+  if (session.flexCredits !== null && typeof session.flexCredits === "object") return true;
+  return false;
+}
+
 // plugins/subscriptions/src/eh-section-model.ts
 function ehResultError(result, fallback) {
   if (!result) return null;
@@ -201,10 +213,12 @@ function ehUsageHasContent(usage) {
   return false;
 }
 var ELECTRONHUB_CODING_PLAN_NOTE = "Coding plan subscription: the live today/weekly headroom numbers are console-only (they ride an authenticated WebSocket plus a browser session, not REST), so they are not shown here \u2014 everything above is what the REST API returns";
-function ehSectionModel(ehUsage, ehModels) {
-  var errorLine = ehResultError(ehUsage, "usage unavailable") || ehResultError(ehModels, "models unavailable");
+function ehSectionModel(ehUsage, ehModels, ehSession = null) {
+  var errorLine = ehResultError(ehUsage, "usage unavailable") || ehResultError(ehModels, "models unavailable") || ehResultError(ehSession, "session unavailable");
   var usage = ehResultBody(ehUsage);
   var modelsBody = ehResultBody(ehModels);
+  var sessionBody = ehResultBody(ehSession);
+  var session = sessionBody !== null && sessionBody.session !== null && typeof sessionBody.session === "object" ? sessionBody.session : null;
   var models = modelsBody && Array.isArray(modelsBody.models) ? modelsBody.models : null;
   var derivedAccount = modelsBody !== null && !Array.isArray(modelsBody.accountUsage) ? parseElectronHubAccountModels(modelsBody) : null;
   var accountUsage = modelsBody && Array.isArray(modelsBody.accountUsage) ? modelsBody.accountUsage : derivedAccount !== null ? derivedAccount.entries : null;
@@ -218,23 +232,30 @@ function ehSectionModel(ehUsage, ehModels) {
     }
   }
   if (usage && usage.codingPlan === true) notes.push(ELECTRONHUB_CODING_PLAN_NOTE);
-  var hasContent = ehUsageHasContent(usage) || models !== null && models.length > 0 || accountUsage !== null && accountUsage.length > 0;
+  var hasSessionContent = ehSessionHasContent(session);
+  if (session !== null && hasSessionContent) {
+    notes.push(EH_SESSION_TIER_UNRESOLVED_NOTE);
+    notes.push(EH_SESSION_ANALYTICS_NOTE);
+  }
+  var hasContent = ehUsageHasContent(usage) || models !== null && models.length > 0 || accountUsage !== null && accountUsage.length > 0 || hasSessionContent;
   var isDevKeyAnswer = usage !== null && usage.devKey === true;
   var status;
   if (errorLine) status = "error";
-  else if (usage === null && modelsBody === null) status = "pending";
+  else if (usage === null && modelsBody === null && sessionBody === null) status = "pending";
   else if (isDevKeyAnswer) status = "ready";
   else if (!hasContent) status = "empty";
   else status = "ready";
   var emptyLine = null;
   if (status === "pending") emptyLine = "Loading ElectronHub usage\u2026";
-  else if (status === "empty") emptyLine = "ElectronHub reported no usage data for this key.";
+  else if (status === "empty")
+    emptyLine = sessionBody !== null ? "ElectronHub session returned no account data." : "ElectronHub reported no usage data for this key.";
   return {
     status,
     errorLine: errorLine ? "ElectronHub: " + errorLine : null,
     notes,
     usage,
     models,
+    session,
     accountUsage,
     totalConsumption: modelsBody !== null ? ehNumber(modelsBody.totalConsumption) ?? (derivedAccount !== null ? derivedAccount.totalConsumption : null) : null,
     lastUpdated: modelsBody !== null ? typeof modelsBody.lastUpdated === "string" ? modelsBody.lastUpdated : derivedAccount !== null ? derivedAccount.lastUpdated : null : null,
@@ -270,6 +291,7 @@ var PROVIDER_TOGGLES = [
 ];
 var EH_MODEL_ROW_CAP = 30;
 var EH_HISTORY_ROWS = 14;
+var EH_SESSION_EXPIRED_LINE = "ElectronHub browser session expired \u2014 log in to ElectronHub in Firefox again, then harvest the session again";
 function fillColor(percent) {
   if (percent >= 90) return "var(--dsw-alias-state-error-primary)";
   if (percent >= 70) return "var(--dsw-alias-state-warn-primary)";
@@ -545,11 +567,28 @@ function renderCcSection(cc, ccUsage) {
   }
   return /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "Command Code"), errorLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, errorLine) : null, hero, meters.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, meters) : null, costCard ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, costCard) : null);
 }
-function renderEhSection(ehUsage, ehModels) {
-  var model = ehSectionModel(ehUsage, ehModels);
+function ehHarvestAlive(session) {
+  if (!session || typeof session !== "object") return false;
+  var at = Date.parse(session.fetchedAt);
+  if (!Number.isFinite(at)) return false;
+  var ttl = session.sessionExpiresIn;
+  if (typeof ttl !== "number" || !Number.isFinite(ttl) || ttl <= 0) return true;
+  return Date.now() - at <= ttl * 1e3;
+}
+function fmtCredits(n) {
+  if (n === null || n === void 0 || isNaN(n)) return "\u2014";
+  if (Math.abs(n) >= 1e3) return fmtCount(n);
+  return String(Math.round(n * 100) / 100);
+}
+function renderEhSection(ehUsage, ehModels, ehSession, ehSessionUi, onHarvestSession, onOpenEhLogin) {
+  var rawSession = ehSession && ehSession.data && ehSession.data.ok === true ? ehSession : null;
+  var harvested = rawSession && rawSession.data && rawSession.data.session ? rawSession.data.session : null;
+  var sessionFresh = ehHarvestAlive(harvested);
+  var model = ehSectionModel(ehUsage, ehModels, sessionFresh ? rawSession : null);
   var errorLine = model.errorLine;
   var usage = model.usage;
   var models = model.models;
+  var session = sessionFresh ? model.session : null;
   var hero = null;
   if (usage) {
     var tier = typeof usage.subscription === "string" && usage.subscription !== "" ? usage.subscription.charAt(0).toUpperCase() + usage.subscription.slice(1) + (usage.codingPlan ? " (coding plan)" : " plan") : null;
@@ -672,6 +711,69 @@ function renderEhSection(ehUsage, ehModels) {
     }
     accountUsageList = /* @__PURE__ */ import_react2.default.createElement("details", { className: "ocgs-details" }, /* @__PURE__ */ import_react2.default.createElement("summary", { className: "ocgs-summary" }, "Usage by model (" + model.accountUsage.length + ")"), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, usageRows));
   }
+  var sessionCards = [];
+  var sessionLines = [];
+  var sessionHero = null;
+  var sessionHarvestedLine = null;
+  if (session !== null) {
+    var sub = session.subscription && typeof session.subscription === "object" ? session.subscription : null;
+    var perm = session.permanentCredits && typeof session.permanentCredits === "object" ? session.permanentCredits : null;
+    var flex = session.flexCredits && typeof session.flexCredits === "object" ? session.flexCredits : null;
+    if (perm !== null) {
+      if (typeof perm.balance === "number") {
+        sessionHero = /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-hero" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-hero-total" }, fmtCredits(perm.balance) + " credits"), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-hero-breakdown" }, typeof perm.monthly_remaining === "number" ? fmtCredits(perm.monthly_remaining) + " left this month" : "permanent credits"));
+      }
+      if (typeof perm.monthly_spent === "number" && typeof perm.monthly_limit === "number") {
+        sessionCards.push(
+          /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-card", key: "eh-s-spent" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-label" }, "Monthly spend"), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-value" }, fmtCredits(perm.monthly_spent) + " / " + fmtCredits(perm.monthly_limit)))
+        );
+      }
+      if (typeof perm.monthly_remaining === "number") {
+        sessionCards.push(
+          /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-card", key: "eh-s-remaining" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-label" }, "Monthly remaining"), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-value" }, fmtCredits(perm.monthly_remaining)), typeof perm.monthly_reset === "string" && perm.monthly_reset !== "" ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-label" }, "resets " + perm.monthly_reset) : null)
+        );
+      }
+      if (typeof perm.rate_limit_scale_name === "string" && perm.rate_limit_scale_name !== "") {
+        sessionCards.push(
+          /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-card", key: "eh-s-scale" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-label" }, "Rate scale"), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-value" }, perm.rate_limit_scale_name))
+        );
+      }
+    }
+    if (flex !== null && typeof flex.flex_credits === "number") {
+      sessionCards.push(
+        /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-card", key: "eh-s-flex" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-label" }, "Flex credits"), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-value" }, fmtCredits(flex.flex_credits)), typeof flex.weekly_save_remaining === "number" ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-label" }, fmtCredits(flex.weekly_save_remaining) + " weekly save left") : null)
+      );
+    }
+    if (sub !== null) {
+      var subBits = [];
+      if (typeof sub.email === "string" && sub.email !== "") subBits.push("email: " + sub.email);
+      if (typeof sub.subscription_status === "string" && sub.subscription_status !== "")
+        subBits.push("status: " + sub.subscription_status);
+      if (typeof sub.active === "boolean") subBits.push(sub.active ? "active" : "inactive");
+      if (typeof sub.expires_in_days === "number")
+        subBits.push("expires in " + sub.expires_in_days + " days");
+      if (typeof sub.payment_provider === "string" && sub.payment_provider !== "")
+        subBits.push("via " + sub.payment_provider);
+      if (typeof sub.tier === "number") {
+        var tierLabel = typeof sub.tier_label === "string" && sub.tier_label !== "" ? " (" + sub.tier_label + ")" : "";
+        subBits.push("tier: " + sub.tier + tierLabel);
+      }
+      for (var si = 0; si < subBits.length; si++) {
+        sessionLines.push(
+          /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note", key: "eh-s-sub-" + si }, subBits[si])
+        );
+      }
+    }
+    if (session.partial === true) {
+      sessionLines.push(
+        /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note", key: "eh-s-partial" }, "partial harvest: a dashboard block failed, so it is omitted \u2014 nothing is estimated")
+      );
+    }
+    var harvestedAt = Date.parse(session.fetchedAt);
+    if (Number.isFinite(harvestedAt)) {
+      sessionHarvestedLine = "Session harvested " + new Date(harvestedAt).toLocaleString();
+    }
+  }
   var modelList = null;
   if (models !== null && models.length > 0) {
     var shown = models.slice(0, EH_MODEL_ROW_CAP);
@@ -688,7 +790,7 @@ function renderEhSection(ehUsage, ehModels) {
   }
   return /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "ElectronHub"), errorLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, errorLine) : null, model.emptyLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note" }, model.emptyLine) : null, model.notes.map(function(note, ni) {
     return /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note", key: "eh-n-" + ni }, note);
-  }), hero, creditCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, creditCards) : null, tokenCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, tokenCards) : null, monthlyCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, monthlyCards) : null, historyRows.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, historyRows) : null, endpointCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, endpointCards) : null, accountUsageList, modelList);
+  }), hero, sessionHero, sessionHarvestedLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note" }, sessionHarvestedLine) : null, rawSession !== null && session === null ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note" }, EH_SESSION_EXPIRED_LINE) : null, sessionLines, sessionCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, sessionCards) : null, creditCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, creditCards) : null, tokenCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, tokenCards) : null, monthlyCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, monthlyCards) : null, historyRows.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, historyRows) : null, endpointCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, endpointCards) : null, accountUsageList, modelList, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-cookie" }, /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", disabled: ehSessionUi.busy, onClick: onHarvestSession }, ehSessionUi.busy ? "Harvesting\u2026" : "Harvest session from Firefox"), ehSessionUi.showLogin ? /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", onClick: onOpenEhLogin }, "Open app.electronhub.ai") : null, ehSessionUi.note ? /* @__PURE__ */ import_react2.default.createElement("span", { className: "ocgs-cookie-note" }, ehSessionUi.note) : null));
 }
 function makePanel(ctx, config) {
   return function Panel() {
@@ -791,7 +893,12 @@ function makePanel(ctx, config) {
         zaiQuota: results[9],
         zaiUsage: results[10],
         ehUsage: results[11],
-        ehModels: results[12]
+        ehModels: results[12],
+        // #108: the harvested session is user-triggered, never polled, so
+        // the poll loop carries the stored harvest forward instead of
+        // dropping it. Its own fetchedAt bounds its freshness (see
+        // ehHarvestAlive); a stale harvest renders as expired, never current.
+        ehSession: snap && snap.ehSession ? snap.ehSession : null
       };
       setSnap(snapData);
       setStaleTs(Date.now());
@@ -826,9 +933,13 @@ function makePanel(ctx, config) {
     var zaiUsage = snap ? snap.zaiUsage : null;
     var ehUsage = snap ? snap.ehUsage : null;
     var ehModels = snap ? snap.ehModels : null;
+    var ehSession = snap ? snap.ehSession : null;
     var cookieState = import_react2.default.useState({ busy: false, note: null, showLogin: false });
     var cookie = cookieState[0];
     var setCookie = cookieState[1];
+    var ehSessionUiState = import_react2.default.useState({ busy: false, note: null, showLogin: false });
+    var ehSessionUi = ehSessionUiState[0];
+    var setEhSessionUi = ehSessionUiState[1];
     var dsTokenState = import_react2.default.useState({ busy: false, note: null, showLogin: false });
     var dsToken = dsTokenState[0];
     var setDsToken = dsTokenState[1];
@@ -867,6 +978,45 @@ function makePanel(ctx, config) {
       } else {
         console.error(
           "[subscriptions] failed to open OpenCode GO login page",
+          result.error || "unknown error"
+        );
+      }
+    };
+    var fetchEhSession = async function() {
+      setEhSessionUi({ busy: true, note: null, showLogin: false });
+      console.info("[subscriptions] action: harvest ElectronHub session from Firefox");
+      var result = await postJson("/subscriptions/electronhub-session/extract");
+      if (result.data && result.data.ok === true) {
+        var merged = Object.assign({}, snap, { ehSession: result });
+        setSnap(merged);
+        writeLastSnap(merged);
+        setEhSessionUi({ busy: false, note: "Session harvested", showLogin: false });
+        console.info("[subscriptions] ElectronHub session harvested");
+      } else {
+        var err = result.error || "Harvest failed";
+        var sessionGone = /browser session/.test(err);
+        if (sessionGone) {
+          var cleared = Object.assign({}, snap, { ehSession: null });
+          setSnap(cleared);
+          writeLastSnap(cleared);
+        }
+        setEhSessionUi({ busy: false, note: err, showLogin: sessionGone });
+        console.error("[subscriptions] ElectronHub session harvest failed", err);
+      }
+    };
+    var openEhLogin = async function() {
+      console.info("[subscriptions] action: open ElectronHub dashboard in Firefox");
+      var result = await postJson("/subscriptions/electronhub-session/login");
+      setEhSessionUi({
+        busy: false,
+        note: result.data && result.data.ok ? "Login page opened in Firefox; sign in, then harvest the session again" : result.error || "Could not open Firefox",
+        showLogin: false
+      });
+      if (result.data && result.data.ok) {
+        console.info("[subscriptions] ElectronHub login page opened");
+      } else {
+        console.error(
+          "[subscriptions] failed to open ElectronHub login page",
           result.error || "unknown error"
         );
       }
@@ -1083,7 +1233,7 @@ function makePanel(ctx, config) {
       ds && ds.data && Array.isArray(ds.data.balance_infos) && ds.data.balance_infos.length > 0 ? ds.data.balance_infos[0] : null,
       dsUsageAmount,
       dsUsageCost
-    ) : null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-cookie" }, /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", disabled: dsToken.busy, onClick: fetchDsToken }, dsToken.busy ? "Fetching\u2026" : "Fetch token from Firefox"), dsToken.showLogin ? /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", onClick: openDsLogin }, "Open platform.deepseek.com") : null, dsToken.note ? /* @__PURE__ */ import_react2.default.createElement("span", { className: "ocgs-cookie-note" }, dsToken.note) : null)) : null, providerVisible(cfg, "opencode") ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "OpenCode GO"), balanceLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-balance" }, balanceLine) : null, go && go.error ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, "OpenCode GO: " + go.error) : null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, buildRows(GO_WINDOWS, goUsage)), goPaceLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-pace" }, goPaceLine) : null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-cookie" }, /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", disabled: cookie.busy, onClick: fetchCookie }, cookie.busy ? "Fetching\u2026" : "Fetch cookie from Firefox"), cookie.showLogin ? /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", onClick: openLogin }, "Open login page") : null, cookie.note ? /* @__PURE__ */ import_react2.default.createElement("span", { className: "ocgs-cookie-note" }, cookie.note) : null)) : null, providerVisible(cfg, "opencode-zen") ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-head" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "OpenCode Zen"), /* @__PURE__ */ import_react2.default.createElement("button", { className: "dsp-refresh", onClick: refreshOz }, "Refresh")), ozBalanceLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-balance" }, ozBalanceLine) : null, oz && oz.error ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, "OpenCode Zen: " + oz.error) : null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-cookie" }, /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", disabled: cookie.busy, onClick: fetchCookie }, cookie.busy ? "Fetching\u2026" : "Fetch cookie from Firefox"), cookie.showLogin ? /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", onClick: openLogin }, "Open opencode.ai") : null, cookie.note ? /* @__PURE__ */ import_react2.default.createElement("span", { className: "ocgs-cookie-note" }, cookie.note) : null)) : null, providerVisible(cfg, "electronhub") ? renderEhSection(ehUsage, ehModels) : null);
+    ) : null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-cookie" }, /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", disabled: dsToken.busy, onClick: fetchDsToken }, dsToken.busy ? "Fetching\u2026" : "Fetch token from Firefox"), dsToken.showLogin ? /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", onClick: openDsLogin }, "Open platform.deepseek.com") : null, dsToken.note ? /* @__PURE__ */ import_react2.default.createElement("span", { className: "ocgs-cookie-note" }, dsToken.note) : null)) : null, providerVisible(cfg, "opencode") ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "OpenCode GO"), balanceLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-balance" }, balanceLine) : null, go && go.error ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, "OpenCode GO: " + go.error) : null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, buildRows(GO_WINDOWS, goUsage)), goPaceLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-pace" }, goPaceLine) : null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-cookie" }, /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", disabled: cookie.busy, onClick: fetchCookie }, cookie.busy ? "Fetching\u2026" : "Fetch cookie from Firefox"), cookie.showLogin ? /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", onClick: openLogin }, "Open login page") : null, cookie.note ? /* @__PURE__ */ import_react2.default.createElement("span", { className: "ocgs-cookie-note" }, cookie.note) : null)) : null, providerVisible(cfg, "opencode-zen") ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-head" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "OpenCode Zen"), /* @__PURE__ */ import_react2.default.createElement("button", { className: "dsp-refresh", onClick: refreshOz }, "Refresh")), ozBalanceLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-balance" }, ozBalanceLine) : null, oz && oz.error ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, "OpenCode Zen: " + oz.error) : null, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-cookie" }, /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", disabled: cookie.busy, onClick: fetchCookie }, cookie.busy ? "Fetching\u2026" : "Fetch cookie from Firefox"), cookie.showLogin ? /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", onClick: openLogin }, "Open opencode.ai") : null, cookie.note ? /* @__PURE__ */ import_react2.default.createElement("span", { className: "ocgs-cookie-note" }, cookie.note) : null)) : null, providerVisible(cfg, "electronhub") ? renderEhSection(ehUsage, ehModels, ehSession, ehSessionUi, fetchEhSession, openEhLogin) : null);
   };
 }
 var name = PLUGIN_NAME;
