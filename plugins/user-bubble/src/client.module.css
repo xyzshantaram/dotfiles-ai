@@ -49,7 +49,17 @@
   font-size: 13px;
   line-height: 20px;
 }
-.user-bubble-chip {
+/*
+ * CHIPS ARE LINKS (#148, defect B). The bubble renders ONE MarkdownText for
+ * the whole body so text and chips share a single paragraph flow, and the
+ * chips ride inside that flow as markdown links — a link is the only
+ * attribute-carrying inline element markdown offers. The href is an opaque
+ * hook (never navigated), the title carries the full label. Visuals match
+ * the old span chip exactly; behaviour is deliberately non-interactive
+ * (these are decorations of sent text, not navigation), announced to
+ * assistive tech as links rather than buttons.
+ */
+.user-bubble-body a[href^="#ub-ref/"] {
   display: inline-block;
   background: var(--dsw-alias-fill-l3, rgba(128, 128, 128, 0.22));
   border-radius: 5px;
@@ -59,6 +69,10 @@
   line-height: 18px;
   vertical-align: baseline;
   white-space: nowrap;
+  color: inherit;
+  text-decoration: none;
+  pointer-events: none;
+  cursor: text;
 }
 .user-bubble-refs {
   font-size: 11px;

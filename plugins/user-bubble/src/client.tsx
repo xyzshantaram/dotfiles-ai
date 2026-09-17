@@ -19,8 +19,13 @@
 // rows carry copy + timestamp only today, and both survive here.
 import * as react from "react";
 import * as primitives from "@deepseek-ai/dsh-client-ui-primitives";
-import { hardBreakOutsideFences, splitReferences, CHAT_NODE_KEYS } from "./text";
-import { injectStyle } from "../../shared/client-util";
+import {
+  encodeRefsForMarkdown,
+  hardBreakOutsideFences,
+  splitReferences,
+  CHAT_NODE_KEYS,
+} from "./text";
+import { fetchJson, injectStyle } from "../../shared/client-util";
 import localCss from "./client.module.css";
 
 var MarkdownText = primitives.MarkdownText;
@@ -79,44 +84,91 @@ function formatMessageClock(time, t) {
   );
 }
 
-/** What a chip shows inside the bubble, mirroring the shipped displayLabel. */
-function chipDisplayLabel(segment) {
-  var label = segment.label;
-  if (segment.refKind === "session") return label.slice(1);
-  if (segment.refKind === "skill") return label;
-  // @-file/folder: the shipped chip shows the basename only.
-  return (
-    label
-      .slice(1)
-      .replace(/^"|"$/g, "")
-      .split(/[\\/]/)
-      .filter(Boolean)
-      .at(-1) ?? label.slice(1)
-  );
+/**
+ * ONE TEXT FLOW (#148, defect B). The bubble used to map each segment to
+ * either a block-level <MarkdownText> or an inline chip span, so
+ * text/chip/text rendered as block, span, block and every chip cost a line
+ * break. Now the whole body goes through ONE <MarkdownText> with the chips
+ * encoded inside the source (see encodeRefsForMarkdown in ./text): the
+ * paragraph flows and the chips sit inline in it. Markdown still renders —
+ * headings, bold, lists, fenced code — because the single pass parses the
+ * full body instead of per-segment fragments (which also fixes chips
+ * splitting constructs like **bold /chip bold** across two renderers).
+ *
+ * DEPARTURE FROM THE SHIPPED CHIP, written down so a later reader does not
+ * file it as a regression: chips render as markdown links (`a[href^="#ub-ref/"]`,
+ * styled as chips, non-interactive) rather than `span[data-ref-chip]`, because
+ * a link is the only attribute-carrying INLINE element markdown offers, and
+ * only an inline element keeps the single flow. The earlier departures stand
+ * (no glyph; every @-ref reads as file) and are unchanged by this.
+ */
+
+/**
+ * Served slash names, fetched once per session and shared by every bubble.
+ * `null` means unknown — not loaded yet, or the fetch failed — and the
+ * bubble treats unknown as NO names (slash tokens plain, the safe
+ * direction) rather than flashing optimistic chips. A failed load logs and
+ * stays failed for the page lifetime; retrying every render would turn one
+ * missing route into a request storm.
+ */
+var NAMES_URL = "/user-bubble/slash-names";
+var namesCache: Map<string, ReadonlySet<string> | null> = new Map();
+var namesInflight: Map<string, Promise<ReadonlySet<string> | null>> = new Map();
+
+/** Guard an unknown JSON value into a string array, or null. */
+function stringArray(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  var out: string[] = [];
+  for (var item of value) {
+    if (typeof item !== "string" || item === "") return null;
+    out.push(item);
+  }
+  return out;
+}
+
+function fetchSlashNames(sessionId: string | null): Promise<ReadonlySet<string> | null> {
+  var key = sessionId ?? "";
+  var cached = namesCache.get(key);
+  if (cached !== undefined) return Promise.resolve(cached);
+  var inflight = namesInflight.get(key);
+  if (inflight !== undefined) return inflight;
+  var url = NAMES_URL + (sessionId !== null ? "?sessionId=" + encodeURIComponent(sessionId) : "");
+  var pending = fetchJson(url).then(function (result) {
+    var skills = result.data !== null && typeof result.data === "object" ? stringArray(result.data.skills) : null;
+    var commands =
+      result.data !== null && typeof result.data === "object" ? stringArray(result.data.commands) : null;
+    var names: ReadonlySet<string> | null =
+      skills === null || commands === null ? null : new Set([...skills, ...commands]);
+    namesCache.set(key, names);
+    namesInflight.delete(key);
+    return names;
+  });
+  namesInflight.set(key, pending);
+  return pending;
 }
 
 /**
- * TWO DELIBERATE DEPARTURES from the shipped chip, written down so a later
- * reader does not file them as regressions (#125 review, subagent 435b851f):
- *
- *  - NO GLYPH. The shipped chip drew a ReferenceIcon from internals we cannot
- *    import. The ticket's loss list allowed "rebuilt from primitives (close,
- *    not identical)"; we dropped it instead, because a near-miss glyph sitting
- *    beside the real ones reads as a rendering bug, while plain text reads as
- *    a different-but-deliberate style. Rebuild it only with a primitive that
- *    matches the surrounding optical weight.
- *  - EVERY @-ref IS data-ref-chip="file". The shipped component distinguished
- *    "folder" by a trailing slash on the label. That attribute is a CSS hook
- *    only and nothing in this bundle styles the two differently; restore the
- *    split here first if a stylesheet ever needs it.
+ * The served slash names for one bubble. Session-scope slots receive
+ * sessionId in props (the slot system synthesizes standard props for
+ * session-scope entries); without one the bubble uses the global names.
  */
-function RefChip({ segment, key }: { segment: any; key?: any }) {
-  var dataRefChip = segment.refKind === "skill" ? "skill" : segment.refKind;
-  return (
-    <span className="user-bubble-chip" data-ref-chip={dataRefChip} title={segment.label}>
-      {chipDisplayLabel(segment)}
-    </span>
+function useSlashNames(sessionId: string | null) {
+  // No type argument: the react shim types the namespace as `any`, and an
+  // untyped call may not take explicit type arguments (TS2347).
+  var state = react.useState(null);
+  react.useEffect(
+    function () {
+      var cancelled = false;
+      fetchSlashNames(sessionId).then(function (names) {
+        if (!cancelled) state[1](names);
+      });
+      return function () {
+        cancelled = true;
+      };
+    },
+    [sessionId],
   );
+  return state[0];
 }
 
 /**
@@ -163,13 +215,15 @@ function BubbleActions({ text, time, t }) {
  * fences (./text). Images go through the renderMessageImages OWNER PROP —
  * never reimplemented — so image rendering is zero-loss in the takeover.
  */
-var UserBubbleNodeView = react.memo(function UserBubbleNodeView({ node, renderMessageImages, t }) {
+var UserBubbleNodeView = react.memo(function UserBubbleNodeView({ node, renderMessageImages, t, sessionId }) {
   var data = node.data;
   var parts = contentParts(data.content);
   // Order matters: hard breaks FIRST (so chip labels never carry break
   // markers — the tokenizer's tokens never contain whitespace), then the
-  // reference split.
+  // reference split against the served names, then the single-flow encode.
+  // Copy keeps the RAW body: what you copy never contains chip encoding.
   var body = hardBreakOutsideFences(parts.text);
+  var slashNames = useSlashNames(typeof sessionId === "string" && sessionId !== "" ? sessionId : null);
   // Runtime referenceLabels are validated names WITHOUT the @ prefix (the
   // shipped projector prepends it); the model trusts only full labels.
   var sessionLabels = new Set<string>(
@@ -177,7 +231,7 @@ var UserBubbleNodeView = react.memo(function UserBubbleNodeView({ node, renderMe
       return "@" + label;
     }),
   );
-  var segments = splitReferences(body, sessionLabels);
+  var markdown = encodeRefsForMarkdown(body, splitReferences(body, sessionLabels, slashNames ?? new Set()));
   var showBubble = body !== "" || parts.rest.length > 0;
   var truncated = function (total) {
     return t("json.truncated", { total: total });
@@ -188,13 +242,7 @@ var UserBubbleNodeView = react.memo(function UserBubbleNodeView({ node, renderMe
         {renderMessageImages({ images: parts.images, align: "end" })}
         {showBubble ? (
           <div className="user-bubble-body">
-            {segments.map(function (segment, i) {
-              return segment.kind === "text" ? (
-                <MarkdownText key={i} text={segment.text} />
-              ) : (
-                <RefChip key={i} segment={segment} />
-              );
-            })}
+            <MarkdownText text={markdown} />
             {parts.rest.map(function (block, i) {
               return <JsonBlock key={i} label={t("message.extraBlock")} payload={block} truncatedLabel={truncated} />;
             })}

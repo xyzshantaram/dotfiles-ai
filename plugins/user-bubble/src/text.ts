@@ -1,14 +1,19 @@
-// Pure text model for the user message bubble (#125).
+// Pure text model for the user message bubble (#125, #148).
 //
-// Two independent transforms, deliberately kept apart because they fail for
+// Three independent transforms, deliberately kept apart because they fail for
 // different reasons and are tested separately:
 //
 //   splitReferences()      — decide what becomes a chip. Fixes the bug where
 //                            a pasted path was decorated as a SKILL.
 //   hardBreakOutsideFences() — decide where a typed newline survives markdown
 //                            paragraph folding, WITHOUT touching code.
+//   encodeRefsForMarkdown()  — put the chips INSIDE one markdown flow (#148).
+//                            A single MarkdownText over the whole body keeps
+//                            text and chips in one paragraph; the chips ride
+//                            as markdown links because a link is the only
+//                            attribute-carrying inline element markdown offers.
 //
-// React-free so vitest reaches both without a browser.
+// React-free so vitest reaches all three without a browser.
 
 /**
  * WHICH KEYS THIS PLUGIN TAKES OVER (#125). The shipped conversation package
@@ -38,7 +43,7 @@ export type UserSegment =
 export type RefKind = "session" | "file" | "skill";
 
 /**
- * THE PATH FIX (#125).
+ * THE PATH FIX (#125) AND ITS RETIREMENT (#148).
  *
  * The shipped pattern is
  *
@@ -49,19 +54,51 @@ export type RefKind = "session" | "file" | "skill";
  * remainder then failed the `(^|\s)` anchor, so a path was rendered as a
  * skill reference.
  *
- * The negative lookahead below refuses a slash token that is followed by
- * more path-ish characters, so `/home/...`, `/etc/passwd` and `/a.b` never
- * chip while a bare `/compact` still does.
+ * #125 added a negative lookahead refusing a slash token followed by more
+ * path-ish characters, and wrote down the accepted limitation: a bare
+ * `/notaskill` still chipped, because shape alone cannot tell `/tmp` from
+ * `/compact`. The owner has now seen exactly that and rejected it (#148).
  *
- * ACCEPTED LIMITATION, stated rather than hidden: without the composer
- * lexicon (the ReadonlyMap<'/'|'@', names> that validated the token at
- * compose time) a bare `/notaskill` STILL chips. The lexicon lives in the
- * composer-bar inject and the input-trigger stores, not in this slot's owner
- * props. If it turns out reachable from a chat.node entry, prefer it and
- * DELETE this lookahead rather than keeping both — two classifiers that can
- * disagree is the defect #130 spent a day removing elsewhere.
+ * LEXICON VERDICT (#148, criterion 1): NOT REACHABLE from a
+ * `conversation.chat.node` entry, established from the installed bundles
+ * rather than assumed. The lexicon is handed exclusively through the
+ * `conversation.composer.bar` entry's inject hooks compartment
+ * (dsh-client-ui-conversation/lib/client.js:10048-10052,
+ * `hooks: { notices, lexicon, menuLauncher }`, consumed by InputBar at
+ * :3490), while chat.node entries receive only the `turnData` hook
+ * (:9774-9779) plus seven owner props — selectedCallId, cwd, openFile,
+ * inspectCall, forkAt, renderMessageImages, fileMentions — and the node
+ * itself (ChatNodeSeat, :5382-5407). No lexicon, no useLexicon, no
+ * sessionId, so the entry cannot even address WHICH session's lexicon to
+ * read (the per-session controller needs a session-scope actx,
+ * dsh-client-ui-input-trigger/lib/client.js:673-692). The shipped bubble
+ * documents the same boundary: "minus the lexicon: sent tokens were
+ * validated at compose time, so shape alone decorates" (:5176-5177). Two
+ * further strikes against reaching around it: the "/" lexicon holds skill
+ * names ONLY (the command source registers no lexicon hook,
+ * dsh-client-ui-commands/lib/client.js:522-532), so even a reachable
+ * lexicon could not validate /compact; and the lexicon is a LIVE hot-source
+ * roll while transcript rows are history — validating the past against the
+ * present gives wrong answers across time.
+ *
+ * So the lookahead is DELETED (per #125's own instruction: two classifiers
+ * that can disagree are the defect #130 removed elsewhere) and slash
+ * tokens are validated against REAL names instead: the host half serves
+ * the registered skill and command names at
+ * GET /user-bubble/slash-names (see ./index.ts), and a slash token chips
+ * if and only if its name is in that set. Unknown names — /tmp, /etc,
+ * /notaskill, and any slash token seen before the names load — stay plain
+ * text, which is the safe direction: declining a chip never corrupts
+ * anything, while a false chip reinterprets the user's words.
+ *
+ * KNOWN APPROXIMATION, stated rather than hidden: the served names are the
+ * GLOBAL views (skills.list({cwd?}), commands global layer). Per-agent
+ * shadows — a command or preset-layer skill shadowing a global for one
+ * agent — resolve per session in the composer but are invisible to a
+ * transcript renderer that was never given a session address. A missed
+ * session-scoped name renders plain, never wrong.
  */
-const REFERENCE_RE = /(^|\s)(\/[\w-]+(?![\w\-/.])|@"[^"\n]+"|@[^\s]+)/gu;
+const REFERENCE_RE = /(^|\s)(\/[\w-]+|@"[^"\n]+"|@[^\s]+)/gu;
 
 /** Classify a matched token. Only `@` forms carry real evidence. */
 function refKindOf(label: string, sessionLabels: ReadonlySet<string>): RefKind {
@@ -82,10 +119,17 @@ function refKindOf(label: string, sessionLabels: ReadonlySet<string>): RefKind {
  * @param sessionLabels - labels the runtime already validated as sessions
  *   (node.data.referenceLabels). Only these are trusted as `session`; nothing
  *   here guesses one.
+ * @param slashNames - REAL skill and command names WITHOUT the leading
+ *   slash, served by our host half (GET /user-bubble/slash-names). A slash
+ *   token chips if and only if its name is in this set. When the set is
+ *   absent (names not loaded yet) or empty, NO slash token chips: unknown
+ *   is plain text, the safe direction. `@` references need no list — they
+ *   carry their own evidence (file/folder/session).
  */
 export function splitReferences(
   text: unknown,
   sessionLabels: ReadonlySet<string> = new Set(),
+  slashNames: ReadonlySet<string> = new Set(),
 ): UserSegment[] {
   if (typeof text !== "string" || text === "") return [];
   const out: UserSegment[] = [];
@@ -95,6 +139,12 @@ export function splitReferences(
   while ((match = REFERENCE_RE.exec(text)) !== null) {
     const lead = match[1];
     const label = match[2];
+    // A slash token is a claim about the world, and the world is the
+    // served name list — never shape. Anything unlisted stays text, so
+    // /tmp, /etc and /notaskill are plain while /compact chips.
+    if (label.startsWith("/") && !slashNames.has(label.slice(1))) {
+      continue;
+    }
     const tokenStart = match.index + lead.length;
     // The anchoring whitespace belongs to the TEXT, not the chip.
     if (tokenStart > cursor) out.push({ kind: "text", text: text.slice(cursor, tokenStart) });
@@ -109,6 +159,167 @@ export function splitReferences(
 export function joinSegments(segments: readonly UserSegment[]): string {
   let out = "";
   for (const segment of segments) out += segment.kind === "text" ? segment.text : segment.raw;
+  return out;
+}
+
+/**
+ * THE SINGLE-FLOW FIX (#148, defect B).
+ *
+ * The bubble used to map each segment to either a block-level MarkdownText
+ * or an inline chip span, so text/chip/text rendered as block, span, block
+ * and every chip cost a line break. The fix renders the WHOLE body through
+ * ONE MarkdownText — a single text flow — with the chips encoded inside the
+ * markdown source as links: a link is the only attribute-carrying INLINE
+ * element markdown offers, so the chip stays in the paragraph instead of
+ * breaking it. The client styles `a[href^="#ub-ref/"]` as the chip (same
+ * visuals, non-interactive) and keeps the copy buffer on the RAW body, so
+ * what you copy never contains the encoding.
+ *
+ * A reference that falls inside CODE stays literal, because encoding it
+ * would write link syntax into what markdown renders verbatim — pasted code
+ * must come out byte-identical. Three code shapes are protected: fenced
+ * blocks (the exact fence walk hardBreakOutsideFences uses), same-line
+ * backtick pairs (inline code spans), and 4-space-indented lines (the same
+ * deliberate approximation the hard-break transform uses). Anything the
+ * protection misses errs toward literal, never toward a false chip.
+ */
+export const CHIP_LINK_PREFIX = "#ub-ref/";
+
+/** What the chip shows, mirroring the shipped displayLabel. */
+export function chipDisplayText(segment: Extract<UserSegment, { kind: "ref" }>): string {
+  const label = segment.label;
+  if (segment.refKind === "session") return label.slice(1);
+  if (segment.refKind === "skill") return label;
+  // @-file/folder: the shipped chip shows the basename only.
+  return (
+    label
+      .slice(1)
+      .replace(/^"|"$/g, "")
+      .split(/[\\/]/)
+      .filter(Boolean)
+      .at(-1) ?? label.slice(1)
+  );
+}
+
+/** Escape markdown link-text metacharacters in a chip label. */
+function escapeLinkText(text: string): string {
+  return text.replace(/\\/g, "\\\\").replace(/\[/g, "\\[").replace(/\]/g, "\\]");
+}
+
+/** Escape a double-quoted markdown link title. Labels never contain \n. */
+function escapeLinkTitle(title: string): string {
+  return title.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+/**
+ * Encode one validated reference as an inline markdown chip link.
+ * The destination is an opaque hook for our stylesheet (never navigated:
+ * the client makes these links non-interactive); the title preserves the
+ * full label for the tooltip the shipped chip carried.
+ */
+export function encodeRefChip(segment: Extract<UserSegment, { kind: "ref" }>): string {
+  const text = escapeLinkText(chipDisplayText(segment));
+  // Angle-bracket destination: labels may contain spaces and parens
+  // (@"my file (1).ts"), which the bare form cannot carry. The leading
+  // trigger char is replaced by the chip kind ("/a" and "@a" would
+  // otherwise collide), and the remainder is percent-encoded, so the hook
+  // carries no raw markdown metacharacters.
+  const dest =
+    "<" + CHIP_LINK_PREFIX + segment.refKind + "/" + encodeURIComponent(segment.label.slice(1)) + ">";
+  const title = escapeLinkTitle(segment.label);
+  return `[${text}](${dest} "${title}")`;
+}
+
+/** A half-open character range [start, end) of body text. */
+interface CharRange {
+  start: number;
+  end: number;
+}
+
+/** Same-line backtick-pair spans (inline code), as offsets within the line. */
+function inlineCodeSpans(line: string): CharRange[] {
+  const out: CharRange[] = [];
+  // Equal-length runs pair like CommonMark backtick strings; an unclosed
+  // run is literal text (no span), so refs on such a line still encode.
+  const re = /(`+)([^`]*?)\1/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(line)) !== null) {
+    // An empty span (``) is literal text, not code.
+    if (match[0].length > match[1].length * 2) {
+      out.push({ start: match.index, end: match.index + match[0].length });
+    }
+  }
+  return out;
+}
+
+/**
+ * Character ranges of body text where references must stay literal:
+ * fenced blocks (through the closing fence, or to end of body when
+ * unterminated), inline code spans, and 4-space-indented lines.
+ */
+function protectedRanges(body: string): CharRange[] {
+  const ranges: CharRange[] = [];
+  const lines = body.split("\n");
+  let offset = 0;
+  let fence: { marker: string; char: string } | null = null;
+  let fenceStart = 0;
+  for (const line of lines) {
+    const lineStart = offset;
+    const lineEnd = offset + line.length;
+    const fenceMatch = FENCE_RE.exec(line);
+    if (fence === null) {
+      if (fenceMatch !== null) {
+        fence = { marker: fenceMatch[1], char: fenceMatch[1][0] };
+        fenceStart = lineStart;
+      } else if (/^ {4,}\S/.test(line)) {
+        ranges.push({ start: lineStart, end: lineEnd });
+      } else {
+        for (const span of inlineCodeSpans(line)) {
+          ranges.push({ start: lineStart + span.start, end: lineStart + span.end });
+        }
+      }
+    } else {
+      const closes =
+        fenceMatch !== null &&
+        fenceMatch[1][0] === fence.char &&
+        fenceMatch[1].length >= fence.marker.length &&
+        line.slice(fenceMatch[0].length).trim() === "";
+      if (closes) {
+        ranges.push({ start: fenceStart, end: lineEnd });
+        fence = null;
+      }
+    }
+    offset = lineEnd + 1;
+  }
+  if (fence !== null) ranges.push({ start: fenceStart, end: body.length });
+  return ranges;
+}
+
+/**
+ * Render segments as ONE markdown source: text verbatim, validated
+ * references as chip links, except inside code where references stay
+ * literal. `segments` must be splitReferences(body) — the walk relies on
+ * the joinSegments round-trip to track offsets, and foreign segments would
+ * misalign the code protection.
+ */
+export function encodeRefsForMarkdown(body: string, segments: readonly UserSegment[]): string {
+  if (typeof body !== "string" || body === "") return "";
+  const prot = protectedRanges(body);
+  const isProtected = (start: number, end: number): boolean =>
+    prot.some((range) => start < range.end && end > range.start);
+  let out = "";
+  let cursor = 0;
+  for (const segment of segments) {
+    if (segment.kind === "text") {
+      out += segment.text;
+      cursor += segment.text.length;
+      continue;
+    }
+    const start = cursor;
+    const end = cursor + segment.raw.length;
+    out += isProtected(start, end) ? segment.raw : encodeRefChip(segment);
+    cursor = end;
+  }
   return out;
 }
 

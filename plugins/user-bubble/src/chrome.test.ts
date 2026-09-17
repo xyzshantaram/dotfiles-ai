@@ -24,6 +24,7 @@ import { describe, expect, it } from "vitest";
 const here = dirname(fileURLToPath(import.meta.url));
 const css = readFileSync(join(here, "client.module.css"), "utf8");
 const tsx = readFileSync(join(here, "client.tsx"), "utf8");
+const host = readFileSync(join(here, "index.ts"), "utf8");
 
 /** The declarations of one rule, by selector, with comments stripped. */
 function ruleBlock(selector: string): string {
@@ -60,5 +61,56 @@ describe("user-bubble chrome: the clock sits below the message, not beside it", 
     // would reflow under the pointer.
     expect(actions).toContain("height: 28px;");
     expect(actions).toContain("opacity: 0;");
+  });
+});
+
+describe("user-bubble composition: one text flow with chips inline (#148)", () => {
+  // Defect B was the alternating-renderer composition: each segment became
+  // either a block-level MarkdownText or an inline chip span, so
+  // text/chip/text rendered as block, span, block and every chip cost a
+  // line break. The fix renders the whole body through ONE MarkdownText
+  // with chips encoded inside the source. These pins fail against the old
+  // composition (it mapped segments to alternating renderers) and pass on
+  // the single flow — so the stacking defect cannot return silently.
+  it("does not map segments to alternating renderers", () => {
+    // The old shape: segments.map(...) choosing MarkdownText for text and
+    // RefChip for refs. Any return of per-segment renderer choice fails here.
+    expect(tsx).not.toContain("segments.map");
+    expect(tsx).not.toContain('segment.kind === "text"');
+    expect(tsx).not.toContain("<RefChip");
+  });
+
+  it("renders the whole body through one MarkdownText over the encoded source", () => {
+    // The single flow: split against the served names, encode chips into
+    // the source, one MarkdownText. Markdown survives because the single
+    // pass parses the full body (including constructs a chip used to split).
+    expect(tsx).toContain("encodeRefsForMarkdown");
+    expect(tsx).toContain("<MarkdownText text={markdown}");
+    expect(tsx).toContain("MarkdownText");
+  });
+
+  it("chips are styled inline links, not dropped and not block spans", () => {
+    // The encoding hook lives in the pure model (CHIP_LINK_PREFIX) and the
+    // stylesheet styles exactly that hook as a non-interactive chip. A fix
+    // that drops chips, or one that keeps block-level chip spans, fails here.
+    expect(tsx).toContain("encodeRefsForMarkdown");
+    expect(css).toContain('a[href^="#ub-ref/"]');
+    const chipRule = ruleBlock('.user-bubble-body a[href^="#ub-ref/"]');
+    expect(chipRule).toContain("display: inline-block;");
+    // Non-interactive: these decorate sent text, they navigate nowhere.
+    expect(chipRule).toContain("pointer-events: none;");
+    // No block-level chip span may remain: it would reintroduce the defect.
+    expect(css).not.toContain(".user-bubble-chip");
+  });
+
+  it("slash names come from our host half, which serves what the client fetches", () => {
+    // The cross-file contract: index.ts serves GET /user-bubble/slash-names
+    // from the real registries, and client.tsx validates against exactly
+    // that list. If either side drifts, chips lose their names or the
+    // route 404s — both fail here rather than in the GUI.
+    expect(host).toContain("/user-bubble/slash-names");
+    expect(tsx).toContain("/user-bubble/slash-names");
+    expect(host).toContain("skills");
+    expect(host).toContain("commands");
   });
 });
