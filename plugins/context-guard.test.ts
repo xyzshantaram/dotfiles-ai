@@ -252,6 +252,89 @@ describe("context-guard alwaysDeny", () => {
   });
 });
 
+describe("context-guard subagent lockdown denies ask_user_question (#163)", () => {
+  // `ask_user_question` is the registered name of the shipped human-question
+  // tool (@deepseek-ai/dsh-tool-ask-user, verified live via schema_lookup):
+  // a child must not interrogate the owner, because questions to the human
+  // are the orchestrator's job.
+  const CORDIS_FIVE = [
+    "cordis_inspect_self",
+    "cordis_define",
+    "cordis_run",
+    "cordis_stop",
+    "cordis_undefine",
+  ];
+
+  it("denies ask_user_question AND the cordis five to a depth-1 subagent by default, on both surfaces", () => {
+    const reg = makeRegistry([...CORDIS_FIVE, "ask_user_question", "plain"]);
+    const ctx = fakeCtx();
+    apply(ctx as never, { skillDirs: [join(tmpRoot, "none-163")] });
+    invalidate(ctx);
+    const { agent } = fakeAgent("ask-depth-1", reg, { depth: 1 });
+    fireSessionStart(ctx, agent);
+    const asm = assemble(reg, agent as { id: string });
+    expect(asm.tools).toEqual(["plain"]);
+    expect(asm.sdk).toEqual(["plain"]);
+  });
+
+  it("keeps the denial even when a skill that gates the tool is loaded", async () => {
+    // The same unconditional footing as the cordis set: loading a skill
+    // that names the tool must not unlock it for a child.
+    const reg = makeRegistry([...CORDIS_FIVE, "ask_user_question", "plain"]);
+    const dir = writeGatedSkill(join(tmpRoot, "ask-unlock"), "asker", ["ask_user_question", "cordis_define"]);
+    const ctx = fakeCtx();
+    apply(ctx as never, { skillDirs: [dir] });
+    invalidate(ctx);
+    const { agent } = fakeAgent("ask-locked-loader", reg, { depth: 1 });
+    fireSessionStart(ctx, agent);
+    await fireSkillLoad(ctx, agent, "asker");
+    await firePreStep(ctx, agent);
+    const asm = assemble(reg, agent as { id: string });
+    expect(asm.tools).toEqual(["plain"]);
+    expect(asm.sdk).toEqual(["plain"]);
+  });
+
+  it("a configured subagentDeny ADDS to the baseline instead of replacing it", () => {
+    // The #163 override trap: with replace semantics, a call-site
+    // `subagentDeny` would silently shrink the baseline back to just the
+    // configured names. A custom name no skill gates keeps the assertion
+    // independent of ambient skill roots: the live $DSH_HOME/skills root
+    // gates the cordis names as gated tools, so a cordis-named variant of
+    // this test would pass even under replace semantics and prove nothing.
+    // Here, under replace semantics `ask_user_question` would stay visible.
+    const reg = makeRegistry(["ask_user_question", "custom_lock", "plain"]);
+    const ctx = fakeCtx();
+    apply(ctx as never, { subagentDeny: ["custom_lock"] });
+    invalidate(ctx);
+    const { agent } = fakeAgent("ask-additive", reg, { depth: 1 });
+    fireSessionStart(ctx, agent);
+    const asm = assemble(reg, agent as { id: string });
+    expect(asm.tools).toEqual(["plain"]);
+    expect(asm.sdk).toEqual(["plain"]);
+  });
+
+  it("leaves ask_user_question visible to a depth-0 agent on both surfaces", () => {
+    // The companion pin: a deny-only test would stay green if the mask
+    // leaked to every agent and broke the primary session — and the
+    // `grilling` skill, which asks via this tool.
+    const reg = makeRegistry([...CORDIS_FIVE, "ask_user_question", "plain"]);
+    const ctx = fakeCtx();
+    apply(ctx as never, { skillDirs: [join(tmpRoot, "none-163b")] });
+    invalidate(ctx);
+    const { agent } = fakeAgent("ask-depth-0", reg);
+    fireSessionStart(ctx, agent);
+    const asm = assemble(reg, agent as { id: string });
+    expect(asm.tools).toContain("ask_user_question");
+    expect(asm.sdk).toContain("ask_user_question");
+  });
+
+  it("ships ask_user_question in the default subagentDeny alongside the cordis five", () => {
+    const deny = (Config({}) as { subagentDeny: string[] }).subagentDeny;
+    expect(deny).toContain("ask_user_question");
+    for (const tool of CORDIS_FIVE) expect(deny).toContain(tool);
+  });
+});
+
 describe("context-guard first prompt (#98)", () => {
   it("hides a gated exact name AND a gated prefix pattern from both surfaces before any pre-step", () => {
     const reg = makeRegistry(["secret_exact", "mcp__acme__one", "mcp__acme__two", "plain"]);

@@ -11,7 +11,8 @@ var DEFAULT_SUBAGENT_DENY = [
   "cordis_define",
   "cordis_run",
   "cordis_stop",
-  "cordis_undefine"
+  "cordis_undefine",
+  "ask_user_question"
 ];
 var Config = z.object({
   /** Extra skill roots to scan for `tools-gated` declarations, in addition to `$DSH_HOME/skills`. */
@@ -19,10 +20,13 @@ var Config = z.object({
   /**
    * Global tool names a SUBAGENT (delegation depth > 0) may never call,
    * even when a skill that gates them is loaded. Depth-0 sessions are
-   * unaffected. Defaults to the cordis session-mutation set, so children
+   * unaffected. Configured names are ADDED to the baseline
+   * (DEFAULT_SUBAGENT_DENY), never a replacement for it, so a call-site
+   * list cannot silently restore a baseline denial (#163). The baseline
+   * is the cordis session-mutation set plus `ask_user_question`: children
    * can inspect the environment (inspect_list / inspect_query) but cannot
-   * define, run, or delete plugins, and cannot read a session's own
-   * plugin registry.
+   * define, run, or delete plugins, cannot read a session's own plugin
+   * registry, and cannot interrogate the owner.
    */
   subagentDeny: z.array(z.string()).default(DEFAULT_SUBAGENT_DENY),
   /**
@@ -209,7 +213,7 @@ var gatesCache;
 function apply(ctx, config) {
   const cfg = config ?? {};
   const skillDirs = cfg.skillDirs ?? [];
-  const subagentDeny = cfg.subagentDeny ?? DEFAULT_SUBAGENT_DENY;
+  const subagentDeny = [.../* @__PURE__ */ new Set([...DEFAULT_SUBAGENT_DENY, ...cfg.subagentDeny ?? []])];
   const alwaysDeny = cfg.alwaysDeny ?? [];
   ctx.on("skills/change", () => {
     gatesCache = void 0;

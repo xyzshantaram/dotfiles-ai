@@ -153,6 +153,17 @@ step_write_web_patch() {
         # unconditionally, unlike a skill's per-skill unlock: no skill may
         # re-expose them once loaded (Effort 9, PLAN.md).
         alwaysDeny: [search, recall]
+        # SUBAGENT LOCKDOWN (#163): depth > 0 agents are hard-denied
+        # ask_user_question on top of the plugin baseline (the cordis
+        # mutation set). A child must not interrogate the owner: questions
+        # to the human are the orchestrator's job, and a child that can ask
+        # has a route to hand its own investigation back to the user. The
+        # plugin UNIONS this list over its baseline instead of replacing
+        # it, so naming one tool here cannot silently restore the cordis
+        # five to every subagent. (No other sync.sh block describes this
+        # lockdown — verified 2026-09-17 — so this comment is the single
+        # documentation of intent at the call site.)
+        subagentDeny: [ask_user_question]
     - id: see
       name: $HERE/plugins/see.js
     - id: tmp-dsh-shared

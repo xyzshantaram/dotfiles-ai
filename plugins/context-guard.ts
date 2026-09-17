@@ -53,9 +53,13 @@
  *     intent, not context; wiping them silently revoked capabilities.)
  *   - SUBAGENT LOCKDOWN: agents with delegation depth > 0 are hard-denied a
  *     configurable tool list (`subagentDeny`, default the cordis mutation
- *     set) regardless of loaded skills. Children keep read-only inspection
+ *     set plus `ask_user_question`, ADDITIVE over that default so a
+ *     call-site list can never silently restore a baseline denial, #163)
+ *     regardless of loaded skills. Children keep read-only inspection
  *     (cordis_inspect_list / cordis_inspect_query) but cannot define, run,
- *     or delete dynamic plugins, and cannot read a session's own registry.
+ *     or delete dynamic plugins, cannot read a session's own registry,
+ *     and cannot interrogate the owner: questions to the human are the
+ *     orchestrator's job.
  *     Depth is read like dsh-subagent's `delegationDepthOf` — the persisted
  *     header count or the runtime AgentOptions override, whichever is deeper.
  *
@@ -82,8 +86,12 @@ export const name = "context-guard";
 
 export const inject = ["tools"] as const;
 /**
- * Tools every child agent is hard-denied, matching the deployed cordis
- * toolset. Keep in sync with the registered cordis_* names (dsh-tool-cordis).
+ * Tools every child agent is hard-denied. The cordis five match the deployed
+ * cordis toolset: keep in sync with the registered cordis_* names
+ * (dsh-tool-cordis). `ask_user_question` is the registered name of the
+ * shipped human-question tool (`@deepseek-ai/dsh-tool-ask-user`, verified
+ * live via schema_lookup): a child must not interrogate the owner, because
+ * questions to the human are the orchestrator's job (#163).
  */
 const DEFAULT_SUBAGENT_DENY = [
   "cordis_inspect_self",
@@ -91,6 +99,7 @@ const DEFAULT_SUBAGENT_DENY = [
   "cordis_run",
   "cordis_stop",
   "cordis_undefine",
+  "ask_user_question",
 ];
 
 export const Config = z.object({
@@ -99,10 +108,13 @@ export const Config = z.object({
   /**
    * Global tool names a SUBAGENT (delegation depth > 0) may never call,
    * even when a skill that gates them is loaded. Depth-0 sessions are
-   * unaffected. Defaults to the cordis session-mutation set, so children
+   * unaffected. Configured names are ADDED to the baseline
+   * (DEFAULT_SUBAGENT_DENY), never a replacement for it, so a call-site
+   * list cannot silently restore a baseline denial (#163). The baseline
+   * is the cordis session-mutation set plus `ask_user_question`: children
    * can inspect the environment (inspect_list / inspect_query) but cannot
-   * define, run, or delete plugins, and cannot read a session's own
-   * plugin registry.
+   * define, run, or delete plugins, cannot read a session's own plugin
+   * registry, and cannot interrogate the owner.
    */
   subagentDeny: z.array(z.string()).default(DEFAULT_SUBAGENT_DENY),
   /**
@@ -436,7 +448,11 @@ export function apply(ctx: Context, config: unknown): void {
     alwaysDeny?: string[];
   };
   const skillDirs = cfg.skillDirs ?? [];
-  const subagentDeny = cfg.subagentDeny ?? DEFAULT_SUBAGENT_DENY;
+  // ADDITIVE over the baseline (#163): a configured list unions with
+  // DEFAULT_SUBAGENT_DENY instead of replacing it. Replace semantics would
+  // let `subagentDeny: ["ask_user_question"]` at the call site silently
+  // restore the cordis five to every subagent, with nothing failing.
+  const subagentDeny = [...new Set([...DEFAULT_SUBAGENT_DENY, ...(cfg.subagentDeny ?? [])])];
   const alwaysDeny = cfg.alwaysDeny ?? [];
 
   ctx.on("skills/change" as keyof Events, () => {
