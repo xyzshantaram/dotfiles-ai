@@ -9,10 +9,11 @@
  * invariant one level up: group slices plus verbatim separators, leading
  * and trailing regions reproduce the command byte for byte.
  */
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   attributeSequenceStages,
-  chainRowDiagramModel,
+  sequenceUnitDiagramModel,
   clearBashSequenceCache,
   getBashDiagram,
   getBashSequenceDiagram,
@@ -110,15 +111,36 @@ describe("ticket-named cases", () => {
     const model = draw("a && b && c; d | e");
     const chain = model.statements[0];
     if (chain.kind !== "chain") throw new Error("expected a chain group");
-    const handed = chain.chain.rows.map((row) => chainRowDiagramModel(row).conditional);
+    const handed = chain.chain.rows.map((row) => sequenceUnitDiagramModel(row).conditional);
     // Base row unconditional (2b); both dependents name their own condition.
     expect(handed).toEqual([null, "&&", "&&"]);
     // The seam must not drop or invent anything else either.
-    const first = chainRowDiagramModel(chain.chain.rows[0]);
+    const first = sequenceUnitDiagramModel(chain.chain.rows[0]);
     expect(first.stages).toBe(chain.chain.rows[0].stages);
     expect(first.arrows).toBe(chain.chain.rows[0].arrows);
     expect(first.kind).toBe(chain.chain.rows[0].kind);
     expect(first.trailing).toEqual([]);
+  });
+
+  it("the view is WIRED to the seam: no branch builds the diagram model inline (#162 re-review)", () => {
+    // Why this test is a source assertion and says so plainly: the test above
+    // pins what the seam RETURNS, and the re-review proved that is not the
+    // same thing — reverting only the call site in client.tsx reddened ZERO
+    // tests, because nothing observed that the view CALLS the seam. Catching
+    // that properly needs a render (react-dom/server or jsdom); this repo has
+    // neither installed, and adding one is outside this ticket's allowlist.
+    // So this pins the structure instead, and is honest about the limit: it
+    // cannot prove the marker is painted, only that no branch has gone back
+    // to hand-building the object, which is the defect CLASS both reviews
+    // found. If a render harness ever lands, this test should be REPLACED by
+    // one that asserts the marker's presence in rendered output, not kept
+    // alongside it.
+    const source = readFileSync(new URL("./client.tsx", import.meta.url), "utf8");
+    // Both branches of the sequence renderer hand a model to BashCommandDiagram.
+    const wired = source.match(/<BashCommandDiagram\s+model=\{sequenceUnitDiagramModel\(/g) ?? [];
+    expect(wired).toHaveLength(2);
+    // An inline object literal is exactly how `conditional` got dropped twice.
+    expect(source).not.toMatch(/<BashCommandDiagram\s+model=\{\{/);
   });
 
   it("draws the exact command from the ticket description", () => {

@@ -616,21 +616,34 @@ export interface BashSequenceUnit {
 export type BashSequenceConditional = "&&" | "||" | "mixed";
 
 /**
- * The model one chain row hands to the command diagram — THE RENDER SEAM.
+ * The model ONE SEQUENCE UNIT hands to the command diagram — THE RENDER SEAM,
+ * and the ONLY one. Both branches of the sequence renderer call this: the
+ * plain-statement branch and the chain-row branch. Neither builds the view's
+ * object by hand.
  *
- * This exists because of a defect the #162 review found: the chain branch
- * built this object inline and silently omitted `conditional`, so the unit
- * model was correct (`[null, "&&", "&&"]`, pinned by passing tests) while the
- * GUI drew three bare rows. The marker was MODEL-TRUE AND SCREEN-FALSE, and
- * no test could redden, because every test asserted the model and nothing
- * asserted what the model handed to the view. Building the view's object
- * here, in one named place, is what makes the seam testable at all.
+ * Why it is a named function at all, in two parts, because the first fix was
+ * itself incomplete:
+ *
+ * 1. The #162 review found the chain branch built this object inline and
+ *    silently omitted `conditional`. The unit model was correct
+ *    (`[null, "&&", "&&"]`, pinned by passing tests) while the GUI drew three
+ *    bare rows: MODEL-TRUE AND SCREEN-FALSE. Nothing could redden, because
+ *    every test asserted the model and none asserted what the model handed to
+ *    the view.
+ * 2. The re-review then found the repair was PARTIAL — the sibling
+ *    plain-statement branch still had its own inline literal, also omitting
+ *    `conditional`. That one is harmless TODAY only because
+ *    prepareStatementUnit hard-codes `conditional: null`, so `undefined` and
+ *    `null` reach the render gate alike. That is an accident of the current
+ *    data, not a guarantee, and it left the defect CLASS intact one branch
+ *    over. Two hand-built copies of one object is the class; a single builder
+ *    is the fix.
  *
  * `conditional` rides through unchanged: the base row's null is the whole
  * point of criterion 2b — a marker on the base would state something false,
  * since the base runs unconditionally.
  */
-export function chainRowDiagramModel(row: BashSequenceUnit): {
+export function sequenceUnitDiagramModel(row: BashSequenceUnit): {
   kind: BashSequenceUnit["kind"];
   negated: boolean;
   timed: boolean;

@@ -22455,7 +22455,7 @@ function attributePipeStages(model, pipeStages) {
     trailing: model.trailing
   };
 }
-function chainRowDiagramModel(row) {
+function sequenceUnitDiagramModel(row) {
   return {
     kind: row.kind,
     negated: row.negated,
@@ -24114,23 +24114,7 @@ function BashSequenceDiagram(props) {
     }
     var group = model.statements[i];
     if (group.kind === "diagram") {
-      var unit = group.unit;
-      children.push(
-        /* @__PURE__ */ import_react4.default.createElement(
-          BashCommandDiagram,
-          {
-            model: {
-              kind: unit.kind,
-              negated: unit.negated,
-              timed: unit.timed,
-              leadingGap: unit.leadingGap,
-              stages: unit.stages,
-              arrows: unit.arrows,
-              trailing: unit.groupGap === "" ? [] : [{ kind: "gap", text: unit.groupGap }]
-            }
-          }
-        )
-      );
+      children.push(/* @__PURE__ */ import_react4.default.createElement(BashCommandDiagram, { model: sequenceUnitDiagramModel(group.unit) }));
     } else if (group.kind === "chain") {
       var chain = group.chain;
       if (chain.leadingGap.trim() !== "") {
@@ -24149,7 +24133,7 @@ function BashSequenceDiagram(props) {
           );
         }
         var row = chain.rows[r];
-        children.push(/* @__PURE__ */ import_react4.default.createElement(BashCommandDiagram, { model: chainRowDiagramModel(row) }));
+        children.push(/* @__PURE__ */ import_react4.default.createElement(BashCommandDiagram, { model: sequenceUnitDiagramModel(row) }));
       }
     } else {
       children.push(/* @__PURE__ */ import_react4.default.createElement(BashSequenceTextGroup, { group }));

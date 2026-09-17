@@ -183,7 +183,7 @@ var EXTENSION_LANGUAGE = {
 // ---- Platform modules: resolved by the shell loader seed at runtime. ----
 import React from "react";
 import { isBashGuardReason } from "./guard";
-import { attributePipeStages, attributeSequenceStages, chainRowDiagramModel, getBashDiagram, getBashSequenceDiagram } from "./bash-diagram";
+import { attributePipeStages, attributeSequenceStages, sequenceUnitDiagramModel, getBashDiagram, getBashSequenceDiagram } from "./bash-diagram";
 import { escalationDetailOf, escalationLabel, escalationReasonClassName } from "./escalation";
 import {
   composeVerdictTooltip,
@@ -1476,11 +1476,17 @@ function BashSequenceTextGroup(props) {
     </div>
   );
 }
-// ---- #160: the boundary between two sequence members. Deliberately NOT a
-// pipe arrow: no operator glyph, a vertical `↓` instead of `→`, stacked rows
-// instead of side-by-side blocks, and the literal word "then". The verbatim
-// separator (`;`, newline) is pure order and needs no display; a comment
-// riding in the separator is content, so it renders muted alongside.
+// ---- #160, amended by #162: the boundary between two sequence members.
+// Deliberately NOT a pipe arrow — no operator glyph of any kind. v2 drew a
+// vertical `↓` and the literal word "then" here; v3 removed both, because
+// labelling every boundary meant the one boundary that needed explaining (a
+// conditional) looked like just another chip. The boundary is the CSS rail
+// alone, and the condition is stated on the dependent row's own panel.
+// The verbatim separator (`;`, newline, or a chain's ` && `) is pure order or
+// pure condition and needs no display; a comment riding in the separator is
+// content, so it renders VERBATIM alongside — never with the operator snipped
+// out of it, which would splice two disjoint slices into text that never
+// appeared in the command.
 function BashSequenceSeparator(props) {
   var separator = props.text;
   // #162 criterion 2: an unconditional boundary (`;`/newline) carries NO
@@ -1528,20 +1534,10 @@ function BashSequenceDiagram(props) {
     }
     var group = model.statements[i];
     if (group.kind === "diagram") {
-      var unit = group.unit;
-      children.push(
-        <BashCommandDiagram
-          model={{
-            kind: unit.kind,
-            negated: unit.negated,
-            timed: unit.timed,
-            leadingGap: unit.leadingGap,
-            stages: unit.stages,
-            arrows: unit.arrows,
-            trailing: unit.groupGap === "" ? [] : [{ kind: "gap", text: unit.groupGap }],
-          }}
-        />,
-      );
+      // Same seam as the chain branch below: one builder, never an inline
+      // literal. This branch kept its own copy after the first fix, which is
+      // how the re-review showed the defect CLASS had survived (#162).
+      children.push(<BashCommandDiagram model={sequenceUnitDiagramModel(group.unit)} />);
     } else if (group.kind === "chain") {
       // #162 criterion 2b: rows stack; the operator between them was v2's
       // group badge and is now each dependent row's own leading line.
@@ -1563,10 +1559,10 @@ function BashSequenceDiagram(props) {
           );
         }
         var row = chain.rows[r];
-        // The row model is built by chainRowDiagramModel, NOT inline: an
+        // The row model is built by sequenceUnitDiagramModel, NOT inline: an
         // inline literal here is what dropped `conditional` and made the
         // marker model-true and screen-false (#162 review).
-        children.push(<BashCommandDiagram model={chainRowDiagramModel(row)} />);
+        children.push(<BashCommandDiagram model={sequenceUnitDiagramModel(row)} />);
       }
     } else {
       children.push(<BashSequenceTextGroup group={group} />);
