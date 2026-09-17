@@ -58,6 +58,7 @@ import {
 } from "../../src/runstate.ts";
 import { answer, answerList } from "../../src/answers.ts";
 import { sessionStore, sidOf } from "../../src/sessionstore.ts";
+import { listResumableDrafts } from "../expense-split.ts";
 import type { WizardCtx } from "../../wizardkit/mod.ts";
 import { dryBox, dryNote } from "./dry.ts";
 
@@ -1223,8 +1224,8 @@ export function routeStatus(status: RunMeta["status"]): string {
 // Resume picker. Lists every live run newest first with its status,
 // so failed runs surface with their reason instead of hiding.
 export function resumeStep(): Step {
-  const runs = listRunsSync();
-  if (runs.length === 0) {
+  const drafts = listResumableDrafts();
+  if (drafts.length === 0) {
     return {
       ...step(
         "resume",
@@ -1245,8 +1246,8 @@ export function resumeStep(): Step {
         radio(
           "Session",
           "resume-pick",
-          runs.map((run) => ({ value: run.id, hint: runHint(run) })),
-          runs[0].id,
+          drafts.map((entry) => ({ value: entry.id, hint: entry.hint })),
+          drafts[0].id,
         ),
       ],
       "Pick a session. Each one opens at its next step. Failed runs name their reason.",

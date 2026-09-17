@@ -637,6 +637,16 @@ export function setPickOverride(sessionId: string, mode: "all" | "none"): void {
   pickOverrides.for(sidOf({ sessionId })).value = mode;
 }
 
+// Hold one draft resumed run id per browser session.
+// Keep the value until a new draft resume replaces it.
+const resumedRuns = sessionStore((): { id: string | null } => ({ id: null }));
+
+// Remember one draft resumed run id for one session.
+// Call this from the drafts resume hook before the pick screen opens.
+export function setResumedRun(sessionId: string, runId: string): void {
+  resumedRuns.for(sidOf({ sessionId })).id = runId;
+}
+
 // Run id the pick step shows. Manual uses the manual run.
 // Other platforms use the newest run covering a picked platform.
 export function gatherPickRunId(
@@ -644,6 +654,9 @@ export function gatherPickRunId(
   sessionId: string,
 ): string | null {
   const sid = sidOf({ sessionId });
+  // Read the draft resume first before the posted answer path.
+  const draftResumed = resumedRuns.for(sid).id;
+  if (draftResumed !== null && draftResumed.length > 0) return draftResumed;
   // A run carried in from the resume screen wins over every rule.
   const resumed = answer(m, "resume-pick");
   if (resumed.length > 0) return resumed;

@@ -5,21 +5,15 @@
 
 import {
   createWizard,
+  type DraftEntry,
   type NavHandler,
   radio,
   type Step,
   step,
   type StepFn,
 } from "../wizardkit/mod.ts";
-import {
-  gatherSteps,
-} from "./expense-split/gather.ts";
-import {
-  resumeStep,
-  routeStatus,
-  splitRunId,
-  splitSteps,
-} from "./expense-split/split.ts";
+import { gatherSteps, setResumedRun } from "./expense-split/gather.ts";
+import { resumeStep, routeStatus, splitRunId, splitSteps } from "./expense-split/split.ts";
 import { pushSteps, sourceStep } from "./expense-split/push.ts";
 import { beginOnboarding, settingsSteps } from "./expense-split/settings.ts";
 
@@ -74,10 +68,8 @@ const MENU: MenuItem[] = [
 ];
 
 import { loadSettings, saveSettings, USAGE_MODES } from "../src/settings.ts";
-import { readRun, stateRoot } from "../src/runstate.ts";
-import {
-  sidOf,
-} from "../src/sessionstore.ts";
+import { listRunsSync, readRun, runHint, stateRoot } from "../src/runstate.ts";
+import { sidOf } from "../src/sessionstore.ts";
 import type { WizardCtx } from "../wizardkit/mod.ts";
 
 // Push source step with the finished split run preloaded. The export
@@ -228,10 +220,42 @@ function menuTarget(picked: string): string {
   return item.target;
 }
 
+// List resumable runs newest first for the drafts hook.
+// Drop pushed runs because pushed runs hold no further work.
+export function listResumableDrafts(): DraftEntry[] {
+  return listRunsSync()
+    .filter((run) => run.status !== "pushed")
+    .map((run) => ({
+      id: run.id,
+      label: run.label + " · " + run.createdAt.slice(0, 10),
+      at: run.createdAt,
+      hint: runHint(run),
+    }));
+}
+
+// Resume one draft run by id for the drafts hook.
+// Return null when no resumable run matches the id.
+// Remember the run for the pick screen.
+// Then open its next step.
+export function resumeDraft(id: string, ctx: WizardCtx): string | null {
+  // One scan answers both questions: the run exists, and it still holds
+  // work. A pushed run is finished, so it never resumes.
+  const run = listRunsSync().find(
+    (entry) => entry.id === id && entry.status !== "pushed",
+  );
+  if (run === undefined) return null;
+  setResumedRun(ctx.sessionId, id);
+  return routeStatus(run.status);
+}
+
 const handle = createWizard({
   title: "Expense Split",
   steps: [menuStep(), ...tail],
   actions: {},
+  drafts: {
+    list: () => listResumableDrafts(),
+    resume: (id, ctx) => resumeDraft(id, ctx),
+  },
   stages: {
     names: ["Gather", "Split", "Push"],
     stageOf: (stepId: string) => {

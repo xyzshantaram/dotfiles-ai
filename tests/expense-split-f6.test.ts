@@ -2,8 +2,8 @@
 // surface, and resume routing by run status. A fake PushApi stands in
 // for Splitwise, so no network call happens. Each test owns its state
 // root and pushed map, and restores the env after itself.
-import { resumeNext } from "../wizards/expense-split.ts";
-import { gatherSteps } from "../wizards/expense-split/gather.ts";
+import { listResumableDrafts, resumeDraft, resumeNext } from "../wizards/expense-split.ts";
+import { gatherPickRunId, gatherSteps } from "../wizards/expense-split/gather.ts";
 import { exportStep, itemStep, routeStatus } from "../wizards/expense-split/split.ts";
 import { pushSteps } from "../wizards/expense-split/push.ts";
 import {
@@ -407,6 +407,110 @@ Deno.test("f6 dry confirm step names the plan before submit", async () => {
       stepText(confirm).includes("Dry run is on"),
       "confirm names the dry run",
     );
+  } finally {
+    restoreEnv(saved);
+  }
+});
+
+// Write one run meta dir under the active state root.
+// Use the fields the resume list reads.
+async function writeF6Run(
+  root: string,
+  id: string,
+  label: string,
+  createdAt: string,
+  status: string,
+): Promise<void> {
+  const dir = root + "/share/runs/" + id;
+  await Deno.mkdir(dir, { recursive: true });
+  await Deno.writeTextFile(
+    dir + "/meta.json",
+    JSON.stringify({
+      id,
+      label,
+      createdAt,
+      platforms: ["zepto"],
+      rangeDays: 7,
+      status,
+    }),
+  );
+}
+
+Deno.test("f6 drafts list drops pushed runs and keeps gathered ones", async () => {
+  const saved = saveEnv();
+  try {
+    await freshRoot("f6-drafts-list-", "t-f6-8");
+    // Seed one finished run plus one open run.
+    const root = Deno.env.get("SPLIT_UTILS_STATE") ?? "";
+    await writeF6Run(root, "r-draft-pushed", "old shop", "2026-01-05T09:00:00Z", "pushed");
+    await writeF6Run(root, "r-draft-gathered", "weekly shop", "2026-01-06T09:00:00Z", "gathered");
+    // Read the shared drafts list.
+    const drafts = listResumableDrafts();
+    assert(
+      drafts.some((entry) => entry.id === "r-draft-gathered"),
+      "gathered run stays",
+    );
+    assert(
+      !drafts.some((entry) => entry.id === "r-draft-pushed"),
+      "pushed run drops",
+    );
+    // Check the entry shape for the kept run.
+    const kept = drafts.find((entry) => entry.id === "r-draft-gathered")!;
+    assert(kept.at === "2026-01-06T09:00:00Z", "entry keeps the timestamp");
+    assert(kept.label === "weekly shop · 2026-01-06", "entry labels the date part");
+    assert(kept.hint !== undefined && kept.hint.includes("gathered"), "entry hints the status");
+  } finally {
+    restoreEnv(saved);
+  }
+});
+
+Deno.test("f6 drafts list stays newest first", async () => {
+  const saved = saveEnv();
+  try {
+    await freshRoot("f6-drafts-order-", "t-f6-9");
+    // Seed an older run plus a newer run.
+    const root = Deno.env.get("SPLIT_UTILS_STATE") ?? "";
+    await writeF6Run(root, "r-draft-older", "older shop", "2026-01-04T09:00:00Z", "gathered");
+    await writeF6Run(root, "r-draft-newer", "newer shop", "2026-01-06T09:00:00Z", "gathered");
+    // Read the shared drafts list.
+    const drafts = listResumableDrafts();
+    assert(drafts.length === 2, "two drafts listed");
+    assert(drafts[0].id === "r-draft-newer", "newest run leads");
+    assert(drafts[1].id === "r-draft-older", "older run follows");
+  } finally {
+    restoreEnv(saved);
+  }
+});
+
+Deno.test("f6 drafts resume on unknown id returns null", async () => {
+  const saved = saveEnv();
+  try {
+    await freshRoot("f6-drafts-unknown-", "t-f6-10");
+    // Seed one open run under a different id.
+    const root = Deno.env.get("SPLIT_UTILS_STATE") ?? "";
+    await writeF6Run(root, "r-draft-known", "weekly shop", "2026-01-06T09:00:00Z", "gathered");
+    // Resume an id the list misses.
+    const out = await resumeDraft("no-such-run", { sessionId: "t-f6-10" });
+    assert(out === null, "unknown id returns null");
+  } finally {
+    restoreEnv(saved);
+  }
+});
+
+Deno.test("f6 drafts resume on gathered run primes the pick screen", async () => {
+  const saved = saveEnv();
+  try {
+    const sid = "t-f6-11";
+    await freshRoot("f6-drafts-prime-", sid);
+    // Seed one gathered run.
+    const root = Deno.env.get("SPLIT_UTILS_STATE") ?? "";
+    await writeF6Run(root, "r-draft-prime", "weekly shop", "2026-01-06T09:00:00Z", "gathered");
+    // Resume the gathered run.
+    const out = await resumeDraft("r-draft-prime", { sessionId: sid });
+    assert(out === "gather-pick", "gathered resume opens the pick screen");
+    // Read the pick run with an empty answers map.
+    const picked = gatherPickRunId(new Map(), sid);
+    assert(picked === "r-draft-prime", "pick screen shows the resumed run");
   } finally {
     restoreEnv(saved);
   }

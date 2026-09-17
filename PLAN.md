@@ -17,11 +17,16 @@ remembering moves to Critical context. Work the user must drive by hand moves to
 
 Settled with the user on 2026-09-17. A step declares its own footer instead of hand building a
 buttons row, the toolkit renders that footer stuck to the foot of the window, and each screen owns
-its own submit logic. This retires G17, which planned to spread the old `nav()` helper instead.
+its own submit logic. This retired G17, which planned to spread the old `nav()` helper instead. The
+bar, the flows, the hooks and the drafts API have all landed. What is left of the series:
 
-- [ ] N6 settings and the app shell move the same way. Then delete the app's `seen` store, which
-      duplicates the toolkit answers map, and delete the unused `nav()` helper. Eval: a search for
-      seenStore returns nothing, onSubmit holds only genuinely shared work or is gone, suite green.
+- [ ] N12 let the strip reach the other sessions, then drop the menu row. The strip offers the
+      newest session only, so "Pick up where you left off" stays in the menu as the one way to reach
+      an older one. Nothing is orphaned today, and the menu keeps a row the strip was meant to
+      replace. Wanted: a second small control on the strip, worded for the case, that opens the
+      picker when more than one session exists. Eval: with two saved runs the strip offers the
+      newest and names a way to the rest, and the menu holds no resume row.
+
 - [ ] S3 the split save guard loses a concurrent write when two saves share a timestamp. Found while
       chasing a test that fails only under heavy load. src/splitstate.ts compares
       `current >
@@ -31,29 +36,6 @@ its own submit logic. This retires G17, which planned to spread the old `nav()` 
       lose a user's assignments rather than reporting a clash. This predates today's work, so it is
       reported, not fixed. Eval: two saves sharing an mtime leave one conflict copy and no lost
       document, and two conflicts in one second leave two files.
-- [ ] N9 the saved draft cannot carry you back to where you were, which is the second half of the
-      report that produced N8. Measured in wizardkit/toolkit.tsx: the draft script stores one record
-      of `{version, step, fields}` in localStorage, and its resume bar checks
-      `saved.step !==
-      sid(form)` and returns when they differ. So the bar appears only while
-      the very step you left is already on screen. Come back after the server session ends and you
-      land on the menu, where the saved draft for `gather-manual` stays invisible for ever, and a
-      successful post clears it. Wanted: a draft that names where you were and offers to go there,
-      for example "You were on Manual expenses. Continue or Discard", with Continue posting a goto
-      to that step. Eval: fill a middle step, drop the session, reopen the wizard, and the bar
-      offers that step by name and lands on it with the fields restored. N9 is the toolkit half of
-      N11 and ships inside it.
-- [ ] N11 a drafts API in the toolkit, with the footer strip as its face. Settled with the user: the
-      toolkit owns the affordance, an app may hook in to offer its own resumable sessions, and the
-      default offer is the newest one. On resume the app does its own restoring first and hands back
-      a step id, so no state enters the toolkit by a new path. The strip is the one that already
-      reads "Draft saved 5:23", and it gains a line such as "Saved session from 09-17 05:26" with a
-      Resume button. "Pick up where you left off" stops being a hand written menu row and is rebuilt
-      on this API. Two sources feed it: the toolkit's own browser draft, which is a step id plus
-      that step's fields, and the app's sessions, which here are the runs on disk. Eval: with no app
-      hook, a half typed screen offers Resume in the strip and lands back on that step with the
-      fields intact. With the hook, a gathered run offers Resume and lands on the pick screen. The
-      menu holds no resume row.
 - [ ] S4 "Repeat Last" on the split item screen does nothing. Found while classifying the button
       rows for N4. The button posts the action `repeat`, and a search of split.ts, expense-split.ts
       and the toolkit finds no code that reads it, so the toolkit treats it as an unknown action and
