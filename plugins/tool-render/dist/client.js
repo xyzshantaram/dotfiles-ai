@@ -2444,6 +2444,65 @@ var client_default = `.tool-render-row {
 .tool-render-output.tool-render-code-out-text {
   max-height: 9.375rem;
 }
+
+/* #152 nesting layout: head -> nested calls -> OUT.
+
+   Upstream's ToolCall renders [ toolview output, .subCalls ] as children of
+   ONE div[data-chat-call-id]. Our run_code view returns a fragment, so that
+   div ends up holding three siblings: our head card, our OUT block, and the
+   nested-call container -- in that DOM order. Making the container a flex
+   column lets \`order\` put the nested calls BETWEEN the two halves, which no
+   amount of styling could achieve while OUT lived inside the card.
+
+   On the hook: data-chat-call-id is stamped by upstream on every call row and
+   is stable and unhashed, which is why it is used here. It is NOT read by
+   upstream's own code -- the bundle contains exactly one occurrence, the write
+   -- so this is a public attribute we are relying on, not a contract upstream
+   would notice breaking. A rename upstream would silently flatten this layout
+   back to head/OUT/nested, which is ugly but not broken. */
+div[data-chat-call-id]:has(> .tool-render-card[data-run-code]) {
+  display: flex;
+  flex-direction: column;
+}
+div[data-chat-call-id]:has(> .tool-render-card[data-run-code]) > .tool-render-card[data-run-code] {
+  order: 0;
+}
+/* Anything else upstream puts in the row (today: the .subCalls container) sits
+   between the halves. Selecting by exclusion rather than by upstream's hashed
+   .subCalls class, which turns over every build. */
+div[data-chat-call-id]:has(> .tool-render-card[data-run-code])
+  > *:not(.tool-render-card):not(.tool-render-runcode-out) {
+  order: 1;
+}
+div[data-chat-call-id]:has(> .tool-render-card[data-run-code]) > .tool-render-runcode-out {
+  order: 2;
+}
+
+/* The three siblings read as ONE card: the head loses its bottom rounding, the
+   OUT block loses its top rounding, and both keep the card's border so the
+   nested calls appear to sit inside the same box. */
+.tool-render-card[data-run-code] {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom: 0;
+  margin-bottom: 0;
+}
+.tool-render-runcode-out {
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-top: 0;
+  border-radius: 0 0 6px 6px;
+  background: var(--dsw-alias-bg-layer-1);
+  padding: 0 0.5rem 0.375rem;
+}
+/* The nested calls, indented inside the open box. */
+div[data-chat-call-id]:has(> .tool-render-card[data-run-code])
+  > *:not(.tool-render-card):not(.tool-render-runcode-out) {
+  border-left: 1px solid var(--dsw-alias-border-l2);
+  border-right: 1px solid var(--dsw-alias-border-l2);
+  margin: 0;
+  padding: 0.25rem 0.5rem 0.25rem 1.375rem;
+  background: var(--dsw-alias-bg-layer-1);
+}
 .tool-render-row[data-state="error"] .tool-render-title {
   color: var(--dsw-alias-state-error-primary);
   font-weight: 500;
@@ -23085,7 +23144,8 @@ function renderToolRenderCard(options, approvalOpen) {
       "data-question-pending": options.questionState === "pending" || void 0,
       "data-question-answered": options.questionState === "answered" || void 0,
       "data-error": options.state === "error" || void 0,
-      "data-stopped": options.state === "stopped" || void 0
+      "data-stopped": options.state === "stopped" || void 0,
+      "data-run-code": options.runCode || void 0
     },
     /* @__PURE__ */ import_react4.default.createElement(
       "div",
@@ -25583,7 +25643,7 @@ function RunCodeRow(props) {
   }
   var below = null;
   if (output !== null) {
-    below = /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-code-out" }, /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-code-out-label" }, "OUT"), /* @__PURE__ */ import_react4.default.createElement(
+    below = /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-code-out tool-render-runcode-out" }, /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-code-out-label" }, "OUT"), /* @__PURE__ */ import_react4.default.createElement(
       "pre",
       {
         className: "tool-render-output tool-render-code-out-text",
@@ -25592,7 +25652,7 @@ function RunCodeRow(props) {
       output
     ));
   }
-  return toolRenderRow({
+  var card = toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
     useProjection: props.useProjection,
@@ -25607,11 +25667,14 @@ function RunCodeRow(props) {
       setExpanded(!expanded);
     },
     body,
-    below,
+    below: null,
+    runCode: true,
     errorSummary,
     errorText,
     inspect: props.inspect
   });
+  if (below === null) return card;
+  return /* @__PURE__ */ import_react4.default.createElement(import_react4.default.Fragment, null, card, below);
 }
 function useCompactionViews(useSession) {
   var face = null;

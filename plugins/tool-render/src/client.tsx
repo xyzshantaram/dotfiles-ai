@@ -648,6 +648,10 @@ function renderToolRenderCard(options, approvalOpen) {
       data-question-answered={options.questionState === "answered" || undefined}
       data-error={options.state === "error" || undefined}
       data-stopped={options.state === "stopped" || undefined}
+      // #152: the run_code card alone needs its OUT block OUTSIDE itself, so
+      // the ship's nested-call container can sit between the two. This marks
+      // the head half; the CSS that orders the three siblings keys on it.
+      data-run-code={options.runCode || undefined}
     >
       <div
         className="tool-render-row"
@@ -4166,10 +4170,19 @@ function RunCodeRow(props) {
   }
   // The hoisted result. Deliberately NOT expandable-gated: a row whose only
   // content is output must not offer a disclosure that opens onto nothing.
+  //
+  // It is returned as a SIBLING of the card, not as the card's `below` footer,
+  // and that is the whole trick behind the nesting layout. Upstream's ToolCall
+  // renders [ our toolview output, the .subCalls container ] as children of one
+  // div[data-chat-call-id] (dsh-client-ui-tool ToolCall). A fragment therefore
+  // lands our two nodes and the nested rows as three siblings in that div, and
+  // ONLY THEN can CSS order them head -> nested calls -> OUT. Kept inside the
+  // card, the output would be stuck ABOVE every nested call, which is the
+  // layout the owner rejected.
   var below = null;
   if (output !== null) {
     below = (
-      <div className="tool-render-code-out">
+      <div className="tool-render-code-out tool-render-runcode-out">
         <div className="tool-render-code-out-label">OUT</div>
         <pre
           className="tool-render-output tool-render-code-out-text"
@@ -4180,7 +4193,7 @@ function RunCodeRow(props) {
       </div>
     );
   }
-  return toolRenderRow({
+  var card = toolRenderRow({
     callId: props.callId,
     useSession: props.useSession, useProjection: props.useProjection,
     toolName: "Run code",
@@ -4194,11 +4207,19 @@ function RunCodeRow(props) {
       setExpanded(!expanded);
     },
     body: body,
-    below: below,
+    below: null,
+    runCode: true,
     errorSummary: errorSummary,
     errorText: errorText,
     inspect: props.inspect,
   });
+  if (below === null) return card;
+  return (
+    <>
+      {card}
+      {below}
+    </>
+  );
 }
 
 // ---- compaction checkpoint row: structured view of a compaction marker. --
