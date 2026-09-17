@@ -7656,6 +7656,16 @@ function makeIndicator() {
       questionInputs.rows,
       selectorTools.pendingOf
     );
+    var liveHandlers = react.useRef({
+      jumpableOf: function(_item) {
+        return false;
+      },
+      onJump: function(_key, _callId) {
+      },
+      handlesOf: function(_itemKey) {
+        return null;
+      }
+    });
     var rows = approvalRows.concat(questionInputs.rows);
     if (!badgeVisible(tone, confirming)) return null;
     var jump = function(key, callId) {
@@ -7682,7 +7692,6 @@ function makeIndicator() {
       var found = owned.handlesByItem.get(itemKey);
       return found === void 0 ? null : found;
     };
-    var liveHandlers = react.useRef({ jumpableOf, onJump: jump, handlesOf });
     liveHandlers.current = { jumpableOf, onJump: jump, handlesOf };
     var closeAttention = function() {
       closeModal(modalId.current);

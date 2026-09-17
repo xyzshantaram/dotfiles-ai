@@ -922,6 +922,40 @@ function makeIndicator() {
       selectorTools.pendingOf,
     );
 
+    // THE HOOK COUNT MUST NOT DEPEND ON THE BADGE BEING VISIBLE (#150).
+    //
+    // This ref used to be DECLARED below the early return. So the render
+    // that first saw a pending item ran one hook MORE than the render
+    // before it, which is React error #310 ("rendered more hooks than
+    // during the previous render"). The slot error boundary caught that
+    // throw and LATCHED: dsh-client-ui-renderer SlotErrorBoundary sets
+    // {failed: true} and from then on renders <div data-slot-error> for
+    // the life of the mount. The badge then never appeared again for ANY
+    // pending item of ANY kind, and nothing re-tried it -- typing into the
+    // composer did not help, because a latched boundary does not re-run.
+    // Reloading the page "fixed" it only because the first render already
+    // had the pending item and therefore kept a constant hook count.
+    //
+    // Live-reproduced by the owner, 2026-09-17: the composer badge stayed
+    // dark through a pending bash-guard approval AND a pending question,
+    // while tool-render's inline card bar -- a different entry, with its
+    // own untripped boundary, reading the SAME snapshot.pending through
+    // the SAME useSession -- updated correctly.
+    //
+    // Only the DECLARATION belongs above the gate. The assignment stays
+    // below, where jump/jumpableOf/handlesOf actually exist. The initial
+    // value is never observed: the modal body reads `.current` only after
+    // openAttention(), which cannot run while the badge is hidden.
+    var liveHandlers = react.useRef({
+      jumpableOf: function (_item: AttentionItem): boolean {
+        return false;
+      },
+      onJump: function (_key: string, _callId: string | null): void {},
+      handlesOf: function (_itemKey: string): AskHandle | null {
+        return null;
+      },
+    });
+
     var rows: ModalRow[] = (approvalRows as ApprovalRow[]).concat(questionInputs.rows);
     // Stay mounted through the confirmation window so an answer reads as
     // confirmed rather than as the badge disappearing under the cursor.
@@ -961,7 +995,8 @@ function makeIndicator() {
     // a ref that every render refreshes, so the body always reaches the
     // current state (the `missing` set especially) instead of the click-time
     // snapshot — the seam carries props, not live bindings (#140).
-    var liveHandlers = react.useRef({ jumpableOf: jumpableOf, onJump: jump, handlesOf: handlesOf });
+    // DECLARED ABOVE THE GATE (#150) -- only the refresh lives here, where
+    // the closures it forwards exist. Do not move the useRef back down.
     liveHandlers.current = { jumpableOf: jumpableOf, onJump: jump, handlesOf: handlesOf };
 
     /** Close the attention modal, wherever it was closed from. */
