@@ -724,8 +724,10 @@ function renderToolRenderCard(options, approvalOpen) {
       ) : null}
       {/* The answer bar sits at the BOTTOM of the card, under the body: the
           decision is the last thing in reading order, after the command and
-          output it is a judgement about. It also keeps the durable decided
-          badge in the same place the actions were. */}
+          output it is a judgement about. It lives ONLY while the decision is
+          open -- #71 moved the durable decided badge up to the collapsed row
+          beside the tool label, and this bar returns null once decided, so a
+          settled card carries exactly one indicator. */}
       {options.callId !== undefined &&
       options.callId !== null &&
       typeof options.useSession === "function" ? (
@@ -806,8 +808,9 @@ function ToolRenderApprovalVerdict(props) {
 // Any tool call card whose callId matches a pending approval -- every
 // approval that carries a callId, not only bash-guard's -- shows
 // [✗ Reject] [✓ Approve] plus an optional inline comment while the
-// approval is open. Once decided, the durable guarded-approvals outcome
-// keeps a small "approved"/"rejected" badge on the card across reloads.
+// approval is open. Once decided this bar disappears entirely; the durable
+// guarded-approvals outcome then shows as the [shield | APPROVED] badge on
+// the COLLAPSED ROW (#71), which is what survives a reload.
 // Approvals without a callId are answered in the composer-approvals modal.
 
 /** The live pending approval for one callId, or null. Mirrors BashRow's
@@ -877,7 +880,8 @@ var REJECT_ARM_RESET_MS = 4000;
 
 /**
  * The answer bar for one card. Renders nothing unless this callId has an
- * open approval (the action bar) or a durable decided outcome (the badge).
+ * OPEN approval: since #71 the decided outcome is the collapsed row's badge,
+ * not this bar, so "decided" and "never asked" both render null here.
  * `respond` throws once the wait is settled, so every answer runs through
  * the local `answered` guard and a synchronous try/catch.
  */
@@ -3859,7 +3863,7 @@ function useCompactionViews(useSession) {
 // Same shape as useCompactionViews with a different key: the host-side
 // projection in guarded-approvals.ts folds `approval/asked` and
 // `approval/decided` events into { guarded, outcomes, reasons } maps keyed
-// by callId, so the BashRow outline, the card's decided badge, AND the
+// by callId, so the BashRow outline, the collapsed row's decided badge, AND the
 // badge's rewrite/prompt tooltip all survive the approval decision and a
 // page reload. A session without projections (an older
 // seat) leaves the record null and the row falls back to the live
