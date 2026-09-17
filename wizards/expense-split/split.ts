@@ -136,6 +136,87 @@ function hasProgress(doc: SplitStateDoc): boolean {
     Object.keys(doc.skipped).length > 0;
 }
 
+// Count progress inside the run.
+export function countSplitProgress(
+  itemCount: number,
+  doc: SplitStateDoc,
+): { assigned: number; skipped: number; waiting: number } {
+  // Count assigned lines inside the run.
+  let assigned = 0;
+  for (const key of Object.keys(doc.assignments)) {
+    const at = Number(key);
+    // Skip keys without an integer index.
+    if (!Number.isInteger(at)) continue;
+    // Skip indexes outside the run.
+    if (at < 0 || at >= itemCount) continue;
+    // Skip missing assignments.
+    if (doc.assignments[key] === undefined) continue;
+    assigned += 1;
+  }
+  // Count skipped lines inside the run.
+  let skipped = 0;
+  for (const key of Object.keys(doc.skipped)) {
+    const at = Number(key);
+    // Skip keys without an integer index.
+    if (!Number.isInteger(at)) continue;
+    // Skip indexes outside the run.
+    if (at < 0 || at >= itemCount) continue;
+    // Skip cleared skips.
+    if (!doc.skipped[key]) continue;
+    // Prefer assigned on overlap.
+    if (doc.assignments[String(at)] !== undefined) continue;
+    skipped += 1;
+  }
+  // Derive waiting from the open lines.
+  const waiting = Math.max(0, itemCount - assigned - skipped);
+  return { assigned, skipped, waiting };
+}
+
+// Name one item with the singular form.
+function itemWord(count: number): string {
+  return count === 1 ? "item" : "items";
+}
+
+// Build the progress sentence for one run.
+function splitProgressSentence(
+  assigned: number,
+  skipped: number,
+  waiting: number,
+  total: number,
+): string {
+  return "It holds " + assigned + " assigned " + itemWord(assigned) + ", " +
+    skipped + " skipped and " + waiting + " waiting out of " + total + " " +
+    itemWord(total) + ".";
+}
+
+// Build one resume hint with progress included.
+function resumeHint(entry: { id: string; hint?: string }): string {
+  // Keep the base hint without progress.
+  const base = entry.hint ?? "";
+  try {
+    // Load orders for one listed run.
+    const dir = resolveRunDir(entry.id);
+    const flat = flattenOrders(readRunOrders(dir));
+    // Fall back to empty progress without saved work.
+    const doc = loadSplitStateSync(dir) ?? freshState([], "");
+    // Count progress inside the run.
+    const progress = countSplitProgress(flat.length, doc);
+    // Append the plain progress sentence.
+    const sentence = splitProgressSentence(
+      progress.assigned,
+      progress.skipped,
+      progress.waiting,
+      flat.length,
+    );
+    // Return the sentence alone without a base hint.
+    if (base.length === 0) return sentence;
+    return base + ". " + sentence;
+  } catch {
+    // Keep the base hint when the run does not load.
+    return base;
+  }
+}
+
 // Resolve a typed run id or dir path to a real directory. Answers may
 // hold a bare id, so meta and state writes must land in the real dir.
 function resolveRunDir(run: string): string {
@@ -538,12 +619,22 @@ export function itemStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
   // Ask once when a saved run holds progress. The answer decides
   // between resume and a clean start.
   if (s.pendingResume && (m.get("resume")?.[0] ?? "").length === 0) {
+    // Count progress for the resume question.
+    const progress = countSplitProgress(s.flat.length, s.doc);
+    // Extend the saved line with plain numbers.
+    const line = "This run holds a saved split in progress. " +
+      splitProgressSentence(
+        progress.assigned,
+        progress.skipped,
+        progress.waiting,
+        s.flat.length,
+      );
     return {
       ...step(
         "split-item",
         "Split item",
         [
-          markdown("This run holds a saved split in progress."),
+          markdown(line),
           radio(
             "Continue where you left off?",
             "resume",
@@ -1111,7 +1202,7 @@ export function resumeStep(): Step {
         radio(
           "Session",
           "resume-pick",
-          drafts.map((entry) => ({ value: entry.id, hint: entry.hint })),
+          drafts.map((entry) => ({ value: entry.id, hint: resumeHint(entry) })),
           drafts[0].id,
         ),
       ],

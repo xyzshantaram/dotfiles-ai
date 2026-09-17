@@ -734,6 +734,85 @@ Deno.test("confirm screen hides the summary when no orders arrive", async () => 
   assert(!body.includes("Summary expense"), "no summary text shows");
 });
 
+// Helpers to pull table nodes out of a step.
+function tableNodes(step: { nodes: { kind: string }[] }) {
+  return step.nodes.filter((n) => n.kind === "table") as {
+    kind: string;
+    label: string;
+    columns: { heading: string }[];
+    rows: string[][];
+  }[];
+}
+
+// Stage two orders and return the confirm step for one session.
+async function confirmStepFor(sid: string, cutoff: string) {
+  await prepareSource(sid, "Split JSON file", "", SPLIT_FILE);
+  await prepareSplitwise(sid, fakeApi().api);
+  applyCutoff(sid, cutoff);
+  const entries = pushSteps();
+  const found = entries
+    .map((entry) =>
+      typeof entry === "function" ? entry(new Map(), { sessionId: sid }) : entry
+    )
+    .find((s) => s.id === "push-confirm");
+  assert(found !== undefined, "confirm step exists in pushSteps");
+  return found!;
+}
+
+// Prove the confirm screen lists every staged order in one table.
+Deno.test("confirm screen lists every order in one table", async () => {
+  await fresh("t-push-confirm-4");
+  const found = await confirmStepFor("t-push-confirm-4", "2026-01-02");
+  const tables = tableNodes(found);
+  assert(tables.length === 1, "one expense table shows");
+  assert(tables[0].label === "Expenses to send", "table names the expenses to send");
+  const body = markdownTexts(found).join("\n");
+  assert(body.includes("These are the expenses that will be sent."), "line names the table");
+  const groups = pushSessionFor("t-push-confirm-4").groups;
+  assert(tables[0].rows.length === groups.length, "one row per order");
+  assert(tables[0].rows.length === 2, "two kept orders give two rows");
+  const cells = tables[0].rows.map((row) => row.join(" ")).join("\n");
+  assert(cells.includes("2026-01-01"), "first order date shows");
+  assert(cells.includes("2026-01-02"), "second order date shows");
+  assert(cells.includes("INR 100.00"), "first order total shows");
+  assert(cells.includes("INR 50.00"), "second order total shows");
+});
+
+// Prove each row carries the per person amounts under the right columns.
+Deno.test("confirm table puts each share under the right person", async () => {
+  await fresh("t-push-confirm-5");
+  const found = await confirmStepFor("t-push-confirm-5", "2026-01-02");
+  const tables = tableNodes(found);
+  assert(tables.length === 1, "one expense table shows");
+  const headings = tables[0].columns.map((col) => col.heading);
+  assert(
+    JSON.stringify(headings) === JSON.stringify(["Date", "Description", "Total", "Ann", "Bob"]),
+    "columns name the date, the description, the total, then each person",
+  );
+  const ann = headings.indexOf("Ann");
+  const bob = headings.indexOf("Bob");
+  const first = tables[0].rows.find((row) => row[0] === "2026-01-01");
+  const second = tables[0].rows.find((row) => row[0] === "2026-01-02");
+  assert(first !== undefined && second !== undefined, "both order rows exist");
+  assert(first![ann] === "INR 60.00", "Ann share of the first order shows");
+  assert(first![bob] === "INR 40.00", "Bob share of the first order shows");
+  assert(second![ann] === "INR 25.00", "Ann share of the second order shows");
+  assert(second![bob] === "INR 25.00", "Bob share of the second order shows");
+});
+
+// Prove the confirm screen with no orders shows no table.
+Deno.test("confirm screen with no orders shows no table", async () => {
+  await fresh("t-push-confirm-6");
+  const entries = pushSteps();
+  const found = entries
+    .map((entry) =>
+      typeof entry === "function" ? entry(new Map(), { sessionId: "t-push-confirm-6" }) : entry
+    )
+    .find((s) => s.id === "push-confirm");
+  assert(found !== undefined, "confirm step exists in pushSteps");
+  assert(tableNodes(found!).length === 0, "no table without orders");
+  assert(markdownTexts(found!).join("\n").includes("No orders reached this step."), "empty note stays");
+});
 // Prove the confirm screen writes no file beside the source.
 Deno.test("confirm screen writes no file beside the source", async () => {
   await fresh("t-push-confirm-3");

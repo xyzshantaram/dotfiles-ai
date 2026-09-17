@@ -11,10 +11,11 @@ import {
   type Step,
   step,
   type StepFn,
+  table,
   textarea,
   textEntry,
 } from "../../wizardkit/mod.ts";
-import { buildAggregateSummary, orderFingerprint } from "../../src/render.ts";
+import { buildAggregateSummary, formatTitle, orderFingerprint } from "../../src/render.ts";
 import { formatDayISO, formatMoney, parseDate } from "../../src/common.ts";
 import { isDryMap, listRunsSync, runHint } from "../../src/runstate.ts";
 import { dryBox, dryNote } from "./dry.ts";
@@ -370,6 +371,36 @@ function confirmStep(m?: Map<string, string[]>, ctx?: WizardCtx): Step {
   }
   if (dry) {
     nodes.push(dryNote());
+  }
+  // List every expense the push will send. The table sits above
+  // the totals so the reader checks the detail first. A dry run
+  // keeps the same table because the dry run exists to be read.
+  if (live.groups.length > 0) {
+    nodes.push(markdown("These are the expenses that will be sent."));
+    const columns = [
+      { heading: "Date" },
+      { heading: "Description" },
+      { heading: "Total" },
+      ...live.people.map((person) => ({ heading: person })),
+    ];
+    const rows = live.groups.map((order) => {
+      const total = order.reduce((sum, item) => sum + item.price, 0);
+      const parsed = parseDate(order[0].date);
+      const day = parsed === null ? order[0].date : formatDayISO(parsed);
+      const owed = new Map<string, number>();
+      for (const item of order) {
+        for (const [name, amount] of Object.entries(item.assignments)) {
+          owed.set(name, (owed.get(name) ?? 0) + amount);
+        }
+      }
+      return [
+        day,
+        formatTitle(order, live.currency + " "),
+        formatMoney(total, live.currency),
+        ...live.people.map((person) => formatMoney(owed.get(person) ?? 0, live.currency)),
+      ];
+    });
+    nodes.push(table("Expenses to send", columns, rows));
   }
   // Show the summary under the notes. Keep the screen read only.
   if (!(live.groups.length === 0 && live.droppedByCutoff === 0)) {

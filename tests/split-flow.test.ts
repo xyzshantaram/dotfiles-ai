@@ -4,6 +4,7 @@
 import { assert, assertEquals, assertStringIncludes } from "@std/assert";
 import {
   collectedPeople,
+  countSplitProgress,
   createSplitShareLink,
   currentShareLink,
   exportStep,
@@ -21,8 +22,10 @@ import { freshState, type SplitStateDoc, writeSplitState } from "../src/splitsta
 import { handleBoardRoute } from "../wizards/expense-split/board-routes.ts";
 import {
   buildPatch,
+  personForDigit,
   repeatOnto,
   round2,
+  seedCheckpointLine,
   shareEqual,
   sharePercent,
   shareSingle,
@@ -1172,6 +1175,32 @@ Deno.test("item step mounts the board with the run people and items", async () =
   assertEquals(typeof board["at"], "number");
 });
 
+Deno.test("digit keys map onto people in order", () => {
+  // Map digit 1 onto Ann.
+  // Map digit 2 onto Ben.
+  // Check a digit past the end maps onto nothing.
+  assertEquals(personForDigit(["Ann", "Ben"], "1"), "Ann");
+  assertEquals(personForDigit(["Ann", "Ben"], "2"), "Ben");
+  assertEquals(personForDigit(["Ann", "Ben"], "3"), null);
+  assertEquals(personForDigit(["Ann", "Ben"], "9"), null);
+});
+
+Deno.test("checkpoint seed names the saved time", () => {
+  // Seed from an island time with one saved line.
+  // Check the line names the saved time.
+  // Check an empty run seeds an empty string.
+  const at = new Date(2026, 8, 17, 9, 4, 7).getTime();
+  const line = seedCheckpointLine(
+    { "0": { splitType: "equal", people: ["Ann"], amounts: { Ann: 10 } } },
+    {},
+    at,
+  );
+  assertStringIncludes(line, "Run last saved");
+  assertEquals(line.endsWith("."), true);
+  assertEquals(seedCheckpointLine({}, {}, at), "");
+  assertStringIncludes(seedCheckpointLine({}, { "0": true }, at), "Run last saved");
+});
+
 Deno.test("two board patches in a row leave no conflict copy", async () => {
   // Patch line 0, then patch line 1 with the first reply time.
   // Check no conflict copy lands beside the state file.
@@ -1205,4 +1234,90 @@ Deno.test("two board patches in a row leave no conflict copy", async () => {
   } finally {
     Deno.env.delete("SPLIT_UTILS_STATE");
   }
+});
+
+Deno.test("progress helper counts each state", () => {
+  // Build a three line doc with one of each state.
+  // Check each count.
+  const doc = freshState(["Ann", "Ben"], "Ann");
+  doc.assignments["0"] = {
+    splitType: "equal",
+    people: ["Ann", "Ben"],
+    amounts: { Ann: 5, Ben: 5 },
+  };
+  doc.skipped["1"] = true;
+  assertEquals(countSplitProgress(3, doc), {
+    assigned: 1,
+    skipped: 1,
+    waiting: 1,
+  });
+});
+
+Deno.test("progress helper ignores indexes outside the run", () => {
+  // Build a two line doc with stale entries past the end.
+  // Check stale entries count for nothing.
+  const doc = freshState(["Ann", "Ben"], "Ann");
+  doc.assignments["0"] = {
+    splitType: "equal",
+    people: ["Ann", "Ben"],
+    amounts: { Ann: 5, Ben: 5 },
+  };
+  doc.assignments["5"] = {
+    splitType: "single",
+    people: ["Ann"],
+    amounts: { Ann: 10 },
+  };
+  doc.skipped["1"] = true;
+  doc.skipped["9"] = true;
+  assertEquals(countSplitProgress(2, doc), {
+    assigned: 1,
+    skipped: 1,
+    waiting: 0,
+  });
+});
+
+Deno.test("resume question names progress and keeps both choices", async () => {
+  // Build a three line run with one assigned and one skipped.
+  // Check the question names the numbers.
+  // Check both choices stay word for word.
+  const orders: Order[] = [{
+    id: "o1",
+    platform: "swiggy",
+    date: "2026-09-01 10:00 AM",
+    paid: 30,
+    items: [
+      { name: "Pizza", price: 10, quantity: 1 },
+      { name: "Burger", price: 10, quantity: 1 },
+      { name: "Salad", price: 10, quantity: 1 },
+    ],
+    fees: { delivery: 0, packaging: 0 },
+  }];
+  const root = await Deno.makeTempDir();
+  const doc = freshState(["Ann", "Ben"], "Ann");
+  doc.assignments["0"] = {
+    splitType: "equal",
+    people: ["Ann", "Ben"],
+    amounts: { Ann: 5, Ben: 5 },
+  };
+  doc.skipped["1"] = true;
+  const dir = makeRun(root, "progress-resume", doc, orders);
+  const found = itemStep(answers(dir), { sessionId: "t-split-progress" });
+  const body = stepText(found.nodes);
+  assertStringIncludes(body, "This run holds a saved split in progress.");
+  assertStringIncludes(
+    body,
+    "It holds 1 assigned item, 1 skipped and 1 waiting out of 3 items.",
+  );
+  const radioNode = found.nodes.find((node) => {
+    const rec = node as unknown as Record<string, unknown>;
+    return rec["kind"] === "radio" && rec["name"] === "resume";
+  }) as unknown as Record<string, unknown>;
+  assert(radioNode !== undefined);
+  assertEquals(radioNode["label"], "Continue where you left off?");
+  const options = (radioNode["options"] as unknown[]).map((option) =>
+    typeof option === "string"
+      ? option
+      : (option as Record<string, unknown>)["value"]
+  );
+  assertEquals(options, ["Continue where you left off?", "Start over"]);
 });

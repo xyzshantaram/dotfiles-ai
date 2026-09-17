@@ -102,7 +102,57 @@ export function buildPatch(dirty, assignments, skipped) {
   return { assignments: patchAssignments, skipped: patchSkipped };
 }
 
-// Split modes in settled order. Number keys pick them by position.
+// Map one digit key onto one person in list order.
+// Digit 1 picks the first person.
+// A digit past the end picks nobody.
+/**
+ * @param {string[]} people
+ * @param {string | number} digit
+ * @returns {string | null}
+ */
+export function personForDigit(people, digit) {
+  const list = Array.isArray(people) ? people : [];
+  const n = typeof digit === "string" ? Number(digit) : digit;
+  if (!Number.isInteger(n)) return null;
+  if (n < 1 || n > 9) return null;
+  if (n > list.length) return null;
+  const name = list[n - 1];
+  if (typeof name !== "string") return null;
+  return name;
+}
+
+// Build the first checkpoint line from saved island work.
+// Return an empty string when the run holds nothing saved.
+/**
+ * @param {Record<string, unknown> | null} assignments
+ * @param {Record<string, unknown> | null} skipped
+ * @param {number} at
+ * @returns {string}
+ */
+export function seedCheckpointLine(assignments, skipped, at) {
+  let saved = false;
+  if (assignments !== null && typeof assignments === "object") {
+    if (Object.keys(assignments).length > 0) saved = true;
+  }
+  if (saved === false && skipped !== null && typeof skipped === "object") {
+    for (const key of Object.keys(skipped)) {
+      if (skipped[key] === true) {
+        saved = true;
+        break;
+      }
+    }
+  }
+  if (saved === false) return "";
+  if (typeof at !== "number" || !Number.isFinite(at) || at <= 0) {
+    return "Run last saved.";
+  }
+  const clock = new Date(at);
+  const pad = (n) => String(n).padStart(2, "0");
+  return "Run last saved " + pad(clock.getHours()) + ":" + pad(clock.getMinutes()) +
+    ":" + pad(clock.getSeconds()) + ".";
+}
+
+// Split modes in settled order. The mouse picks the mode.
 const MODES = ["Equal", "Percentage", "Custom", "Single"];
 
 // Map a saved engine type onto a mode label.
@@ -223,6 +273,9 @@ function boot(host, data) {
   const drafts = new Map();
   let current = 0;
   let lastCheckpoint = "";
+  // Seed the line from saved island work.
+  // A fresh mount then tells the truth about the server.
+  const savedLine = seedCheckpointLine(assignments, skipped, baseline);
 
   const doc = host.ownerDocument;
 
@@ -326,7 +379,7 @@ function boot(host, data) {
   const keysHint = doc.createElement("small");
   keysHint.setAttribute("class", "board-muted");
   keysHint.textContent =
-    "Keys: Left and Right move. Enter saves and moves on. A ticks everyone. M ticks you. R repeats the last line. S skips. 1 to 4 pick the mode.";
+    "Keys: Left and Right move. Enter saves and moves on. A ticks everyone. M ticks you. R repeats the last line. S skips. 1 to 9 tick people in order.";
   root.appendChild(headline);
   root.appendChild(titleLine);
   root.appendChild(headTable);
@@ -532,11 +585,27 @@ function boot(host, data) {
     render();
   }
 
-  // Pick one split mode on the current line.
-  function setMode(mode) {
-    if (!MODES.includes(mode)) return;
+  // Toggle one person on the current line from a digit key.
+  // Mark the line touched.
+  // Keep the Single rule from the mouse path.
+  function togglePerson(name) {
     touched.add(current);
-    draftFor(current).mode = mode;
+    const draft = draftFor(current);
+    if (draft.ticked.includes(name)) {
+      draft.ticked = draft.ticked.filter((entry) => entry !== name);
+    } else {
+      if (draft.mode === "Single") {
+        draft.ticked = [name];
+      } else {
+        draft.ticked.push(name);
+      }
+      if (draft.percents[name] === undefined) {
+        draft.percents[name] = evenPercents(draft.ticked)[name] ?? 0;
+      }
+      if (draft.amounts[name] === undefined) {
+        draft.amounts[name] = 0;
+      }
+    }
     render();
   }
 
@@ -696,10 +765,12 @@ function boot(host, data) {
     const tally = counts();
     progressLine.textContent = tally.done + " assigned. " + tally.skippedCount +
       " skipped. " + tally.left + " left.";
-    if (lastCheckpoint === "") {
-      checkpointLine.textContent = "No checkpoint yet.";
-    } else {
+    if (lastCheckpoint !== "") {
       checkpointLine.textContent = "Last checkpoint " + lastCheckpoint + ".";
+    } else if (savedLine !== "") {
+      checkpointLine.textContent = savedLine;
+    } else {
+      checkpointLine.textContent = "No checkpoint yet.";
     }
   }
 
@@ -713,6 +784,31 @@ function boot(host, data) {
     show(current - 1);
   });
   nextButton.addEventListener("click", () => {
+    // Stay on the last line.
+    // Save it first.
+    // Then name what still waits.
+    if (current >= items.length - 1) {
+      if (items.length === 0) return;
+      if (touched.has(current)) {
+        if (!saveCurrent()) {
+          render();
+          return;
+        }
+      }
+      const tally = counts();
+      render();
+      if (tally.left > 0) {
+        if (tally.left === 1) {
+          noticeLine.textContent = "1 item still waits. Use Left and Right to reach it.";
+        } else {
+          noticeLine.textContent = tally.left +
+            " items still wait. Use Left and Right to reach them.";
+        }
+      } else {
+        noticeLine.textContent = "Every item is done. Use Finish splitting in the bar to finish.";
+      }
+      return;
+    }
     show(current + 1);
   });
 
@@ -770,8 +866,10 @@ function boot(host, data) {
       repeatSaved();
     } else if (lower === "s") {
       toggleSkip();
-    } else if (lower >= "1" && lower <= "4") {
-      setMode(MODES[Number(lower) - 1]);
+    } else if (key >= "1" && key <= "9") {
+      const name = personForDigit(people, key);
+      if (name === null) return;
+      togglePerson(name);
     } else {
       return;
     }
@@ -794,7 +892,12 @@ function boot(host, data) {
   doc.addEventListener("pagehide", () => {
     void checkpoint(true);
   });
+  // Save the open line before the bar leaves.
+  // Then flush the changed lines.
   doc.addEventListener("htmx:beforeRequest", () => {
+    if (touched.has(current)) {
+      saveCurrent();
+    }
     void checkpoint(false);
   });
 
