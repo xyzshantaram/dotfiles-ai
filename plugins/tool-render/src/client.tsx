@@ -1290,6 +1290,21 @@ function BashDiagramHeredoc(props) {
 function BashCommandDiagram(props) {
   var model = props.model;
   var head = [];
+  // #162 criterion 2 (amended): the condition is PROMINENT TEXT at the top
+  // of THIS row's own panel — never a chip, never on a chain's base row
+  // (2b). It leads the block; the command's stages sit under it.
+  if (model.conditional === "&&" || model.conditional === "||") {
+    var why =
+      model.conditional === "&&"
+        ? "runs only if the previous step succeeded"
+        : "runs only if the previous step failed";
+    head.push(
+      <div className="tool-render-diagram-conditional" title={"conditional step: " + why + " — unlike `;`, this step may not run at all"}>
+        <span>{model.conditional}</span>
+        <span>{why}</span>
+      </div>,
+    );
+  }
   if (model.timed) {
     head.push(
       <span
@@ -1334,7 +1349,36 @@ function BashCommandDiagram(props) {
     }
     var stage = model.stages[i];
     var parts = [];
-    if (stage.words !== "") {
+    // #162 criteria 3-5: parsed-argument CHIPS cut from the stage's own
+    // slice — never a re-serialisation of the parser's values, so quoting,
+    // escaping and spacing read exactly as typed. A chip's `title` states
+    // its role; the `slice` (shown) and the parser's value (in the title
+    // when it differs) are both visible, so a reader can always check the
+    // diagram against the command above it. When stage.args is undefined
+    // (#162 criterion 4: fail closed) the row renders plain verbatim text.
+    if (stage.args !== undefined && stage.args.args.length > 1) {
+      var chipRow = [];
+      for (var a = 0; a < stage.args.args.length; a++) {
+        var arg = stage.args.args[a];
+        var roleLabel =
+          arg.role === "value" ? "value (bound; verbatim slice)" :
+          arg.role === "subcommand" ? "subcommand (verbatim slice)" :
+          arg.role === "flag" ? "flag (verbatim slice)" :
+          "positional (verbatim slice)";
+        chipRow.push(
+          <code
+            className={
+              "tool-render-diagram-arg tool-render-diagram-arg-" + arg.role +
+              (a === 0 ? " tool-render-diagram-arg-cmd" : "")
+            }
+            title={roleLabel}
+          >
+            {arg.slice}
+          </code>,
+        );
+      }
+      parts.push(<div className="tool-render-diagram-args">{chipRow}</div>);
+    } else if (stage.words !== "") {
       parts.push(
         <div className="tool-render-diagram-words">
           <code
@@ -1407,22 +1451,13 @@ function BashCommandDiagram(props) {
 // a conditional badge so "ran only if ..." cannot be misread as "ran next".
 function BashSequenceTextGroup(props) {
   var group = props.group;
-  var why =
-    group.conditional === "&&"
-      ? "conditional step: the right side runs only if the left side succeeds — unlike `;`, this group may not run at all"
-      : group.conditional === "||"
-        ? "conditional step: the right side runs only if the left side fails — unlike `;`, this group may not run at all"
-        : "conditional step: later parts run only if earlier ones succeed or fail as written — unlike `;`, parts of this group may not run at all";
+  // #162 criterion 2 + the owner's amendment: verbatim blocks carry NO
+  // conditional chip — the slice already shows the `&&`/`||` that is inside
+  // it, and a group-level badge said something false about the chain's base
+  // statement anyway (2b). Chrome goes to zero; the drawn chains carry the
+  // prominent per-row markers instead.
   return (
-    <div className="tool-render-diagram-text" title={group.conditional !== null ? why : undefined}>
-      {group.conditional !== null ? (
-        <span
-          className="tool-render-diagram-badge"
-          title={why}
-        >
-          {group.conditional === "mixed" ? "&&/||" : group.conditional}
-        </span>
-      ) : null}
+    <div className="tool-render-diagram-text">
       <div className="tool-render-diagram-words">
         <code
           className="hljs"
@@ -1440,15 +1475,12 @@ function BashSequenceTextGroup(props) {
 // riding in the separator is content, so it renders muted alongside.
 function BashSequenceSeparator(props) {
   var separator = props.text;
+  // #162 criterion 2: an unconditional boundary (`;`/newline) carries NO
+  // word and no glyph — the CSS rail is the connector. A comment riding the
+  // separator is content: muted text beside the rail.
   var carriesContent = separator.replace(/[;\s]/g, "") !== "";
   return (
     <div className="tool-render-diagram-seq-sep">
-      <span
-        className="tool-render-diagram-seq-then"
-        title="statement boundary: the next statement runs after this one finishes. It carries no data — unlike a pipe, which feeds bytes rightwards."
-      >
-        {"then \u2193"}
-      </span>
       {carriesContent ? (
         <code
           className="hljs tool-render-diagram-seq-sep-text"
@@ -1490,6 +1522,36 @@ function BashSequenceDiagram(props) {
           }}
         />,
       );
+    } else if (group.kind === "chain") {
+      // #162 criterion 2b: rows stack; the operator between them was v2's
+      // group badge and is now each dependent row's own leading line.
+      var chain = group.chain;
+      if (chain.leadingGap.trim() !== "") {
+        children.push(<div className="tool-render-diagram-lead">{chain.leadingGap}</div>);
+      }
+      for (var r = 0; r < chain.rows.length; r++) {
+        if (r > 0) {
+          // The chain's own separators (space + the &&/|| + space) are pure
+          // condition chrome: the marker line below says the condition, so
+          // the separator renders nothing visible unless it carries content
+          // (a comment). Same contract as a statement separator.
+          children.push(<BashSequenceSeparator text={chain.separators[r - 1]} />);
+        }
+        var row = chain.rows[r];
+        children.push(
+          <BashCommandDiagram
+            model={{
+              kind: row.kind,
+              negated: row.negated,
+              timed: row.timed,
+              leadingGap: row.leadingGap,
+              stages: row.stages,
+              arrows: row.arrows,
+              trailing: row.groupGap === "" ? [] : [{ kind: "gap", text: row.groupGap }],
+            }}
+          />,
+        );
+      }
     } else {
       children.push(<BashSequenceTextGroup group={group} />);
     }

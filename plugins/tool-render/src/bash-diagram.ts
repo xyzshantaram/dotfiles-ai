@@ -94,6 +94,9 @@ export interface BashDiagramStage {
   words: string;
   redirects: BashDiagramRedirect[];
   exitCode: number | undefined;
+  /** v3 (#162): parsed-argument chips cut from `slice`; undefined when the
+   *  parse refused (fail closed) — the row renders plain text then. */
+  args: BashStageArgs | undefined;
 }
 
 /** The trailing region [statementEnd, command.length), partitioned exactly:
@@ -396,6 +399,7 @@ function buildStageModels(
       words,
       redirects,
       exitCode: undefined,
+      args: parseStageArgs(command, s),
     };
   });
 }
@@ -543,6 +547,7 @@ export function attributePipeStages(model: BashDiagram, pipeStages: unknown): Ba
     words: s.words,
     redirects: s.redirects,
     exitCode: undefined as number | undefined,
+    args: s.args,
   }));
   if (Array.isArray(pipeStages) && pipeStages.length === stages.length) {
     let ok = true;
@@ -601,14 +606,37 @@ export interface BashSequenceUnit {
   stages: BashDiagramStage[];
   arrows: BashDiagramArrow[];
   groupGap: string;
+  /** v3 (#162): this row's RIGHT TO RUN, named on the row itself — never on
+   *  a chain's base row (#162 criterion 2b). null = unconditional. */
+  conditional: BashSequenceConditional | null;
 }
 
 /** How an `&&`/`||` text group may run: unconditionally is never the answer,
  *  so the marker names the condition instead of implying order-only. */
 export type BashSequenceConditional = "&&" | "||" | "mixed";
 
+/**
+ * One drawn `&&`/`||` CHAIN inside a statement (#162 criterion 2b): rows
+ * stack exactly like sequence members, and each dependent row (i>0) carries
+ * ITS OWN condition (`operators[i-1]`) as prominent text at the top of its
+ * own panel. The BASE row (i=0) carries no marker of any kind: it runs
+ * unconditionally, and the group-level badge v2 painted across the whole
+ * chain said something false about it.
+ */
+export interface BashSequenceChainGroup {
+  kind: "chain";
+  /** Verbatim source before the first row's operand. */
+  leadingGap: string;
+  rows: BashSequenceUnit[];
+  /** The operator between each row pair; every entry is "&&" or "||". */
+  operators: ("&&" | "||")[];
+  /** Verbatim source between row spans; length is rows.length - 1. */
+  separators: string[];
+}
+
 export type BashSequenceStatement =
   | { kind: "diagram"; unit: BashSequenceUnit }
+  | { kind: "chain"; chain: BashSequenceChainGroup }
   | { kind: "text"; slice: string; conditional: BashSequenceConditional | null };
 
 export interface BashSequenceDiagram {
@@ -647,7 +675,12 @@ function subtreeHasHeredoc(node: any): boolean {
   return false;
 }
 
-/** Name the condition an AndOr statement carries; null for anything else. */
+/** Name the condition an AndOr statement carries; null for anything else.
+ *  v3: only REFUSED AndOr chains reach this (a draw-able chain renders as a
+ *  chain group with per-row markers instead), so the field lives on text
+ *  groups for structural description only — the client renders no badge
+ *  from it (#162 criterion 2: chrome down, only the exceptional case
+ *  labelled). */
 function conditionalOf(inner: any): BashSequenceConditional | null {
   if (inner === null || typeof inner !== "object" || inner.type !== "AndOr") return null;
   const seen = new Set<string>();
@@ -663,12 +696,315 @@ function conditionalOf(inner: any): BashSequenceConditional | null {
   return "mixed";
 }
 
+// ---- #162 (v3): parsed arguments as POSITIONED SLICES, fail closed. ----
+
+/** One argument chip. `slice` is the verbatim stage source [pos,end) of the
+ *  token it names — never a re-serialisation of unbash's parsed value, so
+ *  quoting, escaping and spacing ride exactly as typed (#162 criterion 3).
+ *  `role` is display structure only. */
+export interface BashStageArg {
+  slice: string;
+  role: "flag" | "value" | "positional" | "subcommand";
+}
+
+/** Parsed-argument list attached to a stage. `stageSlice` is the verbatim
+ *  stage span the chips belong to; the client asserts chips slice INSIDE
+ *  that span. Absent = the parse refused; the row renders exactly as
+ *  v1/v2 did and claims nothing (#162 criterion 4: fail closed). */
+export interface BashStageArgs {
+  stageSlice: string;
+  args: BashStageArg[];
+}
+
+/**
+ * Per-command profiles (#162 criterion 4). CROSS-TOKEN value binding is
+ * claimed ONLY through these tables: `--long value` / `-x value` without a
+ * table entry renders both tokens unbound, because without per-command
+ * knowledge the next token is equally likely positional. `--long=value`
+ * binds by itself (same token, self-evident), with or without a profile.
+ * A command with no profile gets the generic treatment: flag pose for
+ * `-`-prefixed tokens, positional otherwise, no binding, no subcommand.
+ */
+const ARG_PROFILES: Record<string, { valueFlags?: string[]; subcommands?: Record<string, { valueFlags?: string[] }> }> = {
+  rg: { valueFlags: ["-e", "-C", "-A", "-B", "--context", "--after-context", "--before-context", "-m", "--max-count", "--type", "--replace", "--max-filesize", "--glob", "-g"] },
+  ls: { valueFlags: ["-w", "--block-size", "--width", "--context", "--sort", "--format"] },
+  node: { valueFlags: ["-e", "-p", "--eval", "--print", "--max-old-space-size", "--stack-size", "--input-type"] },
+  git: {
+    valueFlags: ["-C", "-c", "--git-dir", "--work-tree", "--exec-path", "--namespace"],
+    subcommands: {
+      commit: { valueFlags: ["-m", "-F", "--author", "--date", "-C", "--message"] },
+      merge: { valueFlags: ["-m", "-F", "-X"] },
+      log: { valueFlags: ["-n", "--since", "--until", "--before", "--after", "--format", "--pretty", "-L", "-S", "-G", "-C", "--grep", "--author", "--max-count"] },
+    },
+  },
+};
+
+/** Subcommand vocabularies. Only the FIRST non-bound, non-flag word matching
+ *  a table entry is claimed; every other token stays positional. A command
+ *  with no table (rg, ls, node, …) gets no subcommand claim. */
+const ARG_SUBCOMMANDS: Record<string, Set<string>> = {
+  git: new Set([
+    "add", "am", "archive", "bisect", "blame", "branch", "bundle", "checkout", "cherry-pick",
+    "clean", "clone", "commit", "config", "describe", "diff", "fetch", "format-patch", "gc",
+    "grep", "init", "log", "ls-files", "merge", "mv", "notes", "pull", "push", "rebase",
+    "remote", "reset", "restore", "revert", "rm", "show", "stash", "status", "submodule",
+    "switch", "tag", "worktree",
+  ]),
+};
+
+/** One argument walk for a stage: the words of the stage's Command node in
+ *  order, name first. `value` is unbash's UNQUOTED display value; `pos`/`end`
+ *  are the SOURCE spans the chips are cut from (the quotes ride verbatim). */
+interface ArgWord {
+  value: string;
+  pos: number;
+  end: number;
+}
+
+/**
+ * Parse one stage's arguments into positioned slices, or refuse. Gates, in
+ * order: the stage node must be a plain `Command` with `name` + `suffix`
+ * words; every word must carry numeric pos/end inside the command; the head
+ * must not itself be flag-shaped. Failures return undefined — the caller
+ * renders the stage as plain text with nothing claimed.
+ *
+ * Three passes, in this order, so nothing claims on knowledge that arrives
+ * later: (1) bind flag→next-token pairs with PROFILE-LEVEL certainty, (2)
+ * find the subcommand among tokens those binds did not consume, (3) re-run
+ * the binds with the subcommand's own list added, recheck the subcommand,
+ * (4) emit chips in source order. The two-phase rebind is what lets
+ * `git log --since X` bind via log's table while `git -C path log` also
+ * binds `-C path` before `log` is ever found.
+ */
+export function parseStageArgs(command: string, stageNode: any): BashStageArgs | undefined {
+  if (stageNode === null || typeof stageNode !== "object" || stageNode.type !== "Command") return undefined;
+  const stagePos = stageNode.pos;
+  const stageEnd = stageNode.end;
+  if (typeof stagePos !== "number" || typeof stageEnd !== "number") return undefined;
+  const name = stageNode.name;
+  if (name === null || typeof name !== "object" || typeof name.value !== "string" ||
+      typeof name.pos !== "number" || typeof name.end !== "number") return undefined;
+  if (name.value === "" || name.value.startsWith("-")) return undefined; // not a plain command head
+  // Env assignments (FOO=1 BAR=x ls …) live in `prefix`, which the chip walk
+  // does not cover; silently dropping them from the DISPLAY would contradict
+  // the diagram's own fidelity claim, so a prefixed stage refuses the parse
+  // and renders its plain words.
+  if (Array.isArray(stageNode.prefix) && stageNode.prefix.length > 0) return undefined;
+  const suffix = Array.isArray(stageNode.suffix) ? stageNode.suffix : [];
+  const words: ArgWord[] = [{ value: (name as ArgWord).value, pos: name.pos, end: name.end }];
+  for (const w of suffix) {
+    if (w === null || typeof w !== "object") return undefined;
+    if (typeof w.value !== "string" || typeof w.pos !== "number" || typeof w.end !== "number" ||
+        w.pos < 0 || w.end > command.length || w.end < w.pos) {
+      return undefined;
+    }
+    words.push({ value: w.value, pos: w.pos, end: w.end });
+  }
+
+  const profile = ARG_PROFILES[name.value];
+  const subTbl = ARG_SUBCOMMANDS[name.value];
+  const baseFlags = new Set(profile?.valueFlags ?? []);
+  const bound = new Map<number, number>(); // value-token index -> its flag's index
+
+  /** Bind flag->next-token pairs where the table is certain: the next token
+   *  must be a plain word (not a flag, not empty) and must not be bound. */
+  function bind(effective: Set<string>): void {
+    for (let i = 1; i < words.length; i++) {
+      const v = words[i].value;
+      if (!v.startsWith("-") || v === "-" || v === "--") continue;
+      if (v.startsWith("--") && v.includes("=")) continue; // inline form binds itself
+      if (effective.has(v) && i + 1 < words.length && !bound.has(i + 1) &&
+          words[i + 1].value !== "" && !words[i + 1].value.startsWith("-")) {
+        bound.set(i + 1, i);
+        i++; // the value rides with its flag
+      }
+    }
+  }
+
+  function findSubcommand(): number {
+    for (let i = 1; i < words.length; i++) {
+      if (bound.has(i)) continue;
+      const v = words[i].value;
+      if (v === "" || v.startsWith("-")) continue;
+      if (subTbl !== undefined && subTbl.has(v)) return i;
+    }
+    return -1;
+  }
+
+  bind(baseFlags);
+  let subIndex = findSubcommand();
+  if (subIndex >= 0) {
+    // The subcommand's own table extends the profile's: rebind once.
+    const subFlags = profile?.subcommands?.[words[subIndex].value]?.valueFlags ?? [];
+    bound.clear();
+    bind(new Set([...baseFlags, ...subFlags]));
+    subIndex = findSubcommand();
+  }
+  const effective = new Set(baseFlags);
+  if (subIndex >= 0) {
+    for (const f of profile?.subcommands?.[words[subIndex].value]?.valueFlags ?? []) effective.add(f);
+  }
+
+  // Emit chips in source order.
+  const args: BashStageArg[] = [];
+  args.push({ slice: command.slice(words[0].pos, words[0].end), role: "flag" });
+  for (let i = 1; i < words.length; i++) {
+    const w = words[i];
+    const v = w.value;
+    const slice = command.slice(w.pos, w.end);
+    if (v.startsWith("-") && v !== "-" && v !== "--") {
+      if (v.startsWith("--") && v.includes("=")) {
+        args.push({ slice, role: "flag" }); // inline --long=value
+        continue;
+      }
+      if (bound.get(i + 1) === i) {
+        // This flag's next token was bound in the prebind pass (the table
+        // is certain): emit the pair in source order.
+        args.push({ slice, role: "flag" });
+        args.push({ slice: command.slice(words[i + 1].pos, words[i + 1].end), role: "value" });
+        i++;
+        continue;
+      }
+      // Flag pose claims nothing else when the table does not declare the
+      // value: the next token stays threshold-independent, NOT a value.
+      args.push({ slice, role: "flag" });
+      continue;
+    }
+    if (bound.has(i)) continue; // rode with its flag above
+    if (i === subIndex) { args.push({ slice, role: "subcommand" }); continue; }
+    args.push({ slice, role: "positional" });
+  }
+  return { stageSlice: command.slice(stagePos, stageEnd), args };
+}
+
 interface PendingUnit {
-  owner: number;
+  /** Key under which this unit's heredoc bodies are attributed: the plain
+   *  statement index, or `<si>:r<row>` for a chain row. */
+  owner: string;
   unit: BashSequenceUnit;
   rawStages: any[];
   lists: any[][];
   specs: HeredocSpec[];
+}
+
+/**
+ * Build one statement's drawable unit (v1's stage/arrow machinery) from an
+ * already-classified inner. Shared by the plain `diagram` path and the v3
+ * chain path (whose operands are inner Command/Pipeline nodes of an
+ * outerSpan statement). Returns null on any span the classifier cannot
+ * swear to — the caller refuses that statement, never guesses.
+ */
+function prepareStatementUnit(command: string, st: any, classified: ClassifiedInner): PendingUnit | null {
+  const { kind, negated, timed, rawStages, operators } = classified;
+  for (const s of rawStages) {
+    if (
+      typeof s.pos !== "number" ||
+      typeof s.end !== "number" ||
+      s.pos < 0 ||
+      s.end > command.length ||
+      s.pos > s.end
+    ) {
+      return null;
+    }
+  }
+  for (let i = 0; i + 1 < rawStages.length; i++) {
+    if (rawStages[i].end > rawStages[i + 1].pos) return null;
+  }
+  if (rawStages[0].pos < st.pos || rawStages[rawStages.length - 1].end > st.end) return null;
+  const stmtEnd = Math.min(st.end, command.length);
+  const lists = attributeStatementRedirects(st, rawStages);
+  const unit: BashSequenceUnit = {
+    kind,
+    negated,
+    timed,
+    leadingGap: command.slice(st.pos, rawStages[0].pos),
+    stages: [],
+    arrows: [],
+    groupGap: command.slice(rawStages[rawStages.length - 1].end, stmtEnd),
+    conditional: null,
+  };
+  for (let i = 0; i + 1 < rawStages.length; i++) {
+    unit.arrows.push({
+      operator: operators[i],
+      gap: command.slice(rawStages[i].end, rawStages[i + 1].pos),
+    });
+  }
+  const { specs, usable } = collectHeredocSpecs(lists);
+  if (!usable) return null;
+  return { owner: "", unit, rawStages, lists, specs };
+}
+
+/**
+ * Try to draw a statement whose inner is `&&`/`||` as a CHAIN group (#162
+ * criterion 2b): every operand must itself classify (Pipeline/Command), no
+ * operand may carry a heredoc that would make the interleave inexact (the
+ * global single-line guard below still applies), and every operator must be
+ * a plain `&&` or `||`. Anything else returns null and the caller falls
+ * back to the verbatim text group.
+ */
+function buildChainGroup(command: string, st: any): { chain: BashSequenceChainGroup; rows: PendingUnit[] } | null {
+  const inner = st.command;
+  if (inner === null || typeof inner !== "object" || inner.type !== "AndOr") return null;
+  const opsIn = Array.isArray(inner.operators) ? inner.operators : [];
+  const cmdsIn = Array.isArray(inner.commands) ? inner.commands : [];
+  if (cmdsIn.length < 2 || opsIn.length !== cmdsIn.length - 1) return null;
+  for (const op of opsIn) {
+    if (op !== "&&" && op !== "||") return null;
+  }
+  if (typeof st.pos !== "number" || typeof st.end !== "number") return null;
+  const stmtEnd = Math.min(st.end, command.length);
+  const rows: BashSequenceUnit[] = [];
+  const pends: PendingUnit[] = [];
+  for (let oi = 0; oi < cmdsIn.length; oi++) {
+    const op = cmdsIn[oi];
+    if (op === null || typeof op !== "object") return null;
+    const classified = classifyInner(op);
+    if (classified === null) return null;
+    const pen = prepareStatementUnit(command, op, classified);
+    if (pen === null) return null;
+    // The dependent's leading gap is the verbatim span between the previous
+    // operand's end and its own first stage — it carries the operator text.
+    pen.unit.conditional = oi > 0 ? (opsIn[oi - 1] as "&&" | "||") : null;
+    pen.owner = `_chain_${oi}`;
+    rows.push(pen.unit);
+    pends.push(pen);
+  }
+  // A chain operand that carries a heredoc refuses the CHAIN (not the whole
+  // script): the operand statement falls back to a verbatim text group and
+  // its bodies ride verbatim, exactly as #160 drew it. Only rows that can
+  // be built without carving may chain-draw; the global single-line guard
+  // below stays in charge of everything a drawn row can carve.
+  for (const pen of pends) {
+    if (pen.specs.length > 0) return null;
+  }
+  // Subcommand a chain statement's own redirects onto its last row, exactly
+  // as the plain path does for the last stage (rare, defensive).
+  const statementRedirects = Array.isArray(st.redirects) ? st.redirects : [];
+  for (const r of statementRedirects) pends[pends.length - 1].lists[pends[pends.length - 1].lists.length - 1].push(r);
+  // Span sanity: operands ordered inside the statement, non-overlapping.
+  for (let i = 0; i < cmdsIn.length; i++) {
+    const op = cmdsIn[i];
+    if (typeof op.pos !== "number" || typeof op.end !== "number" || op.pos < 0 || op.end > command.length) return null;
+    if (i > 0 && cmdsIn[i - 1].end > op.pos) return null;
+  }
+  if ((cmdsIn[0].pos as number) < st.pos || cmdsIn[cmdsIn.length - 1].end > st.end) return null;
+  // The last row's groupGap extends to the STATEMENT's end so the chain
+  // covers its own span exactly (statement-level redirects were appended
+  // above; their spans live inside [lastStageEnd, stmtEnd] by inspection).
+  const lastPen = pends[pends.length - 1];
+  const lastStageEnd = lastPen.rawStages[lastPen.rawStages.length - 1].end;
+  lastPen.unit.groupGap = command.slice(lastStageEnd, stmtEnd);
+  const chain: BashSequenceChainGroup = {
+    kind: "chain",
+    leadingGap: command.slice(st.pos, cmdsIn[0].pos),
+    rows,
+    operators: opsIn,
+    separators: [],
+  };
+  for (let i = 0; i + 1 < cmdsIn.length; i++) {
+    chain.separators.push(command.slice(cmdsIn[i].end, cmdsIn[i + 1].pos));
+  }
+  return { chain, rows: pends };
 }
 
 function buildSequenceDiagram(command: string): BashSequenceDiagram | null {
@@ -721,7 +1057,7 @@ function buildSequenceDiagram(command: string): BashSequenceDiagram | null {
 
   const groups: BashSequenceStatement[] = [];
   const pending: PendingUnit[] = [];
-  const allSpecs: (HeredocSpec & { owner: number })[] = [];
+  const allSpecs: (HeredocSpec & { owner: string })[] = [];
   // A text group's heredoc bodies ride verbatim in the separators/trailing
   // gaps (no carve can attribute them inside a verbatim slice). That is
   // exact only while no diagram group carves: bodies serialize in global
@@ -730,46 +1066,31 @@ function buildSequenceDiagram(command: string): BashSequenceDiagram | null {
   let textGroupHeredocs = false;
   for (let si = 0; si < statements.length; si++) {
     const st = statements[si];
+    // #162 v3 chain-split: a statement whose inner is AndOr draws as a CHAIN
+    // when every operand classifies; otherwise it falls through to the
+    // verbatim text group (with conditionalOf naming the operator set).
+    const innerIsAndOr = st.command !== null && typeof st.command === "object" && st.command.type === "AndOr";
+    let chained: { chain: BashSequenceChainGroup; rows: PendingUnit[] } | null = null;
+    if (innerIsAndOr) {
+      chained = buildChainGroup(command, st);
+      if (chained !== null) {
+        for (const r of chained.rows) {
+          for (const spec of r.specs) allSpecs.push({ ...spec, owner: `${si}:${r.owner}` });
+          r.owner = `${si}:${r.owner}`;
+          pending.push(r);
+        }
+        groups.push({ kind: "chain", chain: chained.chain });
+        continue;
+      }
+    }
     const classified = classifyInner(st.command);
     if (classified !== null) {
-      const { kind, negated, timed, rawStages, operators } = classified;
-      for (const s of rawStages) {
-        if (
-          typeof s.pos !== "number" ||
-          typeof s.end !== "number" ||
-          s.pos < 0 ||
-          s.end > command.length ||
-          s.pos > s.end
-        ) {
-          return null;
-        }
-      }
-      for (let i = 0; i + 1 < rawStages.length; i++) {
-        if (rawStages[i].end > rawStages[i + 1].pos) return null;
-      }
-      if (rawStages[0].pos < st.pos || rawStages[rawStages.length - 1].end > st.end) return null;
-      const stmtEnd = Math.min(st.end, command.length);
-      const lists = attributeStatementRedirects(st, rawStages);
-      const unit: BashSequenceUnit = {
-        kind,
-        negated,
-        timed,
-        leadingGap: command.slice(st.pos, rawStages[0].pos),
-        stages: [],
-        arrows: [],
-        groupGap: command.slice(rawStages[rawStages.length - 1].end, stmtEnd),
-      };
-      for (let i = 0; i + 1 < rawStages.length; i++) {
-        unit.arrows.push({
-          operator: operators[i],
-          gap: command.slice(rawStages[i].end, rawStages[i + 1].pos),
-        });
-      }
-      const { specs, usable } = collectHeredocSpecs(lists);
-      if (!usable) return null;
-      for (const spec of specs) allSpecs.push({ ...spec, owner: si });
-      pending.push({ owner: si, unit, rawStages, lists, specs });
-      groups.push({ kind: "diagram", unit });
+      const pen = prepareStatementUnit(command, st, classified);
+      if (pen === null) return null;
+      pen.owner = String(si);
+      for (const spec of pen.specs) allSpecs.push({ ...spec, owner: pen.owner });
+      pending.push(pen);
+      groups.push({ kind: "diagram", unit: pen.unit });
     } else {
       // Not drawable as stages: keep the verbatim slice so the sequence
       // never lies by omission, and mark `&&`/`||` explicitly so a reader
@@ -870,6 +1191,18 @@ export function reconstructBashSequence(command: string, model: BashSequenceDiag
         if (k < group.unit.arrows.length) out += group.unit.arrows[k].gap;
       }
       out += group.unit.groupGap;
+    } else if (group.kind === "chain") {
+      out += group.chain.leadingGap;
+      for (let r = 0; r < group.chain.rows.length; r++) {
+        const row = group.chain.rows[r];
+        out += row.leadingGap;
+        for (let k = 0; k < row.stages.length; k++) {
+          out += row.stages[k].slice;
+          if (k < row.arrows.length) out += row.arrows[k].gap;
+        }
+        out += row.groupGap;
+        if (r < group.chain.separators.length) out += group.chain.separators[r];
+      }
     } else {
       out += group.slice;
     }
@@ -907,6 +1240,10 @@ export function attributeSequenceStages(
   pipeStages: unknown,
 ): BashSequenceDiagram {
   const statements = model.statements.map((group, i) => {
+    // Codes only on the FINAL plain-diagram group. A final CHAIN group shows
+    // none either: a conditional script disqualifies naming host-side, so
+    // there is nothing to attribute without guessing (#162 keeps v2's
+    // guarantee — only attributable groups ever show codes).
     if (group.kind !== "diagram" || i !== model.statements.length - 1) return group;
     const coded = attributePipeStages(
       {
@@ -930,6 +1267,7 @@ export function attributeSequenceStages(
         stages: coded.stages,
         arrows: coded.arrows,
         groupGap: group.unit.groupGap,
+        conditional: group.unit.conditional,
       },
     };
   });

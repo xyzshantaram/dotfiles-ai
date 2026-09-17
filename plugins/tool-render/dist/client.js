@@ -3751,23 +3751,45 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
   line-height: 1.25rem;
   color: var(--dsw-alias-label-tertiary);
 }
+/* #162 criterion 0. v1/v2 shipped \`row wrap\`, and the LIVE measurements
+   against real commands showed why that lied by layout: flex line-breaking
+   runs on items' MAX-content base sizes (a stage with a long flag cluster
+   or a quoted string carries a 380-640px base), so the row wrapped as soon
+   as the base sum exceeded the pane -- at the dsh chat column's 748px cap,
+   the owner's journalctl|rg|tail fixture wrapped its tail stage and a
+   \`node -e "..."\` stage never fit below ~1270px. A wrapped row is visually
+   indistinguishable from a stacked sequence, so the horizontal=pipe/axis
+   claim did not exist at those widths. The fix: the stage row stays ONE row
+   ALWAYS (nowrap); stages shrink inside it (see the stage rule) and only
+   overflow horizontally with a scroll when a pipeline genuinely cannot
+   fit. An overflowed pipe row reads as one band cut at its right edge with
+   a scroll affordance -- nothing like the stacked vertical sequence, whose
+   members have no lateral overflow (-- #162 criterion 0's stated answer:
+   horizontal scroll, plus equal-share shrink, below). */
 .tool-render-diagram-flow {
   display: flex;
-  flex-flow: row wrap;
+  flex-flow: row nowrap;
   align-items: stretch;
-  gap: 0.375rem;
+  gap: 0.25rem;
+  overflow-x: auto;
 }
+/* Equal-share stage blocks (#162 criteria 0+1): flex-basis 0 makes the row
+   fill the pane and every stage take an equal slice, so long pipelines stop
+   wrapping and the freed width goes to the parsed-argument chips instead.
+   min-width 0 plus the words block's pre-wrap lets long content wrap INSIDE
+   its slice; a genuinely unbreakable token slides the row into its own
+   horizontal scroll (-- #162: the pipe row never becomes a stack). */
 .tool-render-diagram-stage {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  flex: 1 1 0%;
+  min-width: 0;
   background: var(--dsw-alias-markdown-code-block);
   border: 1px solid var(--dsw-alias-border-l3);
-  border-radius: 0.625rem;
-  padding: 0.5rem 0.625rem;
-  min-width: 0;
-  max-width: 100%;
+  border-radius: 0.5rem;
+  padding: 0.375rem 0.5rem;
 }
 .tool-render-diagram-words {
   white-space: pre-wrap;
@@ -3781,6 +3803,49 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
   font-size: inherit;
   line-height: inherit;
   white-space: inherit;
+}
+/* #162 criteria 3-5: parsed-argument chips. Each chip's text is the
+   VERBATIM source slice of the token it names (never a re-serialisation \u2014
+   criterion 3; quoting/escaping/spacing read as typed). Roles: the command
+   head (first chip), flags, a bound value, a subcommand, positionals.
+   .tool-render-diagram-args is a wrap ROW so chips hug horizontally and the
+   freed width the equal-share stage blocks freed (criterion 1) goes here.
+   Chips are plain code text, not highlighted: the slice is data the reader
+   checks against the raw command, and hljs would REPRINT it. */
+.tool-render-diagram-args {
+  display: flex;
+  flex-flow: row wrap;
+  gap: 0.25rem;
+  min-width: 0;
+}
+.tool-render-diagram-arg {
+  box-sizing: border-box;
+  font-family: var(--ds-font-family-code);
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-1);
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: 0.25rem;
+  padding: 0 0.25rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-width: 0;
+}
+.tool-render-diagram-arg-cmd {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 600;
+}
+.tool-render-diagram-arg-subcommand {
+  font-weight: 600;
+  border-color: var(--dsw-alias-border-l2);
+}
+.tool-render-diagram-arg-value {
+  color: var(--dsw-alias-label-tertiary);
+  border-style: dashed;
+}
+.tool-render-diagram-arg-positional {
+  color: var(--dsw-alias-label-tertiary);
 }
 /* The arrow carries its verbatim operator as text (\`|\` vs \`|&\`), so the two
    are visually distinguishable without the tooltip; the title states what
@@ -3889,21 +3954,23 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
 .tool-render-diagram-seq .tool-render-diagram {
   margin: 0;
 }
+/* #162 criterion 2: the unconditional boundary is a plain vertical
+   CONNECTOR with no word and no glyph \u2014 v2's "then \u2193" chip disappeared on
+   purpose. The edge between two unconditional members is a hair rail; a
+   comment riding the separator still shows (content, not chrome) beside the
+   rail. The conditional boundary is marked ON the dependent member's own
+   panel instead (see .tool-render-diagram-conditional), so an unmarked edge
+   can never be confused with a conditional one: one is nothing, the other
+   is prominent text. */
 .tool-render-diagram-seq-sep {
   display: flex;
-  flex-flow: row wrap;
+  flex-flow: row nowrap;
   align-items: baseline;
   gap: 0.5rem;
-  margin-left: 0.25rem;
-}
-.tool-render-diagram-seq-then {
-  white-space: nowrap;
-  font-size: 0.6875rem;
-  line-height: 1rem;
-  color: var(--dsw-alias-label-tertiary);
-  border: 1px solid var(--dsw-alias-border-l3);
-  border-radius: 0.25rem;
-  padding: 0 0.375rem;
+  margin-left: 0.375rem;
+  border-left: 2px solid var(--dsw-alias-border-l3);
+  padding: 0.0625rem 0 0.0625rem 0.5rem;
+  min-height: 0.375rem;
 }
 .tool-render-diagram-seq-sep-text {
   background: transparent;
@@ -3914,6 +3981,23 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
   white-space: pre-wrap;
   word-break: break-word;
   color: var(--dsw-alias-label-tertiary);
+}
+/* #162 criterion 2 (amended by the owner, in place of #160's badge chip):
+   the conditional marker is PROMINENT TEXT at the top of the DEPENDENT
+   row's own panel \u2014 its operator glyph first, then the plain-language
+   condition. Never a chip; never a badge on the chain's base row (the base
+   runs unconditionally, #162 criterion 2b). Sits inside the dependent
+   block, above the command, so \`a && b\` reads: \`a\` bare, \`b\` prefixed by
+   its own right-to-run. */
+.tool-render-diagram-conditional {
+  display: flex;
+  flex-flow: row wrap;
+  gap: 0.375rem;
+  align-items: baseline;
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
 }
 .tool-render-diagram-text {
   box-sizing: border-box;
@@ -22266,7 +22350,8 @@ function buildStageModels(command, rawStages, stageRedirectLists, heredocByKey) 
       slice: command.slice(s.pos, s.end),
       words,
       redirects,
-      exitCode: void 0
+      exitCode: void 0,
+      args: parseStageArgs(command, s)
     };
   });
 }
@@ -22343,7 +22428,8 @@ function attributePipeStages(model, pipeStages) {
     slice: s.slice,
     words: s.words,
     redirects: s.redirects,
-    exitCode: void 0
+    exitCode: void 0,
+    args: s.args
   }));
   if (Array.isArray(pipeStages) && pipeStages.length === stages.length) {
     let ok = true;
@@ -22397,6 +22483,230 @@ function conditionalOf(inner) {
   }
   return "mixed";
 }
+var ARG_PROFILES = {
+  rg: { valueFlags: ["-e", "-C", "-A", "-B", "--context", "--after-context", "--before-context", "-m", "--max-count", "--type", "--replace", "--max-filesize", "--glob", "-g"] },
+  ls: { valueFlags: ["-w", "--block-size", "--width", "--context", "--sort", "--format"] },
+  node: { valueFlags: ["-e", "-p", "--eval", "--print", "--max-old-space-size", "--stack-size", "--input-type"] },
+  git: {
+    valueFlags: ["-C", "-c", "--git-dir", "--work-tree", "--exec-path", "--namespace"],
+    subcommands: {
+      commit: { valueFlags: ["-m", "-F", "--author", "--date", "-C", "--message"] },
+      merge: { valueFlags: ["-m", "-F", "-X"] },
+      log: { valueFlags: ["-n", "--since", "--until", "--before", "--after", "--format", "--pretty", "-L", "-S", "-G", "-C", "--grep", "--author", "--max-count"] }
+    }
+  }
+};
+var ARG_SUBCOMMANDS = {
+  git: /* @__PURE__ */ new Set([
+    "add",
+    "am",
+    "archive",
+    "bisect",
+    "blame",
+    "branch",
+    "bundle",
+    "checkout",
+    "cherry-pick",
+    "clean",
+    "clone",
+    "commit",
+    "config",
+    "describe",
+    "diff",
+    "fetch",
+    "format-patch",
+    "gc",
+    "grep",
+    "init",
+    "log",
+    "ls-files",
+    "merge",
+    "mv",
+    "notes",
+    "pull",
+    "push",
+    "rebase",
+    "remote",
+    "reset",
+    "restore",
+    "revert",
+    "rm",
+    "show",
+    "stash",
+    "status",
+    "submodule",
+    "switch",
+    "tag",
+    "worktree"
+  ])
+};
+function parseStageArgs(command, stageNode) {
+  if (stageNode === null || typeof stageNode !== "object" || stageNode.type !== "Command") return void 0;
+  const stagePos = stageNode.pos;
+  const stageEnd = stageNode.end;
+  if (typeof stagePos !== "number" || typeof stageEnd !== "number") return void 0;
+  const name2 = stageNode.name;
+  if (name2 === null || typeof name2 !== "object" || typeof name2.value !== "string" || typeof name2.pos !== "number" || typeof name2.end !== "number") return void 0;
+  if (name2.value === "" || name2.value.startsWith("-")) return void 0;
+  if (Array.isArray(stageNode.prefix) && stageNode.prefix.length > 0) return void 0;
+  const suffix = Array.isArray(stageNode.suffix) ? stageNode.suffix : [];
+  const words = [{ value: name2.value, pos: name2.pos, end: name2.end }];
+  for (const w of suffix) {
+    if (w === null || typeof w !== "object") return void 0;
+    if (typeof w.value !== "string" || typeof w.pos !== "number" || typeof w.end !== "number" || w.pos < 0 || w.end > command.length || w.end < w.pos) {
+      return void 0;
+    }
+    words.push({ value: w.value, pos: w.pos, end: w.end });
+  }
+  const profile = ARG_PROFILES[name2.value];
+  const subTbl = ARG_SUBCOMMANDS[name2.value];
+  const baseFlags = new Set(profile?.valueFlags ?? []);
+  const bound = /* @__PURE__ */ new Map();
+  function bind(effective2) {
+    for (let i = 1; i < words.length; i++) {
+      const v = words[i].value;
+      if (!v.startsWith("-") || v === "-" || v === "--") continue;
+      if (v.startsWith("--") && v.includes("=")) continue;
+      if (effective2.has(v) && i + 1 < words.length && !bound.has(i + 1) && words[i + 1].value !== "" && !words[i + 1].value.startsWith("-")) {
+        bound.set(i + 1, i);
+        i++;
+      }
+    }
+  }
+  function findSubcommand() {
+    for (let i = 1; i < words.length; i++) {
+      if (bound.has(i)) continue;
+      const v = words[i].value;
+      if (v === "" || v.startsWith("-")) continue;
+      if (subTbl !== void 0 && subTbl.has(v)) return i;
+    }
+    return -1;
+  }
+  bind(baseFlags);
+  let subIndex = findSubcommand();
+  if (subIndex >= 0) {
+    const subFlags = profile?.subcommands?.[words[subIndex].value]?.valueFlags ?? [];
+    bound.clear();
+    bind(/* @__PURE__ */ new Set([...baseFlags, ...subFlags]));
+    subIndex = findSubcommand();
+  }
+  const effective = new Set(baseFlags);
+  if (subIndex >= 0) {
+    for (const f of profile?.subcommands?.[words[subIndex].value]?.valueFlags ?? []) effective.add(f);
+  }
+  const args = [];
+  args.push({ slice: command.slice(words[0].pos, words[0].end), role: "flag" });
+  for (let i = 1; i < words.length; i++) {
+    const w = words[i];
+    const v = w.value;
+    const slice = command.slice(w.pos, w.end);
+    if (v.startsWith("-") && v !== "-" && v !== "--") {
+      if (v.startsWith("--") && v.includes("=")) {
+        args.push({ slice, role: "flag" });
+        continue;
+      }
+      if (bound.get(i + 1) === i) {
+        args.push({ slice, role: "flag" });
+        args.push({ slice: command.slice(words[i + 1].pos, words[i + 1].end), role: "value" });
+        i++;
+        continue;
+      }
+      args.push({ slice, role: "flag" });
+      continue;
+    }
+    if (bound.has(i)) continue;
+    if (i === subIndex) {
+      args.push({ slice, role: "subcommand" });
+      continue;
+    }
+    args.push({ slice, role: "positional" });
+  }
+  return { stageSlice: command.slice(stagePos, stageEnd), args };
+}
+function prepareStatementUnit(command, st, classified) {
+  const { kind, negated, timed, rawStages, operators } = classified;
+  for (const s of rawStages) {
+    if (typeof s.pos !== "number" || typeof s.end !== "number" || s.pos < 0 || s.end > command.length || s.pos > s.end) {
+      return null;
+    }
+  }
+  for (let i = 0; i + 1 < rawStages.length; i++) {
+    if (rawStages[i].end > rawStages[i + 1].pos) return null;
+  }
+  if (rawStages[0].pos < st.pos || rawStages[rawStages.length - 1].end > st.end) return null;
+  const stmtEnd = Math.min(st.end, command.length);
+  const lists = attributeStatementRedirects(st, rawStages);
+  const unit = {
+    kind,
+    negated,
+    timed,
+    leadingGap: command.slice(st.pos, rawStages[0].pos),
+    stages: [],
+    arrows: [],
+    groupGap: command.slice(rawStages[rawStages.length - 1].end, stmtEnd),
+    conditional: null
+  };
+  for (let i = 0; i + 1 < rawStages.length; i++) {
+    unit.arrows.push({
+      operator: operators[i],
+      gap: command.slice(rawStages[i].end, rawStages[i + 1].pos)
+    });
+  }
+  const { specs, usable } = collectHeredocSpecs(lists);
+  if (!usable) return null;
+  return { owner: "", unit, rawStages, lists, specs };
+}
+function buildChainGroup(command, st) {
+  const inner = st.command;
+  if (inner === null || typeof inner !== "object" || inner.type !== "AndOr") return null;
+  const opsIn = Array.isArray(inner.operators) ? inner.operators : [];
+  const cmdsIn = Array.isArray(inner.commands) ? inner.commands : [];
+  if (cmdsIn.length < 2 || opsIn.length !== cmdsIn.length - 1) return null;
+  for (const op of opsIn) {
+    if (op !== "&&" && op !== "||") return null;
+  }
+  if (typeof st.pos !== "number" || typeof st.end !== "number") return null;
+  const stmtEnd = Math.min(st.end, command.length);
+  const rows = [];
+  const pends = [];
+  for (let oi = 0; oi < cmdsIn.length; oi++) {
+    const op = cmdsIn[oi];
+    if (op === null || typeof op !== "object") return null;
+    const classified = classifyInner(op);
+    if (classified === null) return null;
+    const pen = prepareStatementUnit(command, op, classified);
+    if (pen === null) return null;
+    pen.unit.conditional = oi > 0 ? opsIn[oi - 1] : null;
+    pen.owner = `_chain_${oi}`;
+    rows.push(pen.unit);
+    pends.push(pen);
+  }
+  for (const pen of pends) {
+    if (pen.specs.length > 0) return null;
+  }
+  const statementRedirects = Array.isArray(st.redirects) ? st.redirects : [];
+  for (const r of statementRedirects) pends[pends.length - 1].lists[pends[pends.length - 1].lists.length - 1].push(r);
+  for (let i = 0; i < cmdsIn.length; i++) {
+    const op = cmdsIn[i];
+    if (typeof op.pos !== "number" || typeof op.end !== "number" || op.pos < 0 || op.end > command.length) return null;
+    if (i > 0 && cmdsIn[i - 1].end > op.pos) return null;
+  }
+  if (cmdsIn[0].pos < st.pos || cmdsIn[cmdsIn.length - 1].end > st.end) return null;
+  const lastPen = pends[pends.length - 1];
+  const lastStageEnd = lastPen.rawStages[lastPen.rawStages.length - 1].end;
+  lastPen.unit.groupGap = command.slice(lastStageEnd, stmtEnd);
+  const chain = {
+    kind: "chain",
+    leadingGap: command.slice(st.pos, cmdsIn[0].pos),
+    rows,
+    operators: opsIn,
+    separators: []
+  };
+  for (let i = 0; i + 1 < cmdsIn.length; i++) {
+    chain.separators.push(command.slice(cmdsIn[i].end, cmdsIn[i + 1].pos));
+  }
+  return { chain, rows: pends };
+}
 function buildSequenceDiagram(command) {
   if (typeof command !== "string" || command === "") return null;
   if (command.length > BASH_DIAGRAM_MAX_COMMAND) return null;
@@ -22434,40 +22744,28 @@ function buildSequenceDiagram(command) {
   let textGroupHeredocs = false;
   for (let si = 0; si < statements.length; si++) {
     const st = statements[si];
+    const innerIsAndOr = st.command !== null && typeof st.command === "object" && st.command.type === "AndOr";
+    let chained = null;
+    if (innerIsAndOr) {
+      chained = buildChainGroup(command, st);
+      if (chained !== null) {
+        for (const r of chained.rows) {
+          for (const spec of r.specs) allSpecs.push({ ...spec, owner: `${si}:${r.owner}` });
+          r.owner = `${si}:${r.owner}`;
+          pending.push(r);
+        }
+        groups.push({ kind: "chain", chain: chained.chain });
+        continue;
+      }
+    }
     const classified = classifyInner(st.command);
     if (classified !== null) {
-      const { kind, negated, timed, rawStages, operators } = classified;
-      for (const s of rawStages) {
-        if (typeof s.pos !== "number" || typeof s.end !== "number" || s.pos < 0 || s.end > command.length || s.pos > s.end) {
-          return null;
-        }
-      }
-      for (let i = 0; i + 1 < rawStages.length; i++) {
-        if (rawStages[i].end > rawStages[i + 1].pos) return null;
-      }
-      if (rawStages[0].pos < st.pos || rawStages[rawStages.length - 1].end > st.end) return null;
-      const stmtEnd = Math.min(st.end, command.length);
-      const lists = attributeStatementRedirects(st, rawStages);
-      const unit = {
-        kind,
-        negated,
-        timed,
-        leadingGap: command.slice(st.pos, rawStages[0].pos),
-        stages: [],
-        arrows: [],
-        groupGap: command.slice(rawStages[rawStages.length - 1].end, stmtEnd)
-      };
-      for (let i = 0; i + 1 < rawStages.length; i++) {
-        unit.arrows.push({
-          operator: operators[i],
-          gap: command.slice(rawStages[i].end, rawStages[i + 1].pos)
-        });
-      }
-      const { specs, usable } = collectHeredocSpecs(lists);
-      if (!usable) return null;
-      for (const spec of specs) allSpecs.push({ ...spec, owner: si });
-      pending.push({ owner: si, unit, rawStages, lists, specs });
-      groups.push({ kind: "diagram", unit });
+      const pen = prepareStatementUnit(command, st, classified);
+      if (pen === null) return null;
+      pen.owner = String(si);
+      for (const spec of pen.specs) allSpecs.push({ ...spec, owner: pen.owner });
+      pending.push(pen);
+      groups.push({ kind: "diagram", unit: pen.unit });
     } else {
       if (subtreeHasHeredoc(st)) textGroupHeredocs = true;
       groups.push({
@@ -22540,7 +22838,8 @@ function attributeSequenceStages(model, pipeStages) {
         leadingGap: coded.leadingGap,
         stages: coded.stages,
         arrows: coded.arrows,
-        groupGap: group.unit.groupGap
+        groupGap: group.unit.groupGap,
+        conditional: group.unit.conditional
       }
     };
   });
@@ -23638,6 +23937,12 @@ function BashDiagramHeredoc(props) {
 function BashCommandDiagram(props) {
   var model = props.model;
   var head = [];
+  if (model.conditional === "&&" || model.conditional === "||") {
+    var why = model.conditional === "&&" ? "runs only if the previous step succeeded" : "runs only if the previous step failed";
+    head.push(
+      /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-conditional", title: "conditional step: " + why + " \u2014 unlike `;`, this step may not run at all" }, /* @__PURE__ */ import_react4.default.createElement("span", null, model.conditional), /* @__PURE__ */ import_react4.default.createElement("span", null, why))
+    );
+  }
   if (model.timed) {
     head.push(
       /* @__PURE__ */ import_react4.default.createElement(
@@ -23683,7 +23988,24 @@ function BashCommandDiagram(props) {
     }
     var stage = model.stages[i];
     var parts = [];
-    if (stage.words !== "") {
+    if (stage.args !== void 0 && stage.args.args.length > 1) {
+      var chipRow = [];
+      for (var a = 0; a < stage.args.args.length; a++) {
+        var arg = stage.args.args[a];
+        var roleLabel = arg.role === "value" ? "value (bound; verbatim slice)" : arg.role === "subcommand" ? "subcommand (verbatim slice)" : arg.role === "flag" ? "flag (verbatim slice)" : "positional (verbatim slice)";
+        chipRow.push(
+          /* @__PURE__ */ import_react4.default.createElement(
+            "code",
+            {
+              className: "tool-render-diagram-arg tool-render-diagram-arg-" + arg.role + (a === 0 ? " tool-render-diagram-arg-cmd" : ""),
+              title: roleLabel
+            },
+            arg.slice
+          )
+        );
+      }
+      parts.push(/* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-args" }, chipRow));
+    } else if (stage.words !== "") {
       parts.push(
         /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-words" }, /* @__PURE__ */ import_react4.default.createElement(
           "code",
@@ -23745,15 +24067,7 @@ function BashCommandDiagram(props) {
 }
 function BashSequenceTextGroup(props) {
   var group = props.group;
-  var why = group.conditional === "&&" ? "conditional step: the right side runs only if the left side succeeds \u2014 unlike `;`, this group may not run at all" : group.conditional === "||" ? "conditional step: the right side runs only if the left side fails \u2014 unlike `;`, this group may not run at all" : "conditional step: later parts run only if earlier ones succeed or fail as written \u2014 unlike `;`, parts of this group may not run at all";
-  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-text", title: group.conditional !== null ? why : void 0 }, group.conditional !== null ? /* @__PURE__ */ import_react4.default.createElement(
-    "span",
-    {
-      className: "tool-render-diagram-badge",
-      title: why
-    },
-    group.conditional === "mixed" ? "&&/||" : group.conditional
-  ) : null, /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-words" }, /* @__PURE__ */ import_react4.default.createElement(
+  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-text" }, /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-words" }, /* @__PURE__ */ import_react4.default.createElement(
     "code",
     {
       className: "hljs",
@@ -23765,14 +24079,7 @@ function BashSequenceTextGroup(props) {
 function BashSequenceSeparator(props) {
   var separator = props.text;
   var carriesContent = separator.replace(/[;\s]/g, "") !== "";
-  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-seq-sep" }, /* @__PURE__ */ import_react4.default.createElement(
-    "span",
-    {
-      className: "tool-render-diagram-seq-then",
-      title: "statement boundary: the next statement runs after this one finishes. It carries no data \u2014 unlike a pipe, which feeds bytes rightwards."
-    },
-    "then \u2193"
-  ), carriesContent ? /* @__PURE__ */ import_react4.default.createElement(
+  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-seq-sep" }, carriesContent ? /* @__PURE__ */ import_react4.default.createElement(
     "code",
     {
       className: "hljs tool-render-diagram-seq-sep-text",
@@ -23810,6 +24117,33 @@ function BashSequenceDiagram(props) {
           }
         )
       );
+    } else if (group.kind === "chain") {
+      var chain = group.chain;
+      if (chain.leadingGap.trim() !== "") {
+        children.push(/* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-lead" }, chain.leadingGap));
+      }
+      for (var r = 0; r < chain.rows.length; r++) {
+        if (r > 0) {
+          children.push(/* @__PURE__ */ import_react4.default.createElement(BashSequenceSeparator, { text: chain.separators[r - 1] }));
+        }
+        var row = chain.rows[r];
+        children.push(
+          /* @__PURE__ */ import_react4.default.createElement(
+            BashCommandDiagram,
+            {
+              model: {
+                kind: row.kind,
+                negated: row.negated,
+                timed: row.timed,
+                leadingGap: row.leadingGap,
+                stages: row.stages,
+                arrows: row.arrows,
+                trailing: row.groupGap === "" ? [] : [{ kind: "gap", text: row.groupGap }]
+              }
+            }
+          )
+        );
+      }
     } else {
       children.push(/* @__PURE__ */ import_react4.default.createElement(BashSequenceTextGroup, { group }));
     }

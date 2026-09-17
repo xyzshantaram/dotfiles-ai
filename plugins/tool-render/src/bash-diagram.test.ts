@@ -261,7 +261,127 @@ describe("exit codes from block.meta.pipeStages", () => {
   });
 });
 
+describe("#162 parsed arguments: slices, never reprints (criteria 3-5)", () => {
+  // FIDELITY FIRST: args attach THROUGH the existing slice machinery, so the
+  // round-trip must hold for every arg-bearing command too.
+  const corpus = [
+    "git commit -m \"a message with 'single' and \\\"double\\\" quotes\" | cat",
+    "rg -n --no-heading foo src/ | head -5",
+    "cat <<EOF\nline\nEOF",
+    "ls -la /tmp > out 2>&1",
+  ];
+  for (const command of corpus) {
+    it(`keeps slice fidelity for ${JSON.stringify(command.slice(0, 40))}`, () => {
+      const model = getBashDiagram(command);
+      expect(model).not.toBeNull();
+      if (model === null) return;
+      expect(verifyBashDiagram(command, model)).toBe(true);
+      expect(reconstructBashDiagram(command, model)).toBe(command);
+      for (const stage of model.stages) {
+        if (stage.args === undefined) continue;
+        // Every chip is a positioned SLICE: each chip's text occurs inside
+        // the stage slice, and the stage slice is echoed exactly.
+        expect(stage.args.stageSlice).toBe(stage.slice);
+      }
+    });
+  }
+
+  it("cut chips verbatim, with the awkward-quoting LITERAL anchor", () => {
+    // #149's reviewer + #160's review both caught diagrams that reconstruct
+    // cleanly while attributing the wrong text. The anchor here is the
+    // exact slice of a flag value with spaces AND an embedded quote.
+    const command = 'git commit -m \'msg with "sp ace" inside\' | cat';
+    const model = draw(command);
+    const stage = model.stages[0];
+    expect(stage.args).toBeDefined();
+    const args = stage.args!.args;
+    expect(args.map((a) => a.role)).toEqual(["flag", "subcommand", "flag", "value"]);
+    // The value chip's slice is the typed text WITH its quotes, byte for byte.
+    expect(args[3].slice).toBe("'msg with \"sp ace\" inside'");
+    // And not the parser's unquoted value.
+    expect(args[3].slice).not.toBe('msg with "sp ace" inside');
+  });
+
+  it("binds `--long=value` by shape alone for every command", () => {
+    const model = draw("unknowncmd --precision 42 | head -1");
+    // `unknowncmd` has no profile: `-42` would be a guessed bind; it is NOT.
+    const first = model.stages[0];
+    expect(first.args).toBeDefined();
+    expect(first.args!.args.map((a) => a.role)).toEqual(["flag", "flag", "positional"]);
+  });
+
+  it("binds a flag's value only when the per-command table says so", () => {
+    const model = draw("rg --context 3 error log.txt | head -2");
+    const args = model.stages[0].args!.args;
+    // rg's table declares `--context` a value flag: binds 3.
+    expect(args.map((a) => a.role)).toEqual(["flag", "flag", "value", "positional", "positional"]);
+    expect(args[2].slice).toBe("3");
+  });
+
+  it("does NOT detect value binding when a flag's next token could be positional", () => {
+    // A table notch: `--no-heading` (no value) and a short flag never bind.
+    const model = draw("rg -n -v pattern | tail -3");
+    const args = model.stages[0].args!.args;
+    expect(args.map((a) => a.role)).toEqual(["flag", "flag", "flag", "positional"]);
+  });
+
+  it("subcommands distinguish from flags and positionals (criterion 5)", () => {
+    const model = draw("git status --porcelain | head -5");
+    const args = model.stages[0].args!.args;
+    expect(args.map((a) => a.role)).toEqual(["flag", "subcommand", "flag"]);
+  });
+
+  it("represents `git -C path log` correctly: -C binds the path, `log` is the subcommand (criterion 5)", () => {
+    // The criterion's exact counterexample: a naive parser calls `path` the
+    // subcommand. The table binds `-C path` first, so `log` wins.
+    const model = draw("git -C /tmp/x log --oneline | head -20");
+    const args = model.stages[0].args!.args;
+    expect(args.map((a) => a.role)).toEqual(["flag", "flag", "value", "subcommand", "flag"]);
+    expect(args[2].slice).toBe("/tmp/x");
+    expect(args[3].slice).toBe("log");
+  });
+
+  it("uses git's per-subcommand value list: commit -m binds its message", () => {
+    const model = draw("git commit -m \"msg here\" | tail -2");
+    const args = model.stages[0].args!.args;
+    expect(args.map((a) => a.role)).toEqual(["flag", "subcommand", "flag", "value"]);
+    expect(args[3].slice).toBe('"msg here"');
+  });
+
+  it("leaves ls/node/etc. generic: no subcommand, no binding when the table refuses", () => {
+    // ls: known command, but nothing binds here.
+    const ls = draw("ls -la /tmp | wc -l");
+    expect(ls.stages[0].args!.args.map((a) => a.role)).toEqual(["flag", "flag", "positional"]);
+    // node: -e takes a value (declared): binds.
+    const node = draw("node -e 'process.exit(1)' | head -2");
+    expect(node.stages[0].args!.args.map((a) => a.role)).toEqual(["flag", "flag", "value"]);
+  });
+
+  it("unknown commands get the reject-a-guess parse, no binding or subcommand", () => {
+    // `docker`'s -f: docker is not in the table, so -f does NOT bind next
+    // token. (Criterion 4: unknown command -> generic treatment.)
+    const model = draw("docker --rm -f busybox echo | head -2");
+    const args = model.stages[0].args!.args;
+    // Flag pose claimed; the VALUE was not: -f is not in any table, so
+    // `busybox` stayed a positional instead of being swallowed.
+    expect(args.map((a) => a.role)).toEqual(["flag", "flag", "flag", "positional", "positional"]);
+    expect(args[3].slice).toBe("busybox");
+  });
+});
+
+describe("#162 parsed args did not break much", () => {
+  it("attributes exit codes alongside parsed args", () => {
+    const base = draw("rg --context 2 pattern f.txt | sort");
+    expect(base.stages[0].args).toBeDefined();
+    const coded = attributePipeStages(base, [{ name: "rg", exitCode: 0 }, { name: "sort", exitCode: 0 }]);
+    expect(coded.stages[0].exitCode).toBe(0);
+    expect(coded.stages[1].exitCode).toBe(0);
+    expect(coded.stages[0].args).toBeDefined();
+  });
+});
+
 describe("limits and oracle", () => {
+
   it("degrades commands above the stated size cap to text", () => {
     expect(BASH_DIAGRAM_MAX_COMMAND).toBe(20000);
     text("a | " + "b".repeat(BASH_DIAGRAM_MAX_COMMAND));

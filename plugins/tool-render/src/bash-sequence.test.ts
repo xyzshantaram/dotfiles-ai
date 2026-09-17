@@ -79,17 +79,24 @@ describe("ticket-named cases", () => {
     expect(verifyBashSequence(command, model)).toBe(true);
   });
 
-  it("renders a `;`-and-`&&` mix with an explicit conditional marker", () => {
+  it("draws a `;`-and-`&&` mix as sequence + chain, markers on dependents (#162 2b supersession of v2's text-group marker)", () => {
+    // v2 drew the `&&` statement as one verbatim text group with a group
+    // badge — which marked the base too. #162 criterion 2b supersedes that:
+    // the chain now draws, and each DEPENDENT row carries its own condition
+    // while the base row carries none.
     const command = "a | b; c && d | e";
     const model = draw(command);
     expect(model.statements).toHaveLength(2);
     expect(model.statements[0].kind).toBe("diagram");
     const second = model.statements[1];
-    if (second.kind !== "text") throw new Error("expected a text group");
-    expect(second.slice).toBe("c && d | e");
-    // NOT silently lumped with `;`: the condition is named on the group.
-    expect(second.conditional).toBe("&&");
+    if (second.kind !== "chain") throw new Error("expected a chain group");
+    expect(second.chain.rows).toHaveLength(2);
+    expect(second.chain.rows[0].conditional).toBeNull();
+    expect(second.chain.rows[1].conditional).toBe("&&");
+    expect(second.chain.rows.map((r) => r.kind)).toEqual(["command", "pipeline"]);
+    expect(second.chain.rows[1].arrows.map((a) => a.operator)).toEqual(["|"]);
     expect(verifyBashSequence(command, model)).toBe(true);
+    expect(reconstructBashSequence(command, model)).toBe(command);
   });
 
   it("draws the exact command from the ticket description", () => {
@@ -142,15 +149,19 @@ describe("scope boundaries", () => {
     expect(verifyBashSequence("(a | b); c | d", model)).toBe(true);
   });
 
-  it("marks `||` and mixed `&&`/`||` distinctly from `&&`", () => {
+  it("draws `||` and mixed chains with per-row markers more specific than a group badge (#162 2b supersession)", () => {
+    // v2 described the WHOLE statement with one conditional string. #162
+    // 2b supersedes that: the chain rows carry their own operators, so a
+    // mixed chain can say exactly which row runs on which condition.
     const orOnly = draw("a | b; c || d | e");
     const orGroup = orOnly.statements[1];
-    if (orGroup.kind !== "text") throw new Error("unreachable");
-    expect(orGroup.conditional).toBe("||");
+    if (orGroup.kind !== "chain") throw new Error("unreachable");
+    expect(orGroup.chain.rows[0].conditional).toBeNull();
+    expect(orGroup.chain.rows[1].conditional).toBe("||");
     const mixed = draw("a | b; c && d || e");
     const mixedGroup = mixed.statements[1];
-    if (mixedGroup.kind !== "text") throw new Error("unreachable");
-    expect(mixedGroup.conditional).toBe("mixed");
+    if (mixedGroup.kind !== "chain") throw new Error("unreachable");
+    expect(mixedGroup.chain.rows.map((r) => r.conditional)).toEqual([null, "&&", "||"]);
   });
 
   it("draws newline-separated statements with a bare separator", () => {
@@ -446,6 +457,91 @@ describe("exit codes: final statement group only, never a guess", () => {
     expect(first.unit.stages.map((s) => s.exitCode)).toEqual([undefined, undefined]);
     expect(last.unit.stages.map((s) => s.exitCode)).toEqual([undefined, undefined]);
     expect(getBashSequenceDiagram("a | b; c | d")).toBe(base);
+  });
+});
+
+describe("#162 criterion 2b: the && chain's base carries NO marker", () => {
+  it("draws a three-deep && chain with markers on rows 2 and 3 only", () => {
+    // THE ticket's ownership test. The base of a && chain runs
+    // unconditionally, so a marker anywhere on it is a false claim about
+    // `a`; the markers describe b's and c's RIGHT TO RUN.
+    const command = "a && b && c; d | e";
+    const model = draw(command);
+    expect(model.statements).toHaveLength(2);
+    const first = model.statements[0];
+    if (first.kind !== "chain") throw new Error("expected a chain group");
+    const rows = first.chain.rows;
+    expect(rows).toHaveLength(3);
+    // Base: no marker of ANY kind.
+    expect(rows[0].conditional).toBeNull();
+    expect(rows[1].conditional).toBe("&&");
+    expect(rows[2].conditional).toBe("&&");
+    expect(first.chain.separators).toEqual([" && ", " && "]);
+    expect(first.chain.operators).toEqual(["&&", "&&"]);
+    // And the last statement after the `;` is its own plain pipeline.
+    const last = model.statements[1];
+    if (last.kind !== "diagram") throw new Error("expected a diagram group");
+    expect(last.unit.stages.map((s) => s.words)).toEqual(["d", "e"]);
+    expect(verifyBashSequence(command, model)).toBe(true);
+    expect(reconstructBashSequence(command, model)).toBe(command);
+  });
+
+  it("keeps || chains marked 'runs only if the previous failed' on dependents", () => {
+    const command = "cd a || cd b; echo done";
+    const model = draw(command);
+    const first = model.statements[0];
+    if (first.kind !== "chain") throw new Error("expected a chain group");
+    expect(first.chain.rows.map((r) => r.conditional)).toEqual([null, "||"]);
+    expect(verifyBashSequence(command, model)).toBe(true);
+  });
+
+  it("keeps the heredoc-bearing && statement a verbatim text group (no carve inside chains)", () => {
+    // The OWNER'S fixture: `cd /tmp && cat > m3.sh <<'EOF'` + body. The
+    // chain must refuse here (the heredoc body's carriage lives in the
+    // separators), so the statement is drawn VERBATIM exactly as #160 did,
+    // with respect for #160's body-riders-verbatim rule.
+    const body = "set -uo pipefail\nhi\nEOF";
+    const command = "cd /tmp && cat > m3.sh <<'EOF'\n" + body + "\necho after";
+    const model = draw(command);
+    const first = model.statements[0];
+    if (first.kind !== "text") throw new Error("expected a verbatim text group");
+    expect(first.slice).toBe("cd /tmp && cat > m3.sh <<'EOF'");
+  });
+
+  it("refuses a chain whose operand is a subshell (verbatim text, no partial markup)", () => {
+    const command = "a && (b | c); echo x";
+    const model = draw(command);
+    const first = model.statements[0];
+    if (first.kind !== "text") throw new Error("expected a text group");
+    expect(first.slice).toBe("a && (b | c)");
+    // v2's marker lived here; #162 criterion 2 removed the badge chrome.
+    expect(first.conditional).toBe("&&");
+  });
+
+  it("parsed args stay sliced in the sequence: awkward quoting round-trips (criterion 3)", () => {
+    const command = "git commit -m 'sp ace \"quoted\" inside'; echo done";
+    const model = draw(command);
+    const group = model.statements[0];
+    if (group.kind !== "diagram") throw new Error("expected a diagram group");
+    const stage = group.unit.stages[0];
+    expect(stage.args).toBeDefined();
+    // LITERAL anchor: the value chip's slice is the typed text with its
+    // quotes, not the parser's unquoted value.
+    expect(stage.args!.args.map((a) => a.role)).toEqual(["flag", "subcommand", "flag", "value"]);
+    expect(stage.args!.args[3].slice).toBe("'sp ace \"quoted\" inside'");
+    expect(verifyBashSequence(command, model)).toBe(true);
+  });
+
+  it("attributeSequenceStages never shows codes on a final chain group", () => {
+    // `a && b; c && d`: the FINAL group is the `c && d` chain (its own
+    // statement's inner is an AndOr); the dependent rows never show codes —
+    // a conditional script disqualifies naming host-side. Nothing is a
+    // guess.
+    const named = [{ name: "d", exitCode: 0 }];
+    const coded = attributeSequenceStages(draw("a && b; c && d"), named);
+    const last = coded.statements[coded.statements.length - 1];
+    expect(last.kind).toBe("chain");
+    expect(last.kind === "chain" && last.chain.rows.map((r) => r.stages.map((s) => s.exitCode))).toEqual([[undefined], [undefined]]);
   });
 });
 
