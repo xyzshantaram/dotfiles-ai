@@ -1413,3 +1413,74 @@ Deno.test("item summary merges repeats and drops ledger rows", () => {
   ]);
   if (got !== "2 Latte") throw new Error("summary wrong: " + JSON.stringify(got));
 });
+
+// A saved profile proves a sign-in happened once, never that it still
+// works. Swiggy expired a session on 2026-09-17 while this screen read
+// "ready" and drew no way back in.
+Deno.test("a signed in browser platform still offers a sign in action", async () => {
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "acc-cached-" });
+  const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    await Deno.mkdir(root + "/share/profiles/swiggy", { recursive: true });
+    const nodes = accountsNodes(
+      new Map([["platforms", ["Swiggy"]], ["range", ["30"]]]),
+    );
+    if (actionIndex(nodes, "Sign in to Swiggy again") < 0) {
+      throw new Error("a cached platform hides the sign in action");
+    }
+  } finally {
+    if (prev === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
+    else Deno.env.set("SPLIT_UTILS_STATE", prev);
+    await cleanup(root);
+  }
+});
+
+Deno.test("every Fetch action carries the same into value ending with multi", () => {
+  const entries = gatherSteps();
+  const reviewEntry = entries[4];
+  if (typeof reviewEntry !== "function") throw new Error("review step is not a function");
+  const sid = "t-into-shared-1";
+  const answers = new Map([
+    ["platforms", ["Zomato", "Blinkit", "Swiggy"]],
+    ["range", ["30"]],
+  ]);
+  const first = (reviewEntry as (
+    m: Map<string, string[]>,
+    ctx?: { sessionId: string },
+  ) => { nodes: unknown[] })(answers, { sessionId: sid });
+  const commands = first.nodes
+    .filter((node) =>
+      (node as Record<string, unknown>)["kind"] === "action" &&
+      String((node as Record<string, unknown>)["label"] ?? "").startsWith("Fetch ")
+    )
+    .map((node) => (node as Record<string, unknown>)["command"] as string[]);
+  if (commands.length !== 3) throw new Error("expected 3 Fetch actions");
+  const intos = commands.map((command) => command.find((part) => part.startsWith("--into=")));
+  if (intos.some((into) => into === undefined)) {
+    throw new Error("a Fetch action misses --into: " + JSON.stringify(commands));
+  }
+  if (new Set(intos).size !== 1) {
+    throw new Error("Fetch actions share no into value: " + JSON.stringify(intos));
+  }
+  if (!String(intos[0]).endsWith("-multi")) {
+    throw new Error("into value misses the multi suffix: " + String(intos[0]));
+  }
+  const second = (reviewEntry as (
+    m: Map<string, string[]>,
+    ctx?: { sessionId: string },
+  ) => { nodes: unknown[] })(answers, { sessionId: sid });
+  const again = second.nodes
+    .filter((node) =>
+      (node as Record<string, unknown>)["kind"] === "action" &&
+      String((node as Record<string, unknown>)["label"] ?? "").startsWith("Fetch ")
+    )
+    .map((node) =>
+      ((node as Record<string, unknown>)["command"] as string[]).find((part) =>
+        part.startsWith("--into=")
+      )
+    );
+  if (JSON.stringify(again) !== JSON.stringify(intos)) {
+    throw new Error("the into value changed across renders");
+  }
+});

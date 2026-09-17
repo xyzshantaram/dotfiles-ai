@@ -119,5 +119,6 @@ client-side from list data). Gotchas:
 
 ## Extraction
 
-`scripts/proto-swiggy-extract.ts`: same-origin `fetch` from the logged-in page context (cookies ride
-along; no WAF issues observed for mapi GETs). 30 orders in 30d, ALL BALANCE.
+A same-origin `fetch` from the logged-in page context carries the cookies, and no WAF issue showed
+up for mapi GETs. One throwaway probe read 30 orders in 30 days, ALL BALANCE. The shipped reader is
+`gatherSwiggy` in `wizards/gatherer.ts`.

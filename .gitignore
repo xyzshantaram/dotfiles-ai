@@ -26,3 +26,9 @@ dist/
 *.swp
 .idea/
 .vscode/
+
+# Throwaway scrape dumps from scripts/proto-*.ts.
+out/
+
+# Compiled desktop demo build.
+demo/

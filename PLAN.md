@@ -136,6 +136,22 @@ later, and the next app does not pay the same cost.
 - Never render the aggregate summary through markdown. It is fixed width plain text, and its `====`
   and `----` rules are read as setext heading underlines, which turned the whole block into giant
   headings on 2026-09-17. It renders through `copyable` with `mono` set.
+- A headless scrape must load the site first. `openSite` passes the app URL for the headed login
+  phase alone, so the scrape page sat on `about:blank` until 2026-09-17. Blinkit reads its access
+  token from `localStorage`, which throws `SecurityError` there, and Swiggy fetches relative paths,
+  which cannot resolve there. Both reported zero orders. Zepto escaped it by navigating on its own.
+- Swiggy answers HTTP 200 while logged out. The body carries the truth: `statusCode` 0 means the
+  call worked, and `statusCode` 1 with "Session expired. Please login again." means it did not.
+  Never read a Swiggy reply by HTTP status alone. That mistake closed the login window after four
+  seconds, because the login check only asked for a 200, and it also turned an expired session into
+  a report of zero orders.
+- A saved browser profile proves that a sign-in happened once, never that it still works. The
+  accounts screen must always offer the sign-in control. It read "ready" and drew no control until
+  2026-09-17, which left a user with an expired session no way back in.
+- One gather may press several Fetch buttons, and every press must add to one run. The gatherer
+  merges platforms into a single run labelled `multi` when it runs them together, but the wizard
+  draws one button per platform, so three presses wrote three runs and the pick screen showed one.
+  The user kept the per-platform buttons for their retry value, so the run id travels with them.
 - A slow step must say it is working. The push of 38 orders took 26 seconds of silence on
   2026-09-17, which read as a dead button and nearly caused a second press. The step form now
   carries `hx-disabled-elt="find wa-button"` and a `.wiz-busy` line that htmx reveals through the
@@ -183,8 +199,8 @@ later, and the next app does not pay the same cost.
   `deno task test:fixtures`).
 - Wizard tone is cohesive and fun, never annoying. No generated transitions like "Opening X".
   Cross-app steps give real moves.
-- Ported copy needs proof: every old user-facing string maps to a new home or a written reason, in
-  docs/copy-audit.md.
+- Ported copy needs proof: every old user-facing string maps to a new home or a written reason. The
+  audit that proved it is done, so its file is gone.
 
 ### Must not happen, anywhere, ever
 

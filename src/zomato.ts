@@ -1,6 +1,6 @@
 // Zomato order history for split-utils.
 // Plain Deno fetch plus WebCrypto only.
-// Protocol facts come from research/zomato/REPORT.md.
+// Protocol facts come from docs/playbook-zomato.md.
 // Auth steps follow public notes and are not run here.
 // Bill paths stay open until one live capture pins them.
 

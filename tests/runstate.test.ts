@@ -3,6 +3,7 @@ import {
   archiveRun,
   backupFailedRun,
   createRun,
+  ensureRun,
   listRuns,
   listRunsSync,
   readRun,
@@ -219,4 +220,94 @@ Deno.test("loadSettingsSync defaults to INR with no file", async () => {
   const settings = loadSettingsSync();
   // Check the INR default.
   assertEquals(settings, { currency: "INR" }, "missing file default");
+});
+
+// ensureRun creates a run with exactly the id it is given.
+Deno.test("ensureRun creates a run with the given id", async () => {
+  // Point state at a fresh temp dir.
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  // Create one run with a fixed id.
+  const { dir, existed } = await ensureRun(
+    "abc-multi",
+    "zomato",
+    ["zomato"],
+    30,
+    root + "/gather.log",
+  );
+  assert(!existed, "first ensureRun is new");
+  assertEquals(dir, runsDir() + "/abc-multi", "run dir");
+  // Read the raw meta file from disk.
+  const raw = JSON.parse(await Deno.readTextFile(dir + "/meta.json"));
+  assertEquals(raw.id, "abc-multi", "meta id");
+  assertEquals(raw.status, "gathered", "meta status");
+});
+
+// ensureRun merges platforms and keeps the first createdAt.
+Deno.test("ensureRun merges platforms and keeps createdAt", async () => {
+  // Point state at a fresh temp dir.
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  // Create one zomato run.
+  await ensureRun("shared-multi", "zomato", ["zomato"], 30, root + "/a.log");
+  const first = JSON.parse(
+    await Deno.readTextFile(runsDir() + "/shared-multi/meta.json"),
+  );
+  // Append a second platform to the same run.
+  const second = await ensureRun(
+    "shared-multi",
+    "blinkit",
+    ["blinkit"],
+    30,
+    root + "/b.log",
+  );
+  assert(second.existed, "second ensureRun exists");
+  // Read the merged record.
+  const raw = JSON.parse(
+    await Deno.readTextFile(runsDir() + "/shared-multi/meta.json"),
+  );
+  assertEquals(raw.platforms, ["zomato", "blinkit"], "merged platforms");
+  assertEquals(raw.label, "multi", "merged label");
+  assertEquals(raw.createdAt, first.createdAt, "kept createdAt");
+});
+
+// ensureRun throws when the run status is pushed.
+Deno.test("ensureRun throws when the run is pushed", async () => {
+  // Point state at a fresh temp dir.
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  // Create one run then mark it pushed.
+  const { dir } = await ensureRun(
+    "done-multi",
+    "zomato",
+    ["zomato"],
+    30,
+    root + "/gather.log",
+  );
+  const raw = JSON.parse(await Deno.readTextFile(dir + "/meta.json"));
+  raw.status = "pushed";
+  await Deno.writeTextFile(dir + "/meta.json", JSON.stringify(raw));
+  // Appending must throw.
+  let msg = "";
+  try {
+    await ensureRun("done-multi", "blinkit", ["blinkit"], 30, root + "/b.log");
+  } catch (e) {
+    msg = e instanceof Error ? e.message : String(e);
+  }
+  assert(msg.includes("not open for more orders"), "throw names the fault");
+});
+
+// ensureRun throws on an unsafe id.
+Deno.test("ensureRun throws on an unsafe id", async () => {
+  // Point state at a fresh temp dir.
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  // An unsafe id must throw.
+  let msg = "";
+  try {
+    await ensureRun("../escape", "zomato", ["zomato"], 30, root + "/a.log");
+  } catch (e) {
+    msg = e instanceof Error ? e.message : String(e);
+  }
+  assert(msg.includes("bad run id"), "throw names the fault");
 });

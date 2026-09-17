@@ -8,15 +8,8 @@
 /// <reference lib="dom" />
 
 import type { Page, Response as PWResponse } from "playwright";
-import {
-  dot,
-  lineEnd,
-  lineStart,
-  say,
-  step,
-  wizardExit,
-} from "../src/wizardkit.ts";
-import { createRun, stateRoot } from "../src/runstate.ts";
+import { dot, lineEnd, lineStart, say, step, wizardExit } from "../src/wizardkit.ts";
+import { createRun, ensureRun, stateRoot } from "../src/runstate.ts";
 import { loadSettings } from "../src/settings.ts";
 import { createRunLog, type RunLog } from "../src/log.ts";
 import { detectDrift, driftMessage, type FailureEvent } from "../src/drift.ts";
@@ -474,20 +467,24 @@ async function blinkitCheck(page: Page): Promise<boolean> {
   }
 }
 
-// Swiggy login signal: the food order list answers 200 when logged in.
+// Swiggy login signal. The HTTP status cannot carry it: an expired
+// session also answers 200, with statusCode 1 and "Session expired.
+// Please login again." in the body. Only the app level statusCode
+// separates a real answer from a logged out one.
 async function swiggyCheck(page: Page): Promise<boolean> {
   try {
-    const res = await page.evaluate(async () => {
+    return await page.evaluate(async () => {
       try {
         const r = await fetch("/mapi/order/all?order_id=", {
           headers: { accept: "application/json" },
         });
-        return r.status;
+        if (r.status !== 200) return false;
+        const body = await r.json().catch(() => null);
+        return body !== null && body.statusCode === 0;
       } catch {
-        return 0;
+        return false;
       }
     });
-    return res === 200;
   } catch {
     return false;
   }
@@ -1178,7 +1175,26 @@ async function gatherSwiggy(
           return { status: 0, body: null };
         }
       }, path);
-      if (r.status === 200 && r.body) return r.body;
+      if (r.status === 200 && r.body) {
+        // Swiggy answers 200 for a logged out session and puts the real
+        // outcome in the body. statusCode 0 means the call worked.
+        // Anything else is an error, and reading data.orders from it
+        // silently yields zero orders, which reads as an empty account.
+        const app = r.body as { statusCode?: unknown; statusMessage?: unknown };
+        if (typeof app.statusCode === "number" && app.statusCode !== 0) {
+          const reason = typeof app.statusMessage === "string" && app.statusMessage !== ""
+            ? app.statusMessage
+            : "no reason given";
+          // Record it here, where the reply arrives. The caller turns it
+          // into one screen line, and the log keeps the exact wording.
+          logWarn(
+            "swiggy " + path.split("?")[0] + " answers statusCode " +
+              app.statusCode + ": " + reason,
+          );
+          throw new Error("swiggy says: " + reason);
+        }
+        return r.body;
+      }
       if (isBlockedStatus(r.status)) {
         throw new Error("swiggy blocked with status " + r.status + " for " + path);
       }
@@ -1413,7 +1429,19 @@ async function gatherSwiggy(
     }
   }
   const listed = foodRaw.length + dashGroups.length;
-  if (
+  // A stale Swiggy login lists nothing at all, so the old rule below
+  // stayed quiet and the run reported an empty account. Name the cause
+  // first, then fall back to the zero bills report.
+  const staleLogin = failures.some((event) =>
+    /session expired|please login|log ?in again/i.test(event.detail ?? "")
+  );
+  if (staleLogin) {
+    notes.push(
+      "Swiggy says the session expired. Sign in to Swiggy again, then gather.",
+    );
+  } else if (listed === 0 && failures.length > 0) {
+    notes.push(reportZeroBills("swiggy", failures));
+  } else if (
     listed > 0 &&
     orders.filter((o) => o.items[0]?.name !== SCREENSHOT_ITEM).length === 0
   ) {
@@ -1767,7 +1795,11 @@ async function writeRun(
   label: string,
   platforms: string[],
   days: number,
+  intoId?: string,
 ): Promise<{ id: string; dir: string }> {
+  if (intoId !== undefined && intoId !== null && intoId !== "") {
+    return await appendRun(label, platforms, days, intoId);
+  }
   const { id, dir } = await createRun(
     label,
     platforms,
@@ -1815,6 +1847,91 @@ async function writeRun(
   }
   logInfo("run " + id + " holds " + bag.orders.length + " orders");
   if (LOG) LOG.close("gathered " + bag.orders.length + " orders into " + id);
+  return { id, dir };
+}
+
+// Append orders plus manifest to a shared run dir. Returns run id and dir.
+async function appendRun(
+  label: string,
+  platforms: string[],
+  days: number,
+  intoId: string,
+): Promise<{ id: string; dir: string }> {
+  const { dir } = await ensureRun(
+    intoId,
+    label,
+    platforms,
+    days,
+    LOG ? LOG.path : "",
+  );
+  const id = intoId;
+  // Read the stored orders. A missing file counts as empty.
+  let merged: Order[] = [];
+  try {
+    const raw = await Deno.readTextFile(dir + "/orders.json");
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed)) merged = parsed as Order[];
+  } catch {
+    merged = [];
+  }
+  // Append only orders the list does not already hold.
+  for (const order of bag.orders) {
+    const seen = merged.some(
+      (m) => m.platform === order.platform && m.id === order.id,
+    );
+    if (!seen) merged.push(order);
+  }
+  await Deno.writeTextFile(
+    dir + "/orders.json",
+    JSON.stringify(merged, null, 2) + "\n",
+  );
+  // Read the stored screenshot manifest. A missing file counts as empty.
+  let manifest: Array<{ order: string; file: string }> = [];
+  try {
+    const raw = await Deno.readTextFile(dir + "/" + SHOT_MANIFEST);
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed)) {
+      manifest = parsed as Array<{ order: string; file: string }>;
+    }
+  } catch {
+    manifest = [];
+  }
+  // Number new files after the stored count, so no name collides.
+  let shotNo = manifest.length;
+  for (const shot of bag.shots) {
+    shotNo += 1;
+    const file = shot.platform + "-" + shotNo + ".png";
+    try {
+      await Deno.copyFile(shot.tempPath, dir + "/" + file);
+      manifest.push({ order: shot.orderId, file });
+    } catch (e) {
+      logWarn(
+        "shot copy failed: " + (e instanceof Error ? e.message : String(e)),
+      );
+    }
+  }
+  if (manifest.length > 0) {
+    await Deno.writeTextFile(
+      dir + "/" + SHOT_MANIFEST,
+      JSON.stringify(manifest, null, 2) + "\n",
+    );
+  }
+  // Note screenshots and split later flags in the run meta.
+  const metaRaw = await Deno.readTextFile(dir + "/meta.json");
+  const meta = JSON.parse(metaRaw) as Record<string, unknown>;
+  if (manifest.length > 0) meta["screenshots"] = manifest;
+  if (bag.splitLater.length > 0) meta["splitLater"] = bag.splitLater;
+  await Deno.writeTextFile(
+    dir + "/meta.json",
+    JSON.stringify(meta, null, 2) + "\n",
+  );
+  for (const platform of platforms) {
+    bag.counts[platform] = merged.filter(
+      (o) => o.platform === platform,
+    ).length;
+  }
+  logInfo("run " + id + " holds " + merged.length + " orders");
+  if (LOG) LOG.close("gathered " + merged.length + " orders into " + id);
   return { id, dir };
 }
 
@@ -1870,6 +1987,7 @@ async function runEmit(): Promise<void> {
     "manual",
   ]);
   const days = parseDays(flagValue("days"), 30);
+  const intoId = flagValue("into");
   LOG = createRunLog("gather");
   logInfo(
     "emit prompt starts for " + platforms.join(",") + " over " + days + " days",
@@ -1903,7 +2021,12 @@ async function runEmit(): Promise<void> {
       }
     }
     const label = platforms.length === 1 ? platforms[0] : "multi";
-    const { id, dir } = await writeRun(label, platforms, days);
+    const { id, dir } = await writeRun(
+      label,
+      platforms,
+      days,
+      intoId ?? undefined,
+    );
     // The agent block serves AI mode only. Human modes get the plain
     // summary: the emit JSON means nothing outside an agent chat.
     const { usage } = await loadSettings();
@@ -2061,11 +2184,7 @@ async function runBrowserLogin(raw: string): Promise<void> {
     wizardExit(1);
   }
   const platform = id as "zepto" | "blinkit" | "swiggy";
-  const display = platform === "zepto"
-    ? "Zepto"
-    : platform === "blinkit"
-    ? "Blinkit"
-    : "Swiggy";
+  const display = platform === "zepto" ? "Zepto" : platform === "blinkit" ? "Blinkit" : "Swiggy";
   const setup = browserLoginSetup(platform);
   try {
     await loginWait(platform, setup.siteUrl, setup.check, setup.opts);

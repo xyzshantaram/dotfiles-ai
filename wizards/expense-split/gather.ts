@@ -165,36 +165,43 @@ function accountsStep(answerMap: Map<string, string[]>): Step {
       );
       continue;
     }
-    if (hasCached(id)) {
-      nodes.push(markdown(platformName(id) + ": ready."));
-    } else {
-      nodes.push(
-        markdown(platformName(id) + ": a sign-in window opens on submit."),
-      );
-      // Press-to-login. Same runtime argv as the gatherer shebang,
-      // scoped to this one platform through --platforms.
-      nodes.push(
-        action(
-          "Sign in to " + platformName(id),
-          "gather-login-" + id,
-          [
-            "deno",
-            "run",
-            "--no-lock",
-            "--allow-read",
-            "--allow-write",
-            "--allow-run",
-            "--allow-env",
-            "--allow-sys",
-            "--allow-net",
-            "wizards/gatherer.ts",
-            "--login=" + id,
-          ],
-          "now",
-          true,
-        ),
-      );
-    }
+    // A saved profile proves that a sign-in happened once. It proves
+    // nothing about today, because the site can expire that session at
+    // any time. This screen used to read "ready" and hide the sign-in
+    // control, which left a user with an expired Swiggy session no way
+    // back in. The control now shows in both states.
+    const cached = hasCached(id);
+    nodes.push(
+      markdown(
+        cached
+          ? platformName(id) +
+            ": signed in before. A saved sign-in can expire, so sign in again if a gather reports it."
+          : platformName(id) + ": a sign-in window opens on submit.",
+      ),
+    );
+    // Press-to-login. Same runtime argv as the gatherer shebang,
+    // scoped to this one platform through --platforms.
+    nodes.push(
+      action(
+        cached ? "Sign in to " + platformName(id) + " again" : "Sign in to " + platformName(id),
+        "gather-login-" + id,
+        [
+          "deno",
+          "run",
+          "--no-lock",
+          "--allow-read",
+          "--allow-write",
+          "--allow-run",
+          "--allow-env",
+          "--allow-sys",
+          "--allow-net",
+          "wizards/gatherer.ts",
+          "--login=" + id,
+        ],
+        "now",
+        true,
+      ),
+    );
   }
   return {
     ...step(
@@ -568,7 +575,8 @@ function reviewStep(answerMap: Map<string, string[]>, ctx?: WizardCtx): Step {
     // Manual has nothing to fetch. Its run is already on disk.
     if (id === "manual") continue;
     // Press to fetch. Same runtime argv as the gatherer shebang,
-    // scoped to this one platform through --platforms.
+    // scoped to this one platform through --platforms. Every press
+    // in one session appends to one shared run through --into.
     nodes.push(
       action(
         "Fetch " + platformName(id) + " orders",
@@ -587,6 +595,7 @@ function reviewStep(answerMap: Map<string, string[]>, ctx?: WizardCtx): Step {
           "--platforms=" + id,
           "--emit",
           "--days=" + days,
+          "--into=" + gatherRunId(sessionId),
         ],
         "now",
         true,
@@ -625,6 +634,19 @@ export function setResumedRun(sessionId: string, runId: string): void {
   resumedRuns.for(sidOf({ sessionId })).id = runId;
 }
 
+// Hold one gather run id per browser session.
+// Every Fetch press in one session appends to this run.
+const gatherRuns = sessionStore((): { id: string | null } => ({ id: null }));
+
+// Read the gather run id for one session. Mint it on first read.
+function gatherRunId(sessionId: string): string {
+  const slot = gatherRuns.for(sidOf({ sessionId }));
+  if (slot.id === null || slot.id.length === 0) {
+    slot.id = String(Math.floor(Date.now() / 1000)) + "-multi";
+  }
+  return slot.id;
+}
+
 // Run id the pick step shows. Manual uses the manual run.
 // Other platforms use the newest run covering a picked platform.
 export function gatherPickRunId(
@@ -641,6 +663,16 @@ export function gatherPickRunId(
   if (manualPicked(m)) {
     const manual = manualRunFor(sid);
     return manual !== null ? manual.id : null;
+  }
+  // A shared gather run from this session wins over the platform scan.
+  const gatherId = gatherRuns.for(sid).id;
+  if (gatherId !== null && gatherId.length > 0) {
+    try {
+      const info = Deno.statSync(runsDir() + "/" + gatherId);
+      if (info.isDirectory) return gatherId;
+    } catch {
+      // Fall through to the platform scan when the dir misses.
+    }
   }
   const picked = (answerList(m, "platforms")).map((value) => value.toLowerCase());
   if (picked.length === 0) return null;

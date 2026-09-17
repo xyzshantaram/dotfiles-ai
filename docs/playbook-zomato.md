@@ -47,7 +47,7 @@ Failure modes seen live, with their fixes:
 Per-device telemetry headers are FRESH RANDOM per install (never replay another client's captured
 ids — a new install sends new ones). Static app constants: API_KEY, CLIENT_ID (embedded in every app
 copy), and APP_VERSION / APP_VERSION_CODE from the current APK (keep in sync with
-scripts/dev/sync-zomato-consts.ts when Zomato deprecates a version).
+wizards/dev-zomato-consts.ts when Zomato deprecates a version).
 
 ## History
 
@@ -92,5 +92,5 @@ exact.
 
 ## Extraction
 
-`scripts/proto-zomato.ts extract [pages]` — 19 orders, ALL BALANCE, out/orders-zomato.json
-(₹7,802.92). Failed-payment cards skipped.
+One throwaway probe read 19 orders, ALL BALANCE, worth ₹7,802.92, and skipped failed-payment
+cards. The shipped reader is `src/zomato.ts`, driven by `wizards/gatherer.ts`.

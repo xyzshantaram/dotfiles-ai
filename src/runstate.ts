@@ -151,6 +151,57 @@ export function listRunsSync(): RunMeta[] {
 }
 
 export { isDryMap } from "./answers.ts";
+// Reuse one run dir across gather presses. Create it when it misses.
+export async function ensureRun(
+  id: string,
+  label: string,
+  platforms: string[],
+  rangeDays: number,
+  logFile: string,
+): Promise<{ dir: string; existed: boolean }> {
+  // Throw for unsafe ids.
+  if (isUnsafe(id)) throw new Error("bad run id " + id);
+  // Build the run dir path.
+  const dir = runsDir() + "/" + id;
+  // Try to read the stored record.
+  let text: string;
+  try {
+    text = await Deno.readTextFile(metaPath(dir));
+  } catch {
+    // Make the run dir with parents.
+    await Deno.mkdir(dir, { recursive: true });
+    // Build the gathered record with UTC time.
+    const meta: RunMeta = {
+      id,
+      label,
+      createdAt: new Date().toISOString(),
+      platforms,
+      rangeDays,
+      status: "gathered",
+      logFile,
+    };
+    // Persist the record to the run dir.
+    await writeJson(metaPath(dir), meta);
+    return { dir, existed: false };
+  }
+  // Parse the stored record.
+  const meta = JSON.parse(text) as RunMeta;
+  // A split or a pushed run must never take new orders.
+  if (meta.status !== "gathered") {
+    throw new Error("run " + id + " is not open for more orders");
+  }
+  // Merge the platform list with the existing order first.
+  const merged: string[] = [...meta.platforms];
+  for (const name of platforms) {
+    if (!merged.includes(name)) merged.push(name);
+  }
+  meta.platforms = merged;
+  // Name a multi platform run multi.
+  if (merged.length > 1) meta.label = "multi";
+  // Persist the merged record.
+  await writeJson(metaPath(dir), meta);
+  return { dir, existed: true };
+}
 export async function createRun(
   label: string,
   platforms: string[],
