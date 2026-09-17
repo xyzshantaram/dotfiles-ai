@@ -371,3 +371,39 @@ export function selectCostBranch(summary: CostSummary | null): "exact" | "estima
   if (summary !== null && summary !== undefined) return "estimated";
   return "missing";
 }
+
+/**
+ * The collapsed trigger's tooltip text, which doubles as the trigger's
+ * aria-label (#166).
+ *
+ * The open panel marks an estimate three ways — median headline, "Est.
+ * range" row, hover naming the provider count — but the collapsed tip used
+ * to carry the bare median, so an estimate was indistinguishable from an
+ * exact figure for anyone who did not open the panel, and a screen-reader
+ * user got ONLY the unmarked form. The estimate therefore carries its
+ * marker AND its range here; exact and missing figures render exactly as
+ * before. A null figure (no usage yet) renders the reading alone.
+ *
+ * Deliberately NOT the styled tooltip plugin (`data-dsh-tip`): that plugin
+ * reads the visual text from `title` while the accessible name still comes
+ * from `aria-label`, which would split the two surfaces this one string
+ * keeps identical — and it strips `title` while showing, so a drifted pair
+ * would show one figure and announce another. One string feeds the hover
+ * div and the aria-label alike, so they can never disagree.
+ */
+export function buildTipText(
+  reading: string,
+  costText: string | null,
+  costBranch: "exact" | "estimated" | "missing",
+  rangeLabel: string | null,
+): string {
+  if (costText === null) return reading;
+  if (costBranch === "estimated") {
+    // The marker is unconditional: even a missing range must never leave an
+    // estimate looking exact on the one surface some users exclusively get.
+    const marked =
+      rangeLabel !== null ? costText + " (est. range " + rangeLabel + ")" : costText + " (est.)";
+    return reading + " · " + marked;
+  }
+  return reading + " · " + costText;
+}

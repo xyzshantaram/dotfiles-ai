@@ -2,6 +2,7 @@ import * as React from "react";
 import { useDismissable } from "../../shared/client-react";
 import { fetchJson, injectStyle, shippedClass } from "../../shared/client-util";
 import {
+  buildTipText,
   effectiveExplainStatus,
   explainMissingRate,
   formatApproxCost,
@@ -294,6 +295,18 @@ function apply(ctx: any) {
     const pricesDoc =
       pricesSnap !== null && pricesSnap !== undefined ? pricesSnap.value : undefined;
     const [routeDoc, setRouteDoc] = React.useState(null);
+    // STALENESS WINDOW, DELIBERATE (#166): this fetches ONCE — the deps are
+    // [pricesDoc], so a host-side table change after the fetch (a sync-models
+    // run) is invisible to this client until a reload: the panel keeps
+    // pricing from the fetched copy, or keeps saying "unpriced, add a row"
+    // for a row that now exists on the host. Left as-is on purpose: there is
+    // no invalidation signal on this side (the settings scope is the reactive
+    // channel and it already re-renders; this fallback only engages where the
+    // scope is dead), a timer would be a poll — minting and fetching on a
+    // timer is how the sibling ElectronHub work got into trouble with
+    // rotating tokens, and a price table does not need polling — and the
+    // trigger is narrow (host-side change, loaded LAN session, no reload).
+    // The panel never asserts currency; a reload picks the new table up.
     React.useEffect(() => {
       if (pricesDoc !== undefined) return;
       let cancelled = false;
@@ -396,8 +409,11 @@ function apply(ctx: any) {
     const reading =
       formatTokens(trueTotal) + " / " + formatTokens(contextWindow) + ", " + percent + "% used";
     // The hover tip carries the same total the panel prices, so the two
-    // surfaces can never disagree about one session.
-    const tipText = costText === null ? reading : reading + " · " + costText;
+    // surfaces can never disagree about one session. It doubles as the
+    // trigger's aria-label, so the estimate marker lives in buildTipText
+    // (cost.ts), not only in the open panel: a screen-reader user never
+    // opens it (#166).
+    const tipText = buildTipText(reading, costText, costBranch, rangeLabel);
 
     const segments = TRUE_ROWS.map((part) => ({
       key: part.key,

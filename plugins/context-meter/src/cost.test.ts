@@ -13,6 +13,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  buildTipText,
   effectiveExplainStatus,
   explainMissingRate,
   formatApproxCost,
@@ -623,6 +624,20 @@ describe("the panel is wired to the explainer, not to a catch-all string", () =>
     expect(source).toMatch(/effectiveExplainStatus\s*\(/);
   });
 
+  it("passes the DERIVED scope status into the call, not a literal (#166)", () => {
+    // The pin above asserts a call EXISTS, not what flows into it — and the
+    // reviewer's mutant M3 proved it: hardcoding
+    // effectiveExplainStatus("ready", effectiveDoc) left all 50 tests green.
+    // This asserts the DATA FLOW instead: the scopeStatus binding derived
+    // from the snapshot must be the call's first argument, and the call's
+    // result must feed explainMissingRate. A literal first argument fails
+    // the first assertion; bypassing the call fails the second.
+    expect(source).toMatch(/effectiveExplainStatus\s*\(\s*scopeStatus\s*,/s);
+    expect(source).toMatch(
+      /explainMissingRate\s*\(\s*effectiveExplainStatus\s*\(\s*scopeStatus\s*,/s,
+    );
+  });
+
   it("prices through the summary, not a single rate (#161)", () => {
     // resolveRate prices one row; the panel must render the exact-or-estimate
     // summary instead, or the median/range work above never reaches a reader.
@@ -652,5 +667,56 @@ describe("the panel is wired to the explainer, not to a catch-all string", () =>
     // selectCostBranch (cost.ts), pinned by the executing tests above; this
     // grep keeps only the range-row WIRING (the row call, the label, the
     // providers), which has no executing equivalent without a DOM.
+  });
+
+  it("builds the trigger tip AND aria-label from the branch-aware builder (#166)", () => {
+    // buildTipText is executed below; this pins only that BOTH surfaces —
+    // the hover div and the aria-label, the latter being all a
+    // screen-reader user gets — share its output instead of a hand-rolled
+    // `reading + costText` that drops the estimate marker.
+    expect(source).toMatch(/const tipText\s*=\s*buildTipText\s*\(/);
+    expect(source).toMatch(/"aria-label":\s*tipText/);
+  });
+});
+
+/**
+ * THE COLLAPSED TOOLTIP CARRIES THE ESTIMATE MARKER (#166).
+ *
+ * The open panel marks an estimate three ways, but the collapsed trigger's
+ * tooltip — also its aria-label — carried the bare median, so an estimate
+ * was indistinguishable from an exact figure for anyone who did not open
+ * the panel, and a screen-reader user got ONLY the unmarked form.
+ * buildTipText is the exact function the trigger calls for that string, so
+ * these tests EXECUTE the marker rather than grepping for it.
+ */
+describe("buildTipText", () => {
+  const reading = "12.3k / 100k, 12% used";
+
+  it("marks an estimate with its range, not just the median", () => {
+    const tip = buildTipText(reading, "~$0.12", "estimated", "~$0.04 – ~$0.30");
+    expect(tip).toContain("~$0.12");
+    expect(tip).toMatch(/est\./);
+    expect(tip).toContain("~$0.04 – ~$0.30");
+  });
+
+  it("still marks the estimate when the range is absent, never bare", () => {
+    // rangeLabel is always set on the estimated branch, but a bare median
+    // must never be the fallback: the marker stays even without the spread.
+    const tip = buildTipText(reading, "~$0.12", "estimated", null);
+    expect(tip).toMatch(/est\./);
+    expect(tip).toContain("~$0.12");
+  });
+
+  it("leaves exact and missing figures identical to the old shape", () => {
+    // The fix must not reword the surfaces that were already honest.
+    expect(buildTipText(reading, "~$0.12", "exact", null)).toBe(reading + " · ~$0.12");
+    expect(buildTipText(reading, "prices unavailable", "missing", null)).toBe(
+      reading + " · prices unavailable",
+    );
+  });
+
+  it("renders the reading alone when there is no figure yet", () => {
+    // No usage reported: costText is null, and there is nothing to join.
+    expect(buildTipText(reading, null, "missing", null)).toBe(reading);
   });
 });

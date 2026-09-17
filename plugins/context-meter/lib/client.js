@@ -269,6 +269,14 @@ function selectCostBranch(summary) {
   if (summary !== null && summary !== void 0) return "estimated";
   return "missing";
 }
+function buildTipText(reading, costText, costBranch, rangeLabel) {
+  if (costText === null) return reading;
+  if (costBranch === "estimated") {
+    const marked = rangeLabel !== null ? costText + " (est. range " + rangeLabel + ")" : costText + " (est.)";
+    return reading + " \xB7 " + marked;
+  }
+  return reading + " \xB7 " + costText;
+}
 
 // css-text:/home/sid/repos/dotfiles-ai/plugins/context-meter/src/client.module.css
 var client_default = ".ctx-meter-root {\n  display: inline-flex;\n  position: relative;\n}\n.ctx-meter-trigger {\n  width: 30px;\n  height: 30px;\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  background: 0 0;\n  border: none;\n  border-radius: 999px;\n  flex: none;\n  place-items: center;\n  display: grid;\n  padding: 0;\n}\n.ctx-meter-trigger:hover {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.ctx-meter-track {\n  fill: none;\n  stroke: var(--dsw-alias-border-l2);\n  stroke-width: 2.5px;\n}\n.ctx-meter-fill {\n  fill: none;\n  stroke: var(--dsw-alias-label-primary);\n  stroke-width: 2.5px;\n  stroke-linecap: round;\n}\n.ctx-meter-tip {\n  z-index: 100;\n  pointer-events: none;\n  white-space: nowrap;\n  border: 1px solid var(--dsw-alias-border-inverted);\n  background: var(--dsw-specific-menu);\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-secondary);\n  border-radius: 8px;\n  padding: 4px 8px;\n  font-size: 12px;\n  line-height: 18px;\n  font-variant-numeric: tabular-nums;\n  position: absolute;\n  bottom: calc(100% + 8px);\n  right: 0;\n}\n.ctx-meter-panel {\n  z-index: 100;\n  box-sizing: border-box;\n  border: 1px solid var(--dsw-alias-border-inverted);\n  background: var(--dsw-specific-menu);\n  width: 296px;\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-secondary);\n  cursor: default;\n  border-radius: 12px;\n  padding: 12px;\n  font-size: 12px;\n  line-height: 20px;\n  position: absolute;\n  bottom: calc(100% + 8px);\n  right: 0;\n}\n.ctx-meter-title {\n  color: var(--dsw-alias-label-primary);\n  font-weight: 500;\n}\n.ctx-meter-half + .ctx-meter-half {\n  margin-top: 12px;\n  padding-top: 10px;\n  border-top: 1px solid var(--dsw-alias-border-l3);\n}\n.ctx-meter-head {\n  align-items: baseline;\n  gap: 6px;\n  display: flex;\n}\n.ctx-meter-figures {\n  font-variant-numeric: tabular-nums;\n  color: var(--dsw-alias-label-primary);\n  margin-left: auto;\n  font-weight: 500;\n}\n.ctx-meter-bar {\n  background: var(--dsw-alias-interactive-bg-hover);\n  border-radius: 999px;\n  gap: 1px;\n  height: 4px;\n  margin: 8px 0 6px;\n  display: flex;\n  overflow: hidden;\n}\n.ctx-meter-segment {\n  background: var(--meter-tint, var(--dsw-alias-label-tertiary));\n  border-radius: 1px;\n  flex: none;\n  min-width: 2px;\n  height: 100%;\n}\n.ctx-meter-swatch {\n  background: var(--meter-tint);\n  vertical-align: baseline;\n  border-radius: 2px;\n  width: 8px;\n  height: 8px;\n  margin-right: 6px;\n  display: inline-block;\n}\n.ctx-meter-color-system {\n  --meter-tint: var(--dsw-static-neutral-bluish-400);\n}\n.ctx-meter-color-tools {\n  --meter-tint: #a78bfa;\n}\n.ctx-meter-color-messages {\n  --meter-tint: var(--dsw-static-blue-450);\n}\n.ctx-meter-rows {\n  margin: 4px 0 0;\n}\n.ctx-meter-row {\n  justify-content: space-between;\n  align-items: center;\n  gap: 12px;\n  padding: 2px 0;\n  display: flex;\n}\n.ctx-meter-row dt {\n  color: var(--dsw-alias-label-secondary);\n}\n.ctx-meter-row dd {\n  font-variant-numeric: tabular-nums;\n  color: var(--dsw-alias-label-primary);\n  margin: 0;\n}\n.ctx-meter-sub dt {\n  padding-left: 14px;\n  color: var(--dsw-alias-label-tertiary);\n}\n.ctx-meter-group {\n  color: var(--dsw-alias-label-tertiary);\n  margin-top: 8px;\n}\n.ctx-meter-note {\n  color: var(--dsw-alias-label-tertiary);\n  margin-top: 6px;\n}\n";
@@ -519,7 +527,7 @@ function apply(ctx) {
     const percent = Math.min(100, Math.round(trueTotal / contextWindow * 100));
     const dash = CIRCUMFERENCE * Math.min(1, trueTotal / contextWindow);
     const reading = formatTokens(trueTotal) + " / " + formatTokens(contextWindow) + ", " + percent + "% used";
-    const tipText = costText === null ? reading : reading + " \xB7 " + costText;
+    const tipText = buildTipText(reading, costText, costBranch, rangeLabel);
     const segments = TRUE_ROWS.map((part) => ({
       key: part.key,
       color: part.color,

@@ -61,9 +61,15 @@ function apply(ctx: any) {
   );
 
   // Lazy inject: the plugin still loads where no web server mounts. The
-  // handler (./route) reads the RESOLVED namespace per request, so a
-  // sync-models run shows up without a restart; a missing settings service
-  // answers 503 instead of throwing the route off the server.
+  // handler (./route) reads the RESOLVED namespace per request, so each NEW
+  // fetch after a sync-models run sees the new table without a restart — but
+  // that is true of the ROUTE, not of every caller: an already-loaded LAN
+  // client fetched its copy once (see the routeDoc effect in client.tsx) and
+  // keeps pricing from the old table until a reload, while a loopback client
+  // re-renders reactively through the scope. A comment true of one caller and
+  // false of another is how the last two defects in this plugin were missed
+  // (#166), so say which. A missing settings service answers 503 instead of
+  // throwing the route off the server.
   try {
     ctx.inject(["webServer"], (scope: any) => {
       const server = scope.webServer as {
