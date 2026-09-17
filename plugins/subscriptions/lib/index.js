@@ -480,8 +480,8 @@ var EH_SESSION_ENDPOINT_PATHS = [
   "/v1/auth/permanent-credits/info",
   "/v1/flex-credits/info"
 ];
-var EH_SESSION_NO_COOKIE = "no ElectronHub browser session in any Firefox profile \u2014 open app.electronhub.ai in Firefox and sign in, then harvest the session again";
-var EH_SESSION_EXPIRED = "ElectronHub browser session expired \u2014 log in to ElectronHub in Firefox again, then harvest the session again";
+var EH_SESSION_NO_COOKIE = "no ElectronHub browser session in any Firefox profile \u2014 open app.electronhub.ai in Firefox and sign in, then fetch the session again";
+var EH_SESSION_EXPIRED = "ElectronHub browser session expired \u2014 log in to ElectronHub in Firefox again, then fetch the session again";
 function ehIniProfiles(text) {
   var out = [];
   var current = null;

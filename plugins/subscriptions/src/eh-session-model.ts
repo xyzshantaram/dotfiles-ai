@@ -23,7 +23,7 @@
  *   expired refresh token"). The host reflects the rotation successor (the
  *   Set-Cookie of the mint response) back into the profile row it read, so
  *   the chain in the profile stays current. A mint therefore happens only
- *   on an explicit user action (the panel's "Harvest session" button), never
+ *   on an explicit user action (the panel's "Fetch session" button), never
  *   on the panel's poll loop — a per-minute auto-mint would churn the
  *   browser's own rotation chain.
  * - Firefox keeps cookies.sqlite in WAL mode: the live values may sit in
@@ -65,7 +65,7 @@ export var EH_SESSION_ENDPOINT_PATHS = [
 /** No usable cookie in any profile: the honest affordance is a login hint. */
 export var EH_SESSION_NO_COOKIE =
   "no ElectronHub browser session in any Firefox profile — open app.electronhub.ai " +
-  "in Firefox and sign in, then harvest the session again";
+  "in Firefox and sign in, then fetch the session again";
 /**
  * The stored session is dead (refresh 401, dashboard 401, or the minted JWT
  * is already expired): the user must log in again. Never rendered as zero
@@ -73,7 +73,7 @@ export var EH_SESSION_NO_COOKIE =
  */
 export var EH_SESSION_EXPIRED =
   "ElectronHub browser session expired — log in to ElectronHub in Firefox again, " +
-  "then harvest the session again";
+  "then fetch the session again";
 /**
  * Analytics endpoints unidentified (criterion 7): the token/API usage tabs
  * ride an authenticated WebSocket (/v1/ws/auth, protocol unknown from the

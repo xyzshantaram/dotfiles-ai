@@ -291,7 +291,7 @@ var PROVIDER_TOGGLES = [
 ];
 var EH_MODEL_ROW_CAP = 30;
 var EH_HISTORY_ROWS = 14;
-var EH_SESSION_EXPIRED_LINE = "ElectronHub browser session expired \u2014 log in to ElectronHub in Firefox again, then harvest the session again";
+var EH_SESSION_EXPIRED_LINE = "ElectronHub browser session expired \u2014 log in to ElectronHub in Firefox again, then fetch the session again";
 function fillColor(percent) {
   if (percent >= 90) return "var(--dsw-alias-state-error-primary)";
   if (percent >= 70) return "var(--dsw-alias-state-warn-primary)";
@@ -766,12 +766,12 @@ function renderEhSection(ehUsage, ehModels, ehSession, ehSessionUi, onHarvestSes
     }
     if (session.partial === true) {
       sessionLines.push(
-        /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note", key: "eh-s-partial" }, "partial harvest: a dashboard block failed, so it is omitted \u2014 nothing is estimated")
+        /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note", key: "eh-s-partial" }, "partial fetch: a dashboard block failed, so it is omitted \u2014 nothing is estimated")
       );
     }
     var harvestedAt = Date.parse(session.fetchedAt);
     if (Number.isFinite(harvestedAt)) {
-      sessionHarvestedLine = "Session harvested " + new Date(harvestedAt).toLocaleString();
+      sessionHarvestedLine = "Session fetched " + new Date(harvestedAt).toLocaleString();
     }
   }
   var modelList = null;
@@ -790,7 +790,7 @@ function renderEhSection(ehUsage, ehModels, ehSession, ehSessionUi, onHarvestSes
   }
   return /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "ElectronHub"), errorLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, errorLine) : null, model.emptyLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note" }, model.emptyLine) : null, model.notes.map(function(note, ni) {
     return /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note", key: "eh-n-" + ni }, note);
-  }), hero, sessionHero, sessionHarvestedLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note" }, sessionHarvestedLine) : null, rawSession !== null && session === null ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note" }, EH_SESSION_EXPIRED_LINE) : null, sessionLines, sessionCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, sessionCards) : null, creditCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, creditCards) : null, tokenCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, tokenCards) : null, monthlyCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, monthlyCards) : null, historyRows.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, historyRows) : null, endpointCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, endpointCards) : null, accountUsageList, modelList, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-cookie" }, /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", disabled: ehSessionUi.busy, onClick: onHarvestSession }, ehSessionUi.busy ? "Harvesting\u2026" : "Harvest session from Firefox"), ehSessionUi.showLogin ? /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", onClick: onOpenEhLogin }, "Open app.electronhub.ai") : null, ehSessionUi.note ? /* @__PURE__ */ import_react2.default.createElement("span", { className: "ocgs-cookie-note" }, ehSessionUi.note) : null));
+  }), hero, sessionHero, sessionHarvestedLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note" }, sessionHarvestedLine) : null, rawSession !== null && session === null ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note" }, EH_SESSION_EXPIRED_LINE) : null, sessionLines, sessionCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, sessionCards) : null, creditCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, creditCards) : null, tokenCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, tokenCards) : null, monthlyCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, monthlyCards) : null, historyRows.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, historyRows) : null, endpointCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, endpointCards) : null, accountUsageList, modelList, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-cookie" }, /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", disabled: ehSessionUi.busy, onClick: onHarvestSession }, ehSessionUi.busy ? "Fetching\u2026" : "Fetch session from Firefox"), ehSessionUi.showLogin ? /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", onClick: onOpenEhLogin }, "Open app.electronhub.ai") : null, ehSessionUi.note ? /* @__PURE__ */ import_react2.default.createElement("span", { className: "ocgs-cookie-note" }, ehSessionUi.note) : null));
 }
 function makePanel(ctx, config) {
   return function Panel() {
@@ -990,10 +990,10 @@ function makePanel(ctx, config) {
         var merged = Object.assign({}, snap, { ehSession: result });
         setSnap(merged);
         writeLastSnap(merged);
-        setEhSessionUi({ busy: false, note: "Session harvested", showLogin: false });
+        setEhSessionUi({ busy: false, note: "Session fetched", showLogin: false });
         console.info("[subscriptions] ElectronHub session harvested");
       } else {
-        var err = result.error || "Harvest failed";
+        var err = result.error || "Fetch failed";
         var sessionGone = /browser session/.test(err);
         if (sessionGone) {
           var cleared = Object.assign({}, snap, { ehSession: null });
@@ -1009,7 +1009,7 @@ function makePanel(ctx, config) {
       var result = await postJson("/subscriptions/electronhub-session/login");
       setEhSessionUi({
         busy: false,
-        note: result.data && result.data.ok ? "Login page opened in Firefox; sign in, then harvest the session again" : result.error || "Could not open Firefox",
+        note: result.data && result.data.ok ? "Login page opened in Firefox; sign in, then fetch the session again" : result.error || "Could not open Firefox",
         showLogin: false
       });
       if (result.data && result.data.ok) {

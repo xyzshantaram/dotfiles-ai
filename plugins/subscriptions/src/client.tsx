@@ -97,7 +97,7 @@ var EH_HISTORY_ROWS = 14;
  */
 var EH_SESSION_EXPIRED_LINE =
   "ElectronHub browser session expired — log in to ElectronHub in Firefox again, " +
-  "then harvest the session again";
+  "then fetch the session again";
 
 /** Fill color by usage percent — themed alias tokens, light/dark safe. */
 function fillColor(percent) {
@@ -867,13 +867,13 @@ function renderEhSection(ehUsage, ehModels, ehSession, ehSessionUi, onHarvestSes
     if (session.partial === true) {
       sessionLines.push(
         <div className="ocgs-note" key="eh-s-partial">
-          {"partial harvest: a dashboard block failed, so it is omitted — nothing is estimated"}
+          {"partial fetch: a dashboard block failed, so it is omitted — nothing is estimated"}
         </div>,
       );
     }
     var harvestedAt = Date.parse(session.fetchedAt);
     if (Number.isFinite(harvestedAt)) {
-      sessionHarvestedLine = "Session harvested " + new Date(harvestedAt).toLocaleString();
+      sessionHarvestedLine = "Session fetched " + new Date(harvestedAt).toLocaleString();
     }
   }
 
@@ -932,7 +932,7 @@ function renderEhSection(ehUsage, ehModels, ehSession, ehSessionUi, onHarvestSes
       {modelList}
       <div className="ocgs-cookie">
         <button className="ocgs-btn" disabled={ehSessionUi.busy} onClick={onHarvestSession}>
-          {ehSessionUi.busy ? "Harvesting…" : "Harvest session from Firefox"}
+          {ehSessionUi.busy ? "Fetching…" : "Fetch session from Firefox"}
         </button>
         {ehSessionUi.showLogin ? (
           <button className="ocgs-btn" onClick={onOpenEhLogin}>
@@ -1172,10 +1172,10 @@ function makePanel(ctx, config) {
         var merged = Object.assign({}, snap, { ehSession: result });
         setSnap(merged);
         writeLastSnap(merged);
-        setEhSessionUi({ busy: false, note: "Session harvested", showLogin: false });
+        setEhSessionUi({ busy: false, note: "Session fetched", showLogin: false });
         console.info("[subscriptions] ElectronHub session harvested");
       } else {
-        var err = result.error || "Harvest failed";
+        var err = result.error || "Fetch failed";
         // A dead session must clear the stored harvest: the old figures
         // must never keep rendering once the credential is gone. Anything
         // else (transport, endpoint 5xx) keeps the labelled harvest.
@@ -1197,7 +1197,7 @@ function makePanel(ctx, config) {
         busy: false,
         note:
           result.data && result.data.ok
-            ? "Login page opened in Firefox; sign in, then harvest the session again"
+            ? "Login page opened in Firefox; sign in, then fetch the session again"
             : result.error || "Could not open Firefox",
         showLogin: false,
       });
