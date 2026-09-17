@@ -12928,15 +12928,174 @@ function finalPipelineNaming(command, script) {
   const leading = names[0];
   return leading !== void 0 && leading !== "" ? { names, leading } : null;
 }
+function hasBackgroundStatement(script) {
+  const walk2 = (node) => {
+    switch (node.type) {
+      case "Script":
+      case "CompoundList":
+        return node.commands.some((s) => walk2(s));
+      case "Statement":
+        return node.background === true || walk2(node.command);
+      case "Pipeline":
+        return false;
+      case "Command":
+        return false;
+      case "AndOr":
+        return node.commands.some((c) => walk2(c));
+      case "If":
+        return walk2(node.clause) || walk2(node.then) || node.else !== void 0 && walk2(node.else);
+      case "While":
+        return walk2(node.clause) || walk2(node.body);
+      case "For":
+      case "Select":
+      case "ArithmeticFor":
+        return walk2(node.body);
+      case "BraceGroup":
+        return walk2(node.body);
+      case "Case":
+        return node.items.some((item) => walk2(item.body));
+      default:
+        return false;
+    }
+  };
+  return walk2(script);
+}
+function hasInvisibleStatement(script) {
+  const walk2 = (node) => {
+    switch (node.type) {
+      case "Script":
+      case "CompoundList":
+        return node.commands.some((s) => walk2(s));
+      case "Statement":
+        return walk2(node.command);
+      case "Subshell":
+      case "Coproc":
+        return true;
+      case "Pipeline":
+        return false;
+      case "Command":
+        return false;
+      case "AndOr":
+        return node.commands.some((c) => walk2(c));
+      case "If":
+        return walk2(node.clause) || walk2(node.then) || node.else !== void 0 && walk2(node.else);
+      case "While":
+        return walk2(node.clause) || walk2(node.body);
+      case "For":
+      case "Select":
+      case "ArithmeticFor":
+        return walk2(node.body);
+      case "BraceGroup":
+        return walk2(node.body);
+      case "Function":
+        return walk2(node.body);
+      case "Case":
+        return node.items.some((item) => walk2(item.body));
+      default:
+        return false;
+    }
+  };
+  return walk2(script);
+}
+function hasChainConditional(script) {
+  const walk2 = (node) => {
+    switch (node.type) {
+      case "Script":
+      case "CompoundList":
+        return node.commands.some((s) => walk2(s));
+      case "Statement":
+        return walk2(node.command);
+      case "AndOr":
+        return true;
+      case "Pipeline":
+        return false;
+      case "Command":
+        return false;
+      case "If":
+        return walk2(node.clause) || walk2(node.then) || node.else !== void 0 && walk2(node.else);
+      case "While":
+        return walk2(node.clause) || walk2(node.body);
+      case "For":
+      case "Select":
+      case "ArithmeticFor":
+        return walk2(node.body);
+      case "BraceGroup":
+        return walk2(node.body);
+      case "Case":
+        return node.items.some((item) => walk2(item.body));
+      default:
+        return false;
+    }
+  };
+  return walk2(script);
+}
+function hasWrappableSteps(script) {
+  if (script.commands.length > 1) return true;
+  if (script.commands.length === 0) return false;
+  const only = script.commands[0];
+  const inner = only !== void 0 && only.type === "Statement" ? only.command : void 0;
+  return inner !== void 0 && (inner.type === "AndOr" || inner.type === "If" || inner.type === "While" || inner.type === "For" || inner.type === "Select" || inner.type === "ArithmeticFor" || inner.type === "BraceGroup");
+}
+function lastChainPipelineNaming(command, script) {
+  if (script.commands.length === 0) return null;
+  const lastStatement = script.commands[script.commands.length - 1];
+  if (lastStatement === void 0 || lastStatement.type !== "Statement") return null;
+  if (lastStatement.background === true) return null;
+  let node = lastStatement.command;
+  let descended = false;
+  while (node.type === "AndOr") {
+    if (node.commands.length === 0) return null;
+    const lastOperand = node.commands[node.commands.length - 1];
+    if (lastOperand === void 0) return null;
+    node = lastOperand;
+    descended = true;
+  }
+  if (!descended) return null;
+  if (node.type !== "Pipeline") return null;
+  if (node.commands.length === 0 || !node.commands.every((s) => s.type === "Command")) {
+    return null;
+  }
+  const names = node.commands.map(
+    (stage) => (
+      // Group 0: the group id only links operators for display, and a basename
+      // needs just the node and its source string.
+      getBasename({ node: stage, source: command, group: 0 })
+    )
+  );
+  const leading = names[0];
+  return leading !== void 0 && leading !== "" ? { names, leading } : null;
+}
 function planPipeCapture(command) {
   let script;
   try {
     script = parse(command);
   } catch {
-    return { hasPipe: false, names: null, finalNames: null, finalLeading: null };
+    return {
+      hasPipe: false,
+      names: null,
+      finalNames: null,
+      finalLeading: null,
+      unconfirmedNames: null,
+      unconfirmedLeading: null,
+      hasBackground: false,
+      hasChain: false,
+      hasHiddenStatements: false,
+      needsWrap: false
+    };
   }
   if (script.errors !== void 0 && script.errors.length > 0) {
-    return { hasPipe: false, names: null, finalNames: null, finalLeading: null };
+    return {
+      hasPipe: false,
+      names: null,
+      finalNames: null,
+      finalLeading: null,
+      unconfirmedNames: null,
+      unconfirmedLeading: null,
+      hasBackground: false,
+      hasChain: false,
+      hasHiddenStatements: false,
+      needsWrap: false
+    };
   }
   let names = null;
   if (script.commands.length === 1) {
@@ -12956,11 +13115,19 @@ function planPipeCapture(command) {
     }
   }
   const final = finalPipelineNaming(command, script);
+  const chain = lastChainPipelineNaming(command, script);
+  const hasPipe = containsPipeline(script);
   return {
-    hasPipe: containsPipeline(script),
+    hasPipe,
     names,
     finalNames: final?.names ?? null,
-    finalLeading: final?.leading ?? null
+    finalLeading: final?.leading ?? null,
+    unconfirmedNames: chain?.names ?? null,
+    unconfirmedLeading: chain?.leading ?? null,
+    hasBackground: hasBackgroundStatement(script),
+    hasChain: hasChainConditional(script),
+    hasHiddenStatements: hasInvisibleStatement(script),
+    needsWrap: hasPipe || hasWrappableSteps(script)
   };
 }
 function decidePipeExit(stages) {
@@ -12976,6 +13143,180 @@ function formatPipeStages(stages) {
   return stages.map(
     (s) => s.name !== void 0 && s.name !== "" ? `${s.name} ${s.exitCode}` : `${s.exitCode}`
   ).join(", ");
+}
+var USER_TRAP_QUERY = /^\s*trap\s+-(p|l)(\s|$)/;
+var USER_TRAP_TAMPER = /^\s*(command\s+|builtin\s+)?trap(\s|;|$)/;
+var USER_FUNCTRACE_TAMPER = [/^\s*set\s+-[A-Za-z]*T/, /^\s*set\s+.*-o\s+functrace\b/];
+function parseStepCapture(text) {
+  const lines = text.split("\n");
+  let endIndex = lines.length - 1;
+  while (endIndex >= 0 && lines[endIndex]?.trim() === "") endIndex--;
+  const endLine = endIndex >= 0 ? lines[endIndex] : void 0;
+  const endMatch = endLine !== void 0 ? /^END rc=(\d+)\s*$/.exec(endLine) : null;
+  if (endMatch === null || endMatch[1] === void 0) {
+    return {
+      complete: false,
+      statements: [],
+      endRc: 0,
+      lossReason: "the command replaced the EXIT trap, or never reached it"
+    };
+  }
+  const endRc = Number(endMatch[1]);
+  const records = [];
+  const recordStart = /^\[([\d ]*)\] :: ?(.*)$/;
+  for (const line of lines.slice(0, endIndex)) {
+    const match = recordStart.exec(line);
+    if (match !== null) {
+      const rawCodes = (match[1] ?? "").trim();
+      const codes = rawCodes === "" ? [] : rawCodes.split(/\s+/).map((s) => Number(s)).filter((n) => Number.isInteger(n));
+      records.push({ command: match[2] ?? "", codes });
+    } else if (records.length > 0 && line !== "") {
+      records[records.length - 1].command += `
+${line}`;
+    }
+  }
+  const installedDropped = records.filter((r) => !r.command.includes("__dsh_"));
+  const EXIT_RECORD = /^\s*exit(\s|;|$)/;
+  const lastExitIndex = (() => {
+    let found = -1;
+    installedDropped.forEach((r, i) => {
+      if (EXIT_RECORD.test(r.command.split("\n")[0] ?? "")) found = i;
+    });
+    return found;
+  })();
+  const userRecords = lastExitIndex < 0 ? installedDropped : installedDropped.filter(
+    (r, i) => i === lastExitIndex || !EXIT_RECORD.test(r.command.split("\n")[0] ?? "")
+  );
+  for (const record of userRecords) {
+    const firstLine = record.command.split("\n")[0] ?? "";
+    if (USER_TRAP_TAMPER.test(firstLine) && !USER_TRAP_QUERY.test(firstLine)) {
+      return {
+        complete: false,
+        statements: [],
+        endRc,
+        lossReason: "the command replaced or cleared the capture traps"
+      };
+    }
+    if (USER_FUNCTRACE_TAMPER.some((pattern) => pattern.test(firstLine))) {
+      return {
+        complete: false,
+        statements: [],
+        endRc,
+        lossReason: "the command enabled functrace, which changes the capture scope"
+      };
+    }
+  }
+  if (userRecords.length === 0) {
+    return {
+      complete: false,
+      statements: [],
+      endRc,
+      lossReason: "no per-statement records were captured"
+    };
+  }
+  const deduped = [...userRecords];
+  const last = deduped[deduped.length - 1];
+  const secondLast = deduped[deduped.length - 2];
+  if (secondLast !== void 0 && secondLast.command === last.command && secondLast.codes.length === last.codes.length && secondLast.codes.every((code, i) => code === last.codes[i])) {
+    deduped.pop();
+  }
+  const statements = attributeStepStatements(deduped, endRc);
+  if (statements === null) {
+    return {
+      complete: false,
+      statements: [],
+      endRc,
+      lossReason: "the capture stream does not group into statements"
+    };
+  }
+  return { complete: true, statements, endRc };
+}
+function attributeStepStatements(records, endRc) {
+  const n = records.length;
+  const last = records[n - 1];
+  if (last.codes.length === 0) return null;
+  const lastFirstLine = last.command.split("\n")[0] ?? "";
+  const codes = records.map((r) => r.codes);
+  if (/^\s*exit(\s|;|$)/.test(lastFirstLine)) {
+    codes[n - 1] = [endRc];
+  }
+  if (n === 1) {
+    return [{ stages: [records[0].command], codes: codes[0] }];
+  }
+  const consumed = new Array(n).fill(false);
+  const byIndex = /* @__PURE__ */ new Map();
+  for (let j = n - 1; j >= 0; j--) {
+    if (consumed[j] === true) continue;
+    const ownCodes = codes[j];
+    if (ownCodes.length === 0) return null;
+    if (ownCodes.length === 1) {
+      byIndex.set(j, { stages: [records[j].command], codes: ownCodes });
+    } else {
+      const size = ownCodes.length;
+      const start = j - size + 1;
+      if (start < 0) return null;
+      for (let k = start; k <= j; k++) {
+        if (consumed[k] === true) return null;
+      }
+      const stages = [];
+      for (let k = start; k <= j; k++) {
+        consumed[k] = true;
+        stages.push(records[k].command);
+      }
+      byIndex.set(start, { stages, codes: ownCodes });
+      j = start;
+    }
+  }
+  const statements = [];
+  for (let i = 0; i < n; i++) {
+    const statement = byIndex.get(i);
+    if (statement !== void 0) statements.push(statement);
+  }
+  return statements;
+}
+function renderDegradedCodesLine(pipeStages, plan) {
+  const stageNames = plan.names !== null ? plan.names : plan.finalNames;
+  if (stageNames !== null) {
+    return `[exit codes: ${formatPipeStages(pipeStages)}]`;
+  }
+  if (plan.unconfirmedNames !== null && plan.unconfirmedNames.length === pipeStages.length) {
+    const unconfirmed = pipeStages.map((stage, i) => ({
+      ...stage,
+      name: plan.unconfirmedNames[i]
+    }));
+    return `[exit codes (unconfirmed \u2014 the \`&&\`/\`||\` chain may have short-circuited; these name the final pipeline (led by \`${plan.unconfirmedLeading}\`) only if it ran): ${formatPipeStages(unconfirmed)}]`;
+  }
+  if (!plan.hasChain) {
+    return `[exit codes: ${formatPipeStages(pipeStages)}]`;
+  }
+  return "";
+}
+function renderDegradedScopeNote(pipeStages, plan, reportedExit, stepLossReason) {
+  if (plan.names !== null) return "";
+  const carryingCodes = reportedExit === 0 ? `: ${formatPipeStages(pipeStages)}` : "";
+  return `[exit codes cover the final pipeline only` + (plan.finalLeading !== null ? ` (last pipeline led by \`${plan.finalLeading}\`${carryingCodes})` : carryingCodes !== "" ? ` (${carryingCodes.slice(2)})` : "") + `; earlier lines of a compound command were not captured` + (stepLossReason !== void 0 ? `; per-statement capture was lost (${stepLossReason})` : "") + `]`;
+}
+function shortCommandText(command, maxLength = 120) {
+  const firstLine = command.split("\n")[0] ?? "";
+  return firstLine.length > maxLength ? `${firstLine.slice(0, maxLength)}\u2026` : firstLine;
+}
+function renderAttributedStatement(statement) {
+  const renderedStages = statement.stages.map((stage) => `\`${shortCommandText(stage)}\``);
+  const renderedCodes = statement.codes.join(", ");
+  if (renderedStages.length === 1) return `${renderedStages[0]} ${renderedCodes}`;
+  return `${renderedStages.join(" | ")} \u2192 ${renderedCodes}`;
+}
+function renderStepReport(statements, endRc) {
+  const failed = statements.filter((s) => decidePipeExit(s.codes) !== 0);
+  if (failed.length === 0 && endRc === 0) {
+    return `[exit codes: all ${statements.length} statements exited 0]`;
+  }
+  const rendered = failed.map((s) => renderAttributedStatement(s));
+  if (rendered.length === 0 && statements.length > 0) {
+    const final = statements[statements.length - 1];
+    rendered.push(`${renderAttributedStatement(final)} (final statement; command exited ${endRc})`);
+  }
+  return `[exit codes (${failed.length} of ${statements.length} statements failed): ${rendered.join("; ")}]`;
 }
 function renderShellResult(result) {
   let body = result.stdout.text;
@@ -13301,12 +13642,39 @@ bash-guard: ${outcome.ranNote}`;
         const pipePlan = planPipeCapture(toRun);
         let wrappedCommand = toRun;
         let pipeDir;
-        if (pipePlan.hasPipe) {
+        if (pipePlan.needsWrap) {
           try {
             await mkdir("/tmp/dsh", { recursive: true });
             pipeDir = await mkdtemp(join2("/tmp/dsh", "pipestatus-"));
             const statusFile = shellQuote(join2(pipeDir, "status"));
+            const stepsFile = shellQuote(join2(pipeDir, "steps"));
             wrappedCommand = `set -o pipefail
+exec {__dsh_dbg_fd}>${stepsFile} || true
+__dsh_dbg_prev=""
+__dsh_dbg_busy=0
+__dsh_dbg_handler() {
+  local __dsh_dbg_st=( "\${PIPESTATUS[@]}" )
+  if (( __dsh_dbg_busy )); then return 0; fi
+  __dsh_dbg_busy=1
+  if [[ -n $__dsh_dbg_prev ]]; then
+    printf '[%s] :: %s\\n' "\${__dsh_dbg_st[*]}" "$__dsh_dbg_prev" >&$__dsh_dbg_fd
+  fi
+  __dsh_dbg_prev=$BASH_COMMAND
+  __dsh_dbg_busy=0
+  return 0
+}
+__dsh_dbg_exit() {
+  local __dsh_dbg_st=( "\${PIPESTATUS[@]}" ) __dsh_dbg_rc=$?
+  trap - DEBUG
+  if [[ -n $__dsh_dbg_prev ]]; then
+    printf '[%s] :: %s\\n' "\${__dsh_dbg_st[*]}" "$__dsh_dbg_prev" >&$__dsh_dbg_fd
+  fi
+  printf 'END rc=%s\\n' "$__dsh_dbg_rc" >&$__dsh_dbg_fd
+  exec {__dsh_dbg_fd}>&- || true
+  exit "$__dsh_dbg_rc"
+}
+trap '__dsh_dbg_handler' DEBUG
+trap '__dsh_dbg_exit' EXIT
 ${toRun}
 __dsh_pipe_exit=$? __dsh_pipe_stages=("\${PIPESTATUS[@]}")
 printf '%s' "\${__dsh_pipe_stages[*]}" > ${statusFile} 2>/dev/null || true
@@ -13326,34 +13694,68 @@ exit $__dsh_pipe_exit`;
         );
         const stageNames = pipePlan.names !== null ? pipePlan.names : pipePlan.finalNames;
         let pipeStages;
+        let rawSteps;
         if (pipeDir !== void 0) {
           try {
             if (result.signal === null) {
-              const raw = (await readFile(join2(pipeDir, "status"), "utf8")).trim();
-              const codes = raw.split(/\s+/).map((s) => Number(s)).filter((n) => Number.isInteger(n));
-              if (codes.length > 0) {
-                pipeStages = codes.map((exitCode, i) => ({
-                  ...stageNames !== null && stageNames[i] !== void 0 ? { name: stageNames[i] } : {},
-                  exitCode
-                }));
+              try {
+                const raw = (await readFile(join2(pipeDir, "status"), "utf8")).trim();
+                const codes = raw.split(/\s+/).map((s) => Number(s)).filter((n) => Number.isInteger(n));
+                if (codes.length > 0) {
+                  pipeStages = codes.map((exitCode, i) => ({
+                    ...stageNames !== null && stageNames[i] !== void 0 ? { name: stageNames[i] } : {},
+                    exitCode
+                  }));
+                }
+              } catch {
+                pipeStages = void 0;
+              }
+              try {
+                rawSteps = await readFile(join2(pipeDir, "steps"), "utf8");
+              } catch {
+                rawSteps = void 0;
               }
             }
-          } catch {
-            pipeStages = void 0;
           } finally {
             await rm(pipeDir, { recursive: true, force: true }).catch(() => {
             });
           }
         }
         const reportedExit = pipeStages !== void 0 && result.signal === null ? result.exitCode === 0 ? 0 : decidePipeExit(pipeStages.map((s) => s.exitCode)) : result.exitCode;
-        let text = renderShellResult({ ...result, exitCode: reportedExit });
-        if (pipeStages !== void 0 && reportedExit !== 0 && reportedExit !== null) {
-          text += `
-[exit codes: ${formatPipeStages(pipeStages)}]`;
+        let stepStatements = null;
+        let stepEndRc = 0;
+        let stepLossReason;
+        if (pipeDir !== void 0 && result.signal === null) {
+          if (pipePlan.hasBackground) {
+            stepLossReason = "the command backgrounds a statement, whose records are unattributable";
+          } else if (pipePlan.hasHiddenStatements) {
+            stepLossReason = "the command hides statements in a subshell the trap cannot see";
+          } else if (rawSteps === void 0) {
+            stepLossReason = "the per-statement capture file was unreadable";
+          } else {
+            const parsed = parseStepCapture(rawSteps);
+            if (parsed.complete) {
+              stepStatements = parsed.statements;
+              stepEndRc = parsed.endRc;
+            } else {
+              stepLossReason = parsed.lossReason;
+            }
+          }
         }
-        if (pipeStages !== void 0 && pipePlan.names === null) {
+        let text = renderShellResult({ ...result, exitCode: reportedExit });
+        if (stepStatements !== null) {
           text += `
-[exit codes cover the final pipeline only` + (pipePlan.finalLeading !== null ? ` (last pipeline led by \`${pipePlan.finalLeading}\`)` : "") + `; earlier lines of a compound command were not captured]`;
+${renderStepReport(stepStatements, stepEndRc)}`;
+        } else {
+          if (pipeStages !== void 0 && reportedExit !== 0 && reportedExit !== null) {
+            const codesLine = renderDegradedCodesLine(pipeStages, pipePlan);
+            if (codesLine !== "") text += `
+${codesLine}`;
+          }
+          if (pipeStages !== void 0 && pipePlan.names === null) {
+            text += `
+${renderDegradedScopeNote(pipeStages, pipePlan, reportedExit, stepLossReason)}`;
+          }
         }
         if (outcome.ranNote !== void 0) text += `
 
@@ -13390,5 +13792,9 @@ export {
   formatPipeStages,
   inject,
   name,
-  planPipeCapture
+  parseStepCapture,
+  planPipeCapture,
+  renderDegradedCodesLine,
+  renderDegradedScopeNote,
+  renderStepReport
 };

@@ -27,7 +27,11 @@ import {
   evaluate,
   formatPipeStages,
   GUARD_APPROVAL_KIND,
+  parseStepCapture,
   planPipeCapture,
+  renderDegradedCodesLine,
+  renderDegradedScopeNote,
+  renderStepReport,
   type GuardOutcome,
 } from "./bash-guard";
 import {
@@ -371,7 +375,12 @@ describe("bash-guard tool wiring", () => {
       { name: "cat", exitCode: 0 },
     ]);
     expect(value.text).toContain("[exit code: 1]");
-    expect(value.text).toContain("[exit codes: false 1, cat 0]");
+    // Complete per-statement capture: the single pipeline's failure is
+    // attributed to its stages, and the "final pipeline only" note is gone
+    // — with every statement captured it no longer describes reality.
+    expect(value.text).toContain("[exit codes (1 of 1 statements failed):");
+    expect(value.text).toContain("`false` | `cat` → 1, 0");
+    expect(value.text).not.toContain("earlier lines of a compound command were not captured");
     // The capture rides a side file, never the output stream.
     expect(value.text).not.toContain("pipestatus-");
   });
@@ -397,62 +406,63 @@ describe("bash-guard tool wiring", () => {
     expect(value.text).not.toContain("[exit code:");
   });
 
-  it("names a compound command's final pipeline and states the capture scope", async () => {
-    // Multi-line on one line: the codes belong to the LAST pipeline, so the
-    // report names it (`echo …`) and says plainly that earlier lines were
-    // never captured — even on success, where that limitation is otherwise
-    // invisible.
+  it("reports a successful compound command with data, not a bare disclaimer", async () => {
+    // Ticket #144a, via #143: every statement's codes are captured, so the
+    // scope note is unnecessary and goes away — the report carries what it
+    // knows (all statements exited 0) instead of a disclaimer with no
+    // numbers. Ticket #144's instruction: remove the note rather than leave
+    // one that no longer describes reality.
     const { value } = await runReal("echo one | cat; echo two | cat");
     expect(value.exitCode).toBe(0);
     expect(value.pipeStages).toEqual([
       { name: "echo", exitCode: 0 },
       { name: "cat", exitCode: 0 },
     ]);
-    expect(value.text).not.toContain("[exit codes:");
-    expect(value.text).toContain("exit codes cover the final pipeline only");
-    expect(value.text).toContain("last pipeline led by `echo`");
-    expect(value.text).toContain("earlier lines of a compound command were not captured");
+    expect(value.text).toContain("[exit codes: all 2 statements exited 0]");
+    expect(value.text).not.toContain("exit codes cover the final pipeline only");
+    expect(value.text).not.toContain("earlier lines of a compound command were not captured");
   });
 
-  it("attributes a multi-line script's codes to its final pipeline", async () => {
+  it("attributes a multi-line script's failure to the statement that produced it", async () => {
     // The owner's report: several lines on screen, numbers that name no
-    // line. The failing pipeline is the LAST one here, and the report now
-    // says which pipeline the codes belong to.
+    // line. Per-statement capture attributes the failure to `false | cat`
+    // itself — no "final pipeline only" summary, no scope note.
     const { value } = await runReal("echo starting\nfalse | cat");
     expect(value.exitCode).toBe(1);
     expect(value.pipeStages).toEqual([
       { name: "false", exitCode: 1 },
       { name: "cat", exitCode: 0 },
     ]);
-    expect(value.text).toContain("[exit codes: false 1, cat 0]");
-    expect(value.text).toContain("exit codes cover the final pipeline only");
-    expect(value.text).toContain("last pipeline led by `false`");
+    expect(value.text).toContain("[exit codes (1 of 2 statements failed):");
+    expect(value.text).toContain("`false` | `cat` → 1, 0");
+    expect(value.text).not.toContain("exit codes cover the final pipeline only");
   });
 
-  it("states in the report when a mid-script failure is outside PIPESTATUS's reach", async () => {
-    // The first line's pipeline fails; the final command succeeds and
-    // overwrites PIPESTATUS. The capture cannot surface that failure —
-    // bash holds no record of it — so the report says the limitation
-    // instead of letting exit 0 read as all-clear.
+  it("surfaces a mid-script failure the final pipeline would hide", async () => {
+    // Ticket #143 inverts this case's old premise: the first line's pipeline
+    // fails, the final command succeeds — and per-statement capture now
+    // attributes the failure to `false | cat` instead of reporting exit 0
+    // with a limitation note. The process exit stays 0 (bash semantics are
+    // never rewritten), but the failure is data, not a disclaimer.
     const { value } = await runReal("false | cat\necho done");
     expect(value.exitCode).toBe(0);
     expect(value.pipeStages).toEqual([{ exitCode: 0 }]);
-    expect(value.text).not.toContain("[exit codes:");
-    expect(value.text).toContain("exit codes cover the final pipeline only");
-    expect(value.text).toContain("earlier lines of a compound command were not captured");
+    expect(value.text).toContain("[exit codes (1 of 2 statements failed):");
+    expect(value.text).toContain("`false` | `cat` → 1, 0");
+    expect(value.text).not.toContain("exit codes cover the final pipeline only");
   });
 
-  it("keeps an unnamed compound report unnamed but still attributed", async () => {
-    // A brace group disqualifies final-pipeline naming (the last executed
-    // pipeline is not decidable), so the codes stay bare — but the report
-    // still says they cover the final pipeline only.
+  it("names a brace group's pipeline from the capture, not the static plan", async () => {
+    // A brace group disqualifies static final-pipeline naming (the
+    // last-executed pipeline is not decidable from source), so the legacy
+    // structured stages stay bare — but the per-statement stream watches
+    // the stages run and names them factually.
     const { value } = await runReal("{ false | cat; }");
     expect(value.exitCode).toBe(1);
     expect(value.pipeStages).toEqual([{ exitCode: 1 }, { exitCode: 0 }]);
-    expect(value.text).toContain("[exit codes: 1, 0]");
-    expect(value.text).toContain("exit codes cover the final pipeline only");
-    expect(value.text).not.toContain("last pipeline led by");
-    expect(value.text).toContain("earlier lines of a compound command were not captured");
+    expect(value.text).toContain("[exit codes (1 of 1 statements failed):");
+    expect(value.text).toContain("`false` | `cat` → 1, 0");
+    expect(value.text).not.toContain("exit codes cover the final pipeline only");
   });
 
   it("lets a piped sandbox-style failure surface a non-zero exit", async () => {
@@ -485,6 +495,157 @@ describe("bash-guard tool wiring", () => {
     expect(value.denied).toBe(true);
     expect(value.exitCode).toBe(1);
     expect(value.text).toContain("[sandbox: file access denied under workspace-write mode]");
+  });
+
+  it("attributes an && chain per operand with no scope note (#143, #144b)", async () => {
+    // The owner's transcript shape: `cd && cp && pipeline`. Statically the
+    // chain disqualifies naming — but the trap watches every operand run,
+    // so the report names each operand's codes factually. No bare numbers,
+    // no disclaimer.
+    const { value } = await runReal("cd /tmp && echo ok-chain && seq 1 3 | head -2 | wc -l");
+    expect(value.exitCode).toBe(0);
+    expect(value.text).toContain("[exit codes: all 3 statements exited 0]");
+    expect(value.text).not.toContain("exit codes cover the final pipeline only");
+    expect(value.text).not.toContain("unconfirmed");
+  });
+
+  it("attributes a failing && chain to the operand that failed", async () => {
+    const { value } = await runReal("cd /tmp && false && seq 1 3 | head -1");
+    expect(value.exitCode).toBe(1);
+    expect(value.text).toContain("[exit codes (1 of 2 statements failed):");
+    expect(value.text).toContain("`false` 1");
+    // The skipped pipeline leaves no record: nothing plausible is printed
+    // for a command that never ran.
+    expect(value.text).not.toContain("seq");
+    expect(value.text).not.toContain("exit codes cover the final pipeline only");
+  });
+
+  it("closes re-entrancy: no handler command appears in the capture", async () => {
+    // The last statement would otherwise repeat (the EOF quirk), and any
+    // command inside our own trap handlers would pollute the stream. A
+    // script ending in a pipeline proves both are closed: exactly two
+    // statements, no `__dsh_` text, no handler builtins.
+    const { value } = await runReal("echo reentrancy-probe\necho tail-pipe | cat");
+    expect(value.exitCode).toBe(0);
+    expect(value.text).toContain("[exit codes: all 2 statements exited 0]");
+    expect(value.text).not.toContain("__dsh_");
+    expect(value.text).not.toContain("PIPESTATUS");
+    expect(value.text).not.toContain("BASH_COMMAND");
+  });
+
+  it("leaves set -e semantics alone and still aborts on failure", async () => {
+    // The handler ends in a zero status: it can neither skip a command nor
+    // swallow the abort. The capture holds the records up to the failure.
+    const { value } = await runReal("set -e\necho first\nfalse\necho NEVER");
+    expect(value.exitCode).toBe(1);
+    expect(value.text).not.toContain("NEVER");
+    expect(value.text).toContain("[exit codes (1 of 3 statements failed):");
+    expect(value.text).toContain("`false` 1");
+  });
+
+  it("survives a mid-script exit with the requested status", async () => {
+    const { value } = await runReal("echo one\necho two | cat\nexit 3");
+    expect(value.exitCode).toBe(3);
+    expect(value.text).toContain("[exit code: 3]");
+    expect(value.text).toContain("`exit 3` 3");
+  });
+
+  it("keeps the capture out of the command's own stdout and stderr", async () => {
+    const { value } = await runReal("echo out-line\necho err-line >&2\necho last | cat");
+    expect(value.exitCode).toBe(0);
+    // User output is intact and carries no capture records.
+    expect(value.text).toContain("out-line");
+    expect(value.text).toContain("err-line");
+    expect(value.text).not.toContain(" :: ");
+    expect(value.text).toContain("[exit codes: all 3 statements exited 0]");
+  });
+
+  it("degrades with a coverage note when the script replaces the DEBUG trap", async () => {
+    // The command runs fine — degradation never breaks it — but statements
+    // after the replacement are unattributed, so the legacy report carries
+    // the loss wording instead of claiming coverage. (`false | cat` fails
+    // under pipefail, so the legacy codes travel with the note.)
+    const { value } = await runReal("echo before\ntrap 'true' DEBUG\nfalse | cat");
+    expect(value.exitCode).toBe(1);
+    expect(value.text).toContain("before");
+    expect(value.text).not.toContain("[exit codes: all");
+    expect(value.text).toContain("[exit codes: false 1, cat 0]");
+    expect(value.text).toContain("exit codes cover the final pipeline only");
+    expect(value.text).toContain("per-statement capture was lost");
+    expect(value.text).toContain("replaced or cleared");
+  });
+
+  it("degrades with a coverage note when the script replaces the EXIT trap", async () => {
+    // No END marker without our EXIT handler: the legacy report stands in.
+    const { value } = await runReal("echo before\ntrap 'true' EXIT\nfalse | cat");
+    expect(value.exitCode).toBe(1);
+    expect(value.text).toContain("before");
+    expect(value.text).not.toContain("[exit codes: all");
+    expect(value.text).toContain("exit codes cover the final pipeline only");
+    expect(value.text).toContain("per-statement capture was lost");
+  });
+
+  it("renders the unconfirmed candidate when degraded on a chain (#144b)", async () => {
+    // Forced degrade (DEBUG trap replaced first): the chain ran its final
+    // pipeline, the legacy epilogue holds its stages, and the report names
+    // the candidate beside the warning — never bare.
+    const { value } = await runReal(
+      "trap 'true' DEBUG\ncd /tmp && echo ok && false | cat",
+    );
+    expect(value.exitCode).toBe(1);
+    expect(value.text).toContain("unconfirmed");
+    expect(value.text).toContain("false 1, cat 0");
+    expect(value.text).not.toContain("[exit codes: 1, 0]");
+    expect(value.text).toContain("per-statement capture was lost");
+  });
+
+  it("withholds numbers when a degraded chain short-circuited (#144b)", async () => {
+    // Forced degrade: `false` fails first, so `echo hi | cat` never runs
+    // and the single code cannot be its stages (arity backstop). No bare
+    // numbers, no leader claim — the scope note stands alone, honestly.
+    const { value } = await runReal("trap 'true' DEBUG\nfalse && echo hi | cat");
+    expect(value.exitCode).toBe(1);
+    expect(value.text).not.toContain("[exit codes:");
+    expect(value.text).toContain("exit codes cover the final pipeline only");
+  });
+
+  it("degrades a backgrounded tail to the legacy report (#142 preserved)", async () => {
+    // BASH_COMMAND carries no `&`: the backgrounded statement's records
+    // would pair stale codes with names, so the whole command falls back.
+    // The legacy #142 rule still withholds the names themselves.
+    const { value } = await runReal("sleep 0.1 & echo bg-tail | cat");
+    expect(value.exitCode).toBe(0);
+    expect(value.text).not.toContain("[exit codes: all");
+    expect(value.pipeStages).toEqual([
+      { name: "echo", exitCode: 0 },
+      { name: "cat", exitCode: 0 },
+    ]);
+    expect(value.text).toContain("exit codes cover the final pipeline only");
+    expect(value.text).toContain("per-statement capture was lost");
+  });
+
+  it("degrades a subshell script rather than clearing it (#143 scope)", async () => {
+    // `(false | cat)` fires no trap at all: claiming "all statements
+    // succeeded" would be a lie the legacy note refuses to tell.
+    const { value } = await runReal("(false | cat)\necho hi-visible");
+    expect(value.exitCode).toBe(0);
+    expect(value.text).toContain("hi-visible");
+    expect(value.text).not.toContain("[exit codes: all");
+    expect(value.text).toContain("exit codes cover the final pipeline only");
+    expect(value.text).toContain("subshell");
+  });
+
+  it("captures a 200-statement script with one printf per statement", async () => {
+    // Overhead is measured, not asserted: one builtin printf per command
+    // into a pre-opened fd, no forks. The count pins completeness; the
+    // timing is recorded in the ticket report (about 8ms here).
+    const lines = Array.from({ length: 200 }, (_, i) => `echo line-${i} | cat`);
+    const started = Date.now();
+    const { value } = await runReal(lines.join("\n"));
+    const elapsedMs = Date.now() - started;
+    expect(value.exitCode).toBe(0);
+    expect(value.text).toContain("[exit codes: all 200 statements exited 0]");
+    expect(elapsedMs).toBeLessThan(30_000);
   });
 });
 
@@ -626,12 +787,24 @@ describe("pipeline stage capture", () => {
       names: ["false", "cat"],
       finalNames: ["false", "cat"],
       finalLeading: "false",
+      unconfirmedNames: null,
+      unconfirmedLeading: null,
+      hasBackground: false,
+      hasChain: false,
+      hasHiddenStatements: false,
+      needsWrap: true,
     });
     expect(planPipeCapture("VITE_X=1 vite build | rg warn | tail -2")).toEqual({
       hasPipe: true,
       names: ["vite", "rg", "tail"],
       finalNames: ["vite", "rg", "tail"],
       finalLeading: "vite",
+      unconfirmedNames: null,
+      unconfirmedLeading: null,
+      hasBackground: false,
+      hasChain: false,
+      hasHiddenStatements: false,
+      needsWrap: true,
     });
   });
 
@@ -703,7 +876,70 @@ describe("pipeline stage capture", () => {
       names: ["false", "cat"],
       finalNames: ["false", "cat"],
       finalLeading: "false",
+      unconfirmedNames: null,
+      unconfirmedLeading: null,
+      hasBackground: false,
+      hasChain: false,
+      hasHiddenStatements: false,
+      needsWrap: true,
     });
+  });
+
+  it("flags backgrounded statements anywhere the trap would observe them", () => {
+    // The per-statement gate (#143): BASH_COMMAND carries no `&` marker, so
+    // any backgrounded statement degrades the per-statement text even when
+    // the legacy names survive it (see the `sleep 1 &` case above).
+    expect(planPipeCapture("sleep 1 & true | false").hasBackground).toBe(true);
+    expect(planPipeCapture("false | cat &").hasBackground).toBe(true);
+    expect(planPipeCapture("false | cat").hasBackground).toBe(false);
+    // `&&` is AndOr, not background: chains never trip this scan.
+    expect(planPipeCapture("cd /tmp && false | cat").hasBackground).toBe(false);
+    expect(planPipeCapture("cd /tmp && false | cat").hasChain).toBe(true);
+  });
+
+  it("names an &&/||-final pipeline as an unconfirmed candidate only", () => {
+    // Ticket #144b: the disqualification stands (the pipeline may never have
+    // run), so this candidate must only ever render beside a warning.
+    const plan = planPipeCapture("cd /tmp && cp a b && npx vitest run | tail -5");
+    expect(plan.names).toBeNull();
+    expect(plan.finalNames).toBeNull();
+    expect(plan.unconfirmedNames).toEqual(["npx", "tail"]);
+    expect(plan.unconfirmedLeading).toBe("npx");
+    // Narrow: a final operand that is not a simple pipeline leaves the
+    // candidate null (a subshell's exit is a single code, not stages).
+    expect(planPipeCapture("cd /tmp && (false | cat)").unconfirmedNames).toBeNull();
+    // Narrow: a backgrounded chain declines even the candidate — under `&`
+    // the codes are empty or stale (#142), so a warned name would still
+    // pair names with garbage.
+    expect(planPipeCapture("cd /tmp && false | cat &").unconfirmedNames).toBeNull();
+    // Not a chain at all: no candidate.
+    expect(planPipeCapture("false | cat").unconfirmedNames).toBeNull();
+    expect(planPipeCapture("{ false | cat; }").unconfirmedNames).toBeNull();
+  });
+
+  it("pins the heredoc case: a heredoc never disqualifies naming", () => {
+    // Ticket #144: the heredoc parses fine — the && chain was the
+    // disqualifier, and this test proves the heredoc is not what kills it.
+    const plan = planPipeCapture("python3 - <<'EOF'\nprint(1)\nEOF\necho hi | cat");
+    expect(plan.finalNames).toEqual(["echo", "cat"]);
+    expect(plan.finalLeading).toBe("echo");
+  });
+
+  it("wraps compound pipe-free commands but leaves trivial ones alone", () => {
+    // #143's gate: sequences and chains deserve per-statement attribution
+    // even without a pipe; a lone simple command (or definition) keeps the
+    // bare unwrapped report it always had.
+    expect(planPipeCapture("set -e\necho first\nfalse").needsWrap).toBe(true);
+    expect(planPipeCapture("false && echo hi").needsWrap).toBe(true);
+    expect(planPipeCapture("echo hello").needsWrap).toBe(false);
+    expect(planPipeCapture("greet() { echo hi; }").needsWrap).toBe(false);
+    expect(planPipeCapture("false | cat").needsWrap).toBe(true);
+  });
+
+  it("flags subshell statements the trap cannot see", () => {
+    expect(planPipeCapture("(false | cat); echo hi").hasHiddenStatements).toBe(true);
+    expect(planPipeCapture("echo hi | cat").hasHiddenStatements).toBe(false);
+    expect(planPipeCapture("{ false | cat; }").hasHiddenStatements).toBe(false);
   });
 
   it("skips commands without a pipeline and commands that do not parse", () => {
@@ -712,6 +948,12 @@ describe("pipeline stage capture", () => {
       names: null,
       finalNames: null,
       finalLeading: null,
+      unconfirmedNames: null,
+      unconfirmedLeading: null,
+      hasBackground: false,
+      hasChain: false,
+      hasHiddenStatements: false,
+      needsWrap: false,
     });
     expect(planPipeCapture("echo $(date)").hasPipe).toBe(false);
     expect(planPipeCapture("if true; then |; fi")).toEqual({
@@ -719,6 +961,12 @@ describe("pipeline stage capture", () => {
       names: null,
       finalNames: null,
       finalLeading: null,
+      unconfirmedNames: null,
+      unconfirmedLeading: null,
+      hasBackground: false,
+      hasChain: false,
+      hasHiddenStatements: false,
+      needsWrap: false,
     });
   });
 
@@ -748,6 +996,228 @@ describe("pipeline stage capture", () => {
       ]),
     ).toBe("vite 1, grep 0, tail 0");
     expect(formatPipeStages([{ exitCode: 1 }, { exitCode: 0 }])).toBe("1, 0");
+  });
+});
+
+/**
+ * #143. The DEBUG-trap steps file groups into statements with their OWN
+ * exit codes. These tests pin the parser against transcript-shaped inputs
+ * (all shapes live-probed on GNU bash 5.3.9; transcripts on ticket #143),
+ * so a refactor of the grouping cannot silently reattribute a failure.
+ */
+describe("per-statement step capture (#143)", () => {
+  it("groups a compound stream into statements with their own codes", () => {
+    // Post-install-drop shape of `cd /tmp; false | cat; echo done`
+    // (records written at the NEXT statement's firing carry the array).
+    const cap = parseStepCapture(
+      "[0] :: cd /tmp\n[0] :: false\n[1 0] :: cat\n[0] :: echo done\nEND rc=0\n",
+    );
+    expect(cap.complete).toBe(true);
+    expect(cap.endRc).toBe(0);
+    expect(cap.statements).toEqual([
+      { stages: ["cd /tmp"], codes: [0] },
+      { stages: ["false", "cat"], codes: [1, 0] },
+      { stages: ["echo done"], codes: [0] },
+    ]);
+    // The mid-script failure is attributed even though the command exited 0.
+    expect(renderStepReport(cap.statements, cap.endRc)).toBe(
+      "[exit codes (1 of 3 statements failed): `false` | `cat` → 1, 0]",
+    );
+  });
+
+  it("groups a three-stage pipeline and && operands individually", () => {
+    const cap = parseStepCapture(
+      "[0] :: cd /tmp\n[0] :: echo ok1\n[0] :: seq 1 3\n[0] :: head -2\n[0 0 0] :: wc -l\nEND rc=0\n",
+    );
+    expect(cap.complete).toBe(true);
+    expect(cap.statements).toEqual([
+      { stages: ["cd /tmp"], codes: [0] },
+      { stages: ["echo ok1"], codes: [0] },
+      { stages: ["seq 1 3", "head -2", "wc -l"], codes: [0, 0, 0] },
+    ]);
+    expect(renderStepReport(cap.statements, cap.endRc)).toBe(
+      "[exit codes: all 3 statements exited 0]",
+    );
+  });
+
+  it("collapses only the known final-record duplicate", () => {
+    // The shell fires DEBUG once more for the final command before EXIT, so
+    // the final record arrives twice with identical codes. A genuine
+    // `false; false` repeat keeps both statements — each record carries its
+    // own command's codes. (Real-stream shape: the first firing's record
+    // carries install text and is filtered, so no residue leads.)
+    const cap = parseStepCapture("[1] :: false\n[1] :: false\n[1] :: false\nEND rc=1\n");
+    expect(cap.complete).toBe(true);
+    expect(cap.statements).toEqual([
+      { stages: ["false"], codes: [1] },
+      { stages: ["false"], codes: [1] },
+    ]);
+  });
+
+  it("attributes a mid-script exit to the exit status, not stale codes", () => {
+    // After `exit 3`, PIPESTATUS still holds the previous pipeline — the
+    // record would claim [0 0] for `exit 3`. The END marker overrides it.
+    // (Earlier `exit` copies are dropped; only the flush stays.)
+    const cap = parseStepCapture(
+      "[0] :: echo one\n[0] :: echo two\n[0 0] :: cat\n[0 0] :: exit 3\n[0 0] :: exit 3\n[0 0] :: exit 3\nEND rc=3\n",
+    );
+    expect(cap.complete).toBe(true);
+    expect(cap.statements).toEqual([
+      { stages: ["echo one"], codes: [0] },
+      { stages: ["echo two", "cat"], codes: [0, 0] },
+      { stages: ["exit 3"], codes: [3] },
+    ]);
+    expect(renderStepReport(cap.statements, cap.endRc)).toContain("`exit 3` 3");
+  });
+
+  it("drops our own installation lines by namespace", () => {
+    const cap = parseStepCapture(
+      "[0] :: trap '__dsh_dbg_exit' EXIT\n[0] :: echo hi\n[0] :: echo hi\nEND rc=0\n",
+    );
+    expect(cap.complete).toBe(true);
+    expect(cap.statements).toEqual([{ stages: ["echo hi"], codes: [0] }]);
+  });
+
+  it("degrades when the script replaces or clears the DEBUG trap", () => {
+    expect(
+      parseStepCapture("[0] :: echo before\n[0] :: trap 'echo user' DEBUG\nEND rc=0\n")
+        .complete,
+    ).toBe(false);
+    expect(
+      parseStepCapture("[0] :: echo before\n[0] :: trap - DEBUG\nEND rc=0\n").lossReason,
+    ).toContain("replaced or cleared");
+  });
+
+  it("lets a read-only trap query pass without degrading", () => {
+    // `trap -p` changes nothing: no install is replaced, no capture lost.
+    const cap = parseStepCapture("[0] :: trap -p DEBUG\n[0] :: echo hi\n[0] :: echo hi\nEND rc=0\n");
+    expect(cap.complete).toBe(true);
+    expect(cap.statements).toEqual([
+      { stages: ["trap -p DEBUG"], codes: [0] },
+      { stages: ["echo hi"], codes: [0] },
+    ]);
+  });
+
+  it("degrades when the script enables functrace", () => {
+    expect(parseStepCapture("[0] :: set -T\nEND rc=0\n").complete).toBe(false);
+    expect(parseStepCapture("[0] :: set -eT\nEND rc=0\n").complete).toBe(false);
+    expect(parseStepCapture("[0] :: set -o functrace\nEND rc=0\n").complete).toBe(false);
+    // Disabling is harmless.
+    expect(parseStepCapture("[0] :: set +T\n[0] :: echo hi\n[0] :: echo hi\nEND rc=0\n").complete).toBe(
+      true,
+    );
+  });
+
+  it("degrades without an END marker or with an empty stage record", () => {
+    expect(parseStepCapture("[0] :: echo before\n").complete).toBe(false);
+    expect(parseStepCapture("[0] :: echo before\n").lossReason).toContain("EXIT trap");
+    expect(parseStepCapture("[] :: echo hi\nEND rc=0\n").complete).toBe(false);
+    expect(parseStepCapture("END rc=0\n").lossReason).toContain("no per-statement records");
+  });
+
+  it("keeps a heredoc statement as one record with its own codes", () => {
+    // A heredoc body never fires the trap: the whole statement is one
+    // record (its first line renders; the body lines travel with it).
+    const cap = parseStepCapture(
+      "[0] :: python3 - <<'PYEOF'\nprint(1)\nPYEOF\n[0] :: echo hi\n[0 0] :: cat\nEND rc=0\n",
+    );
+    expect(cap.complete).toBe(true);
+    expect(cap.statements).toEqual([
+      { stages: ["python3 - <<'PYEOF'\nprint(1)\nPYEOF"], codes: [0] },
+      { stages: ["echo hi", "cat"], codes: [0, 0] },
+    ]);
+  });
+});
+
+/**
+ * #144. The degraded report's honesty rules, pinned without running bash:
+ * the scope note carries codes on success, and && chains never render bare
+ * unlabelled numbers.
+ */
+describe("degraded report honesty (#144)", () => {
+  const chainPlan = planPipeCapture("cd /tmp && cp a b && npx vitest run | tail -5");
+  const flatPlan = planPipeCapture("echo starting\nfalse | cat");
+  const bracePlan = planPipeCapture("{ false | cat; }");
+  const singlePlan = planPipeCapture("false | cat");
+
+  it("names the candidate chain stages beside the unconfirmed warning", () => {
+    const line = renderDegradedCodesLine(
+      [
+        { exitCode: 1 },
+        { exitCode: 0 },
+      ],
+      chainPlan,
+    );
+    expect(line).toContain("unconfirmed");
+    expect(line).toContain("npx 1, tail 0");
+    expect(line).toContain("led by `npx`");
+    // Not bare: the warning travels with the numbers, never apart.
+    expect(line).not.toBe("[exit codes: 1, 0]");
+  });
+
+  it("withholds the numbers when the chain short-circuited", () => {
+    // `false && echo hi | cat`: the chain failed early, so the codes hold
+    // the single `false` — one code where the candidate has two stages.
+    // The arity backstop withholds rather than mislabels.
+    const shortPlan = planPipeCapture("false && echo hi | cat");
+    expect(shortPlan.unconfirmedNames).toEqual(["echo", "cat"]);
+    expect(renderDegradedCodesLine([{ exitCode: 1 }], shortPlan)).toBe("");
+  });
+
+  it("withholds the numbers for a chained command with no pipeline candidate", () => {
+    const subshellChain = planPipeCapture("cd /tmp && (false | cat)");
+    expect(subshellChain.unconfirmedNames).toBeNull();
+    expect(renderDegradedCodesLine([{ exitCode: 1 }, { exitCode: 0 }], subshellChain)).toBe("");
+  });
+
+  it("keeps the bare render for chain-free unnamed commands", () => {
+    expect(
+      renderDegradedCodesLine(
+        [{ exitCode: 1 }, { exitCode: 0 }],
+        bracePlan,
+      ),
+    ).toBe("[exit codes: 1, 0]");
+  });
+
+  it("carries the final pipeline's codes in the success note", () => {
+    const note = renderDegradedScopeNote(
+      [
+        { name: "false", exitCode: 0 },
+        { name: "cat", exitCode: 0 },
+      ],
+      { ...flatPlan, finalNames: ["false", "cat"], finalLeading: "false" },
+      0,
+      undefined,
+    );
+    expect(note).toContain("exit codes cover the final pipeline only");
+    expect(note).toContain("last pipeline led by `false`");
+    expect(note).toContain("false 0, cat 0");
+    expect(note).toContain("earlier lines of a compound command were not captured");
+  });
+
+  it("states the coverage loss in the degraded note", () => {
+    const note = renderDegradedScopeNote(
+      [{ exitCode: 0 }],
+      bracePlan,
+      0,
+      "the command replaced or cleared the capture traps",
+    );
+    expect(note).toContain("per-statement capture was lost");
+    expect(note).toContain("replaced or cleared");
+  });
+
+  it("prints no note for a named single pipeline", () => {
+    expect(
+      renderDegradedScopeNote(
+        [
+          { name: "false", exitCode: 1 },
+          { name: "cat", exitCode: 0 },
+        ],
+        singlePlan,
+        1,
+        undefined,
+      ),
+    ).toBe("");
   });
 });
 

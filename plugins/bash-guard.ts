@@ -1232,6 +1232,46 @@ export interface PipeCapturePlan {
   finalNames: string[] | null;
   /** The leading command of that last pipeline, when finalNames is set. */
   finalLeading: string | null;
+  /** Stage program names of the FINAL statement's pipeline when that final
+   * statement is an &&/|| chain ending in a simple pipeline (see
+   * lastChainPipelineNaming). Attribution is explicitly UNCONFIRMED: the
+   * chain may have short-circuited before the pipeline ran, so these names
+   * must only ever render beside a warning, never as fact. Null whenever
+   * the final statement is not such a chain — including when it is
+   * backgrounded (see the #142 rule below: under `&` the codes are empty
+   * or stale, so even a warned candidate would pair names with garbage). */
+  unconfirmedNames: string[] | null;
+  /** The leading command of that candidate pipeline, when set. */
+  unconfirmedLeading: string | null;
+  /** Any backgrounded statement (`cmd &`) in a position whose commands the
+   * DEBUG trap would observe. BASH_COMMAND carries no `&` marker (live
+   * probe, GNU bash 5.3.9, ticket #143: `sleep 0.2 &` records as bare
+   * `sleep 0.2` with the previous pipeline's codes), so a backgrounded
+   * statement's per-statement records are indistinguishable from foreground
+   * fact. Any `&` therefore degrades the whole command to the legacy
+   * final-pipeline report rather than risk pairing stale codes with names.
+   * Stricter than #142 by design: #142 keeps finalNames for a backgrounded
+   * statement BEFORE the last pipeline, and that still holds — this flag
+   * gates only the NEW per-statement text, never the legacy pipeStages. */
+  hasBackground: boolean;
+  /** Any &&/|| chain in statement position. Decides the degraded report's
+   * honesty floor (ticket #144b): a chain's final pipeline may never have
+   * run, so bare unlabelled numbers are withheld for chained commands while
+   * chain-free ones keep today's bare render. Never gates the per-statement
+   * text — a && chain's every operand fires the trap with its own status
+   * (live probe, ticket #143), so chains are fully factual when captured. */
+  hasChain: boolean;
+  /** Any subshell or coprocessor statement. The trap fires nothing for
+   * `( ... )` — neither the statement nor its interior (live probe, ticket
+   * #143) — so a script containing one degrades rather than print an
+   * all-clear that never looked inside. See hasInvisibleStatement. */
+  hasHiddenStatements: boolean;
+  /** Whether the command is worth wrapping at all: piped commands (stage
+   * codes) plus compound commands whose statements deserve attribution
+   * (per-statement codes). A lone simple command — or a lone definition,
+   * subshell, or test, which the trap cannot observe usefully — stays
+   * unwrapped exactly as before, so trivial calls keep their bare report. */
+  needsWrap: boolean;
 }
 
 /** Whether a statement-level tree contains a Pipeline node. Word interiors
@@ -1361,6 +1401,231 @@ function finalPipelineNaming(
 }
 
 /**
+ * Any backgrounded statement the DEBUG trap could observe. The descent
+ * mirrors containsPipeline: subshells, functions and word interiors never
+ * fire the trap (live probes, GNU bash 5.3.9, ticket #143 — a sourced file's
+ * body, a function body, `( ... )`, and `$( ... )` all run silent), so a `&`
+ * hidden in those positions cannot poison the per-statement stream and is
+ * ignored. Everything else — sequences, &&/|| chains, if/while/for bodies,
+ * brace groups — fires, so a `&` there degrades the per-statement text
+ * (see PipeCapturePlan.hasBackground). `&&` is AndOr, not background, and
+ * never trips this scan.
+ */
+function hasBackgroundStatement(script: UnbashScript): boolean {
+  const walk = (node: UnbashScript | UnbashNode): boolean => {
+    switch (node.type) {
+      case "Script":
+      case "CompoundList":
+        return node.commands.some((s) => walk(s));
+      case "Statement":
+        return node.background === true || walk(node.command);
+      case "Pipeline":
+        return false;
+      case "Command":
+        return false;
+      case "AndOr":
+        return node.commands.some((c) => walk(c));
+      case "If":
+        return (
+          walk(node.clause) ||
+          walk(node.then) ||
+          (node.else !== undefined && walk(node.else))
+        );
+      case "While":
+        return walk(node.clause) || walk(node.body);
+      case "For":
+      case "Select":
+      case "ArithmeticFor":
+        return walk(node.body);
+      case "BraceGroup":
+        return walk(node.body);
+      case "Case":
+        return node.items.some((item) => walk(item.body));
+      default:
+        // Subshell, Function, Coproc, TestCommand, ArithmeticCommand: their
+        // interiors never reach the trap, so a `&` inside cannot poison it.
+        return false;
+    }
+  };
+  return walk(script);
+}
+
+/**
+ * Any subshell or coprocessor statement the DEBUG trap cannot see. A
+ * top-level `( ... )` fires NO trap at all — neither for itself nor for its
+ * interior (live probe, GNU bash 5.3.9, ticket #143: `(false | cat)` leaves
+ * zero records, and its exit status surfaces nowhere in the stream). The
+ * per-statement report claims every top-level statement, so a script with
+ * such a statement degrades to the legacy report rather than printing an
+ * all-clear that never looked inside the subshell. Function bodies are
+ * included in the descent: a call records one summary line, but a subshell
+ * inside the body would still be invisible. Word interiors (`$( ... )`)
+ * are excluded like everywhere else: they contribute no statements, and
+ * the enclosing statement's own record stays factual.
+ */
+function hasInvisibleStatement(script: UnbashScript): boolean {
+  const walk = (node: UnbashScript | UnbashNode): boolean => {
+    switch (node.type) {
+      case "Script":
+      case "CompoundList":
+        return node.commands.some((s) => walk(s));
+      case "Statement":
+        return walk(node.command);
+      case "Subshell":
+      case "Coproc":
+        return true;
+      case "Pipeline":
+        return false;
+      case "Command":
+        return false;
+      case "AndOr":
+        return node.commands.some((c) => walk(c));
+      case "If":
+        return (
+          walk(node.clause) ||
+          walk(node.then) ||
+          (node.else !== undefined && walk(node.else))
+        );
+      case "While":
+        return walk(node.clause) || walk(node.body);
+      case "For":
+      case "Select":
+      case "ArithmeticFor":
+        return walk(node.body);
+      case "BraceGroup":
+        return walk(node.body);
+      case "Function":
+        return walk(node.body);
+      case "Case":
+        return node.items.some((item) => walk(item.body));
+      default:
+        return false;
+    }
+  };
+  return walk(script);
+}
+
+/**
+ * Any &&/|| chain in statement position. The descent mirrors
+ * containsPipeline: word interiors never fire the trap, so a chain hidden
+ * in `$( ... )` cannot short-circuit the top-level stream and is ignored.
+ */
+function hasChainConditional(script: UnbashScript): boolean {
+  const walk = (node: UnbashScript | UnbashNode): boolean => {
+    switch (node.type) {
+      case "Script":
+      case "CompoundList":
+        return node.commands.some((s) => walk(s));
+      case "Statement":
+        return walk(node.command);
+      case "AndOr":
+        return true;
+      case "Pipeline":
+        return false;
+      case "Command":
+        return false;
+      case "If":
+        return (
+          walk(node.clause) ||
+          walk(node.then) ||
+          (node.else !== undefined && walk(node.else))
+        );
+      case "While":
+        return walk(node.clause) || walk(node.body);
+      case "For":
+      case "Select":
+      case "ArithmeticFor":
+        return walk(node.body);
+      case "BraceGroup":
+        return walk(node.body);
+      case "Case":
+        return node.items.some((item) => walk(item.body));
+      default:
+        return false;
+    }
+  };
+  return walk(script);
+}
+
+/**
+ * Whether a pipe-free command still deserves the capture wrap: sequences
+ * (`a; b`), chains (`a && b`), and branch/loop/brace singles, whose every
+ * statement fires the trap and can be attributed. A lone simple command
+ * needs no attribution (its exit code says everything), and lone
+ * definitions, subshells, coprocs and tests would only degrade into noise,
+ * so those stay unwrapped. Piped commands wrap regardless (hasPipe).
+ */
+function hasWrappableSteps(script: UnbashScript): boolean {
+  if (script.commands.length > 1) return true;
+  if (script.commands.length === 0) return false;
+  const only = script.commands[0];
+  const inner = only !== undefined && only.type === "Statement" ? only.command : undefined;
+  return (
+    inner !== undefined &&
+    (inner.type === "AndOr" ||
+      inner.type === "If" ||
+      inner.type === "While" ||
+      inner.type === "For" ||
+      inner.type === "Select" ||
+      inner.type === "ArithmeticFor" ||
+      inner.type === "BraceGroup")
+  );
+}
+
+/**
+ * The candidate pipeline of an &&/|| chain whose FINAL operand is a simple
+ * pipeline — ticket #144b's case (`cd X && cp Y && npx vitest | tail -5`).
+ * finalPipelineNaming deliberately declines these (if an early operand
+ * fails, the pipeline never runs, so the last-executed pipeline is not
+ * decidable from source), and that disqualification STANDS: this function
+ * does not claim the pipeline ran. It names the pipeline the numbers
+ * describe IF it ran, so the degraded report can print the stages beside
+ * an explicit unconfirmed-attribution warning instead of bare numbers no
+ * reader can place. Narrow on purpose: only a final AndOr operand that is
+ * itself a simple Pipeline qualifies — a final subshell, brace group, or
+ * anything else leaves the candidate null and the numbers withheld. A
+ * backgrounded chain (`a && b | c &`) declines too: under `&` the codes
+ * are empty or stale (probe on ticket #142), so even a warned candidate
+ * would pair names with garbage — the #142 invariant (nothing rather than
+ * something plausible) applies to candidates as well.
+ */
+function lastChainPipelineNaming(
+  command: string,
+  script: UnbashScript,
+): { names: string[]; leading: string } | null {
+  if (script.commands.length === 0) return null;
+  const lastStatement = script.commands[script.commands.length - 1];
+  if (lastStatement === undefined || lastStatement.type !== "Statement") return null;
+  if (lastStatement.background === true) return null;
+  let node: UnbashNode = lastStatement.command;
+  // Descend through a trailing &&/|| chain to its final operand. Anything
+  // else as the final statement (plain pipeline, subshell, brace group,
+  // control flow) is not this function's case: plain pipelines are named
+  // by the confirmed paths, the rest stay unnamed. At least one AndOr
+  // descent is required — without it this was never a chain.
+  let descended = false;
+  while (node.type === "AndOr") {
+    if (node.commands.length === 0) return null;
+    const lastOperand = node.commands[node.commands.length - 1];
+    if (lastOperand === undefined) return null;
+    node = lastOperand;
+    descended = true;
+  }
+  if (!descended) return null;
+  if (node.type !== "Pipeline") return null;
+  if (node.commands.length === 0 || !node.commands.every((s) => s.type === "Command")) {
+    return null;
+  }
+  const names = node.commands.map((stage) =>
+    // Group 0: the group id only links operators for display, and a basename
+    // needs just the node and its source string.
+    getBasename({ node: stage as UnbashCommand, source: command, group: 0 }),
+  );
+  const leading = names[0];
+  return leading !== undefined && leading !== "" ? { names, leading } : null;
+}
+
+/**
  * Decide whether a command is worth wrapping for PIPESTATUS capture, and
  * which stage names the capture may claim. Names come from the pipeline
  * NODE — never from the flat extractAllCommandsFromAST list, which mixes in
@@ -1380,10 +1645,32 @@ export function planPipeCapture(command: string): PipeCapturePlan {
   try {
     script = parse(command);
   } catch {
-    return { hasPipe: false, names: null, finalNames: null, finalLeading: null };
+    return {
+      hasPipe: false,
+      names: null,
+      finalNames: null,
+      finalLeading: null,
+      unconfirmedNames: null,
+      unconfirmedLeading: null,
+      hasBackground: false,
+      hasChain: false,
+      hasHiddenStatements: false,
+      needsWrap: false,
+    };
   }
   if (script.errors !== undefined && script.errors.length > 0) {
-    return { hasPipe: false, names: null, finalNames: null, finalLeading: null };
+    return {
+      hasPipe: false,
+      names: null,
+      finalNames: null,
+      finalLeading: null,
+      unconfirmedNames: null,
+      unconfirmedLeading: null,
+      hasBackground: false,
+      hasChain: false,
+      hasHiddenStatements: false,
+      needsWrap: false,
+    };
   }
   let names: string[] | null = null;
   if (script.commands.length === 1) {
@@ -1407,11 +1694,22 @@ export function planPipeCapture(command: string): PipeCapturePlan {
     }
   }
   const final = finalPipelineNaming(command, script);
+  // The &&/||-final candidate is independent of the confirmed paths: it is
+  // only ever rendered beside an unconfirmed-attribution warning (see the
+  // degraded report below), so computing it here claims nothing by itself.
+  const chain = lastChainPipelineNaming(command, script);
+  const hasPipe = containsPipeline(script);
   return {
-    hasPipe: containsPipeline(script),
+    hasPipe,
     names,
     finalNames: final?.names ?? null,
     finalLeading: final?.leading ?? null,
+    unconfirmedNames: chain?.names ?? null,
+    unconfirmedLeading: chain?.leading ?? null,
+    hasBackground: hasBackgroundStatement(script),
+    hasChain: hasChainConditional(script),
+    hasHiddenStatements: hasInvisibleStatement(script),
+    needsWrap: hasPipe || hasWrappableSteps(script),
   };
 }
 
@@ -1445,6 +1743,375 @@ export function formatPipeStages(stages: PipeStageStatus[]): string {
       s.name !== undefined && s.name !== "" ? `${s.name} ${s.exitCode}` : `${s.exitCode}`,
     )
     .join(", ");
+}
+
+/**
+ * One per-statement record from the DEBUG-trap capture file: the command
+ * that just completed (BASH_COMMAND is the command about to run, so the
+ * handler records the PREVIOUS one) and the exit codes saved on entry
+ * (PIPESTATUS of that same previous command — see the pairing note on
+ * attributeStepStatements).
+ */
+export interface StepRecord {
+  command: string;
+  codes: number[];
+}
+
+/** One top-level statement with its OWN exit codes, after grouping. */
+export interface AttributedStatement {
+  /** Stage texts for a pipeline, one text for a single command. */
+  stages: string[];
+  codes: number[];
+}
+
+export interface StepCapture {
+  complete: boolean;
+  /** Grouped statements, ending in the final statement. Empty unless complete. */
+  statements: AttributedStatement[];
+  /** The EXIT trap's `$?`: authoritative for the command's own exit. */
+  endRc: number;
+  /** Why the capture degraded, for the coverage-lost note. Absent when complete. */
+  lossReason?: string;
+}
+
+/** A first-line match for a user-installed trap command. The guard's own
+ * install lines carry the `__dsh_` namespace and are dropped before this
+ * scan ever sees them, so any `trap ...` record here is the user's. */
+const USER_TRAP_QUERY = /^\s*trap\s+-(p|l)(\s|$)/;
+const USER_TRAP_TAMPER = /^\s*(command\s+|builtin\s+)?trap(\s|;|$)/;
+/** `set -T` / `set -eT` / `set -o functrace`: enabling functrace changes the
+ * trap's scope (it descends into functions) and corrupts the stream shape
+ * (live probe, ticket #143). Disabling (`+T`, `+o functrace`) is harmless. */
+const USER_FUNCTRACE_TAMPER = [/^\s*set\s+-[A-Za-z]*T/, /^\s*set\s+.*-o\s+functrace\b/];
+
+/**
+ * Parse the DEBUG-trap steps file into per-statement records. Returns
+ * complete:false (with a lossReason) whenever the stream cannot be trusted:
+ * no END marker (the user's EXIT trap replaced ours, or the shell never
+ * reached it via `exec`/signal), a user DEBUG-trap install or clear after
+ * our install, user-enabled functrace, or an empty stage record.
+ */
+export function parseStepCapture(text: string): StepCapture {
+  const lines = text.split("\n");
+  // The file must END with the EXIT trap's marker (a trailing newline after
+  // it is fine). Anything else means the EXIT handler never ran.
+  let endIndex = lines.length - 1;
+  while (endIndex >= 0 && lines[endIndex]?.trim() === "") endIndex--;
+  const endLine = endIndex >= 0 ? lines[endIndex] : undefined;
+  const endMatch = endLine !== undefined ? /^END rc=(\d+)\s*$/.exec(endLine) : null;
+  if (endMatch === null || endMatch[1] === undefined) {
+    return {
+      complete: false,
+      statements: [],
+      endRc: 0,
+      lossReason: "the command replaced the EXIT trap, or never reached it",
+    };
+  }
+  const endRc = Number(endMatch[1]);
+  const records: StepRecord[] = [];
+  const recordStart = /^\[([\d ]*)\] :: ?(.*)$/;
+  for (const line of lines.slice(0, endIndex)) {
+    const match = recordStart.exec(line);
+    if (match !== null) {
+      const rawCodes = (match[1] ?? "").trim();
+      const codes =
+        rawCodes === ""
+          ? []
+          : rawCodes
+              .split(/\s+/)
+              .map((s) => Number(s))
+              .filter((n) => Number.isInteger(n));
+      records.push({ command: match[2] ?? "", codes });
+    } else if (records.length > 0 && line !== "") {
+      // A multiline BASH_COMMAND (heredoc, multi-line string): continuation
+      // lines belong to the open record. Truly stray lines cannot occur —
+      // only our handler writes this file — so anything else appends.
+      records[records.length - 1]!.command += `\n${line}`;
+    }
+  }
+  // Our own installation and epilogue lines fire the trap like any named
+  // command. They carry the reserved `__dsh_` namespace; drop them before
+  // any other decision so they can never read as user statements. (On the
+  // normal path this also removes the EXIT-trap flush and the EOF quirk
+  // firing, which both carry epilogue text — the final user statement's
+  // record is the one written at the epilogue's first firing.)
+  const installedDropped = records.filter((r) => !r.command.includes("__dsh_"));
+  // A literal trailing `exit N` terminates the shell, so its firing record,
+  // the quirk record and the flush record triple up on the same text. Only
+  // the last copy (the flush, overridden with END rc below) may stay: an
+  // earlier copy carries the previous pipeline's codes and would false-close
+  // a group with the `exit` as a phantom stage. (`eval exit N` and friends
+  // keep today's behavior — the override below covers literal `exit` only,
+  // and anything else falls back to naming the final statement.)
+  const EXIT_RECORD = /^\s*exit(\s|;|$)/;
+  const lastExitIndex = (() => {
+    let found = -1;
+    installedDropped.forEach((r, i) => {
+      if (EXIT_RECORD.test(r.command.split("\n")[0] ?? "")) found = i;
+    });
+    return found;
+  })();
+  const userRecords =
+    lastExitIndex < 0
+      ? installedDropped
+      : installedDropped.filter(
+          (r, i) => i === lastExitIndex || !EXIT_RECORD.test(r.command.split("\n")[0] ?? ""),
+        );
+  // A script that installs its own DEBUG/EXIT trap, or clears ours, keeps
+  // running fine — but every statement after that point is unattributed, so
+  // the capture degrades instead of claiming coverage it does not have. A
+  // read-only `trap -p` / `trap -l` query changes nothing and is allowed.
+  for (const record of userRecords) {
+    const firstLine = record.command.split("\n")[0] ?? "";
+    if (USER_TRAP_TAMPER.test(firstLine) && !USER_TRAP_QUERY.test(firstLine)) {
+      return {
+        complete: false,
+        statements: [],
+        endRc,
+        lossReason: "the command replaced or cleared the capture traps",
+      };
+    }
+    if (USER_FUNCTRACE_TAMPER.some((pattern) => pattern.test(firstLine))) {
+      return {
+        complete: false,
+        statements: [],
+        endRc,
+        lossReason: "the command enabled functrace, which changes the capture scope",
+      };
+    }
+  }
+  if (userRecords.length === 0) {
+    return {
+      complete: false,
+      statements: [],
+      endRc,
+      lossReason: "no per-statement records were captured",
+    };
+  }
+  // The shell fires DEBUG once more for the final command just before the
+  // EXIT trap (live probe, GNU bash 5.3.9, ticket #143), so the final record
+  // arrives twice: once from that firing, once from the EXIT flush. Both
+  // saves happen after the final statement completed with nothing real
+  // between them, so the pair is always identical and the second copy drops.
+  // Only this KNOWN pair collapses: a genuine `false; false` repeat keeps
+  // both records (the first carries the earlier statement's codes), and only
+  // an exact duplicate of the final record is ever removed.
+  const deduped = [...userRecords];
+  const last = deduped[deduped.length - 1]!;
+  const secondLast = deduped[deduped.length - 2];
+  if (
+    secondLast !== undefined &&
+    secondLast.command === last.command &&
+    secondLast.codes.length === last.codes.length &&
+    secondLast.codes.every((code, i) => code === last.codes[i])
+  ) {
+    deduped.pop();
+  }
+  const statements = attributeStepStatements(deduped, endRc);
+  if (statements === null) {
+    return {
+      complete: false,
+      statements: [],
+      endRc,
+      lossReason: "the capture stream does not group into statements",
+    };
+  }
+  return { complete: true, statements, endRc };
+}
+
+/**
+ * Group per-firing records into statements with their OWN exit codes.
+ *
+ * Pairing is DIRECT, not shifted: the handler records the PREVIOUS command
+ * (BASH_COMMAND is the command about to run, useless for attribution) beside
+ * the PIPESTATUS saved on entry — which is that previous command's own
+ * stages, because nothing else completed between its run and this firing.
+ * So record[i].codes IS record[i].command's own codes, with exactly one
+ * systematic exception: a pipeline fires once per STAGE, and a non-final
+ * stage is still running when the next stage's firing saves — its record
+ * carries STALE codes belonging to an earlier statement. Those records are
+ * never read: walking backward, a record with N > 1 codes ENDS an N-stage
+ * pipeline (the array was saved after its last stage completed, so it lands
+ * ON that stage), and the N most recent commands take those codes.
+ * Arity-1 records are single statements with the codes they carry.
+ *
+ * Consequences this encoding relies on (all live-probed, ticket #143):
+ * - The final record's codes are always the final statement's own: on the
+ *   normal path it is written at the epilogue's first firing (after the
+ *   final statement completed; the epilogue's own firings are filtered by
+ *   namespace), and on a mid-script `exit` path it is the EXIT flush.
+ * - The save MUST be the handler's first expansion: a save placed after
+ *   even one handler command reads all zeros.
+ * - A trailing literal `exit N` record carries the previous pipeline's
+ *   codes (`exit` does not reset PIPESTATUS), so it is overridden with the
+ *   EXIT trap's authoritative `$?` (earlier `exit` copies are dropped in
+ *   parseStepCapture so the stale one cannot false-close a group).
+ *
+ * Returns null when the stream cannot group (an empty stage record, or a
+ * stage count running past the observed commands) — the caller degrades.
+ */
+function attributeStepStatements(records: StepRecord[], endRc: number): AttributedStatement[] | null {
+  const n = records.length;
+  const last = records[n - 1]!;
+  if (last.codes.length === 0) return null;
+  // A trailing `exit N`: its record holds the previous pipeline's codes, not
+  // the exit status. The END marker is authoritative for what the command
+  // asked for, so the record takes it.
+  const lastFirstLine = last.command.split("\n")[0] ?? "";
+  const codes: number[][] = records.map((r) => r.codes);
+  if (/^\s*exit(\s|;|$)/.test(lastFirstLine)) {
+    codes[n - 1] = [endRc];
+  }
+  if (n === 1) {
+    // A single-statement script: the lone record carries its own codes.
+    return [{ stages: [records[0]!.command], codes: codes[0]! }];
+  }
+  // Direct pairing (see above): record j carries its own command's codes,
+  // except non-final stages, which are consumed unread by the group their
+  // last stage closes. Record 0 needs no special case: the first firing's
+  // record carries install text and is filtered before grouping, so every
+  // surviving record describes a real completed command.
+  const consumed = new Array<boolean>(n).fill(false);
+  const byIndex = new Map<number, AttributedStatement>();
+  for (let j = n - 1; j >= 0; j--) {
+    if (consumed[j] === true) continue;
+    const ownCodes = codes[j]!;
+    if (ownCodes.length === 0) return null;
+    if (ownCodes.length === 1) {
+      byIndex.set(j, { stages: [records[j]!.command], codes: ownCodes });
+    } else {
+      const size = ownCodes.length;
+      const start = j - size + 1;
+      if (start < 0) return null;
+      for (let k = start; k <= j; k++) {
+        if (consumed[k] === true) return null;
+      }
+      const stages: string[] = [];
+      for (let k = start; k <= j; k++) {
+        consumed[k] = true;
+        stages.push(records[k]!.command);
+      }
+      byIndex.set(start, { stages, codes: ownCodes });
+      j = start;
+    }
+  }
+  const statements: AttributedStatement[] = [];
+  for (let i = 0; i < n; i++) {
+    const statement = byIndex.get(i);
+    if (statement !== undefined) statements.push(statement);
+  }
+  return statements;
+}
+
+/**
+ * The degraded codes line: what the legacy final-pipeline report may print
+ * when per-statement capture is unavailable. Returns "" when nothing may
+ * print. Pure (no I/O) so the honesty rules pin directly under test.
+ *
+ * - A confidently named pipeline prints its stages (single-pipeline `names`
+ *   or flat-final `finalNames` — the one PIPESTATUS actually holds).
+ * - An &&/|| chain ending in a pipeline prints the candidate stages ONLY
+ *   beside the unconfirmed-attribution warning, and only when the stage
+ *   count matches the codes (a short-circuited chain leaves an earlier
+ *   single command's codes, which cannot be this pipeline's).
+ * - A chained command with no matching candidate withholds the numbers
+ *   entirely: bare unlabelled codes are the one actively misleading render.
+ * - Chain-free unnamed commands (brace group, branch, subshell) keep
+ *   today's bare render.
+ */
+export function renderDegradedCodesLine(
+  pipeStages: PipeStageStatus[],
+  plan: PipeCapturePlan,
+): string {
+  const stageNames = plan.names !== null ? plan.names : plan.finalNames;
+  if (stageNames !== null) {
+    return `[exit codes: ${formatPipeStages(pipeStages)}]`;
+  }
+  if (
+    plan.unconfirmedNames !== null &&
+    plan.unconfirmedNames.length === pipeStages.length
+  ) {
+    const unconfirmed = pipeStages.map((stage, i) => ({
+      ...stage,
+      name: plan.unconfirmedNames![i] as string,
+    }));
+    return (
+      `[exit codes (unconfirmed — the \`&&\`/\`||\` chain may have ` +
+      `short-circuited; these name the final pipeline ` +
+      `(led by \`${plan.unconfirmedLeading}\`) only if it ran): ` +
+      `${formatPipeStages(unconfirmed)}]`
+    );
+  }
+  if (!plan.hasChain) {
+    return `[exit codes: ${formatPipeStages(pipeStages)}]`;
+  }
+  return "";
+}
+
+/**
+ * The degraded scope note: PIPESTATUS holds the LAST pipeline only. On a
+ * successful compound run the note carries the final pipeline's stage codes
+ * (ticket #144a) — scope plus its data, never scope alone. A coverage loss
+ * appends its reason. Returns "" when no note prints (single pipelines, or
+ * no capture at all). Pure, for the same reason as renderDegradedCodesLine.
+ */
+export function renderDegradedScopeNote(
+  pipeStages: PipeStageStatus[],
+  plan: PipeCapturePlan,
+  reportedExit: number | null,
+  stepLossReason: string | undefined,
+): string {
+  if (plan.names !== null) return "";
+  const carryingCodes = reportedExit === 0 ? `: ${formatPipeStages(pipeStages)}` : "";
+  return (
+    `[exit codes cover the final pipeline only` +
+    (plan.finalLeading !== null
+      ? ` (last pipeline led by \`${plan.finalLeading}\`${carryingCodes})`
+      : carryingCodes !== ""
+        ? ` (${carryingCodes.slice(2)})`
+        : "") +
+    `; earlier lines of a compound command were not captured` +
+    (stepLossReason !== undefined ? `; per-statement capture was lost (${stepLossReason})` : "") +
+    `]`
+  );
+}
+
+/** First line, capped: multiline BASH_COMMANDs (heredocs) render as one. */
+function shortCommandText(command: string, maxLength = 120): string {
+  const firstLine = command.split("\n")[0] ?? "";
+  return firstLine.length > maxLength ? `${firstLine.slice(0, maxLength)}…` : firstLine;
+}
+
+/** Render one grouped statement the way the model reads it. */
+function renderAttributedStatement(statement: AttributedStatement): string {
+  const renderedStages = statement.stages.map((stage) => `\`${shortCommandText(stage)}\``);
+  const renderedCodes = statement.codes.join(", ");
+  if (renderedStages.length === 1) return `${renderedStages[0]} ${renderedCodes}`;
+  return `${renderedStages.join(" | ")} → ${renderedCodes}`;
+}
+
+/**
+ * Render the complete per-statement capture. Success is one line (every
+ * statement's code is data, so the scope never stands alone — ticket #144a);
+ * failure names each failing statement (ticket #143's attribution). A
+ * nonzero exit with no failing statement (explicit `exit N` is overridden
+ * into its record, so this is the `!`-negation shape) falls back to naming
+ * the final statement beside the authoritative exit.
+ */
+export function renderStepReport(statements: AttributedStatement[], endRc: number): string {
+  const failed = statements.filter((s) => decidePipeExit(s.codes) !== 0);
+  if (failed.length === 0 && endRc === 0) {
+    return `[exit codes: all ${statements.length} statements exited 0]`;
+  }
+  const rendered = failed.map((s) => renderAttributedStatement(s));
+  if (rendered.length === 0 && statements.length > 0) {
+    // A nonzero exit with no failing statement of its own (`!`-negation and
+    // friends invert the verdict after the fact): name the final statement
+    // beside the authoritative exit rather than print bare scope.
+    const final = statements[statements.length - 1]!;
+    rendered.push(`${renderAttributedStatement(final)} (final statement; command exited ${endRc})`);
+  }
+  return `[exit codes (${failed.length} of ${statements.length} statements failed): ${rendered.join("; ")}]`;
 }
 
 /** Render one completed foreground run into the text the model receives. */
@@ -1892,25 +2559,94 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
         // `producer | head` idiom (producer dies of SIGPIPE, exit 141) into a
         // failure on every successful call.
         //
-        // Capture limits, stated plainly: PIPESTATUS holds the LAST pipeline
-        // only, so a compound command reports that pipeline's stages; when
-        // the shell never reaches the epilogue (`exec`, `exit`, a signal
-        // kill) the side file is absent and everything below degrades to the
-        // legacy last-stage behavior. A missing capture never fails the call.
+        // Capture, in two layers. The DEBUG trap observes every top-level
+        // statement as it runs — its handler's FIRST expansion saves
+        // PIPESTATUS (the previous statement's stages) beside the previous
+        // BASH_COMMAND into a side file, and the EXIT trap flushes the final
+        // statement. The legacy epilogue below still records the final
+        // pipeline's PIPESTATUS once, as the fallback when per-statement
+        // capture degrades.
+        //
+        // The trap changes nothing about what runs: the handler ends in a
+        // zero status (it can never skip a command under `set -e`), defines
+        // no globals outside the reserved `__dsh_dbg_` namespace, allocates
+        // its file descriptor dynamically (`{var}>`, never a hardcoded fd
+        // the script might use), and writes only to the side file — never
+        // to the command's stdout/stderr. Bare assignments and function
+        // definitions do not fire DEBUG at all, so the installation itself
+        // leaves only its two `trap` lines in the stream, filtered by
+        // namespace on parse. Without functrace the trap stays top-level:
+        // sourced bodies, function bodies, subshells, `$( ... )` and
+        // heredoc bodies run silent (all live-probed on GNU bash 5.3.9,
+        // transcripts on ticket #143).
+        //
+        // Degradation, never failure: a script that installs its own
+        // DEBUG/EXIT trap, clears ours, enables functrace, backgrounds a
+        // statement (BASH_COMMAND carries no `&`, so backgrounded records
+        // are indistinguishable from fact), or hides statements in a
+        // subshell falls back to the legacy final-pipeline report with the
+        // loss stated in the note. When the shell never reaches the traps
+        // (`exec`, `exit`-less kills, signals) the files are absent and the
+        // same fallback applies. A missing capture never fails the call.
         const pipePlan = planPipeCapture(toRun);
         let wrappedCommand = toRun;
         let pipeDir: string | undefined;
-        if (pipePlan.hasPipe) {
+        if (pipePlan.needsWrap) {
           try {
             await mkdir("/tmp/dsh", { recursive: true });
             pipeDir = await mkdtemp(join("/tmp/dsh", "pipestatus-"));
             const statusFile = shellQuote(join(pipeDir, "status"));
+            const stepsFile = shellQuote(join(pipeDir, "steps"));
             // One command saves BOTH facts: $? and PIPESTATUS each die with
             // the next command, so neither survives a two-step save — the
             // expansions below all read the verdict of toRun itself. The
             // printf then reports the saved copy, never the live array.
+            // `set -o pipefail` leads (before the trap install) so its own
+            // firing never enters the per-statement stream.
             wrappedCommand =
-              `set -o pipefail\n${toRun}\n` +
+              `set -o pipefail\n` +
+              // No `2>/dev/null` on this exec: unlike `printf ... 2>/dev/null`
+              // (a temporary redirect), redirections on a bare `exec` apply
+              // to the shell itself PERMANENTLY — silencing open errors here
+              // would silence the USER script's whole stderr too (caught live
+              // on bash 5.3.9: every `>&2` vanished). An open failure is
+              // practically impossible (pipeDir was just created beside the
+              // status file, which trusts it the same way); if it ever
+              // happens the one error line is honest, and the missing steps
+              // file degrades to the legacy report.
+              `exec {__dsh_dbg_fd}>${stepsFile} || true\n` +
+              `__dsh_dbg_prev=""\n` +
+              `__dsh_dbg_busy=0\n` +
+              `__dsh_dbg_handler() {\n` +
+              // The save MUST be the first expansion in the handler: even a
+              // single arithmetic guard before it resets PIPESTATUS to all
+              // zeros (probed). The re-entrancy guard therefore comes after.
+              `  local __dsh_dbg_st=( "\${PIPESTATUS[@]}" )\n` +
+              `  if (( __dsh_dbg_busy )); then return 0; fi\n` +
+              `  __dsh_dbg_busy=1\n` +
+              `  if [[ -n $__dsh_dbg_prev ]]; then\n` +
+              `    printf '[%s] :: %s\\n' "\${__dsh_dbg_st[*]}" "$__dsh_dbg_prev" >&$__dsh_dbg_fd\n` +
+              `  fi\n` +
+              `  __dsh_dbg_prev=$BASH_COMMAND\n` +
+              `  __dsh_dbg_busy=0\n` +
+              `  return 0\n` +
+              `}\n` +
+              `__dsh_dbg_exit() {\n` +
+              `  local __dsh_dbg_st=( "\${PIPESTATUS[@]}" ) __dsh_dbg_rc=$?\n` +
+              `  trap - DEBUG\n` +
+              `  if [[ -n $__dsh_dbg_prev ]]; then\n` +
+              `    printf '[%s] :: %s\\n' "\${__dsh_dbg_st[*]}" "$__dsh_dbg_prev" >&$__dsh_dbg_fd\n` +
+              `  fi\n` +
+              `  printf 'END rc=%s\\n' "$__dsh_dbg_rc" >&$__dsh_dbg_fd\n` +
+              `  exec {__dsh_dbg_fd}>&- || true\n` +
+              // Explicit, so a mid-script `exit N` keeps its status through
+              // the handler's own commands (probed: `exit 3` mid-script
+              // still exits 3).
+              `  exit "$__dsh_dbg_rc"\n` +
+              `}\n` +
+              `trap '__dsh_dbg_handler' DEBUG\n` +
+              `trap '__dsh_dbg_exit' EXIT\n` +
+              `${toRun}\n` +
               `__dsh_pipe_exit=$? __dsh_pipe_stages=("\${PIPESTATUS[@]}")\n` +
               `printf '%s' "\${__dsh_pipe_stages[*]}" > ${statusFile} 2>/dev/null || true\n` +
               `exit $__dsh_pipe_exit`;
@@ -1937,25 +2673,39 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
         // limits above). Anything else stays unnamed rather than guessed.
         const stageNames = pipePlan.names !== null ? pipePlan.names : pipePlan.finalNames;
         let pipeStages: PipeStageStatus[] | undefined;
+        // The raw per-statement stream, read beside the status file so one
+        // cleanup covers both. Parsing happens after: it cannot throw (it
+        // returns complete:false instead), but reading can. The two reads
+        // are INDEPENDENT: a mid-script `exit` skips the legacy epilogue
+        // (no status file) while the EXIT trap still flushes the steps
+        // file, so one missing file must never hide the other.
+        let rawSteps: string | undefined;
         if (pipeDir !== undefined) {
           try {
             if (result.signal === null) {
-              const raw = (await readFile(join(pipeDir, "status"), "utf8")).trim();
-              const codes = raw
-                .split(/\s+/)
-                .map((s) => Number(s))
-                .filter((n) => Number.isInteger(n));
-              if (codes.length > 0) {
-                pipeStages = codes.map((exitCode, i) => ({
-                  ...(stageNames !== null && stageNames[i] !== undefined
-                    ? { name: stageNames[i] as string }
-                    : {}),
-                  exitCode,
-                }));
+              try {
+                const raw = (await readFile(join(pipeDir, "status"), "utf8")).trim();
+                const codes = raw
+                  .split(/\s+/)
+                  .map((s) => Number(s))
+                  .filter((n) => Number.isInteger(n));
+                if (codes.length > 0) {
+                  pipeStages = codes.map((exitCode, i) => ({
+                    ...(stageNames !== null && stageNames[i] !== undefined
+                      ? { name: stageNames[i] as string }
+                      : {}),
+                    exitCode,
+                  }));
+                }
+              } catch {
+                pipeStages = undefined;
+              }
+              try {
+                rawSteps = await readFile(join(pipeDir, "steps"), "utf8");
+              } catch {
+                rawSteps = undefined;
               }
             }
-          } catch {
-            pipeStages = undefined;
           } finally {
             await rm(pipeDir, { recursive: true, force: true }).catch(() => {});
           }
@@ -1971,30 +2721,51 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
               ? 0
               : decidePipeExit(pipeStages.map((s) => s.exitCode))
             : result.exitCode;
-        let text = renderShellResult({ ...result, exitCode: reportedExit });
-        // The named list is data rendered once, not a second signal: it
-        // prints only when a stage actually failed, never on a fully
-        // successful pipeline, and no reader scrapes it back out of the text
-        // (the stages travel in the value and in presentationMeta instead).
-        if (pipeStages !== undefined && reportedExit !== 0 && reportedExit !== null) {
-          text += `\n[exit codes: ${formatPipeStages(pipeStages)}]`;
+        // Per-statement capture, when it survived intact. The two static
+        // gates degrade before parsing: a backgrounded statement's records
+        // cannot be told from foreground fact, and a subshell statement
+        // leaves no records at all — both fall back to the legacy report
+        // rather than print coverage they do not have.
+        let stepStatements: AttributedStatement[] | null = null;
+        let stepEndRc = 0;
+        let stepLossReason: string | undefined;
+        if (pipeDir !== undefined && result.signal === null) {
+          if (pipePlan.hasBackground) {
+            stepLossReason = "the command backgrounds a statement, whose records are unattributable";
+          } else if (pipePlan.hasHiddenStatements) {
+            stepLossReason = "the command hides statements in a subshell the trap cannot see";
+          } else if (rawSteps === undefined) {
+            stepLossReason = "the per-statement capture file was unreadable";
+          } else {
+            const parsed = parseStepCapture(rawSteps);
+            if (parsed.complete) {
+              stepStatements = parsed.statements;
+              stepEndRc = parsed.endRc;
+            } else {
+              stepLossReason = parsed.lossReason;
+            }
+          }
         }
-        // Scope attribution. PIPESTATUS holds the LAST pipeline only, so
-        // when the command is anything more than one simple pipeline the
-        // report says so and names that pipeline where it can — a reader
-        // must never have to guess which line the numbers describe. On a
-        // successful compound run the note is the ONLY record that earlier
-        // lines were never checked, so a mid-script failure cannot hide
-        // behind a succeeding final pipeline without the limitation being
-        // stated in the report itself. Named single-pipeline reports need no
-        // note: the codes and the name are the same thing there.
-        if (pipeStages !== undefined && pipePlan.names === null) {
-          text +=
-            `\n[exit codes cover the final pipeline only` +
-            (pipePlan.finalLeading !== null
-              ? ` (last pipeline led by \`${pipePlan.finalLeading}\`)`
-              : "") +
-            `; earlier lines of a compound command were not captured]`;
+        let text = renderShellResult({ ...result, exitCode: reportedExit });
+        if (stepStatements !== null) {
+          // Complete per-statement capture replaces the legacy codes-and-note
+          // block: every statement's codes are data now, so the "final
+          // pipeline only" note no longer describes reality and goes away
+          // (ticket #144: remove the note rather than leave one that lies).
+          text += `\n${renderStepReport(stepStatements, stepEndRc)}`;
+        } else {
+          // Degraded: the legacy final-pipeline report, honestly worded.
+          // The honesty rules live in the pure renderDegraded* helpers
+          // (pinned directly under test); this branch only decides WHEN
+          // each line prints: the codes line on failure with data, the
+          // scope note whenever the command is more than one pipeline.
+          if (pipeStages !== undefined && reportedExit !== 0 && reportedExit !== null) {
+            const codesLine = renderDegradedCodesLine(pipeStages, pipePlan);
+            if (codesLine !== "") text += `\n${codesLine}`;
+          }
+          if (pipeStages !== undefined && pipePlan.names === null) {
+            text += `\n${renderDegradedScopeNote(pipeStages, pipePlan, reportedExit, stepLossReason)}`;
+          }
         }
         if (outcome.ranNote !== undefined) text += `\n\nbash-guard: ${outcome.ranNote}`;
         return {
