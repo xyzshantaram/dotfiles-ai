@@ -1,7 +1,7 @@
 // Tests for the CLI pure pieces. No subprocess, no browser, and no
 // network call happens here. The flag parser, the --map parser, the
 // push input builder, and the usage text are all pure.
-import { buildPushInput, parseNameMap, parsePushFlags, usageText } from "../cli.ts";
+import { buildPushInput, parseNameMap, parsePushFlags, usageText } from "../scripts/cli.ts";
 import type { OutputDoc } from "../src/common.ts";
 
 // Fail the test when a condition misses.

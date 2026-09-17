@@ -93,8 +93,8 @@ proves the pragma carries the build.
 `desktop/` is gone. Its `compile.ts` was byte for byte identical to `wizard/compile.ts`, and its
 tasks only packaged the wizardkit demo, which now lives in that package's own `examples/`.
 
-W1, W2 and W3 have landed. The CLI is `cli.ts` at the repository root, with six verbs. The browser
-libraries load from pinned CDN URLs, and the push work is a callable core in `src/pushcore.ts`.
+W1, W2 and W3 have landed. The CLI is `scripts/cli.ts`, with six verbs. The browser libraries load
+from pinned CDN URLs, and the push work is a callable core in `src/pushcore.ts`.
 
 - [x] W3b drop `buttons()` from wizardkit before the first publish. The nav bar replaced it, no app
       file uses it, and a new package must not ship two ways to build one footer. Eval: no export
@@ -106,6 +106,20 @@ libraries load from pinned CDN URLs, and the push work is a callable core in `sr
       `deno publish --dry-run` passes there.
 - [x] W5 split-utils imports `jsr:@xyzshantaram/wizardkit`. Eval: the app runs with no local
       wizardkit on the import path.
+- [x] W10 wizardkit's installer and runtime parse flags with `parseArgs` from `@std/cli` instead of
+      a hand-rolled reader. The runtime also drops its manual `--` split. Eval: a bare word and an
+      unknown flag both throw, and the runtime still starts a child after `--`.
+- [ ] W11 wizardkit's client scripts become real files under `src/client/`, loaded by text import
+      the way `style.css` already is. Today about 255 lines of browser JavaScript are assembled by
+      string concatenation, so no editor, formatter or linter can see them. Eval: no client script
+      is built by concatenation, and the rendered page still carries the same behaviour.
+- [x] W12 move `cli.ts` into `scripts/`, beside `validate.ts`. It is a runnable entry, not a library
+      module. Eval: the six verbs still work, including the two subprocess dispatches whose targets
+      resolve relative to the entry.
+- [ ] W13 rework the split-utils readme. An AI harness user pastes one prompt and is set up; a
+      reader without a harness gets plain instructions for running the app alone. The Windows path
+      says how to open a terminal, for a reader who has never opened one. Eval: a reader with no
+      prior context reaches a working run by either route.
 - [ ] W6 the wizard skill ships one file that imports the JSR package. Eval: the template runs from
       a directory holding nothing else.
 - [ ] W7 the split-utils skill, as a thin router, with the three push paths, the safety contract and

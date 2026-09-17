@@ -8,13 +8,13 @@
 // engine, which drags in the browser session stores.
 
 import { parseArgs } from "jsr:@std/cli@^1.0.32/parse-args";
-import { formatMoney, type OutputDoc } from "./src/common.ts";
-import { splitwiseEnvPath } from "./src/paths.ts";
-import { buildNameMap, type PushApi, runPush } from "./src/pushcore.ts";
-import { buildAggregateSummary, groupOrders, inferPayer } from "./src/render.ts";
-import { loadSettings } from "./src/settings.ts";
-import { createShareLink } from "./src/share.ts";
-import { loadCredentials, loadPushed, savePushed, SplitwiseAPI } from "./src/splitwise.ts";
+import { formatMoney, type OutputDoc } from "../src/common.ts";
+import { splitwiseEnvPath } from "../src/paths.ts";
+import { buildNameMap, type PushApi, runPush } from "../src/pushcore.ts";
+import { buildAggregateSummary, groupOrders, inferPayer } from "../src/render.ts";
+import { loadSettings } from "../src/settings.ts";
+import { createShareLink } from "../src/share.ts";
+import { loadCredentials, loadPushed, savePushed, SplitwiseAPI } from "../src/splitwise.ts";
 
 // Short usage block naming all six verbs.
 export function usageText(): string {
@@ -332,9 +332,9 @@ async function runShareVerb(args: string[]): Promise<void> {
 // non zero. Dispatch verbs run in a subprocess; the rest run here.
 async function main(args: string[]): Promise<void> {
   const [verb, ...rest] = args;
-  if (verb === "gather") await dispatch("./wizards/gatherer.ts", rest);
-  else if (verb === "validate") await dispatch("./scripts/validate.ts", rest);
-  else if (verb === "wizard") await dispatch("./wizards/expense-split.ts", rest);
+  if (verb === "gather") await dispatch("../wizards/gatherer.ts", rest);
+  else if (verb === "validate") await dispatch("./validate.ts", rest);
+  else if (verb === "wizard") await dispatch("../wizards/expense-split.ts", rest);
   else if (verb === "push") await runPushVerb(rest);
   else if (verb === "aggregate") await runAggregateVerb(rest);
   else if (verb === "share") await runShareVerb(rest);

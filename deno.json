@@ -9,7 +9,7 @@
     "jsr:@xyzshantaram/wizardkit@^0.1.0": "/home/sid/repos/wizardkit/src/mod.ts"
   },
   "tasks": {
-    "check": "deno check --no-lock cli.ts src/*.ts wizards/*.ts wizards/expense-split/*.ts",
+    "check": "deno check --no-lock scripts/*.ts src/*.ts wizards/*.ts wizards/expense-split/*.ts",
     "test": "deno test --no-lock --allow-read --allow-write --allow-env --allow-sys --allow-run tests/",
     "test:fixtures": "bash tests/run.sh",
     "dev": "deno run --no-lock -A"
