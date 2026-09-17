@@ -361,8 +361,14 @@ Deno.test("conflict name keeps the prefix", async () => {
   assert(base.startsWith("split-state.conflict-"), "prefix stays");
 });
 
-// Two writes started together both finish, and the later doc wins.
-Deno.test("concurrent saves both land with the later doc last", async () => {
+// Two writes started together both finish, and the file stays whole.
+// writeSplitState promises no order between overlapping calls: each one
+// writes a private temp file and renames it over the real file, so the
+// rename that happens to run last wins. The app never races this way,
+// because createSaver runs one save at a time. What the function does
+// promise is that neither call corrupts the file or leaves a temp file,
+// and that the survivor is one of the two documents, whole.
+Deno.test("concurrent saves both land and leave one whole document", async () => {
   // Point state at a fresh temp dir.
   const root = await Deno.makeTempDir();
   const dir = root + "/run";
@@ -376,10 +382,14 @@ Deno.test("concurrent saves both land with the later doc last", async () => {
   const [r1, r2] = await Promise.all([p1, p2]);
   assertEquals(r1.conflicted, false, "first save lands");
   assertEquals(r2.conflicted, false, "second save lands");
-  // Check the real file holds the later document.
+  // The file parses, so no save wrote over another part way.
   const back = await loadSplitState(dir);
   assert(back !== null, "state loads");
-  assertEquals(back!.payer, "Ben", "later doc wins");
+  // The survivor is one whole document, not a mix of the two.
+  assert(back!.payer === "Asha" || back!.payer === "Ben", "payer came from one of the two saves");
+  assertEquals(back!.people, ["Asha", "Ben"], "the survivor keeps its own people list");
+  // Neither call left its private temp file behind.
+  assertEquals((await tmpLeftovers(dir)).length, 0, "no temp file survives the race");
 });
 
 // Temp paths never repeat between writes.
