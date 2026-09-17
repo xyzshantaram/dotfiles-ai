@@ -172,23 +172,12 @@ export function repeatOnto(last, people, price) {
   };
 }
 
-// Default ticked people for a fresh line. A fee ticks everyone. An
-// item ticks the me name when present and everyone otherwise.
-function defaultTicked(item, people, me) {
-  if (people.length === 0) return [];
-  if (item.isFee) return [...people];
-  if (me !== "" && people.includes(me)) return [me];
-  return [...people];
-}
-
-// Fresh draft for a line with no saved assignment.
-function freshDraft(item, people, me) {
-  const ticked = defaultTicked(item, people, me);
-  let amounts = {};
-  if (ticked.length > 0) {
-    amounts = shareEqual(item.price, ticked);
-  }
-  return { mode: "Equal", ticked, percents: evenPercents(ticked), amounts };
+// Fresh draft for a line with no saved assignment. Nobody is ticked,
+// fee or not, so every split is a deliberate choice and no default can
+// be saved by accident. The r key repeats the last line, which covers
+// the run of fees and the run of shared items alike.
+function freshDraft(_item, _people, _me) {
+  return { mode: "Equal", ticked: [], percents: {}, amounts: {} };
 }
 
 // Draft from a saved assignment. Percent fields derive from the
