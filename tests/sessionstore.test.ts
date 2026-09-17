@@ -1,10 +1,6 @@
 // Tests for the per session store that keeps two browsers apart.
 import { assert, assertEquals } from "@std/assert";
-import {
-  DEFAULT_SESSION,
-  sessionStore,
-  sidOf,
-} from "../src/sessionstore.ts";
+import { DEFAULT_SESSION, sessionStore, sidOf } from "../src/sessionstore.ts";
 
 Deno.test("each session gets its own value", () => {
   const store = sessionStore(() => ({ picked: [] as string[] }));

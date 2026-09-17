@@ -59,31 +59,31 @@ A1 to A4 have landed. The series is closed.
 
 ### W series: three homes, a shared core, and a CLI
 
-Settled with the user on 2026-09-17 by grilling. The work splits into three homes. `~/repos/wizardkit`
-becomes the JSR package `@xyzshantaram/wizardkit`, holding `deno.json`, `license.md`, `readme.md`,
-`src/` and `tests/`. The `wizard` skill ships one file that imports that package. `split-utils` lives
-in `dotfiles-ai/skills/split-utils`, imports wizardkit from JSR, and runs straight from its GitHub
-URL. split-utils is never published to JSR, because the user does not want to maintain a release for
-it.
+Settled with the user on 2026-09-17 by grilling. The work splits into three homes.
+`~/repos/wizardkit` becomes the JSR package `@xyzshantaram/wizardkit`, holding `deno.json`,
+`license.md`, `readme.md`, `src/` and `tests/`. The `wizard` skill ships one file that imports that
+package. `split-utils` lives in `dotfiles-ai/skills/split-utils`, imports wizardkit from JSR, and
+runs straight from its GitHub URL. split-utils is never published to JSR, because the user does not
+want to maintain a release for it.
 
 Settled decisions, which no ticket may revisit. The work becomes pure functions with a thin CLI over
 them, and both the wizard and an agent use that core. The wizard calls the CLI through zx where that
 is easy, which is what gathering already does, and imports the functions where interaction demands
 it. The CLI carries six verbs: gather, validate, push, aggregate, share, wizard. The skill is a thin
-router that names the surface and sends the reader to `docs/schema.md` for the split format. An agent
-always dry runs, shows the expense table and the per person totals, and stops until the user says go.
-The skill explains all three push paths: aggregate for no API access, share to a friend who has
-access, and the user's own API key. An agent asks rather than guessing, accepts standing rules such
-as per person affinities and a fallback owner with a cap, and asks the user where to persist those
-rules using whatever the host offers, because split-utils stores none of it.
+router that names the surface and sends the reader to `docs/schema.md` for the split format. An
+agent always dry runs, shows the expense table and the per person totals, and stops until the user
+says go. The skill explains all three push paths: aggregate for no API access, share to a friend who
+has access, and the user's own API key. An agent asks rather than guessing, accepts standing rules
+such as per person affinities and a fallback owner with a cap, and asks the user where to persist
+those rules using whatever the host offers, because split-utils stores none of it.
 
-W1, W2 and W3 have landed. The CLI is `cli.ts` at the repository root, with six verbs. The browser libraries load from pinned CDN URLs, and the push work is a
-callable core in `src/pushcore.ts`.
+W1, W2 and W3 have landed. The CLI is `cli.ts` at the repository root, with six verbs. The browser
+libraries load from pinned CDN URLs, and the push work is a callable core in `src/pushcore.ts`.
 
-- [ ] W3b drop `buttons()` from wizardkit before the first publish. The nav bar replaced it, no app
+- [x] W3b drop `buttons()` from wizardkit before the first publish. The nav bar replaced it, no app
       file uses it, and a new package must not ship two ways to build one footer. Eval: no export
       named buttons survives, and the suite is green.
-- [ ] W3c rename `src/wizardkit.ts` to `src/term.ts`. It is the terminal output helper for the two
+- [x] W3c rename `src/wizardkit.ts` to `src/term.ts`. It is the terminal output helper for the two
       remaining CLI scripts, and it has nothing to do with the library. Four files import it. Eval:
       no file named wizardkit.ts sits under src/.
 - [ ] W4 move wizardkit to `~/repos/wizardkit` as a JSR package with `src/` and `tests/`. Eval:

@@ -7,7 +7,6 @@ import { createWizard } from "../mod.ts";
 import {
   action,
   answers,
-  buttons,
   checkbox,
   markdown,
   menu,
@@ -29,55 +28,52 @@ const STAGE_NAMES = [
 ];
 
 export function styleStep(): Step {
-  return step("style", "Pick a split style", [
-    stages("Stages", STAGE_NAMES, 0),
-    tabs([
-      {
-        label: "Style",
-        nodes: [radio("Share the fee", "fee", ["Equal", "Skip"], "Equal")],
-      },
-      {
-        label: "Help",
-        nodes: [
-          markdown(
-            "This sample shows **every core node**.\nPick one option.\nSee /files/sample.json.",
-          ),
-        ],
-      },
+  return {
+    ...step("style", "Pick a split style", [
+      stages("Stages", STAGE_NAMES, 0),
+      tabs([
+        {
+          label: "Style",
+          nodes: [radio("Share the fee", "fee", ["Equal", "Skip"], "Equal")],
+        },
+        {
+          label: "Help",
+          nodes: [
+            markdown(
+              "This sample shows **every core node**.\nPick one option.\nSee /files/sample.json.",
+            ),
+          ],
+        },
+      ]),
+      menu("Split style", ["Equal", "Percent", "Custom"], "style"),
+      action("Show system date", "date", ["date"]),
     ]),
-    menu("Split style", ["Equal", "Percent", "Custom"], "style"),
-    action("Show system date", "date", ["date"]),
-    buttons([{ label: "Next", action: "next", primary: true }]),
-  ]);
+    nav: { next: "Next" },
+  };
 }
 
 function peopleStep(): Step {
-  return step("people", "Add people plus amounts", [
-    stages("Stages", STAGE_NAMES, 1),
-    progress("Coverage", 1, 0, 2),
-    tabs([
-      {
-        label: "People",
-        nodes: [checkbox("People", "who", ["Ana", "Bo", "Cy"], ["Ana"])],
-      },
-      {
-        label: "Amounts",
-        nodes: [
-          textEntry("Run name", "run", "", "Friday dinner"),
-          numberEntry("Total paid", "total", 100),
-        ],
-      },
+  return {
+    ...step("people", "Add people plus amounts", [
+      stages("Stages", STAGE_NAMES, 1),
+      progress("Coverage", 1, 0, 2),
+      tabs([
+        {
+          label: "People",
+          nodes: [checkbox("People", "who", ["Ana", "Bo", "Cy"], ["Ana"])],
+        },
+        {
+          label: "Amounts",
+          nodes: [
+            textEntry("Run name", "run", "", "Friday dinner"),
+            numberEntry("Total paid", "total", 100),
+          ],
+        },
+      ]),
+      action("Write deploy note", "deploy-note", ["echo", "deploy"], "onConfirm"),
     ]),
-    action("Write deploy note", "deploy-note", ["echo", "deploy"], "onConfirm"),
-    buttons(
-      [
-        { label: "Back", action: "back" },
-        { label: "Next", action: "next", primary: true },
-      ],
-      undefined,
-      "split",
-    ),
-  ]);
+    nav: { back: true, next: "Next" },
+  };
 }
 
 function reviewStep(saved: Map<string, string[]>): Step {
@@ -88,14 +84,13 @@ function reviewStep(saved: Map<string, string[]>): Step {
   } else {
     kids.push(answers("Answers", entries));
   }
-  return step("review", "Review answers", [
-    stages("Stages", STAGE_NAMES, 2),
-    ...kids,
-    buttons([
-      { label: "Back", action: "back" },
-      { label: "Done", action: "done", primary: true },
+  return {
+    ...step("review", "Review answers", [
+      stages("Stages", STAGE_NAMES, 2),
+      ...kids,
     ]),
-  ]);
+    nav: { back: true, done: "Done" },
+  };
 }
 
 const handle = createWizard({

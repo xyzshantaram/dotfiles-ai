@@ -1,6 +1,6 @@
-// Tests for the wizardkit wrap helper. Wrapping keeps lines short
+// Tests for the term wrap helper. Wrapping keeps lines short
 // and never splits words unless one word fills the whole width.
-import { wrap } from "../src/wizardkit.ts";
+import { wrap } from "../src/term.ts";
 
 // Fail the test when a flag misses.
 function assert(cond: boolean, msg: string): void {

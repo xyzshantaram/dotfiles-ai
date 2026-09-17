@@ -1,4 +1,4 @@
-// Wizard library. Share one style across wizards.
+// Terminal output helper. Share one style across scripts.
 const USE_COLOR = Deno.stdout.isTerminal() && !Deno.env.get("NO_COLOR");
 const RESET = USE_COLOR ? "\x1b[0m" : "";
 const BLUE = USE_COLOR ? "\x1b[34m" : "";

@@ -388,7 +388,7 @@ function nodeWords(node: unknown): string[] {
   for (const key of ["text", "label", "hint", "name", "value", "action"]) {
     if (typeof rec[key] === "string") parts.push(rec[key] as string);
   }
-  for (const key of ["items", "rows", "options", "nodes", "buttons", "entries"]) {
+  for (const key of ["items", "rows", "options", "nodes", "entries"]) {
     const arr = rec[key];
     if (Array.isArray(arr)) {
       for (const item of arr) parts.push(...nodeWords(item));

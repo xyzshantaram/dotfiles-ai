@@ -97,16 +97,6 @@ export interface ButtonItem {
   primary?: boolean;
 }
 
-export type ButtonsLayout = "right" | "split";
-
-export interface ButtonsNode {
-  kind: "buttons";
-  buttons: ButtonItem[];
-  label?: string;
-  layout?: ButtonsLayout;
-  error?: string;
-}
-
 export interface MarkdownNode {
   kind: "markdown";
   text: string;
@@ -227,7 +217,6 @@ export type Node =
   | TextEntryNode
   | NumberEntryNode
   | TextareaNode
-  | ButtonsNode
   | MarkdownNode
   | StagesNode
   | SpoilerNode
@@ -537,40 +526,6 @@ function validateTextarea(node: TextareaNode, tag: string): string[] {
   return errors;
 }
 
-function validateButtons(node: ButtonsNode, tag: string): string[] {
-  const errors: string[] = [];
-  if (node.label !== undefined && typeof node.label !== "string") {
-    errors.push(tag + ": label must be text");
-  }
-  if (
-    node.layout !== undefined &&
-    node.layout !== "right" &&
-    node.layout !== "split"
-  ) {
-    errors.push(tag + ": layout must be right or split");
-  }
-  if (!Array.isArray(node.buttons) || node.buttons.length === 0) {
-    errors.push(tag + ": buttons must hold at least one button");
-    return errors;
-  }
-  node.buttons.forEach((button, i) => {
-    if (!isRecord(button) || !isTitle(button.label)) {
-      errors.push(tag + ": button " + i + " must have a label");
-    }
-    if (!isRecord(button) || !isTitle(button.action)) {
-      errors.push(tag + ": button " + i + " must have an action id");
-    }
-    if (
-      isRecord(button) &&
-      button.primary !== undefined &&
-      typeof button.primary !== "boolean"
-    ) {
-      errors.push(tag + ": button " + i + " primary must be true or false");
-    }
-  });
-  return errors;
-}
-
 function validateMarkdown(node: MarkdownNode, tag: string): string[] {
   if (!isTitle(node.text)) return [tag + ": text must be non-blank"];
   return [];
@@ -775,8 +730,6 @@ function validateNodeAt(node: unknown, path: string): string[] {
       return validateNumberEntry(item as NumberEntryNode, tag);
     case "textarea":
       return validateTextarea(item as TextareaNode, tag);
-    case "buttons":
-      return validateButtons(item as ButtonsNode, tag);
     case "markdown":
       return validateMarkdown(item as MarkdownNode, tag);
     case "stages":
@@ -1065,14 +1018,6 @@ export function textarea(
   });
 }
 
-export function buttons(
-  buttons: ButtonItem[],
-  label?: string,
-  layout: ButtonsLayout = "right",
-): ButtonsNode {
-  return omitUndefined({ kind: "buttons", buttons, label, layout });
-}
-
 export function markdown(text: string): MarkdownNode {
   return { kind: "markdown", text };
 }
@@ -1152,83 +1097,6 @@ export function copyable(
     mono: opts?.mono,
     rows: opts?.rows,
   }) as CopyableNode;
-}
-
-export interface NavGoto {
-  step: string;
-  label: string;
-}
-
-export interface NavOptions {
-  back?: boolean | string;
-  next?: string;
-  done?: string;
-  goto?: string | NavGoto;
-  extra?: ButtonItem[];
-}
-
-// Standard button row, so no author writes it by hand. back is true
-// for the label Back or a string for a custom label. next, done, and
-// goto pick the forward button: a next or done label, or a jump to a
-// step id labelled Next. goto also takes an object with a step id and
-// a label for a custom label. extra buttons sit between back and forward.
-// The row uses the split layout with a primary forward button.
-export function nav(opts: NavOptions): ButtonsNode {
-  const forward = [opts.next, opts.done, opts.goto].filter(
-    (item) => item !== undefined,
-  );
-  if (forward.length !== 1) {
-    throw new Error("nav: exactly one of next, done, or goto must be set");
-  }
-  if (opts.back !== undefined && opts.back !== true && !isTitle(opts.back)) {
-    throw new Error("nav: back must be true or a non-blank label");
-  }
-  if (opts.next !== undefined && !isTitle(opts.next)) {
-    throw new Error("nav: next label must be non-blank");
-  }
-  if (opts.done !== undefined && !isTitle(opts.done)) {
-    throw new Error("nav: done label must be non-blank");
-  }
-  if (typeof opts.goto === "string") {
-    if (!isTitle(opts.goto)) {
-      throw new Error("nav: goto step id must be non-blank");
-    }
-  } else if (isRecord(opts.goto)) {
-    if (!isTitle(opts.goto.step)) {
-      throw new Error("nav: goto step must be non-blank");
-    }
-    if (!isTitle(opts.goto.label)) {
-      throw new Error("nav: goto label must be non-blank");
-    }
-  } else if (opts.goto !== undefined) {
-    throw new Error("nav: goto step id must be non-blank");
-  }
-  const list: ButtonItem[] = [];
-  if (opts.back === true) {
-    list.push({ label: "Back", action: "back" });
-  } else if (typeof opts.back === "string") {
-    list.push({ label: opts.back, action: "back" });
-  }
-  if (opts.extra !== undefined) list.push(...opts.extra);
-  if (opts.next !== undefined) {
-    list.push({ label: opts.next, action: "next", primary: true });
-  } else if (opts.done !== undefined) {
-    list.push({ label: opts.done, action: "done", primary: true });
-  } else if (typeof opts.goto === "string") {
-    list.push({
-      label: "Next",
-      action: "goto:" + opts.goto,
-      primary: true,
-    });
-  } else {
-    const target = opts.goto as NavGoto;
-    list.push({
-      label: target.label,
-      action: "goto:" + target.step,
-      primary: true,
-    });
-  }
-  return buttons(list, undefined, "split");
 }
 
 export function step(

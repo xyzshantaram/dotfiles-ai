@@ -230,7 +230,9 @@ Deno.test("currency label follows settings", async () => {
     const board = mountData(item.nodes, "split-board");
     assertEquals(board["currency"], "USD");
     assertEquals(mountItems(board)[0]["price"], 10);
-    const out = exportStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-5" });
+    const out = exportStep(answers(dir, "Continue where you left off?"), {
+      sessionId: "t-split-5",
+    });
     assertStringIncludes(stepText(out.nodes), "USD 5.00");
   } finally {
     Deno.env.delete("SPLIT_UTILS_STATE");
@@ -281,7 +283,9 @@ Deno.test("export handoff lands on push-source with the run preloaded", async ()
       }) + "\n",
     );
     itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-6" });
-    const out = exportStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-6" });
+    const out = exportStep(answers(dir, "Continue where you left off?"), {
+      sessionId: "t-split-6",
+    });
     // The export step offers the jump into the push flow.
     assertStringIncludes(stepText(out.nodes), "Send these to Splitwise now?");
     const pushJump = (out.nav?.actions ?? []).find((entry) => entry.id === "push-source");
@@ -412,7 +416,9 @@ Deno.test("settlement rows read in second person for the me person", async () =>
   const root = await Deno.makeTempDir();
   const dir = makeRun(root, "r8", savedDoc("Ann"));
   itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-11" });
-  const out = exportStep(answers(dir, "Continue where you left off?", "Ann"), { sessionId: "t-split-11" });
+  const out = exportStep(answers(dir, "Continue where you left off?", "Ann"), {
+    sessionId: "t-split-11",
+  });
   const text = stepText(out.nodes);
   // Ann is the me person: her row reads in second person and her
   // total comes first under her own label.
@@ -448,7 +454,9 @@ Deno.test("split-summary renders the summary text in a textarea", async () => {
   const dir = makeRun(root, "r10", savedDoc("Ann"));
   itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-13" });
   exportStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-13" });
-  const found = summaryStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-13" });
+  const found = summaryStep(answers(dir, "Continue where you left off?"), {
+    sessionId: "t-split-13",
+  });
   assertEquals(found.id, "split-summary");
   assertStringIncludes(
     textareaValue(found.nodes, "summary-text"),
@@ -467,7 +475,8 @@ Deno.test("split-share-done renders a stored link", async () => {
   globalThis.fetch = () =>
     Promise.resolve(new Response("https://paste.rs/abc123\n", { status: 200 }));
   try {
-    const made = await createSplitShareLink("t-split-14", 
+    const made = await createSplitShareLink(
+      "t-split-14",
       answers(dir, "Continue where you left off?"),
     );
     assertEquals(made, { ok: true });
@@ -1315,9 +1324,7 @@ Deno.test("resume question names progress and keeps both choices", async () => {
   assert(radioNode !== undefined);
   assertEquals(radioNode["label"], "Continue where you left off?");
   const options = (radioNode["options"] as unknown[]).map((option) =>
-    typeof option === "string"
-      ? option
-      : (option as Record<string, unknown>)["value"]
+    typeof option === "string" ? option : (option as Record<string, unknown>)["value"]
   );
   assertEquals(options, ["Continue where you left off?", "Start over"]);
 });

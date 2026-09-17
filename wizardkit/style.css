@@ -167,18 +167,6 @@ small.node-hint {
   width: 100%;
   margin: 0;
 }
-/* Nav buttons live at the bottom in both cases: margin-top auto sinks
-   the bar when content is short, sticky pins it when content scrolls.
-   It stays inside the step form so submission keeps working. */
-.node-buttons {
-  position: sticky;
-  bottom: 0;
-  z-index: 5;
-  margin: auto -1rem 0;
-  padding: 0.5rem 1rem;
-  background: var(--wa-color-surface-default);
-  border-top: 1px solid var(--wa-color-surface-border);
-}
 .tree-list {
   list-style: none;
   margin: 0;
@@ -200,20 +188,6 @@ small.node-hint {
 }
 .tree-row.is-skipped {
   opacity: 0.65;
-}
-.button-row-right {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.25rem;
-}
-.button-row-split {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.25rem;
 }
 .action-out {
   margin-top: 0.5rem;
@@ -353,10 +327,6 @@ wa-tab-group::part(tabs) {
   }
   .wiz-main {
     padding: 1rem 0.75rem 0;
-  }
-  .node-buttons {
-    margin: auto -0.75rem 0;
-    padding: 0.5rem 0.75rem;
   }
   .wiz-foot {
     padding: 0.5rem 1rem;

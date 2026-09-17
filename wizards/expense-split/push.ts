@@ -367,8 +367,7 @@ function confirmStep(m?: Map<string, string[]>, ctx?: WizardCtx): Step {
       const owedByOthers = live.people
         .filter((person) => person !== live.payer)
         .reduce(
-          (sum, person) =>
-            sum + order.reduce((s, item) => s + (item.assignments[person] ?? 0), 0),
+          (sum, person) => sum + order.reduce((s, item) => s + (item.assignments[person] ?? 0), 0),
           0,
         );
       nodes.push(

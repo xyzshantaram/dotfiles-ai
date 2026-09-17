@@ -8,7 +8,7 @@
 /// <reference lib="dom" />
 
 import type { Page, Response as PWResponse } from "playwright";
-import { dot, lineEnd, lineStart, say, step, wizardExit } from "../src/wizardkit.ts";
+import { dot, lineEnd, lineStart, say, step, wizardExit } from "../src/term.ts";
 import { createRun, ensureRun, stateRoot } from "../src/runstate.ts";
 import { loadSettings } from "../src/settings.ts";
 import { createRunLog, type RunLog } from "../src/log.ts";

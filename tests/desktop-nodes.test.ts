@@ -4,13 +4,11 @@
 import {
   action,
   answers,
-  buttons,
   checkbox,
   copyable,
   markdown,
   menu,
   mount,
-  nav,
   numberEntry,
   progress,
   radio,
@@ -109,7 +107,6 @@ function goodStep() {
     checkbox("People", "who", ["Ana", "Bo"], ["Ana"]),
     textEntry("Run name", "run", "Friday", "Dinner"),
     numberEntry("Total paid", "total", 100),
-    buttons([{ label: "Next", action: "next" }]),
   ]);
 }
 
@@ -195,17 +192,6 @@ Deno.test("validation rejects a bad number entry with a message", () => {
   step.nodes[7] = numberEntry("Total paid", "total", NaN);
   const errors = validateStep(step);
   assert(errors.length > 0 && namesKind(errors, "number"), "number names kind");
-});
-
-Deno.test("validation rejects bad buttons with a message", () => {
-  // Blank the action id.
-  const step = goodStep();
-  step.nodes[8] = buttons([{ label: "Next", action: "  " }]);
-  const errors = validateStep(step);
-  assert(
-    errors.length > 0 && namesKind(errors, "buttons"),
-    "buttons names kind",
-  );
 });
 
 Deno.test("validation rejects a bad markdown panel with a message", () => {
@@ -500,14 +486,16 @@ function echoWizard() {
   return wiz({
     title: "T",
     steps: [
-      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
-      step("b", "Second", [
-        textEntry("Run name", "run"),
-        buttons([
-          { label: "B", action: "back" },
-          { label: "N", action: "next" },
+      {
+        ...step("a", "First", []),
+        nav: { next: "N" },
+      },
+      {
+        ...step("b", "Second", [
+          textEntry("Run name", "run"),
         ]),
-      ]),
+        nav: { back: true, next: "N" },
+      },
       (answers) =>
         step("c", "Third", [
           markdown(answers.get("run")?.join(", ") ?? "none"),
@@ -554,10 +542,12 @@ Deno.test("onSubmit veto rejects the post without appending", async () => {
   const handle = wiz({
     title: "T",
     steps: [
-      step("a", "First", [
-        textEntry("Run name", "run"),
-        buttons([{ label: "N", action: "next" }]),
-      ]),
+      {
+        ...step("a", "First", [
+          textEntry("Run name", "run"),
+        ]),
+        nav: { next: "N" },
+      },
       step("b", "Second", [markdown("tail")]),
       (answers) =>
         step("c", "Third", [
@@ -586,7 +576,10 @@ Deno.test("onSubmit goto jumps after the post applies", async () => {
   const handle = wiz({
     title: "T",
     steps: [
-      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
+      {
+        ...step("a", "First", []),
+        nav: { next: "N" },
+      },
       step("b", "Second", [markdown("tail")]),
       step("c", "Third", [markdown("tail")]),
     ],
@@ -604,7 +597,10 @@ Deno.test("onSubmit insert splices in after the current step", async () => {
   const handle = wiz({
     title: "T",
     steps: [
-      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
+      {
+        ...step("a", "First", []),
+        nav: { next: "N" },
+      },
       step("b", "Second", [markdown("tail")]),
     ],
     onSubmit: (_fields, stepId) => {
@@ -632,38 +628,6 @@ Deno.test("markdown heading renders h2", () => {
   const html = renderNode(markdown("## Answers\nSome text."));
   assert(html.includes("<h2>Answers</h2>"), "heading renders");
   assert(html.includes("Some text."), "plain line stays");
-});
-
-Deno.test("validation rejects a bad button layout", () => {
-  // Feed a layout outside right plus split.
-  const node = buttons([{ label: "Next", action: "next" }]);
-  (node as { layout: string }).layout = "left";
-  const errors = validateStep(step("s1", "Sample", [node]));
-  assert(
-    errors.length > 0 && namesKind(errors, "buttons"),
-    "layout names kind",
-  );
-});
-
-Deno.test("buttons default to the right layout", () => {
-  // Render buttons with no layout set.
-  const html = renderNode(buttons([{ label: "Next", action: "next" }]));
-  assert(html.includes("button-row-right"), "default row aligns right");
-});
-
-Deno.test("buttons render the split layout", () => {
-  // Render buttons with the split layout set.
-  const html = renderNode(
-    buttons(
-      [
-        { label: "Back", action: "back" },
-        { label: "Next", action: "next" },
-      ],
-      undefined,
-      "split",
-    ),
-  );
-  assert(html.includes("button-row-split"), "split row spreads out");
 });
 
 Deno.test("action renders a full-width button", () => {
@@ -696,33 +660,6 @@ Deno.test("confirm action shows question and gates the post", () => {
   assert(html.includes("hidden"), "confirm region starts hidden");
   const posts = html.split('hx-post="/action"').length - 1;
   assert(posts === 1, "only the Confirm press posts to /action");
-});
-
-Deno.test("primary buttons render class plus autofocus", () => {
-  // Render one quiet button plus one primary button.
-  const html = renderNode(
-    buttons([
-      { label: "Back", action: "back" },
-      { label: "Next", action: "next", primary: true },
-    ]),
-  );
-  assert(html.includes('variant="primary"'), "primary takes its variant");
-  const focusCount = html.split("autofocus").length - 1;
-  assert(focusCount === 1, "only one button takes focus");
-  const backTag = html.split("Back")[0];
-  assert(backTag.includes('variant="neutral"'), "quiet button stays plain");
-});
-
-Deno.test("validation rejects a bad primary flag", () => {
-  // Feed text where true or false belongs.
-  const node = buttons([{ label: "Next", action: "next" }]);
-  const bad = node.buttons[0] as unknown as { primary: string };
-  bad.primary = "yes";
-  const errors = validateStep(step("s1", "Sample", [node]));
-  assert(
-    errors.length > 0 && namesKind(errors, "buttons"),
-    "primary names kind",
-  );
 });
 
 Deno.test("posting done returns the confirmation count", async () => {
@@ -783,10 +720,12 @@ Deno.test("replay from events matches", async () => {
   const handle = wiz({
     title: "T",
     steps: [
-      step("a", "First", [
-        checkbox("Who", "who", ["Ana", "Bo"], []),
-        buttons([{ label: "N", action: "next" }]),
-      ]),
+      {
+        ...step("a", "First", [
+          checkbox("Who", "who", ["Ana", "Bo"], []),
+        ]),
+        nav: { next: "N" },
+      },
       (answers) => {
         seen = new Map(answers);
         return step("b", "Second", [markdown("Hi")]);
@@ -816,12 +755,17 @@ function stagedWizard() {
   return wiz({
     title: "T",
     steps: [
-      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
-      step("b", "Second", [
-        action("First staged", "s1", ["echo", "first-out"], "onConfirm"),
-        action("Second staged", "s2", ["echo", "second-out"], "onConfirm"),
-        buttons([{ label: "Done", action: "done", primary: true }]),
-      ]),
+      {
+        ...step("a", "First", []),
+        nav: { next: "N" },
+      },
+      {
+        ...step("b", "Second", [
+          action("First staged", "s1", ["echo", "first-out"], "onConfirm"),
+          action("Second staged", "s2", ["echo", "second-out"], "onConfirm"),
+        ]),
+        nav: { done: "Done" },
+      },
     ],
   });
 }
@@ -1191,7 +1135,10 @@ Deno.test("done with onDone goto renders the named step", async () => {
   const handle = wiz({
     title: "T",
     steps: [
-      step("a", "First", [buttons([{ label: "D", action: "done" }])]),
+      {
+        ...step("a", "First", []),
+        nav: { done: "D" },
+      },
       step("menu", "Menu", [markdown("menu tail")]),
     ],
     onDone: (answers) => {
@@ -1207,7 +1154,10 @@ Deno.test("done with onDone goto renders the named step", async () => {
   const plain = wiz({
     title: "T",
     steps: [
-      step("a", "First", [buttons([{ label: "D", action: "done" }])]),
+      {
+        ...step("a", "First", []),
+        nav: { done: "D" },
+      },
       step("menu", "Menu", [markdown("menu tail")]),
     ],
     onDone: () => {},
@@ -1219,7 +1169,10 @@ Deno.test("done with onDone goto renders the named step", async () => {
   const missing = wiz({
     title: "T",
     steps: [
-      step("a", "First", [buttons([{ label: "D", action: "done" }])]),
+      {
+        ...step("a", "First", []),
+        nav: { done: "D" },
+      },
       step("menu", "Menu", [markdown("menu tail")]),
     ],
     onDone: () => ({ goto: "nowhere" }),
@@ -1232,7 +1185,12 @@ Deno.test("done with onDone goto renders the named step", async () => {
   // No hook at all still renders the summary screen.
   const bare = wiz({
     title: "T",
-    steps: [step("a", "First", [buttons([{ label: "D", action: "done" }])])],
+    steps: [
+      {
+        ...step("a", "First", []),
+        nav: { done: "D" },
+      },
+    ],
   });
   const bareBody = await (await bare(stepPost("a", "done"))).text();
   assert(bareBody.includes("answers recorded."), "absent hook keeps summary");
@@ -1243,11 +1201,17 @@ Deno.test("back follows the visit path after a goto jump", async () => {
   const handle = wiz({
     title: "T",
     steps: [
-      step("s1", "Step one", [buttons([{ label: "J", action: "goto:s5" }])]),
+      {
+        ...step("s1", "Step one", []),
+        nav: { goto: { step: "s5", label: "J" } },
+      },
       step("s2", "Step two", [markdown("two")]),
       step("s3", "Step three", [markdown("three")]),
       step("s4", "Step four", [markdown("four")]),
-      step("s5", "Step five", [buttons([{ label: "B", action: "back" }])]),
+      {
+        ...step("s5", "Step five", []),
+        nav: { back: true },
+      },
     ],
   });
   const jump = await handle(stepPost("s1", "goto:s5"));
@@ -1265,7 +1229,10 @@ Deno.test("onSubmit sees the pressed action string", async () => {
   const handle = wiz({
     title: "T",
     steps: [
-      step("a", "First", [buttons([{ label: "Go", action: "custom" }])]),
+      {
+        ...step("a", "First", []),
+        nav: { actions: [{ id: "custom", label: "Go" }] },
+      },
       step("b", "Second", [markdown("tail")]),
     ],
     onSubmit: (_fields, stepId, action) => {
@@ -1273,15 +1240,18 @@ Deno.test("onSubmit sees the pressed action string", async () => {
       seenStep = stepId;
     },
   });
-  await handle(stepPost("a", "custom"));
-  assert(seen === "custom", "hook sees the custom action");
+  await handle(stepPost("a", "act:custom"));
+  assert(seen === "act:custom", "hook sees the custom action");
   assert(seenStep === "a", "hook still sees the step id");
   // A two argument hook still runs without change.
   let twoCalls = 0;
   const legacy = wiz({
     title: "T",
     steps: [
-      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
+      {
+        ...step("a", "First", []),
+        nav: { next: "N" },
+      },
       step("b", "Second", [markdown("tail")]),
       step("c", "Third", [markdown("third tail")]),
     ],
@@ -1306,13 +1276,14 @@ Deno.test("a rejected post re-renders with state the hook recorded", async () =>
   const handle = wiz({
     title: "T",
     steps: [
-      (answers) =>
-        step("a", "First", [
+      (answers) => ({
+        ...step("a", "First", [
           ...held.map((name) => textEntry("Name", "person", name)),
           textEntry("Next name", "person"),
-          buttons([{ label: "N", action: "next" }]),
           markdown(answers.get("person")?.join(", ") ?? "no answers"),
         ]),
+        nav: { next: "N" },
+      }),
       step("b", "Second", [markdown("tail")]),
     ],
     onSubmit: (fields) => {
@@ -1431,39 +1402,6 @@ Deno.test("repeating rejects a record naming an unknown sub field", () => {
   );
 });
 
-Deno.test("nav renders back first and a primary next in a split row", () => {
-  // Render the standard row with back plus next.
-  const html = renderNode(nav({ back: true, next: "Continue" }));
-  assert(html.includes("button-row-split"), "nav uses the split layout");
-  const backAt = html.indexOf(">Back<");
-  const nextAt = html.indexOf(">Continue<");
-  assert(backAt >= 0 && nextAt > backAt, "back sits before next");
-  assert(html.includes('value="back"'), "back posts back");
-  assert(html.includes('value="next"'), "next posts next");
-  const forward = html.slice(html.lastIndexOf("<wa-button", nextAt), nextAt);
-  assert(forward.includes('variant="primary"'), "next is primary");
-  const back = html.slice(html.lastIndexOf("<wa-button", backAt), backAt);
-  assert(back.includes('variant="neutral"'), "back stays plain");
-});
-
-Deno.test("nav rejects zero or two forward buttons", () => {
-  // Feed next plus done together, then neither.
-  let both = "";
-  try {
-    nav({ next: "Next", done: "Done" });
-  } catch (err) {
-    both = err instanceof Error ? err.message : String(err);
-  }
-  assert(both.includes("exactly one"), "both together report the rule");
-  let none = "";
-  try {
-    nav({ back: true });
-  } catch (err) {
-    none = err instanceof Error ? err.message : String(err);
-  }
-  assert(none.includes("exactly one"), "none set reports the rule");
-});
-
 Deno.test("copyable renders a read only textarea plus a Copy button", () => {
   // Render a copyable node with a link.
   const html = renderNode(
@@ -1536,14 +1474,16 @@ function vetoWizard(seen: string[]) {
   return wiz({
     title: "T",
     steps: [
-      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
-      step("b", "Second", [
-        textEntry("Run name", "run"),
-        buttons([
-          { label: "B", action: "back" },
-          { label: "N", action: "next" },
+      {
+        ...step("a", "First", []),
+        nav: { next: "N" },
+      },
+      {
+        ...step("b", "Second", [
+          textEntry("Run name", "run"),
         ]),
-      ]),
+        nav: { back: true, next: "N" },
+      },
       step("c", "Third", [markdown("tail")]),
     ],
     onSubmit: (_fields, stepId, action) => {
@@ -1608,10 +1548,12 @@ Deno.test("a live task fragment names its own target", async () => {
   const handle = wiz({
     title: "T",
     steps: [
-      step("a", "Live", [
-        action("Run it", "run-it", ["echo", "hello"], "now", true),
-        buttons([{ label: "N", action: "next" }]),
-      ]),
+      {
+        ...step("a", "Live", [
+          action("Run it", "run-it", ["echo", "hello"], "now", true),
+        ]),
+        nav: { next: "N" },
+      },
     ],
   });
   await handle(new Request("http://local/"));
@@ -1766,11 +1708,13 @@ Deno.test("staged action fills its marker from saved answers on Done", async () 
   const handle = wiz({
     title: "T",
     steps: [
-      step("a", "First", [
-        textEntry("Run name", "run"),
-        action("Staged say", "s1", ["echo", "{run}"], "onConfirm"),
-        buttons([{ label: "Done", action: "done", primary: true }]),
-      ]),
+      {
+        ...step("a", "First", [
+          textEntry("Run name", "run"),
+          action("Staged say", "s1", ["echo", "{run}"], "onConfirm"),
+        ]),
+        nav: { done: "Done" },
+      },
     ],
   });
   await handle(new Request("http://local/"));
@@ -1813,14 +1757,16 @@ Deno.test("two sessions keep separate answers", async () => {
   const handle = createWizard({
     title: "T",
     steps: [
-      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
-      step("b", "Second", [
-        textEntry("Run name", "run"),
-        buttons([
-          { label: "B", action: "back" },
-          { label: "N", action: "next" },
+      {
+        ...step("a", "First", []),
+        nav: { next: "N" },
+      },
+      {
+        ...step("b", "Second", [
+          textEntry("Run name", "run"),
         ]),
-      ]),
+        nav: { back: true, next: "N" },
+      },
       (answers) =>
         step("c", "Third", [
           markdown(answers.get("run")?.join(", ") ?? "none"),
@@ -1857,10 +1803,12 @@ Deno.test("a foreign poll never sees the job output", async () => {
   const handle = createWizard({
     title: "T",
     steps: [
-      step("a", "Live", [
-        action("Run it", "run-it", ["sleep", "5"], "now", true),
-        buttons([{ label: "N", action: "next" }]),
-      ]),
+      {
+        ...step("a", "Live", [
+          action("Run it", "run-it", ["sleep", "5"], "now", true),
+        ]),
+        nav: { next: "N" },
+      },
     ],
   });
   await handle(
@@ -1917,14 +1865,16 @@ Deno.test("the session cap drops the oldest session", async () => {
   const handle = createWizard({
     title: "T",
     steps: [
-      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
-      step("b", "Second", [
-        textEntry("Run name", "run"),
-        buttons([
-          { label: "B", action: "back" },
-          { label: "N", action: "next" },
+      {
+        ...step("a", "First", []),
+        nav: { next: "N" },
+      },
+      {
+        ...step("b", "Second", [
+          textEntry("Run name", "run"),
         ]),
-      ]),
+        nav: { back: true, next: "N" },
+      },
       (answers) =>
         step("c", "Third", [
           markdown(answers.get("run")?.join(", ") ?? "none"),
@@ -2008,32 +1958,6 @@ Deno.test("repeating text plus number keep their markup", () => {
   assert(!html.includes('type="checkbox"'), "no checkbox appears");
 });
 
-Deno.test("nav with a plain goto string renders Next", () => {
-  // Render nav with a step id string.
-  const html = renderNode(nav({ goto: "menu" }));
-  assert(html.includes(">Next<"), "plain goto keeps Next");
-  assert(html.includes('value="goto:menu"'), "plain goto posts the step");
-});
-
-Deno.test("nav with a goto object renders its label", () => {
-  // Render nav with a step plus label object.
-  const html = renderNode(nav({ goto: { step: "menu", label: "Back to menu" } }));
-  assert(html.includes(">Back to menu<"), "object goto keeps its label");
-  assert(html.includes('value="goto:menu"'), "object goto posts the step");
-});
-
-Deno.test("nav with a blank goto label throws and names nav", () => {
-  // Feed a goto object with a blank label.
-  let message = "";
-  try {
-    nav({ goto: { step: "menu", label: "  " } });
-  } catch (err) {
-    message = err instanceof Error ? err.message : String(err);
-  }
-  assert(message.includes("nav"), "error names nav");
-  assert(message.includes("label"), "error names the label field");
-});
-
 // A three-step wizard with a conditional middle step. The middle step
 // carries a when function, so every move must skip it when false.
 function conditionalWizard(
@@ -2042,7 +1966,10 @@ function conditionalWizard(
   return wiz({
     title: "T",
     steps: [
-      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
+      {
+        ...step("a", "First", []),
+        nav: { next: "N" },
+      },
       step("b", "Second", [markdown("middle")], undefined, when),
       step("c", "Third", [markdown("tail")]),
     ],
@@ -2074,10 +2001,12 @@ function answerWizard() {
   return wiz({
     title: "T",
     steps: [
-      step("a", "First", [
-        textEntry("Mode", "mode"),
-        buttons([{ label: "N", action: "next" }]),
-      ]),
+      {
+        ...step("a", "First", [
+          textEntry("Mode", "mode"),
+        ]),
+        nav: { next: "N" },
+      },
       step(
         "b",
         "Second",
@@ -2162,7 +2091,10 @@ Deno.test("a step with no condition walks every screen", async () => {
   const handle = wiz({
     title: "T",
     steps: [
-      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
+      {
+        ...step("a", "First", []),
+        nav: { next: "N" },
+      },
       step("b", "Second", [markdown("middle")]),
       step("c", "Third", [markdown("tail")]),
     ],
@@ -2191,11 +2123,16 @@ Deno.test("default done summary stays with no done option", async () => {
   const handle = wiz({
     title: "T",
     steps: [
-      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
-      step("b", "Second", [
-        textEntry("Run name", "run"),
-        buttons([{ label: "D", action: "done", primary: true }]),
-      ]),
+      {
+        ...step("a", "First", []),
+        nav: { next: "N" },
+      },
+      {
+        ...step("b", "Second", [
+          textEntry("Run name", "run"),
+        ]),
+        nav: { done: "D" },
+      },
     ],
   });
   await handle(stepPost("a", "next"));
@@ -2212,15 +2149,21 @@ Deno.test("custom done step renders and Back returns to prior step", async () =>
   const handle = wiz({
     title: "T",
     steps: [
-      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
-      step("b", "Second", [
-        buttons([{ label: "D", action: "done", primary: true }]),
-      ]),
+      {
+        ...step("a", "First", []),
+        nav: { next: "N" },
+      },
+      {
+        ...step("b", "Second", []),
+        nav: { done: "D" },
+      },
     ],
-    done: step("fin", "Finished", [
-      markdown("Custom tail"),
-      buttons([{ label: "B", action: "back" }]),
-    ]),
+    done: {
+      ...step("fin", "Finished", [
+        markdown("Custom tail"),
+      ]),
+      nav: { back: true },
+    },
   });
   await handle(stepPost("a", "next"));
   const done = await handle(stepPost("b", "done"));
@@ -2237,20 +2180,24 @@ Deno.test("goto from custom done lands on named step", async () => {
   const handle = wiz({
     title: "T",
     steps: [
-      step("a", "First", [
-        textEntry("Run name", "run"),
-        buttons([{ label: "N", action: "next" }]),
-      ]),
-      step("b", "Second", [
-        buttons([{ label: "D", action: "done", primary: true }]),
-      ]),
+      {
+        ...step("a", "First", [
+          textEntry("Run name", "run"),
+        ]),
+        nav: { next: "N" },
+      },
+      {
+        ...step("b", "Second", []),
+        nav: { done: "D" },
+      },
       step("menu", "Menu", [markdown("menu tail")]),
     ],
-    done: (answers) =>
-      step("fin", "Finished", [
+    done: (answers) => ({
+      ...step("fin", "Finished", [
         markdown("Custom for " + (answers.get("run")?.join(", ") ?? "none")),
-        buttons([{ label: "Go", action: "goto:menu", primary: true }]),
       ]),
+      nav: { goto: { step: "menu", label: "Go" } },
+    }),
   });
   await handle(stepPost("a", "next", { run: "Friday" }));
   const done = await handle(stepPost("b", "done"));
@@ -2270,7 +2217,10 @@ Deno.test("onEnter runs once on arrival not on re-render", async () => {
   const handle = wiz({
     title: "T",
     steps: [
-      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
+      {
+        ...step("a", "First", []),
+        nav: { next: "N" },
+      },
       (_answers) =>
         step(
           "b",
@@ -2301,20 +2251,25 @@ Deno.test("rejected post keeps onEnter silent", async () => {
   const handle = wiz({
     title: "T",
     steps: [
-      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
-      step(
-        "b",
-        "Second",
-        [
-          textEntry("Run name", "run"),
-          buttons([{ label: "N", action: "next" }]),
-        ],
-        undefined,
-        undefined,
-        () => {
-          calls += 1;
-        },
-      ),
+      {
+        ...step("a", "First", []),
+        nav: { next: "N" },
+      },
+      {
+        ...step(
+          "b",
+          "Second",
+          [
+            textEntry("Run name", "run"),
+          ],
+          undefined,
+          undefined,
+          () => {
+            calls += 1;
+          },
+        ),
+        nav: { next: "N" },
+      },
       step("c", "Third", [markdown("tail")]),
     ],
     onSubmit: (_fields, stepId) => {
@@ -2336,22 +2291,23 @@ Deno.test("leaving and returning runs onEnter again", async () => {
   const handle = wiz({
     title: "T",
     steps: [
-      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
-      step(
-        "b",
-        "Second",
-        [
-          buttons([
-            { label: "B", action: "back" },
-            { label: "N", action: "next" },
-          ]),
-        ],
-        undefined,
-        undefined,
-        () => {
-          calls += 1;
-        },
-      ),
+      {
+        ...step("a", "First", []),
+        nav: { next: "N" },
+      },
+      {
+        ...step(
+          "b",
+          "Second",
+          [],
+          undefined,
+          undefined,
+          () => {
+            calls += 1;
+          },
+        ),
+        nav: { back: true, next: "N" },
+      },
     ],
   });
   await handle(stepPost("a", "next"));
@@ -2368,7 +2324,10 @@ Deno.test("throwing onEnter still renders the step", async () => {
   const handle = wiz({
     title: "T",
     steps: [
-      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
+      {
+        ...step("a", "First", []),
+        nav: { next: "N" },
+      },
       step(
         "b",
         "Second",
@@ -2655,10 +2614,12 @@ Deno.test("posted field wins over stored answers in handler", async () => {
   const handle = wiz({
     title: "T",
     steps: [
-      step("a", "First", [
-        textEntry("Run name", "run"),
-        buttons([{ label: "N", action: "next" }]),
-      ]),
+      {
+        ...step("a", "First", [
+          textEntry("Run name", "run"),
+        ]),
+        nav: { next: "N" },
+      },
       {
         ...step("b", "Second", [textEntry("Run name", "run")]),
         nav: {
@@ -2694,7 +2655,10 @@ function draftsWizard(
   return wiz({
     title: "T",
     steps: [
-      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
+      {
+        ...step("a", "First", []),
+        nav: { next: "N" },
+      },
       step("b", "Second", [markdown("second tail")]),
     ],
     drafts,
@@ -2815,7 +2779,10 @@ Deno.test("draft offer flag shows only on the first screen", async () => {
   const handle = wiz({
     title: "T",
     steps: [
-      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
+      {
+        ...step("a", "First", []),
+        nav: { next: "N" },
+      },
       step("b", "Second", [markdown("tail")]),
     ],
     drafts: {

@@ -33,7 +33,7 @@ function texts(node: unknown): string[] {
   for (const key of ["text", "label", "hint", "name", "value", "action"]) {
     if (typeof rec[key] === "string") parts.push(rec[key] as string);
   }
-  for (const key of ["items", "rows", "options", "nodes", "buttons"]) {
+  for (const key of ["items", "rows", "options", "nodes"]) {
     const arr = rec[key];
     if (Array.isArray(arr)) {
       for (const item of arr) parts.push(...texts(item));
@@ -257,7 +257,9 @@ Deno.test("f6 each status routes to its next step", async () => {
       const res = await resumeNext(new Map(), { "resume-pick": [id] }, { sessionId: "t-f6-3" });
       assert(res?.goto === want, id + " routes to " + want);
     }
-    const gone = await resumeNext(new Map(), { "resume-pick": ["no-such-run"] }, { sessionId: "t-f6-3" });
+    const gone = await resumeNext(new Map(), { "resume-pick": ["no-such-run"] }, {
+      sessionId: "t-f6-3",
+    });
     assert(
       (gone?.errors ?? []).join("").includes("gone"),
       "missing run errors out",

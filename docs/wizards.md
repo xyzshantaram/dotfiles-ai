@@ -110,9 +110,9 @@ prints the agent block on purpose.
 No environment variable carries state between stages. One variable remains, `SPLIT_UTILS_STATE`, and
 it overrides the state root. `src/paths.ts` holds its only reader.
 
-`src/wizardkit.ts` exports `wizardExit(code)`. It closes the progress dot line, then exits with the
-given code. It prints no closing advice, because the old line pointed at a terminal main menu that
-no longer exists.
+`src/term.ts` exports `wizardExit(code)`. It closes the progress dot line, then exits with the given
+code. It prints no closing advice, because the old line pointed at a terminal main menu that no
+longer exists.
 
 ## Splitwise access setup
 

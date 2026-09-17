@@ -6,7 +6,7 @@
 
 import { $ } from "zx";
 import { legacyZomatoConfigPath, stateRoot, zomatoConfigPath } from "../src/paths.ts";
-import { say } from "../src/wizardkit.ts";
+import { say } from "../src/term.ts";
 
 // zx escape hatch: use $`cmd args` for shell, e.g. await $`gh auth status`.
 

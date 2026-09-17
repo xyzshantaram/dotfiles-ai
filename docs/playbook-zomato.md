@@ -92,5 +92,5 @@ exact.
 
 ## Extraction
 
-One throwaway probe read 19 orders, ALL BALANCE, worth ₹7,802.92, and skipped failed-payment
-cards. The shipped reader is `src/zomato.ts`, driven by `wizards/gatherer.ts`.
+One throwaway probe read 19 orders, ALL BALANCE, worth ₹7,802.92, and skipped failed-payment cards.
+The shipped reader is `src/zomato.ts`, driven by `wizards/gatherer.ts`.

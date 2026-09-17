@@ -5,7 +5,6 @@
 // wizardkit alone and import everything through this module.
 export * from "./nodes.ts";
 export * from "./toolkit.ts";
-// Standard nav row plus the clipboard node, re-exported by name so
-// wizard authors can spot the toolkit helpers in one place.
-export { copyable, nav } from "./nodes.ts";
+// Step navigation is declared, not built: set the nav field on a step
+// rather than adding a node for it. See StepNav in ./nodes.ts.
 export { $ } from "npm:zx@8.8.5";

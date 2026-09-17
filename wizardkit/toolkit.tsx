@@ -20,11 +20,10 @@ import { renderToString } from "preact-render-to-string";
 import { micromark } from "micromark";
 import cssText from "./style.css" with { type: "text" };
 import "./jsx-types.ts";
-import { buttons, markdown, optionValue, stages, step, stepApplies } from "./nodes.ts";
+import { markdown, optionValue, stages, step, stepApplies } from "./nodes.ts";
 import type {
   ActionNode,
   AnswersNode,
-  ButtonsNode,
   CheckboxNode,
   CopyableNode,
   DraftEntry,
@@ -304,29 +303,6 @@ function TextareaView(props: { node: TextareaNode }) {
   return (
     <Shell kind="textarea" label={node.label} error={node.error}>
       <wa-textarea name={node.name} rows={rows} value={value} />
-    </Shell>
-  );
-}
-
-function ButtonsView(props: { node: ButtonsNode }) {
-  const node = props.node;
-  const firstPrimary = node.buttons.findIndex((item) => item.primary === true);
-  const row = node.layout === "split" ? "button-row-split" : "button-row-right";
-  return (
-    <Shell kind="buttons" label={node.label ?? ""} error={node.error}>
-      <div class={row}>
-        {node.buttons.map((button, i) => (
-          <wa-button
-            variant={button.primary === true ? "primary" : "neutral"}
-            type="submit"
-            name="action"
-            value={button.action}
-            autofocus={button.primary === true && i === firstPrimary}
-          >
-            {button.label}
-          </wa-button>
-        ))}
-      </div>
     </Shell>
   );
 }
@@ -715,8 +691,6 @@ function NodeView(props: { node: Node }) {
       return <EntryView node={node} />;
     case "textarea":
       return <TextareaView node={node} />;
-    case "buttons":
-      return <ButtonsView node={node} />;
     case "markdown":
       return <MarkdownView node={node} />;
     case "stages":
@@ -796,7 +770,9 @@ function NavBar(props: { nav: StepNav }) {
             variant="neutral"
             type="submit"
             name="action"
-            value={"act:" + item.id}
+            // Restart is a reserved global action like back, so it
+            // posts raw. Every other action posts under the act mark.
+            value={item.id === "restart" ? "restart" : "act:" + item.id}
           >
             {item.label}
           </wa-button>
@@ -2100,10 +2076,10 @@ export function createWizard(
           return reply(req, custom, state, doneNav, ctx);
         }
       }
-      state.doneStep = step("done", "Done", [
-        ...outNodes,
-        buttons([{ label: "Start over", action: "restart" }]),
-      ]);
+      state.doneStep = {
+        ...step("done", "Done", [...outNodes]),
+        nav: { actions: [{ id: "restart", label: "Start over" }] },
+      };
       return reply(req, state.doneStep, state, doneNav, ctx);
     }
     // One flag per step, in order. Every condition runs once here

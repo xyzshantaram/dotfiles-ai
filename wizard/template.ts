@@ -5,7 +5,6 @@
 
 import {
   answers,
-  buttons,
   createWizard,
   markdown,
   radio,
@@ -18,26 +17,27 @@ import {
 const STAGE_NAMES = ["Ask", "Review"];
 
 function askStep(): Step {
-  return step("ask", "Ask", [
-    stages("Stages", STAGE_NAMES, 0),
-    markdown("Answer two questions, then review."),
-    textEntry("Your name", "name", "", "Ada"),
-    radio("Pick a style", "style", ["Equal", "Custom"], "Equal"),
-    buttons([{ label: "Next", action: "next", primary: true }]),
-  ]);
+  return {
+    ...step("ask", "Ask", [
+      stages("Stages", STAGE_NAMES, 0),
+      markdown("Answer two questions, then review."),
+      textEntry("Your name", "name", "", "Ada"),
+      radio("Pick a style", "style", ["Equal", "Custom"], "Equal"),
+    ]),
+    nav: { next: "Next" },
+  };
 }
 
 function reviewStep(saved: Map<string, string[]>): Step {
   const entries = [...saved].map(([name, values]) => ({ name, values }));
-  return step("review", "Review", [
-    stages("Stages", STAGE_NAMES, 1),
-    markdown("## Answers"),
-    answers("Fields", entries),
-    buttons([
-      { label: "Back", action: "back" },
-      { label: "Done", action: "done", primary: true },
+  return {
+    ...step("review", "Review", [
+      stages("Stages", STAGE_NAMES, 1),
+      markdown("## Answers"),
+      answers("Fields", entries),
     ]),
-  ]);
+    nav: { back: true, done: "Done" },
+  };
 }
 
 const handle = createWizard({

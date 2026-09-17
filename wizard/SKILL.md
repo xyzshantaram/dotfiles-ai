@@ -19,10 +19,10 @@ Rename the title, steps, and the desktop block. That dir is the whole wizard.
 ## Steps as data
 
 A step is `{ id, title, nodes }`, built with `step(id, title, nodes)` or hand-written as JSON. Node
-kinds: `menu`, `tree`, `progress`, `radio`, `checkbox`, `textEntry`, `numberEntry`, `buttons`,
-`markdown` (info panels only), `stages` (clickable `1/3` rows posting `goto:N`), `spoiler` (native
-details), `tabs` (CSS-only, radio-driven), `action` (runs a server command, output swaps inline),
-`answers` (review lists).
+kinds: `menu`, `tree`, `progress`, `radio`, `checkbox`, `textEntry`, `numberEntry`, `markdown` (info
+panels only), `stages` (clickable `1/3` rows posting `goto:N`), `spoiler` (native details), `tabs`
+(CSS-only, radio-driven), `action` (runs a server command, output swaps inline), `answers` (review
+lists).
 
 ```ts
 const handle = createWizard({
@@ -64,8 +64,8 @@ and Next stay in reach on a long screen. Set `nav` on the step:
   to move somewhere else.
 - A step handler replaces the central `onSubmit` for that post, so one screen has exactly one owner.
 - Back never blocks and takes no handler.
-- Per-item buttons stay in the page as ordinary `buttons` nodes. The bar carries navigation and
-  actions that apply to the whole screen.
+- The bar carries navigation and every action that applies to the whole screen. There is no in-page
+  button node: a control that acts on one item belongs to that item's own node.
 
 ## Arrival and departure
 
@@ -81,9 +81,8 @@ Two hooks bracket a step. Both swallow their own errors, and neither can block.
 - State is an event log. Every post appends `{ action, step, fields }`; answers fold from it.
   Restart clears it. Nothing is permanent until Done: mark side-effecting actions `run: "onConfirm"`
   and they execute in order on the confirmation page.
-- Buttons: declare navigation through `nav` above. A `buttons` node is for rows that sit in the page
-  beside what they act on. One primary per step (`primary: true`, autofocused). Rows default
-  right-aligned, and `layout: "split"` puts Back left, Next right.
+- Buttons: declare every control through `nav` above. The bar puts Back on the left and the forward
+  control on the right, and it autofocuses the forward control.
 - Forms survive refresh: field drafts persist to localStorage, and a resume bar offers Restore or
   Discard. The draft holds one step's fields, and the bar appears only while that same step is on
   screen. It does not carry the reader back to the step they left. The footer shows the draft
