@@ -90,10 +90,13 @@ async function applyPatch(req: Request): Promise<Response> {
       else doc.skipped[key] = true;
     }
   }
-  const sent = body["baseline"];
-  const baseline = typeof sent === "number"
-    ? sent
-    : await snapshotMtime(runDir);
+  // Take the baseline from the file this patch was just applied to, not
+  // from the caller. The board reads its baseline when the step renders,
+  // and the wizard writes the same file, so a caller's value goes stale
+  // between a render and the first checkpoint. A stale baseline sent the
+  // whole board's work into a conflict copy while an empty document kept
+  // the real file, which is the one outcome this endpoint must not have.
+  const baseline = await snapshotMtime(runDir);
   const result = await writeSplitState(runDir, doc, baseline);
   return Response.json({
     ok: true,
