@@ -3,22 +3,17 @@
 
 import {
   answers,
-  checkbox,
   markdown,
+  mount,
   type NavHandler,
   type Node,
-  numberEntry,
-  progress,
   radio,
   repeating,
   type Step,
   step,
   type StepFn,
-  table,
   textarea,
   textEntry,
-  tree,
-  type TreeState,
 } from "../../wizardkit/mod.ts";
 import {
   buildOutputDoc,
@@ -41,14 +36,6 @@ import { formatMoney } from "../../src/common.ts";
 import { buildAggregateSummary, groupOrders } from "../../src/render.ts";
 import { createShareLink, type ShareLink } from "../../src/share.ts";
 import {
-  customShare,
-  equalShare,
-  percentShare,
-  round2,
-  scaleRepeat,
-  singleShare,
-} from "../../src/splitengine.ts";
-import {
   isDryMap,
   listRunsSync,
   readRunMetaSync,
@@ -62,14 +49,6 @@ import { sessionStore, sidOf } from "../../src/sessionstore.ts";
 import { listResumableDrafts } from "../expense-split.ts";
 import type { WizardCtx } from "../../wizardkit/mod.ts";
 import { dryBox, dryNote } from "./dry.ts";
-
-// Split modes the radio offers, with the engine type each one stores.
-const MODES = [
-  { label: "Equal", type: "equal" },
-  { label: "Percentage", type: "percent" },
-  { label: "Custom", type: "custom" },
-  { label: "Single", type: "single" },
-];
 
 // Live split session for one run dir. The doc is the source of truth
 // between posts; writeSplitState mirrors it to disk after each commit.
@@ -110,16 +89,6 @@ function sessionFor(sessionId: string): Session | null {
 // Store the live session for one session id.
 function setSessionFor(sessionId: string, value: Session | null): void {
   splitSessions.for(sidOf({ sessionId })).current = value;
-}
-
-// Engine type for a radio label.
-function modeType(label: string): string {
-  return MODES.find((mode) => mode.label === label)?.type ?? "equal";
-}
-
-// Radio label for an engine type.
-function modeLabel(type: string): string {
-  return MODES.find((mode) => mode.type === type)?.label ?? "Equal";
 }
 
 // Currency labels, one per browser session. The store replaces the
@@ -269,78 +238,6 @@ function saveState(s: Session): void {
   s.saveChain = s.saveChain.then(run, run);
 }
 
-// Prior assignment before a line, nearest first.
-function priorOf(
-  doc: SplitStateDoc,
-  index: number,
-): { at: number; of: ItemAssignment } | undefined {
-  for (let k = index - 1; k >= 0; k--) {
-    const of = doc.assignments[String(k)];
-    if (of !== undefined) return { at: k, of };
-  }
-  return undefined;
-}
-
-// Engine amounts that seed a fresh line form. Equal and single recompute;
-// percent shows even percents; custom scales the prior split by price.
-function seedAmounts(
-  line: FlatItem,
-  type: string,
-  who: string[],
-  prev?: { at: number; of: ItemAssignment },
-): Record<string, number> {
-  if (who.length === 0) return {};
-  if (type === "equal") return equalShare(line.price, who);
-  if (type === "single") return singleShare(line.price, who[0]);
-  if (type === "percent") {
-    const share = round2(100 / who.length);
-    const out: Record<string, number> = {};
-    for (const name of who) out[name] = share;
-    return out;
-  }
-  if (
-    prev !== undefined &&
-    prev.of.splitType !== "equal" &&
-    prev.of.splitType !== "single"
-  ) {
-    const prevAmounts: Record<string, number> = {};
-    for (const name of who) prevAmounts[name] = prev.of.amounts[name] ?? 0;
-    const prevPrice = who.reduce((sum, name) => sum + prevAmounts[name], 0);
-    return scaleRepeat(prevPrice, line.price, prevAmounts);
-  }
-  const out: Record<string, number> = {};
-  for (const name of who) out[name] = 0;
-  return out;
-}
-
-// Posted percents or amounts, run through the engine. Throws when a
-// custom split does not sum to the price.
-function postedAmounts(
-  line: FlatItem,
-  index: number,
-  type: string,
-  who: string[],
-  m: Map<string, string[]>,
-): Record<string, number> {
-  if (type === "equal") return equalShare(line.price, who);
-  if (type === "single") return singleShare(line.price, who[0]);
-  if (type === "percent") {
-    const even = round2(100 / who.length);
-    const percents: Record<string, number> = {};
-    for (const name of who) {
-      const raw = Number(m.get("pct-" + name + "-" + index)?.[0]);
-      percents[name] = Number.isFinite(raw) && raw > 0 ? raw : even;
-    }
-    return percentShare(line.price, percents);
-  }
-  const amounts: Record<string, number> = {};
-  for (const name of who) {
-    const raw = Number(m.get("amt-" + name + "-" + index)?.[0]);
-    amounts[name] = Number.isFinite(raw) ? raw : 0;
-  }
-  return customShare(line.price, amounts);
-}
-
 // Mirror split progress into meta.json. Runs stay findable mid-way.
 function updateProgressMeta(s: Session): void {
   const done = countDoneOrders(s.flat, s.orderCount, s.doc);
@@ -352,60 +249,6 @@ function updateProgressMeta(s: Session): void {
     ordersDone: done,
     ordersTotal: s.orderCount,
   });
-}
-
-// Commit every posted line that waits in the answers. Field names carry
-// the line index, so a post only ever fills its own line.
-function commitPosted(
-  s: Session,
-  m: Map<string, string[]>,
-  people: string[],
-): void {
-  // A resume with blank people fields keeps the saved names.
-  if (people.length > 0) {
-    s.doc = remapPeople(s.doc, people);
-    s.doc.people = [...people];
-  }
-  const payer = answer(m, "payer");
-  if (payer.length > 0) s.doc.payer = payer;
-  for (;;) {
-    const i = firstUnfinished(s.flat.length, s.doc.assignments, s.doc.skipped);
-    if (i >= s.flat.length) return;
-    const label = m.get("mode-" + i)?.[0];
-    if (label === undefined) return;
-    if (m.get("skip-" + i)?.[0] !== undefined) {
-      s.doc.skipped[String(i)] = true;
-      s.error = "";
-      saveState(s);
-      updateProgressMeta(s);
-      continue;
-    }
-    const who = (answerList(m, "who-" + i)).filter((name) => people.includes(name));
-    if (who.length === 0) return;
-    let amounts: Record<string, number>;
-    try {
-      amounts = postedAmounts(s.flat[i], i, modeType(label), who, m);
-    } catch (err) {
-      s.error = err instanceof Error ? err.message : String(err);
-      return;
-    }
-    s.doc.assignments[String(i)] = {
-      splitType: modeType(label),
-      people: who,
-      amounts,
-    };
-    s.error = "";
-    saveState(s);
-    updateProgressMeta(s);
-  }
-}
-
-// Tree state for one line in the list.
-function pickTreeState(s: Session, i: number, index: number): TreeState {
-  if (s.doc.skipped[String(i)]) return "skipped";
-  if (s.doc.assignments[String(i)]) return "done";
-  if (i === index) return "current";
-  return "todo";
 }
 
 // Names the saved split state doc already holds for the picked run.
@@ -643,60 +486,9 @@ export function lastSavedAssignment(doc: SplitStateDoc): ItemAssignment | null {
   return found;
 }
 
-// Copy the last saved line onto the current line.
-// Save the current line with the same type and people.
-// Recompute amounts for the current price.
-// Keep old numbers on the line where they were typed.
-function repeatLast(
-  _answers: Map<string, string[]>,
-  _fields: Record<string, string[]>,
-  ctx: WizardCtx,
-): void {
-  const live = sessionFor(sidOf(ctx));
-  if (live === null) return;
-  const last = lastSavedAssignment(live.doc);
-  if (last === null) return;
-  const index = firstUnfinished(live.flat.length, live.doc.assignments, live.doc.skipped);
-  if (index >= live.flat.length) return;
-  const kept = last.people.filter((name) => live.doc.people.includes(name));
-  const who = kept.length > 0 ? kept : [...last.people];
-  if (who.length === 0) return;
-  const line = live.flat[index];
-  const type = last.splitType;
-  let amounts: Record<string, number>;
-  if (type === "single") {
-    const first = who[0];
-    if (first === undefined) return;
-    amounts = singleShare(line.price, first);
-  } else if (type === "percent") {
-    const even = round2(100 / who.length);
-    const percents: Record<string, number> = {};
-    for (const name of who) percents[name] = even;
-    amounts = percentShare(line.price, percents);
-  } else {
-    amounts = equalShare(line.price, who);
-  }
-  live.doc.assignments[String(index)] = {
-    splitType: type,
-    people: [...who],
-    amounts,
-  };
-  live.error = "";
-  saveState(live);
-  updateProgressMeta(live);
-}
-
-// Next line handler for the item step. It holds the screen on the item
-// step, so the builder commits the posted line and shows the next one.
-function stayOnSplitItem(
-  _answers: Map<string, string[]>,
-  _fields: Record<string, string[]>,
-  _ctx: WizardCtx,
-): { goto: string } {
-  return { goto: "split-item" };
-}
-
-// Item step. One flat line per render, driven by the answers map.
+// Item step. The browser board owns the run now, so this step hands
+// the board the whole run as mount data and draws nothing per item.
+// The bar carries flow controls only: leave, or finish and export.
 export function itemStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
   const sessionId = sidOf(ctx);
   const currency = currencyFor(sessionId);
@@ -740,6 +532,9 @@ export function itemStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
   }
   const s = live;
   const people = fieldPeople.length > 0 ? fieldPeople : s.doc.people;
+  // True while this render clears the run. A fresh clear keeps its
+  // empty doc even when the disk holds a newer board checkpoint.
+  let reset = false;
   // Ask once when a saved run holds progress. The answer decides
   // between resume and a clean start.
   if (s.pendingResume && (m.get("resume")?.[0] ?? "").length === 0) {
@@ -767,140 +562,99 @@ export function itemStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
       const payer = answer(m, "payer");
       s.doc = freshState(people, payer.length > 0 ? payer : s.doc.payer);
       saveState(s);
+      reset = true;
     }
     updateProgressMeta(s);
   }
-  commitPosted(s, m, people);
-  const total = s.flat.length;
-  const assigned = Object.keys(s.doc.assignments).length;
-  const skipped = Object.keys(s.doc.skipped).length;
-  const index = firstUnfinished(total, s.doc.assignments, s.doc.skipped);
-  const head: Node[] = [
-    tree(
-      "Items",
-      s.flat.flatMap((line, i) => {
-        if (s.doc.skipped[String(i)]) return [];
-        return [{
-          text: line.name + " (" + formatMoney(line.price, currency) + ")",
-          state: pickTreeState(s, i, index),
-        }];
-      }),
-    ),
-    progress("Coverage", assigned, skipped, total - assigned - skipped),
-  ];
-  // Show one muted line when the last save missed. The answers stay
-  // in memory, so the user waits for the next save to land.
-  if (s.saveError.length > 0) {
-    head.push(
-      markdown(
-        "_The last save did not land: " + s.saveError +
-          ". Your answers stay in this window until a save lands._",
-      ),
-    );
+  // A newer state file wins over the cached doc, because the board
+  // checkpoints straight to disk. A queued wizard save keeps the
+  // cached doc until that save lands. A fresh clear skips this.
+  if (!reset) {
+    let diskAt = 0;
+    try {
+      diskAt = Deno.statSync(statePath(s.runDir)).mtime?.getTime() ?? 0;
+    } catch {
+      diskAt = 0;
+    }
+    if (diskAt > s.baseline) {
+      const fresh = loadSplitStateSync(s.runDir);
+      if (fresh !== null) {
+        s.doc = fresh;
+        s.baseline = diskAt;
+      }
+    }
   }
-  if (index >= total) {
-    return {
-      ...step(
-        "split-item",
-        "Split item",
-        [
-          ...head,
-          markdown("All " + total + " items are split. Continue to the export."),
-        ],
-        "Every item is marked. Press Next to see the totals.",
-      ),
-      nav: { back: true, next: "Next" },
+  // A rename through the People step keeps every saved assignment.
+  // A resume with blank people fields keeps the saved names.
+  if (
+    people.length > 0 &&
+    (people.length !== s.doc.people.length ||
+      people.some((name, at) => name !== s.doc.people[at]))
+  ) {
+    s.doc = remapPeople(s.doc, people);
+    s.doc.people = [...people];
+    const payer = answer(m, "payer");
+    if (payer.length > 0) s.doc.payer = payer;
+    saveState(s);
+    updateProgressMeta(s);
+  }
+  // The patch endpoint answers 409 while no state file exists, so the
+  // first render writes the fresh doc. Later renders find the file.
+  try {
+    Deno.statSync(statePath(s.runDir));
+  } catch {
+    const stamped: SplitStateDoc = {
+      ...s.doc,
+      updatedAt: new Date().toISOString(),
     };
-  }
-  const line = s.flat[index];
-  const saved = s.doc.assignments[String(index)];
-  const prev = priorOf(s.doc, index);
-  // A fee line defaults to an equal split across everyone, mirroring
-  // the old terminal flow. A saved assignment always wins over that
-  // default. An item line keeps the old default: the me person alone
-  // on a fresh run, else the previous line split.
-  let mode: string;
-  let ticked: string[];
-  if (saved !== undefined) {
-    mode = modeLabel(saved.splitType);
-    ticked = saved.people.filter((name) => people.includes(name));
-    if (ticked.length === 0) ticked = [...people];
-  } else if (line.isFee) {
-    mode = "Equal";
-    ticked = [...people];
-  } else {
-    mode = modeLabel(prev?.of.splitType ?? "equal");
-    ticked = prev === undefined
-      ? (people.includes(meName(m)) ? [meName(m)] : [...people])
-      : prev.of.people.filter((name) => people.includes(name));
-    if (ticked.length === 0) ticked = [...people];
-  }
-  const type = modeType(mode);
-  const amounts = seedAmounts(line, type, ticked, prev);
-  const nodes: Node[] = [
-    ...head,
-    markdown(
-      "### " + line.name + " — " + formatMoney(line.price, currency),
-    ),
-    table(
-      "Item",
-      [{ heading: "Field" }, { heading: "Value", align: "left" }],
-      [
-        ["Item", (index + 1) + " of " + total],
-        ["Platform", line.platform],
-        ["Order", line.orderId],
-      ],
-    ),
-  ];
-  const splitType = radio(
-    "How to split",
-    "mode-" + index,
-    MODES.map((o) => o.label),
-    mode,
-  );
-  if (s.error.length > 0) splitType.error = "Split rejected. " + s.error;
-  if (line.isFee && saved === undefined && ticked.length > 0) {
-    nodes.push(
-      markdown(
-        "Fee default: everyone pays " +
-          formatMoney(line.price / ticked.length, currency) +
-          " each. You may change it.",
-      ),
+    Deno.writeTextFileSync(
+      statePath(s.runDir),
+      JSON.stringify(stamped, null, 2) + "\n",
     );
   }
-  nodes.push(splitType);
-  // Bulk ticks sit beside the names, because a long people list is
-  // tedious to tick one name at a time on every item.
-  nodes.push(checkbox("Split with whom", "who-" + index, people, ticked, true));
-  nodes.push(checkbox("Skip this item", "skip-" + index, ["Skip"], []));
-  const percent = type === "percent";
-  for (const name of ticked) {
-    nodes.push(
-      numberEntry(
-        (percent ? "Percent for " : "Amount for ") + name,
-        (percent ? "pct-" : "amt-") + name + "-" + index,
-        amounts[name] ?? 0,
-      ),
-    );
+  // Read the state file time for the board baseline. Steps run sync,
+  // so this reads the same time the async snapshot helper reads.
+  let at = s.baseline;
+  try {
+    at = Deno.statSync(statePath(s.runDir)).mtime?.getTime() ?? 0;
+  } catch {
+    at = s.baseline;
   }
-  // Show Repeat Last only after one saved assignment exists.
-  // Read the saved doc.
-  // A fresh run shows Back and Next line only.
-  const last = lastSavedAssignment(s.doc);
-  const repeatActions = last === null
-    ? []
-    : [{ id: "repeat", label: "Repeat Last", run: repeatLast }];
+  s.baseline = at;
+  const payer = answer(m, "payer");
+  const runId = s.runDir.replace(/\/+$/, "").split("/").pop() ?? "";
+  const data = {
+    runId,
+    currency,
+    payer: payer.length > 0 ? payer : s.doc.payer,
+    me: meName(m),
+    people: [...people],
+    items: s.flat.map((line, index) => ({
+      index,
+      name: line.name,
+      price: line.price,
+      platform: line.platform,
+      orderId: line.orderId,
+      isFee: line.isFee,
+    })),
+    assignments: s.doc.assignments,
+    skipped: s.doc.skipped,
+    at,
+  };
+  // The board owns movement between items now, and it binds Repeat Last
+  // to the r key on the screen itself. So the bar carries flow controls
+  // only: leave, or finish and go to the export. A Next item button here
+  // would fight the board's own Next and move nothing.
   return {
     ...step(
       "split-item",
       "Split item",
-      nodes,
+      [mount("split-board", data)],
       "Pick who shares this item and how the price splits. Tick Skip for items nobody owes.",
     ),
     nav: {
       back: true,
-      actions: repeatActions,
-      next: { label: "Next item", run: stayOnSplitItem },
+      goto: { step: "split-export", label: "Finish splitting" },
     },
   };
 }
@@ -969,6 +723,22 @@ export function exportStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
     };
   }
   const s = live;
+  // The board checkpoints straight to disk while the wizard idles, so
+  // a newer file wins over the cached doc here. A queued wizard save
+  // keeps the cached doc until that save lands.
+  let diskAt = 0;
+  try {
+    diskAt = Deno.statSync(statePath(s.runDir)).mtime?.getTime() ?? 0;
+  } catch {
+    diskAt = 0;
+  }
+  if (diskAt > s.baseline) {
+    const fresh = loadSplitStateSync(s.runDir);
+    if (fresh !== null) {
+      s.doc = fresh;
+      s.baseline = diskAt;
+    }
+  }
   // Dry plan first, before any write. It mirrors the live shape
   // (counts, payloads, totals) and writes nothing: no output.json,
   // no validator run, no meta patch.

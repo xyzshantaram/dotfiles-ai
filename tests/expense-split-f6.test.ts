@@ -373,7 +373,12 @@ Deno.test("f6 dry split export writes no output and keeps gathered status", asyn
       ["resume", ["Continue where you left off?"]],
     ]);
     const item = itemStep(m, { sessionId: "t-f6-6" });
-    assert(stepText(item).includes("All 1 items are split"), "split reads done");
+    const island = item.nodes.find((node) =>
+      (node as unknown as Record<string, unknown>)["kind"] === "mount"
+    ) as unknown as { data: { assignments: Record<string, unknown> } } | undefined;
+    assert(island !== undefined, "item mounts the board");
+    if (island === undefined) throw new Error("item mounts no board");
+    assert(island.data.assignments["0"] !== undefined, "split keeps line 0");
     const dryM = new Map(m);
     dryM.set("dry", ["dry"]);
     const out = exportStep(dryM, { sessionId: "t-f6-6" });

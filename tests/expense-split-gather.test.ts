@@ -178,16 +178,38 @@ Deno.test("manual expenses become a run and split end to end", async () => {
   });
   await post(handle, { step: "split-run", action: "next", run: dir });
 
-  // Both lines split equally in one post. Next line is a declared bar
-  // action now, so it posts under the act prefix.
-  await post(handle, {
-    step: "split-item",
-    action: "act:nextline",
-    "mode-0": "Equal",
-    "who-0": ["Asha", "Vijay"],
-    "mode-1": "Equal",
-    "who-1": ["Asha", "Vijay"],
-  });
+  // The board owns the lines now. Render the item step once so the
+  // initial state file exists, then checkpoint both lines through
+  // the patch endpoint like the browser component does.
+  await post(handle, { step: "split-item", action: "next" });
+  const { handleBoardRoute } = await import(
+    "../wizards/expense-split/board-routes.ts"
+  );
+  const patch = await handleBoardRoute(
+    new Request("http://x/app/split-patch", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        runId,
+        assignments: {
+          "0": {
+            splitType: "equal",
+            people: ["Asha", "Vijay"],
+            amounts: { Asha: 60, Vijay: 60 },
+          },
+          "1": {
+            splitType: "equal",
+            people: ["Asha", "Vijay"],
+            amounts: { Asha: 40, Vijay: 40 },
+          },
+        },
+        baseline: Date.now(),
+      }),
+    }),
+  );
+  if (patch === null || patch.status !== 200) {
+    throw new Error("board patch missed");
+  }
   await post(handle, { step: "split-item", action: "next" });
 
   // The export step writes output.json for the run.

@@ -55,7 +55,10 @@ body {
   width: 100%;
   box-sizing: border-box;
   margin: 0 auto;
-  padding: 1.5rem 1rem 0;
+  /* The nav bar sticks over the foot of this column, so the last node
+     needs room to scroll clear of it. Without this the final control on
+     a long screen sits behind the bar and cannot be reached. */
+  padding: 1.5rem 1rem 7rem;
   flex: 1;
   /* No overflow here. An overflow value makes this element the scrollport
      for the sticky nav bar inside it, and this element never scrolls,
@@ -384,4 +387,53 @@ body:has([data-draft-offer]) .wiz-nav {
     margin: auto -0.75rem 0;
     padding: 0.5rem 0.75rem;
   }
+}
+
+/* Split board. Only the mounted board needs these rules. */
+.board-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0.5rem;
+  font-size: 1.0625rem;
+  color: var(--wa-color-text-normal);
+}
+.board-table {
+  border-collapse: collapse;
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+}
+.board-table th {
+  text-align: left;
+  font-weight: var(--wa-font-weight-normal);
+  color: var(--wa-color-text-quiet);
+  padding: 0.125rem 0.75rem 0.125rem 0;
+}
+.board-table td {
+  color: var(--wa-color-text-normal);
+  padding: 0.125rem 0;
+}
+.board-amounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.board-amounts wa-input {
+  flex: 0 1 10rem;
+}
+.board-muted {
+  display: block;
+  color: var(--wa-color-text-quiet);
+  font-size: 0.8125rem;
+}
+.split-board .board-muted {
+  margin: 0.25rem 0;
+}
+.board-callout {
+  display: block;
+  margin: 0.5rem 0;
+}
+.board-callout:empty {
+  display: none;
 }

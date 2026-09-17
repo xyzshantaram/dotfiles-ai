@@ -8,7 +8,6 @@ import {
   currentShareLink,
   exportStep,
   itemStep,
-  lastSavedAssignment,
   lastSaveError,
   loadCurrency,
   pendingSaves,
@@ -20,6 +19,14 @@ import {
 } from "../wizards/expense-split/split.ts";
 import { freshState, type SplitStateDoc, writeSplitState } from "../src/splitstate.ts";
 import { handleBoardRoute } from "../wizards/expense-split/board-routes.ts";
+import {
+  buildPatch,
+  repeatOnto,
+  round2,
+  shareEqual,
+  sharePercent,
+  shareSingle,
+} from "../wizards/expense-split/split-board.js";
 import type { Node } from "../wizardkit/mod.ts";
 import type { Order } from "../src/common.ts";
 
@@ -105,44 +112,25 @@ function nodeText(node: Node): string {
   return parts.join("\n");
 }
 
+// Mount data of one item step, by mount id.
+function mountData(nodes: Node[], id: string): Record<string, unknown> {
+  for (const node of nodes) {
+    const rec = node as unknown as Record<string, unknown>;
+    if (rec["kind"] === "mount" && rec["id"] === id) {
+      return rec["data"] as Record<string, unknown>;
+    }
+  }
+  throw new Error("no mount named " + id);
+}
+
+// Items list of one board mount.
+function mountItems(board: Record<string, unknown>): Array<Record<string, unknown>> {
+  return board["items"] as Array<Record<string, unknown>>;
+}
+
 // Text of every node in a step, joined.
 function stepText(nodes: Node[]): string {
   return nodes.map(nodeText).join("\n");
-}
-
-// Collect the text of every markdown node.
-function markdownTexts(nodes: Node[]): string[] {
-  const out: string[] = [];
-  for (const node of nodes) {
-    const rec = node as unknown as Record<string, unknown>;
-    if (rec["kind"] === "markdown" && typeof rec["text"] === "string") {
-      out.push(rec["text"] as string);
-    }
-  }
-  return out;
-}
-
-// Find the table node with one label.
-function tableByLabel(nodes: Node[], label: string): Record<string, unknown> {
-  for (const node of nodes) {
-    const rec = node as unknown as Record<string, unknown>;
-    if (rec["kind"] === "table" && rec["label"] === label) return rec;
-  }
-  throw new Error("no table labelled " + label);
-}
-
-// Find the tree node with one label.
-function treeByLabel(nodes: Node[], label: string): Record<string, unknown> {
-  for (const node of nodes) {
-    const rec = node as unknown as Record<string, unknown>;
-    if (rec["kind"] === "tree" && rec["label"] === label) return rec;
-  }
-  throw new Error("no tree labelled " + label);
-}
-
-// Read the rows of one table node.
-function tableRows(table: Record<string, unknown>): string[][] {
-  return (table["rows"] as string[][]) ?? [];
 }
 
 // Answers map with the run typed, the resume question answered, and
@@ -164,9 +152,14 @@ Deno.test("resume mid-way keeps saved assignments", async () => {
   // Nothing overwrote the saved state while asking.
   const onDisk = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
   assertEquals(onDisk.assignments["0"].amounts, { Ann: 5, Ben: 5 });
-  // Continue renders the finished state, line 0 stays assigned.
+  // Continue renders the mount, line 0 stays assigned.
   const done = itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-1" });
-  assertStringIncludes(stepText(done.nodes), "All 1 items are split");
+  const kept = mountData(done.nodes, "split-board")["assignments"] as Record<string, unknown>;
+  assertEquals(kept["0"], {
+    splitType: "equal",
+    people: ["Ann", "Ben"],
+    amounts: { Ann: 5, Ben: 5 },
+  });
   const after = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
   assertEquals(after.assignments["0"].amounts, { Ann: 5, Ben: 5 });
   assertEquals(after.payer, "Ann");
@@ -177,7 +170,7 @@ Deno.test("start over clears saved assignments", async () => {
   const dir = makeRun(root, "r2", savedDoc("Ann"));
   itemStep(answers(dir), { sessionId: "t-split-2" });
   const fresh = itemStep(answers(dir, "Start over"), { sessionId: "t-split-2" });
-  assertEquals(tableRows(tableByLabel(fresh.nodes, "Item"))[0], ["Item", "1 of 1"]);
+  assertEquals(mountData(fresh.nodes, "split-board")["runId"], "r2");
   // saveState writes in the background, so wait for the cleared file.
   for (let i = 0; i < 50; i++) {
     const after = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
@@ -231,7 +224,9 @@ Deno.test("currency label follows settings", async () => {
     assertEquals(await loadCurrency("t-split-5"), "USD");
     const dir = makeRun(root, "r5", savedDoc("Ann"));
     const item = itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-5" });
-    assertStringIncludes(stepText(item.nodes), "USD 10.00");
+    const board = mountData(item.nodes, "split-board");
+    assertEquals(board["currency"], "USD");
+    assertEquals(mountItems(board)[0]["price"], 10);
     const out = exportStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-5" });
     assertStringIncludes(stepText(out.nodes), "USD 5.00");
   } finally {
@@ -384,32 +379,17 @@ Deno.test("roleErrors covers the empty, missing role, and complete cases", () =>
   assertEquals(roleErrors({ person: ["Ann"], payer: ["Ann"], me: ["Ann"] }), []);
 });
 
-// Ticked values of one checkbox node, by field name.
-function tickedOf(nodes: Node[], name: string): string[] {
-  for (const node of nodes) {
-    const rec = node as unknown as Record<string, unknown>;
-    if (rec["name"] === name) return (rec["ticked"] as string[]) ?? [];
-  }
-  throw new Error("no checkbox named " + name);
-}
-
-// Picked value of one radio node, by field name.
-function pickedOf(nodes: Node[], name: string): string | undefined {
-  for (const node of nodes) {
-    const rec = node as unknown as Record<string, unknown>;
-    if (rec["name"] === name) return rec["picked"] as string | undefined;
-  }
-  throw new Error("no radio named " + name);
-}
-
-Deno.test("a fresh line ticks the me person by default", async () => {
+Deno.test("a fresh line names the me person in the board data", async () => {
   const root = await Deno.makeTempDir();
   const dir = makeRun(root, "r7", null);
   const m = answers(dir);
   m.set("person", ["Ann", "Ben"]);
   m.set("me", ["Ben"]);
-  const step = itemStep(m, { sessionId: "t-split-10" });
-  assertEquals(tickedOf(step.nodes, "who-0"), ["Ben"]);
+  const found = itemStep(m, { sessionId: "t-split-10" });
+  const board = mountData(found.nodes, "split-board");
+  assertEquals(board["me"], "Ben");
+  assertEquals(board["people"], ["Ann", "Ben"]);
+  assertEquals(mountItems(board).length, 1);
 });
 
 // Names of the answers node entries, in order.
@@ -499,39 +479,34 @@ Deno.test("split-share-done renders a stored link", async () => {
   assertEquals(currentShareLink("t-split-14"), value);
 });
 
-Deno.test("fresh item line still ticks only the me person", async () => {
+Deno.test("a fresh item line reaches the board as an item", async () => {
   const root = await Deno.makeTempDir();
   const dir = makeRun(root, "fee-item", null, FEE_ORDERS);
   const m = answers(dir);
   m.set("person", ["Ann", "Ben"]);
   m.set("me", ["Ben"]);
   const found = itemStep(m, { sessionId: "t-split-15" });
-  assertEquals(tickedOf(found.nodes, "who-0"), ["Ben"]);
-  assertEquals(pickedOf(found.nodes, "mode-0"), "Equal");
-  assertEquals(stepText(found.nodes).includes("Fee default"), false);
+  const items = mountItems(mountData(found.nodes, "split-board"));
+  assertEquals(items.length, 2);
+  assertEquals(items[0]["name"], "Pizza");
+  assertEquals(items[0]["price"], 10);
+  assertEquals(items[0]["isFee"], false);
 });
 
-Deno.test("fresh fee line ticks everyone and preselects equal", async () => {
+Deno.test("a fresh fee line reaches the board flagged as a fee", async () => {
   const root = await Deno.makeTempDir();
   const dir = makeRun(root, "fee-fresh", null, FEE_ORDERS);
-  const first = answers(dir);
-  first.set("person", ["Ann", "Ben"]);
-  first.set("me", ["Ben"]);
-  // Line 0 is the Pizza item: only the me person ticks.
-  const item = itemStep(first, { sessionId: "t-split-16" });
-  assertEquals(tickedOf(item.nodes, "who-0"), ["Ben"]);
-  // Commit line 0 to Ben alone, so line 1 renders the delivery fee.
   const m = answers(dir);
   m.set("person", ["Ann", "Ben"]);
   m.set("me", ["Ben"]);
-  m.set("mode-0", ["Equal"]);
-  m.set("who-0", ["Ben"]);
-  const fee = itemStep(m, { sessionId: "t-split-16" });
-  assertEquals(tickedOf(fee.nodes, "who-1"), ["Ann", "Ben"]);
-  assertEquals(pickedOf(fee.nodes, "mode-1"), "Equal");
-  assertStringIncludes(stepText(fee.nodes), "Fee default");
-  assertStringIncludes(stepText(fee.nodes), "2.50");
-  assertStringIncludes(stepText(fee.nodes), "You may change it");
+  const found = itemStep(m, { sessionId: "t-split-16" });
+  const board = mountData(found.nodes, "split-board");
+  const items = mountItems(board);
+  assertEquals(items.length, 2);
+  assertEquals(items[0]["isFee"], false);
+  assertEquals(items[1]["isFee"], true);
+  assertEquals(items[1]["price"], 5);
+  assertEquals(board["skipped"], {});
 });
 
 Deno.test("fee line with a saved assignment keeps the saved people", async () => {
@@ -549,9 +524,12 @@ Deno.test("fee line with a saved assignment keeps the saved people", async () =>
     amounts: { Ann: 5 },
   };
   const dir = makeRun(root, "fee-saved", doc, FEE_ORDERS);
-  const done = itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-17" });
-  assertStringIncludes(stepText(done.nodes), "All 2 items are split");
-  assertEquals(stepText(done.nodes).includes("Fee default"), false);
+  const board = mountData(
+    itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-17" }).nodes,
+    "split-board",
+  );
+  const kept = board["assignments"] as Record<string, unknown>;
+  assertEquals((kept["1"] as Record<string, unknown>)["people"], ["Ann"]);
   const after = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
   assertEquals(after.assignments["1"].people, ["Ann"]);
   assertEquals(after.assignments["1"].amounts, { Ann: 5 });
@@ -576,15 +554,11 @@ Deno.test("fee copy names the per person amount with the settings currency", asy
     const m = answers(dir);
     m.set("person", ["Ann", "Ben"]);
     m.set("me", ["Ben"]);
-    m.set("mode-0", ["Equal"]);
-    m.set("who-0", ["Ben"]);
-    const fee = itemStep(m, { sessionId: "t-split-18" });
-    // The 5.00 fee split two ways names EUR 2.50 each.
-    assertStringIncludes(
-      stepText(fee.nodes),
-      "Fee default: everyone pays EUR 2.50 each.",
-    );
-    assertStringIncludes(stepText(fee.nodes), "You may change it");
+    const board = mountData(itemStep(m, { sessionId: "t-split-18" }).nodes, "split-board");
+    // The 5.00 fee reaches the board flagged as a fee in EUR.
+    assertEquals(board["currency"], "EUR");
+    assertEquals(mountItems(board)[1]["price"], 5);
+    assertEquals(mountItems(board)[1]["isFee"], true);
   } finally {
     Deno.env.delete("SPLIT_UTILS_STATE");
     await loadCurrency("t-split-18");
@@ -618,8 +592,8 @@ Deno.test("rename through the save path keeps the assignment reachable", async (
   const m = answers(dir, "Continue where you left off?");
   m.set("person", ["Ann", "Bobby"]);
   m.set("me", ["Ann"]);
-  const done = itemStep(m, { sessionId: "t-split-20" });
-  assertStringIncludes(stepText(done.nodes), "All 1 items are split");
+  const board = mountData(itemStep(m, { sessionId: "t-split-20" }).nodes, "split-board");
+  assertEquals(board["people"], ["Ann", "Bobby"]);
   const out = exportStep(m, { sessionId: "t-split-20" });
   assertStringIncludes(stepText(out.nodes), "Bobby pays you");
   const written = JSON.parse(Deno.readTextFileSync(dir + "/output.json"));
@@ -636,44 +610,31 @@ function freshFeeAnswers(dir: string): Map<string, string[]> {
   return m;
 }
 
-Deno.test("a failed save shows its reason until the next save lands", async () => {
+Deno.test("a failed save keeps its reason until the next save lands", async () => {
   const root = await Deno.makeTempDir();
   const dir = makeRun(root, "save-warn", null, FEE_ORDERS);
-  // First render opens the session on line 0.
-  itemStep(freshFeeAnswers(dir), { sessionId: "t-split-21" });
-  assertEquals(lastSaveError("t-split-21"), "");
+  const sid = "t-split-21";
+  // First render opens the session on the fresh run.
+  itemStep(freshFeeAnswers(dir), { sessionId: sid });
+  assertEquals(lastSaveError(sid), "");
   // Force the next save to fail.
   setSaveWriterForTests(() => Promise.reject(new Error("disk is full")));
   try {
-    // Post line 0. The commit saves in the background and misses.
-    const first = freshFeeAnswers(dir);
-    first.set("mode-0", ["Equal"]);
-    first.set("who-0", ["Ben"]);
-    itemStep(first, { sessionId: "t-split-21" });
-    await pendingSaves("t-split-21");
+    // Rename one person. The remap saves in the background and misses.
+    const renamed = freshFeeAnswers(dir);
+    renamed.set("person", ["Ann", "Bobby"]);
+    const board = mountData(itemStep(renamed, { sessionId: sid }).nodes, "split-board");
+    assertEquals(board["people"], ["Ann", "Bobby"]);
+    await pendingSaves(sid);
     // Check the session holds the reason.
-    assertEquals(lastSaveError("t-split-21"), "disk is full");
-    // Check the item step shows one muted warning line.
-    const warned = itemStep(first, { sessionId: "t-split-21" });
-    assertStringIncludes(
-      stepText(warned.nodes),
-      "The last save did not land: disk is full. Your answers stay in this window until a save lands.",
-    );
+    assertEquals(lastSaveError(sid), "disk is full");
   } finally {
     setSaveWriterForTests(writeSplitState);
   }
-  // Post line 1 with the real writer. The save lands and clears the error.
-  const second = freshFeeAnswers(dir);
-  second.set("mode-0", ["Equal"]);
-  second.set("who-0", ["Ben"]);
-  second.set("mode-1", ["Equal"]);
-  second.set("who-1", ["Ann", "Ben"]);
-  itemStep(second, { sessionId: "t-split-21" });
-  await pendingSaves("t-split-21");
-  assertEquals(lastSaveError("t-split-21"), "");
-  const clean = itemStep(second, { sessionId: "t-split-21" });
-  assertStringIncludes(stepText(clean.nodes), "All 2 items are split");
-  assertEquals(stepText(clean.nodes).includes("did not land"), false);
+  // Rename back with the real writer. The save lands and clears the error.
+  itemStep(freshFeeAnswers(dir), { sessionId: sid });
+  await pendingSaves(sid);
+  assertEquals(lastSaveError(sid), "");
 });
 
 Deno.test("a split session opened under A does not serve B", async () => {
@@ -703,15 +664,21 @@ Deno.test("a split session opened under A does not serve B", async () => {
     m.set("me", ["Ann"]);
     return m;
   };
-  const shownA = stepText(itemStep(mapFor(dirA), { sessionId: sidA }).nodes);
-  const shownB = stepText(itemStep(mapFor(dirB), { sessionId: sidB }).nodes);
-  assertStringIncludes(shownA, "PizzaA-x1");
-  assertStringIncludes(shownB, "PizzaB-y2");
+  const shownA = mountItems(
+    mountData(itemStep(mapFor(dirA), { sessionId: sidA }).nodes, "split-board"),
+  );
+  const shownB = mountItems(
+    mountData(itemStep(mapFor(dirB), { sessionId: sidB }).nodes, "split-board"),
+  );
+  assertEquals(shownA[0]["name"], "PizzaA-x1");
+  assertEquals(shownB[0]["name"], "PizzaB-y2");
   // Re-render A after B opened: A still shows its own run.
-  const againA = stepText(itemStep(mapFor(dirA), { sessionId: sidA }).nodes);
-  assertStringIncludes(againA, "PizzaA-x1");
-  assertEquals(againA.includes("PizzaB-y2"), false);
-  assertEquals(shownB.includes("PizzaA-x1"), false);
+  const againA = mountItems(
+    mountData(itemStep(mapFor(dirA), { sessionId: sidA }).nodes, "split-board"),
+  );
+  assertEquals(againA[0]["name"], "PizzaA-x1");
+  assertEquals(shownB[0]["name"] === "PizzaA-x1", false);
+  assertEquals(shownA[0]["name"] === "PizzaB-y2", false);
 });
 
 // Two one line orders with distinct item names for the pick tests.
@@ -760,10 +727,12 @@ Deno.test("fresh split session skips the lines of unpicked orders", async () => 
   m.set("person", ["Ann", "Ben"]);
   m.set("me", ["Ann"]);
   const found = itemStep(m, { sessionId: "t-pick-6" });
-  const text = stepText(found.nodes);
-  // Line 0 belongs to the unpicked order, so the session opens on line 2.
-  assertEquals(tableRows(tableByLabel(found.nodes, "Item"))[0], ["Item", "2 of 2"]);
-  assertStringIncludes(text, "MilkB-pick");
+  const board = mountData(found.nodes, "split-board");
+  const items = mountItems(board);
+  // Line 0 belongs to the unpicked order, so it stays skipped.
+  assertEquals(items.length, 2);
+  assertEquals(board["skipped"], { "0": true });
+  assertEquals(items[1]["name"], "MilkB-pick");
 });
 
 Deno.test("resumed split session keeps its saved skipped map", async () => {
@@ -773,213 +742,90 @@ Deno.test("resumed split session keeps its saved skipped map", async () => {
   const dir = makeRun(root, "pick-resume", doc, pickOrders());
   writePickedMeta(dir, "pick-resume", [0]);
   const m = answers(dir, "Continue where you left off?");
-  const found = itemStep(m, { sessionId: "t-pick-7" });
-  const text = stepText(found.nodes);
+  const board = mountData(itemStep(m, { sessionId: "t-pick-7" }).nodes, "split-board");
   // The saved skip on line 0 stays. Line 1 stays open.
-  assertEquals(tableRows(tableByLabel(found.nodes, "Item"))[0], ["Item", "2 of 2"]);
-  assertEquals(text.includes("All 2 items are split"), false);
+  assertEquals(mountItems(board).length, 2);
+  assertEquals(board["skipped"], { "0": true });
+  assertEquals(board["assignments"], {});
   const after = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
   assertEquals(after.skipped, { "0": true });
 });
 
-Deno.test("split item bar holds Next line plus Repeat Last", async () => {
+Deno.test("split item bar holds Back", async () => {
+  // Open a fresh one line run.
+  // Check the bar keeps Back.
   const root = await Deno.makeTempDir();
-  const dir = makeRun(root, "nav-item", null, FEE_ORDERS);
+  const dir = makeRun(root, "nav-back", null);
   const m = answers(dir);
   m.set("person", ["Ann", "Ben"]);
   m.set("me", ["Ben"]);
-  itemStep(m, { sessionId: "t-split-nav" });
-  // Post line 0 first.
-  // Check the bar on line 2.
-  const posted = answers(dir);
-  posted.set("person", ["Ann", "Ben"]);
-  posted.set("me", ["Ben"]);
-  posted.set("mode-0", ["Equal"]);
-  posted.set("who-0", ["Ben"]);
-  const found = itemStep(posted, { sessionId: "t-split-nav" });
+  const found = itemStep(m, { sessionId: "t-split-nav-back" });
   assertEquals(found.id, "split-item");
   assertEquals(found.nav?.back, true);
-  // Next line is the forward button.
-  const fwd = found.nav?.next as unknown as Record<string, unknown> | string;
-  assertEquals(typeof fwd === "string" ? fwd : String(fwd["label"]), "Next item");
-  // Repeat Last is a screen wide action.
-  const repeat = (found.nav?.actions ?? []).find((entry) => entry.id === "repeat");
-  assertEquals(repeat?.label, "Repeat Last");
-  // The bar replaces the buttons node: no buttons node remains.
-  for (const node of found.nodes) {
-    const rec = node as unknown as Record<string, unknown>;
-    assertEquals(rec["kind"] === "buttons", false);
-  }
-  // Next line holds the screen on the item step. Repeat Last re-renders.
-  type RunFn = (
-    answers: Map<string, string[]>,
-    fields: Record<string, string[]>,
-    ctx: { sessionId: string },
-  ) => unknown;
-  const nextRun = (fwd as { run?: unknown }).run as RunFn;
-  assertEquals(
-    await nextRun(new Map(), {}, { sessionId: "t-split-nav" }),
-    { goto: "split-item" },
-  );
-  const repeatRun = repeat?.run as RunFn;
-  assertEquals(
-    await repeatRun(new Map(), {}, { sessionId: "t-split-nav" }),
-    undefined,
-  );
 });
 
-Deno.test("item bar hides Repeat Last with nothing saved", async () => {
-  // Open a fresh run.
-  // Check the bar on line 1.
+Deno.test("split item bar finishes to split-export", async () => {
+  // Open a fresh one line run.
+  // Check the forward control names the export step.
   const root = await Deno.makeTempDir();
-  const dir = makeRun(root, "repeat-none", null);
+  const dir = makeRun(root, "nav-finish", null);
   const m = answers(dir);
   m.set("person", ["Ann", "Ben"]);
   m.set("me", ["Ben"]);
-  const found = itemStep(m, { sessionId: "t-repeat-1" });
-  assertEquals(found.id, "split-item");
+  const found = itemStep(m, { sessionId: "t-split-nav-finish" });
+  const goto = found.nav?.goto as unknown as Record<string, unknown>;
+  assertEquals(goto["step"], "split-export");
+  assertEquals(goto["label"], "Finish splitting");
+});
+
+Deno.test("split item bar declares no action", async () => {
+  // Open a two line run with line 0 saved.
+  // Check the bar lists no action even with saved work.
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "nav-no-action", savedDoc("Ann"), FEE_ORDERS);
+  const m = answers(dir, "Continue where you left off?");
+  m.set("person", ["Ann", "Ben"]);
+  m.set("me", ["Ben"]);
+  const found = itemStep(m, { sessionId: "t-split-nav-actions" });
   assertEquals(found.nav?.back, true);
-  const fwd = found.nav?.next as unknown as Record<string, unknown> | string;
-  assertEquals(typeof fwd === "string" ? fwd : String(fwd["label"]), "Next item");
-  const ids = (found.nav?.actions ?? []).map((entry) => entry.id);
-  assertEquals(ids.includes("repeat"), false);
-  assertEquals(lastSavedAssignment(freshState(["Ann", "Ben"], "Ann")), null);
+  assertEquals(found.nav?.actions ?? [], []);
+  assertEquals(found.nav?.next, undefined);
 });
 
-Deno.test("item bar shows Repeat Last after one saved line", async () => {
-  // Open a two line run.
-  // Post line 0 first.
-  // Check the bar on line 2.
-  const root = await Deno.makeTempDir();
-  const dir = makeRun(root, "repeat-one", null, FEE_ORDERS);
-  const first = answers(dir);
-  first.set("person", ["Ann", "Ben"]);
-  first.set("me", ["Ben"]);
-  itemStep(first, { sessionId: "t-repeat-2" });
-  const posted = answers(dir);
-  posted.set("person", ["Ann", "Ben"]);
-  posted.set("me", ["Ben"]);
-  posted.set("mode-0", ["Equal"]);
-  posted.set("who-0", ["Ann", "Ben"]);
-  const found = itemStep(posted, { sessionId: "t-repeat-2" });
-  await pendingSaves("t-repeat-2");
-  const repeat = (found.nav?.actions ?? []).find((entry) => entry.id === "repeat");
-  assertEquals(repeat?.label, "Repeat Last");
-  const after = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
-  assertEquals(lastSavedAssignment(after)?.splitType, "equal");
+Deno.test("repeatOnto copies single split with fresh amounts", () => {
+  // Repeat a single Ben line onto a higher price.
+  // Check the type and the people stay.
+  // Check the amounts recompute for the new price.
+  const made = repeatOnto(
+    { splitType: "single", people: ["Ben"], amounts: { Ben: 10 } },
+    ["Ann", "Ben"],
+    20,
+  );
+  assertEquals(made?.splitType, "single");
+  assertEquals(made?.people, ["Ben"]);
+  assertEquals(made?.amounts, { Ben: 20 });
 });
 
-Deno.test("repeat handler copies type and people to the current line", async () => {
-  // Open a saved two item run.
-  // Continue the saved run.
-  // Press Repeat Last on line 2.
-  // Read the saved line 2.
-  const orders: Order[] = [{
-    id: "o1",
-    platform: "swiggy",
-    date: "2026-09-01 10:00 AM",
-    paid: 30,
-    items: [
-      { name: "Pizza", price: 10, quantity: 1 },
-      { name: "Burger", price: 20, quantity: 1 },
-    ],
-    fees: { delivery: 0, packaging: 0 },
-  }];
-  const root = await Deno.makeTempDir();
-  const seed = freshState(["Ann", "Ben"], "Ann");
-  seed.assignments["0"] = {
-    splitType: "single",
-    people: ["Ben"],
-    amounts: { Ben: 10 },
-  };
-  const dir = makeRun(root, "repeat-copy", seed, orders);
-  const m = answers(dir, "Continue where you left off?");
-  m.set("person", ["Ann", "Ben"]);
-  m.set("me", ["Ann"]);
-  const onSecond = itemStep(m, { sessionId: "t-repeat-3" });
-  type RunFn = (
-    answers: Map<string, string[]>,
-    fields: Record<string, string[]>,
-    ctx: { sessionId: string },
-  ) => unknown;
-  const repeat = (onSecond.nav?.actions ?? []).find((entry) => entry.id === "repeat");
-  const run = repeat?.run as RunFn;
-  assertEquals(await run(new Map(), {}, { sessionId: "t-repeat-3" }), undefined);
-  await pendingSaves("t-repeat-3");
-  const after = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
-  assertEquals(after.assignments["1"].splitType, "single");
-  assertEquals(after.assignments["1"].people, ["Ben"]);
-  assertEquals(after.assignments["1"].amounts, { Ben: 20 });
+Deno.test("repeatOnto drops unknown names and returns null with nobody", () => {
+  // Repeat an equal line after Ben left the run.
+  // Check Ann stays alone with a fresh amount.
+  const kept = repeatOnto(
+    { splitType: "equal", people: ["Ann", "Ben"], amounts: { Ann: 5, Ben: 5 } },
+    ["Ann"],
+    10,
+  );
+  assertEquals(kept?.splitType, "equal");
+  assertEquals(kept?.people, ["Ann"]);
+  assertEquals(kept?.amounts, { Ann: 10 });
+  // Repeat with no saved names.
+  // Check the helper returns null.
+  assertEquals(
+    repeatOnto({ splitType: "equal", people: [], amounts: {} }, ["Ann", "Ben"], 10),
+    null,
+  );
 });
 
-Deno.test("repeat handler copies no skip and no typed amount", async () => {
-  // Open a saved fee run.
-  // Continue the saved run.
-  // Press Repeat Last on the fee line.
-  // Read the saved fee line.
-  const root = await Deno.makeTempDir();
-  const seed = freshState(["Ann", "Ben"], "Ann");
-  seed.assignments["0"] = {
-    splitType: "custom",
-    people: ["Ann", "Ben"],
-    amounts: { Ann: 6, Ben: 4 },
-  };
-  const dir = makeRun(root, "repeat-clean", seed, FEE_ORDERS);
-  const m = answers(dir, "Continue where you left off?");
-  m.set("person", ["Ann", "Ben"]);
-  m.set("me", ["Ann"]);
-  const onFee = itemStep(m, { sessionId: "t-repeat-4" });
-  type RunFn = (
-    answers: Map<string, string[]>,
-    fields: Record<string, string[]>,
-    ctx: { sessionId: string },
-  ) => unknown;
-  const repeat = (onFee.nav?.actions ?? []).find((entry) => entry.id === "repeat");
-  const run = repeat?.run as RunFn;
-  assertEquals(await run(new Map(), {}, { sessionId: "t-repeat-4" }), undefined);
-  await pendingSaves("t-repeat-4");
-  const after = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
-  assertEquals(after.assignments["1"].splitType, "custom");
-  assertEquals(after.assignments["1"].people, ["Ann", "Ben"]);
-  assertEquals(after.assignments["1"].amounts, { Ann: 2.5, Ben: 2.5 });
-  assertEquals(after.skipped["1"], undefined);
-});
-
-// One session saving two lines leaves no conflict copy.
-Deno.test("two saves in one session leave no conflict copy", async () => {
-  // Open a fresh two line run.
-  const root = await Deno.makeTempDir();
-  const dir = makeRun(root, "no-self-conflict", null, FEE_ORDERS);
-  const sid = "t-no-self-conflict";
-  const open = freshFeeAnswers(dir);
-  itemStep(open, { sessionId: sid });
-  // Post line 0 and wait for the save.
-  const first = freshFeeAnswers(dir);
-  first.set("mode-0", ["Equal"]);
-  first.set("who-0", ["Ben"]);
-  itemStep(first, { sessionId: sid });
-  await pendingSaves(sid);
-  // Post line 1 and wait for the save.
-  const second = freshFeeAnswers(dir);
-  second.set("mode-0", ["Equal"]);
-  second.set("who-0", ["Ben"]);
-  second.set("mode-1", ["Equal"]);
-  second.set("who-1", ["Ann", "Ben"]);
-  itemStep(second, { sessionId: sid });
-  await pendingSaves(sid);
-  // List files with the conflict prefix.
-  const names: string[] = [];
-  for await (const entry of Deno.readDir(dir)) {
-    if (entry.name.startsWith("split-state.conflict-")) names.push(entry.name);
-  }
-  // Check no conflict copy exists.
-  assertEquals(names.length, 0, "no conflict file");
-  // Read the live file and check both lines landed.
-  const live = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
-  assertEquals(Object.keys(live.assignments).length, 2, "both lines saved");
-});
-
-Deno.test("item header names the product and price alone", async () => {
+Deno.test("board data names the product and price", async () => {
   // Open a fresh one line run.
   const root = await Deno.makeTempDir();
   const dir = makeRun(root, "header-alone", null);
@@ -987,18 +833,14 @@ Deno.test("item header names the product and price alone", async () => {
   m.set("person", ["Ann", "Ben"]);
   m.set("me", ["Ann"]);
   const found = itemStep(m, { sessionId: "t-header-1" });
-  // Find the header markdown node.
-  const headers = markdownTexts(found.nodes).filter((text) => text.startsWith("### "));
-  assertEquals(headers.length, 1);
-  // Check the header names the product and price.
-  assertStringIncludes(headers[0], "Pizza");
-  assertStringIncludes(headers[0], "10.00");
-  // Check the header drops the old platform words.
-  assertEquals(headers[0].includes("from"), false);
-  assertEquals(headers[0].includes("order"), false);
+  // Check the island names the product and price.
+  const items = mountItems(mountData(found.nodes, "split-board"));
+  assertEquals(items.length, 1);
+  assertEquals(items[0]["name"], "Pizza");
+  assertEquals(items[0]["price"], 10);
 });
 
-Deno.test("item header table carries the counter platform and order", async () => {
+Deno.test("board data carries the platform and order of every item", async () => {
   // Open a fresh one line run.
   const root = await Deno.makeTempDir();
   const dir = makeRun(root, "header-table", null);
@@ -1006,15 +848,15 @@ Deno.test("item header table carries the counter platform and order", async () =
   m.set("person", ["Ann", "Ben"]);
   m.set("me", ["Ann"]);
   const found = itemStep(m, { sessionId: "t-header-2" });
-  // Find the line table.
-  const table = tableByLabel(found.nodes, "Item");
-  // Check the column headings.
-  assertEquals(table["columns"], [{ heading: "Field" }, { heading: "Value", align: "left" }]);
-  // Check the rows hold the counter platform and order.
-  assertEquals(tableRows(table), [["Item", "1 of 1"], ["Platform", "swiggy"], ["Order", "o1"]]);
+  // Check the island holds the counter platform and order.
+  const items = mountItems(mountData(found.nodes, "split-board"));
+  assertEquals(items.length, 1);
+  assertEquals(items[0]["index"], 0);
+  assertEquals(items[0]["platform"], "swiggy");
+  assertEquals(items[0]["orderId"], "o1");
 });
 
-Deno.test("lines tree omits a skipped line and keeps an unskipped one", async () => {
+Deno.test("board data keeps skipped lines flagged in place", async () => {
   // Build a two line run with line 0 skipped.
   const orders: Order[] = [{
     id: "o1",
@@ -1028,19 +870,19 @@ Deno.test("lines tree omits a skipped line and keeps an unskipped one", async ()
   const doc = freshState(["Ann", "Ben"], "Ann");
   doc.skipped["0"] = true;
   const dir = makeRun(root, "skip-hide", doc, orders);
-  const found = itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-skip-1" });
-  // Find the lines tree.
-  const tree = treeByLabel(found.nodes, "Items");
-  const rows = tree["rows"] as Array<{ text: string; state: string }>;
-  // Check the tree holds one row.
-  assertEquals(rows.length, 1);
-  // Check the tree keeps the unskipped line.
-  assertStringIncludes(rows[0].text, "Burger");
-  // Check the tree drops the skipped line.
-  assertEquals(rows.map((row) => row.text).join("\n").includes("Pizza"), false);
+  const board = mountData(
+    itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-skip-1" }).nodes,
+    "split-board",
+  );
+  // Check the island holds both lines with the skip flagged.
+  const items = mountItems(board);
+  assertEquals(items.length, 2);
+  assertEquals(items[0]["name"], "Pizza");
+  assertEquals(items[1]["name"], "Burger");
+  assertEquals(board["skipped"], { "0": true });
 });
 
-Deno.test("lines tree still marks the current line", async () => {
+Deno.test("board data carries the open line alongside the skip", async () => {
   // Build a two line run with line 0 skipped.
   const orders: Order[] = [{
     id: "o1",
@@ -1054,15 +896,14 @@ Deno.test("lines tree still marks the current line", async () => {
   const doc = freshState(["Ann", "Ben"], "Ann");
   doc.skipped["0"] = true;
   const dir = makeRun(root, "skip-current", doc, orders);
-  const found = itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-skip-2" });
-  // Find the lines tree.
-  const tree = treeByLabel(found.nodes, "Items");
-  const rows = tree["rows"] as Array<{ text: string; state: string }>;
-  // Check the remaining row marks the current line.
-  assertEquals(rows.length, 1);
-  assertEquals(rows[0].state, "current");
-  // Check the header table points at line 2.
-  assertEquals(tableRows(tableByLabel(found.nodes, "Item"))[0], ["Item", "2 of 2"]);
+  const board = mountData(
+    itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-skip-2" }).nodes,
+    "split-board",
+  );
+  // Check the skipped map stays while line 1 stays open.
+  assertEquals(mountItems(board).length, 2);
+  assertEquals(board["skipped"], { "0": true });
+  assertEquals(board["assignments"], {});
 });
 
 Deno.test("stored split run opens the item step with no run answer", async () => {
@@ -1078,34 +919,35 @@ Deno.test("stored split run opens the item step with no run answer", async () =>
   m.set("me", ["Ann"]);
   const found = itemStep(m, { sessionId: sid });
   assertEquals(found.id, "split-item");
-  assertStringIncludes(stepText(found.nodes), "Pizza");
-  assertEquals(stepText(found.nodes).includes("Pick a run in the Run step first."), false);
+  const board = mountData(found.nodes, "split-board");
+  assertEquals(board["runId"], "store-fallback");
+  assertEquals(mountItems(board)[0]["name"], "Pizza");
 });
 
-Deno.test("item header table carries the Item label", async () => {
+Deno.test("item step mounts the board node", async () => {
   // Open a fresh one line run.
-  // Read the header table label.
+  // Read the mount node id.
   const root = await Deno.makeTempDir();
   const dir = makeRun(root, "item-label", null);
   const m = answers(dir);
   m.set("person", ["Ann", "Ben"]);
   m.set("me", ["Ann"]);
   const found = itemStep(m, { sessionId: "t-item-label-1" });
-  const table = tableByLabel(found.nodes, "Item");
-  assertEquals(tableRows(table)[0], ["Item", "1 of 1"]);
+  assertEquals(mountData(found.nodes, "split-board")["runId"], "item-label");
 });
 
-Deno.test("item bar forward button reads Next item", async () => {
+Deno.test("item bar forward button reads Finish splitting", async () => {
   // Open a fresh one line run.
-  // Read the forward button label.
+  // Read the forward control target.
   const root = await Deno.makeTempDir();
   const dir = makeRun(root, "next-item", null);
   const m = answers(dir);
   m.set("person", ["Ann", "Ben"]);
   m.set("me", ["Ben"]);
   const found = itemStep(m, { sessionId: "t-next-item-1" });
-  const fwd = found.nav?.next as unknown as Record<string, unknown> | string;
-  assertEquals(typeof fwd === "string" ? fwd : String(fwd["label"]), "Next item");
+  const goto = found.nav?.goto as unknown as Record<string, unknown>;
+  assertEquals(String(goto["label"]), "Finish splitting");
+  assertEquals(String(goto["step"]), "split-export");
 });
 
 // Build one run under the live runs dir with meta plus state.
@@ -1155,15 +997,16 @@ Deno.test("board routes ignore an unknown path", async () => {
   );
 });
 
-Deno.test("board file answers 404 while the component misses", async () => {
-  // Ask for the component file before the later ticket writes it.
-  // Check the route answers 404 with a plain line.
+Deno.test("board file serves the component", async () => {
+  // Ask for the component file the board ticket wrote.
+  // Check the route answers 200 as JavaScript.
   const res = await handleBoardRoute(
     new Request("http://localhost/app/split-board.js"),
   );
   assert(res !== null);
-  assertEquals(res.status, 404);
-  assertEquals(res.headers.get("content-type"), "text/plain; charset=utf-8");
+  assertEquals(res.status, 200);
+  assertEquals(res.headers.get("content-type"), "text/javascript; charset=utf-8");
+  assertStringIncludes(await res.text(), "shareEqual");
 });
 
 Deno.test("board patch names an unknown run with 404", async () => {
@@ -1247,6 +1090,86 @@ Deno.test("board patch drops a skip set false", async () => {
   } finally {
     Deno.env.delete("SPLIT_UTILS_STATE");
   }
+});
+
+Deno.test("equal split with a remainder still adds up", () => {
+  // Split 10.00 three ways. The parts must total the price exactly.
+  const parts: Record<string, number> = shareEqual(10, ["Ann", "Ben", "Cara"]);
+  const sum = round2(Object.values(parts).reduce((a, b) => a + b, 0));
+  assertEquals(sum, 10);
+  // The remainder lands on the first person.
+  assertEquals(parts["Ann"], 3.34);
+  assertEquals(parts["Ben"], 3.33);
+});
+
+Deno.test("percent split turns percents into money", () => {
+  // Split 10.00 by 60 and 40. The money must match the percents.
+  assertEquals(sharePercent(10, { Ann: 60, Ben: 40 }), { Ann: 6, Ben: 4 });
+});
+
+Deno.test("single split puts the whole price on one person", () => {
+  // Split 10.00 onto Ann alone. She carries the whole price.
+  assertEquals(shareSingle(10, "Ann"), { Ann: 10 });
+});
+
+Deno.test("buildPatch carries only the changed lines plus a set skip", () => {
+  // Mark line 1 dirty with a skip set. Line 0 stays out.
+  const patch = buildPatch(
+    new Set([1]),
+    {
+      "0": { splitType: "equal", people: ["Ann"], amounts: { Ann: 10 } },
+      "1": { splitType: "single", people: ["Ben"], amounts: { Ben: 10 } },
+    },
+    { "1": true },
+  );
+  assertEquals(Object.keys(patch.assignments), ["1"]);
+  assertEquals(patch.assignments["1"], {
+    splitType: "single",
+    people: ["Ben"],
+    amounts: { Ben: 10 },
+  });
+  assertEquals(patch.skipped, { "1": true });
+});
+
+Deno.test("board exports repeatOnto as a function", () => {
+  // Check the board keeps the repeat helper exported.
+  // Guard later changes from dropping it quietly.
+  assertEquals(typeof repeatOnto, "function");
+});
+
+Deno.test("item step mounts the board with the run people and items", async () => {
+  // Open a fresh one line run with the people filled in.
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "board-mount", null);
+  const m = answers(dir);
+  m.set("person", ["Ann", "Ben"]);
+  m.set("me", ["Ann"]);
+  m.set("payer", ["Ann"]);
+  const found = itemStep(m, { sessionId: "t-board-mount" });
+  // Check the step keeps its id plus its bar.
+  assertEquals(found.id, "split-item");
+  assertEquals(found.title, "Split item");
+  assertEquals(found.nav?.back, true);
+  // Check the island names the run, the people and every item.
+  const board = mountData(found.nodes, "split-board");
+  assertEquals(board["runId"], "board-mount");
+  assertEquals(board["currency"], "INR");
+  assertEquals(board["payer"], "Ann");
+  assertEquals(board["me"], "Ann");
+  assertEquals(board["people"], ["Ann", "Ben"]);
+  const items = mountItems(board);
+  assertEquals(items.length, 1);
+  assertEquals(items[0], {
+    index: 0,
+    name: "Pizza",
+    price: 10,
+    platform: "swiggy",
+    orderId: "o1",
+    isFee: false,
+  });
+  assertEquals(board["assignments"], {});
+  assertEquals(board["skipped"], {});
+  assertEquals(typeof board["at"], "number");
 });
 
 Deno.test("two board patches in a row leave no conflict copy", async () => {
