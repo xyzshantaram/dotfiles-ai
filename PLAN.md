@@ -20,31 +20,6 @@ buttons row, the toolkit renders that footer stuck to the foot of the window, an
 its own submit logic. This retired G17, which planned to spread the old `nav()` helper instead. The
 bar, the flows, the hooks and the drafts API have all landed. What is left of the series:
 
-- [ ] N12 let the strip reach the other sessions, then drop the menu row. The strip offers the
-      newest session only, so "Pick up where you left off" stays in the menu as the one way to reach
-      an older one. Nothing is orphaned today, and the menu keeps a row the strip was meant to
-      replace. Wanted: a second small control on the strip, worded for the case, that opens the
-      picker when more than one session exists. Eval: with two saved runs the strip offers the
-      newest and names a way to the rest, and the menu holds no resume row.
-
-- [ ] S3 the split save guard loses a concurrent write when two saves share a timestamp. Found while
-      chasing a test that fails only under heavy load. src/splitstate.ts compares
-      `current >
-      baselineMs`, so an equal mtime reads as no conflict and the second save
-      overwrites the first instead of landing beside it as a conflict copy. The conflict file name
-      also uses whole seconds, so two conflicts inside one second overwrite each other. Both paths
-      lose a user's assignments rather than reporting a clash. This predates today's work, so it is
-      reported, not fixed. Eval: two saves sharing an mtime leave one conflict copy and no lost
-      document, and two conflicts in one second leave two files.
-- [ ] S4 "Repeat Last" on the split item screen does nothing. Found while classifying the button
-      rows for N4. The button posts the action `repeat`, and a search of split.ts, expense-split.ts
-      and the toolkit finds no code that reads it, so the toolkit treats it as an unknown action and
-      re-renders the step. The press saves whatever the fields already hold, exactly as Next line
-      does, and the label promises a copy of the previous line that never happens. The terminal
-      dashboard had this feature, and the port kept the button without the logic. Reported, not
-      fixed, because the fix is a feature decision. Eval: pressing it on a fresh line fills the same
-      people and the same split type as the last saved line.
-
 ### Final gate, after every ticket above is closed
 
 - [ ] Z9 full code review plus slop audit of the whole repo. Look for dead code, unused imports,
@@ -74,29 +49,21 @@ later, and the next app does not pay the same cost.
       which hardcodes `npm:zx@8.8.5` so the published package resolves with no import map. A bump
       needs three edits today, and nothing fails when one is missed. Eval: one place states the
       version, or a check fails when the three disagree.
-- [ ] U9 the aggregate summary survives, but nobody can choose it. I searched for the old sentence
-      and found none, then read the engine and found the whole capability alive. push-engine.ts
-      carries a mode of idle, aggregate, or live. It falls to aggregate when the key pair is
-      missing, when the credentials fail to read, when no token is cached, and when the sign in
-      check throws. It writes `aggregate-<unix>.txt` beside the source file, which matches the old
-      behaviour, and the report step shows the text. push.ts states it plainly: "No Splitwise access
-      is configured. The push writes one summary file instead." Two tests cover the fallback and two
-      more cover the arithmetic. So one gap remains, and only one: the path is a fallback, never a
-      choice. A user who has Splitwise set up cannot ask for the summary on purpose, which the old
-      menu allowed. Eval: the push flow offers the summary as a choice with access configured, and
-      the automatic fallback still works with no access.
-- [ ] U12 re-run the parity audit against the current tree. docs/function-audit.md is the list that
-      caught this class of loss, and it is now stale in the other direction: it still marks as GAP
-      the OAuth handshake, the group picker, cutoff validation and filtering, the manual expense
-      loop, resume routing by status, the failPush path, archiveRun, and the aggregate summary. Each
-      of those exists today. A parity list that cries GAP on closed work stops being read, which is
-      how a real loss slips past. Eval: every row states its live state, and each true gap becomes a
-      ticket here.
 - [ ] W6 file pick: the last open gap (descriptions, polling, entry onConfirm all shipped). Eval:
       user picks a split file through the dialog in push flow.
 
 ## Critical context
 
+- The parity audit is finished and its document is deleted. All 50 rows were re-checked against the
+  tree on 2026-09-17: 47 carried, 2 dropped with the terminal flows they belonged to, and 1 missing.
+  The missing one was Splitwise key discovery through a `SPLITWISE_ENV` variable, and the user chose
+  to leave it dropped with the rest of the environment plumbing. Keys live at the config path only.
+- The footer strip offers the newest saved session, and the menu keeps its resume row on purpose.
+  The user decided on 2026-09-17 to keep both rather than build a second strip control, so the
+  picker stays reachable for older sessions.
+- Two split saves inside one filesystem timestamp tick still lose the earlier document. The user
+  accepted that on 2026-09-17, so only the conflict file name was made unique. A hash or a version
+  counter was considered and rejected as too much machinery for the risk.
 - The toolkit replays every post into one answers map per session, so any app level copy of the
   answers is duplication. This is why N6 deletes the `seen` store rather than feeding it.
 - Back is unblockable by construction: the toolkit resolves a backward move before any app code
@@ -165,6 +132,12 @@ it.
       foot of the window while a long screen scrolls. What is left to drive by hand: Select all and
       Select none tick and untick without leaving the screen, Next refuses an empty pick list with
       one message, and the split and push flows show the same bar now that they carry it too.
+- [ ] REPEAT hand-drive: split a run. The Repeat Last button must be absent on the first line and
+      present from the second. Press it and confirm the line takes the same people and the same
+      split type as the line before, and that the run dir grows no `split-state.conflict-` file.
+- [ ] CONFIRM hand-drive: reach the last push screen and read the summary above the bar, under the
+      heading "Read this summary before you push." Confirm it matches what the push then sends, and
+      that no file lands beside the source until a push with no Splitwise access writes one.
 - [ ] PICK detail hand-drive: on Pick orders each row now carries a second line naming up to five
       items with their quantities, then a count of the rest. Confirm it reads well on a real grocery
       order, which is the thing that made price and count too little to decide on.

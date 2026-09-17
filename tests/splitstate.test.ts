@@ -324,6 +324,43 @@ Deno.test("conflict guard keeps the newer file", async () => {
   assertEquals(conflict.payer, "Ben", "conflict holds stale work");
 });
 
+// Two quick conflicts land in two files.
+Deno.test("quick conflicts keep both copies", async () => {
+  // Point state at a fresh temp dir.
+  const root = await Deno.makeTempDir();
+  const dir = root + "/run";
+  await Deno.mkdir(dir, { recursive: true });
+  // Save once so a real file exists.
+  await writeSplitState(dir, freshState(["Asha", "Ben"], "Asha"), 0);
+  // Force two stale saves through the conflict path.
+  const first = freshState(["Asha", "Ben"], "Asha");
+  const second = freshState(["Asha", "Ben"], "Ben");
+  await writeSplitState(dir, first, 0);
+  await writeSplitState(dir, second, 0);
+  // Count files with the conflict prefix.
+  const names: string[] = [];
+  for await (const entry of Deno.readDir(dir)) {
+    if (entry.name.startsWith("split-state.conflict-")) names.push(entry.name);
+  }
+  // Check both copies survived.
+  assertEquals(names.length, 2, "two conflict files");
+});
+
+// Conflict names keep the shared prefix.
+Deno.test("conflict name keeps the prefix", async () => {
+  // Point state at a fresh temp dir.
+  const root = await Deno.makeTempDir();
+  const dir = root + "/run";
+  await Deno.mkdir(dir, { recursive: true });
+  // Save once so a real file exists.
+  await writeSplitState(dir, freshState(["Asha", "Ben"], "Asha"), 0);
+  // Force one stale save through the conflict path.
+  const res = await writeSplitState(dir, freshState(["Asha", "Ben"], "Ben"), 0);
+  // Check the file name keeps the prefix.
+  const base = res.path.split("/").pop() ?? "";
+  assert(base.startsWith("split-state.conflict-"), "prefix stays");
+});
+
 // Two writes started together both finish, and the later doc wins.
 Deno.test("concurrent saves both land with the later doc last", async () => {
   // Point state at a fresh temp dir.
@@ -443,4 +480,76 @@ Deno.test("run meta keeps split progress", async () => {
   assertEquals(found!.meta.ordersTotal, 3, "orders total");
   // Check the status stays gathered on partial progress.
   assertEquals(found!.meta.status, "gathered", "partial status");
+});
+
+// Clean save reports the state file time left behind.
+Deno.test("clean save reports the live file time", async () => {
+  // Point state at a fresh temp dir.
+  const root = await Deno.makeTempDir();
+  const dir = root + "/run";
+  await Deno.mkdir(dir, { recursive: true });
+  // Save one doc with a zero baseline.
+  const doc = freshState(["Asha", "Ben"], "Asha");
+  const result = await writeSplitState(dir, doc, 0);
+  // Read the live file time after the write.
+  const live = await snapshotMtime(dir);
+  // Check the clean path reports no clash.
+  assertEquals(result.conflicted, false, "clean save lands");
+  // Check the reported time matches the live file time.
+  assertEquals(result.at, live, "at matches live mtime");
+});
+
+// Clashing save reports the live file time.
+Deno.test("clash reports the live file time", async () => {
+  // Point state at a fresh temp dir.
+  const root = await Deno.makeTempDir();
+  const dir = root + "/run";
+  await Deno.mkdir(dir, { recursive: true });
+  // Save once so a real file exists.
+  await writeSplitState(dir, freshState(["Asha", "Ben"], "Asha"), 0);
+  // Read the live file time before the clash.
+  const live = await snapshotMtime(dir);
+  // Wait past the timestamp tick for a fresh conflict time.
+  await new Promise((r) => setTimeout(r, 25));
+  // Save stale work with a zero baseline.
+  const res = await writeSplitState(dir, freshState(["Asha", "Ben"], "Ben"), 0);
+  // Check the guard fires.
+  assertEquals(res.conflicted, true, "guard fires");
+  // Check the reported time matches the live file time.
+  assertEquals(res.at, live, "at matches live mtime");
+  // Read the conflict copy time from disk.
+  const info = await Deno.stat(res.path);
+  const conflictMs = info.mtime?.getTime() ?? 0;
+  // Check the reported time stays behind the conflict copy time.
+  assert(res.at < conflictMs, "at stays behind conflict time");
+});
+
+// Second save with the first at avoids a conflict copy.
+Deno.test("carried at avoids a self conflict", async () => {
+  // Point state at a fresh temp dir.
+  const root = await Deno.makeTempDir();
+  const dir = root + "/run";
+  await Deno.mkdir(dir, { recursive: true });
+  // Save the first doc with a zero baseline.
+  const firstDoc = freshState(["Asha", "Ben"], "Asha");
+  const first = await writeSplitState(dir, firstDoc, 0);
+  // Check the first save lands clean.
+  assertEquals(first.conflicted, false, "first lands");
+  // Save the next doc with the first at as baseline.
+  const secondDoc = freshState(["Asha", "Ben"], "Asha");
+  secondDoc.assignments["0"] = {
+    splitType: "equal",
+    people: ["Asha", "Ben"],
+    amounts: { Asha: 20, Ben: 20 },
+  };
+  const second = await writeSplitState(dir, secondDoc, first.at);
+  // Check the second save lands clean.
+  assertEquals(second.conflicted, false, "second lands");
+  // Count files with the conflict prefix.
+  const names: string[] = [];
+  for await (const entry of Deno.readDir(dir)) {
+    if (entry.name.startsWith("split-state.conflict-")) names.push(entry.name);
+  }
+  // Check no conflict copy exists.
+  assertEquals(names.length, 0, "no conflict file");
 });

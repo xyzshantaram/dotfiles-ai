@@ -8,6 +8,7 @@ import {
   currentShareLink,
   exportStep,
   itemStep,
+  lastSavedAssignment,
   lastSaveError,
   loadCurrency,
   pendingSaves,
@@ -746,11 +747,19 @@ Deno.test("resumed split session keeps its saved skipped map", async () => {
 
 Deno.test("split item bar holds Next line plus Repeat Last", async () => {
   const root = await Deno.makeTempDir();
-  const dir = makeRun(root, "nav-item", null);
+  const dir = makeRun(root, "nav-item", null, FEE_ORDERS);
   const m = answers(dir);
   m.set("person", ["Ann", "Ben"]);
   m.set("me", ["Ben"]);
-  const found = itemStep(m, { sessionId: "t-split-nav" });
+  itemStep(m, { sessionId: "t-split-nav" });
+  // Post line 0 first.
+  // Check the bar on line 2.
+  const posted = answers(dir);
+  posted.set("person", ["Ann", "Ben"]);
+  posted.set("me", ["Ben"]);
+  posted.set("mode-0", ["Equal"]);
+  posted.set("who-0", ["Ben"]);
+  const found = itemStep(posted, { sessionId: "t-split-nav" });
   assertEquals(found.id, "split-item");
   assertEquals(found.nav?.back, true);
   // Next line is the forward button.
@@ -780,4 +789,155 @@ Deno.test("split item bar holds Next line plus Repeat Last", async () => {
     await repeatRun(new Map(), {}, { sessionId: "t-split-nav" }),
     undefined,
   );
+});
+
+Deno.test("item bar hides Repeat Last with nothing saved", async () => {
+  // Open a fresh run.
+  // Check the bar on line 1.
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "repeat-none", null);
+  const m = answers(dir);
+  m.set("person", ["Ann", "Ben"]);
+  m.set("me", ["Ben"]);
+  const found = itemStep(m, { sessionId: "t-repeat-1" });
+  assertEquals(found.id, "split-item");
+  assertEquals(found.nav?.back, true);
+  const fwd = found.nav?.next as unknown as Record<string, unknown> | string;
+  assertEquals(typeof fwd === "string" ? fwd : String(fwd["label"]), "Next line");
+  const ids = (found.nav?.actions ?? []).map((entry) => entry.id);
+  assertEquals(ids.includes("repeat"), false);
+  assertEquals(lastSavedAssignment(freshState(["Ann", "Ben"], "Ann")), null);
+});
+
+Deno.test("item bar shows Repeat Last after one saved line", async () => {
+  // Open a two line run.
+  // Post line 0 first.
+  // Check the bar on line 2.
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "repeat-one", null, FEE_ORDERS);
+  const first = answers(dir);
+  first.set("person", ["Ann", "Ben"]);
+  first.set("me", ["Ben"]);
+  itemStep(first, { sessionId: "t-repeat-2" });
+  const posted = answers(dir);
+  posted.set("person", ["Ann", "Ben"]);
+  posted.set("me", ["Ben"]);
+  posted.set("mode-0", ["Equal"]);
+  posted.set("who-0", ["Ann", "Ben"]);
+  const found = itemStep(posted, { sessionId: "t-repeat-2" });
+  await pendingSaves("t-repeat-2");
+  const repeat = (found.nav?.actions ?? []).find((entry) => entry.id === "repeat");
+  assertEquals(repeat?.label, "Repeat Last");
+  const after = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
+  assertEquals(lastSavedAssignment(after)?.splitType, "equal");
+});
+
+Deno.test("repeat handler copies type and people to the current line", async () => {
+  // Open a saved two item run.
+  // Continue the saved run.
+  // Press Repeat Last on line 2.
+  // Read the saved line 2.
+  const orders: Order[] = [{
+    id: "o1",
+    platform: "swiggy",
+    date: "2026-09-01 10:00 AM",
+    paid: 30,
+    items: [
+      { name: "Pizza", price: 10, quantity: 1 },
+      { name: "Burger", price: 20, quantity: 1 },
+    ],
+    fees: { delivery: 0, packaging: 0 },
+  }];
+  const root = await Deno.makeTempDir();
+  const seed = freshState(["Ann", "Ben"], "Ann");
+  seed.assignments["0"] = {
+    splitType: "single",
+    people: ["Ben"],
+    amounts: { Ben: 10 },
+  };
+  const dir = makeRun(root, "repeat-copy", seed, orders);
+  const m = answers(dir, "Continue where you left off?");
+  m.set("person", ["Ann", "Ben"]);
+  m.set("me", ["Ann"]);
+  const onSecond = itemStep(m, { sessionId: "t-repeat-3" });
+  type RunFn = (
+    answers: Map<string, string[]>,
+    fields: Record<string, string[]>,
+    ctx: { sessionId: string },
+  ) => unknown;
+  const repeat = (onSecond.nav?.actions ?? []).find((entry) => entry.id === "repeat");
+  const run = repeat?.run as RunFn;
+  assertEquals(await run(new Map(), {}, { sessionId: "t-repeat-3" }), undefined);
+  await pendingSaves("t-repeat-3");
+  const after = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
+  assertEquals(after.assignments["1"].splitType, "single");
+  assertEquals(after.assignments["1"].people, ["Ben"]);
+  assertEquals(after.assignments["1"].amounts, { Ben: 20 });
+});
+
+Deno.test("repeat handler copies no skip and no typed amount", async () => {
+  // Open a saved fee run.
+  // Continue the saved run.
+  // Press Repeat Last on the fee line.
+  // Read the saved fee line.
+  const root = await Deno.makeTempDir();
+  const seed = freshState(["Ann", "Ben"], "Ann");
+  seed.assignments["0"] = {
+    splitType: "custom",
+    people: ["Ann", "Ben"],
+    amounts: { Ann: 6, Ben: 4 },
+  };
+  const dir = makeRun(root, "repeat-clean", seed, FEE_ORDERS);
+  const m = answers(dir, "Continue where you left off?");
+  m.set("person", ["Ann", "Ben"]);
+  m.set("me", ["Ann"]);
+  const onFee = itemStep(m, { sessionId: "t-repeat-4" });
+  type RunFn = (
+    answers: Map<string, string[]>,
+    fields: Record<string, string[]>,
+    ctx: { sessionId: string },
+  ) => unknown;
+  const repeat = (onFee.nav?.actions ?? []).find((entry) => entry.id === "repeat");
+  const run = repeat?.run as RunFn;
+  assertEquals(await run(new Map(), {}, { sessionId: "t-repeat-4" }), undefined);
+  await pendingSaves("t-repeat-4");
+  const after = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
+  assertEquals(after.assignments["1"].splitType, "custom");
+  assertEquals(after.assignments["1"].people, ["Ann", "Ben"]);
+  assertEquals(after.assignments["1"].amounts, { Ann: 2.5, Ben: 2.5 });
+  assertEquals(after.skipped["1"], undefined);
+});
+
+// One session saving two lines leaves no conflict copy.
+Deno.test("two saves in one session leave no conflict copy", async () => {
+  // Open a fresh two line run.
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "no-self-conflict", null, FEE_ORDERS);
+  const sid = "t-no-self-conflict";
+  const open = freshFeeAnswers(dir);
+  itemStep(open, { sessionId: sid });
+  // Post line 0 and wait for the save.
+  const first = freshFeeAnswers(dir);
+  first.set("mode-0", ["Equal"]);
+  first.set("who-0", ["Ben"]);
+  itemStep(first, { sessionId: sid });
+  await pendingSaves(sid);
+  // Post line 1 and wait for the save.
+  const second = freshFeeAnswers(dir);
+  second.set("mode-0", ["Equal"]);
+  second.set("who-0", ["Ben"]);
+  second.set("mode-1", ["Equal"]);
+  second.set("who-1", ["Ann", "Ben"]);
+  itemStep(second, { sessionId: sid });
+  await pendingSaves(sid);
+  // List files with the conflict prefix.
+  const names: string[] = [];
+  for await (const entry of Deno.readDir(dir)) {
+    if (entry.name.startsWith("split-state.conflict-")) names.push(entry.name);
+  }
+  // Check no conflict copy exists.
+  assertEquals(names.length, 0, "no conflict file");
+  // Read the live file and check both lines landed.
+  const live = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
+  assertEquals(Object.keys(live.assignments).length, 2, "both lines saved");
 });

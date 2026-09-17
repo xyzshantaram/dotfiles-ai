@@ -699,3 +699,62 @@ Deno.test("source step declares a bar with a back button and a forward button", 
   assert(next.label === "Next", "forward button keeps its label");
   assert(next.run !== undefined, "forward button owns its handler");
 });
+
+// Prove the confirm screen shows the summary with orders staged.
+Deno.test("confirm screen shows the summary text when orders are staged", async () => {
+  await fresh("t-push-confirm-1");
+  await prepareSource("t-push-confirm-1", "Split JSON file", "", SPLIT_FILE);
+  await prepareSplitwise("t-push-confirm-1", fakeApi().api);
+  applyCutoff("t-push-confirm-1", "2026-01-02");
+  const entries = pushSteps();
+  const found = entries
+    .map((entry) =>
+      typeof entry === "function" ? entry(new Map(), { sessionId: "t-push-confirm-1" }) : entry
+    )
+    .find((s) => s.id === "push-confirm");
+  assert(found !== undefined, "confirm step exists in pushSteps");
+  const body = markdownTexts(found!).join("\n");
+  assert(body.includes("Read this summary before you push."), "heading names the summary");
+  assert(body.includes("Summary expense"), "summary text shows on the confirm screen");
+});
+
+// Prove the confirm screen hides the summary when no orders arrive.
+Deno.test("confirm screen hides the summary when no orders arrive", async () => {
+  await fresh("t-push-confirm-2");
+  const entries = pushSteps();
+  const found = entries
+    .map((entry) =>
+      typeof entry === "function" ? entry(new Map(), { sessionId: "t-push-confirm-2" }) : entry
+    )
+    .find((s) => s.id === "push-confirm");
+  assert(found !== undefined, "confirm step exists in pushSteps");
+  const body = markdownTexts(found!).join("\n");
+  assert(body.includes("No orders reached this step."), "empty note shows");
+  assert(!body.includes("Read this summary before you push."), "no summary heading shows");
+  assert(!body.includes("Summary expense"), "no summary text shows");
+});
+
+// Prove the confirm screen writes no file beside the source.
+Deno.test("confirm screen writes no file beside the source", async () => {
+  await fresh("t-push-confirm-3");
+  await prepareSource("t-push-confirm-3", "Split JSON file", "", SPLIT_FILE);
+  await prepareSplitwise("t-push-confirm-3", fakeApi().api);
+  applyCutoff("t-push-confirm-3", "2026-01-02");
+  async function listNames(dir: string): Promise<string[]> {
+    const names: string[] = [];
+    for await (const entry of Deno.readDir(dir)) names.push(entry.name);
+    names.sort();
+    return names;
+  }
+  const before = await listNames(root);
+  const entries = pushSteps();
+  const found = entries
+    .map((entry) =>
+      typeof entry === "function" ? entry(new Map(), { sessionId: "t-push-confirm-3" }) : entry
+    )
+    .find((s) => s.id === "push-confirm");
+  assert(found !== undefined, "confirm step exists in pushSteps");
+  assert(markdownTexts(found!).join("\n").includes("Summary expense"), "summary renders first");
+  const after = await listNames(root);
+  assert(JSON.stringify(after) === JSON.stringify(before), "no new file appears");
+});

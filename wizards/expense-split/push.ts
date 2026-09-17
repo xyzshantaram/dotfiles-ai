@@ -371,6 +371,13 @@ function confirmStep(m?: Map<string, string[]>, ctx?: WizardCtx): Step {
   if (dry) {
     nodes.push(dryNote());
   }
+  // Show the summary under the notes. Keep the screen read only.
+  if (!(live.groups.length === 0 && live.droppedByCutoff === 0)) {
+    const summary = aggregateText(sidOf(ctx));
+    if (summary !== null) {
+      nodes.push(markdown("Read this summary before you push.\n\n" + summary));
+    }
+  }
   return {
     ...step(
       "push-confirm",

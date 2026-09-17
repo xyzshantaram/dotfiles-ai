@@ -411,6 +411,8 @@ export async function snapshotMtime(runDir: string): Promise<number> {
 export interface SaveResult {
   conflicted: boolean;
   path: string;
+  // Carry the state file time this attempt leaves behind.
+  at: number;
 }
 
 // Temp path for one save. Carries the process id plus a random id,
@@ -426,6 +428,11 @@ export function tmpStatePath(runDir: string): string {
 // Writes to a private temp file first, then renames over the real file.
 // When the real file grew newer than the baseline, the save lands in a
 // conflict copy instead and the real file stays untouched.
+// Two saves inside one timestamp tick read as equal.
+// The later one wins.
+// The earlier one is lost.
+// The owner accepted this limit.
+// Carry at forward into the next save.
 export async function writeSplitState(
   runDir: string,
   doc: SplitStateDoc,
@@ -440,15 +447,31 @@ export async function writeSplitState(
     await Deno.writeTextFile(tmp, JSON.stringify(stamped, null, 2) + "\n");
     const current = await snapshotMtime(runDir);
     if (current > baselineMs) {
-      const unix = Math.floor(Date.now() / 1000);
-      const conflict = runDir + "/" + CONFLICT_BASE + ".conflict-" + unix +
+      // Build a conflict name with millisecond time.
+      // Probe with a sync check.
+      // Add a counter on clash.
+      // Stop after a bound so the loop always ends.
+      const stamp = Date.now();
+      let conflict = runDir + "/" + CONFLICT_BASE + ".conflict-" + stamp +
         ".json";
+      for (let n = 1; n < 1000; n++) {
+        try {
+          Deno.statSync(conflict);
+        } catch {
+          break;
+        }
+        conflict = runDir + "/" + CONFLICT_BASE + ".conflict-" + stamp +
+          "-" + n + ".json";
+      }
       await Deno.copyFile(tmp, conflict);
       await Deno.remove(tmp);
-      return { conflicted: true, path: conflict };
+      // Return the live file time for the next baseline.
+      return { conflicted: true, path: conflict, at: current };
     }
     await Deno.rename(tmp, statePath(runDir));
-    return { conflicted: false, path: statePath(runDir) };
+    // Read the fresh state file time after the rename.
+    const at = await snapshotMtime(runDir);
+    return { conflicted: false, path: statePath(runDir), at };
   } finally {
     // Drop the temp file when the write fails part way. Succeeds
     // silently when the rename already consumed it.

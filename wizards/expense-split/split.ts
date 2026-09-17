@@ -258,7 +258,8 @@ function saveState(s: Session): void {
   const run = async (): Promise<void> => {
     try {
       const result = await saveWriter(s.runDir, s.doc, s.baseline);
-      if (result.conflicted) s.baseline = Date.now();
+      // Carry the writer time into the next baseline.
+      s.baseline = result.at;
       s.saveError = "";
     } catch (err) {
       s.saveError = err instanceof Error ? err.message : String(err);
@@ -594,12 +595,72 @@ function runStep(m: Map<string, string[]>): Step {
 }
 
 // Silent action handler. It changes nothing and returns nothing, so the
-// bar re-renders the same step. Repeat Last and Check again use it.
+// bar re-renders the same step. Check again uses it.
 function rerenderOnly(
   _answers: Map<string, string[]>,
   _fields: Record<string, string[]>,
   _ctx: WizardCtx,
 ): void {}
+
+// Return the last saved assignment for a run.
+// Scan saved keys for the highest line index.
+// Return null when the run holds no assignment.
+export function lastSavedAssignment(doc: SplitStateDoc): ItemAssignment | null {
+  let best = -1;
+  let found: ItemAssignment | null = null;
+  for (const key of Object.keys(doc.assignments)) {
+    const at = Number(key);
+    if (!Number.isInteger(at)) continue;
+    if (at > best) {
+      best = at;
+      found = doc.assignments[key] ?? null;
+    }
+  }
+  return found;
+}
+
+// Copy the last saved line onto the current line.
+// Save the current line with the same type and people.
+// Recompute amounts for the current price.
+// Keep old numbers on the line where they were typed.
+function repeatLast(
+  _answers: Map<string, string[]>,
+  _fields: Record<string, string[]>,
+  ctx: WizardCtx,
+): void {
+  const live = sessionFor(sidOf(ctx));
+  if (live === null) return;
+  const last = lastSavedAssignment(live.doc);
+  if (last === null) return;
+  const index = firstUnfinished(live.flat.length, live.doc.assignments, live.doc.skipped);
+  if (index >= live.flat.length) return;
+  const kept = last.people.filter((name) => live.doc.people.includes(name));
+  const who = kept.length > 0 ? kept : [...last.people];
+  if (who.length === 0) return;
+  const line = live.flat[index];
+  const type = last.splitType;
+  let amounts: Record<string, number>;
+  if (type === "single") {
+    const first = who[0];
+    if (first === undefined) return;
+    amounts = singleShare(line.price, first);
+  } else if (type === "percent") {
+    const even = round2(100 / who.length);
+    const percents: Record<string, number> = {};
+    for (const name of who) percents[name] = even;
+    amounts = percentShare(line.price, percents);
+  } else {
+    amounts = equalShare(line.price, who);
+  }
+  live.doc.assignments[String(index)] = {
+    splitType: type,
+    people: [...who],
+    amounts,
+  };
+  live.error = "";
+  saveState(live);
+  updateProgressMeta(live);
+}
 
 // Next line handler for the item step. It holds the screen on the item
 // step, so the builder commits the posted line and shows the next one.
@@ -795,6 +856,13 @@ export function itemStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
       ),
     );
   }
+  // Show Repeat Last only after one saved assignment exists.
+  // Read the saved doc.
+  // A fresh run shows Back and Next line only.
+  const last = lastSavedAssignment(s.doc);
+  const repeatActions = last === null
+    ? []
+    : [{ id: "repeat", label: "Repeat Last", run: repeatLast }];
   return {
     ...step(
       "split-item",
@@ -804,7 +872,7 @@ export function itemStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
     ),
     nav: {
       back: true,
-      actions: [{ id: "repeat", label: "Repeat Last", run: rerenderOnly }],
+      actions: repeatActions,
       next: { label: "Next line", run: stayOnSplitItem },
     },
   };
