@@ -703,18 +703,57 @@ export function pickNext(
   setRunPicked(runId, picked);
 }
 
+// Treat [Fees], [Rounding] and [Screenshot only] as ledger rows.
+// Drop them before the pick line shows items.
+export function isLedgerRow(name: string): boolean {
+  const trimmed = name.trim();
+  return trimmed.startsWith("[") && trimmed.endsWith("]");
+}
+
+// Match a number plus a pack, weight, volume or count unit.
+const SIZE_PATTERN =
+  /\d+\s*(kg|ml|ltr|litre|liter|pieces|piece|pcs|pc|packs|pack|combo|g|l)\b/i;
+
+// Strip one trailing size group like pack, weight or volume.
+// Repeat the strip while the new tail still states a size.
+export function tidyProductName(name: string): string {
+  let out = name.trim();
+  while (out.endsWith(")")) {
+    let depth = 0;
+    let open = -1;
+    for (let i = out.length - 1; i >= 0; i--) {
+      if (out[i] === ")") depth += 1;
+      if (out[i] === "(") {
+        depth -= 1;
+        if (depth === 0) {
+          open = i;
+          break;
+        }
+      }
+    }
+    if (open < 0) break;
+    const inner = out.slice(open + 1, out.length - 1).trim();
+    const lower = inner.toLowerCase();
+    const bare = lower === "pack" || lower === "pcs" || lower === "combo";
+    if (!bare && !SIZE_PATTERN.test(inner)) break;
+    out = out.slice(0, open).trim();
+  }
+  return out;
+}
+
 // One line summary of the order contents for the pick screen.
 // Names the first five items, then counts the rest.
 function pickHint(items: Array<{ name: string; quantity?: number }>): string | undefined {
-  if (items.length === 0) return undefined;
-  const shown = items.slice(0, 5).map((item) =>
+  const products = items.filter((item) => !isLedgerRow(item.name ?? ""));
+  if (products.length === 0) return undefined;
+  const shown = products.slice(0, 5).map((item) =>
     item.quantity !== undefined && item.quantity > 1
-      ? String(item.quantity) + " " + item.name
-      : item.name
+      ? String(item.quantity) + " " + tidyProductName(item.name)
+      : tidyProductName(item.name)
   );
   const head = shown.join(", ");
-  if (items.length <= 5) return head;
-  return head + " +" + String(items.length - 5) + " more";
+  if (products.length <= 5) return head;
+  return head + " +" + String(products.length - 5) + " more";
 }
 
 // Label for one order on the pick screen.
@@ -778,16 +817,17 @@ function pickStep(answerMap: Map<string, string[]>, ctx?: WizardCtx): Step {
   const mode = held.value;
   held.value = null;
   const options = orders.map((order, index) => {
+    const visible = (order.items ?? []).filter((item) => !isLedgerRow(item.name ?? ""));
     const option: { value: string; label: string; hint?: string } = {
       value: String(index),
       label: pickLabel(
         order.platform ?? "",
         order.date ?? "",
         order.paid ?? 0,
-        (order.items ?? []).length,
+        visible.length,
       ),
     };
-    const hint = pickHint(order.items ?? []);
+    const hint = pickHint(visible);
     if (hint !== undefined) option.hint = hint;
     return option;
   });

@@ -6,6 +6,7 @@ import { createWizard } from "../wizardkit/mod.ts";
 import {
   gatherPickRunId,
   gatherSteps,
+  isLedgerRow,
   manualPicked,
   manualRowProblems,
   manualRows,
@@ -14,6 +15,7 @@ import {
   pickNext,
   pickNone,
   reviewNext,
+  tidyProductName,
 } from "../wizards/expense-split/gather.ts";
 import { DEFAULT_LOCATION } from "../src/zomato.ts";
 import { routeStatus, splitSteps } from "../wizards/expense-split/split.ts";
@@ -1168,5 +1170,112 @@ Deno.test("the manual screen applies only when Manual is picked", () => {
   }
   if (manual.when(new Map([["platforms", ["Zepto"]]])) !== false) {
     throw new Error("the screen must not apply without Manual");
+  }
+});
+
+// Prove the tidy helper drops pack, weight and volume text.
+Deno.test("tidy product name drops pack weight and volume", () => {
+  const cases: Array<[string, string]> = [
+    ["Latte (250 ml)", "Latte"],
+    ["Desi Nachos (100g)", "Desi Nachos"],
+    ["Marlboro Advance Compact (1 pack (10 pcs))", "Marlboro Advance Compact"],
+    [
+      "Nissin Carbonara Korean Ramen with Bull's-eye Eggs (2 Pcs) (2 combo)",
+      "Nissin Carbonara Korean Ramen with Bull's-eye Eggs",
+    ],
+    [
+      "Decathlon Nabaiji Adult UV Protected Swimming Goggles | Black | L (1 pc)",
+      "Decathlon Nabaiji Adult UV Protected Swimming Goggles | Black | L",
+    ],
+    ["Latte (Iced)", "Latte (Iced)"],
+  ];
+  for (const [input, want] of cases) {
+    const got = tidyProductName(input);
+    if (got !== want) throw new Error("tidy wrong for " + input + ": " + got);
+  }
+  if (!isLedgerRow("[Fees]")) throw new Error("ledger check misses [Fees]");
+});
+
+// Prove the hint names only the product beside a fee row.
+Deno.test("pick hint drops the fee row and tidies the product", async () => {
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-ledger-hint-" });
+  const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    writePickRun("pick-ledger-1", ["zepto"], [
+      pickOrder("zepto", "2026-09-08", 200, ["Latte (250 ml)", "[Fees]"]),
+    ]);
+    const found = pickStepFor(new Map([["platforms", ["Zepto"]]]), "t-pick-ledger-1");
+    const options = pickBox(found)["options"] as Array<Record<string, unknown>>;
+    if (options[0]["hint"] !== "Latte") {
+      throw new Error("hint wrong: " + JSON.stringify(options[0]["hint"]));
+    }
+  } finally {
+    if (prev === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
+    else Deno.env.set("SPLIT_UTILS_STATE", prev);
+    await cleanup(root);
+  }
+});
+
+// Prove the label counts only the product beside a fee row.
+Deno.test("pick label counts only the product beside a fee row", async () => {
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-ledger-count-" });
+  const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    writePickRun("pick-ledger-2", ["zepto"], [
+      pickOrder("zepto", "2026-09-08", 200, ["Latte (250 ml)", "[Fees]"]),
+    ]);
+    const found = pickStepFor(new Map([["platforms", ["Zepto"]]]), "t-pick-ledger-2");
+    const options = pickBox(found)["options"] as Array<Record<string, unknown>>;
+    if (options[0]["label"] !== "Zepto · 2026-09-08 · 200.00 · 1 item") {
+      throw new Error("label wrong: " + JSON.stringify(options[0]["label"]));
+    }
+  } finally {
+    if (prev === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
+    else Deno.env.set("SPLIT_UTILS_STATE", prev);
+    await cleanup(root);
+  }
+});
+
+// Prove an order with only ledger rows carries no hint.
+Deno.test("pick option with only ledger rows carries no hint", async () => {
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-ledger-only-" });
+  const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    writePickRun("pick-ledger-3", ["zepto"], [
+      pickOrder("zepto", "2026-09-08", 20, ["[Fees]", "[Rounding]", "[Screenshot only]"]),
+    ]);
+    const found = pickStepFor(new Map([["platforms", ["Zepto"]]]), "t-pick-ledger-3");
+    const options = pickBox(found)["options"] as Array<Record<string, unknown>>;
+    if ("hint" in options[0]) {
+      throw new Error("ledger only order carries a hint: " + JSON.stringify(options[0]["hint"]));
+    }
+  } finally {
+    if (prev === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
+    else Deno.env.set("SPLIT_UTILS_STATE", prev);
+    await cleanup(root);
+  }
+});
+
+// Prove the five item limit still applies after ledger rows drop.
+Deno.test("pick hint keeps the five item limit after ledger rows drop", async () => {
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-ledger-limit-" });
+  const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    writePickRun("pick-ledger-4", ["zepto"], [
+      pickOrder("zepto", "2026-09-08", 600, ["A", "B", "C", "D", "E", "F", "[Fees]"]),
+    ]);
+    const found = pickStepFor(new Map([["platforms", ["Zepto"]]]), "t-pick-ledger-4");
+    const options = pickBox(found)["options"] as Array<Record<string, unknown>>;
+    if (options[0]["hint"] !== "A, B, C, D, E +1 more") {
+      throw new Error("hint wrong: " + JSON.stringify(options[0]["hint"]));
+    }
+  } finally {
+    if (prev === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
+    else Deno.env.set("SPLIT_UTILS_STATE", prev);
+    await cleanup(root);
   }
 });

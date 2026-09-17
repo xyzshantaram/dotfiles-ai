@@ -39,6 +39,15 @@ its own submit logic. This retires G17, which planned to spread the old `nav()` 
 - [ ] N6 settings and the app shell move the same way. Then delete the app's `seen` store, which
       duplicates the toolkit answers map, and delete the unused `nav()` helper. Eval: a search for
       seenStore returns nothing, onSubmit holds only genuinely shared work or is gone, suite green.
+- [ ] S3 the split save guard loses a concurrent write when two saves share a timestamp. Found while
+      chasing a test that fails only under heavy load. src/splitstate.ts compares
+      `current >
+      baselineMs`, so an equal mtime reads as no conflict and the second save
+      overwrites the first instead of landing beside it as a conflict copy. The conflict file name
+      also uses whole seconds, so two conflicts inside one second overwrite each other. Both paths
+      lose a user's assignments rather than reporting a clash. This predates today's work, so it is
+      reported, not fixed. Eval: two saves sharing an mtime leave one conflict copy and no lost
+      document, and two conflicts in one second leave two files.
 - [ ] N9 the saved draft cannot carry you back to where you were, which is the second half of the
       report that produced N8. Measured in wizardkit/toolkit.tsx: the draft script stores one record
       of `{version, step, fields}` in localStorage, and its resume bar checks
