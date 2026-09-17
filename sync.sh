@@ -462,6 +462,9 @@ step_install_plugins() {
 		# Pending-approval indicator beside the overflow trigger, with a
 		# modal that lists every pending approval and can jump to its call.
 		pnpm_ins "$HERE/plugins/composer-approvals"
+		# Floating quote button on assistant-message selections; quoting
+		# appends the passage to the composer draft as a markdown blockquote.
+		pnpm_ins "$HERE/plugins/quote-selection"
 		# Markdown user/steering bubbles with hard breaks outside fenced code;
 		# pasted absolute paths stop chipping as skill references.
 		pnpm_ins "$HERE/plugins/user-bubble"
@@ -544,6 +547,7 @@ step_report_extra_plugins() {
 		"context-meter"
 		"composer-menu"
 		"composer-approvals"
+		"quote-selection"
 		"user-bubble"
 		"dsh-at-file"
 		"dsh-better-markdown"

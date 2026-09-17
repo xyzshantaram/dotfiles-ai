@@ -335,6 +335,31 @@ await wrapClientBundle(
   "composer-approvals",
 );
 
+// quote-selection: selecting text in an assistant message offers a floating
+// quote button that appends the passage to the composer draft. Same plain
+// client-plugin split as composer-approvals.
+//
+// THIS STANZA IS LOAD-BEARING, not boilerplate: sync.sh builds plugins by
+// running this file, and a plugin with no stanza here is simply never
+// rebuilt. Its lib/ would keep whatever bytes it was born with while its
+// src/ moved on -- a silent staleness with no error anywhere. The first
+// bundles for this plugin were hand-built for exactly that reason and are
+// replaced by this build.
+await build({
+  entryPoints: [join(here, "plugins/quote-selection/src/index.ts")],
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  external: ["@deepseek-ai/*", "node:*"],
+  outfile: join(here, "plugins/quote-selection/lib/index.js"),
+  logLevel: "info",
+});
+await wrapClientBundle(
+  join(here, "plugins/quote-selection/src/client.tsx"),
+  join(here, "plugins/quote-selection/lib/client.js"),
+  "quote-selection",
+);
+
 // user-bubble: markdown user/steering bubbles with hard breaks outside
 // fenced code; pasted paths stop chipping as skill references. Same plain
 // client-plugin split as composer-approvals.

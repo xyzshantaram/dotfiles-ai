@@ -1,0 +1,26 @@
+/* Floating quote button (#155). Fixed-position: it lives in the composer's
+   React tree (where the composer API is) while appearing next to the text
+   selection anywhere on screen. Rendered only while a quotable selection is
+   armed; zero DOM otherwise. */
+.quote-selection-float {
+  position: fixed;
+  z-index: 60;
+  transform: translate(-50%, 0);
+  box-sizing: border-box;
+  padding: 4px 12px;
+  border: 1px solid var(--dsw-alias-border-l2, #3a3a3a);
+  border-radius: 999px;
+  background: var(--dsw-alias-button-floating-fill, #1f1f1f);
+  color: var(--dsw-alias-label-primary, #e8e8e8);
+  box-shadow: var(--dsw-shadow-lv2, 0 4px 12px rgba(0, 0, 0, 0.35));
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.quote-selection-float[data-above] {
+  transform: translate(-50%, -100%);
+}
+.quote-selection-float:hover {
+  filter: brightness(1.15);
+}
