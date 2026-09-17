@@ -20,6 +20,47 @@ buttons row, the toolkit renders that footer stuck to the foot of the window, an
 its own submit logic. This retired G17, which planned to spread the old `nav()` helper instead. The
 bar, the flows, the hooks and the drafts API have all landed. What is left of the series:
 
+### V series: the split board
+
+Settled with the user on 2026-09-17, after they drove a real 137 item run. The verdict: the split
+screen is confusing, it cannot move back to an earlier item, and it is worse than the Tk dashboard
+it replaced. One item per server round trip is the cause. The fix is a component that holds the run
+in the browser and tells the server at checkpoints.
+
+Settled decisions, which no ticket may revisit: one item fills the screen and movement runs both
+ways; the browser holds the whole run; checkpoints go on a timer while working and once on leaving;
+the step renders the run into the page as JSON and the component posts only what changed; the keys
+mirror the dashboard, a for all, m for me, r for repeat, arrows to move, Enter to move on, plus s to
+skip and number keys for the split modes; the component replaces the server rendered item screen
+rather than standing beside it; the component lives in the app, never in wizardkit, and only the
+pattern goes in the wizard skill.
+
+- [ ] V1 the toolkit gains a door for an app component. Add a `mount` node holding an id, an
+      optional label and optional data, which renders an empty element plus a JSON island beside it.
+      Add a `scripts` list to the wizard options, rendered as module script tags after the toolkit
+      scripts. The toolkit never handles app markup, only an element to fill and a path to include.
+      Eval: a page with a mount node carries the element and the island, a page with a script list
+      carries the tags in order, and validateStep rejects a mount with no id.
+- [ ] V2 the app serves its own component file and patch endpoint. Wrap the server so the app
+      answers its own paths before the wizard sees them: one path serves the component file, and one
+      accepts a patch of assignments and skips for a run. The patch applies through the existing
+      split state writer, so the conflict guard and the baseline rules still hold. Eval: a patch
+      post writes the named assignments, a patch naming an unknown run answers a plain error, and no
+      patch writes a conflict copy in a single session.
+- [ ] V3 the split board itself, in plain browser JavaScript with no build step. It reads the
+      island, shows one item, moves both ways, binds the settled keys, ticks people, sets modes,
+      skips, and posts changed items on a timer and on leaving. It shows where it is in the run and
+      what is left. Eval: a 137 item run walks forward and backward with the keyboard alone, a
+      reload after a checkpoint keeps every assignment, and the item shown matches the item the keys
+      act on.
+- [ ] V4 retire the server rendered item screen. The step renders the mount node and nothing else,
+      the old builder and its helpers go, and every test that drove the old screen moves to the new
+      contract. Eval: no step builds per item nodes, and the suite is green with the old tests
+      replaced rather than deleted.
+- [ ] V5 record the pattern in wizard/SKILL.md. State when a wizard should reach for a component,
+      how the mount node and the script list work, and the checkpoint rule that keeps the server the
+      owner of the file. Eval: a reader with only the skill can build a component of their own.
+
 ### Final gate, after every ticket above is closed
 
 - [ ] Z9 full code review plus slop audit of the whole repo. Look for dead code, unused imports,
@@ -49,11 +90,20 @@ later, and the next app does not pay the same cost.
       which hardcodes `npm:zx@8.8.5` so the published package resolves with no import map. A bump
       needs three edits today, and nothing fails when one is missed. Eval: one place states the
       version, or a check fails when the three disagree.
+- [ ] N13 show which build a window is running. Four bug reports on 2026-09-17 were a stale process
+      serving the code it booted with, and each cost a round of investigation. Wanted: the footer
+      strip carries a short build mark, so a reader can see at a glance that the window predates a
+      fix. A start time works, and a short commit mark works better. Eval: two windows on different
+      builds show different marks, and the mark changes after a restart.
 - [ ] W6 file pick: the last open gap (descriptions, polling, entry onConfirm all shipped). Eval:
       user picks a split file through the dialog in push flow.
 
 ## Critical context
 
+- A running server keeps the code it booted with. The page carries an inlined stylesheet and an
+  inlined client script, so a committed and green change still will not reach an open window. Four
+  reports on 2026-09-17 turned out to be exactly this: the sticky bar, the strip resume, one of my
+  own measurements, and a missing button. Restart the app before believing what a screen shows.
 - The parity audit is finished and its document is deleted. All 50 rows were re-checked against the
   tree on 2026-09-17: 47 carried, 2 dropped with the terminal flows they belonged to, and 1 missing.
   The missing one was Splitwise key discovery through a `SPLITWISE_ENV` variable, and the user chose

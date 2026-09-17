@@ -1324,3 +1324,33 @@ Deno.test("pick hint keeps the five item limit after ledger rows drop", async ()
     await cleanup(root);
   }
 });
+
+Deno.test("pick next sends the user to the People step after a good tick post", async () => {
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-goto-" });
+  const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    const sid = "t-pick-goto-1";
+    writePickRun("pick-goto-1", ["zepto"], [
+      pickOrder("zepto", "2026-09-08", 530, ["A"]),
+      pickOrder("zepto", "2026-09-09", 120, ["B"]),
+    ]);
+    const out = await pickNext(
+      new Map([["platforms", ["zepto"]]]),
+      { pick: ["0"] },
+      { sessionId: sid },
+    );
+    if (out?.errors) throw new Error("expected no errors, got " + JSON.stringify(out.errors));
+    if (JSON.stringify(out) !== JSON.stringify({ goto: "split-people" })) {
+      throw new Error("pick next misses the People jump: " + JSON.stringify(out));
+    }
+    const meta = JSON.parse(await Deno.readTextFile(runsDir() + "/pick-goto-1/meta.json"));
+    if (JSON.stringify(meta.picked) !== JSON.stringify([0])) {
+      throw new Error("picked wrong: " + JSON.stringify(meta.picked));
+    }
+  } finally {
+    if (prev === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
+    else Deno.env.set("SPLIT_UTILS_STATE", prev);
+    await cleanup(root);
+  }
+});

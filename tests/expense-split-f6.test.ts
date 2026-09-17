@@ -373,7 +373,7 @@ Deno.test("f6 dry split export writes no output and keeps gathered status", asyn
       ["resume", ["Continue where you left off?"]],
     ]);
     const item = itemStep(m, { sessionId: "t-f6-6" });
-    assert(stepText(item).includes("All 1 lines are split"), "split reads done");
+    assert(stepText(item).includes("All 1 items are split"), "split reads done");
     const dryM = new Map(m);
     dryM.set("dry", ["dry"]);
     const out = exportStep(dryM, { sessionId: "t-f6-6" });

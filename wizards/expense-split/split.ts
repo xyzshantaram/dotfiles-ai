@@ -409,8 +409,8 @@ function pickTreeState(s: Session, i: number, index: number): TreeState {
 }
 
 // Names the saved split state doc already holds for the picked run.
-function savedPeople(m: Map<string, string[]>): string[] {
-  const run = pickedRun(m);
+function savedPeople(m: Map<string, string[]>, sessionId?: string): string[] {
+  const run = pickedRun(m, sessionId);
   if (run.length === 0) return [];
   return loadSplitStateSync(resolveRunDir(run))?.people ?? [];
 }
@@ -479,7 +479,7 @@ function peopleStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
   // just rejected, then the names saved with the run.
   const held = lastPeoplePost !== null && lastPeoplePost.names.length > 0
     ? lastPeoplePost.names
-    : savedPeople(m);
+    : savedPeople(m, sessionId);
   const seeded = known.length > 0 ? known : held;
   // The repeating block carries the known names as its own rows. Plain
   // entries beside an empty block were a workaround for a block that
@@ -544,20 +544,41 @@ export function roleErrors(fields: Record<string, string[]>): string[] {
   return [];
 }
 
+// Hold the run id this browser splits, one per session.
+// Carry the gather pick across the run question.
+const splitRuns = sessionStore((): { id: string | null } => ({ id: null }));
+
+// Remember the run id this browser splits.
+// Call this after the gather pick saves.
+export function setSplitRun(sessionId: string, runId: string): void {
+  splitRuns.for(sidOf({ sessionId })).id = runId;
+}
+
+// Read the stored split run for one session id.
+// Return empty when the session holds none.
+function storedSplitRun(sessionId?: string): string {
+  if (sessionId === undefined || sessionId.length === 0) return "";
+  const held = splitRuns.for(sidOf({ sessionId })).id;
+  return held ?? "";
+}
+
 // The picked run. A value typed into Other run wins over the list
 // pick. A run picked on the resume screen comes last, so a user who
 // resumes a session never answers the same question twice.
-function pickedRun(m: Map<string, string[]>): string {
+function pickedRun(m: Map<string, string[]>, sessionId?: string): string {
   const other = answer(m, "run-other");
   if (other.length > 0) return other;
   const picked = answer(m, "run");
   if (picked.length > 0) return picked;
-  return answer(m, "resume-pick");
+  const resumed = answer(m, "resume-pick");
+  if (resumed.length > 0) return resumed;
+  return storedSplitRun(sessionId);
 }
 
 // Run picker. Lists every live run, plus a free text entry for a run
 // the list misses.
-function runStep(m: Map<string, string[]>): Step {
+function runStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
+  const sessionId = sidOf(ctx);
   const runs = listRunsSync();
   if (runs.length === 0) {
     return {
@@ -584,7 +605,9 @@ function runStep(m: Map<string, string[]>): Step {
           // A run carried in from the resume screen shows as picked, so a
           // user who already chose one does not choose again. Otherwise
           // the newest run leads.
-          runs.some((run) => run.id === pickedRun(m)) ? pickedRun(m) : runs[0].id,
+          runs.some((run) => run.id === pickedRun(m, sessionId))
+            ? pickedRun(m, sessionId)
+            : runs[0].id,
         ),
         textEntry("Other run", "run-other", ""),
         dryBox(isDryMap(m)),
@@ -678,7 +701,7 @@ export function itemStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
   const sessionId = sidOf(ctx);
   const currency = currencyFor(sessionId);
   const fieldPeople = collectedPeople(m);
-  const dir = pickedRun(m);
+  const dir = pickedRun(m, sessionId);
   if (dir.length === 0) {
     return {
       ...step(
@@ -754,7 +777,7 @@ export function itemStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
   const index = firstUnfinished(total, s.doc.assignments, s.doc.skipped);
   const head: Node[] = [
     tree(
-      "Lines",
+      "Items",
       s.flat.flatMap((line, i) => {
         if (s.doc.skipped[String(i)]) return [];
         return [{
@@ -782,9 +805,9 @@ export function itemStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
         "Split item",
         [
           ...head,
-          markdown("All " + total + " lines are split. Continue to the export."),
+          markdown("All " + total + " items are split. Continue to the export."),
         ],
-        "Every line is marked. Press Next to see the totals.",
+        "Every item is marked. Press Next to see the totals.",
       ),
       nav: { back: true, next: "Next" },
     };
@@ -820,10 +843,10 @@ export function itemStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
       "### " + line.name + " — " + formatMoney(line.price, currency),
     ),
     table(
-      "Line",
+      "Item",
       [{ heading: "Field" }, { heading: "Value", align: "left" }],
       [
-        ["Line", (index + 1) + " of " + total],
+        ["Item", (index + 1) + " of " + total],
         ["Platform", line.platform],
         ["Order", line.orderId],
       ],
@@ -846,8 +869,10 @@ export function itemStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
     );
   }
   nodes.push(splitType);
-  nodes.push(checkbox("Split with whom", "who-" + index, people, ticked));
-  nodes.push(checkbox("Skip this line", "skip-" + index, ["Skip"], []));
+  // Bulk ticks sit beside the names, because a long people list is
+  // tedious to tick one name at a time on every item.
+  nodes.push(checkbox("Split with whom", "who-" + index, people, ticked, true));
+  nodes.push(checkbox("Skip this item", "skip-" + index, ["Skip"], []));
   const percent = type === "percent";
   for (const name of ticked) {
     nodes.push(
@@ -870,12 +895,12 @@ export function itemStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
       "split-item",
       "Split item",
       nodes,
-      "Pick who shares this line and how the price splits. Tick Skip for lines nobody owes.",
+      "Pick who shares this item and how the price splits. Tick Skip for items nobody owes.",
     ),
     nav: {
       back: true,
       actions: repeatActions,
-      next: { label: "Next line", run: stayOnSplitItem },
+      next: { label: "Next item", run: stayOnSplitItem },
     },
   };
 }
@@ -959,7 +984,7 @@ export function exportStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
     const lines = [
       "Split dry run. Nothing is written.",
       "",
-      "Lines: " + s.flat.length + ". Assigned: " +
+      "Items: " + s.flat.length + ". Assigned: " +
       Object.keys(s.doc.assignments).length + ". Skipped: " +
       Object.keys(s.doc.skipped).length + ".",
       ...Object.keys(doc.totals).map((name) =>
@@ -997,12 +1022,12 @@ export function exportStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
         "Export",
         [
           markdown(
-            "Finish the split lines first. " +
+            "Finish the split items first. " +
               (s.flat.length - done) +
-              " lines still wait.",
+              " items still wait.",
           ),
         ],
-        "Go back and split every remaining line, then return here.",
+        "Go back and split every remaining item, then return here.",
       ),
       nav: { back: true },
     };
@@ -1146,7 +1171,7 @@ export function summaryStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
         [
           markdown("A split must finish first, then this step shows the summary."),
         ],
-        "Finish the split lines and the export first, then return here.",
+        "Finish the split items and the export first, then return here.",
       ),
       nav: { back: true },
     };
@@ -1189,11 +1214,11 @@ export function shareStep(_m: Map<string, string[]>): Step {
       [
         markdown(
           "The app uploads the split as encrypted text and makes a share link. " +
-          "The link holds no readable data without its code, so send the link and the code together.",
+            "The link holds no readable data without its code, so send the link and the code together.",
         ),
         markdown(
           "A friend with Splitwise access opens the link under Upload orders to Splitwise. " +
-          "The link expires, so the friend should open it soon.",
+            "The link expires, so the friend should open it soon.",
         ),
       ],
       "Press Next to make the link. Then send the link and the code to your friend.",
@@ -1250,7 +1275,7 @@ export async function createSplitShareLink(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const sid = sidOf({ sessionId });
   try {
-    const picked = pickedRun(m);
+    const picked = pickedRun(m, sessionId);
     const dir = picked.length > 0 ? resolveRunDir(picked) : sessionFor(sid)?.runDir ?? "";
     if (dir.length === 0) {
       return { ok: false, error: "Finish a split first, then share it." };

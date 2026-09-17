@@ -24,6 +24,7 @@ import {
 } from "../../src/runstate.ts";
 import { answer, answerList } from "../../src/answers.ts";
 import { sessionStore, sidOf } from "../../src/sessionstore.ts";
+import { setSplitRun } from "./split.ts";
 import type { WizardCtx } from "../../wizardkit/mod.ts";
 import { dryBox, dryNote } from "./dry.ts";
 import { fmtRs, formatDayISO, parseDate } from "../../src/common.ts";
@@ -695,11 +696,12 @@ export function pickNone(
 // Save ticked orders on Next.
 // Reject empty picks with errors.
 // Block missing runs with errors.
+// Send the user to the People step.
 export function pickNext(
   answers: Map<string, string[]>,
   fields: Record<string, string[]>,
   ctx: WizardCtx,
-): { errors?: string[] } | void {
+): { errors?: string[]; goto?: string } | void {
   const picked = (fields["pick"] ?? [])
     .map((value) => Number(value))
     .filter((n) => Number.isInteger(n) && n >= 0)
@@ -712,6 +714,8 @@ export function pickNext(
     };
   }
   setRunPicked(runId, picked);
+  setSplitRun(ctx.sessionId, runId);
+  return { goto: "split-people" };
 }
 
 // Treat [Fees], [Rounding] and [Screenshot only] as ledger rows.
