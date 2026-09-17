@@ -9,8 +9,17 @@
 declare module "react" {
   const React: any;
   // `export =` rather than `export default`: every client plugin writes
-  // `import * as react from "react"` and calls `react.useState`,
-  // `react.createElement`, and so on directly on the namespace binding.
+  // `import * as React from "react"` and calls `React.useState`,
+  // `React.createElement`, and so on directly on the namespace binding.
+  //
+  // THE CAPITAL R IS LOAD-BEARING, not a style choice (#158). The rule
+  // eslint-plugin-react-hooks/rules-of-hooks recognises hook calls only
+  // through a namespace object literally named `React`; with the old
+  // lowercase alias it matched nothing in this repo and #150's
+  // conditionally-called hook shipped past it. tsconfig.json's jsxFactory
+  // and build.mjs name `React.createElement` to match -- change one and
+  // you must change all three, or the bundles reference a binding that
+  // does not exist.
   // With only `export default`, that namespace types as `{ default: any }`
   // and every hook access fails typecheck (TS2339) even though esbuild
   // resolves the real react package fine at build time. `export =` makes
