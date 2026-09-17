@@ -201,16 +201,6 @@ Deno.test("currency label follows settings", async () => {
   }
 });
 
-// Button actions of a step, joined.
-function buttonActions(nodes: Node[]): string {
-  return nodes.flatMap((node) => {
-    const rec = node as unknown as Record<string, unknown>;
-    if (rec["kind"] !== "buttons") return [];
-    return ((rec["buttons"] as Array<Record<string, unknown>>) ?? [])
-      .map((b) => String(b["action"] ?? ""));
-  }).join("\n");
-}
-
 // Run id picked value of the push source step.
 function runIdValue(step: { id: string; nodes: Node[] }): string {
   assertEquals(step.id, "push-source");
@@ -258,10 +248,8 @@ Deno.test("export handoff lands on push-source with the run preloaded", async ()
     const out = exportStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-6" });
     // The export step offers the jump into the push flow.
     assertStringIncludes(stepText(out.nodes), "Send these to Splitwise now?");
-    assertStringIncludes(
-      buttonActions(out.nodes),
-      "goto:push-source",
-    );
+    const pushJump = (out.nav?.actions ?? []).find((entry) => entry.id === "push-source");
+    assertEquals(pushJump?.label, "Push to Splitwise");
     // Following the handoff: the push-source step carries the run id.
     assertEquals(runIdValue(pushSourceStep(new Map(), { sessionId: "t-split-6" })), "r6");
     // The Other run entry starts empty beside the list.
@@ -428,11 +416,10 @@ Deno.test("export offers push, summary, and share finish paths", async () => {
   const dir = makeRun(root, "r9", savedDoc("Ann"));
   itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-12" });
   const out = exportStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-12" });
-  const actions = buttonActions(out.nodes);
-  assertStringIncludes(actions, "goto:push-source");
-  assertStringIncludes(actions, "goto:split-summary");
-  assertStringIncludes(actions, "goto:split-share");
-  assertStringIncludes(actions, "goto:menu");
+  const bar = out.nav;
+  const jumpIds = (bar?.actions ?? []).map((entry) => entry.id);
+  assertEquals(jumpIds, ["push-source", "split-summary", "split-share"]);
+  assertEquals(bar?.goto, { step: "menu", label: "Back to menu" });
   assertStringIncludes(stepText(out.nodes), "need no Splitwise account");
 });
 
@@ -582,7 +569,7 @@ Deno.test("empty run branch asks nothing", async () => {
         throw new Error("empty run branch still shows the Dry run box");
       }
     }
-    assertStringIncludes(buttonActions(found.nodes), "back");
+    assertEquals(found.nav?.back, true);
   } finally {
     Deno.env.delete("SPLIT_UTILS_STATE");
   }
@@ -756,4 +743,42 @@ Deno.test("resumed split session keeps its saved skipped map", async () => {
   assertEquals(text.includes("All 2 lines are split"), false);
   const after = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
   assertEquals(after.skipped, { "0": true });
+});
+
+Deno.test("split item bar holds Next line plus Repeat Last", async () => {
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "nav-item", null);
+  const m = answers(dir);
+  m.set("person", ["Ann", "Ben"]);
+  m.set("me", ["Ben"]);
+  const found = itemStep(m, { sessionId: "t-split-nav" });
+  assertEquals(found.id, "split-item");
+  assertEquals(found.nav?.back, true);
+  // Next line is the forward button.
+  const fwd = found.nav?.next as unknown as Record<string, unknown> | string;
+  assertEquals(typeof fwd === "string" ? fwd : String(fwd["label"]), "Next line");
+  // Repeat Last is a screen wide action.
+  const repeat = (found.nav?.actions ?? []).find((entry) => entry.id === "repeat");
+  assertEquals(repeat?.label, "Repeat Last");
+  // The bar replaces the buttons node: no buttons node remains.
+  for (const node of found.nodes) {
+    const rec = node as unknown as Record<string, unknown>;
+    assertEquals(rec["kind"] === "buttons", false);
+  }
+  // Next line holds the screen on the item step. Repeat Last re-renders.
+  type RunFn = (
+    answers: Map<string, string[]>,
+    fields: Record<string, string[]>,
+    ctx: { sessionId: string },
+  ) => unknown;
+  const nextRun = (fwd as { run?: unknown }).run as RunFn;
+  assertEquals(
+    await nextRun(new Map(), {}, { sessionId: "t-split-nav" }),
+    { goto: "split-item" },
+  );
+  const repeatRun = repeat?.run as RunFn;
+  assertEquals(
+    await repeatRun(new Map(), {}, { sessionId: "t-split-nav" }),
+    undefined,
+  );
 });

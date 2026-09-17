@@ -3,9 +3,9 @@
 
 import {
   answers,
-  buttons,
   checkbox,
   markdown,
+  type NavHandler,
   type Node,
   numberEntry,
   progress,
@@ -455,6 +455,19 @@ function lastPeoplePostFor(
   return peoplePosts.for(sidOf({ sessionId })).current;
 }
 
+// Next handler for the People step. It remembers the post before the
+// check runs, then rejects gaps with errors. The bar never sends Back
+// here, so no extra guard is needed.
+export function peopleNext(
+  _answers: Map<string, string[]>,
+  fields: Record<string, string[]>,
+  ctx: WizardCtx,
+): { errors?: string[] } | void {
+  rememberPeoplePost(ctx.sessionId, fields);
+  const problems = roleErrors(fields);
+  if (problems.length > 0) return { errors: problems };
+}
+
 function peopleStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
   const sessionId = sidOf(ctx);
   const lastPeoplePost = lastPeoplePostFor(sessionId);
@@ -496,22 +509,15 @@ function peopleStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
       ),
     );
   }
-  nodes.push(
-    buttons(
-      [
-        { label: "Back", action: "back" },
-        { label: "Next", action: "next", primary: true },
-      ],
-      undefined,
-      "split",
+  return {
+    ...step(
+      "split-people",
+      "People",
+      nodes,
+      "Check the names. Add a row per new person. Then pick who paid and which name is you.",
     ),
-  );
-  return step(
-    "split-people",
-    "People",
-    nodes,
-    "Check the names. Add a row per new person. Then pick who paid and which name is you.",
-  );
+    nav: { back: true, next: { label: "Next", run: peopleNext } },
+  };
 }
 
 // Completeness check for the People step. The orchestrator calls this
@@ -551,42 +557,57 @@ function pickedRun(m: Map<string, string[]>): string {
 function runStep(m: Map<string, string[]>): Step {
   const runs = listRunsSync();
   if (runs.length === 0) {
-    return step(
+    return {
+      ...step(
+        "split-run",
+        "Run",
+        [
+          markdown("No gathered runs exist yet. The gather flow creates one."),
+        ],
+        "Collect orders first. The gather flow creates a run you can split.",
+      ),
+      nav: { back: true },
+    };
+  }
+  return {
+    ...step(
       "split-run",
       "Run",
       [
-        markdown("No gathered runs exist yet. The gather flow creates one."),
-        buttons([{ label: "Back", action: "back" }], undefined, "split"),
+        radio(
+          "Run",
+          "run",
+          runs.map((run) => ({ value: run.id, hint: runHint(run) })),
+          // A run carried in from the resume screen shows as picked, so a
+          // user who already chose one does not choose again. Otherwise
+          // the newest run leads.
+          runs.some((run) => run.id === pickedRun(m)) ? pickedRun(m) : runs[0].id,
+        ),
+        textEntry("Other run", "run-other", ""),
+        dryBox(isDryMap(m)),
       ],
-      "Collect orders first. The gather flow creates a run you can split.",
-    );
-  }
-  return step(
-    "split-run",
-    "Run",
-    [
-      radio(
-        "Run",
-        "run",
-        runs.map((run) => ({ value: run.id, hint: runHint(run) })),
-        // A run carried in from the resume screen shows as picked, so a
-        // user who already chose one does not choose again. Otherwise
-        // the newest run leads.
-        runs.some((run) => run.id === pickedRun(m)) ? pickedRun(m) : runs[0].id,
-      ),
-      textEntry("Other run", "run-other", ""),
-      dryBox(isDryMap(m)),
-      buttons(
-        [
-          { label: "Back", action: "back" },
-          { label: "Next", action: "next", primary: true },
-        ],
-        undefined,
-        "split",
-      ),
-    ],
-    "Pick the run to split. Other run covers a run the list misses.",
-  );
+      "Pick the run to split. Other run covers a run the list misses.",
+    ),
+    nav: { back: true, next: "Next" },
+  };
+}
+
+// Silent action handler. It changes nothing and returns nothing, so the
+// bar re-renders the same step. Repeat Last and Check again use it.
+function rerenderOnly(
+  _answers: Map<string, string[]>,
+  _fields: Record<string, string[]>,
+  _ctx: WizardCtx,
+): void {}
+
+// Next line handler for the item step. It holds the screen on the item
+// step, so the builder commits the posted line and shows the next one.
+function stayOnSplitItem(
+  _answers: Map<string, string[]>,
+  _fields: Record<string, string[]>,
+  _ctx: WizardCtx,
+): { goto: string } {
+  return { goto: "split-item" };
 }
 
 // Item step. One flat line per render, driven by the answers map.
@@ -596,15 +617,17 @@ export function itemStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
   const fieldPeople = collectedPeople(m);
   const dir = pickedRun(m);
   if (dir.length === 0) {
-    return step(
-      "split-item",
-      "Split item",
-      [
-        markdown("Pick a run in the Run step first."),
-        buttons([{ label: "Back", action: "back" }], undefined, "split"),
-      ],
-      "Go back and pick a run, then return here.",
-    );
+    return {
+      ...step(
+        "split-item",
+        "Split item",
+        [
+          markdown("Pick a run in the Run step first."),
+        ],
+        "Go back and pick a run, then return here.",
+      ),
+      nav: { back: true },
+    };
   }
   let live = sessionFor(sessionId);
   if (live === null || live.runDir !== resolveRunDir(dir)) {
@@ -616,15 +639,17 @@ export function itemStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
       );
       setSessionFor(sessionId, live);
     } catch {
-      return step(
-        "split-item",
-        "Split item",
-        [
-          markdown("That run does not match a saved run. Pick one from the list."),
-          buttons([{ label: "Back", action: "back" }], undefined, "split"),
-        ],
-        "Go back and pick a run from the list.",
-      );
+      return {
+        ...step(
+          "split-item",
+          "Split item",
+          [
+            markdown("That run does not match a saved run. Pick one from the list."),
+          ],
+          "Go back and pick a run from the list.",
+        ),
+        nav: { back: true },
+      };
     }
   }
   const s = live;
@@ -632,28 +657,23 @@ export function itemStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
   // Ask once when a saved run holds progress. The answer decides
   // between resume and a clean start.
   if (s.pendingResume && (m.get("resume")?.[0] ?? "").length === 0) {
-    return step(
-      "split-item",
-      "Split item",
-      [
-        markdown("This run holds a saved split in progress."),
-        radio(
-          "Continue where you left off?",
-          "resume",
-          ["Continue where you left off?", "Start over"],
-          "Continue where you left off?",
-        ),
-        buttons(
-          [
-            { label: "Back", action: "back" },
-            { label: "Next", action: "next", primary: true },
-          ],
-          undefined,
-          "split",
-        ),
-      ],
-      "Pick Continue to keep the saved assignments. Pick Start over to clear them.",
-    );
+    return {
+      ...step(
+        "split-item",
+        "Split item",
+        [
+          markdown("This run holds a saved split in progress."),
+          radio(
+            "Continue where you left off?",
+            "resume",
+            ["Continue where you left off?", "Start over"],
+            "Continue where you left off?",
+          ),
+        ],
+        "Pick Continue to keep the saved assignments. Pick Start over to clear them.",
+      ),
+      nav: { back: true, next: "Next" },
+    };
   }
   if (s.pendingResume) {
     s.pendingResume = false;
@@ -690,23 +710,18 @@ export function itemStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
     );
   }
   if (index >= total) {
-    return step(
-      "split-item",
-      "Split item",
-      [
-        ...head,
-        markdown("All " + total + " lines are split. Continue to the export."),
-        buttons(
-          [
-            { label: "Back", action: "back" },
-            { label: "Next", action: "next", primary: true },
-          ],
-          undefined,
-          "split",
-        ),
-      ],
-      "Every line is marked. Press Next to see the totals.",
-    );
+    return {
+      ...step(
+        "split-item",
+        "Split item",
+        [
+          ...head,
+          markdown("All " + total + " lines are split. Continue to the export."),
+        ],
+        "Every line is marked. Press Next to see the totals.",
+      ),
+      nav: { back: true, next: "Next" },
+    };
   }
   const line = s.flat[index];
   const saved = s.doc.assignments[String(index)];
@@ -779,23 +794,19 @@ export function itemStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
       ),
     );
   }
-  nodes.push(
-    buttons(
-      [
-        { label: "Back", action: "back" },
-        { label: "Repeat Last", action: "repeat" },
-        { label: "Next line", action: "nextline", primary: true },
-      ],
-      undefined,
-      "split",
+  return {
+    ...step(
+      "split-item",
+      "Split item",
+      nodes,
+      "Pick who shares this line and how the price splits. Tick Skip for lines nobody owes.",
     ),
-  );
-  return step(
-    "split-item",
-    "Split item",
-    nodes,
-    "Pick who shares this line and how the price splits. Tick Skip for lines nobody owes.",
-  );
+    nav: {
+      back: true,
+      actions: [{ id: "repeat", label: "Repeat Last", run: rerenderOnly }],
+      next: { label: "Next line", run: stayOnSplitItem },
+    },
+  };
 }
 
 // Run the output validator over a written output.json. Mirrors the old
@@ -833,6 +844,12 @@ function settlementLine(
   return row.from + " pays " + row.to + " " + formatMoney(row.amount, currency);
 }
 
+// Jump handler for one bar action. It moves to the named step, so one
+// finish path keeps its target without its own function.
+function goTo(target: string): NavHandler {
+  return () => ({ goto: target });
+}
+
 // Export step. Finish writes output.json for the run dir, runs the
 // validator over it, then marks the run assigned. A validator failure
 // renders as a step error and blocks Finish.
@@ -843,15 +860,17 @@ export function exportStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
   const payer = answer(m, "payer");
   const live = sessionFor(sessionId);
   if (live === null) {
-    return step(
-      "split-export",
-      "Export",
-      [
-        markdown("Split a run first."),
-        buttons([{ label: "Back", action: "back" }], undefined, "split"),
-      ],
-      "There is nothing to export yet. Split a run first.",
-    );
+    return {
+      ...step(
+        "split-export",
+        "Export",
+        [
+          markdown("Split a run first."),
+        ],
+        "There is nothing to export yet. Split a run first.",
+      ),
+      nav: { back: true },
+    };
   }
   const s = live;
   // Dry plan first, before any write. It mirrors the live shape
@@ -879,23 +898,18 @@ export function exportStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
       "",
       "Would write output.json and mark the run assigned.",
     ];
-    return step(
-      "split-export",
-      "Export",
-      [
-        markdown(lines.join("\n")),
-        dryNote(),
-        buttons(
-          [
-            { label: "Back", action: "back" },
-            { label: "Back to menu", action: "goto:menu", primary: true },
-          ],
-          undefined,
-          "split",
-        ),
-      ],
-      "Dry run is on. This is the plan only. Press Back to the first screen of this flow to change it.",
-    );
+    return {
+      ...step(
+        "split-export",
+        "Export",
+        [
+          markdown(lines.join("\n")),
+          dryNote(),
+        ],
+        "Dry run is on. This is the plan only. Press Back to the first screen of this flow to change it.",
+      ),
+      nav: { back: true, goto: { step: "menu", label: "Back to menu" } },
+    };
   }
   // Step functions rebuild eagerly on every post, so this runs before
   // the split is done. Export only once every line is assigned or
@@ -906,19 +920,21 @@ export function exportStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
     s.doc.skipped,
   );
   if (!s.exported && done < s.flat.length) {
-    return step(
-      "split-export",
-      "Export",
-      [
-        markdown(
-          "Finish the split lines first. " +
-            (s.flat.length - done) +
-            " lines still wait.",
-        ),
-        buttons([{ label: "Back", action: "back" }], undefined, "split"),
-      ],
-      "Go back and split every remaining line, then return here.",
-    );
+    return {
+      ...step(
+        "split-export",
+        "Export",
+        [
+          markdown(
+            "Finish the split lines first. " +
+              (s.flat.length - done) +
+              " lines still wait.",
+          ),
+        ],
+        "Go back and split every remaining line, then return here.",
+      ),
+      nav: { back: true },
+    };
   }
   const names = people.length > 0 ? people : s.doc.people;
   const doc = buildOutputDoc({
@@ -948,25 +964,23 @@ export function exportStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
     }
   }
   if (s.validateError.length > 0) {
-    return step(
-      "split-export",
-      "Export",
-      [
-        markdown(
-          "The export failed its own check. Press Check again, or report this.\n\n" +
-            s.validateError,
-        ),
-        buttons(
-          [
-            { label: "Back", action: "back" },
-            { label: "Check again", action: "retry", primary: true },
-          ],
-          undefined,
-          "split",
-        ),
-      ],
-      "The check runs again when you press Check again. Fix nothing by hand here.",
-    );
+    return {
+      ...step(
+        "split-export",
+        "Export",
+        [
+          markdown(
+            "The export failed its own check. Press Check again, or report this.\n\n" +
+              s.validateError,
+          ),
+        ],
+        "The check runs again when you press Check again. Fix nothing by hand here.",
+      ),
+      nav: {
+        back: true,
+        actions: [{ id: "retry", label: "Check again", run: rerenderOnly }],
+      },
+    };
   }
   const me = meName(m);
   const totals = Object.keys(doc.totals);
@@ -981,34 +995,34 @@ export function exportStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
     })),
   ];
   const rows = doc.settlements.map((row) => settlementLine(row, me, currency));
-  return step(
-    "split-export",
-    "Export",
-    [
-      answers("Totals", entries),
-      markdown(
-        "## Settlements\n" +
-          (rows.length > 0 ? rows.join("\n") : "Nothing to settle."),
-      ),
-      markdown("Send these to Splitwise now?"),
-      markdown(
-        "Any one of the three ways below settles the bill, and the summary and the share path need no Splitwise account.",
-      ),
-      ...(isDryMap(m) ? [dryNote()] : []),
-      buttons(
-        [
-          { label: "Back", action: "back" },
-          { label: "Push to Splitwise", action: "goto:push-source" },
-          { label: "Summary to copy", action: "goto:split-summary" },
-          { label: "Share with a friend", action: "goto:split-share" },
-          { label: "Back to menu", action: "goto:menu", primary: true },
-        ],
-        undefined,
-        "split",
-      ),
-    ],
-    "The split is done. Push opens the push flow with this run loaded. Back to menu returns to the menu.",
-  );
+  return {
+    ...step(
+      "split-export",
+      "Export",
+      [
+        answers("Totals", entries),
+        markdown(
+          "## Settlements\n" +
+            (rows.length > 0 ? rows.join("\n") : "Nothing to settle."),
+        ),
+        markdown("Send these to Splitwise now?"),
+        markdown(
+          "Any one of the three ways below settles the bill, and the summary and the share path need no Splitwise account.",
+        ),
+        ...(isDryMap(m) ? [dryNote()] : []),
+      ],
+      "The split is done. Push opens the push flow with this run loaded. Back to menu returns to the menu.",
+    ),
+    nav: {
+      back: true,
+      actions: [
+        { id: "push-source", label: "Push to Splitwise", run: goTo("push-source") },
+        { id: "split-summary", label: "Summary to copy", run: goTo("split-summary") },
+        { id: "split-share", label: "Share with a friend", run: goTo("split-share") },
+      ],
+      goto: { step: "menu", label: "Back to menu" },
+    },
+  };
 }
 
 // Stored share links, one per browser session. The orchestrator fills
@@ -1054,77 +1068,84 @@ function rowsFor(text: string): number {
 export function summaryStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
   const text = finishedSummaryText(m, sidOf(ctx));
   if (text === null) {
-    return step(
+    return {
+      ...step(
+        "split-summary",
+        "Summary to copy",
+        [
+          markdown("A split must finish first, then this step shows the summary."),
+        ],
+        "Finish the split lines and the export first, then return here.",
+      ),
+      nav: { back: true },
+    };
+  }
+  return {
+    ...step(
       "split-summary",
       "Summary to copy",
       [
-        markdown("A split must finish first, then this step shows the summary."),
-        buttons([{ label: "Back", action: "back" }], undefined, "split"),
+        markdown(
+          "Select the text, copy it, and add it to Splitwise as one expense. No account or API key is needed.",
+        ),
+        textarea("Summary", "summary-text", { value: text, rows: rowsFor(text) }),
       ],
-      "Finish the split lines and the export first, then return here.",
-    );
-  }
-  return step(
-    "split-summary",
-    "Summary to copy",
-    [
-      markdown(
-        "Select the text, copy it, and add it to Splitwise as one expense. No account or API key is needed.",
-      ),
-      textarea("Summary", "summary-text", { value: text, rows: rowsFor(text) }),
-      buttons(
-        [
-          { label: "Back", action: "back" },
-          { label: "Back to menu", action: "goto:menu", primary: true },
-        ],
-        undefined,
-        "split",
-      ),
-    ],
-    "Copy the text and add it to Splitwise as one expense. Nothing else is needed.",
-  );
+      "Copy the text and add it to Splitwise as one expense. Nothing else is needed.",
+    ),
+    nav: { back: true, goto: { step: "menu", label: "Back to menu" } },
+  };
+}
+
+// Next handler for the Share step. It uploads the finished split and
+// moves to the link step. It reads earlier answers for the run, so no
+// merged map is needed.
+export async function shareNext(
+  answers: Map<string, string[]>,
+  _fields: Record<string, string[]>,
+  ctx: WizardCtx,
+): Promise<{ errors?: string[]; goto?: string } | void> {
+  const made = await createSplitShareLink(ctx.sessionId, answers);
+  if (!made.ok) return { errors: [made.error] };
+  return { goto: "split-share-done" };
 }
 
 // Share step. Explains the encrypted share link before the upload.
 export function shareStep(_m: Map<string, string[]>): Step {
-  return step(
-    "split-share",
-    "Share with a friend",
-    [
-      markdown(
-        "The app uploads the split as encrypted text and makes a share link. " +
+  return {
+    ...step(
+      "split-share",
+      "Share with a friend",
+      [
+        markdown(
+          "The app uploads the split as encrypted text and makes a share link. " +
           "The link holds no readable data without its code, so send the link and the code together.",
-      ),
-      markdown(
-        "A friend with Splitwise access opens the link under Upload orders to Splitwise. " +
+        ),
+        markdown(
+          "A friend with Splitwise access opens the link under Upload orders to Splitwise. " +
           "The link expires, so the friend should open it soon.",
-      ),
-      buttons(
-        [
-          { label: "Back", action: "back" },
-          { label: "Next", action: "next", primary: true },
-        ],
-        undefined,
-        "split",
-      ),
-    ],
-    "Press Next to make the link. Then send the link and the code to your friend.",
-  );
+        ),
+      ],
+      "Press Next to make the link. Then send the link and the code to your friend.",
+    ),
+    nav: { back: true, next: { label: "Next", run: shareNext } },
+  };
 }
 
 // Share done step. Shows the created link and its code.
 export function shareDoneStep(_m: Map<string, string[]>, ctx?: WizardCtx): Step {
   const storedShare = shareLinks.for(sidOf(ctx)).current;
   if (storedShare === null) {
-    return step(
-      "split-share-done",
-      "Share link",
-      [
-        markdown("No link exists yet. Press Next on the previous step first."),
-        buttons([{ label: "Back", action: "back" }], undefined, "split"),
-      ],
-      "Go back one step and press Next to make the link.",
-    );
+    return {
+      ...step(
+        "split-share-done",
+        "Share link",
+        [
+          markdown("No link exists yet. Press Next on the previous step first."),
+        ],
+        "Go back one step and press Next to make the link.",
+      ),
+      nav: { back: true },
+    };
   }
   const nodes: Node[] = [
     markdown(
@@ -1138,19 +1159,15 @@ export function shareDoneStep(_m: Map<string, string[]>, ctx?: WizardCtx): Step 
   if (storedShare.keyFragment.length > 0) {
     nodes.push(markdown("Code: " + storedShare.keyFragment));
   }
-  nodes.push(
-    buttons(
-      [{ label: "Back to menu", action: "goto:menu", primary: true }],
-      undefined,
-      "split",
+  return {
+    ...step(
+      "split-share-done",
+      "Share link",
+      nodes,
+      "Send the link and the code to your friend before the link expires.",
     ),
-  );
-  return step(
-    "split-share-done",
-    "Share link",
-    nodes,
-    "Send the link and the code to your friend before the link expires.",
-  );
+    nav: { goto: { step: "menu", label: "Back to menu" } },
+  };
 }
 
 // Upload the finished output.json as an encrypted share link. The
@@ -1208,57 +1225,49 @@ export function routeStatus(status: RunMeta["status"]): string {
 export function resumeStep(): Step {
   const runs = listRunsSync();
   if (runs.length === 0) {
-    return step(
+    return {
+      ...step(
+        "resume",
+        "Pick up where you left off",
+        [
+          markdown("You have no saved sessions yet. Collect orders first to start one."),
+        ],
+        "No sessions yet. Go back and collect orders first.",
+      ),
+      nav: { back: true },
+    };
+  }
+  return {
+    ...step(
       "resume",
       "Pick up where you left off",
       [
-        markdown("You have no saved sessions yet. Collect orders first to start one."),
-        buttons([{ label: "Back", action: "back" }], undefined, "split"),
+        radio(
+          "Session",
+          "resume-pick",
+          runs.map((run) => ({ value: run.id, hint: runHint(run) })),
+          runs[0].id,
+        ),
       ],
-      "No sessions yet. Go back and collect orders first.",
-    );
-  }
-  return step(
-    "resume",
-    "Pick up where you left off",
-    [
-      radio(
-        "Session",
-        "resume-pick",
-        runs.map((run) => ({ value: run.id, hint: runHint(run) })),
-        runs[0].id,
-      ),
-      buttons(
-        [
-          { label: "Back", action: "back" },
-          { label: "Next", action: "next", primary: true },
-        ],
-        undefined,
-        "split",
-      ),
-    ],
-    "Pick a session. Each one opens at its next step. Failed runs name their reason.",
-  );
+      "Pick a session. Each one opens at its next step. Failed runs name their reason.",
+    ),
+    nav: { back: true, next: "Next" },
+  };
 }
 
 // Landing step for runs that already pushed. Nothing left to do.
 function resumeDoneStep(): Step {
-  return step(
-    "resume-done",
-    "Session complete",
-    [
-      markdown("That session already pushed. Nothing left to do."),
-      buttons(
-        [
-          { label: "Back", action: "back" },
-          { label: "Back to menu", action: "goto:menu", primary: true },
-        ],
-        undefined,
-        "split",
-      ),
-    ],
-    "This run is done. Pick another session or start a new one.",
-  );
+  return {
+    ...step(
+      "resume-done",
+      "Session complete",
+      [
+        markdown("That session already pushed. Nothing left to do."),
+      ],
+      "This run is done. Pick another session or start a new one.",
+    ),
+    nav: { back: true, goto: { step: "menu", label: "Back to menu" } },
+  };
 }
 
 export function splitSteps(): Array<Step | StepFn> {

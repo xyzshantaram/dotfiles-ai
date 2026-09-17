@@ -686,3 +686,16 @@ Deno.test("the push session prepared under A does not serve B", async () => {
   assert(liveB.file === fileB, "B keeps its file");
   assert(liveA.file !== liveB.file, "the two sessions stage apart");
 });
+
+// Check the bar shape without posting answers.
+Deno.test("source step declares a bar with a back button and a forward button", () => {
+  const found = sourceStep(new Map(), "");
+  assert(found.nav !== undefined, "source step declares a bar");
+  assert(found.nav!.back === true, "bar carries a back button");
+  const next = found.nav!.next;
+  if (next === undefined || typeof next === "string") {
+    throw new Error("assert failed: bar carries a labeled forward button");
+  }
+  assert(next.label === "Next", "forward button keeps its label");
+  assert(next.run !== undefined, "forward button owns its handler");
+});

@@ -58,7 +58,27 @@ its own submit logic. This retires G17, which planned to spread the old `nav()` 
       successful post clears it. Wanted: a draft that names where you were and offers to go there,
       for example "You were on Manual expenses. Continue or Discard", with Continue posting a goto
       to that step. Eval: fill a middle step, drop the session, reopen the wizard, and the bar
-      offers that step by name and lands on it with the fields restored.
+      offers that step by name and lands on it with the fields restored. N9 is the toolkit half of
+      N11 and ships inside it.
+- [ ] N11 a drafts API in the toolkit, with the footer strip as its face. Settled with the user: the
+      toolkit owns the affordance, an app may hook in to offer its own resumable sessions, and the
+      default offer is the newest one. On resume the app does its own restoring first and hands back
+      a step id, so no state enters the toolkit by a new path. The strip is the one that already
+      reads "Draft saved 5:23", and it gains a line such as "Saved session from 09-17 05:26" with a
+      Resume button. "Pick up where you left off" stops being a hand written menu row and is rebuilt
+      on this API. Two sources feed it: the toolkit's own browser draft, which is a step id plus
+      that step's fields, and the app's sessions, which here are the runs on disk. Eval: with no app
+      hook, a half typed screen offers Resume in the strip and lands back on that step with the
+      fields intact. With the hook, a gathered run offers Resume and lands on the pick screen. The
+      menu holds no resume row.
+- [ ] S4 "Repeat Last" on the split item screen does nothing. Found while classifying the button
+      rows for N4. The button posts the action `repeat`, and a search of split.ts, expense-split.ts
+      and the toolkit finds no code that reads it, so the toolkit treats it as an unknown action and
+      re-renders the step. The press saves whatever the fields already hold, exactly as Next line
+      does, and the label promises a copy of the previous line that never happens. The terminal
+      dashboard had this feature, and the port kept the button without the logic. Reported, not
+      fixed, because the fix is a feature decision. Eval: pressing it on a fresh line fills the same
+      people and the same split type as the last saved line.
 
 ### Final gate, after every ticket above is closed
 

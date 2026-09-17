@@ -165,21 +165,24 @@ Deno.test("manual expenses become a run and split end to end", async () => {
   });
   assertStringIncludes(review, runId);
 
-  // Split the run: people, payer, who am I, run id.
+  // Split the run. The People step now takes the names plus both roles in
+  // one post, and its own handler rejects a post that misses a role. The
+  // two follow up posts named steps that no longer exist.
   await post(handle, {
     step: "split-people",
     action: "next",
     "person-1": "Asha",
     "person-2": "Vijay",
+    payer: "Asha",
+    me: "Asha",
   });
-  await post(handle, { step: "split-payer", action: "next", payer: "Asha" });
-  await post(handle, { step: "split-me", action: "next", me: "Asha" });
   await post(handle, { step: "split-run", action: "next", run: dir });
 
-  // Both lines split equally in one post.
+  // Both lines split equally in one post. Next line is a declared bar
+  // action now, so it posts under the act prefix.
   await post(handle, {
     step: "split-item",
-    action: "nextline",
+    action: "act:nextline",
     "mode-0": "Equal",
     "who-0": ["Asha", "Vijay"],
     "mode-1": "Equal",

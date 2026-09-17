@@ -5,7 +5,6 @@
 
 import {
   answers,
-  buttons,
   markdown,
   type Node,
   radio,
@@ -19,7 +18,17 @@ import { buildAggregateSummary, orderFingerprint } from "../../src/render.ts";
 import { formatDayISO, formatMoney, parseDate } from "../../src/common.ts";
 import { isDryMap, listRunsSync, runHint } from "../../src/runstate.ts";
 import { dryBox, dryNote } from "./dry.ts";
-import { pushSessionFor, SHARE_SOURCE } from "./push-engine.ts";
+import {
+  applyCutoff,
+  executePush,
+  prepareShareImport,
+  prepareSource,
+  prepareSplitwise,
+  pushSessionFor,
+  resolveNamePicks,
+  SHARE_SOURCE,
+} from "./push-engine.ts";
+import { field } from "../../src/answers.ts";
 import {
   sidOf,
 } from "../../src/sessionstore.ts";
@@ -44,6 +53,102 @@ export function accessNote(sessionId: string): Node | null {
     return markdown(fallback);
   }
   return null;
+}
+
+// Stage the picked source for this session.
+export async function pushSourceNext(
+  _answers: Map<string, string[]>,
+  fields: Record<string, string[]>,
+  ctx: WizardCtx,
+): Promise<{ errors?: string[]; goto?: string } | void> {
+  const sessionId = ctx.sessionId;
+  const source = fields["source"]?.[0] ?? "";
+  if (source === SHARE_SOURCE) {
+    const imported = await prepareShareImport(sessionId, fields["share-link"]?.[0] ?? "");
+    if (!imported.ok) return { errors: [imported.error] };
+  } else {
+    const typed = field(fields, "run-id-other");
+    const listed = field(fields, "run-id");
+    const runId = typed !== "" ? typed : listed;
+    const prepared = await prepareSource(
+      sessionId,
+      source,
+      runId,
+      fields["split-file"]?.[0] ?? "",
+    );
+    if (!prepared.ok) return { errors: [prepared.error] };
+  }
+  const sw = await prepareSplitwise(sessionId);
+  if (!sw.ok) {
+    if (sw.needsNamePick) return { goto: "push-names" };
+    return { errors: [sw.error] };
+  }
+  return { goto: pushSessionFor(sessionId).mode === "live" ? "push-group" : "push-setup" };
+}
+
+// Resolve the posted name picks for this session.
+export async function pushNamesNext(
+  _answers: Map<string, string[]>,
+  fields: Record<string, string[]>,
+  ctx: WizardCtx,
+): Promise<{ errors?: string[]; goto?: string } | void> {
+  const sessionId = ctx.sessionId;
+  const picked = resolveNamePicks(sessionId, fields);
+  if (!picked.ok) return { errors: [picked.error] };
+  const sw = await prepareSplitwise(sessionId);
+  if (!sw.ok) return { errors: [sw.error] };
+  return { goto: pushSessionFor(sessionId).mode === "live" ? "push-group" : "push-setup" };
+}
+
+// Route live access toward the group screen.
+export function pushSetupNext(
+  _answers: Map<string, string[]>,
+  _fields: Record<string, string[]>,
+  ctx: WizardCtx,
+): { errors?: string[]; goto?: string } | void {
+  const sessionId = ctx.sessionId;
+  return { goto: pushSessionFor(sessionId).mode === "live" ? "push-group" : "push-cutoff" };
+}
+
+// Store the picked group for this session.
+export function pushGroupNext(
+  _answers: Map<string, string[]>,
+  fields: Record<string, string[]>,
+  ctx: WizardCtx,
+): { errors?: string[]; goto?: string } | void {
+  const sessionId = ctx.sessionId;
+  const picked = Number(fields["push-group"]?.[0] ?? "0");
+  pushSessionFor(sessionId).groupId = Number.isFinite(picked) ? picked : 0;
+  return { goto: "push-cutoff" };
+}
+
+// Apply the posted cutoff for this session.
+export function pushCutoffNext(
+  _answers: Map<string, string[]>,
+  fields: Record<string, string[]>,
+  ctx: WizardCtx,
+): { errors?: string[]; goto?: string } | void {
+  const sessionId = ctx.sessionId;
+  const cut = applyCutoff(sessionId, fields["cutoff"]?.[0] ?? "");
+  if (!cut.ok) return { errors: [cut.error] };
+  return { goto: "push-confirm" };
+}
+
+// Run the push loop for this session.
+export async function pushConfirmNext(
+  _answers: Map<string, string[]>,
+  fields: Record<string, string[]>,
+  ctx: WizardCtx,
+): Promise<{ errors?: string[]; goto?: string } | void> {
+  const sessionId = ctx.sessionId;
+  const dry = (fields["dry"] ?? []).includes("dry");
+  const choices: Record<string, string> = {};
+  for (const [name, values] of Object.entries(fields)) {
+    if (name.startsWith("order-")) choices[name.slice("order-".length)] = values[0] ?? "";
+  }
+  const done = await executePush(sessionId, choices, dry ? { dry: true } : undefined);
+  if (!done.ok) return { errors: [done.error] };
+  return { goto: "push-report" };
 }
 
 // Source step. The radio carries the picked choice (or the first
@@ -81,20 +186,15 @@ export function sourceStep(m: Map<string, string[]>, prefillRunId: string): Step
     );
   }
   nodes.push(dryBox(isDryMap(m)));
-  nodes.push(buttons(
-    [
-      { label: "Back", action: "back" },
-      { label: "Next", action: "next", primary: true },
-    ],
-    undefined,
-    "split",
-  ));
-  return step(
-    "push-source",
-    "Pick source",
-    nodes,
-    "Choose an assigned run, a saved split file, or a share link from a friend. Then type or paste the matching value below.",
-  );
+  return {
+    ...step(
+      "push-source",
+      "Pick source",
+      nodes,
+      "Choose an assigned run, a saved split file, or a share link from a friend. Then type or paste the matching value below.",
+    ),
+    nav: { back: true, next: { label: "Next", run: pushSourceNext } },
+  };
 }
 
 // Splitwise access status, from pusher.ts splitwise stage. Shows the
@@ -126,20 +226,15 @@ function setupStep(_m?: Map<string, string[]>, ctx?: WizardCtx): Step {
         "Pick a source in the step before this one, then come back.",
     ));
   }
-  nodes.push(buttons(
-    [
-      { label: "Back", action: "back" },
-      { label: "Next", action: "next", primary: true },
-    ],
-    undefined,
-    "split",
-  ));
-  return step(
-    "push-setup",
-    "Splitwise access",
-    nodes,
-    "One-time check that this app may talk to Splitwise. The approval from Settings owns the sign-in, so this step only reports it.",
-  );
+  return {
+    ...step(
+      "push-setup",
+      "Splitwise access",
+      nodes,
+      "One-time check that this app may talk to Splitwise. The approval from Settings owns the sign-in, so this step only reports it.",
+    ),
+    nav: { back: true, next: { label: "Next", run: pushSetupNext } },
+  };
 }
 
 // Name picker, from pusher.ts:213-240. Ambiguous people show their
@@ -182,20 +277,15 @@ function namePickStep(_m?: Map<string, string[]>, ctx?: WizardCtx): Step {
       );
     }
   }
-  nodes.push(buttons(
-    [
-      { label: "Back", action: "back" },
-      { label: "Next", action: "next", primary: true },
-    ],
-    undefined,
-    "split",
-  ));
-  return step(
-    "push-names",
-    "Splitwise members",
-    nodes,
-    "More than one Splitwise member shares a name, or a person has no match. Pick the right member, or type their id number.",
-  );
+  return {
+    ...step(
+      "push-names",
+      "Splitwise members",
+      nodes,
+      "More than one Splitwise member shares a name, or a person has no match. Pick the right member, or type their id number.",
+    ),
+    nav: { back: true, next: { label: "Next", run: pushNamesNext } },
+  };
 }
 
 // Group picker, from pusher.ts group select. Live mode only.
@@ -223,20 +313,15 @@ function groupStep(_m?: Map<string, string[]>, ctx?: WizardCtx): Step {
       ),
     );
   }
-  nodes.push(buttons(
-    [
-      { label: "Back", action: "back" },
-      { label: "Next", action: "next", primary: true },
-    ],
-    undefined,
-    "split",
-  ));
-  return step(
-    "push-group",
-    "Splitwise group",
-    nodes,
-    "Expenses land in this group. Leave it on no group for plain expenses.",
-  );
+  return {
+    ...step(
+      "push-group",
+      "Splitwise group",
+      nodes,
+      "Expenses land in this group. Leave it on no group for plain expenses.",
+    ),
+    nav: { back: true, next: { label: "Next", run: pushGroupNext } },
+  };
 }
 
 // Confirm step. Orders already sent show as auto-skips from the
@@ -286,22 +371,15 @@ function confirmStep(m?: Map<string, string[]>, ctx?: WizardCtx): Step {
   if (dry) {
     nodes.push(dryNote());
   }
-  nodes.push(
-    buttons(
-      [
-        { label: "Back", action: "back" },
-        { label: "Next", action: "next", primary: true },
-      ],
-      undefined,
-      "split",
+  return {
+    ...step(
+      "push-confirm",
+      "Confirm orders",
+      nodes,
+      "Pick Push, Skip, or Stop for each order. Push sends that order to Splitwise as one expense. Unpicked orders stay out.",
     ),
-  );
-  return step(
-    "push-confirm",
-    "Confirm orders",
-    nodes,
-    "Pick Push, Skip, or Stop for each order. Push sends that order to Splitwise as one expense. Unpicked orders stay out.",
-  );
+    nav: { back: true, next: { label: "Next", run: pushConfirmNext } },
+  };
 }
 
 // Summary text for the aggregate report step. The written file wins,
@@ -392,22 +470,15 @@ function reportStep(_m?: Map<string, string[]>, ctx?: WizardCtx): Step {
       ]),
     );
   }
-  nodes.push(
-    buttons(
-      [
-        { label: "Back", action: "back" },
-        { label: "Back to menu", action: "goto:menu", primary: true },
-      ],
-      undefined,
-      "split",
+  return {
+    ...step(
+      "push-report",
+      "Push report",
+      nodes,
+      "Here is what happened. Pushed orders landed on Splitwise, and skipped orders stayed out.",
     ),
-  );
-  return step(
-    "push-report",
-    "Push report",
-    nodes,
-    "Here is what happened. Pushed orders landed on Splitwise, and skipped orders stayed out.",
-  );
+    nav: { back: true, goto: { step: "menu", label: "Back to menu" } },
+  };
 }
 
 export function pushSteps(): Array<Step | StepFn> {
@@ -443,18 +514,13 @@ function cutoffStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
     if (newest !== null) prefill = formatDayISO(newest);
   }
   nodes.push(textEntry("Push orders dated up to", "cutoff", prefill));
-  nodes.push(buttons(
-    [
-      { label: "Back", action: "back" },
-      { label: "Next", action: "next", primary: true },
-    ],
-    undefined,
-    "split",
-  ));
-  return step(
-    "push-cutoff",
-    "Cutoff date",
-    nodes,
-    "Include orders up to this date only (YYYY-MM-DD). Later orders stay out. Leave it blank to push every order.",
-  );
+  return {
+    ...step(
+      "push-cutoff",
+      "Cutoff date",
+      nodes,
+      "Include orders up to this date only (YYYY-MM-DD). Later orders stay out. Leave it blank to push every order.",
+    ),
+    nav: { back: true, next: { label: "Next", run: pushCutoffNext } },
+  };
 }
