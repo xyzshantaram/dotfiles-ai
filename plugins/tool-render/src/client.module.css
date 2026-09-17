@@ -170,6 +170,28 @@
   background: rgba(255, 85, 85, 0.08);
   font-weight: 500;
 }
+/* #152: the hoisted run_code result. A sibling of the collapsed row inside
+   the same card — visible with zero clicks — never inside the collapsible
+   body. The OUT label keeps the upstream IN/OUT vocabulary (the code
+   variant renders only OUT, since it has no IN section). The text block
+   reuses .tool-render-output; the cap below mirrors the rule the OUT row
+   has today: upstream .ioSection scrolls internally past 150px
+   (max-height:150px; overflow-y:auto), so long output scrolls instead of
+   flooding the transcript, with the full text retained in the DOM. */
+.tool-render-code-out {
+  display: flex;
+  flex-direction: column;
+}
+.tool-render-code-out-label {
+  font-family: var(--ds-font-family-code);
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  color: var(--dsw-alias-label-caption);
+  margin: 0.375rem 0 0 0.25rem;
+}
+.tool-render-output.tool-render-code-out-text {
+  max-height: 9.375rem;
+}
 .tool-render-row[data-state="error"] .tool-render-title {
   color: var(--dsw-alias-state-error-primary);
   font-weight: 500;

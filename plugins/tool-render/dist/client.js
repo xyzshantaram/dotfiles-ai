@@ -2084,6 +2084,71 @@ function countMessageRows(rows) {
   return count;
 }
 
+// plugins/tool-render/src/run-code.ts
+var RUN_CODE_NO_OUTPUT = "(run_code completed with no output)";
+function parseArgs(raw) {
+  if (typeof raw !== "string" || raw === "") return null;
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    return null;
+  }
+}
+function firstLine(text) {
+  var at = String(text).indexOf("\n");
+  return at === -1 ? String(text) : String(text).slice(0, at);
+}
+function runCodeSummary(argsRaw) {
+  var parsed = parseArgs(argsRaw);
+  if (parsed !== null && typeof parsed === "object") {
+    var description = parsed.description;
+    if (typeof description === "string" && description !== "") return firstLine(description);
+    for (var key of Object.keys(parsed)) {
+      var value = parsed[key];
+      if (typeof value === "string" && value !== "") return firstLine(value);
+    }
+  }
+  var raw = firstLine(typeof argsRaw === "string" ? argsRaw : "");
+  return raw !== "" ? raw : "Code";
+}
+function runCodeBodyText(argsRaw) {
+  if (typeof argsRaw !== "string" || argsRaw === "") return null;
+  var parsed = parseArgs(argsRaw);
+  if (parsed === void 0) return argsRaw;
+  if (parsed !== null && typeof parsed === "object") {
+    var code = parsed.code;
+    if (typeof code === "string" && code !== "") return code;
+  }
+  if (parsed === null) return argsRaw;
+  return JSON.stringify(parsed, null, 2);
+}
+function flattenResultText(content, isError, error) {
+  var parts = [];
+  var blocks = Array.isArray(content) ? content : [];
+  for (var i = 0; i < blocks.length; i++) {
+    var item = blocks[i];
+    if (item !== null && typeof item === "object" && item.type === "text" && typeof item.text === "string") {
+      parts.push(item.text);
+    } else if (item !== null && item !== void 0) {
+      try {
+        parts.push(JSON.stringify(item, null, 2));
+      } catch (error2) {
+      }
+    }
+  }
+  if (parts.length === 0 && error !== void 0 && error !== null) {
+    parts.push(String(error.name) + ": " + String(error.code));
+  }
+  return parts.join("\n");
+}
+function runCodeOutputText(content, isError, error) {
+  var text = flattenResultText(content, isError, error);
+  if (text === "") return null;
+  if (text === RUN_CODE_NO_OUTPUT) return null;
+  if (text.trim() === "") return null;
+  return text;
+}
+
 // plugins/shared/client-util.ts
 function injectStyle(pluginName, styleId, cssText) {
   if (typeof document === "undefined") return;
@@ -2356,6 +2421,28 @@ var client_default = `.tool-render-row {
   border-color: rgba(255, 85, 85, 0.45);
   background: rgba(255, 85, 85, 0.08);
   font-weight: 500;
+}
+/* #152: the hoisted run_code result. A sibling of the collapsed row inside
+   the same card \u2014 visible with zero clicks \u2014 never inside the collapsible
+   body. The OUT label keeps the upstream IN/OUT vocabulary (the code
+   variant renders only OUT, since it has no IN section). The text block
+   reuses .tool-render-output; the cap below mirrors the rule the OUT row
+   has today: upstream .ioSection scrolls internally past 150px
+   (max-height:150px; overflow-y:auto), so long output scrolls instead of
+   flooding the transcript, with the full text retained in the DOM. */
+.tool-render-code-out {
+  display: flex;
+  flex-direction: column;
+}
+.tool-render-code-out-label {
+  font-family: var(--ds-font-family-code);
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  color: var(--dsw-alias-label-caption);
+  margin: 0.375rem 0 0 0.25rem;
+}
+.tool-render-output.tool-render-code-out-text {
+  max-height: 9.375rem;
 }
 .tool-render-row[data-state="error"] .tool-render-title {
   color: var(--dsw-alias-state-error-primary);
@@ -22467,6 +22554,7 @@ var IconApiOutline142 = primitives.IconApiOutline14;
 var IconChevronDownOutline142 = primitives.IconChevronDownOutline14;
 var IconInspectOutline122 = primitives.IconInspectOutline12;
 var IconChecklistOutline142 = primitives.IconChecklistOutline14;
+var IconPlayOutline162 = primitives.IconPlayOutline16;
 var IconQuestionOutline142 = primitives.IconQuestionOutline14;
 var IconAgentPresetOutline162 = primitives.IconAgentPresetOutline16;
 var IconStopFill162 = primitives.IconStopFill16;
@@ -22547,7 +22635,7 @@ function ensureHljsPass() {
   observer.observe(document.body || document.documentElement, { childList: true, subtree: true });
 }
 ensureHljsPass();
-function parseArgs(raw) {
+function parseArgs2(raw) {
   if (typeof raw !== "string" || raw === "") return null;
   try {
     return JSON.parse(raw);
@@ -22603,7 +22691,7 @@ function errorTextOf(block) {
   if (block.error && block.error.code) return String(block.error.code);
   return null;
 }
-function firstLine(text) {
+function firstLine2(text) {
   var at = text.indexOf("\n");
   return at === -1 ? text : text.slice(0, at);
 }
@@ -22783,6 +22871,7 @@ function renderToolRenderCard(options, approvalOpen) {
       summary
     ),
     open === true ? /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-body" }, options.body !== null && options.body !== void 0 ? options.body : options.state === "error" && options.errorText !== null && options.errorText !== void 0 && options.errorText !== "" ? /* @__PURE__ */ import_react4.default.createElement("pre", { className: "tool-render-output", "tool-render-error": true }, options.errorText) : null, options.inspect !== void 0 ? /* @__PURE__ */ import_react4.default.createElement("button", { type: "button", className: "tool-render-inspect", onClick: options.inspect }, /* @__PURE__ */ import_react4.default.createElement(IconInspectOutline122, null), " Inspect") : null) : null,
+    options.below !== null && options.below !== void 0 ? options.below : null,
     options.callId !== void 0 && options.callId !== null && typeof options.useSession === "function" ? /* @__PURE__ */ import_react4.default.createElement(
       ToolRenderApprovalBar,
       {
@@ -23053,13 +23142,13 @@ function ReadRow(props) {
   var setExpanded = expandedState[1];
   var block = props.block;
   var done = doneOf(block);
-  var args = parseArgs(argsRawOf(block));
+  var args = parseArgs2(argsRawOf(block));
   var path = args !== null ? pickString2(args, ["path", "file_path"]) : void 0;
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
   var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
-  var summary = path !== void 0 ? relativizeToCwd(firstLine(path), props.cwd) : "Read";
+  var summary = path !== void 0 ? relativizeToCwd(firstLine2(path), props.cwd) : "Read";
   var body = null;
   if (output !== null && output !== "") {
     if (state === "error") {
@@ -23250,14 +23339,14 @@ function BashRow(props) {
   var setExpanded = expandedState[1];
   var block = props.block;
   var done = doneOf(block);
-  var argsObj = parseArgs(argsRawOf(block));
+  var argsObj = parseArgs2(argsRawOf(block));
   var command = argsObj !== null ? pickString2(argsObj, ["command"]) : void 0;
   var description = argsObj !== null ? pickString2(argsObj, ["description"]) : void 0;
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = bashErrorState(rowStateOf(block), output, block.meta);
   var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
-  var summary = description !== void 0 && description !== "" ? firstLine(description) : command !== void 0 ? firstLine(command) : "Bash";
+  var summary = description !== void 0 && description !== "" ? firstLine2(description) : command !== void 0 ? firstLine2(command) : "Bash";
   var escalated = escalatedOf(argsObj);
   var escalation = escalationDetailOf(argsObj);
   var escalationSettled = props.useSession(function(snapshot) {
@@ -23430,7 +23519,7 @@ function readsOf(snapshot, path, beforeTime, cwd) {
     var time = typeof block.time === "number" ? block.time : void 0;
     if (time === void 0) continue;
     if (typeof beforeTime === "number" && time >= beforeTime) continue;
-    var args = parseArgs(argsRawOf(block));
+    var args = parseArgs2(argsRawOf(block));
     if (args === null) continue;
     var readPath = pickString2(args, ["path", "file_path"]);
     if (readPath === void 0 || !matchesPath(readPath, path, cwd)) continue;
@@ -23645,7 +23734,7 @@ function makeEditRow(toolTitle) {
       });
     }
     var done = doneOf(block);
-    var args = parseArgs(argsRawOf(block));
+    var args = parseArgs2(argsRawOf(block));
     var argsObject = args !== null ? args : {};
     var effectiveCwd = resolveEffectiveCwd(props);
     var wire = wireDiffs(block);
@@ -23666,7 +23755,7 @@ function makeEditRow(toolTitle) {
     var state = rowStateOf(block);
     var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
     var summaryPath = pickString2(argsObject, ["path", "file_path"]);
-    var summary = summaryPath !== void 0 ? relativizeToCwd(firstLine(summaryPath), effectiveCwd) : toolTitle;
+    var summary = summaryPath !== void 0 ? relativizeToCwd(firstLine2(summaryPath), effectiveCwd) : toolTitle;
     var body = null;
     if (state !== "error" && diffs !== null && diffs.length > 0) {
       if (wire === null && done && state === "ok" && allHunksNull(diffs)) {
@@ -23909,7 +23998,7 @@ function WriteRow(props) {
   var setExpanded = expandedState[1];
   var block = props.block;
   var done = doneOf(block);
-  var args = parseArgs(argsRawOf(block));
+  var args = parseArgs2(argsRawOf(block));
   var argsObject = args !== null ? args : {};
   var effectiveCwd = resolveEffectiveCwd(props);
   var path = pickString2(argsObject, ["file_path", "path"]);
@@ -23918,7 +24007,7 @@ function WriteRow(props) {
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
   var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
-  var summary = path !== void 0 ? relativizeToCwd(firstLine(path), effectiveCwd) : "Write";
+  var summary = path !== void 0 ? relativizeToCwd(firstLine2(path), effectiveCwd) : "Write";
   var before = null;
   if (path !== void 0 && props.useSession !== void 0) {
     before = props.useSession(function(snapshot) {
@@ -23992,7 +24081,7 @@ function TodoRow(props) {
   var setExpanded = expandedState[1];
   var block = props.block;
   var done = doneOf(block);
-  var args = parseArgs(argsRawOf(block));
+  var args = parseArgs2(argsRawOf(block));
   var todos = todoItems(args);
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
@@ -24065,7 +24154,7 @@ function askQuestions(args) {
 }
 function askAnswers(block) {
   if (!doneOf(block) || block.isError === true) return null;
-  var parsed = parseArgs(resultTextOf(block) || "");
+  var parsed = parseArgs2(resultTextOf(block) || "");
   if (parsed === null || typeof parsed !== "object" || !Array.isArray(parsed.answers)) return null;
   var byId = {};
   var order = [];
@@ -24376,7 +24465,7 @@ function AskRow(props) {
   var setExpanded = expandedState[1];
   var block = props.block;
   var done = doneOf(block);
-  var args = parseArgs(argsRawOf(block));
+  var args = parseArgs2(argsRawOf(block));
   var questions = askQuestions(args);
   var answers = done ? askAnswers(block) : null;
   var output = done ? resultTextOf(block) : null;
@@ -24449,7 +24538,7 @@ function SubagentRow(props) {
   var setExpanded = expandedState[1];
   var block = props.block;
   var done = doneOf(block);
-  var args = parseArgs(argsRawOf(block));
+  var args = parseArgs2(argsRawOf(block));
   var description = args !== null ? pickString2(args, ["description"]) : void 0;
   var prompt = subagentPrompt(args);
   var output = done ? resultTextOf(block) : null;
@@ -24458,7 +24547,7 @@ function SubagentRow(props) {
   var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
   var background = args !== null && args.run_in_background === true;
   var title = background ? "Background subagent" : "Subagent";
-  var summary = description !== void 0 ? firstLine(relativizeToCwd(description, props.cwd)) : title;
+  var summary = description !== void 0 ? firstLine2(relativizeToCwd(description, props.cwd)) : title;
   var body = null;
   if (state !== "error" && prompt !== null) {
     body = /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react4.default.createElement(MarkdownText2, { text: prompt }));
@@ -24496,7 +24585,7 @@ function JobOutputRow(props) {
   var setExpanded = expandedState[1];
   var block = props.block;
   var done = doneOf(block);
-  var args = parseArgs(argsRawOf(block));
+  var args = parseArgs2(argsRawOf(block));
   var jobId = args !== null ? pickString2(args, ["job_id"]) : void 0;
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
@@ -24539,7 +24628,7 @@ function PackageRow(props) {
   var setExpanded = expandedState[1];
   var block = props.block;
   var done = doneOf(block);
-  var args = parseArgs(argsRawOf(block));
+  var args = parseArgs2(argsRawOf(block));
   var action = args !== null ? pickString2(args, ["action"]) : void 0;
   var ecosystem = args !== null ? pickString2(args, ["ecosystem"]) : void 0;
   var target = args !== null ? pickString2(args, ["packageName", "taskName"]) : void 0;
@@ -24577,7 +24666,7 @@ function SendMessageRow(props) {
   var setExpanded = expandedState[1];
   var block = props.block;
   var done = doneOf(block);
-  var args = sendMessageArgs(parseArgs(argsRawOf(block)));
+  var args = sendMessageArgs(parseArgs2(argsRawOf(block)));
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
   var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
@@ -24590,7 +24679,7 @@ function SendMessageRow(props) {
     icon: /* @__PURE__ */ import_react4.default.createElement(IconAgentPresetOutline162, { size: 14 }),
     title: "Message",
     badge: args !== null ? args.subagent_id : void 0,
-    summary: args !== null ? firstLine(args.message) : "Message",
+    summary: args !== null ? firstLine2(args.message) : "Message",
     state,
     expandable: body !== null,
     expanded,
@@ -24606,7 +24695,7 @@ function SendMessageRow(props) {
 function InterruptAgentRow(props) {
   var block = props.block;
   var done = doneOf(block);
-  var args = parseArgs(argsRawOf(block));
+  var args = parseArgs2(argsRawOf(block));
   var agentId = args !== null ? pickString2(args, ["agent_id"]) : void 0;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
@@ -24726,7 +24815,7 @@ function FailoverRow(props) {
   var code = match[5];
   var detailStart = text.indexOf("\n\n");
   var detail = detailStart !== -1 ? text.slice(detailStart + 2) : "";
-  var detailFirstLine = detail.length > 0 ? firstLine(detail) : "";
+  var detailFirstLine = detail.length > 0 ? firstLine2(detail) : "";
   var summary = `${fromProv}/${fromModel} -> ${toProv}/${toModel}`;
   var errorSummary = code + (detailFirstLine ? " \xB7 " + detailFirstLine : "");
   var errorText = detail !== "" ? detail : void 0;
@@ -24813,7 +24902,7 @@ function GenericContextCard(props) {
     icon: /* @__PURE__ */ import_react4.default.createElement(IconBrowseOutline162, { size: 14 }),
     title,
     badge,
-    summary: text !== "" ? firstLine(text) : title,
+    summary: text !== "" ? firstLine2(text) : title,
     expandable: body !== null,
     expanded,
     onToggle: function() {
@@ -24858,7 +24947,7 @@ function SkillRow(props) {
       }
     );
   }
-  var args = parseArgs(argsRawOf(block));
+  var args = parseArgs2(argsRawOf(block));
   var skillName = args !== null ? pickString2(args, ["name"]) : void 0;
   return toolRenderRow({
     callId: props.callId,
@@ -24939,7 +25028,7 @@ function ReadImageRow(props) {
   var setExpanded = expandedState[1];
   var block = props.block;
   var done = doneOf(block);
-  var args = parseArgs(argsRawOf(block));
+  var args = parseArgs2(argsRawOf(block));
   var path = args !== null ? pickString2(args, ["file_path"]) : void 0;
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
@@ -24988,7 +25077,7 @@ function SeeRow(props) {
   var setShowMore = showMoreState[1];
   var block = props.block;
   var done = doneOf(block);
-  var args = parseArgs(argsRawOf(block));
+  var args = parseArgs2(argsRawOf(block));
   var question = args !== null ? pickString2(args, ["question"]) : void 0;
   var imagePath = args !== null ? pickString2(args, ["image"]) : void 0;
   var output = done ? resultTextOf(block) : null;
@@ -24996,7 +25085,7 @@ function SeeRow(props) {
   var state = rowStateOf(block);
   var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
   var description = done && state !== "error" ? output : null;
-  var summary = question !== void 0 ? firstLine(question) : "See";
+  var summary = question !== void 0 ? firstLine2(question) : "See";
   var needsClamp = description !== null && description.length > 400;
   var body = null;
   if (done && state !== "error" && (description !== null || imagePath !== void 0)) {
@@ -25062,7 +25151,7 @@ function WebSearchRow(props) {
   var setExpanded = expandedState[1];
   var block = props.block;
   var done = doneOf(block);
-  var args = parseArgs(argsRawOf(block));
+  var args = parseArgs2(argsRawOf(block));
   var queries = searchQueries(args);
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
@@ -25096,13 +25185,13 @@ function WebFetchRow(props) {
   var setExpanded = expandedState[1];
   var block = props.block;
   var done = doneOf(block);
-  var args = parseArgs(argsRawOf(block));
+  var args = parseArgs2(argsRawOf(block));
   var url = args !== null ? pickString2(args, ["url"]) : void 0;
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
   var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
-  var summary = url !== void 0 ? firstLine(url) : "Web fetch";
+  var summary = url !== void 0 ? firstLine2(url) : "Web fetch";
   var body = null;
   if (state !== "error" && output !== null && output !== "") {
     body = looksLikeRawHtml(output) ? /* @__PURE__ */ import_react4.default.createElement("pre", { className: "tool-render-fetch-body tool-render-fetch-raw" }, output) : /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-fetch-body" }, /* @__PURE__ */ import_react4.default.createElement(MarkdownText2, { text: output }));
@@ -25122,6 +25211,59 @@ function WebFetchRow(props) {
       setExpanded(!expanded);
     },
     body,
+    errorSummary,
+    errorText,
+    inspect: props.inspect
+  });
+}
+function RunCodeRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var block = props.block;
+  var done = doneOf(block);
+  var raw = argsRawOf(block);
+  var summary = runCodeSummary(raw);
+  var codeText = runCodeBodyText(raw);
+  var content = done && block !== null && typeof block === "object" && Array.isArray(block.content) ? block.content : [];
+  var isError = done && block !== null && typeof block === "object" && block.isError === true;
+  var error = done && block !== null && typeof block === "object" ? block.error : void 0;
+  var output = done ? runCodeOutputText(content, isError, error) : null;
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var body = null;
+  if (codeText !== null && codeText !== "") {
+    var rows = numberedReadRows(codeText, 1);
+    body = /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-code" }, readLineRows(rows, "typescript"));
+  }
+  var below = null;
+  if (output !== null) {
+    below = /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-code-out" }, /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-code-out-label" }, "OUT"), /* @__PURE__ */ import_react4.default.createElement(
+      "pre",
+      {
+        className: "tool-render-output tool-render-code-out-text",
+        "tool-render-error": state === "error" || void 0
+      },
+      output
+    ));
+  }
+  return toolRenderRow({
+    callId: props.callId,
+    useSession: props.useSession,
+    useProjection: props.useProjection,
+    toolName: "Run code",
+    icon: /* @__PURE__ */ import_react4.default.createElement(IconPlayOutline162, { size: 14 }),
+    title: "Code",
+    summary,
+    state,
+    expandable: body !== null,
+    expanded,
+    onToggle: function() {
+      setExpanded(!expanded);
+    },
+    body,
+    below,
     errorSummary,
     errorText,
     inspect: props.inspect
@@ -25244,7 +25386,7 @@ function CompactionRow(props) {
       toolName: "Compaction",
       icon: /* @__PURE__ */ import_react4.default.createElement(IconBrowseOutline162, { size: 14 }),
       title: "Compaction",
-      summary: commandError !== null ? "Compaction" : counts !== null ? counts : fallbackText !== "" ? firstLine(fallbackText) : "Compaction",
+      summary: commandError !== null ? "Compaction" : counts !== null ? counts : fallbackText !== "" ? firstLine2(fallbackText) : "Compaction",
       state: commandError !== null ? "error" : void 0,
       expandable: fallbackBody !== null || commandError !== null,
       expanded,
@@ -25441,6 +25583,14 @@ function apply(ctx) {
         priority: -100
       },
       WebFetchRow
+    );
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "run_code",
+        priority: -100
+      },
+      RunCodeRow
     );
   });
   ctx.slots.inject("conversation.chat.node", function* () {

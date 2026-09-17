@@ -1310,6 +1310,232 @@ print("  stopped the web-tools search-button background poll")
 PY
 }
 
+# Serialise run_code abort reasons inside the installed DSH (#152, Part A).
+#
+# THE BUG. When a tool call inside a run_code program raises an approval and
+# the human rejects it, the agent loop cancels with a plain-OBJECT cause
+# ({kind:"user",reason:"approval-rejected"}), run_code forwards it as the
+# worker abort reason, and dsh-code-runtime-worker-thread stringifies it
+# with String(reason) -> "[object Object]". By the time dsh-tools builds
+# the CodeRunFailedError text the information is gone, so the throw site
+# alone cannot be patched to recover it: the serialiser must sit where the
+# reason is still an object (the worker), plus a guard at the throw site
+# (dsh-tools) so a structured message can never again reach a template
+# literal raw. The uncatchable-abort semantics are untouched: both edits
+# only change HOW the reason reads, never whether the program aborts.
+#
+# REVERSIBILITY. These files live under the dsh install, outside this repo:
+# a dsh reinstall wipes the patch and the next sync re-applies it. The
+# twin .../dsh-tools/lib/types/code-mode.js is deliberately NOT patched:
+# the package exports map exposes no deep code-mode entry (only ".",
+# "./invariant", "./types", "./presentation"), so lib/index.js is the
+# loaded copy and the twin is dead at runtime.
+#
+# The helper source below is CANONICAL: plugins/tool-render/src/
+# run-code-abort.test.ts extracts it verbatim from this file and pins its
+# behaviour, so the shipped patch logic is tested, not a copy of it. Keep
+# the block dependency-free and ES2019-safe (it is injected into shipped
+# bundles as-is).
+PATCH_152_HELPERS="$(cat <<'HELPERS_EOF'
+// dotfiles-ai#152 helpers — BEGIN
+function dotfilesAiAbortMessage(reason) {
+	try {
+		if (typeof reason === "string") return reason;
+		if (reason instanceof Error) return reason.message;
+		if (reason !== null && typeof reason === "object") {
+			var parts = [];
+			var kind = typeof reason.kind === "string" ? reason.kind : "";
+			var why = typeof reason.reason === "string" ? reason.reason : "";
+			if (why === "approval-rejected") {
+				parts.push(
+					(kind !== "" ? kind + " " : "") +
+						"rejected the approval request (a human refusal, not a crash \u2014 do not retry the refused action)",
+				);
+			} else if (why === "approval-cancelled") {
+				parts.push((kind !== "" ? kind + " " : "") + "cancelled the approval request");
+			} else if (why !== "") {
+				parts.push(kind !== "" ? kind + " abort (" + why + ")" : "abort (" + why + ")");
+			}
+			// Preserve every other human-authored string field (a rejection
+			// comment, a detail), so it survives into the message the model
+			// sees instead of being dropped with the object wrapper.
+			var keys = Object.keys(reason);
+			for (var i = 0; i < keys.length; i++) {
+				var key = keys[i];
+				if (key === "kind" || key === "reason") continue;
+				var value = reason[key];
+				if (typeof value === "string" && value !== "") parts.push(key + ": " + value);
+			}
+			if (parts.length > 0) return parts.join("; ");
+			var json = JSON.stringify(reason);
+			if (typeof json === "string" && json !== "") return json;
+		}
+		var text = String(reason);
+		if (text !== "[object Object]") return text;
+		if (reason !== null && typeof reason === "object") {
+			var names = Object.keys(reason).slice(0, 8).join(", ");
+			if (names !== "") return "abort reason {" + names + "}";
+		}
+		return "abort (unprintable reason)";
+	} catch (e) {
+		return "abort (unprintable reason)";
+	}
+}
+function dotfilesAiErrorText(message) {
+	try {
+		if (typeof message === "string") return message;
+		if (message instanceof Error) return message.message;
+		if (message !== null && typeof message === "object") {
+			var json = JSON.stringify(message);
+			if (typeof json === "string" && json !== "") return json;
+		}
+		var text = String(message);
+		if (text !== "[object Object]") return text;
+		return "<unprintable error message>";
+	} catch (e) {
+		return "<unprintable error message>";
+	}
+}
+// dotfiles-ai#152 helpers — END
+HELPERS_EOF
+)"
+
+step_patch_dsh_run_code_abort() {
+	local dsh_bin dsh_real dsh_pkg worker_js tools_js helpers_tmp
+	dsh_bin="$(command -v dsh 2>/dev/null || true)"
+	if [ -z "$dsh_bin" ]; then
+		echo "  WARNING: dsh not on PATH; skipping run_code abort-message patch (#152)."
+		return 0
+	fi
+	# Same realpath capture as step_drop_code_preset: a function name or
+	# alias must not kill the whole sync under set -euo pipefail.
+	dsh_real="$(realpath "$dsh_bin" 2>/dev/null || true)"
+	if [ -z "$dsh_real" ] || [ ! -x "$dsh_real" ]; then
+		echo "  WARNING: could not resolve dsh to a real binary ('$dsh_bin'); skipping run_code abort-message patch (#152)."
+		return 0
+	fi
+	dsh_pkg="$(dirname "$(dirname "$dsh_real")")"
+	worker_js="$dsh_pkg/node_modules/@deepseek-ai/dsh-code-runtime-worker-thread/lib/index.js"
+	tools_js="$dsh_pkg/node_modules/@deepseek-ai/dsh-tools/lib/index.js"
+	if [ ! -f "$worker_js" ] && [ ! -f "$tools_js" ]; then
+		echo "  WARNING: neither dsh-tools nor the worker runtime found under $(short_path "$dsh_pkg"); skipping run_code abort-message patch (#152)."
+		return 0
+	fi
+	helpers_tmp="$(mktemp)"
+	printf '%s\n' "$PATCH_152_HELPERS" >"$helpers_tmp"
+	python3 - "$helpers_tmp" "$worker_js" "$tools_js" <<'PY'
+import json
+import os
+import sys
+
+helpers_path, worker_js, tools_js = sys.argv[1], sys.argv[2], sys.argv[3]
+helpers = open(helpers_path).read().rstrip("\n") + "\n"
+
+def entry_loads(pkg_dir, main_file):
+    # Fail LOUD when upstream moves the entry point: patching a file the
+    # runtime no longer loads is the silent-skip this step exists to prevent.
+    try:
+        pkg = json.load(open(pkg_dir + "/package.json"))
+    except OSError:
+        return False
+    main = pkg.get("main", "")
+    exports = pkg.get("exports", {})
+    entry = exports.get(".", {}).get("default", main) if isinstance(exports, dict) else main
+    return isinstance(entry, str) and main_file in entry
+
+def patch_worker(path):
+    pkg_dir = os.path.dirname(os.path.dirname(path))
+    if not entry_loads(pkg_dir, "lib/index.js"):
+        print("  WARNING (#152): worker runtime entry moved; NOT patching " + path + " (patch would be dead).")
+        return
+    text = open(path).read()
+    sites = [
+        "message: String(request.signal.reason)",
+        "message: String(request.signal?.reason)",
+    ]
+    fixed = [
+        "message: dotfilesAiAbortMessage(request.signal.reason)",
+        "message: dotfilesAiAbortMessage(request.signal?.reason)",
+    ]
+    anchor = "function messageOf(error) {"
+    helper_here = "function dotfilesAiAbortMessage" in text
+    sites_fixed = all(s in text for s in fixed)
+    if helper_here and sites_fixed:
+        print("  run_code abort serialiser already applied to the worker runtime; no change")
+        return
+    if not helper_here and all(s in text for s in sites) and text.count(anchor) == 1:
+        for old, new in zip(sites, fixed):
+            text = text.replace(old, new)
+        head, sep, tail = text.partition(anchor)
+        note = (
+            "/* dotfiles-ai#152: serialise the abort reason (a human refusal is a "
+            "plain object, and String() on it reads '[object Object]'). A dsh "
+            "reinstall wipes this; the next sync re-applies it. */\n" + helpers
+        )
+        text = head + note + sep + tail
+        open(path, "w").write(text)
+        print("  patched the worker runtime abort message (#152)")
+        return
+    print(
+        "  WARNING (#152): worker runtime shape changed (expected two "
+        "String(request.signal.reason) sites and one messageOf anchor); NOT patching. "
+        "A dsh upgrade likely moved the code \u2014 update step_patch_dsh_run_code_abort."
+    )
+
+def patch_tools(path):
+    pkg_dir = os.path.dirname(os.path.dirname(path))
+    if not entry_loads(pkg_dir, "lib/index.js"):
+        print("  WARNING (#152): dsh-tools entry moved; NOT patching " + path + " (patch would be dead).")
+        return
+    text = open(path).read()
+    pristine = "code run failed (${result.error.kind}): ${result.error.message}${logsText}"
+    fixed = "code run failed (${result.error.kind}): ${dotfilesAiErrorText(result.error.message)}${logsText}"
+    anchor = "var CodeRunFailedError = class extends HarnessError {"
+    helper_here = "function dotfilesAiErrorText" in text
+    if helper_here and fixed in text:
+        print("  run_code abort guard already applied to dsh-tools; no change")
+        return
+    if not helper_here and text.count(pristine) == 1 and text.count(anchor) == 1:
+        text = text.replace(pristine, fixed)
+        head, sep, tail = text.partition(anchor)
+        note = (
+            "/* dotfiles-ai#152: a structured error message must never reach the "
+            "template literal raw (${...} on an object reads '[object Object]'). "
+            "A dsh reinstall wipes this; the next sync re-applies it. */\n" + helpers
+        )
+        text = head + note + sep + tail
+        open(path, "w").write(text)
+        print("  patched the dsh-tools abort guard (#152)")
+        return
+    print(
+        "  WARNING (#152): dsh-tools shape changed (expected one CodeRunFailedError "
+        "template and one class anchor); NOT patching. "
+        "A dsh upgrade likely moved the code \u2014 update step_patch_dsh_run_code_abort."
+    )
+
+patch_worker(worker_js)
+patch_tools(tools_js)
+PY
+	local rc=$?
+	rm -f "$helpers_tmp"
+	if [ "$rc" -ne 0 ]; then
+		echo "  WARNING (#152): abort-message patch script failed; continuing sync." >&2
+		return 0
+	fi
+	# A patched file that no longer parses would break the next dsh boot:
+	# check syntax even though the edits are anchored string swaps.
+	for f in "$worker_js" "$tools_js"; do
+		if [ -f "$f" ] && rg -q "dotfiles-ai#152" "$f" 2>/dev/null; then
+			if node --check "$f" 2>/dev/null; then
+				echo "  syntax OK: $(short_path "$f")"
+			else
+				echo "  WARNING (#152): $(short_path "$f") fails node --check after patching; reinstall dsh to revert." >&2
+			fi
+		fi
+	done
+	echo "  (patched modules load at boot: restart dsh to pick this up)"
+}
+
 step_disable_replaced_jobs_rows() {
 	# Effort 6: job-viewer replaces both dsh-tool-jobs (the model-facing
 	# job_list/job_output/job_kill tools, id tool-jobs, in the standard
@@ -1852,6 +2078,7 @@ STEPS=(
 	"Disable tool-jobs and ui-jobs (job-viewer replaces both)|step_disable_replaced_jobs_rows"
 	"Relocate the attach button to the send/steer edge|step_relocate_attach_button"
 	"Stop the web-tools search-button background poll|step_stop_web_tools_search_poll"
+	"Serialise run_code abort reasons in the installed DSH (#152)|step_patch_dsh_run_code_abort"
 	"Register the aidos agent preset|step_register_aidos_preset"
 	"Check the aidos preset's subagent agentOptions placement|step_check_aidos_subagent_pin"
 	"Check the pi-ai catalog for drift and mis-forced protocols|step_check_pi_ai_drift"

@@ -16,7 +16,7 @@
  * slot name (`slot "tool.call.toolview" is already declared`, verified by
  * running the shipped SlotCore). So this bundle shadows the per-tool ROWS:
  * it registers the `read`, `bash`, `edit`, `write`, `undo_edit`,
- * `undo_last_edit`, `todo_write`, and `ask_user_question` keys of
+ * `undo_last_edit`, `todo_write`, `ask_user_question`, and `run_code` keys of
  * `tool.call.toolview` at priority -100. Keyed slots sort ascending by
  * priority and the lowest live entry renders (dsh-client-ui-slots SlotCore:
  * entries sort by `options.priority ?? 0`; `entriesOfSlot` keeps the first
@@ -85,6 +85,7 @@ import {
   typeCustomInDraft,
 } from "./questions";
 import { countMessageRows, prettyRows } from "./pretty";
+import { runCodeBodyText, runCodeOutputText, runCodeSummary } from "./run-code";
 import {
   injectStyle,
   mergeCss,
@@ -207,6 +208,7 @@ var IconApiOutline14 = primitives.IconApiOutline14;
 var IconChevronDownOutline14 = primitives.IconChevronDownOutline14;
 var IconInspectOutline12 = primitives.IconInspectOutline12;
 var IconChecklistOutline14 = primitives.IconChecklistOutline14;
+var IconPlayOutline16 = primitives.IconPlayOutline16;
 var IconQuestionOutline14 = primitives.IconQuestionOutline14;
 var IconAgentPresetOutline16 = primitives.IconAgentPresetOutline16;
 var IconStopFill16 = primitives.IconStopFill16;
@@ -723,6 +725,11 @@ function renderToolRenderCard(options, approvalOpen) {
           ) : null}
         </div>
       ) : null}
+      {/* #152: a permanent footer BELOW the collapsible body, never gated on
+          `open`. The run_code shadow renders the program RESULT here, so it
+          is visible with zero clicks while the code stays collapsed. Only
+          run_code passes `below` today. */}
+      {options.below !== null && options.below !== undefined ? options.below : null}
       {/* The answer bar sits at the BOTTOM of the card, under the body: the
           decision is the last thing in reading order, after the command and
           output it is a judgement about. It lives ONLY while the decision is
@@ -3980,6 +3987,97 @@ function WebFetchRow(props) {
   });
 }
 
+// ---- run_code row (#152, Part B): the RESULT is the visible content. ----
+// The owner likes the builtin Code card, including its nested subtool rows,
+// and wants exactly one change: the program output (console.log plus the
+// returned value) visible WITHOUT expanding anything, with the CODE as the
+// collapsed content behind the 'Code' summary.
+//
+// MECHANISM: (2), a narrow toolview shadow — (1) CSS-only is impossible and
+// (3) upstream change is not needed. (1) fails structurally, verified in
+// the shipped bundle: DisclosureRow renders its children ONLY when open
+// (`l && g` in the web-frontend bundle), so while collapsed the OUT node
+// is not in the DOM at all and no selector can reveal it. The shadow
+// replaces only the atomic `run_code` row: nested subtool rows are rendered
+// by upstream's ToolCallTree as SIBLINGS of the toolview (the `.subCalls`
+// container under each call row), so they are preserved untouched — the
+// trap the ticket names does not trigger. What IS reimplemented is the
+// single row's own derivation, in run-code.ts beside tested mirrors of
+// upstream's summary/body/output derivation; see that module's header for
+// the exact contract and what will drift.
+//
+// Layout: the collapsed row reads Code + description (error text on
+// failure, as upstream). The code rides the normal collapsible body. The
+// output rides the permanent `below` footer: a sibling of the row inside
+// the same card — the same depth the outer tool call sits at — visible
+// with zero clicks. Empty output (including the host's NO_OUTPUT
+// sentinel) renders nothing, not an empty labelled row. Long output keeps
+// today's rule: internal scroll past 150px (.tool-render-code-out-text
+// mirrors upstream .ioSection's max-height), full text retained.
+function RunCodeRow(props) {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  var setExpanded = expandedState[1];
+  var block = props.block;
+  var done = doneOf(block);
+  var raw = argsRawOf(block);
+  var summary = runCodeSummary(raw);
+  var codeText = runCodeBodyText(raw);
+  var content =
+    done && block !== null && typeof block === "object" && Array.isArray(block.content)
+      ? block.content
+      : [];
+  var isError = done && block !== null && typeof block === "object" && block.isError === true;
+  var error = done && block !== null && typeof block === "object" ? block.error : undefined;
+  var output = done ? runCodeOutputText(content, isError, error) : null;
+  var errorText = done ? errorTextOf(block) : null;
+  var state = rowStateOf(block);
+  var errorSummary =
+    state === "error" && errorText !== null && errorText !== ""
+      ? firstLineOfError(errorText)
+      : undefined;
+  var body = null;
+  if (codeText !== null && codeText !== "") {
+    var rows = numberedReadRows(codeText, 1);
+    body = <div className="tool-render-code">{readLineRows(rows, "typescript")}</div>;
+  }
+  // The hoisted result. Deliberately NOT expandable-gated: a row whose only
+  // content is output must not offer a disclosure that opens onto nothing.
+  var below = null;
+  if (output !== null) {
+    below = (
+      <div className="tool-render-code-out">
+        <div className="tool-render-code-out-label">OUT</div>
+        <pre
+          className="tool-render-output tool-render-code-out-text"
+          tool-render-error={state === "error" || undefined}
+        >
+          {output}
+        </pre>
+      </div>
+    );
+  }
+  return toolRenderRow({
+    callId: props.callId,
+    useSession: props.useSession, useProjection: props.useProjection,
+    toolName: "Run code",
+    icon: <IconPlayOutline16 size={14} />,
+    title: "Code",
+    summary: summary,
+    state: state,
+    expandable: body !== null,
+    expanded: expanded,
+    onToggle: function () {
+      setExpanded(!expanded);
+    },
+    body: body,
+    below: below,
+    errorSummary: errorSummary,
+    errorText: errorText,
+    inspect: props.inspect,
+  });
+}
+
 // ---- compaction checkpoint row: structured view of a compaction marker. --
 // The compaction fork stores a prettyView payload on each `compaction/summary`
 // event, and the host-side projection in projection.ts folds those payloads
@@ -4448,6 +4546,18 @@ function apply(ctx) {
         priority: -100,
       },
       WebFetchRow,
+    );
+    // #152, Part B: the run_code shadow. Replaces only the atomic Code row
+    // (output hoisted visible, code collapsed); nested subtool rows stay
+    // tree-owned and untouched. See RunCodeRow above for the mechanism
+    // justification.
+    yield ctx.slots.register(
+      {
+        name: "tool.call.toolview",
+        key: "run_code",
+        priority: -100,
+      },
+      RunCodeRow,
     );
   });
   ctx.slots.inject("conversation.chat.node", function* () {
