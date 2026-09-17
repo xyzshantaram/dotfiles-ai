@@ -1423,7 +1423,8 @@ step_patch_dsh_run_code_abort() {
 	fi
 	helpers_tmp="$(mktemp)"
 	printf '%s\n' "$PATCH_152_HELPERS" >"$helpers_tmp"
-	python3 - "$helpers_tmp" "$worker_js" "$tools_js" <<'PY'
+	local rc=0
+	if python3 - "$helpers_tmp" "$worker_js" "$tools_js" <<'PY'
 import json
 import os
 import sys
@@ -1516,7 +1517,18 @@ def patch_tools(path):
 patch_worker(worker_js)
 patch_tools(tools_js)
 PY
-	local rc=$?
+	then
+		rc=0
+	else
+		# The if/else is load-bearing, not style (#152 review). A BARE
+		# `python3 ... <<PY` under `set -euo pipefail` aborts the whole sync at
+		# the failing command, so a following `local rc=$?` never runs and the
+		# WARNING below is dead code in exactly the case it exists for: a
+		# read-only dsh file (PermissionError), an unreadable target, or no
+		# python3 at all. Every later sync step would be skipped. This file
+		# documents the same trap for command substitution twice already.
+		rc=$?
+	fi
 	rm -f "$helpers_tmp"
 	if [ "$rc" -ne 0 ]; then
 		echo "  WARNING (#152): abort-message patch script failed; continuing sync." >&2
