@@ -1,10 +1,31 @@
 /**
  * bash-diagram — a read-only dataflow diagram model for bash tool-call rows.
  *
- * Ticket #149. SCOPE: a single, non-backgrounded statement that is either a
- * multi-stage pipeline of plain commands or one command carrying redirects.
+ * Ticket #149 (v1). SCOPE: a single, non-backgrounded statement that is either
+ * a multi-stage pipeline of plain commands or one command carrying redirects.
  * Everything else (control flow, && chains, subshells, command substitution,
  * backgrounding) returns null and the row renders exactly as it does today.
+ *
+ * Ticket #160 (v2). SCOPE: a multi-statement script (statements separated by
+ * `;` or newline) draws as an ORDERED SEQUENCE of statement groups. Each
+ * group reuses v1's stage/arrow machinery where it applies: a multi-stage
+ * pipeline of plain commands, a command carrying redirects, or — new in v2 —
+ * a single plain command as one block (the `echo` between two pipelines in
+ * the motivating script must not sink the whole diagram). A statement v1
+ * would refuse (AndOr, subshell, compound, ...) renders as its VERBATIM
+ * slice inside the sequence, never as stages and arrows.
+ *
+ * WHY A SEQUENCE IS HONEST WHERE &&-AS-ARROW WOULD NOT BE (#149's reasoning,
+ * kept): the AST models syntax, not dataflow. A pipe carries bytes; `&&`
+ * carries only a decision, so drawing both as arrows would claim a dataflow
+ * that does not exist. A `;`/newline sequence claims nothing but order —
+ * "these ran in order" — which is true and drawable. The sequence separator
+ * therefore MUST NOT look like a pipe (see the client: vertical "then ↓"
+ * between stacked statement rows, never the horizontal `|`/`→` glyph), and
+ * `&&`/`||` groups carry an explicit conditional marker rather than being
+ * silently lumped with `;`. A backgrounded statement (`&`) voids even the
+ * ordering claim (it runs concurrently), so any `background === true`
+ * degrades the WHOLE script to text, exactly as in v1.
  *
  * CLIENT PARSE ONLY. This module imports `parse` from "unbash" and nothing
  * else — @cad0p/unbash-walker MUST NOT enter the client bundle (it imports
@@ -161,118 +182,94 @@ function carveHeredocs(
   return carved;
 }
 
-function buildDiagram(command: string): BashDiagram | null {
-  if (typeof command !== "string" || command === "") return null;
-  if (command.length > BASH_DIAGRAM_MAX_COMMAND) return null;
-  let script: any;
-  try {
-    script = parse(command);
-  } catch {
-    return null;
-  }
-  if (script === null || typeof script !== "object") return null;
-  if (Array.isArray(script.errors) && script.errors.length > 0) return null;
-  if (!Array.isArray(script.commands) || script.commands.length !== 1) return null;
-  const statement = script.commands[0];
-  if (statement === null || typeof statement !== "object") return null;
-  if (statement.background === true) return null;
+/**
+ * Classify one statement's inner node into the drawable shapes. Returns null
+ * for everything v1 falls back to text on (AndOr, Subshell, BraceGroup, If,
+ * For, While, Case, Function, Coproc, TestCommand, ArithmeticCommand, ...):
+ * scope says control flow falls back to text, never a partial diagram of one
+ * branch. Shared by v1 (single statement) and v2 (each sequence member).
+ */
+interface ClassifiedInner {
+  kind: "pipeline" | "command";
+  negated: boolean;
+  timed: boolean;
+  rawStages: any[];
+  operators: any[];
+}
 
-  const inner = statement.command;
+function classifyInner(inner: any): ClassifiedInner | null {
   if (inner === null || typeof inner !== "object") return null;
-
-  let kind: "pipeline" | "command";
-  let negated = false;
-  let timed = false;
-  let rawStages: any[];
-  let operators: any[];
   if (inner.type === "Pipeline") {
     if (!Array.isArray(inner.commands) || inner.commands.length === 0) return null;
     // A single-stage pipeline (`! ls`, `time ls`) unwraps to the command
-    // path below: without redirects it stays text, with redirects it draws
-    // carrying its badges. Only multi-stage pipelines draw as pipelines.
+    // path below: without redirects it stays text in v1, with redirects it
+    // draws carrying its badges. Only multi-stage pipelines draw as pipelines.
     if (inner.commands.length === 1) {
       const only = inner.commands[0];
       if (only === null || typeof only !== "object" || only.type !== "Command") return null;
-      kind = "command";
-      negated = inner.negated === true;
-      timed = inner.time === true;
-      rawStages = [only];
-      operators = [];
-    } else {
-      if (!inner.commands.every((s: any) => s !== null && typeof s === "object" && s.type === "Command")) {
-        return null;
-      }
-      kind = "pipeline";
-      negated = inner.negated === true;
-      timed = inner.time === true;
-      rawStages = inner.commands;
-      operators = Array.isArray(inner.operators) ? inner.operators : [];
-      if (operators.length !== rawStages.length - 1) return null;
-      for (const op of operators) {
-        if (op !== "|" && op !== "|&") return null;
-      }
+      return {
+        kind: "command",
+        negated: inner.negated === true,
+        timed: inner.time === true,
+        rawStages: [only],
+        operators: [],
+      };
     }
-  } else if (inner.type === "Command") {
-    kind = "command";
-    rawStages = [inner];
-    operators = [];
-  } else {
-    // AndOr, Subshell, BraceGroup, If, For, While, Case, Function, Coproc,
-    // TestCommand, ArithmeticCommand, ... — scope says control flow falls
-    // back to text, never a partial diagram of one branch.
-    return null;
-  }
-
-  // Statement-level redirects are vanishingly rare for Command/Pipeline
-  // inners (probes always found them on the inner node), but attribute them
-  // defensively: the single stage, or the last pipeline stage.
-  const statementRedirects: any[] =
-    Array.isArray(statement.redirects) ? statement.redirects : [];
-  const stageRedirectLists: any[][] = rawStages.map((s) =>
-    Array.isArray(s.redirects) ? s.redirects.slice() : [],
-  );
-  for (const r of statementRedirects) {
-    stageRedirectLists[stageRedirectLists.length - 1].push(r);
-  }
-
-  if (kind === "command") {
-    const hasRedirects = stageRedirectLists[0].length > 0;
-    if (!hasRedirects) return null; // a single simple command stays text.
-  }
-
-  // Span sanity: stages in source order, non-overlapping, inside the command.
-  for (const s of rawStages) {
-    if (
-      typeof s.pos !== "number" ||
-      typeof s.end !== "number" ||
-      s.pos < 0 ||
-      s.end > command.length ||
-      s.pos > s.end
-    ) {
+    if (!inner.commands.every((s: any) => s !== null && typeof s === "object" && s.type === "Command")) {
       return null;
     }
+    const rawStages = inner.commands;
+    const operators = Array.isArray(inner.operators) ? inner.operators : [];
+    if (operators.length !== rawStages.length - 1) return null;
+    for (const op of operators) {
+      if (op !== "|" && op !== "|&") return null;
+    }
+    return {
+      kind: "pipeline",
+      negated: inner.negated === true,
+      timed: inner.time === true,
+      rawStages,
+      operators,
+    };
   }
-  for (let i = 0; i + 1 < rawStages.length; i++) {
-    if (rawStages[i].end > rawStages[i + 1].pos) return null;
+  if (inner.type === "Command") {
+    return { kind: "command", negated: false, timed: false, rawStages: [inner], operators: [] };
   }
-  if (typeof statement.end !== "number" || statement.end < rawStages[rawStages.length - 1].end) {
-    return null;
-  }
-  const statementEnd = Math.min(statement.end, command.length);
+  return null;
+}
 
-  const leadingGap = command.slice(0, rawStages[0].pos);
-
-  const arrows: BashDiagramArrow[] = [];
-  for (let i = 0; i + 1 < rawStages.length; i++) {
-    arrows.push({
-      operator: operators[i],
-      gap: command.slice(rawStages[i].end, rawStages[i + 1].pos),
-    });
+/**
+ * Attribute statement-level redirects defensively onto the stage lists.
+ * Statement-level redirects are vanishingly rare for Command/Pipeline inners
+ * (probes always found them on the inner node): the single stage, or the
+ * last pipeline stage, owns them.
+ */
+function attributeStatementRedirects(statement: any, rawStages: any[]): any[][] {
+  const statementRedirects: any[] = Array.isArray(statement.redirects) ? statement.redirects : [];
+  const lists: any[][] = rawStages.map((s) => (Array.isArray(s.redirects) ? s.redirects.slice() : []));
+  for (const r of statementRedirects) {
+    lists[lists.length - 1].push(r);
   }
+  return lists;
+}
 
-  // Heredoc bodies live in the trailing region, in redirect source order.
-  const heredocRedirects: { operator: string; delimiter: string; stage: number; index: number }[] = [];
-  let heredocsUsable = true;
+/**
+ * One heredoc body to carve, with its owner for attribution. `redirectPos`
+ * is the redirect's source offset (null when the node carries none): v1
+ * sorts by it, v2 additionally requires every operator to sit on the last
+ * statement's line (see buildSequenceDiagram).
+ */
+interface HeredocSpec {
+  operator: string;
+  delimiter: string;
+  redirectPos: number | null;
+  stage: number;
+  index: number;
+}
+
+function collectHeredocSpecs(stageRedirectLists: any[][]): { specs: HeredocSpec[]; usable: boolean } {
+  const specs: HeredocSpec[] = [];
+  let usable = true;
   stageRedirectLists.forEach((list, stage) => {
     list.forEach((r, index) => {
       if (r === null || typeof r !== "object" || typeof r.operator !== "string") return;
@@ -280,47 +277,74 @@ function buildDiagram(command: string): BashDiagram | null {
       // A heredoc operator with no usable delimiter target cannot have its
       // body attributed, so the whole diagram degrades to text.
       if (r.target === null || typeof r.target !== "object" || typeof r.target.value !== "string") {
-        heredocsUsable = false;
+        usable = false;
         return;
       }
-      heredocRedirects.push({ operator: r.operator, delimiter: r.target.value, stage, index });
+      specs.push({
+        operator: r.operator,
+        delimiter: r.target.value,
+        redirectPos: typeof r.pos === "number" ? r.pos : null,
+        stage,
+        index,
+      });
     });
   });
-  if (!heredocsUsable) return null;
+  if (!usable) return { specs: [], usable: false };
   // Sort into source order for body attribution (bodies serialize in the
   // order the << operators appear). Redirect lists are already ordered, and
   // stages are ordered, so this is a no-op in practice — belt and braces.
-  heredocRedirects.sort((a, b) => {
-    const ra = stageRedirectLists[a.stage][a.index];
-    const rb = stageRedirectLists[b.stage][b.index];
-    return (typeof ra.pos === "number" ? ra.pos : 0) - (typeof rb.pos === "number" ? rb.pos : 0);
-  });
+  specs.sort((a, b) => (a.redirectPos ?? 0) - (b.redirectPos ?? 0));
+  return { specs, usable: true };
+}
 
+/**
+ * Partition the trailing region [statementEnd, command.length) exactly: gap
+ * pieces stay verbatim; each heredoc piece is the carved body plus its
+ * delimiter line plus the newline that terminated that line ("" when the
+ * delimiter line ends the command). Returns null when the bodies cannot be
+ * accounted for exactly — the caller degrades to text rendering.
+ */
+function buildTrailing(
+  command: string,
+  statementEnd: number,
+  specs: HeredocSpec[],
+): { trailing: BashDiagramTrailing[]; carves: HeredocCarve[] } | null {
   const trailing: BashDiagramTrailing[] = [];
-  const heredocByKey = new Map<string, HeredocCarve>();
-  if (heredocRedirects.length > 0) {
+  if (specs.length > 0) {
     const carved = carveHeredocs(
       command,
       statementEnd,
-      heredocRedirects.map((h) => ({ operator: h.operator, delimiter: h.delimiter })),
+      specs.map((h) => ({ operator: h.operator, delimiter: h.delimiter })),
     );
-    if (carved === null || carved.length !== heredocRedirects.length) return null;
+    if (carved === null || carved.length !== specs.length) return null;
     // Partition the trailing region: pre gap, then interleaved bodies.
     const firstNewline = command.indexOf("\n", statementEnd);
     let cursor = firstNewline + 1;
     trailing.push({ kind: "gap", text: command.slice(statementEnd, cursor) });
-    heredocRedirects.forEach((h, i) => {
-      const c = carved[i];
+    for (const c of carved) {
       trailing.push({ kind: "heredoc", body: c.body, delimiterLine: c.delimiterLine, newline: c.newline });
-      heredocByKey.set(h.stage + ":" + h.index, c);
       cursor += c.body.length + c.delimiterLine.length + c.newline.length;
-    });
+    }
     trailing.push({ kind: "gap", text: command.slice(cursor) });
-  } else {
-    trailing.push({ kind: "gap", text: command.slice(statementEnd) });
+    return { trailing, carves: carved };
   }
+  trailing.push({ kind: "gap", text: command.slice(statementEnd) });
+  return { trailing, carves: [] };
+}
 
-  const stages: BashDiagramStage[] = rawStages.map((s, stageIdx) => {
+/**
+ * Build the drawn stage blocks for one statement: `slice` is the verbatim
+ * stage source, `words` display text only (slice minus redirect spans,
+ * whitespace collapsed), redirects verbatim with carved heredoc bodies
+ * attached from `heredocByKey` ("stage:index").
+ */
+function buildStageModels(
+  command: string,
+  rawStages: any[],
+  stageRedirectLists: any[][],
+  heredocByKey: Map<string, HeredocCarve>,
+): BashDiagramStage[] {
+  return rawStages.map((s, stageIdx) => {
     const list = stageRedirectLists[stageIdx];
     const spans: { start: number; end: number }[] = [];
     for (const r of list) {
@@ -374,6 +398,83 @@ function buildDiagram(command: string): BashDiagram | null {
       exitCode: undefined,
     };
   });
+}
+
+function buildDiagram(command: string): BashDiagram | null {
+  if (typeof command !== "string" || command === "") return null;
+  if (command.length > BASH_DIAGRAM_MAX_COMMAND) return null;
+  let script: any;
+  try {
+    script = parse(command);
+  } catch {
+    return null;
+  }
+  if (script === null || typeof script !== "object") return null;
+  if (Array.isArray(script.errors) && script.errors.length > 0) return null;
+  if (!Array.isArray(script.commands) || script.commands.length !== 1) return null;
+  const statement = script.commands[0];
+  if (statement === null || typeof statement !== "object") return null;
+  if (statement.background === true) return null;
+
+  const classified = classifyInner(statement.command);
+  if (classified === null) {
+    // AndOr, Subshell, BraceGroup, If, For, While, Case, Function, Coproc,
+    // TestCommand, ArithmeticCommand, ... — scope says control flow falls
+    // back to text, never a partial diagram of one branch.
+    return null;
+  }
+  const { kind, negated, timed, rawStages, operators } = classified;
+
+  const stageRedirectLists = attributeStatementRedirects(statement, rawStages);
+
+  if (kind === "command") {
+    const hasRedirects = stageRedirectLists[0].length > 0;
+    if (!hasRedirects) return null; // a single simple command stays text.
+  }
+
+  // Span sanity: stages in source order, non-overlapping, inside the command.
+  for (const s of rawStages) {
+    if (
+      typeof s.pos !== "number" ||
+      typeof s.end !== "number" ||
+      s.pos < 0 ||
+      s.end > command.length ||
+      s.pos > s.end
+    ) {
+      return null;
+    }
+  }
+  for (let i = 0; i + 1 < rawStages.length; i++) {
+    if (rawStages[i].end > rawStages[i + 1].pos) return null;
+  }
+  if (typeof statement.end !== "number" || statement.end < rawStages[rawStages.length - 1].end) {
+    return null;
+  }
+  const statementEnd = Math.min(statement.end, command.length);
+
+  const leadingGap = command.slice(0, rawStages[0].pos);
+
+  const arrows: BashDiagramArrow[] = [];
+  for (let i = 0; i + 1 < rawStages.length; i++) {
+    arrows.push({
+      operator: operators[i],
+      gap: command.slice(rawStages[i].end, rawStages[i + 1].pos),
+    });
+  }
+
+  // Heredoc bodies live in the trailing region, in redirect source order.
+  const { specs: heredocSpecs, usable: heredocsUsable } = collectHeredocSpecs(stageRedirectLists);
+  if (!heredocsUsable) return null;
+
+  const trailed = buildTrailing(command, statementEnd, heredocSpecs);
+  if (trailed === null) return null;
+  const trailing = trailed.trailing;
+  const heredocByKey = new Map<string, HeredocCarve>();
+  heredocSpecs.forEach((h, i) => {
+    heredocByKey.set(h.stage + ":" + h.index, trailed.carves[i]);
+  });
+
+  const stages = buildStageModels(command, rawStages, stageRedirectLists, heredocByKey);
 
   return { kind, negated, timed, leadingGap, stages, arrows, trailing };
 }
@@ -470,6 +571,373 @@ export function attributePipeStages(model: BashDiagram, pipeStages: unknown): Ba
     leadingGap: model.leadingGap,
     stages,
     arrows: model.arrows,
+    trailing: model.trailing,
+  };
+}
+
+// ---- #160 (v2): multi-statement scripts as an ordered sequence. ----
+//
+// A `;`/newline-separated script draws as a SEQUENCE of statement groups.
+// The sequence claims order only ("these ran in order"), never dataflow, so
+// it stays inside #149's honesty boundary: pipes keep their horizontal
+// `|`/`→` arrows *within* a group, while the boundary *between* groups is a
+// vertical "then ↓" marker that shares no glyph with any pipe (see the
+// client). `&&`/`||` statements are NOT silently lumped with `;`: they render
+// as verbatim text groups carrying an explicit conditional marker. A
+// backgrounded statement degrades the whole script to text — `&` runs
+// concurrently, so even the ordering claim would be false.
+
+/**
+ * One drawn statement group: v1's stage/arrow machinery, plus the verbatim
+ * `groupGap` between the last stage's end and the statement's end (usually
+ * "" — trailing comments before a `;` belong to the SEPARATOR, not the
+ * statement, per unbash's spans).
+ */
+export interface BashSequenceUnit {
+  kind: "pipeline" | "command";
+  negated: boolean;
+  timed: boolean;
+  leadingGap: string;
+  stages: BashDiagramStage[];
+  arrows: BashDiagramArrow[];
+  groupGap: string;
+}
+
+/** How an `&&`/`||` text group may run: unconditionally is never the answer,
+ *  so the marker names the condition instead of implying order-only. */
+export type BashSequenceConditional = "&&" | "||" | "mixed";
+
+export type BashSequenceStatement =
+  | { kind: "diagram"; unit: BashSequenceUnit }
+  | { kind: "text"; slice: string; conditional: BashSequenceConditional | null };
+
+export interface BashSequenceDiagram {
+  kind: "sequence";
+  /** Verbatim source before the first statement (indent, leading comments). */
+  leadingGap: string;
+  statements: BashSequenceStatement[];
+  /** Verbatim source between statement spans (`;`, newlines, comments);
+   *  length is always statements.length - 1. */
+  separators: string[];
+  /** The trailing region after the last statement, partitioned exactly as in
+   *  v1 (heredoc bodies live here, in redirect source order). */
+  trailing: BashDiagramTrailing[];
+}
+
+/**
+ * True when any heredoc redirect (`<<`/`<<-` with a target) hides anywhere
+ * in the subtree. Recorded per TEXT group (see buildSequenceDiagram): a text
+ * group cannot own carved bodies, so its bodies ride verbatim in the
+ * separators/trailing gaps — which is exact only while no DIAGRAM group
+ * carves bodies of its own (bodies serialize in global operator order, so
+ * coexisting carves and verbatim bodies could interleave ambiguously).
+ */
+function subtreeHasHeredoc(node: any): boolean {
+  if (node === null || typeof node !== "object") return false;
+  if (Array.isArray(node)) {
+    for (const el of node) {
+      if (subtreeHasHeredoc(el)) return true;
+    }
+    return false;
+  }
+  if ((node.operator === "<<" || node.operator === "<<-") && "target" in node) return true;
+  for (const key of Object.keys(node)) {
+    if (subtreeHasHeredoc(node[key])) return true;
+  }
+  return false;
+}
+
+/** Name the condition an AndOr statement carries; null for anything else. */
+function conditionalOf(inner: any): BashSequenceConditional | null {
+  if (inner === null || typeof inner !== "object" || inner.type !== "AndOr") return null;
+  const seen = new Set<string>();
+  const ops = Array.isArray(inner.operators) ? inner.operators : [];
+  for (const op of ops) {
+    if (op === "&&" || op === "||") seen.add(op);
+    else seen.add("other");
+  }
+  if (seen.size === 1) {
+    if (seen.has("&&")) return "&&";
+    if (seen.has("||")) return "||";
+  }
+  return "mixed";
+}
+
+interface PendingUnit {
+  owner: number;
+  unit: BashSequenceUnit;
+  rawStages: any[];
+  lists: any[][];
+  specs: HeredocSpec[];
+}
+
+function buildSequenceDiagram(command: string): BashSequenceDiagram | null {
+  if (typeof command !== "string" || command === "") return null;
+  if (command.length > BASH_DIAGRAM_MAX_COMMAND) return null;
+  let script: any;
+  try {
+    script = parse(command);
+  } catch {
+    return null;
+  }
+  if (script === null || typeof script !== "object") return null;
+  if (Array.isArray(script.errors) && script.errors.length > 0) return null;
+  // v1 owns the single statement; empties and comment-only scripts stay text.
+  if (!Array.isArray(script.commands) || script.commands.length < 2) return null;
+  const statements: any[] = script.commands;
+  for (const st of statements) {
+    if (st === null || typeof st !== "object") return null;
+    // `&` runs concurrently: even the "these ran in order" claim would be
+    // false, so any backgrounded statement voids the whole sequence (v1's
+    // `a | b &` and `sleep 1 & true | false` stay text exactly as before).
+    if (st.background === true) return null;
+  }
+  // Span sanity: statements in source order, non-overlapping, inside the
+  // command.
+  for (let i = 0; i < statements.length; i++) {
+    const st = statements[i];
+    if (
+      typeof st.pos !== "number" ||
+      typeof st.end !== "number" ||
+      st.pos < 0 ||
+      st.end > command.length ||
+      st.pos > st.end
+    ) {
+      return null;
+    }
+    if (i > 0 && statements[i - 1].end > st.pos) return null;
+  }
+  const lastEnd = Math.min(statements[statements.length - 1].end, command.length);
+
+  // Separators are verbatim inter-statement text: `;`, whitespace, newlines,
+  // comments. A `&` here would be a background split the flag above missed —
+  // refuse rather than claim order across it.
+  const separators: string[] = [];
+  for (let i = 0; i + 1 < statements.length; i++) {
+    const sep = command.slice(statements[i].end, statements[i + 1].pos);
+    if (sep.includes("&")) return null;
+    separators.push(sep);
+  }
+
+  const groups: BashSequenceStatement[] = [];
+  const pending: PendingUnit[] = [];
+  const allSpecs: (HeredocSpec & { owner: number })[] = [];
+  // A text group's heredoc bodies ride verbatim in the separators/trailing
+  // gaps (no carve can attribute them inside a verbatim slice). That is
+  // exact only while no diagram group carves: bodies serialize in global
+  // operator order, so a carve alongside verbatim bodies could attribute
+  // the wrong bytes to an endpoint while still reconstructing cleanly.
+  let textGroupHeredocs = false;
+  for (let si = 0; si < statements.length; si++) {
+    const st = statements[si];
+    const classified = classifyInner(st.command);
+    if (classified !== null) {
+      const { kind, negated, timed, rawStages, operators } = classified;
+      for (const s of rawStages) {
+        if (
+          typeof s.pos !== "number" ||
+          typeof s.end !== "number" ||
+          s.pos < 0 ||
+          s.end > command.length ||
+          s.pos > s.end
+        ) {
+          return null;
+        }
+      }
+      for (let i = 0; i + 1 < rawStages.length; i++) {
+        if (rawStages[i].end > rawStages[i + 1].pos) return null;
+      }
+      if (rawStages[0].pos < st.pos || rawStages[rawStages.length - 1].end > st.end) return null;
+      const stmtEnd = Math.min(st.end, command.length);
+      const lists = attributeStatementRedirects(st, rawStages);
+      const unit: BashSequenceUnit = {
+        kind,
+        negated,
+        timed,
+        leadingGap: command.slice(st.pos, rawStages[0].pos),
+        stages: [],
+        arrows: [],
+        groupGap: command.slice(rawStages[rawStages.length - 1].end, stmtEnd),
+      };
+      for (let i = 0; i + 1 < rawStages.length; i++) {
+        unit.arrows.push({
+          operator: operators[i],
+          gap: command.slice(rawStages[i].end, rawStages[i + 1].pos),
+        });
+      }
+      const { specs, usable } = collectHeredocSpecs(lists);
+      if (!usable) return null;
+      for (const spec of specs) allSpecs.push({ ...spec, owner: si });
+      pending.push({ owner: si, unit, rawStages, lists, specs });
+      groups.push({ kind: "diagram", unit });
+    } else {
+      // Not drawable as stages: keep the verbatim slice so the sequence
+      // never lies by omission, and mark `&&`/`||` explicitly so a reader
+      // can tell "ran unconditionally" from "ran only if...". A heredoc
+      // hiding here is recorded, not refused: its bodies stay verbatim in
+      // the gaps, exact while no diagram group carves (see above).
+      if (subtreeHasHeredoc(st)) textGroupHeredocs = true;
+      groups.push({
+        kind: "text",
+        slice: command.slice(st.pos, Math.min(st.end, command.length)),
+        conditional: conditionalOf(st.command),
+      });
+    }
+  }
+
+  // Heredoc bodies serialize after the command line in redirect source
+  // order, so a single global carve must account for every diagram body.
+  // That carve is only valid when every operator sits on the LAST
+  // statement's line: an operator on an earlier line has its bodies before
+  // the last line (e.g. `cat <<EOF\nbody\nEOF\nc | d`), where the carve
+  // would misattribute them. Refuse those scripts instead of guessing.
+  // And refuse a carve alongside verbatim text-group bodies (see above):
+  // with diagram bodies carving out of the shared trailing region, a text
+  // group's bodies could interleave ambiguously.
+  if (allSpecs.length > 0 && textGroupHeredocs) return null;
+  for (const spec of allSpecs) {
+    if (spec.redirectPos === null) return null;
+    if (command.slice(spec.redirectPos, lastEnd).includes("\n")) return null;
+  }
+  // Specs arrive in statement order with in-statement source order, but sort
+  // globally anyway: bodies serialize in operator order, period.
+  allSpecs.sort((a, b) => (a.redirectPos ?? 0) - (b.redirectPos ?? 0));
+  const trailed = buildTrailing(command, lastEnd, allSpecs);
+  if (trailed === null) return null;
+  const carveByOwner = new Map<string, HeredocCarve>();
+  allSpecs.forEach((h, i) => {
+    carveByOwner.set(h.owner + ":" + h.stage + ":" + h.index, trailed.carves[i]);
+  });
+  for (const p of pending) {
+    const sub = new Map<string, HeredocCarve>();
+    for (const s of p.specs) {
+      const carve = carveByOwner.get(p.owner + ":" + s.stage + ":" + s.index);
+      if (carve !== undefined) sub.set(s.stage + ":" + s.index, carve);
+    }
+    p.unit.stages = buildStageModels(command, p.rawStages, p.lists, sub);
+  }
+
+  return {
+    kind: "sequence",
+    leadingGap: command.slice(0, statements[0].pos),
+    statements: groups,
+    separators,
+    trailing: trailed.trailing,
+  };
+}
+
+const sequenceCache = new Map<string, BashSequenceDiagram | null>();
+
+/**
+ * Memoised v2 entry point: parse + sequence predicate + model build, once
+ * per distinct command string. Returns null when the command renders as
+ * text — including every single-statement command, which v1 owns. Same
+ * bounded-cache, nulls-cached, no-session-state contract as v1.
+ */
+export function getBashSequenceDiagram(command: string): BashSequenceDiagram | null {
+  if (sequenceCache.has(command)) return sequenceCache.get(command) ?? null;
+  const built = buildSequenceDiagram(command);
+  if (sequenceCache.size >= BASH_DIAGRAM_CACHE_LIMIT) {
+    const oldest = sequenceCache.keys().next();
+    if (!oldest.done) sequenceCache.delete(oldest.value);
+  }
+  sequenceCache.set(command, built);
+  return built;
+}
+
+/** Test hook: drop all memoised sequence entries. */
+export function clearBashSequenceCache(): void {
+  sequenceCache.clear();
+}
+
+/**
+ * Reproduce the command from the sequence model's slices. The v2 fidelity
+ * invariant is `reconstructBashSequence(command,
+ * getBashSequenceDiagram(command)) === command` for every non-null model:
+ * drawn-stage slices plus arrow gaps plus per-unit group gaps, interleaved
+ * with the verbatim separators and leading/trailing regions that belong to
+ * no node. Comments between statements survive inside the separators.
+ */
+export function reconstructBashSequence(command: string, model: BashSequenceDiagram): string {
+  void command;
+  let out = model.leadingGap;
+  for (let i = 0; i < model.statements.length; i++) {
+    const group = model.statements[i];
+    if (group.kind === "diagram") {
+      out += group.unit.leadingGap;
+      for (let k = 0; k < group.unit.stages.length; k++) {
+        out += group.unit.stages[k].slice;
+        if (k < group.unit.arrows.length) out += group.unit.arrows[k].gap;
+      }
+      out += group.unit.groupGap;
+    } else {
+      out += group.slice;
+    }
+    if (i < model.separators.length) out += model.separators[i];
+  }
+  for (const t of model.trailing) {
+    if (t.kind === "gap") out += t.text;
+    else out += t.body + t.delimiterLine + t.newline;
+  }
+  return out;
+}
+
+/** True exactly when the sequence model reproduces the command byte for byte. */
+export function verifyBashSequence(command: string, model: BashSequenceDiagram): boolean {
+  return reconstructBashSequence(command, model) === command;
+}
+
+/**
+ * Attribute per-stage exit codes from `block.meta.pipeStages` onto a COPY of
+ * the sequence (the cached base is never mutated: meta differs per row).
+ *
+ * Honest ONLY on the FINAL statement group, and only through v1's matcher
+ * (length matches the drawn stages AND every entry carries a non-empty
+ * name): PIPESTATUS holds the LAST pipeline only, and bash-guard names
+ * `finalNames` exactly when the script is a flat sequence ending in that
+ * pipeline (finalPipelineNaming in plugins/bash-guard.ts) — a compound
+ * script otherwise carries bare {exitCode} entries plus the "final pipeline
+ * only" note, which this hides. Every non-final group, and any final TEXT
+ * group, shows no codes: earlier lines were never captured, so showing none
+ * is the only non-guess. A conditional (`&&`/`||`) anywhere in the script
+ * disqualifies naming host-side, so conditional scripts never show codes.
+ */
+export function attributeSequenceStages(
+  model: BashSequenceDiagram,
+  pipeStages: unknown,
+): BashSequenceDiagram {
+  const statements = model.statements.map((group, i) => {
+    if (group.kind !== "diagram" || i !== model.statements.length - 1) return group;
+    const coded = attributePipeStages(
+      {
+        kind: group.unit.kind,
+        negated: group.unit.negated,
+        timed: group.unit.timed,
+        leadingGap: group.unit.leadingGap,
+        stages: group.unit.stages,
+        arrows: group.unit.arrows,
+        trailing: [],
+      },
+      pipeStages,
+    );
+    return {
+      kind: "diagram" as const,
+      unit: {
+        kind: coded.kind,
+        negated: coded.negated,
+        timed: coded.timed,
+        leadingGap: coded.leadingGap,
+        stages: coded.stages,
+        arrows: coded.arrows,
+        groupGap: group.unit.groupGap,
+      },
+    };
+  });
+  return {
+    kind: model.kind,
+    leadingGap: model.leadingGap,
+    statements,
+    separators: model.separators,
     trailing: model.trailing,
   };
 }

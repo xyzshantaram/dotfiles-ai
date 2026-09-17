@@ -183,7 +183,7 @@ var EXTENSION_LANGUAGE = {
 // ---- Platform modules: resolved by the shell loader seed at runtime. ----
 import React from "react";
 import { isBashGuardReason } from "./guard";
-import { attributePipeStages, getBashDiagram } from "./bash-diagram";
+import { attributePipeStages, attributeSequenceStages, getBashDiagram, getBashSequenceDiagram } from "./bash-diagram";
 import { escalationDetailOf, escalationLabel, escalationReasonClassName } from "./escalation";
 import {
   composeVerdictTooltip,
@@ -1227,15 +1227,25 @@ function escalationBanner(detail, settled) {
     </div>
   );
 }
-// ---- #149: read-only dataflow diagram for pipe/redirect commands. ----
+// ---- #149: read-only dataflow diagram for pipe/redirect commands, plus
+// #160: multi-statement scripts as an ordered SEQUENCE of statement groups.
 // Auto-rendered when the command is a single non-backgrounded statement
 // that is either a multi-stage pipeline of plain commands or one command
-// carrying redirects; everything else stays text (getBashDiagram returns
-// null there). Stages are blocks in execution order; `|` and `|&` are typed
-// arrows; redirects are labelled endpoints; each heredoc body is one
-// collapsed disclosure. Per-stage exit codes come from
-// block.meta.pipeStages, attributed by attributePipeStages — never from
+// carrying redirects (#149: getBashDiagram returns null elsewhere), or a
+// `;`/newline-separated script of such statements (#160:
+// getBashSequenceDiagram); everything else stays text. Stages are blocks in
+// execution order; `|` and `|&` are typed arrows; redirects are labelled
+// endpoints; each heredoc body is one collapsed disclosure. Per-stage exit
+// codes come from block.meta.pipeStages, attributed by attributePipeStages
+// (single) or attributeSequenceStages (final group only) — never from
 // host-computed offsets, which this component never sees.
+// ---- Sequence vs pipe, the visual contract (#160). Pipes lay stages
+// side-by-side in one row (left to right = data movement) with the verbatim
+// operator plus `→`. Sequence members stack VERTICALLY (top to bottom = time
+// order) joined by a "then ↓" marker that shares no glyph with any pipe.
+// The word "then" is doing the work: plain English for order, impossible to
+// read as bytes flowing. `&&`/`||` groups render as verbatim text with an
+// explicit conditional badge, never as arrows.
 function BashDiagramHeredoc(props) {
   var endpoint = props.endpoint;
   var heredoc = endpoint.heredoc;
@@ -1387,6 +1397,109 @@ function BashCommandDiagram(props) {
     </div>
   );
 }
+// ---- #160: one verbatim statement group inside a sequence. A statement v1
+// would refuse (subshell, &&-chain, compound, ...) keeps its exact source
+// slice — the sequence never lies by omission — and an `&&`/`||` chain gains
+// a conditional badge so "ran only if ..." cannot be misread as "ran next".
+function BashSequenceTextGroup(props) {
+  var group = props.group;
+  var why =
+    group.conditional === "&&"
+      ? "conditional step: the right side runs only if the left side succeeds — unlike `;`, this group may not run at all"
+      : group.conditional === "||"
+        ? "conditional step: the right side runs only if the left side fails — unlike `;`, this group may not run at all"
+        : "conditional step: later parts run only if earlier ones succeed or fail as written — unlike `;`, parts of this group may not run at all";
+  return (
+    <div className="tool-render-diagram-text" title={group.conditional !== null ? why : undefined}>
+      {group.conditional !== null ? (
+        <span
+          className="tool-render-diagram-badge"
+          title={why}
+        >
+          {group.conditional === "mixed" ? "&&/||" : group.conditional}
+        </span>
+      ) : null}
+      <div className="tool-render-diagram-words">
+        <code
+          className="hljs"
+          data-highlighted="yes"
+          dangerouslySetInnerHTML={{ __html: highlightCode(group.slice, "bash") }}
+        />
+      </div>
+    </div>
+  );
+}
+// ---- #160: the boundary between two sequence members. Deliberately NOT a
+// pipe arrow: no operator glyph, a vertical `↓` instead of `→`, stacked rows
+// instead of side-by-side blocks, and the literal word "then". The verbatim
+// separator (`;`, newline) is pure order and needs no display; a comment
+// riding in the separator is content, so it renders muted alongside.
+function BashSequenceSeparator(props) {
+  var separator = props.text;
+  var carriesContent = separator.replace(/[;\s]/g, "") !== "";
+  return (
+    <div className="tool-render-diagram-seq-sep">
+      <span
+        className="tool-render-diagram-seq-then"
+        title="statement boundary: the next statement runs after this one finishes. It carries no data — unlike a pipe, which feeds bytes rightwards."
+      >
+        {"then \u2193"}
+      </span>
+      {carriesContent ? (
+        <code
+          className="hljs tool-render-diagram-seq-sep-text"
+          data-highlighted="yes"
+          dangerouslySetInnerHTML={{ __html: highlightCode(separator, "bash") }}
+        />
+      ) : null}
+    </div>
+  );
+}
+// ---- #160: a multi-statement script as a vertical sequence. Each drawable
+// member reuses BashCommandDiagram (same blocks, arrows, heredoc
+// disclosures and exit pills as v1); other members render verbatim with
+// their conditional badge. Exit codes, if any, sit only on the final member
+// (attributeSequenceStages enforces that); earlier members never show them.
+function BashSequenceDiagram(props) {
+  var model = props.model;
+  var children = [];
+  if (model.leadingGap.trim() !== "") {
+    children.push(<div className="tool-render-diagram-lead">{model.leadingGap}</div>);
+  }
+  for (var i = 0; i < model.statements.length; i++) {
+    if (i > 0) {
+      children.push(<BashSequenceSeparator text={model.separators[i - 1]} />);
+    }
+    var group = model.statements[i];
+    if (group.kind === "diagram") {
+      var unit = group.unit;
+      children.push(
+        <BashCommandDiagram
+          model={{
+            kind: unit.kind,
+            negated: unit.negated,
+            timed: unit.timed,
+            leadingGap: unit.leadingGap,
+            stages: unit.stages,
+            arrows: unit.arrows,
+            trailing: unit.groupGap === "" ? [] : [{ kind: "gap", text: unit.groupGap }],
+          }}
+        />,
+      );
+    } else {
+      children.push(<BashSequenceTextGroup group={group} />);
+    }
+  }
+  for (var t = 0; t < model.trailing.length; t++) {
+    var piece = model.trailing[t];
+    // Heredoc bodies render under their own stage's endpoint; only stray
+    // non-whitespace gap text (e.g. a trailing comment) renders here.
+    if (piece.kind === "gap" && piece.text.trim() !== "") {
+      children.push(<div className="tool-render-diagram-lead">{piece.text}</div>);
+    }
+  }
+  return <div className="tool-render-diagram tool-render-diagram-seq">{children}</div>;
+}
 function BashRow(props) {
   var expandedState = useState(false);
   var expanded = expandedState[0];
@@ -1513,21 +1626,31 @@ function BashRow(props) {
           ),
         );
       } else {
-        // #149: auto-diagram pipe/redirect commands. The rewrite pair above
-        // keeps today's text rendering (both texts stay visible); only the
-        // single-command branch diagrams. getBashDiagram parses client-side
-        // and memoises by command string; attributePipeStages copies the
-        // cached base with this row's meta.pipeStages (or none).
+        // #149/#160: auto-diagram pipe/redirect commands and multi-statement
+        // scripts. The rewrite pair above keeps today's text rendering (both
+        // texts stay visible); only the single-command branch diagrams.
+        // getBashDiagram (one statement) and getBashSequenceDiagram (two or
+        // more) parse client-side and memoise by command string; the
+        // attribute* copies layer this row's meta.pipeStages onto the cached
+        // base (or none). The two predicates are disjoint by construction,
+        // so at most one of sequence/diagram is non-null.
         var diagramBase = getBashDiagram(command);
+        var sequenceBase = getBashSequenceDiagram(command);
         var diagramMeta =
           block.meta !== null && typeof block.meta === "object" && !Array.isArray(block.meta)
             ? block.meta
             : null;
-        var diagram =
-          diagramBase !== null
-            ? attributePipeStages(diagramBase, diagramMeta !== null ? diagramMeta.pipeStages : undefined)
+        var sequence =
+          sequenceBase !== null
+            ? attributeSequenceStages(sequenceBase, diagramMeta !== null ? diagramMeta.pipeStages : undefined)
             : null;
-        if (diagram !== null) {
+        var diagram =
+          sequence !== null || diagramBase === null
+            ? null
+            : attributePipeStages(diagramBase, diagramMeta !== null ? diagramMeta.pipeStages : undefined);
+        if (sequence !== null) {
+          inner.push(<BashSequenceDiagram model={sequence} />);
+        } else if (diagram !== null) {
           inner.push(<BashCommandDiagram model={diagram} />);
         } else {
           inner.push.apply(inner, commandBlock(null, command));

@@ -3723,6 +3723,61 @@ var client_default = `.tool-render-row {
   line-height: 1.125rem;
   color: var(--dsw-alias-label-primary);
 }
+/* #160: a multi-statement script as an ordered sequence of statement groups.
+   The visual contract against #149's refusal: pipes lay stages side-by-side
+   in one row (left to right = data movement) with the verbatim operator plus
+   \`\u2192\`; sequence members stack VERTICALLY here (top to bottom = time order),
+   joined by a "then \u2193" marker that shares no glyph with any pipe. The word
+   "then" is doing the work \u2014 plain English for order, impossible to read as
+   bytes flowing. Verbatim text groups (subshells, &&-chains) get a dashed
+   outline to signal "shown, not drawn". */
+.tool-render-diagram-seq {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+/* A reused single-statement diagram nested in a sequence keeps v1's blocks
+   untouched; only its outer margin is neutralised so members align. */
+.tool-render-diagram-seq .tool-render-diagram {
+  margin: 0;
+}
+.tool-render-diagram-seq-sep {
+  display: flex;
+  flex-flow: row wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-left: 0.25rem;
+}
+.tool-render-diagram-seq-then {
+  white-space: nowrap;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  color: var(--dsw-alias-label-tertiary);
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: 0.25rem;
+  padding: 0 0.375rem;
+}
+.tool-render-diagram-seq-sep-text {
+  background: transparent;
+  padding: 0;
+  font-family: inherit;
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--dsw-alias-label-tertiary);
+}
+.tool-render-diagram-text {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border: 1px dashed var(--dsw-alias-border-l3);
+  border-radius: 0.625rem;
+  padding: 0.5rem 0.625rem;
+  min-width: 0;
+  max-width: 100%;
+}
 .tool-render-diagram-lead {
   white-space: pre-wrap;
   word-break: break-word;
@@ -21934,132 +21989,99 @@ function carveHeredocs(command, statementEnd, heredocs) {
   }
   return carved;
 }
-function buildDiagram(command) {
-  if (typeof command !== "string" || command === "") return null;
-  if (command.length > BASH_DIAGRAM_MAX_COMMAND) return null;
-  let script;
-  try {
-    script = parse2(command);
-  } catch {
-    return null;
-  }
-  if (script === null || typeof script !== "object") return null;
-  if (Array.isArray(script.errors) && script.errors.length > 0) return null;
-  if (!Array.isArray(script.commands) || script.commands.length !== 1) return null;
-  const statement = script.commands[0];
-  if (statement === null || typeof statement !== "object") return null;
-  if (statement.background === true) return null;
-  const inner = statement.command;
+function classifyInner(inner) {
   if (inner === null || typeof inner !== "object") return null;
-  let kind;
-  let negated = false;
-  let timed = false;
-  let rawStages;
-  let operators;
   if (inner.type === "Pipeline") {
     if (!Array.isArray(inner.commands) || inner.commands.length === 0) return null;
     if (inner.commands.length === 1) {
       const only = inner.commands[0];
       if (only === null || typeof only !== "object" || only.type !== "Command") return null;
-      kind = "command";
-      negated = inner.negated === true;
-      timed = inner.time === true;
-      rawStages = [only];
-      operators = [];
-    } else {
-      if (!inner.commands.every((s) => s !== null && typeof s === "object" && s.type === "Command")) {
-        return null;
-      }
-      kind = "pipeline";
-      negated = inner.negated === true;
-      timed = inner.time === true;
-      rawStages = inner.commands;
-      operators = Array.isArray(inner.operators) ? inner.operators : [];
-      if (operators.length !== rawStages.length - 1) return null;
-      for (const op of operators) {
-        if (op !== "|" && op !== "|&") return null;
-      }
+      return {
+        kind: "command",
+        negated: inner.negated === true,
+        timed: inner.time === true,
+        rawStages: [only],
+        operators: []
+      };
     }
-  } else if (inner.type === "Command") {
-    kind = "command";
-    rawStages = [inner];
-    operators = [];
-  } else {
-    return null;
-  }
-  const statementRedirects = Array.isArray(statement.redirects) ? statement.redirects : [];
-  const stageRedirectLists = rawStages.map(
-    (s) => Array.isArray(s.redirects) ? s.redirects.slice() : []
-  );
-  for (const r of statementRedirects) {
-    stageRedirectLists[stageRedirectLists.length - 1].push(r);
-  }
-  if (kind === "command") {
-    const hasRedirects = stageRedirectLists[0].length > 0;
-    if (!hasRedirects) return null;
-  }
-  for (const s of rawStages) {
-    if (typeof s.pos !== "number" || typeof s.end !== "number" || s.pos < 0 || s.end > command.length || s.pos > s.end) {
+    if (!inner.commands.every((s) => s !== null && typeof s === "object" && s.type === "Command")) {
       return null;
     }
+    const rawStages = inner.commands;
+    const operators = Array.isArray(inner.operators) ? inner.operators : [];
+    if (operators.length !== rawStages.length - 1) return null;
+    for (const op of operators) {
+      if (op !== "|" && op !== "|&") return null;
+    }
+    return {
+      kind: "pipeline",
+      negated: inner.negated === true,
+      timed: inner.time === true,
+      rawStages,
+      operators
+    };
   }
-  for (let i = 0; i + 1 < rawStages.length; i++) {
-    if (rawStages[i].end > rawStages[i + 1].pos) return null;
+  if (inner.type === "Command") {
+    return { kind: "command", negated: false, timed: false, rawStages: [inner], operators: [] };
   }
-  if (typeof statement.end !== "number" || statement.end < rawStages[rawStages.length - 1].end) {
-    return null;
+  return null;
+}
+function attributeStatementRedirects(statement, rawStages) {
+  const statementRedirects = Array.isArray(statement.redirects) ? statement.redirects : [];
+  const lists = rawStages.map((s) => Array.isArray(s.redirects) ? s.redirects.slice() : []);
+  for (const r of statementRedirects) {
+    lists[lists.length - 1].push(r);
   }
-  const statementEnd = Math.min(statement.end, command.length);
-  const leadingGap = command.slice(0, rawStages[0].pos);
-  const arrows = [];
-  for (let i = 0; i + 1 < rawStages.length; i++) {
-    arrows.push({
-      operator: operators[i],
-      gap: command.slice(rawStages[i].end, rawStages[i + 1].pos)
-    });
-  }
-  const heredocRedirects = [];
-  let heredocsUsable = true;
+  return lists;
+}
+function collectHeredocSpecs(stageRedirectLists) {
+  const specs = [];
+  let usable = true;
   stageRedirectLists.forEach((list, stage) => {
     list.forEach((r, index) => {
       if (r === null || typeof r !== "object" || typeof r.operator !== "string") return;
       if (!isHeredocOperator(r.operator)) return;
       if (r.target === null || typeof r.target !== "object" || typeof r.target.value !== "string") {
-        heredocsUsable = false;
+        usable = false;
         return;
       }
-      heredocRedirects.push({ operator: r.operator, delimiter: r.target.value, stage, index });
+      specs.push({
+        operator: r.operator,
+        delimiter: r.target.value,
+        redirectPos: typeof r.pos === "number" ? r.pos : null,
+        stage,
+        index
+      });
     });
   });
-  if (!heredocsUsable) return null;
-  heredocRedirects.sort((a, b) => {
-    const ra = stageRedirectLists[a.stage][a.index];
-    const rb = stageRedirectLists[b.stage][b.index];
-    return (typeof ra.pos === "number" ? ra.pos : 0) - (typeof rb.pos === "number" ? rb.pos : 0);
-  });
+  if (!usable) return { specs: [], usable: false };
+  specs.sort((a, b) => (a.redirectPos ?? 0) - (b.redirectPos ?? 0));
+  return { specs, usable: true };
+}
+function buildTrailing(command, statementEnd, specs) {
   const trailing = [];
-  const heredocByKey = /* @__PURE__ */ new Map();
-  if (heredocRedirects.length > 0) {
+  if (specs.length > 0) {
     const carved = carveHeredocs(
       command,
       statementEnd,
-      heredocRedirects.map((h) => ({ operator: h.operator, delimiter: h.delimiter }))
+      specs.map((h) => ({ operator: h.operator, delimiter: h.delimiter }))
     );
-    if (carved === null || carved.length !== heredocRedirects.length) return null;
+    if (carved === null || carved.length !== specs.length) return null;
     const firstNewline = command.indexOf("\n", statementEnd);
     let cursor = firstNewline + 1;
     trailing.push({ kind: "gap", text: command.slice(statementEnd, cursor) });
-    heredocRedirects.forEach((h, i) => {
-      const c2 = carved[i];
+    for (const c2 of carved) {
       trailing.push({ kind: "heredoc", body: c2.body, delimiterLine: c2.delimiterLine, newline: c2.newline });
-      heredocByKey.set(h.stage + ":" + h.index, c2);
       cursor += c2.body.length + c2.delimiterLine.length + c2.newline.length;
-    });
+    }
     trailing.push({ kind: "gap", text: command.slice(cursor) });
-  } else {
-    trailing.push({ kind: "gap", text: command.slice(statementEnd) });
+    return { trailing, carves: carved };
   }
-  const stages = rawStages.map((s, stageIdx) => {
+  trailing.push({ kind: "gap", text: command.slice(statementEnd) });
+  return { trailing, carves: [] };
+}
+function buildStageModels(command, rawStages, stageRedirectLists, heredocByKey) {
+  return rawStages.map((s, stageIdx) => {
     const list = stageRedirectLists[stageIdx];
     const spans = [];
     for (const r of list) {
@@ -22099,6 +22121,62 @@ function buildDiagram(command) {
       exitCode: void 0
     };
   });
+}
+function buildDiagram(command) {
+  if (typeof command !== "string" || command === "") return null;
+  if (command.length > BASH_DIAGRAM_MAX_COMMAND) return null;
+  let script;
+  try {
+    script = parse2(command);
+  } catch {
+    return null;
+  }
+  if (script === null || typeof script !== "object") return null;
+  if (Array.isArray(script.errors) && script.errors.length > 0) return null;
+  if (!Array.isArray(script.commands) || script.commands.length !== 1) return null;
+  const statement = script.commands[0];
+  if (statement === null || typeof statement !== "object") return null;
+  if (statement.background === true) return null;
+  const classified = classifyInner(statement.command);
+  if (classified === null) {
+    return null;
+  }
+  const { kind, negated, timed, rawStages, operators } = classified;
+  const stageRedirectLists = attributeStatementRedirects(statement, rawStages);
+  if (kind === "command") {
+    const hasRedirects = stageRedirectLists[0].length > 0;
+    if (!hasRedirects) return null;
+  }
+  for (const s of rawStages) {
+    if (typeof s.pos !== "number" || typeof s.end !== "number" || s.pos < 0 || s.end > command.length || s.pos > s.end) {
+      return null;
+    }
+  }
+  for (let i = 0; i + 1 < rawStages.length; i++) {
+    if (rawStages[i].end > rawStages[i + 1].pos) return null;
+  }
+  if (typeof statement.end !== "number" || statement.end < rawStages[rawStages.length - 1].end) {
+    return null;
+  }
+  const statementEnd = Math.min(statement.end, command.length);
+  const leadingGap = command.slice(0, rawStages[0].pos);
+  const arrows = [];
+  for (let i = 0; i + 1 < rawStages.length; i++) {
+    arrows.push({
+      operator: operators[i],
+      gap: command.slice(rawStages[i].end, rawStages[i + 1].pos)
+    });
+  }
+  const { specs: heredocSpecs, usable: heredocsUsable } = collectHeredocSpecs(stageRedirectLists);
+  if (!heredocsUsable) return null;
+  const trailed = buildTrailing(command, statementEnd, heredocSpecs);
+  if (trailed === null) return null;
+  const trailing = trailed.trailing;
+  const heredocByKey = /* @__PURE__ */ new Map();
+  heredocSpecs.forEach((h, i) => {
+    heredocByKey.set(h.stage + ":" + h.index, trailed.carves[i]);
+  });
+  const stages = buildStageModels(command, rawStages, stageRedirectLists, heredocByKey);
   return { kind, negated, timed, leadingGap, stages, arrows, trailing };
 }
 var diagramCache = /* @__PURE__ */ new Map();
@@ -22140,6 +22218,189 @@ function attributePipeStages(model, pipeStages) {
     leadingGap: model.leadingGap,
     stages,
     arrows: model.arrows,
+    trailing: model.trailing
+  };
+}
+function subtreeHasHeredoc(node) {
+  if (node === null || typeof node !== "object") return false;
+  if (Array.isArray(node)) {
+    for (const el of node) {
+      if (subtreeHasHeredoc(el)) return true;
+    }
+    return false;
+  }
+  if ((node.operator === "<<" || node.operator === "<<-") && "target" in node) return true;
+  for (const key of Object.keys(node)) {
+    if (subtreeHasHeredoc(node[key])) return true;
+  }
+  return false;
+}
+function conditionalOf(inner) {
+  if (inner === null || typeof inner !== "object" || inner.type !== "AndOr") return null;
+  const seen = /* @__PURE__ */ new Set();
+  const ops = Array.isArray(inner.operators) ? inner.operators : [];
+  for (const op of ops) {
+    if (op === "&&" || op === "||") seen.add(op);
+    else seen.add("other");
+  }
+  if (seen.size === 1) {
+    if (seen.has("&&")) return "&&";
+    if (seen.has("||")) return "||";
+  }
+  return "mixed";
+}
+function buildSequenceDiagram(command) {
+  if (typeof command !== "string" || command === "") return null;
+  if (command.length > BASH_DIAGRAM_MAX_COMMAND) return null;
+  let script;
+  try {
+    script = parse2(command);
+  } catch {
+    return null;
+  }
+  if (script === null || typeof script !== "object") return null;
+  if (Array.isArray(script.errors) && script.errors.length > 0) return null;
+  if (!Array.isArray(script.commands) || script.commands.length < 2) return null;
+  const statements = script.commands;
+  for (const st of statements) {
+    if (st === null || typeof st !== "object") return null;
+    if (st.background === true) return null;
+  }
+  for (let i = 0; i < statements.length; i++) {
+    const st = statements[i];
+    if (typeof st.pos !== "number" || typeof st.end !== "number" || st.pos < 0 || st.end > command.length || st.pos > st.end) {
+      return null;
+    }
+    if (i > 0 && statements[i - 1].end > st.pos) return null;
+  }
+  const lastEnd = Math.min(statements[statements.length - 1].end, command.length);
+  const separators = [];
+  for (let i = 0; i + 1 < statements.length; i++) {
+    const sep = command.slice(statements[i].end, statements[i + 1].pos);
+    if (sep.includes("&")) return null;
+    separators.push(sep);
+  }
+  const groups = [];
+  const pending = [];
+  const allSpecs = [];
+  let textGroupHeredocs = false;
+  for (let si = 0; si < statements.length; si++) {
+    const st = statements[si];
+    const classified = classifyInner(st.command);
+    if (classified !== null) {
+      const { kind, negated, timed, rawStages, operators } = classified;
+      for (const s of rawStages) {
+        if (typeof s.pos !== "number" || typeof s.end !== "number" || s.pos < 0 || s.end > command.length || s.pos > s.end) {
+          return null;
+        }
+      }
+      for (let i = 0; i + 1 < rawStages.length; i++) {
+        if (rawStages[i].end > rawStages[i + 1].pos) return null;
+      }
+      if (rawStages[0].pos < st.pos || rawStages[rawStages.length - 1].end > st.end) return null;
+      const stmtEnd = Math.min(st.end, command.length);
+      const lists = attributeStatementRedirects(st, rawStages);
+      const unit = {
+        kind,
+        negated,
+        timed,
+        leadingGap: command.slice(st.pos, rawStages[0].pos),
+        stages: [],
+        arrows: [],
+        groupGap: command.slice(rawStages[rawStages.length - 1].end, stmtEnd)
+      };
+      for (let i = 0; i + 1 < rawStages.length; i++) {
+        unit.arrows.push({
+          operator: operators[i],
+          gap: command.slice(rawStages[i].end, rawStages[i + 1].pos)
+        });
+      }
+      const { specs, usable } = collectHeredocSpecs(lists);
+      if (!usable) return null;
+      for (const spec of specs) allSpecs.push({ ...spec, owner: si });
+      pending.push({ owner: si, unit, rawStages, lists, specs });
+      groups.push({ kind: "diagram", unit });
+    } else {
+      if (subtreeHasHeredoc(st)) textGroupHeredocs = true;
+      groups.push({
+        kind: "text",
+        slice: command.slice(st.pos, Math.min(st.end, command.length)),
+        conditional: conditionalOf(st.command)
+      });
+    }
+  }
+  if (allSpecs.length > 0 && textGroupHeredocs) return null;
+  for (const spec of allSpecs) {
+    if (spec.redirectPos === null) return null;
+    if (command.slice(spec.redirectPos, lastEnd).includes("\n")) return null;
+  }
+  allSpecs.sort((a, b) => (a.redirectPos ?? 0) - (b.redirectPos ?? 0));
+  const trailed = buildTrailing(command, lastEnd, allSpecs);
+  if (trailed === null) return null;
+  const carveByOwner = /* @__PURE__ */ new Map();
+  allSpecs.forEach((h, i) => {
+    carveByOwner.set(h.owner + ":" + h.stage + ":" + h.index, trailed.carves[i]);
+  });
+  for (const p of pending) {
+    const sub = /* @__PURE__ */ new Map();
+    for (const s of p.specs) {
+      const carve = carveByOwner.get(p.owner + ":" + s.stage + ":" + s.index);
+      if (carve !== void 0) sub.set(s.stage + ":" + s.index, carve);
+    }
+    p.unit.stages = buildStageModels(command, p.rawStages, p.lists, sub);
+  }
+  return {
+    kind: "sequence",
+    leadingGap: command.slice(0, statements[0].pos),
+    statements: groups,
+    separators,
+    trailing: trailed.trailing
+  };
+}
+var sequenceCache = /* @__PURE__ */ new Map();
+function getBashSequenceDiagram(command) {
+  if (sequenceCache.has(command)) return sequenceCache.get(command) ?? null;
+  const built = buildSequenceDiagram(command);
+  if (sequenceCache.size >= BASH_DIAGRAM_CACHE_LIMIT) {
+    const oldest = sequenceCache.keys().next();
+    if (!oldest.done) sequenceCache.delete(oldest.value);
+  }
+  sequenceCache.set(command, built);
+  return built;
+}
+function attributeSequenceStages(model, pipeStages) {
+  const statements = model.statements.map((group, i) => {
+    if (group.kind !== "diagram" || i !== model.statements.length - 1) return group;
+    const coded = attributePipeStages(
+      {
+        kind: group.unit.kind,
+        negated: group.unit.negated,
+        timed: group.unit.timed,
+        leadingGap: group.unit.leadingGap,
+        stages: group.unit.stages,
+        arrows: group.unit.arrows,
+        trailing: []
+      },
+      pipeStages
+    );
+    return {
+      kind: "diagram",
+      unit: {
+        kind: coded.kind,
+        negated: coded.negated,
+        timed: coded.timed,
+        leadingGap: coded.leadingGap,
+        stages: coded.stages,
+        arrows: coded.arrows,
+        groupGap: group.unit.groupGap
+      }
+    };
+  });
+  return {
+    kind: model.kind,
+    leadingGap: model.leadingGap,
+    statements,
+    separators: model.separators,
     trailing: model.trailing
   };
 }
@@ -23333,6 +23594,85 @@ function BashCommandDiagram(props) {
   }
   return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram" }, head, /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-flow" }, flow), tail);
 }
+function BashSequenceTextGroup(props) {
+  var group = props.group;
+  var why = group.conditional === "&&" ? "conditional step: the right side runs only if the left side succeeds \u2014 unlike `;`, this group may not run at all" : group.conditional === "||" ? "conditional step: the right side runs only if the left side fails \u2014 unlike `;`, this group may not run at all" : "conditional step: later parts run only if earlier ones succeed or fail as written \u2014 unlike `;`, parts of this group may not run at all";
+  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-text", title: group.conditional !== null ? why : void 0 }, group.conditional !== null ? /* @__PURE__ */ import_react4.default.createElement(
+    "span",
+    {
+      className: "tool-render-diagram-badge",
+      title: why
+    },
+    group.conditional === "mixed" ? "&&/||" : group.conditional
+  ) : null, /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-words" }, /* @__PURE__ */ import_react4.default.createElement(
+    "code",
+    {
+      className: "hljs",
+      "data-highlighted": "yes",
+      dangerouslySetInnerHTML: { __html: highlightCode(group.slice, "bash") }
+    }
+  )));
+}
+function BashSequenceSeparator(props) {
+  var separator = props.text;
+  var carriesContent = separator.replace(/[;\s]/g, "") !== "";
+  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-seq-sep" }, /* @__PURE__ */ import_react4.default.createElement(
+    "span",
+    {
+      className: "tool-render-diagram-seq-then",
+      title: "statement boundary: the next statement runs after this one finishes. It carries no data \u2014 unlike a pipe, which feeds bytes rightwards."
+    },
+    "then \u2193"
+  ), carriesContent ? /* @__PURE__ */ import_react4.default.createElement(
+    "code",
+    {
+      className: "hljs tool-render-diagram-seq-sep-text",
+      "data-highlighted": "yes",
+      dangerouslySetInnerHTML: { __html: highlightCode(separator, "bash") }
+    }
+  ) : null);
+}
+function BashSequenceDiagram(props) {
+  var model = props.model;
+  var children = [];
+  if (model.leadingGap.trim() !== "") {
+    children.push(/* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-lead" }, model.leadingGap));
+  }
+  for (var i = 0; i < model.statements.length; i++) {
+    if (i > 0) {
+      children.push(/* @__PURE__ */ import_react4.default.createElement(BashSequenceSeparator, { text: model.separators[i - 1] }));
+    }
+    var group = model.statements[i];
+    if (group.kind === "diagram") {
+      var unit = group.unit;
+      children.push(
+        /* @__PURE__ */ import_react4.default.createElement(
+          BashCommandDiagram,
+          {
+            model: {
+              kind: unit.kind,
+              negated: unit.negated,
+              timed: unit.timed,
+              leadingGap: unit.leadingGap,
+              stages: unit.stages,
+              arrows: unit.arrows,
+              trailing: unit.groupGap === "" ? [] : [{ kind: "gap", text: unit.groupGap }]
+            }
+          }
+        )
+      );
+    } else {
+      children.push(/* @__PURE__ */ import_react4.default.createElement(BashSequenceTextGroup, { group }));
+    }
+  }
+  for (var t = 0; t < model.trailing.length; t++) {
+    var piece = model.trailing[t];
+    if (piece.kind === "gap" && piece.text.trim() !== "") {
+      children.push(/* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-lead" }, piece.text));
+    }
+  }
+  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram tool-render-diagram-seq" }, children);
+}
 function BashRow(props) {
   var expandedState = useState(false);
   var expanded = expandedState[0];
@@ -23416,9 +23756,13 @@ function BashRow(props) {
         );
       } else {
         var diagramBase = getBashDiagram(command);
+        var sequenceBase = getBashSequenceDiagram(command);
         var diagramMeta = block.meta !== null && typeof block.meta === "object" && !Array.isArray(block.meta) ? block.meta : null;
-        var diagram = diagramBase !== null ? attributePipeStages(diagramBase, diagramMeta !== null ? diagramMeta.pipeStages : void 0) : null;
-        if (diagram !== null) {
+        var sequence = sequenceBase !== null ? attributeSequenceStages(sequenceBase, diagramMeta !== null ? diagramMeta.pipeStages : void 0) : null;
+        var diagram = sequence !== null || diagramBase === null ? null : attributePipeStages(diagramBase, diagramMeta !== null ? diagramMeta.pipeStages : void 0);
+        if (sequence !== null) {
+          inner.push(/* @__PURE__ */ import_react4.default.createElement(BashSequenceDiagram, { model: sequence }));
+        } else if (diagram !== null) {
           inner.push(/* @__PURE__ */ import_react4.default.createElement(BashCommandDiagram, { model: diagram }));
         } else {
           inner.push.apply(inner, commandBlock(null, command));

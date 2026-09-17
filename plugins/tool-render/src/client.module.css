@@ -1471,6 +1471,61 @@
   line-height: 1.125rem;
   color: var(--dsw-alias-label-primary);
 }
+/* #160: a multi-statement script as an ordered sequence of statement groups.
+   The visual contract against #149's refusal: pipes lay stages side-by-side
+   in one row (left to right = data movement) with the verbatim operator plus
+   `→`; sequence members stack VERTICALLY here (top to bottom = time order),
+   joined by a "then ↓" marker that shares no glyph with any pipe. The word
+   "then" is doing the work — plain English for order, impossible to read as
+   bytes flowing. Verbatim text groups (subshells, &&-chains) get a dashed
+   outline to signal "shown, not drawn". */
+.tool-render-diagram-seq {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+/* A reused single-statement diagram nested in a sequence keeps v1's blocks
+   untouched; only its outer margin is neutralised so members align. */
+.tool-render-diagram-seq .tool-render-diagram {
+  margin: 0;
+}
+.tool-render-diagram-seq-sep {
+  display: flex;
+  flex-flow: row wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-left: 0.25rem;
+}
+.tool-render-diagram-seq-then {
+  white-space: nowrap;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  color: var(--dsw-alias-label-tertiary);
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: 0.25rem;
+  padding: 0 0.375rem;
+}
+.tool-render-diagram-seq-sep-text {
+  background: transparent;
+  padding: 0;
+  font-family: inherit;
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--dsw-alias-label-tertiary);
+}
+.tool-render-diagram-text {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border: 1px dashed var(--dsw-alias-border-l3);
+  border-radius: 0.625rem;
+  padding: 0.5rem 0.625rem;
+  min-width: 0;
+  max-width: 100%;
+}
 .tool-render-diagram-lead {
   white-space: pre-wrap;
   word-break: break-word;
