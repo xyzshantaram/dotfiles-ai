@@ -13,13 +13,16 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  effectiveExplainStatus,
   explainMissingRate,
   formatApproxCost,
   isPriced,
   priceBuckets,
   rateKey,
   resolveRate,
+  selectCostBranch,
   summarizeCost,
+  unwrapRoutePrices,
 } from "./cost";
 
 // Real models.dev shape (anthropic/claude-sonnet-5, 2026-09-09): input 2,
@@ -363,6 +366,209 @@ describe("summarizeCost", () => {
 });
 
 /**
+ * THE LAN FALLBACK CONVERSION, executed (#161 review DEFECT 1).
+ *
+ * Mutating the client's `doc.prices` to `doc.price` — the single line
+ * converting the new GET /context-meter/prices response into the panel's
+ * price document — left all 36 tests green, because no test EXECUTED the
+ * conversion. The conversion now lives in unwrapRoutePrices, and these
+ * tests call it: the typo mutant returns undefined below and goes red.
+ */
+describe("unwrapRoutePrices", () => {
+  const doc = {
+    rates: { "meridian/claude-opus-5": SONNET_RATE },
+    overrides: {},
+  };
+
+  it("unwraps a successful route body into the panel document", () => {
+    const result = { data: { ok: true, prices: doc }, error: null };
+    expect(unwrapRoutePrices(result)).toBe(doc);
+  });
+
+  it("reads doc.prices, not a near-miss key", () => {
+    // The proven mutant: doc.price (singular) is undefined, so the panel
+    // would sit on "no document" forever while the suite stayed green.
+    // A decoy `price` key proves which key is actually read.
+    const result = {
+      data: { ok: true, prices: doc, price: { rates: { "fake/row": SONNET_RATE } } },
+      error: null,
+    };
+    const unwrapped = unwrapRoutePrices(result);
+    expect(unwrapped).toBe(doc);
+    expect(unwrapped).not.toBe((result.data as any).price);
+  });
+
+  it("yields undefined for every failure shape, never a half table", () => {
+    expect(unwrapRoutePrices(null)).toBeUndefined();
+    expect(unwrapRoutePrices(undefined)).toBeUndefined();
+    // Network failure: fetchJson answers { data: null, error }.
+    expect(unwrapRoutePrices({ data: null, error: "HTTP 503" })).toBeUndefined();
+    // Route answered but refused: 405/503 bodies carry ok: false.
+    expect(
+      unwrapRoutePrices({ data: { ok: false, error: "prices unavailable" }, error: null }),
+    ).toBeUndefined();
+    // A body without the table is not a table.
+    expect(unwrapRoutePrices({ data: { ok: true }, error: null })).toBeUndefined();
+    expect(unwrapRoutePrices({ data: { ok: true, prices: null }, error: null })).toBeUndefined();
+    expect(unwrapRoutePrices({ data: { ok: true, prices: undefined }, error: null })).toBeUndefined();
+  });
+});
+
+/**
+ * THE EXACT/ESTIMATE GATE, executed (#161 review DEFECT 1).
+ *
+ * Widening `summary.kind === "exact"` to `summary !== null` silently
+ * collapses every estimate back into the exact branch — the range row
+ * vanishes and the figure is mislabelled — and stayed green at 36/36,
+ * because the suite only asserted the TEXTUAL presence of
+ * `else if (summary !== null) {`. The gate now lives in selectCostBranch,
+ * and these tests execute it through real summaries: the widened mutant
+ * answers "exact" for the estimate below and goes red.
+ */
+describe("selectCostBranch", () => {
+  const buckets = {
+    uncachedInputTokens: 1_000_000,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    outputTokens: 1_000_000,
+  };
+  const doc = {
+    rates: {
+      "meridian/claude-opus-5": { input: 5, output: 25, cache_read: 0.5, cache_write: 6.25 },
+      "electronhub/claude-opus-5": { input: 1, output: 3, cache_read: 0.1, cache_write: 1 },
+    },
+  };
+
+  it("answers exact only for an exact summary", () => {
+    expect(selectCostBranch(summarizeCost(buckets, doc, "meridian", "claude-opus-5"))).toBe(
+      "exact",
+    );
+  });
+
+  it("answers estimated for a non-null non-exact summary", () => {
+    // No "nowhere/claude-opus-5" row, but the bare model is shared: the
+    // summary is estimated, and the gate must say so.
+    const summary = summarizeCost(buckets, doc, "nowhere", "claude-opus-5");
+    expect(summary).not.toBeNull();
+    expect(summary!.kind).toBe("estimated");
+    expect(selectCostBranch(summary)).toBe("estimated");
+  });
+
+  it("answers missing for a null summary, never a zero", () => {
+    expect(selectCostBranch(null)).toBe("missing");
+    expect(selectCostBranch(summarizeCost(buckets, null, "meridian", "claude-opus-5"))).toBe(
+      "missing",
+    );
+  });
+});
+
+/**
+ * THE EFFECTIVE STATUS (#161 review DEFECT 2).
+ *
+ * On a LAN origin the settings scope status IS 'unavailable' while the
+ * plugin route may still have delivered the table. Judging the raw scope
+ * status would report a dead transport for a genuinely unpriced model.
+ */
+describe("effectiveExplainStatus", () => {
+  const held = { rates: { "meridian/claude-opus-5": SONNET_RATE } };
+
+  it("does not let a dead scope overrule a delivered document", () => {
+    expect(effectiveExplainStatus("unavailable", held)).not.toBe("unavailable");
+  });
+
+  it("leaves the scope verdict standing when nothing arrived", () => {
+    expect(effectiveExplainStatus("unavailable", undefined)).toBe("unavailable");
+    expect(effectiveExplainStatus("unavailable", null)).toBe("unavailable");
+  });
+
+  it("passes any other status through untouched", () => {
+    expect(effectiveExplainStatus("ready", held)).toBe("ready");
+    expect(effectiveExplainStatus("loading", undefined)).toBe("loading");
+    expect(effectiveExplainStatus(undefined, held)).toBe(undefined);
+  });
+});
+
+/**
+ * EVERY PANEL STATE, reachable on the LAN path (#161 review DEFECT 2).
+ *
+ * Before the fix the client passed the raw SCOPE status to
+ * explainMissingRate, so once the route had delivered the table a
+ * genuinely unpriced model still reported "prices unavailable" — and
+ * 'unpriced model' and 'no model reported' were unreachable on LAN
+ * entirely. These drive the CLIENT's own pipeline (unwrap the fetch
+ * result, judge the effective status, summarize) with the scope status a
+ * LAN browser really sees ('unavailable') and pin all four outcomes.
+ */
+describe("the LAN path reaches every panel state", () => {
+  const LAN_SCOPE = "unavailable";
+  const held = {
+    rates: { "meridian/claude-opus-5": { input: 5, output: 25, cache_read: 0.5, cache_write: 6.25 } },
+    overrides: {},
+  };
+  const buckets = {
+    uncachedInputTokens: 1_000_000,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    outputTokens: 1_000_000,
+  };
+
+  /** The client's pipeline on a LAN origin: unwrap, effective status, explain. */
+  function lanMissing(routeResult: unknown, provider: string | null, model: string | null) {
+    const doc = unwrapRoutePrices(routeResult);
+    return explainMissingRate(effectiveExplainStatus(LAN_SCOPE, doc), doc, provider, model);
+  }
+
+  it("says the transport failed when the route delivered nothing", () => {
+    const m = lanMissing({ data: null, error: "HTTP 503" }, "meridian", "claude-opus-5");
+    expect(m.kind).toBe("transport");
+    expect(m.label).toBe("prices unavailable");
+  });
+
+  it("says no model was reported once the route delivered the table", () => {
+    const m = lanMissing({ data: { ok: true, prices: held }, error: null }, null, null);
+    expect(m.kind).toBe("no-model");
+    expect(m.label).toBe("no model reported");
+  });
+
+  it("says the model is unpriced once the route delivered the table", () => {
+    const m = lanMissing(
+      { data: { ok: true, prices: held }, error: null },
+      "meridian",
+      "some-unlisted-model",
+    );
+    expect(m.kind).toBe("unpriced");
+    expect(m.label).toBe("unpriced model");
+    expect(m.detail).toContain("meridian/some-unlisted-model");
+  });
+
+  it("prices exactly once the route delivered the table", () => {
+    const doc = unwrapRoutePrices({ data: { ok: true, prices: held }, error: null });
+    const summary = summarizeCost(buckets, doc, "meridian", "claude-opus-5");
+    expect(summary).not.toBeNull();
+    expect(selectCostBranch(summary)).toBe("exact");
+    expect(summary!.cost).toBeCloseTo(30, 10);
+  });
+
+  it("estimates with median and range once the route delivered the table", () => {
+    const multi = {
+      rates: {
+        ...held.rates,
+        "electronhub/claude-opus-5": { input: 1, output: 3, cache_read: 0.1, cache_write: 1 },
+      },
+      overrides: {},
+    };
+    const doc = unwrapRoutePrices({ data: { ok: true, prices: multi }, error: null });
+    const summary = summarizeCost(buckets, doc, "nowhere", "claude-opus-5");
+    expect(selectCostBranch(summary)).toBe("estimated");
+    // Median 17 of the two candidate costs, range 4–30: the headline AND
+    // the spread.
+    expect(summary!.cost).toBeCloseTo(17, 10);
+    expect(summary!.min).toBeCloseTo(4, 10);
+    expect(summary!.max).toBeCloseTo(30, 10);
+  });
+});
+
+/**
  * THE RENDER PATH, pinned (#134 review SHOULD-FIX; #99's original complaint).
  *
  * Every test above covers the CLASSIFIER. None covered the WIRING, so a
@@ -408,10 +614,13 @@ describe("the panel is wired to the explainer, not to a catch-all string", () =>
     expect(source).toMatch(/title:\s*title/);
   });
 
-  it("feeds the scope status in, so a dead transport is detectable at all", () => {
-    // Dropping this argument silently downgrades every transport failure to
-    // "unpriced model" — the wrong half, and invisible.
+  it("judges the effective document status, not the raw scope status (#161 review)", () => {
+    // DEFECT 2: passing the raw scope status made 'unpriced model' and
+    // 'no model reported' unreachable on LAN. The client must derive the
+    // scope status and pass it through effectiveExplainStatus, so a
+    // delivered route document overrules a dead scope transport.
     expect(source).toMatch(/pricesSnap[^;]*\.status/s);
+    expect(source).toMatch(/effectiveExplainStatus\s*\(/);
   });
 
   it("prices through the summary, not a single rate (#161)", () => {
@@ -419,7 +628,7 @@ describe("the panel is wired to the explainer, not to a catch-all string", () =>
     // summary instead, or the median/range work above never reaches a reader.
     expect(source).toMatch(/summarizeCost\s*\(/);
     expect(source).not.toMatch(/resolveRate\s*\(/);
-    expect(source).toMatch(/summary\.cost/);
+    expect(source).toMatch(/summary[!.]\.cost/);
   });
 
   it("falls back to the plugin route when the scope yields no document (#161)", () => {
@@ -434,10 +643,14 @@ describe("the panel is wired to the explainer, not to a catch-all string", () =>
     const call = /row\(\s*"range"\s*,[^)]*\)/s.exec(source);
     expect(call).not.toBeNull();
     expect((call as RegExpExecArray)[0]).toMatch(/rangeLabel/);
-    expect(source).toMatch(/summary\.providers/);
-    // And the estimate branch must be REACHABLE: gating it on kind exact
-    // would silently drop every estimate back to the missing-rate label
-    // while all the markup above stays put.
-    expect(source).toMatch(/else if \(summary !== null\) \{/);
+    expect(source).toMatch(/summary[!.]\.providers/);
+    // DELETED (#161 review): the old fourth assertion here checked the
+    // TEXTUAL presence of `else if (summary !== null) {` while commenting
+    // that "the estimate branch must be REACHABLE" — and stayed green when
+    // the exact gate was widened to `summary !== null`, which kills every
+    // estimate. A grep cannot observe behaviour. The gate now lives in
+    // selectCostBranch (cost.ts), pinned by the executing tests above; this
+    // grep keeps only the range-row WIRING (the row call, the label, the
+    // providers), which has no executing equivalent without a DOM.
   });
 });

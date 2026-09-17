@@ -11,6 +11,29 @@ function sendJson(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
+// plugins/context-meter/src/route.ts
+var PRICES_ROUTE_PATH = "/context-meter/prices";
+function makePricesHandler(readSettings, namespace) {
+  return (req, res) => {
+    if (req.method !== "GET") {
+      sendJson(res, 405, { ok: false, error: "method not allowed" });
+      return;
+    }
+    const doc = readSettings()?.get(namespace);
+    if (doc === void 0) {
+      sendJson(res, 503, { ok: false, error: "prices unavailable" });
+      return;
+    }
+    sendJson(res, 200, {
+      ok: true,
+      prices: {
+        rates: doc.rates ?? {},
+        overrides: doc.overrides ?? {}
+      }
+    });
+  };
+}
+
 // plugins/context-meter/src/index.ts
 var name = "context-meter";
 var inject = [];
@@ -37,28 +60,11 @@ function apply(ctx) {
       const server = scope.webServer;
       server.register({
         kind: "exact",
-        path: "/context-meter/prices",
-        handler: (req, res) => {
-          if (req.method !== "GET") {
-            sendJson(res, 405, { ok: false, error: "method not allowed" });
-            return;
-          }
-          const settings = ctx.get(
-            "settings"
-          );
-          const doc = settings?.get(PRICES_NS);
-          if (doc === void 0) {
-            sendJson(res, 503, { ok: false, error: "prices unavailable" });
-            return;
-          }
-          sendJson(res, 200, {
-            ok: true,
-            prices: {
-              rates: doc.rates ?? {},
-              overrides: doc.overrides ?? {}
-            }
-          });
-        }
+        path: PRICES_ROUTE_PATH,
+        handler: makePricesHandler(
+          () => ctx.get("settings"),
+          PRICES_NS
+        )
       });
     });
   } catch {

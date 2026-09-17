@@ -13,15 +13,14 @@
  *
  * The settings mirror is loopback-only, so a browser reached over the LAN
  * (or any browser whose mirror stalls) never sees the namespace. The GET
- * route below serves the same resolved document over plain same-origin
+ * route in ./route serves the same resolved document over plain same-origin
  * fetch, which survives a remote browser (#161): the client reads the
  * scope first and falls back to this route when the scope yields no doc.
  */
 
 import { installSettingsSection, settingsNamespace } from "@deepseek-ai/dsh-settings";
 import z from "@deepseek-ai/schemastery";
-import type { IncomingMessage, ServerResponse } from "node:http";
-import { sendJson } from "../../shared/http";
+import { makePricesHandler, PRICES_ROUTE_PATH } from "./route";
 
 const name = "context-meter";
 
@@ -62,9 +61,9 @@ function apply(ctx: any) {
   );
 
   // Lazy inject: the plugin still loads where no web server mounts. The
-  // handler reads the RESOLVED namespace per request, so a sync-models run
-  // shows up without a restart; a missing settings service answers 503
-  // instead of throwing the route off the server.
+  // handler (./route) reads the RESOLVED namespace per request, so a
+  // sync-models run shows up without a restart; a missing settings service
+  // answers 503 instead of throwing the route off the server.
   try {
     ctx.inject(["webServer"], (scope: any) => {
       const server = scope.webServer as {
@@ -72,28 +71,14 @@ function apply(ctx: any) {
       };
       server.register({
         kind: "exact",
-        path: "/context-meter/prices",
-        handler: (req: IncomingMessage, res: ServerResponse) => {
-          if (req.method !== "GET") {
-            sendJson(res, 405, { ok: false, error: "method not allowed" });
-            return;
-          }
-          const settings = (ctx as { get(name: string): unknown }).get(
-            "settings",
-          ) as SettingsReader | undefined;
-          const doc = settings?.get(PRICES_NS);
-          if (doc === undefined) {
-            sendJson(res, 503, { ok: false, error: "prices unavailable" });
-            return;
-          }
-          sendJson(res, 200, {
-            ok: true,
-            prices: {
-              rates: doc.rates ?? {},
-              overrides: doc.overrides ?? {},
-            },
-          });
-        },
+        path: PRICES_ROUTE_PATH,
+        handler: makePricesHandler(
+          () =>
+            (ctx as { get(name: string): unknown }).get("settings") as
+            | SettingsReader
+            | undefined,
+          PRICES_NS,
+        ),
       });
     });
   } catch {

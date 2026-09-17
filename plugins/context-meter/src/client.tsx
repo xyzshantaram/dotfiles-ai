@@ -2,10 +2,13 @@ import * as React from "react";
 import { useDismissable } from "../../shared/client-react";
 import { fetchJson, injectStyle, shippedClass } from "../../shared/client-util";
 import {
+  effectiveExplainStatus,
   explainMissingRate,
   formatApproxCost,
   rateKey,
+  selectCostBranch,
   summarizeCost,
+  unwrapRoutePrices,
 } from "./cost";
 import localCss from "./client.module.css";
 
@@ -297,9 +300,7 @@ function apply(ctx: any) {
       fetchJson("/context-meter/prices")
         .then(function (result: any) {
           if (cancelled) return;
-          const doc = result !== null && result !== undefined ? result.data : undefined;
-          const prices =
-            doc !== null && doc !== undefined && doc.ok === true ? doc.prices : undefined;
+          const prices = unwrapRoutePrices(result);
           if (prices !== null && prices !== undefined) setRouteDoc(prices);
         })
         .catch(function () {});
@@ -322,14 +323,23 @@ function apply(ctx: any) {
     // The absence explainer judges the EFFECTIVE document (scope, else the
     // route): when the route delivered the table, a missing rate means the
     // model is genuinely unpriced, not a transport fault. The scope status
-    // still rides along so a dead transport reads as one.
+    // rides along through effectiveExplainStatus — except it must not
+    // overrule a delivered document: on a LAN origin the scope status IS
+    // 'unavailable' while the route HAS delivered the table, and judging
+    // the raw scope status would lie about the held document (#161 review).
+    const scopeStatus =
+      pricesSnap !== null && pricesSnap !== undefined ? pricesSnap.status : undefined;
     const missing = explainMissingRate(
-      pricesSnap !== null && pricesSnap !== undefined ? pricesSnap.status : undefined,
+      effectiveExplainStatus(scopeStatus, effectiveDoc),
       effectiveDoc,
       provider,
       model,
     );
     let costDetail: string | null = null;
+    // Exact, estimated, or missing is decided by selectCostBranch (cost.ts),
+    // where the suite executes the gate — not by an inline kind check the
+    // suite can only grep for (#161 review).
+    const costBranch = selectCostBranch(summary);
     if (usage !== undefined) {
       const totalTokens =
         (usage.uncachedInputTokens || 0) +
@@ -337,23 +347,23 @@ function apply(ctx: any) {
         (usage.cacheWriteTokens || 0) +
         (usage.outputTokens || 0);
       if (totalTokens === 0) costText = formatApproxCost(0);
-      else if (summary !== null && summary.kind === "exact") {
-        costText = formatApproxCost(summary.cost);
+      else if (costBranch === "exact") {
+        costText = formatApproxCost(summary!.cost);
         rateLabel = provider !== null && model !== null ? rateKey(provider, model) : null;
-      } else if (summary !== null) {
+      } else if (costBranch === "estimated") {
         // Estimated, never guessed (#126's rule): the headline is the median
         // session cost across the providers that publish this bare model,
         // and the range underneath names the spread. The title says which
         // providers and that no exact row exists.
-        costText = formatApproxCost(summary.cost);
-        rangeLabel = formatApproxCost(summary.min) + " – " + formatApproxCost(summary.max);
+        costText = formatApproxCost(summary!.cost);
+        rangeLabel = formatApproxCost(summary!.min) + " – " + formatApproxCost(summary!.max);
         costDetail =
           "Estimated: no published row for " +
           rateKey(provider ?? "?", model ?? "?") +
           ". Median of " +
-          summary.providers.length +
+          summary!.providers.length +
           " provider rows (" +
-          summary.providers.join(", ") +
+          summary!.providers.join(", ") +
           "), ranging " +
           rangeLabel +
           ".";

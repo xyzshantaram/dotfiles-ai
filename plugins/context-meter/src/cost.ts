@@ -75,6 +75,32 @@ export interface PricesDoc {
   overrides?: Record<string, PriceRate> | null;
 }
 
+/**
+ * Unwrap one GET /context-meter/prices answer into the panel's price
+ * document (#161 review DEFECT 1: this line had zero executing coverage).
+ *
+ * The LAN fallback reads the same resolved table the settings mirror
+ * carries, over the plugin's own route instead of the loopback-only
+ * mirror. fetchJson answers `{ data, error }`; the route body is
+ * `{ ok, prices }` on success. Anything else — a network failure (data
+ * null), a 405/503 (ok false or missing), a body without the prices table
+ * — yields undefined, and the caller treats it as "no document", never as
+ * a half table. Missing means missing, never a zero (#126's rule).
+ *
+ * This is the exact conversion the client performs on the fetch result;
+ * it lives here so the suite EXECUTES it instead of grepping for it.
+ */
+export function unwrapRoutePrices(result: unknown): PricesDoc | undefined {
+  if (result === null || result === undefined) return undefined;
+  const data = (result as { data?: unknown }).data;
+  if (data === null || data === undefined) return undefined;
+  const body = data as { ok?: unknown; prices?: unknown };
+  if (body.ok !== true) return undefined;
+  const prices = body.prices;
+  if (prices === null || prices === undefined) return undefined;
+  return prices as PricesDoc;
+}
+
 /** True when the row can price: input and output must both be present.
  * A missing cache dimension bills as zero (models.dev omits uncharged
  * dimensions — zai writes cache_write: 0 while resellers omit the key),
@@ -148,6 +174,29 @@ export interface MissingRate {
   label: string;
   /** One sentence a reader can act on, for the tooltip. */
   detail: string;
+}
+
+/**
+ * The status {@link explainMissingRate} should judge, given the document
+ * the panel actually holds (#161 review DEFECT 2).
+ *
+ * On a LAN origin the settings scope status IS 'unavailable' — the mirror
+ * is loopback-only — while the plugin route may still have delivered the
+ * table. Judging the raw scope status then reports "prices unavailable /
+ * the browser never received the price table" for a genuinely unpriced
+ * model, which is false, and makes 'unpriced model' and 'no model
+ * reported' unreachable on LAN entirely. When the panel HOLDS the table,
+ * the dead transport is history, not the diagnosis: report it as up so
+ * the explainer judges the held document. When nothing arrived, the scope
+ * verdict stands untouched.
+ */
+export function effectiveExplainStatus(
+  scopeStatus: unknown,
+  effectiveDoc: PricesDoc | null | undefined,
+): unknown {
+  if (scopeStatus === "unavailable" && effectiveDoc !== null && effectiveDoc !== undefined)
+    return "ready";
+  return scopeStatus;
 }
 
 /**
@@ -305,4 +354,20 @@ export function summarizeCost(
     max: candidates[candidates.length - 1].cost,
     providers: [...new Set(candidates.map((c) => c.provider))].sort(),
   };
+}
+
+/**
+ * Which cost row the panel renders for one summary (#161 review DEFECT 1).
+ *
+ * The panel renders the exact figure only for an exact summary; ANY other
+ * non-null summary is an estimate (median headline with the range
+ * underneath). Widening the exact gate to "summary !== null" silently
+ * collapses every estimate back into the exact branch — the range row
+ * vanishes and the figure is mislabelled — so the gate lives here,
+ * executed by the suite, not as a shape the suite greps for.
+ */
+export function selectCostBranch(summary: CostSummary | null): "exact" | "estimated" | "missing" {
+  if (summary !== null && summary !== undefined && summary.kind === "exact") return "exact";
+  if (summary !== null && summary !== undefined) return "estimated";
+  return "missing";
 }

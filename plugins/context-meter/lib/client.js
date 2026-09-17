@@ -154,6 +154,16 @@ function formatApproxCost(usd) {
 function rateKey(provider, model) {
   return provider + "/" + model;
 }
+function unwrapRoutePrices(result) {
+  if (result === null || result === void 0) return void 0;
+  const data = result.data;
+  if (data === null || data === void 0) return void 0;
+  const body = data;
+  if (body.ok !== true) return void 0;
+  const prices = body.prices;
+  if (prices === null || prices === void 0) return void 0;
+  return prices;
+}
 function isPriced(rate) {
   if (rate === null || rate === void 0 || typeof rate !== "object") return false;
   const r = rate;
@@ -169,6 +179,11 @@ function resolveRate(doc, provider, model) {
   const base = doc.rates !== null && doc.rates !== void 0 ? doc.rates[key] : void 0;
   if (isPriced(base)) return base;
   return null;
+}
+function effectiveExplainStatus(scopeStatus, effectiveDoc) {
+  if (scopeStatus === "unavailable" && effectiveDoc !== null && effectiveDoc !== void 0)
+    return "ready";
+  return scopeStatus;
 }
 function explainMissingRate(scopeStatus, doc, provider, model) {
   if (scopeStatus === "unavailable") {
@@ -248,6 +263,11 @@ function summarizeCost(buckets, doc, provider, model) {
     max: candidates[candidates.length - 1].cost,
     providers: [...new Set(candidates.map((c) => c.provider))].sort()
   };
+}
+function selectCostBranch(summary) {
+  if (summary !== null && summary !== void 0 && summary.kind === "exact") return "exact";
+  if (summary !== null && summary !== void 0) return "estimated";
+  return "missing";
 }
 
 // css-text:/home/sid/repos/dotfiles-ai/plugins/context-meter/src/client.module.css
@@ -450,8 +470,7 @@ function apply(ctx) {
       let cancelled = false;
       fetchJson("/context-meter/prices").then(function(result) {
         if (cancelled) return;
-        const doc = result !== null && result !== void 0 ? result.data : void 0;
-        const prices = doc !== null && doc !== void 0 && doc.ok === true ? doc.prices : void 0;
+        const prices = unwrapRoutePrices(result);
         if (prices !== null && prices !== void 0) setRouteDoc(prices);
       }).catch(function() {
       });
@@ -464,20 +483,22 @@ function apply(ctx) {
     let costText = null;
     let rateLabel = null;
     let rangeLabel = null;
+    const scopeStatus = pricesSnap !== null && pricesSnap !== void 0 ? pricesSnap.status : void 0;
     const missing = explainMissingRate(
-      pricesSnap !== null && pricesSnap !== void 0 ? pricesSnap.status : void 0,
+      effectiveExplainStatus(scopeStatus, effectiveDoc),
       effectiveDoc,
       provider,
       model
     );
     let costDetail = null;
+    const costBranch = selectCostBranch(summary);
     if (usage !== void 0) {
       const totalTokens = (usage.uncachedInputTokens || 0) + (usage.cacheReadTokens || 0) + (usage.cacheWriteTokens || 0) + (usage.outputTokens || 0);
       if (totalTokens === 0) costText = formatApproxCost(0);
-      else if (summary !== null && summary.kind === "exact") {
+      else if (costBranch === "exact") {
         costText = formatApproxCost(summary.cost);
         rateLabel = provider !== null && model !== null ? rateKey(provider, model) : null;
-      } else if (summary !== null) {
+      } else if (costBranch === "estimated") {
         costText = formatApproxCost(summary.cost);
         rangeLabel = formatApproxCost(summary.min) + " \u2013 " + formatApproxCost(summary.max);
         costDetail = "Estimated: no published row for " + rateKey(provider ?? "?", model ?? "?") + ". Median of " + summary.providers.length + " provider rows (" + summary.providers.join(", ") + "), ranging " + rangeLabel + ".";
