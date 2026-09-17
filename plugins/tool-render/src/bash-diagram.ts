@@ -616,6 +616,43 @@ export interface BashSequenceUnit {
 export type BashSequenceConditional = "&&" | "||" | "mixed";
 
 /**
+ * The model one chain row hands to the command diagram — THE RENDER SEAM.
+ *
+ * This exists because of a defect the #162 review found: the chain branch
+ * built this object inline and silently omitted `conditional`, so the unit
+ * model was correct (`[null, "&&", "&&"]`, pinned by passing tests) while the
+ * GUI drew three bare rows. The marker was MODEL-TRUE AND SCREEN-FALSE, and
+ * no test could redden, because every test asserted the model and nothing
+ * asserted what the model handed to the view. Building the view's object
+ * here, in one named place, is what makes the seam testable at all.
+ *
+ * `conditional` rides through unchanged: the base row's null is the whole
+ * point of criterion 2b — a marker on the base would state something false,
+ * since the base runs unconditionally.
+ */
+export function chainRowDiagramModel(row: BashSequenceUnit): {
+  kind: BashSequenceUnit["kind"];
+  negated: boolean;
+  timed: boolean;
+  leadingGap: string;
+  stages: BashDiagramStage[];
+  arrows: BashDiagramArrow[];
+  conditional: BashSequenceConditional | null;
+  trailing: { kind: "gap"; text: string }[];
+} {
+  return {
+    kind: row.kind,
+    negated: row.negated,
+    timed: row.timed,
+    leadingGap: row.leadingGap,
+    stages: row.stages,
+    arrows: row.arrows,
+    conditional: row.conditional,
+    trailing: row.groupGap === "" ? [] : [{ kind: "gap", text: row.groupGap }],
+  };
+}
+
+/**
  * One drawn `&&`/`||` CHAIN inside a statement (#162 criterion 2b): rows
  * stack exactly like sequence members, and each dependent row (i>0) carries
  * ITS OWN condition (`operators[i-1]`) as prominent text at the top of its

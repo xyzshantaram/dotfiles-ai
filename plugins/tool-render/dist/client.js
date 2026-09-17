@@ -22455,6 +22455,18 @@ function attributePipeStages(model, pipeStages) {
     trailing: model.trailing
   };
 }
+function chainRowDiagramModel(row) {
+  return {
+    kind: row.kind,
+    negated: row.negated,
+    timed: row.timed,
+    leadingGap: row.leadingGap,
+    stages: row.stages,
+    arrows: row.arrows,
+    conditional: row.conditional,
+    trailing: row.groupGap === "" ? [] : [{ kind: "gap", text: row.groupGap }]
+  };
+}
 function subtreeHasHeredoc(node) {
   if (node === null || typeof node !== "object") return false;
   if (Array.isArray(node)) {
@@ -24078,7 +24090,9 @@ function BashSequenceTextGroup(props) {
 }
 function BashSequenceSeparator(props) {
   var separator = props.text;
-  var carriesContent = separator.replace(/[;\s]/g, "") !== "";
+  var residue = separator.replace(/[;\s]/g, "");
+  if (typeof props.operator === "string" && residue === props.operator) residue = "";
+  var carriesContent = residue !== "";
   return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-seq-sep" }, carriesContent ? /* @__PURE__ */ import_react4.default.createElement(
     "code",
     {
@@ -24124,25 +24138,18 @@ function BashSequenceDiagram(props) {
       }
       for (var r = 0; r < chain.rows.length; r++) {
         if (r > 0) {
-          children.push(/* @__PURE__ */ import_react4.default.createElement(BashSequenceSeparator, { text: chain.separators[r - 1] }));
+          children.push(
+            /* @__PURE__ */ import_react4.default.createElement(
+              BashSequenceSeparator,
+              {
+                text: chain.separators[r - 1],
+                operator: chain.operators[r - 1]
+              }
+            )
+          );
         }
         var row = chain.rows[r];
-        children.push(
-          /* @__PURE__ */ import_react4.default.createElement(
-            BashCommandDiagram,
-            {
-              model: {
-                kind: row.kind,
-                negated: row.negated,
-                timed: row.timed,
-                leadingGap: row.leadingGap,
-                stages: row.stages,
-                arrows: row.arrows,
-                trailing: row.groupGap === "" ? [] : [{ kind: "gap", text: row.groupGap }]
-              }
-            }
-          )
-        );
+        children.push(/* @__PURE__ */ import_react4.default.createElement(BashCommandDiagram, { model: chainRowDiagramModel(row) }));
       }
     } else {
       children.push(/* @__PURE__ */ import_react4.default.createElement(BashSequenceTextGroup, { group }));

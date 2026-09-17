@@ -12,6 +12,7 @@
 import { describe, expect, it } from "vitest";
 import {
   attributeSequenceStages,
+  chainRowDiagramModel,
   clearBashSequenceCache,
   getBashDiagram,
   getBashSequenceDiagram,
@@ -97,6 +98,27 @@ describe("ticket-named cases", () => {
     expect(second.chain.rows[1].arrows.map((a) => a.operator)).toEqual(["|"]);
     expect(verifyBashSequence(command, model)).toBe(true);
     expect(reconstructBashSequence(command, model)).toBe(command);
+  });
+
+  it("carries the row's condition ACROSS THE RENDER SEAM, not just in the model (#162 review defect)", () => {
+    // The defect this pins: the chain branch built the view's model inline
+    // and omitted `conditional`, so the unit model was right and the SCREEN
+    // was wrong — `a && b && c` drew as three bare rows. Every existing 2b
+    // test passed throughout, because they all assert the model and none
+    // asserted what the model hands to the view. Asserting the seam is the
+    // only thing that can redden on a wiring defect.
+    const model = draw("a && b && c; d | e");
+    const chain = model.statements[0];
+    if (chain.kind !== "chain") throw new Error("expected a chain group");
+    const handed = chain.chain.rows.map((row) => chainRowDiagramModel(row).conditional);
+    // Base row unconditional (2b); both dependents name their own condition.
+    expect(handed).toEqual([null, "&&", "&&"]);
+    // The seam must not drop or invent anything else either.
+    const first = chainRowDiagramModel(chain.chain.rows[0]);
+    expect(first.stages).toBe(chain.chain.rows[0].stages);
+    expect(first.arrows).toBe(chain.chain.rows[0].arrows);
+    expect(first.kind).toBe(chain.chain.rows[0].kind);
+    expect(first.trailing).toEqual([]);
   });
 
   it("draws the exact command from the ticket description", () => {

@@ -183,7 +183,7 @@ var EXTENSION_LANGUAGE = {
 // ---- Platform modules: resolved by the shell loader seed at runtime. ----
 import React from "react";
 import { isBashGuardReason } from "./guard";
-import { attributePipeStages, attributeSequenceStages, getBashDiagram, getBashSequenceDiagram } from "./bash-diagram";
+import { attributePipeStages, attributeSequenceStages, chainRowDiagramModel, getBashDiagram, getBashSequenceDiagram } from "./bash-diagram";
 import { escalationDetailOf, escalationLabel, escalationReasonClassName } from "./escalation";
 import {
   composeVerdictTooltip,
@@ -1243,13 +1243,21 @@ function escalationBanner(detail, settled) {
 // codes come from block.meta.pipeStages, attributed by attributePipeStages
 // (single) or attributeSequenceStages (final group only) — never from
 // host-computed offsets, which this component never sees.
-// ---- Sequence vs pipe, the visual contract (#160). Pipes lay stages
-// side-by-side in one row (left to right = data movement) with the verbatim
-// operator plus `→`. Sequence members stack VERTICALLY (top to bottom = time
-// order) joined by a "then ↓" marker that shares no glyph with any pipe.
-// The word "then" is doing the work: plain English for order, impossible to
-// read as bytes flowing. `&&`/`||` groups render as verbatim text with an
-// explicit conditional badge, never as arrows.
+// ---- Sequence vs pipe, the visual contract (#160, amended by #162). Pipes
+// lay stages side-by-side in ONE row that never wraps (left to right = data
+// movement) with the verbatim operator plus `→`; an overlong pipeline scrolls
+// sideways rather than stacking, because a wrapped pipe row is
+// indistinguishable from a sequence and would imply time where there is only
+// dataflow. Sequence members stack VERTICALLY (top to bottom = time order).
+//
+// v2 joined them with a "then ↓" marker; #162 removed it. Labelling EVERY
+// boundary meant nothing stood out, and the one case that genuinely needs
+// explaining — a conditional — looked like just another chip. Now the
+// unconditional boundary renders no word and no glyph (the rail is the
+// connector), and conditionality is a property of the EDGE, stated as
+// prominent text at the top of the DEPENDENT row's own panel. The base row
+// of a chain carries no marker: it runs unconditionally, so a chain-wide
+// badge stated something false about it.
 function BashDiagramHeredoc(props) {
   var endpoint = props.endpoint;
   var heredoc = endpoint.heredoc;
@@ -1478,7 +1486,19 @@ function BashSequenceSeparator(props) {
   // #162 criterion 2: an unconditional boundary (`;`/newline) carries NO
   // word and no glyph — the CSS rail is the connector. A comment riding the
   // separator is content: muted text beside the rail.
-  var carriesContent = separator.replace(/[;\s]/g, "") !== "";
+  //
+  // A CHAIN separator passes its operator here (#162 review): `" && "` is not
+  // content, it is the condition — already stated as prominent text on the
+  // dependent row below. Left in, it rendered as muted `&&` debris between
+  // every chain row, which is the chrome 2b exists to remove. Note what is
+  // NOT done: the operator is never SNIPPED out of a separator that also
+  // carries a comment. Rendering `sep.replace(op, "")` would concatenate two
+  // disjoint slices into text that never existed in the command, which is
+  // exactly the fabrication the slice invariant forbids. So the separator is
+  // shown VERBATIM or not at all.
+  var residue = separator.replace(/[;\s]/g, "");
+  if (typeof props.operator === "string" && residue === props.operator) residue = "";
+  var carriesContent = residue !== "";
   return (
     <div className="tool-render-diagram-seq-sep">
       {carriesContent ? (
@@ -1535,22 +1555,18 @@ function BashSequenceDiagram(props) {
           // condition chrome: the marker line below says the condition, so
           // the separator renders nothing visible unless it carries content
           // (a comment). Same contract as a statement separator.
-          children.push(<BashSequenceSeparator text={chain.separators[r - 1]} />);
+          children.push(
+            <BashSequenceSeparator
+              text={chain.separators[r - 1]}
+              operator={chain.operators[r - 1]}
+            />,
+          );
         }
         var row = chain.rows[r];
-        children.push(
-          <BashCommandDiagram
-            model={{
-              kind: row.kind,
-              negated: row.negated,
-              timed: row.timed,
-              leadingGap: row.leadingGap,
-              stages: row.stages,
-              arrows: row.arrows,
-              trailing: row.groupGap === "" ? [] : [{ kind: "gap", text: row.groupGap }],
-            }}
-          />,
-        );
+        // The row model is built by chainRowDiagramModel, NOT inline: an
+        // inline literal here is what dropped `conditional` and made the
+        // marker model-true and screen-false (#162 review).
+        children.push(<BashCommandDiagram model={chainRowDiagramModel(row)} />);
       }
     } else {
       children.push(<BashSequenceTextGroup group={group} />);
