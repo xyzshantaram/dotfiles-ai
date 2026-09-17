@@ -40,12 +40,12 @@ __export(client_exports, {
   name: () => name
 });
 module.exports = __toCommonJS(client_exports);
-var react2 = __toESM(require("react"), 1);
+var React2 = __toESM(require("react"), 1);
 
 // plugins/shared/client-react.ts
-var react = __toESM(require("react"));
+var React = __toESM(require("react"));
 function useDismissable(open, rootRef, onClose) {
-  react.useEffect(() => {
+  React.useEffect(() => {
     if (!open || typeof document === "undefined") return;
     const onPointerDown = (event) => {
       const root = rootRef.current;
@@ -103,6 +103,41 @@ var HLJS_THEME_CSS = [
   ".hljs-addition{color:#aff5b4;background-color:#033a16}",
   ".hljs-deletion{color:#ffdcd7;background-color:#67060c}"
 ].join("");
+function request(method, url, body) {
+  const hasBody = body !== void 0 && method !== "GET";
+  console.debug("[client-util] " + method + " " + url);
+  return fetch(url, {
+    method,
+    cache: "no-store",
+    ...hasBody ? { headers: { "content-type": "application/json" } } : {},
+    ...hasBody ? { body: JSON.stringify(body) } : {}
+  }).then(function(res) {
+    return res.json().catch(function() {
+      return null;
+    }).then(function(json) {
+      return { ok: res.ok, status: res.status, json };
+    });
+  }).then(function(result) {
+    if (result.json !== null && result.json.error) {
+      console.error(
+        "[client-util] " + method + " " + url + " failed: server error " + result.status
+      );
+      return { data: null, error: String(result.json.error) };
+    }
+    if (!result.ok) {
+      console.error("[client-util] " + method + " " + url + " failed: HTTP " + result.status);
+      return { data: null, error: "HTTP " + result.status };
+    }
+    console.info("[client-util] " + method + " " + url + " ok (HTTP " + result.status + ")");
+    return { data: result.json, error: null };
+  }).catch(function(e) {
+    console.error("[client-util] " + method + " " + url + " failed: network error");
+    return { data: null, error: String(e && e.message || e) };
+  });
+}
+function fetchJson(url) {
+  return request("GET", url);
+}
 
 // plugins/context-meter/src/cost.ts
 function num(value) {
@@ -136,12 +171,20 @@ function resolveRate(doc, provider, model) {
   return null;
 }
 function explainMissingRate(scopeStatus, doc, provider, model) {
-  const docMissing = doc === null || doc === void 0;
-  if (scopeStatus === "unavailable" || docMissing) {
+  if (scopeStatus === "unavailable") {
     return {
       kind: "transport",
       label: "prices unavailable",
       detail: "The browser never received the price table. Settings are mirrored from the host only over a loopback connection, so this is expected on a proxied or LAN URL and no rate can be resolved for any model."
+    };
+  }
+  const docMissing = doc === null || doc === void 0;
+  if (docMissing) {
+    const seen = typeof scopeStatus === "string" && scopeStatus !== "" ? scopeStatus : "unknown";
+    return {
+      kind: "transport",
+      label: "prices not received",
+      detail: "The price table never arrived although the settings transport reports status '" + seen + "'. The host may not have registered the prices namespace, or the mirror stalled \u2014 reload, and if it persists the host log names the cause."
     };
   }
   const hasProvider = typeof provider === "string" && provider !== "";
@@ -157,6 +200,53 @@ function explainMissingRate(scopeStatus, doc, provider, model) {
     kind: "unpriced",
     label: "unpriced model",
     detail: "No rate row for " + rateKey(provider, model) + ". The price table arrived but does not price this model; add a row under the prices namespace."
+  };
+}
+function bareModel(key) {
+  const slash = key.indexOf("/");
+  return slash === -1 ? key : key.slice(slash + 1);
+}
+function summarizeCost(buckets, doc, provider, model) {
+  if (typeof model !== "string" || model === "") return null;
+  const exact = typeof provider === "string" && provider !== "" ? resolveRate(doc, provider, model) : null;
+  if (exact !== null) {
+    return {
+      kind: "exact",
+      key: rateKey(provider, model),
+      cost: priceBuckets(buckets, exact),
+      min: priceBuckets(buckets, exact),
+      max: priceBuckets(buckets, exact),
+      providers: []
+    };
+  }
+  if (doc === null || doc === void 0) return null;
+  const merged = {};
+  if (doc.rates !== null && doc.rates !== void 0) {
+    for (const [key, rate] of Object.entries(doc.rates)) merged[key] = rate;
+  }
+  if (doc.overrides !== null && doc.overrides !== void 0) {
+    for (const [key, rate] of Object.entries(doc.overrides)) merged[key] = rate;
+  }
+  const candidates = [];
+  for (const [key, rate] of Object.entries(merged)) {
+    if (bareModel(key) !== model) continue;
+    if (!isPriced(rate)) continue;
+    candidates.push({
+      provider: key.slice(0, key.indexOf("/")),
+      cost: priceBuckets(buckets, rate)
+    });
+  }
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => a.cost - b.cost);
+  const mid = Math.floor(candidates.length / 2);
+  const median = candidates.length % 2 === 1 ? candidates[mid].cost : (candidates[mid - 1].cost + candidates[mid].cost) / 2;
+  return {
+    kind: "estimated",
+    key: null,
+    cost: median,
+    min: candidates[0].cost,
+    max: candidates[candidates.length - 1].cost,
+    providers: [...new Set(candidates.map((c) => c.provider))].sort()
   };
 }
 
@@ -186,12 +276,12 @@ var TRUE_ROWS = [
   }
 ];
 function row(key, label, value, sub, title) {
-  return react2.createElement(
+  return React2.createElement(
     "div",
     { key, className: sub ? "ctx-meter-row ctx-meter-sub" : "ctx-meter-row" },
     [
-      react2.createElement("dt", { key: "dt" }, label),
-      react2.createElement(
+      React2.createElement("dt", { key: "dt" }, label),
+      React2.createElement(
         "dd",
         title === void 0 || title === null ? { key: "dd" } : { key: "dd", title },
         value
@@ -228,7 +318,7 @@ function apply(ctx) {
   ctx.slots.inject("conversation.input.right", function* () {
     yield ctx.slots.register(
       { name: "conversation.input.right", id: "true-context-meter", order: 50 },
-      (props) => react2.createElement(Meter, {
+      (props) => React2.createElement(Meter, {
         useProjection: props.useProjection,
         sessionId: props.sessionId,
         pricesScope,
@@ -290,20 +380,20 @@ function apply(ctx) {
     const breakdown = useProjection("contextBreakdown");
     const pressure = useProjection("contextPressure");
     const usage = useProjection("tokenUsage");
-    const [open, setOpen] = react2.useState(false);
-    const [hovering, setHovering] = react2.useState(false);
-    const rootRef = react2.useRef(null);
+    const [open, setOpen] = React2.useState(false);
+    const [hovering, setHovering] = React2.useState(false);
+    const rootRef = React2.useRef(null);
     const pricesScope2 = props.pricesScope;
-    const pricesSubscribe = react2.useCallback(
+    const pricesSubscribe = React2.useCallback(
       (callback) => pricesScope2.store.subscribe(callback),
       [pricesScope2]
     );
-    const pricesSnap = react2.useSyncExternalStore(
+    const pricesSnap = React2.useSyncExternalStore(
       pricesSubscribe,
       () => pricesScope2.store.getSnapshot()
     );
     const box = props.servicesBox;
-    const boxSubscribe = react2.useCallback(
+    const boxSubscribe = React2.useCallback(
       (callback) => {
         box.listeners.add(callback);
         return () => {
@@ -312,10 +402,10 @@ function apply(ctx) {
       },
       [box]
     );
-    const servicesVersion = react2.useSyncExternalStore(boxSubscribe, () => box.version);
+    const servicesVersion = React2.useSyncExternalStore(boxSubscribe, () => box.version);
     const sessionId = props.sessionId;
-    const [directory, setDirectory] = react2.useState(null);
-    react2.useEffect(() => {
+    const [directory, setDirectory] = React2.useState(null);
+    React2.useEffect(() => {
       if (box === void 0 || box.models === void 0) {
         setDirectory(null);
         return;
@@ -341,12 +431,12 @@ function apply(ctx) {
         }
       }
     }, [box, sessionId, servicesVersion]);
-    const dirSubscribe = react2.useCallback(
+    const dirSubscribe = React2.useCallback(
       (callback) => directory === null ? () => {
       } : directory.store.subscribe(callback),
       [directory]
     );
-    const dirSnap = react2.useSyncExternalStore(
+    const dirSnap = React2.useSyncExternalStore(
       dirSubscribe,
       () => directory === null ? null : directory.store.getSnapshot()
     );
@@ -354,12 +444,29 @@ function apply(ctx) {
     const provider = current !== void 0 && current !== null && typeof current.provider === "string" ? current.provider : null;
     const model = current !== void 0 && current !== null && typeof current.model === "string" ? current.model : null;
     const pricesDoc = pricesSnap !== null && pricesSnap !== void 0 ? pricesSnap.value : void 0;
-    const rate = resolveRate(pricesDoc, provider, model);
+    const [routeDoc, setRouteDoc] = React2.useState(null);
+    React2.useEffect(() => {
+      if (pricesDoc !== void 0) return;
+      let cancelled = false;
+      fetchJson("/context-meter/prices").then(function(result) {
+        if (cancelled) return;
+        const doc = result !== null && result !== void 0 ? result.data : void 0;
+        const prices = doc !== null && doc !== void 0 && doc.ok === true ? doc.prices : void 0;
+        if (prices !== null && prices !== void 0) setRouteDoc(prices);
+      }).catch(function() {
+      });
+      return function() {
+        cancelled = true;
+      };
+    }, [pricesDoc]);
+    const effectiveDoc = pricesDoc !== void 0 ? pricesDoc : routeDoc;
+    const summary = usage !== void 0 ? summarizeCost(usage, effectiveDoc, provider, model) : null;
     let costText = null;
     let rateLabel = null;
+    let rangeLabel = null;
     const missing = explainMissingRate(
       pricesSnap !== null && pricesSnap !== void 0 ? pricesSnap.status : void 0,
-      pricesDoc,
+      effectiveDoc,
       provider,
       model
     );
@@ -367,19 +474,23 @@ function apply(ctx) {
     if (usage !== void 0) {
       const totalTokens = (usage.uncachedInputTokens || 0) + (usage.cacheReadTokens || 0) + (usage.cacheWriteTokens || 0) + (usage.outputTokens || 0);
       if (totalTokens === 0) costText = formatApproxCost(0);
-      else if (rate !== null) {
-        costText = formatApproxCost(priceBuckets(usage, rate));
+      else if (summary !== null && summary.kind === "exact") {
+        costText = formatApproxCost(summary.cost);
         rateLabel = provider !== null && model !== null ? rateKey(provider, model) : null;
+      } else if (summary !== null) {
+        costText = formatApproxCost(summary.cost);
+        rangeLabel = formatApproxCost(summary.min) + " \u2013 " + formatApproxCost(summary.max);
+        costDetail = "Estimated: no published row for " + rateKey(provider ?? "?", model ?? "?") + ". Median of " + summary.providers.length + " provider rows (" + summary.providers.join(", ") + "), ranging " + rangeLabel + ".";
       } else {
         costText = missing.label;
         costDetail = missing.detail;
       }
     }
-    react2.useEffect(() => {
+    React2.useEffect(() => {
       ensureShippedHidden();
       placeAfterModelSelect(rootRef.current);
     });
-    const close = react2.useCallback(() => setOpen(false), []);
+    const close = React2.useCallback(() => setOpen(false), []);
     useDismissable(open, rootRef, close);
     const contextWindow = pressure === void 0 ? void 0 : pressure.contextWindow;
     if (breakdown === void 0 || contextWindow === void 0) return null;
@@ -393,7 +504,7 @@ function apply(ctx) {
       color: part.color,
       width: trueTotal === 0 ? 0 : percent * breakdown[part.key] / trueTotal
     })).filter((part) => part.width > 0);
-    const trigger = react2.createElement(
+    const trigger = React2.createElement(
       "button",
       {
         type: "button",
@@ -402,18 +513,18 @@ function apply(ctx) {
         "aria-expanded": open,
         onClick: () => setOpen(!open)
       },
-      react2.createElement(
+      React2.createElement(
         "svg",
         { width: 18, height: 18, viewBox: "0 0 18 18", "aria-hidden": true },
         [
-          react2.createElement("circle", {
+          React2.createElement("circle", {
             key: "track",
             className: "ctx-meter-track",
             cx: 9,
             cy: 9,
             r: RADIUS
           }),
-          react2.createElement("circle", {
+          React2.createElement("circle", {
             key: "fill",
             className: "ctx-meter-fill",
             cx: 9,
@@ -425,50 +536,50 @@ function apply(ctx) {
         ]
       )
     );
-    const trueHalf = react2.createElement("div", { className: "ctx-meter-half" }, [
-      react2.createElement("div", { key: "head", className: "ctx-meter-head" }, [
-        react2.createElement(
+    const trueHalf = React2.createElement("div", { className: "ctx-meter-half" }, [
+      React2.createElement("div", { key: "head", className: "ctx-meter-head" }, [
+        React2.createElement(
           "span",
           { key: "t", className: "ctx-meter-title" },
           "Prompt, as measured"
         ),
-        react2.createElement(
+        React2.createElement(
           "span",
           { key: "f", className: "ctx-meter-figures" },
           formatTokens(trueTotal) + " / " + formatTokens(contextWindow) + "  " + percent + "%"
         )
       ]),
-      react2.createElement(
+      React2.createElement(
         "div",
         { key: "bar", className: "ctx-meter-bar" },
         segments.map(
-          (part) => react2.createElement("span", {
+          (part) => React2.createElement("span", {
             key: part.key,
             className: "ctx-meter-segment " + part.color,
             style: { width: part.width + "%" }
           })
         )
       ),
-      react2.createElement(
+      React2.createElement(
         "dl",
         { key: "rows", className: "ctx-meter-rows" },
         TRUE_ROWS.map(
-          (part) => react2.createElement("div", { key: part.key, className: "ctx-meter-row" }, [
-            react2.createElement("dt", { key: "dt" }, [
-              react2.createElement("span", {
+          (part) => React2.createElement("div", { key: part.key, className: "ctx-meter-row" }, [
+            React2.createElement("dt", { key: "dt" }, [
+              React2.createElement("span", {
                 key: "s",
                 className: "ctx-meter-swatch " + part.color
               }),
               part.label
             ]),
-            react2.createElement("dd", { key: "dd" }, formatTokens(breakdown[part.key]))
+            React2.createElement("dd", { key: "dd" }, formatTokens(breakdown[part.key]))
           ])
         )
       )
     ]);
     let providerBody;
     if (usage === void 0) {
-      providerBody = react2.createElement(
+      providerBody = React2.createElement(
         "div",
         { className: "ctx-meter-note" },
         "No usage reported yet."
@@ -476,49 +587,52 @@ function apply(ctx) {
     } else {
       const billed = usage.uncachedInputTokens + usage.cacheReadTokens + usage.cacheWriteTokens;
       providerBody = [
-        react2.createElement("dl", { key: "last", className: "ctx-meter-rows" }, [
+        React2.createElement("dl", { key: "last", className: "ctx-meter-rows" }, [
           row("claim", "Prompt it says it read", formatTokens(pressure.pressureTokens))
         ]),
-        react2.createElement(
+        React2.createElement(
           "div",
           { key: "g", className: "ctx-meter-group" },
           "Session totals, every call summed"
         ),
-        react2.createElement("dl", { key: "totals", className: "ctx-meter-rows" }, [
+        React2.createElement("dl", { key: "totals", className: "ctx-meter-rows" }, [
           row("in", "Prompt, billed", formatTokens(billed)),
           row("cr", "of which cache read", formatTokens(usage.cacheReadTokens), true),
           row("cw", "of which cache write", formatTokens(usage.cacheWriteTokens), true),
           row("out", "Output", formatTokens(usage.outputTokens))
         ]),
-        react2.createElement(
+        React2.createElement(
           "div",
           { key: "cg", className: "ctx-meter-group" },
           "Session cost, approximate"
         ),
-        react2.createElement("dl", { key: "cost", className: "ctx-meter-rows" }, [
-          // The label is now specific (prices unavailable / no model reported /
-          // unpriced model) and the sentence a reader can act on rides in the
-          // title, so the panel explains itself without a console.
+        React2.createElement("dl", { key: "cost", className: "ctx-meter-rows" }, [
+          // The label is now specific (prices unavailable / prices not
+          // received / no model reported / unpriced model) and the sentence
+          // a reader can act on rides in the title, so the panel explains
+          // itself without a console. An estimate adds its range underneath
+          // the median headline, with the providers in the hover.
           row("cost", "Whole session", costText ?? missing.label, false, costDetail ?? missing.detail),
-          ...rateLabel !== null ? [row("rate", "Priced at", rateLabel, true)] : []
+          ...rateLabel !== null ? [row("rate", "Priced at", rateLabel, true)] : [],
+          ...rangeLabel !== null ? [row("range", "Est. range", rangeLabel, true, costDetail)] : []
         ]),
-        react2.createElement(
+        React2.createElement(
           "div",
           { key: "cn", className: "ctx-meter-note" },
           "Per-model cache rates from models.dev. The runtime exposes no subagent or since-compaction split, so the panel shows the whole-session total only."
         )
       ];
     }
-    const providerHalf = react2.createElement("div", { className: "ctx-meter-half" }, [
-      react2.createElement("div", { key: "head", className: "ctx-meter-head" }, [
-        react2.createElement(
+    const providerHalf = React2.createElement("div", { className: "ctx-meter-half" }, [
+      React2.createElement("div", { key: "head", className: "ctx-meter-head" }, [
+        React2.createElement(
           "span",
           { key: "t", className: "ctx-meter-title" },
           "Provider claims, last call"
         )
       ]),
-      react2.createElement("div", { key: "body" }, providerBody),
-      react2.createElement(
+      React2.createElement("div", { key: "body" }, providerBody),
+      React2.createElement(
         "div",
         { key: "note", className: "ctx-meter-note" },
         "Reported by the provider, not measured here. Some providers report these as running totals, which makes them larger than the prompt above."
@@ -527,16 +641,16 @@ function apply(ctx) {
     const children = [trigger];
     if (open)
       children.push(
-        react2.createElement("div", { key: "panel", className: "ctx-meter-panel" }, [
+        React2.createElement("div", { key: "panel", className: "ctx-meter-panel" }, [
           trueHalf,
           providerHalf
         ])
       );
     else if (hovering)
       children.push(
-        react2.createElement("div", { key: "tip", className: "ctx-meter-tip" }, tipText)
+        React2.createElement("div", { key: "tip", className: "ctx-meter-tip" }, tipText)
       );
-    return react2.createElement(
+    return React2.createElement(
       "span",
       {
         ref: rootRef,

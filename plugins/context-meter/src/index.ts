@@ -10,12 +10,23 @@
  * "unknown price" for that model, never fail the whole registration and
  * take every other model's figure down with it. The client validates rows
  * before pricing (see ./cost.ts isPriced).
+ *
+ * The settings mirror is loopback-only, so a browser reached over the LAN
+ * (or any browser whose mirror stalls) never sees the namespace. The GET
+ * route below serves the same resolved document over plain same-origin
+ * fetch, which survives a remote browser (#161): the client reads the
+ * scope first and falls back to this route when the scope yields no doc.
  */
 
 import { installSettingsSection, settingsNamespace } from "@deepseek-ai/dsh-settings";
 import z from "@deepseek-ai/schemastery";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import { sendJson } from "../../shared/http";
 
 const name = "context-meter";
+
+/** No hard host dependencies: services are looked up lazily per request. */
+const inject: string[] = [];
 
 /** The `prices` settings namespace owned here. */
 const PRICES_NS = settingsNamespace("prices");
@@ -28,6 +39,11 @@ const PRICES_SCHEMA = z.object({
   rates: z.dict(z.any()).default({}),
   overrides: z.dict(z.any()).default({}),
 });
+
+/** Minimal structural view of the settings service, matching profiles.ts. */
+interface SettingsReader {
+  get(ns: unknown): { rates?: unknown; overrides?: unknown } | undefined;
+}
 
 function apply(ctx: any) {
   // The browser reads prices through the settings scope (bound in the
@@ -44,6 +60,45 @@ function apply(ctx: any) {
       onChange: () => {},
     },
   );
+
+  // Lazy inject: the plugin still loads where no web server mounts. The
+  // handler reads the RESOLVED namespace per request, so a sync-models run
+  // shows up without a restart; a missing settings service answers 503
+  // instead of throwing the route off the server.
+  try {
+    ctx.inject(["webServer"], (scope: any) => {
+      const server = scope.webServer as {
+        register(options: unknown): unknown;
+      };
+      server.register({
+        kind: "exact",
+        path: "/context-meter/prices",
+        handler: (req: IncomingMessage, res: ServerResponse) => {
+          if (req.method !== "GET") {
+            sendJson(res, 405, { ok: false, error: "method not allowed" });
+            return;
+          }
+          const settings = (ctx as { get(name: string): unknown }).get(
+            "settings",
+          ) as SettingsReader | undefined;
+          const doc = settings?.get(PRICES_NS);
+          if (doc === undefined) {
+            sendJson(res, 503, { ok: false, error: "prices unavailable" });
+            return;
+          }
+          sendJson(res, 200, {
+            ok: true,
+            prices: {
+              rates: doc.rates ?? {},
+              overrides: doc.overrides ?? {},
+            },
+          });
+        },
+      });
+    });
+  } catch {
+    // No webServer: the settings scope path still works where it can.
+  }
 }
 
-export { apply, name };
+export { apply, inject, name };

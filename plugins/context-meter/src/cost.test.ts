@@ -19,6 +19,7 @@ import {
   priceBuckets,
   rateKey,
   resolveRate,
+  summarizeCost,
 } from "./cost";
 
 // Real models.dev shape (anthropic/claude-sonnet-5, 2026-09-09): input 2,
@@ -188,6 +189,32 @@ describe("explainMissingRate", () => {
     expect(m.detail).toMatch(/loopback/);
   });
 
+  it("keeps the loopback cause on the unavailable branch even when a doc is present", () => {
+    // Branch purity both ways: a present doc must not dilute the scope verdict.
+    const m = explainMissingRate("unavailable", priced, "meridian", "claude-opus-5");
+    expect(m.label).toBe("prices unavailable");
+    expect(m.detail).toMatch(/loopback/);
+  });
+
+  it("names a DIFFERENT cause when the doc is missing but the transport is up (#161)", () => {
+    // On loopback the scope status is never 'unavailable', yet the panel read
+    // 'prices unavailable' there too — the old text asserted the loopback cause
+    // unconditionally and sent the investigation to the wrong half. A missing
+    // document with a live transport is a different failure with a different
+    // remedy and must read differently.
+    for (const status of ["loading", "ready", "idle", undefined]) {
+      const m = explainMissingRate(status, undefined, "meridian", "claude-opus-5");
+      expect(m.kind).toBe("transport");
+      expect(m.label).not.toBe("prices unavailable");
+      expect(m.detail).not.toMatch(/loopback/);
+    }
+  });
+
+  it("says which scope status it actually saw when the doc is missing (#161)", () => {
+    const m = explainMissingRate("loading", undefined, "meridian", "claude-opus-5");
+    expect(m.detail).toContain("loading");
+  });
+
   it("blames the transport when the document never arrived", () => {
     expect(explainMissingRate(undefined, undefined, "meridian", "claude-opus-5").kind).toBe("transport");
     expect(explainMissingRate(undefined, null, "meridian", "claude-opus-5").kind).toBe("transport");
@@ -223,12 +250,115 @@ describe("explainMissingRate", () => {
   it("gives every state a distinct label, which is the entire point", () => {
     const labels = [
       explainMissingRate("unavailable", undefined, null, null).label,
+      explainMissingRate("ready", undefined, "meridian", "claude-opus-5").label,
       explainMissingRate("ready", priced, null, null).label,
       explainMissingRate("ready", priced, "meridian", "nope").label,
     ];
-    expect(new Set(labels).size).toBe(3);
+    expect(new Set(labels).size).toBe(4);
     // And none of them may be the old catch-all.
     for (const label of labels) expect(label).not.toBe("unknown price");
+  });
+});
+
+/**
+ * CROSS-PROVIDER ESTIMATES (#161, #126 decision 4; owner's chosen shape).
+ *
+ * An unresolved provider/model key must never invent a rate — but where the
+ * SAME bare model is priced under other providers, the panel may show the
+ * MEDIAN session cost as the headline with the min-max RANGE underneath,
+ * labelled estimated. Exact rows always win; overrides win per key.
+ */
+describe("summarizeCost", () => {
+  const buckets = {
+    uncachedInputTokens: 1_000_000,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    outputTokens: 1_000_000,
+  };
+  // $1/M input + $1/M output => exactly $2 for the buckets above, per unit row.
+  const doc = {
+    rates: {
+      "meridian/claude-opus-5": { input: 5, output: 25, cache_read: 0.5, cache_write: 6.25 },
+      "electronhub/claude-opus-5": { input: 1, output: 3, cache_read: 0.1, cache_write: 1 },
+      "zai/claude-opus-5": { input: 3, output: 9, cache_read: 0.3, cache_write: 3 },
+    },
+    overrides: {},
+  };
+
+  it("prices an exact provider/model row with no range", () => {
+    const s = summarizeCost(buckets, doc, "meridian", "claude-opus-5");
+    expect(s).not.toBeNull();
+    expect(s!.kind).toBe("exact");
+    expect(s!.key).toBe("meridian/claude-opus-5");
+    // 1M * 5 + 1M * 25, per million.
+    expect(s!.cost).toBeCloseTo(30, 10);
+  });
+
+  it("estimates the median across providers sharing the bare model", () => {
+    // No "nowhere/claude-opus-5" row: candidate costs are 30 (meridian),
+    // 4 (electronhub), 12 (zai). Median 12, range 4-30.
+    const s = summarizeCost(buckets, doc, "nowhere", "claude-opus-5");
+    expect(s).not.toBeNull();
+    expect(s!.kind).toBe("estimated");
+    expect(s!.cost).toBeCloseTo(12, 10);
+    expect(s!.min).toBeCloseTo(4, 10);
+    expect(s!.max).toBeCloseTo(30, 10);
+    expect(s!.providers.sort()).toEqual(["electronhub", "meridian", "zai"]);
+  });
+
+  it("averages the two middle costs for an even candidate count", () => {
+    const two = {
+      rates: {
+        "a/m": { input: 2, output: 2, cache_read: 0, cache_write: 0 },
+        "b/m": { input: 4, output: 4, cache_read: 0, cache_write: 0 },
+      },
+    };
+    // Costs 4 and 8: median is their mean, 6 — not the lower, not the upper.
+    const s = summarizeCost(buckets, two, "c", "m");
+    expect(s!.kind).toBe("estimated");
+    expect(s!.cost).toBeCloseTo(6, 10);
+  });
+
+  it("lets an override win its key inside the candidate set", () => {
+    const withOverride = {
+      rates: { "a/m": { input: 2, output: 2, cache_read: 0, cache_write: 0 } },
+      overrides: { "a/m": { input: 10, output: 10, cache_read: 0, cache_write: 0 } },
+    };
+    // Single candidate prices at the override (cost 20), never the sync row (4).
+    const s = summarizeCost(buckets, withOverride, "b", "m");
+    expect(s!.kind).toBe("estimated");
+    expect(s!.cost).toBeCloseTo(20, 10);
+  });
+
+  it("returns null when no row shares the bare model, and never a zero", () => {
+    expect(summarizeCost(buckets, doc, "meridian", "no-such-model")).toBeNull();
+    expect(summarizeCost(buckets, null, "meridian", "claude-opus-5")).toBeNull();
+    expect(summarizeCost(buckets, doc, "meridian", null)).toBeNull();
+    expect(summarizeCost(buckets, doc, null, null)).toBeNull();
+  });
+
+  it("still estimates when the provider is unknown but the model is priced", () => {
+    // The common mixed-routing case: no provider reported, bare model known.
+    const s = summarizeCost(buckets, doc, null, "claude-opus-5");
+    expect(s!.kind).toBe("estimated");
+    expect(s!.cost).toBeCloseTo(12, 10);
+  });
+
+  it("matches multi-segment model ids after the first slash only", () => {
+    const nested = {
+      rates: {
+        "command-code/MiniMaxAI/MiniMax-M2.5": {
+          input: 0.3,
+          output: 1.2,
+          cache_read: 0.03,
+          cache_write: 0.375,
+        },
+      },
+    };
+    // "MiniMax-M2.5" alone is NOT the bare model; the full suffix is.
+    expect(summarizeCost(buckets, nested, "other", "MiniMax-M2.5")).toBeNull();
+    const s = summarizeCost(buckets, nested, "other", "MiniMaxAI/MiniMax-M2.5");
+    expect(s!.kind).toBe("estimated");
   });
 });
 
@@ -282,5 +412,32 @@ describe("the panel is wired to the explainer, not to a catch-all string", () =>
     // Dropping this argument silently downgrades every transport failure to
     // "unpriced model" — the wrong half, and invisible.
     expect(source).toMatch(/pricesSnap[^;]*\.status/s);
+  });
+
+  it("prices through the summary, not a single rate (#161)", () => {
+    // resolveRate prices one row; the panel must render the exact-or-estimate
+    // summary instead, or the median/range work above never reaches a reader.
+    expect(source).toMatch(/summarizeCost\s*\(/);
+    expect(source).not.toMatch(/resolveRate\s*\(/);
+    expect(source).toMatch(/summary\.cost/);
+  });
+
+  it("falls back to the plugin route when the scope yields no document (#161)", () => {
+    // The settings mirror is loopback-only; without this fetch the panel is
+    // permanently unpriced on a LAN URL no matter how complete the table is.
+    expect(source).toMatch(/fetchJson\(\s*"\/context-meter\/prices"\s*\)/);
+  });
+
+  it("renders the estimate range as its own row with the providers behind it", () => {
+    // A bare median without the spread is a guess wearing a number; the
+    // range row underneath is what keeps it an honest estimate.
+    const call = /row\(\s*"range"\s*,[^)]*\)/s.exec(source);
+    expect(call).not.toBeNull();
+    expect((call as RegExpExecArray)[0]).toMatch(/rangeLabel/);
+    expect(source).toMatch(/summary\.providers/);
+    // And the estimate branch must be REACHABLE: gating it on kind exact
+    // would silently drop every estimate back to the missing-rate label
+    // while all the markup above stays put.
+    expect(source).toMatch(/else if \(summary !== null\) \{/);
   });
 });

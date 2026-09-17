@@ -115,7 +115,7 @@ export function resolveRate(
 }
 
 /**
- * WHY THREE STATES INSTEAD OF ONE STRING (#134).
+ * WHY FOUR STATES INSTEAD OF ONE STRING (#134, #161).
  *
  * `resolveRate` returning null used to render one word — "unknown price" —
  * for three completely different failures, with no console output. That cost
@@ -129,6 +129,12 @@ export function resolveRate(
  * proxied or LAN URL the prices document never arrives at all and EVERY
  * model reads unpriced — permanently, restart-proof, no matter how complete
  * the rate table is.
+ *
+ * #161 split the transport state in two. The old text asserted the loopback
+ * cause unconditionally, and the panel read 'prices unavailable' ON LOOPBACK
+ * too — where the scope status cannot be 'unavailable'. A missing document
+ * with a live transport is a different failure (host registration absent, or
+ * the mirror stalled) with a different remedy, so it reads differently.
  *
  * These states are DIAGNOSTIC, not cosmetic. The never-guess rule is
  * unchanged: none of them invents a rate, and an unpriced model still shows
@@ -153,9 +159,11 @@ export interface MissingRate {
  * half — which is exactly the failure this function exists to end.
  *
  * @param scopeStatus - the settings scope snapshot's `status`, when the
- *   transport reports one. Anything other than the string "unavailable" is
- *   treated as present, so an unfamiliar transport degrades to judging the
- *   document itself rather than mislabelling it as broken.
+ *   transport reports one. Only the string "unavailable" means the transport
+ *   itself is down (the loopback/memory case); any other status with a
+ *   missing document means the transport is up but the table never arrived.
+ *   An unfamiliar transport degrades to judging the document itself rather
+ *   than mislabelling it as broken.
  * @param doc - the resolved prices document, if it arrived.
  * @param provider - live selection's provider, or null when unresolved.
  * @param model - live selection's model, or null when unresolved.
@@ -166,13 +174,27 @@ export function explainMissingRate(
   provider: string | null | undefined,
   model: string | null | undefined,
 ): MissingRate {
-  const docMissing = doc === null || doc === undefined;
-  if (scopeStatus === "unavailable" || docMissing) {
+  if (scopeStatus === "unavailable") {
     return {
       kind: "transport",
       label: "prices unavailable",
       detail:
         "The browser never received the price table. Settings are mirrored from the host only over a loopback connection, so this is expected on a proxied or LAN URL and no rate can be resolved for any model.",
+    };
+  }
+  const docMissing = doc === null || doc === undefined;
+  if (docMissing) {
+    const seen =
+      typeof scopeStatus === "string" && scopeStatus !== "" ? scopeStatus : "unknown";
+    return {
+      kind: "transport",
+      label: "prices not received",
+      detail:
+        "The price table never arrived although the settings transport reports " +
+        "status '" +
+        seen +
+        "'. The host may not have registered the prices namespace, or the " +
+        "mirror stalled — reload, and if it persists the host log names the cause.",
     };
   }
   const hasProvider = typeof provider === "string" && provider !== "";
@@ -192,5 +214,95 @@ export function explainMissingRate(
       "No rate row for " +
       rateKey(provider as string, model as string) +
       ". The price table arrived but does not price this model; add a row under the prices namespace.",
+  };
+}
+
+/**
+ * The bare model id of a "provider/model" rate key: everything after the
+ * FIRST slash. Model ids themselves contain slashes
+ * ("command-code/MiniMaxAI/MiniMax-M2.5"), so splitting on the last slash
+ * would misidentify them; the provider is always the first segment.
+ */
+export function bareModel(key: string): string {
+  const slash = key.indexOf("/");
+  return slash === -1 ? key : key.slice(slash + 1);
+}
+
+/** One session's cost under one pricing, exact or estimated. */
+export interface CostSummary {
+  kind: "exact" | "estimated";
+  /** The exact rate key, when kind is exact. */
+  key: string | null;
+  /** Exact cost, or the MEDIAN candidate cost when estimated. */
+  cost: number;
+  /** Cheapest candidate cost; estimated only. */
+  min: number;
+  /** Priciest candidate cost; estimated only. */
+  max: number;
+  /** Provider prefixes behind the estimate, sorted; estimated only. */
+  providers: string[];
+}
+
+/**
+ * Price one bucket set, preferring the exact provider/model row and falling
+ * back to a cross-provider estimate (#161, #126 decision 4, owner's chosen
+ * shape: median headline with the range underneath).
+ *
+ * The estimate never invents a rate: every candidate is a real published row
+ * for the SAME bare model under another provider. Overrides win per key,
+ * exactly as in {@link resolveRate}. With an even candidate count the median
+ * is the mean of the two middle costs. No candidate at all resolves null —
+ * never a zero, never a guess (#126's rule).
+ */
+export function summarizeCost(
+  buckets: TokenBuckets,
+  doc: PricesDoc | null | undefined,
+  provider: string | null | undefined,
+  model: string | null | undefined,
+): CostSummary | null {
+  if (typeof model !== "string" || model === "") return null;
+  const exact =
+    typeof provider === "string" && provider !== "" ? resolveRate(doc, provider, model) : null;
+  if (exact !== null) {
+    return {
+      kind: "exact",
+      key: rateKey(provider as string, model),
+      cost: priceBuckets(buckets, exact),
+      min: priceBuckets(buckets, exact),
+      max: priceBuckets(buckets, exact),
+      providers: [],
+    };
+  }
+  if (doc === null || doc === undefined) return null;
+  const merged: Record<string, unknown> = {};
+  if (doc.rates !== null && doc.rates !== undefined) {
+    for (const [key, rate] of Object.entries(doc.rates)) merged[key] = rate;
+  }
+  if (doc.overrides !== null && doc.overrides !== undefined) {
+    for (const [key, rate] of Object.entries(doc.overrides)) merged[key] = rate;
+  }
+  const candidates: { provider: string; cost: number }[] = [];
+  for (const [key, rate] of Object.entries(merged)) {
+    if (bareModel(key) !== model) continue;
+    if (!isPriced(rate)) continue;
+    candidates.push({
+      provider: key.slice(0, key.indexOf("/")),
+      cost: priceBuckets(buckets, rate as PriceRate),
+    });
+  }
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => a.cost - b.cost);
+  const mid = Math.floor(candidates.length / 2);
+  const median =
+    candidates.length % 2 === 1
+      ? candidates[mid].cost
+      : (candidates[mid - 1].cost + candidates[mid].cost) / 2;
+  return {
+    kind: "estimated",
+    key: null,
+    cost: median,
+    min: candidates[0].cost,
+    max: candidates[candidates.length - 1].cost,
+    providers: [...new Set(candidates.map((c) => c.provider))].sort(),
   };
 }

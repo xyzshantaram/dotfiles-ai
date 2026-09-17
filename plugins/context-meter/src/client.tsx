@@ -1,12 +1,11 @@
 import * as React from "react";
 import { useDismissable } from "../../shared/client-react";
-import { injectStyle, shippedClass } from "../../shared/client-util";
+import { fetchJson, injectStyle, shippedClass } from "../../shared/client-util";
 import {
   explainMissingRate,
   formatApproxCost,
-  priceBuckets,
   rateKey,
-  resolveRate,
+  summarizeCost,
 } from "./cost";
 import localCss from "./client.module.css";
 
@@ -283,24 +282,50 @@ function apply(ctx: any) {
         ? current.model
         : null;
 
-    // The whole-session approximate cost at the live selection's rate. A
-    // mixed-model history prices at the current rate and says which one: the
-    // projection carries no per-model split, so any single-rate figure is an
-    // approximation, and the rate label keeps it checkable.
+    // The whole-session approximate cost. The settings scope is first: it is
+    // reactive, so a sync-models run re-renders without a reload. But the
+    // mirror is loopback-only, and it can stall anywhere — so when the scope
+    // yields no document, the same resolved table is read over the plugin's
+    // own GET route instead (#161). Same document, same pipeline; only the
+    // road differs, and the scope still wins whenever it has the table.
     const pricesDoc =
       pricesSnap !== null && pricesSnap !== undefined ? pricesSnap.value : undefined;
-    const rate = resolveRate(pricesDoc, provider, model);
+    const [routeDoc, setRouteDoc] = React.useState(null);
+    React.useEffect(() => {
+      if (pricesDoc !== undefined) return;
+      let cancelled = false;
+      fetchJson("/context-meter/prices")
+        .then(function (result: any) {
+          if (cancelled) return;
+          const doc = result !== null && result !== undefined ? result.data : undefined;
+          const prices =
+            doc !== null && doc !== undefined && doc.ok === true ? doc.prices : undefined;
+          if (prices !== null && prices !== undefined) setRouteDoc(prices);
+        })
+        .catch(function () {});
+      return function () {
+        cancelled = true;
+      };
+    }, [pricesDoc]);
+    const effectiveDoc = pricesDoc !== undefined ? pricesDoc : routeDoc;
+    const summary =
+      usage !== undefined ? summarizeCost(usage, effectiveDoc, provider, model) : null;
     let costText: string | null = null;
     let rateLabel: string | null = null;
+    let rangeLabel: string | null = null;
     // #134: WHY no rate, not merely THAT there is none. One "unknown price"
     // string used to cover three unrelated failures — a dead settings
     // transport, an unresolved model, and a genuinely unpriced model — with
     // no console output, so a bug report could not say which half to look
     // at. Computed even when priced, because it costs nothing and keeps the
     // two branches from drifting apart.
+    // The absence explainer judges the EFFECTIVE document (scope, else the
+    // route): when the route delivered the table, a missing rate means the
+    // model is genuinely unpriced, not a transport fault. The scope status
+    // still rides along so a dead transport reads as one.
     const missing = explainMissingRate(
       pricesSnap !== null && pricesSnap !== undefined ? pricesSnap.status : undefined,
-      pricesDoc,
+      effectiveDoc,
       provider,
       model,
     );
@@ -312,9 +337,26 @@ function apply(ctx: any) {
         (usage.cacheWriteTokens || 0) +
         (usage.outputTokens || 0);
       if (totalTokens === 0) costText = formatApproxCost(0);
-      else if (rate !== null) {
-        costText = formatApproxCost(priceBuckets(usage, rate));
+      else if (summary !== null && summary.kind === "exact") {
+        costText = formatApproxCost(summary.cost);
         rateLabel = provider !== null && model !== null ? rateKey(provider, model) : null;
+      } else if (summary !== null) {
+        // Estimated, never guessed (#126's rule): the headline is the median
+        // session cost across the providers that publish this bare model,
+        // and the range underneath names the spread. The title says which
+        // providers and that no exact row exists.
+        costText = formatApproxCost(summary.cost);
+        rangeLabel = formatApproxCost(summary.min) + " – " + formatApproxCost(summary.max);
+        costDetail =
+          "Estimated: no published row for " +
+          rateKey(provider ?? "?", model ?? "?") +
+          ". Median of " +
+          summary.providers.length +
+          " provider rows (" +
+          summary.providers.join(", ") +
+          "), ranging " +
+          rangeLabel +
+          ".";
       } else {
         // Still never a guessed rate and never a zero (#126's rule): the
         // figure is absent, and only the EXPLANATION is now specific.
@@ -458,11 +500,16 @@ function apply(ctx: any) {
           "Session cost, approximate",
         ),
         React.createElement("dl", { key: "cost", className: "ctx-meter-rows" }, [
-          // The label is now specific (prices unavailable / no model reported /
-          // unpriced model) and the sentence a reader can act on rides in the
-          // title, so the panel explains itself without a console.
+          // The label is now specific (prices unavailable / prices not
+          // received / no model reported / unpriced model) and the sentence
+          // a reader can act on rides in the title, so the panel explains
+          // itself without a console. An estimate adds its range underneath
+          // the median headline, with the providers in the hover.
           row("cost", "Whole session", costText ?? missing.label, false, costDetail ?? missing.detail),
           ...(rateLabel !== null ? [row("rate", "Priced at", rateLabel, true)] : []),
+          ...(rangeLabel !== null
+            ? [row("range", "Est. range", rangeLabel, true, costDetail)]
+            : []),
         ]),
         React.createElement(
           "div",
