@@ -42,7 +42,7 @@ describe("Indicator hook order (#150)", () => {
     expect(GATE).toBeGreaterThan(-1);
   });
 
-  it("declares no React hook below the early return", () => {
+  it("declares no hook call of ANY kind below the early return", () => {
     // Scan to the top-level close of makeIndicator (a `}` in column 0),
     // so unrelated code further down the file is not policed.
     let end = LINES.length;
@@ -54,7 +54,15 @@ describe("Indicator hook order (#150)", () => {
     }
     const offenders: string[] = [];
     for (let i = GATE + 1; i < end; i++) {
-      if (/\breact\.use[A-Z]/.test(LINES[i])) offenders.push(`${i + 1}: ${LINES[i].trim()}`);
+      const code = LINES[i].trim();
+      // A comment NAMING a hook is not a hook call. This file leans hard on
+      // its comments; a pin that tripped on prose would punish them.
+      if (code.startsWith("//") || code.startsWith("*") || code.startsWith("/*")) continue;
+      // Any `useX(` call, not just `react.useX`. A CUSTOM hook below the gate
+      // (useBuiltInSurfaces, props.useSession) breaks hook order just as
+      // fatally, and the original pattern could not see it -- named by the
+      // reviewer of 5e64d9a as the one real hole left in this pin.
+      if (/\buse[A-Z][A-Za-z0-9_$]*\s*\(/.test(LINES[i])) offenders.push(`${i + 1}: ${code}`);
     }
     // A hook here is React error #310 waiting to happen.
     expect(offenders).toEqual([]);
