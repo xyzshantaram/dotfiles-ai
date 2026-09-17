@@ -421,7 +421,7 @@ step_install_plugins() {
 		# own calls cost. Do NOT track upstream main: it imports
 		# @deepseek-ai/dsh-util-values, which needs dsh 0.1.2.
 		# Upgrade = bump the pin.
-		pnpm_ins "@deepseek-ai/dsh-compaction-basic@github:xyzshantaram/dsh-compaction-instant#9525c7233d0f92651bd850ff7d49bb2d149d099f"
+		pnpm_ins "@deepseek-ai/dsh-compaction-basic@github:xyzshantaram/dsh-compaction-instant#c349aab0baa3dcb8bf918b86e5fadbee9a1292ad"
 
 		# The shared toast stack. Other packages reach it through the global it
 		# publishes, so it must be installed before anything that raises a toast.
