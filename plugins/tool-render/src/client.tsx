@@ -182,6 +182,7 @@ var EXTENSION_LANGUAGE = {
 // ---- Platform modules: resolved by the shell loader seed at runtime. ----
 import react from "react";
 import { isBashGuardReason } from "./guard";
+import { attributePipeStages, getBashDiagram } from "./bash-diagram";
 import { escalationDetailOf, escalationLabel, escalationReasonClassName } from "./escalation";
 import {
   composeVerdictTooltip,
@@ -1219,6 +1220,166 @@ function escalationBanner(detail, settled) {
     </div>
   );
 }
+// ---- #149: read-only dataflow diagram for pipe/redirect commands. ----
+// Auto-rendered when the command is a single non-backgrounded statement
+// that is either a multi-stage pipeline of plain commands or one command
+// carrying redirects; everything else stays text (getBashDiagram returns
+// null there). Stages are blocks in execution order; `|` and `|&` are typed
+// arrows; redirects are labelled endpoints; each heredoc body is one
+// collapsed disclosure. Per-stage exit codes come from
+// block.meta.pipeStages, attributed by attributePipeStages — never from
+// host-computed offsets, which this component never sees.
+function BashDiagramHeredoc(props) {
+  var endpoint = props.endpoint;
+  var heredoc = endpoint.heredoc;
+  var openState = useState(false);
+  var open = openState[0];
+  var setOpen = openState[1];
+  var lines = heredoc.lines;
+  var label =
+    endpoint.slice + " \u00b7 " + String(lines) + (lines === 1 ? " line" : " lines") + " hidden";
+  if (!open) {
+    return (
+      <button
+        className="tool-render-diagram-heredoc"
+        title="heredoc body: one collapsed element, never one per line"
+        onClick={function () {
+          setOpen(true);
+        }}
+      >
+        {label + " \u2014 show"}
+      </button>
+    );
+  }
+  return (
+    <span className="tool-render-diagram-heredoc-open">
+      <button
+        className="tool-render-diagram-heredoc"
+        title="heredoc body"
+        onClick={function () {
+          setOpen(false);
+        }}
+      >
+        {label + " \u2014 hide"}
+      </button>
+      <pre className="tool-render-diagram-heredoc-body">{heredoc.body + heredoc.delimiter}</pre>
+    </span>
+  );
+}
+function BashCommandDiagram(props) {
+  var model = props.model;
+  var head = [];
+  if (model.timed) {
+    head.push(
+      <span
+        className="tool-render-diagram-badge"
+        title="`time` prefix: the command was timed, which changes what its exit code means"
+      >
+        time
+      </span>,
+    );
+  }
+  if (model.negated) {
+    head.push(
+      <span
+        className="tool-render-diagram-badge"
+        title="`!` negation: the pipeline exit code is inverted"
+      >
+        !
+      </span>,
+    );
+  }
+  if (model.leadingGap.trim() !== "") {
+    head.push(<div className="tool-render-diagram-lead">{model.leadingGap}</div>);
+  }
+  var flow = [];
+  for (var i = 0; i < model.stages.length; i++) {
+    if (i > 0) {
+      var arrow = model.arrows[i - 1];
+      var carriesStderr = arrow.operator === "|&";
+      flow.push(
+        <span
+          className={
+            "tool-render-diagram-arrow" +
+            (carriesStderr ? " tool-render-diagram-arrow-stderr" : "")
+          }
+          title={
+            carriesStderr ? "pipe stdout and stderr together (|&)" : "pipe stdout only (|)"
+          }
+        >
+          {arrow.operator + " \u2192"}
+        </span>,
+      );
+    }
+    var stage = model.stages[i];
+    var parts = [];
+    if (stage.words !== "") {
+      parts.push(
+        <div className="tool-render-diagram-words">
+          <code
+            className="hljs"
+            data-highlighted="yes"
+            dangerouslySetInnerHTML={{ __html: highlightCode(stage.words, "bash") }}
+          />
+        </div>,
+      );
+    }
+    for (var r = 0; r < stage.redirects.length; r++) {
+      var redirect = stage.redirects[r];
+      if (redirect.heredoc !== null) {
+        parts.push(<BashDiagramHeredoc endpoint={redirect} />);
+      } else {
+        parts.push(
+          <span
+            className="tool-render-diagram-endpoint"
+            title={"redirect (" + redirect.operator + ")"}
+          >
+            <code
+              className="hljs"
+              data-highlighted="yes"
+              dangerouslySetInnerHTML={{ __html: highlightCode(redirect.slice, "bash") }}
+            />
+          </span>,
+        );
+      }
+    }
+    if (stage.exitCode !== undefined) {
+      var failed = stage.exitCode !== 0;
+      parts.push(
+        <span
+          className={
+            "tool-render-diagram-exit" +
+            (failed ? " tool-render-diagram-exit-fail" : " tool-render-diagram-exit-ok")
+          }
+          title={
+            failed
+              ? "stage exit code " + String(stage.exitCode) + " (failed)"
+              : "stage exit code 0"
+          }
+        >
+          {"exit " + String(stage.exitCode)}
+        </span>,
+      );
+    }
+    flow.push(<div className="tool-render-diagram-stage">{parts}</div>);
+  }
+  var tail = [];
+  for (var t = 0; t < model.trailing.length; t++) {
+    var piece = model.trailing[t];
+    // Heredoc bodies render under their own stage's endpoint; only stray
+    // non-whitespace gap text (e.g. a trailing comment) renders here.
+    if (piece.kind === "gap" && piece.text.trim() !== "") {
+      tail.push(<div className="tool-render-diagram-lead">{piece.text}</div>);
+    }
+  }
+  return (
+    <div className="tool-render-diagram">
+      {head}
+      <div className="tool-render-diagram-flow">{flow}</div>
+      {tail}
+    </div>
+  );
+}
 function BashRow(props) {
   var expandedState = useState(false);
   var expanded = expandedState[0];
@@ -1345,7 +1506,25 @@ function BashRow(props) {
           ),
         );
       } else {
-        inner.push.apply(inner, commandBlock(null, command));
+        // #149: auto-diagram pipe/redirect commands. The rewrite pair above
+        // keeps today's text rendering (both texts stay visible); only the
+        // single-command branch diagrams. getBashDiagram parses client-side
+        // and memoises by command string; attributePipeStages copies the
+        // cached base with this row's meta.pipeStages (or none).
+        var diagramBase = getBashDiagram(command);
+        var diagramMeta =
+          block.meta !== null && typeof block.meta === "object" && !Array.isArray(block.meta)
+            ? block.meta
+            : null;
+        var diagram =
+          diagramBase !== null
+            ? attributePipeStages(diagramBase, diagramMeta !== null ? diagramMeta.pipeStages : undefined)
+            : null;
+        if (diagram !== null) {
+          inner.push(<BashCommandDiagram model={diagram} />);
+        } else {
+          inner.push.apply(inner, commandBlock(null, command));
+        }
       }
     }
     if (output !== null && output !== "") {
