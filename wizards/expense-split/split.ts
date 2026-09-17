@@ -14,6 +14,7 @@ import {
   type Step,
   step,
   type StepFn,
+  table,
   textarea,
   textEntry,
   tree,
@@ -754,10 +755,13 @@ export function itemStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
   const head: Node[] = [
     tree(
       "Lines",
-      s.flat.map((line, i) => ({
-        text: line.name + " (" + formatMoney(line.price, currency) + ")",
-        state: pickTreeState(s, i, index),
-      })),
+      s.flat.flatMap((line, i) => {
+        if (s.doc.skipped[String(i)]) return [];
+        return [{
+          text: line.name + " (" + formatMoney(line.price, currency) + ")",
+          state: pickTreeState(s, i, index),
+        }];
+      }),
     ),
     progress("Coverage", assigned, skipped, total - assigned - skipped),
   ];
@@ -813,18 +817,16 @@ export function itemStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
   const nodes: Node[] = [
     ...head,
     markdown(
-      "Line " +
-        (index + 1) +
-        " of " +
-        total +
-        ": **" +
-        line.name +
-        "** " +
-        formatMoney(line.price, currency) +
-        " from " +
-        line.platform +
-        " order " +
-        line.orderId,
+      "### " + line.name + " — " + formatMoney(line.price, currency),
+    ),
+    table(
+      "Line",
+      [{ heading: "Field" }, { heading: "Value", align: "left" }],
+      [
+        ["Line", (index + 1) + " of " + total],
+        ["Platform", line.platform],
+        ["Order", line.orderId],
+      ],
     ),
   ];
   const splitType = radio(

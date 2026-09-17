@@ -219,6 +219,16 @@ body {
   flex-direction: column;
   gap: 0.375rem;
 }
+/* Style bulk controls as quiet links. Keep the underline on the label. */
+.bulk-controls {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+.bulk-controls wa-button {
+  text-decoration: underline;
+  cursor: pointer;
+}
 small.option-hint {
   display: block;
   margin-top: 0.8rem;

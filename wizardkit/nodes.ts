@@ -58,6 +58,8 @@ export interface CheckboxNode {
   name: string;
   options: WizardOption[];
   ticked: string[];
+  // Show bulk tick controls when true.
+  bulk?: boolean;
   error?: string;
 }
 
@@ -450,6 +452,9 @@ function validateRadio(node: RadioNode, tag: string): string[] {
 
 function validateCheckbox(node: CheckboxNode, tag: string): string[] {
   const { errors, ok } = validateOptionsPrologue(node, tag, true);
+  if (node.bulk !== undefined && typeof node.bulk !== "boolean") {
+    errors.push(tag + ": bulk must be true or false");
+  }
   if (!ok) return errors;
   if (!Array.isArray(node.ticked)) {
     errors.push(tag + ": ticked must be a list");
@@ -971,8 +976,16 @@ export function checkbox(
   name: string,
   options: WizardOption[],
   ticked: string[] = [],
+  bulk = false,
 ): CheckboxNode {
-  return { kind: "checkbox", label, name, options, ticked };
+  return omitUndefined({
+    kind: "checkbox",
+    label,
+    name,
+    options,
+    ticked,
+    bulk: bulk ? true : undefined,
+  });
 }
 
 export function textEntry(

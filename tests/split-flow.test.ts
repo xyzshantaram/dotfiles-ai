@@ -108,6 +108,41 @@ function stepText(nodes: Node[]): string {
   return nodes.map(nodeText).join("\n");
 }
 
+// Collect the text of every markdown node.
+function markdownTexts(nodes: Node[]): string[] {
+  const out: string[] = [];
+  for (const node of nodes) {
+    const rec = node as unknown as Record<string, unknown>;
+    if (rec["kind"] === "markdown" && typeof rec["text"] === "string") {
+      out.push(rec["text"] as string);
+    }
+  }
+  return out;
+}
+
+// Find the table node with one label.
+function tableByLabel(nodes: Node[], label: string): Record<string, unknown> {
+  for (const node of nodes) {
+    const rec = node as unknown as Record<string, unknown>;
+    if (rec["kind"] === "table" && rec["label"] === label) return rec;
+  }
+  throw new Error("no table labelled " + label);
+}
+
+// Find the tree node with one label.
+function treeByLabel(nodes: Node[], label: string): Record<string, unknown> {
+  for (const node of nodes) {
+    const rec = node as unknown as Record<string, unknown>;
+    if (rec["kind"] === "tree" && rec["label"] === label) return rec;
+  }
+  throw new Error("no tree labelled " + label);
+}
+
+// Read the rows of one table node.
+function tableRows(table: Record<string, unknown>): string[][] {
+  return (table["rows"] as string[][]) ?? [];
+}
+
 // Answers map with the run typed, the resume question answered, and
 // an optional me name.
 function answers(run: string, resume?: string, me?: string): Map<string, string[]> {
@@ -140,7 +175,7 @@ Deno.test("start over clears saved assignments", async () => {
   const dir = makeRun(root, "r2", savedDoc("Ann"));
   itemStep(answers(dir), { sessionId: "t-split-2" });
   const fresh = itemStep(answers(dir, "Start over"), { sessionId: "t-split-2" });
-  assertStringIncludes(stepText(fresh.nodes), "Line 1 of 1");
+  assertEquals(tableRows(tableByLabel(fresh.nodes, "Line"))[0], ["Line", "1 of 1"]);
   // saveState writes in the background, so wait for the cleared file.
   for (let i = 0; i < 50; i++) {
     const after = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
@@ -725,7 +760,7 @@ Deno.test("fresh split session skips the lines of unpicked orders", async () => 
   const found = itemStep(m, { sessionId: "t-pick-6" });
   const text = stepText(found.nodes);
   // Line 0 belongs to the unpicked order, so the session opens on line 2.
-  assertStringIncludes(text, "Line 2 of 2");
+  assertEquals(tableRows(tableByLabel(found.nodes, "Line"))[0], ["Line", "2 of 2"]);
   assertStringIncludes(text, "MilkB-pick");
 });
 
@@ -739,7 +774,7 @@ Deno.test("resumed split session keeps its saved skipped map", async () => {
   const found = itemStep(m, { sessionId: "t-pick-7" });
   const text = stepText(found.nodes);
   // The saved skip on line 0 stays. Line 1 stays open.
-  assertStringIncludes(text, "Line 2 of 2");
+  assertEquals(tableRows(tableByLabel(found.nodes, "Line"))[0], ["Line", "2 of 2"]);
   assertEquals(text.includes("All 2 lines are split"), false);
   const after = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
   assertEquals(after.skipped, { "0": true });
@@ -940,4 +975,90 @@ Deno.test("two saves in one session leave no conflict copy", async () => {
   // Read the live file and check both lines landed.
   const live = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
   assertEquals(Object.keys(live.assignments).length, 2, "both lines saved");
+});
+
+Deno.test("item header names the product and price alone", async () => {
+  // Open a fresh one line run.
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "header-alone", null);
+  const m = answers(dir);
+  m.set("person", ["Ann", "Ben"]);
+  m.set("me", ["Ann"]);
+  const found = itemStep(m, { sessionId: "t-header-1" });
+  // Find the header markdown node.
+  const headers = markdownTexts(found.nodes).filter((text) => text.startsWith("### "));
+  assertEquals(headers.length, 1);
+  // Check the header names the product and price.
+  assertStringIncludes(headers[0], "Pizza");
+  assertStringIncludes(headers[0], "10.00");
+  // Check the header drops the old platform words.
+  assertEquals(headers[0].includes("from"), false);
+  assertEquals(headers[0].includes("order"), false);
+});
+
+Deno.test("item header table carries the counter platform and order", async () => {
+  // Open a fresh one line run.
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "header-table", null);
+  const m = answers(dir);
+  m.set("person", ["Ann", "Ben"]);
+  m.set("me", ["Ann"]);
+  const found = itemStep(m, { sessionId: "t-header-2" });
+  // Find the line table.
+  const table = tableByLabel(found.nodes, "Line");
+  // Check the column headings.
+  assertEquals(table["columns"], [{ heading: "Field" }, { heading: "Value", align: "left" }]);
+  // Check the rows hold the counter platform and order.
+  assertEquals(tableRows(table), [["Line", "1 of 1"], ["Platform", "swiggy"], ["Order", "o1"]]);
+});
+
+Deno.test("lines tree omits a skipped line and keeps an unskipped one", async () => {
+  // Build a two line run with line 0 skipped.
+  const orders: Order[] = [{
+    id: "o1",
+    platform: "swiggy",
+    date: "2026-09-01 10:00 AM",
+    paid: 30,
+    items: [{ name: "Pizza", price: 10, quantity: 1 }, { name: "Burger", price: 20, quantity: 1 }],
+    fees: { delivery: 0, packaging: 0 },
+  }];
+  const root = await Deno.makeTempDir();
+  const doc = freshState(["Ann", "Ben"], "Ann");
+  doc.skipped["0"] = true;
+  const dir = makeRun(root, "skip-hide", doc, orders);
+  const found = itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-skip-1" });
+  // Find the lines tree.
+  const tree = treeByLabel(found.nodes, "Lines");
+  const rows = tree["rows"] as Array<{ text: string; state: string }>;
+  // Check the tree holds one row.
+  assertEquals(rows.length, 1);
+  // Check the tree keeps the unskipped line.
+  assertStringIncludes(rows[0].text, "Burger");
+  // Check the tree drops the skipped line.
+  assertEquals(rows.map((row) => row.text).join("\n").includes("Pizza"), false);
+});
+
+Deno.test("lines tree still marks the current line", async () => {
+  // Build a two line run with line 0 skipped.
+  const orders: Order[] = [{
+    id: "o1",
+    platform: "swiggy",
+    date: "2026-09-01 10:00 AM",
+    paid: 30,
+    items: [{ name: "Pizza", price: 10, quantity: 1 }, { name: "Burger", price: 20, quantity: 1 }],
+    fees: { delivery: 0, packaging: 0 },
+  }];
+  const root = await Deno.makeTempDir();
+  const doc = freshState(["Ann", "Ben"], "Ann");
+  doc.skipped["0"] = true;
+  const dir = makeRun(root, "skip-current", doc, orders);
+  const found = itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-skip-2" });
+  // Find the lines tree.
+  const tree = treeByLabel(found.nodes, "Lines");
+  const rows = tree["rows"] as Array<{ text: string; state: string }>;
+  // Check the remaining row marks the current line.
+  assertEquals(rows.length, 1);
+  assertEquals(rows[0].state, "current");
+  // Check the header table points at line 2.
+  assertEquals(tableRows(tableByLabel(found.nodes, "Line"))[0], ["Line", "2 of 2"]);
 });

@@ -2701,3 +2701,68 @@ Deno.test("the strip carries no draft attributes when empty", async () => {
   assert(!body.includes('data-draft-id="'), "strip holds no draft id");
   assert(!body.includes('data-draft-at="'), "strip holds no draft time");
 });
+
+Deno.test("bulk checkbox keeps its flag only when true", () => {
+  // Build one bulk checkbox plus one plain checkbox.
+  const withBulk = checkbox("People", "who", ["Ana", "Bo"], [], true);
+  assert(withBulk.bulk === true, "bulk true stays");
+  const plain = checkbox("People", "who", ["Ana", "Bo"]);
+  assert(!("bulk" in plain), "plain build holds no bulk field");
+});
+
+Deno.test("validation rejects a non boolean bulk", () => {
+  // Feed text where true or false belongs.
+  const node = checkbox("People", "who", ["Ana"], []);
+  (node as unknown as { bulk: string }).bulk = "yes";
+  const errors = validateStep(step("s1", "Sample", [node]));
+  assert(errors.length > 0 && namesKind(errors, "checkbox"), "bulk names kind");
+});
+
+Deno.test("bulk checkbox renders its controls plus group mark", () => {
+  // Render a page holding one bulk checkbox.
+  const page = renderPage(
+    "Demo",
+    renderStepFragment(
+      step("s1", "Sample", [checkbox("People", "who", ["Ana", "Bo"], [], true)]),
+    ),
+  );
+  assert(page.includes('data-bulk="all"'), "page holds the select all control");
+  assert(page.includes('data-bulk="none"'), "page holds the select none control");
+  assert(page.includes("Select all"), "all control keeps its label");
+  assert(page.includes("Select none"), "none control keeps its label");
+  assert(page.includes('data-bulk-group="who"'), "group keeps its mark");
+  assert(page.includes('type="button"'), "controls never submit the form");
+});
+
+Deno.test("plain checkbox renders no bulk controls", () => {
+  // Render a page holding one plain checkbox.
+  const page = renderPage(
+    "Demo",
+    renderStepFragment(step("s1", "Sample", [checkbox("People", "who", ["Ana"])])),
+  );
+  assert(!page.includes('data-bulk="all"'), "page holds no all control");
+  assert(!page.includes('data-bulk="none"'), "page holds no none control");
+  assert(!page.includes('data-bulk-group="who"'), "group keeps no bulk mark");
+});
+
+Deno.test("draft offer flag shows only on the first screen", async () => {
+  // Open a two step wizard with a drafts hook.
+  const handle = wiz({
+    title: "T",
+    steps: [
+      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
+      step("b", "Second", [markdown("tail")]),
+    ],
+    drafts: {
+      list: () => [{ id: "s1", label: "Saved run", at: "2025-06-07T08:09:10.000Z" }],
+      resume: () => null,
+    },
+  });
+  const first = await (await handle(new Request("http://local/"))).text();
+  assert(first.includes('data-draft-first="1"'), "first screen keeps the flag");
+  assert(first.includes('data-draft-id="s1"'), "first screen keeps the draft");
+  // Move to the second step with the same session.
+  const second = await (await handle(stepPost("a", "next"))).text();
+  assert(second.includes("Second"), "second screen shows");
+  assert(!second.includes('data-draft-first="1"'), "later screen drops the flag");
+});

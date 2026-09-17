@@ -232,9 +232,36 @@ function RadioView(props: { node: RadioNode }) {
 
 function CheckboxView(props: { node: CheckboxNode }) {
   const node = props.node;
+  const bulk = node.bulk === true;
   return (
     <Shell kind="checkbox" label={node.label} error={node.error}>
-      <div class="check-group">
+      {bulk
+        ? (
+          <div class="bulk-controls">
+            <wa-button
+              type="button"
+              size="small"
+              appearance="plain"
+              class="bulk-control"
+              data-bulk="all"
+              data-bulk-target={node.name}
+            >
+              Select all
+            </wa-button>
+            <wa-button
+              type="button"
+              size="small"
+              appearance="plain"
+              class="bulk-control"
+              data-bulk="none"
+              data-bulk-target={node.name}
+            >
+              Select none
+            </wa-button>
+          </div>
+        )
+        : null}
+      <div class="check-group" data-bulk-group={bulk ? node.name : undefined}>
         {node.options.map((option) => {
           const value = optionValue(option);
           const checked = node.ticked.includes(value);
@@ -809,8 +836,16 @@ function draftJs(title: string): string {
     `(function () {\n` +
     `var KEY = ${JSON.stringify(KEY)}, VER = ${
       JSON.stringify(title + " v1")
-    }, timer = null, PENDING = KEY + "-pick", OFFKEY = KEY + "-off";\n` +
-    `function frm(el) { return (el && el.form) || el || null; }\n` +
+    }, timer = null, sending = "", PENDING = KEY + "-pick", OFFKEY = KEY + "-off";\n` +
+    // Find the form that owns an element. A custom element button has
+    // no form property, so the walk up the tree does the work. Without
+    // it a successful post never clears its draft, and the strip then
+    // offers to take the reader back to the step they just left.
+    `function frm(el) {\n` +
+    `if (!el) return null;\n` +
+    `if (el.form) return el.form;\n` +
+    `if (el.closest) { var f = el.closest("form"); if (f) return f; }\n` +
+    `return el.tagName === "FORM" ? el : null; }\n` +
     `function sid(f) {\n` +
     `var s = f.querySelector("[name=step]"); return s ? s.value : ""; }\n` +
     `function stepTitle() {\n` +
@@ -830,7 +865,10 @@ function draftJs(title: string): string {
     `var st = document.getElementById("draft-status"); if (!st) return;\n` +
     `var d = new Date(), m = ("0" + d.getMinutes()).slice(-2);\n` +
     `st.textContent = "Draft saved " + d.getHours() + ":" + m; }\n` +
+    // A form that already left the page belongs to a step the reader
+    // has moved past. Saving it would raise the step they just left.
     `function save(f) {\n` +
+    `if (!f || (f.isConnected === false)) return;\n` +
     `var d = { v: VER, step: sid(f), title: stepTitle(), at: new Date().toISOString(), fields: read(f) };\n` +
     `try { localStorage.setItem(KEY, JSON.stringify(d)); stamp(); } catch (e) {}\n` +
     `renderOffer(); }\n` +
@@ -868,6 +906,7 @@ function draftJs(title: string): string {
     `function statusEl() { return document.getElementById("draft-status"); }\n` +
     `function appEntry() {\n` +
     `var f = foot(); if (!f) return null;\n` +
+    `if (!f.hasAttribute("data-draft-first")) return null;\n` +
     `var id = f.getAttribute("data-draft-id"), at = f.getAttribute("data-draft-at");\n` +
     `if (!id || !at) return null;\n` +
     `return { id: id, label: f.getAttribute("data-draft-label") || id, at: at }; }\n` +
@@ -955,9 +994,19 @@ function draftJs(title: string): string {
     `document.addEventListener("submit", function (ev) {\n` +
     `if (!window.htmx && ev.target.tagName === "FORM") clearFor(sid(ev.target));\n` +
     `});\n` +
+    // Note the step at the moment of the post. The swap replaces the
+    // form before the request settles, so reading the id afterwards
+    // names the new step and the old draft would survive its own post.
+    `document.addEventListener("htmx:beforeRequest", function (ev) {\n` +
+    // Drop a pending autosave. It holds the old form, and firing after
+    // the swap would write the step the reader has just left.
+    `clearTimeout(timer); timer = null;\n` +
+    `var f = frm(ev.detail && ev.detail.elt); sending = f ? sid(f) : ""; });\n` +
     `document.addEventListener("htmx:afterRequest", function (ev) {\n` +
     `if (!ev.detail || !ev.detail.successful) return;\n` +
-    `var f = frm(ev.detail.elt); if (f) clearFor(sid(f)); });\n` +
+    `if (sending) clearFor(sending);\n` +
+    `var f = frm(ev.detail.elt); if (f) clearFor(sid(f));\n` +
+    `sending = ""; });\n` +
     `document.addEventListener("htmx:afterSwap", function (ev) {\n` +
     `var out = ev.detail && ev.detail.target;\n` +
     `if (!out || !out.classList || !out.classList.contains("action-out")) {\n` +
@@ -979,6 +1028,30 @@ const REPEAT_JS = `(function () {\n` +
   `var inputs = copy.querySelectorAll("wa-input, input, textarea");\n` +
   `for (var i = 0; i < inputs.length; i++) inputs[i].value = "";\n` +
   `list.insertBefore(copy, btn); }); })();`;
+
+// Bulk tick helper. One delegated click handler ticks every box in the named group.
+const BULK_JS = `(function () {\n` +
+  `document.addEventListener("click", function (ev) {\n` +
+  `var btn = ev.target.closest("[data-bulk]");\n` +
+  `if (!btn) return;\n` +
+  `var mode = btn.getAttribute("data-bulk");\n` +
+  `if (mode !== "all" && mode !== "none") return;\n` +
+  `if (ev.preventDefault) ev.preventDefault();\n` +
+  `var target = btn.getAttribute("data-bulk-target");\n` +
+  `var scope = btn.closest("section");\n` +
+  `var group = null;\n` +
+  `if (scope) group = target ? scope.querySelector('[data-bulk-group="' + target + '"]') : scope.querySelector("[data-bulk-group]");\n` +
+  `if (!group) group = target ? document.querySelector('[data-bulk-group="' + target + '"]') : null;\n` +
+  `if (!group) return;\n` +
+  `var boxes = group.querySelectorAll("wa-checkbox");\n` +
+  `var tick = mode === "all";\n` +
+  `for (var i = 0; i < boxes.length; i++) {\n` +
+  `var box = boxes[i];\n` +
+  `if (box.checked === tick) continue;\n` +
+  `box.checked = tick;\n` +
+  `box.dispatchEvent(new Event("input", { bubbles: true }));\n` +
+  `box.dispatchEvent(new Event("change", { bubbles: true }));\n` +
+  `} }); })();`;
 
 // Copy helper. One delegated click handler finds the textarea by its
 // name inside the container, writes it to the clipboard, and shows a
@@ -1017,10 +1090,12 @@ const BASE_PATH_JS =
 // Script, style, and markdown bodies inject as raw HTML because they
 // are trusted program output; Preact escapes every other text node.
 // A draft entry adds resume attributes to the footer strip.
+// A true first flag marks the first applying step.
 export function renderPage(
   title: string,
   fragment: string,
   draft?: DraftEntry | null,
+  first?: boolean,
 ): string {
   return "<!DOCTYPE html>\n" + renderToString(
     <html lang="en">
@@ -1063,12 +1138,14 @@ export function renderPage(
           data-draft-id={draft?.id}
           data-draft-label={draft?.label}
           data-draft-at={draft?.at}
+          data-draft-first={first === true ? "1" : undefined}
         >
           <span>{title}</span>
           <small id="draft-status" />
         </footer>
         <script dangerouslySetInnerHTML={{ __html: draftJs(title) }} />
         <script dangerouslySetInnerHTML={{ __html: REPEAT_JS }} />
+        <script dangerouslySetInnerHTML={{ __html: BULK_JS }} />
         <script dangerouslySetInnerHTML={{ __html: COPY_JS }} />
       </body>
     </html>,
@@ -1565,6 +1642,7 @@ export function createWizard(
 
   // Reply with one step. A full page carries the newest app draft
   // in the footer strip. A fragment swaps the step alone.
+  // The footer marks the first applying step for the app offer.
   async function reply(
     req: Request,
     step: Step,
@@ -1576,7 +1654,12 @@ export function createWizard(
     const fragment = renderStepFragment(withStages(step, nav));
     if (req.headers.get("hx-request") === "true") return html(fragment);
     const draft = ctx === undefined ? undefined : await readDraft(ctx);
-    return html(renderPage(opts.title, fragment, draft));
+    let first = false;
+    if (nav !== undefined) {
+      const at = scanForward(nav.built, nav.applies, 0);
+      if (at >= 0 && nav.built[at]?.id === step.id) first = true;
+    }
+    return html(renderPage(opts.title, fragment, draft, first));
   }
 
   // Dir holding the vendored Web Awesome tree. Beside the binary in
