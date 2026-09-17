@@ -57,16 +57,31 @@ describe("run_code output is a SIBLING of the card, not its footer", () => {
 });
 
 describe("the three siblings are ordered head -> nested -> out", () => {
-  const scope = 'div[data-chat-call-id]:has(> .tool-render-card[data-run-code])';
+  const scope =
+    'div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-card[data-run-code])';
+
+  it("selects THROUGH the renderer's slot wrapper", () => {
+    // The regression that actually shipped. The renderer wraps every slot entry
+    // in <div data-slot="tool.call.toolview" style="display:contents">, so our
+    // card is a GRANDchild of the call row, and the obvious
+    // `:has(> .tool-render-card[data-run-code])` matches nothing -- silently,
+    // with no error and no visual clue beyond the layout simply not happening.
+    // Measured in the live DOM: selectorMatches was false while ruleLoaded was
+    // true. Any future edit that drops the wrapper step reintroduces exactly
+    // that failure, so pin the wrapper, not just the order values.
+    expect(css).toContain('[data-slot="tool.call.toolview"] > .tool-render-card[data-run-code]');
+    expect(css).not.toMatch(/:has\(>\s*\.tool-render-card\[data-run-code\]\)/);
+  });
 
   it("the call row is a flex column, or order does nothing", () => {
     const rule = css.slice(css.indexOf(scope));
+    expect(css.indexOf(scope)).toBeGreaterThan(-1);
     expect(rule).toContain("flex-direction: column");
   });
 
   it("assigns all three orders, with the nested calls in the middle", () => {
     expect(css).toMatch(/\.tool-render-card\[data-run-code\]\s*\{\s*order: 0/);
-    expect(css).toMatch(/:not\(\.tool-render-runcode-out\)\s*\{\s*order: 1/);
+    expect(css).toMatch(/\*:not\(\[data-slot\]\)\s*\{\s*order: 1/);
     expect(css).toMatch(/\.tool-render-runcode-out\s*\{\s*order: 2/);
   });
 
