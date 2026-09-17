@@ -12,7 +12,7 @@ import {
   step,
   type StepFn,
   textEntry,
-} from "../../wizardkit/mod.ts";
+} from "jsr:@xyzshantaram/wizardkit@^0.1.0";
 import {
   isDryMap,
   listRunsSync,
@@ -25,7 +25,7 @@ import {
 import { answer, answerList } from "../../src/answers.ts";
 import { sessionStore, sidOf } from "../../src/sessionstore.ts";
 import { setSplitRun } from "./split.ts";
-import type { WizardCtx } from "../../wizardkit/mod.ts";
+import type { WizardCtx } from "jsr:@xyzshantaram/wizardkit@^0.1.0";
 import { dryBox, dryNote } from "./dry.ts";
 import { fmtRs, formatDayISO, isLedgerRow, itemSummary, parseDate } from "../../src/common.ts";
 import { DEFAULT_LOCATION, hasTokensSync } from "../../src/zomato.ts";

@@ -32,3 +32,6 @@ out/
 
 # Compiled desktop demo build.
 demo/
+
+# Every task passes --no-lock, so a lockfile here only goes stale.
+deno.lock

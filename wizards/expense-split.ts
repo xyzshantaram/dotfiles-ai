@@ -11,7 +11,7 @@ import {
   type Step,
   step,
   type StepFn,
-} from "../wizardkit/mod.ts";
+} from "jsr:@xyzshantaram/wizardkit@^0.1.0";
 import { gatherSteps, setResumedRun } from "./expense-split/gather.ts";
 import { handleBoardRoute } from "./expense-split/board-routes.ts";
 import { resumeStep, routeStatus, splitRunId, splitSteps } from "./expense-split/split.ts";
@@ -71,7 +71,7 @@ const MENU: MenuItem[] = [
 import { loadSettings, saveSettings, USAGE_MODES } from "../src/settings.ts";
 import { listRunsSync, readRun, runHint, stateRoot } from "../src/runstate.ts";
 import { sidOf } from "../src/sessionstore.ts";
-import type { WizardCtx } from "../wizardkit/mod.ts";
+import type { WizardCtx } from "jsr:@xyzshantaram/wizardkit@^0.1.0";
 
 // Push source step with the finished split run preloaded. The export
 // step jumps here with goto:push-source, so the Run entry carries the

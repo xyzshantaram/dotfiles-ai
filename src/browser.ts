@@ -3,7 +3,7 @@
 // Site-specific knowledge (auth header names, API paths) stays in each
 // site module; only the mechanics live here.
 
-import { type BrowserContext, chromium, type Page, type Response } from "playwright";
+import { type BrowserContext, chromium, type Page, type Response } from "npm:playwright@1.57.0";
 
 /** Resolved by the wizard per-OS in production; fixed path for prototyping. */
 export const DEFAULT_CHROMIUM =

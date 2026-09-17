@@ -7,7 +7,7 @@
 // straight from a raw GitHub URL. This module never imports the wizard
 // engine, which drags in the browser session stores.
 
-import { parseArgs } from "@std/cli/parse-args";
+import { parseArgs } from "jsr:@std/cli@^1.0.32/parse-args";
 import { formatMoney, type OutputDoc } from "./src/common.ts";
 import { splitwiseEnvPath } from "./src/paths.ts";
 import { buildNameMap, type PushApi, runPush } from "./src/pushcore.ts";

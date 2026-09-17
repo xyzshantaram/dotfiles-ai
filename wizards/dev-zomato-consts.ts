@@ -4,7 +4,7 @@
 // Print fresh values by default.
 // Write the config file only with the write flag.
 
-import { $ } from "zx";
+import { $ } from "npm:zx@8.8.5";
 import { legacyZomatoConfigPath, stateRoot, zomatoConfigPath } from "../src/paths.ts";
 import { say } from "../src/term.ts";
 

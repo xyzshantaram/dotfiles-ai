@@ -30,7 +30,7 @@ import {
   sharePercent,
   shareSingle,
 } from "../wizards/expense-split/split-board.js";
-import type { Node } from "../wizardkit/mod.ts";
+import type { Node } from "jsr:@xyzshantaram/wizardkit@^0.1.0";
 import type { Order } from "../src/common.ts";
 
 // One order with one 10.00 item and no fees.

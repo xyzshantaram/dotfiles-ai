@@ -10,9 +10,9 @@ import {
   type StepFn,
   tabs,
   textEntry,
-} from "../../wizardkit/mod.ts";
+} from "jsr:@xyzshantaram/wizardkit@^0.1.0";
 import { currentSignedInAs, envPath, realApi, verifyKey } from "./connect.ts";
-import type { WizardCtx } from "../../wizardkit/mod.ts";
+import type { WizardCtx } from "jsr:@xyzshantaram/wizardkit@^0.1.0";
 import { sessionStore, sidOf } from "../../src/sessionstore.ts";
 import { field } from "../../src/answers.ts";
 import { aiSetupMessage } from "../../src/ai-setup.ts";

@@ -6,13 +6,13 @@ access for its own UI.
 
 ## Layout
 
-Copy three files into a fresh dir: `template.ts`, `deno.json`, and `compile.ts` (from `desktop/`).
-Rename the title, steps, and the desktop block. That dir is the whole wizard.
+Copy three files into a fresh dir: `template.ts`, `deno.json`, and `compile.ts`. All three ship with
+this skill. Rename the title, steps, and the desktop block. That dir is the whole wizard.
 
 - `template.ts` imports everything from `"wizardkit"`: node builders, `createWizard`, plus
   re-exported shell (`$`).
-- `deno.json` maps `"wizardkit"` to `jsr:@sid/wizardkit`. Local development against a checkout maps
-  it at `../wizardkit/mod.ts`.
+- `deno.json` maps `"wizardkit"` to `jsr:@xyzshantaram/wizardkit`. To develop against a checkout,
+  map it at that checkout's `src/mod.ts` instead.
 - `compile.ts` builds the binary plus the Linux shortcut. It reads the local `deno.json`, so it
   works unchanged per wizard.
 
@@ -123,6 +123,6 @@ Scripts read their port from `WIZARD_PORT` with a plain fallback:
 const port = Number(Deno.env.get("WIZARD_PORT") ?? 8471);
 ```
 
-`wizardkit/install.ts` automates all three (`--app`, `--version`, `--scope`, `--dest`, `--dry`).
-`wizardkit/install.sh` ensures Deno, then runs the installer from JSR. Updates mean reinstalling the
-same command. Icons ride `assets/icon.png` by convention.
+The package's `install` entry point automates all three (`--app`, `--version`, `--scope`, `--dest`,
+`--dry`). Its `install.sh` ensures Deno, then runs the installer from JSR. Updates mean reinstalling
+the same command. Icons ride `assets/icon.png` by convention.

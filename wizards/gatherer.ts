@@ -7,7 +7,7 @@
 
 /// <reference lib="dom" />
 
-import type { Page, Response as PWResponse } from "playwright";
+import type { Page, Response as PWResponse } from "npm:playwright@1.57.0";
 import { dot, lineEnd, lineStart, say, step, wizardExit } from "../src/term.ts";
 import { createRun, ensureRun, stateRoot } from "../src/runstate.ts";
 import { loadSettings } from "../src/settings.ts";

@@ -77,6 +77,22 @@ has access, and the user's own API key. An agent asks rather than guessing, acce
 such as per person affinities and a fallback owner with a cap, and asks the user where to persist
 those rules using whatever the host offers, because split-utils stores none of it.
 
+W4 and W5 have landed. Three facts came out of them, and no later ticket may contradict them.
+
+A raw GitHub URL run cannot resolve a bare specifier. Deno does not apply a local `deno.json` to a
+remote module, and it rejects `--config` pointing at a URL. Only `--import-map=<url>` works. The
+user chose to name every dependency in full inside the source instead, so a plain `deno run <url>`
+needs no extra flag. The `no-import-prefix` lint rule is off for that reason, and `deno.json` keeps
+only `@std/assert` for the tests.
+
+A package cannot read the compilerOptions of the project that imports it. wizardkit's JSX only ever
+compiled because split-utils declared `jsx` settings at its own root. `toolkit.tsx` now carries a
+`@jsxImportSource` pragma, and the package manifest declares no jsx settings, so its own check
+proves the pragma carries the build.
+
+`desktop/` is gone. Its `compile.ts` was byte for byte identical to `wizard/compile.ts`, and its
+tasks only packaged the wizardkit demo, which now lives in that package's own `examples/`.
+
 W1, W2 and W3 have landed. The CLI is `cli.ts` at the repository root, with six verbs. The browser
 libraries load from pinned CDN URLs, and the push work is a callable core in `src/pushcore.ts`.
 
@@ -86,9 +102,9 @@ libraries load from pinned CDN URLs, and the push work is a callable core in `sr
 - [x] W3c rename `src/wizardkit.ts` to `src/term.ts`. It is the terminal output helper for the two
       remaining CLI scripts, and it has nothing to do with the library. Four files import it. Eval:
       no file named wizardkit.ts sits under src/.
-- [ ] W4 move wizardkit to `~/repos/wizardkit` as a JSR package with `src/` and `tests/`. Eval:
+- [x] W4 move wizardkit to `~/repos/wizardkit` as a JSR package with `src/` and `tests/`. Eval:
       `deno publish --dry-run` passes there.
-- [ ] W5 split-utils imports `jsr:@xyzshantaram/wizardkit`. Eval: the app runs with no local
+- [x] W5 split-utils imports `jsr:@xyzshantaram/wizardkit`. Eval: the app runs with no local
       wizardkit on the import path.
 - [ ] W6 the wizard skill ships one file that imports the JSR package. Eval: the template runs from
       a directory holding nothing else.

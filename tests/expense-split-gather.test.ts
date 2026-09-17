@@ -2,7 +2,7 @@
 // written run, then the split stage reads and splits that run. Also
 // proves the Zomato phone and OTP fields are gone.
 
-import { createWizard } from "../wizardkit/mod.ts";
+import { createWizard } from "jsr:@xyzshantaram/wizardkit@^0.1.0";
 import {
   gatherPickRunId,
   gatherSteps,
