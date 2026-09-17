@@ -221,6 +221,22 @@ describe("heredocs across statements", () => {
     text("cat <<EOF\nhello\nEOF\nc | d");
   });
 
+  it("refuses a SECOND heredoc whose body sits on an earlier line (#160 review)", () => {
+    // This pins the same-line guard itself, which was reported as unreachable
+    // defense-in-depth. It is not: the review found the input that reaches it.
+    //
+    // Remove the guard and this command DRAWS -- reconstructs byte-for-byte,
+    // verifies true -- and yet BOTH heredoc bodies come out as "" instead of
+    // "bodyA\n" and "A\n". A diagram that misquotes while passing every
+    // fidelity check is precisely the failure the slice invariant exists to
+    // prevent, and round-tripping cannot see it.
+    //
+    // The pre-existing case above does NOT cover this: it stays null in both
+    // variants, via an unrelated downstream null, which is exactly why the
+    // suite stayed green when the guard was disabled.
+    text("cat <<A\nbodyA\nA\ncat <<B\nA\nB");
+  });
+
   it("keeps a text group's heredoc bodies verbatim when nothing carves", () => {
     // Refined rule (#160 review): the subshell's body has nowhere to
     // attribute inside a verbatim slice, so it rides in the trailing gap —
