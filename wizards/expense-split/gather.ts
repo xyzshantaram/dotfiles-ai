@@ -28,7 +28,7 @@ import { setSplitRun } from "./split.ts";
 import type { WizardCtx } from "../../wizardkit/mod.ts";
 import { dryBox, dryNote } from "./dry.ts";
 import { fmtRs, formatDayISO, isLedgerRow, itemSummary, parseDate } from "../../src/common.ts";
-import { DEFAULT_LOCATION, TOKENS_FILE } from "../../src/zomato.ts";
+import { DEFAULT_LOCATION, hasTokensSync } from "../../src/zomato.ts";
 import type { Order } from "../../src/common.ts";
 
 // Platform ids the gather stage knows, in checkbox order.
@@ -45,39 +45,12 @@ function profileDir(id: string): string {
   return stateRoot() + "/share/profiles/" + id;
 }
 
-// Old Zomato token path beside the repo state dir.
-const LEGACY_TOKENS_FILE = decodeURIComponent(
-  new URL("../../state/zomato-tokens.json", import.meta.url).pathname,
-);
-
-// True when one token file holds both tokens. Mirrors loadTokens
-// with sync reads so the step builder stays synchronous.
-function hasTokens(): boolean {
-  const paths = [
-    stateRoot() + "/share/zomato-tokens.json",
-    TOKENS_FILE,
-    LEGACY_TOKENS_FILE,
-  ];
-  for (const path of paths) {
-    try {
-      const data = JSON.parse(Deno.readTextFileSync(path)) as {
-        access_token?: string;
-        refresh_token?: string;
-      };
-      if (data.access_token && data.refresh_token) return true;
-    } catch {
-      // Try the next path.
-    }
-  }
-  return false;
-}
-
 // True when a platform holds cached credentials, the same way the
 // gatherer detects them: profile storage for browser platforms,
 // token files for Zomato, and Manual needs nothing.
 function hasCached(id: PlatformId): boolean {
   if (id === "manual") return true;
-  if (id === "zomato") return hasTokens();
+  if (id === "zomato") return hasTokensSync();
   try {
     Deno.statSync(profileDir(id));
     return true;
@@ -106,8 +79,12 @@ function accountsStep(answerMap: Map<string, string[]>): Step {
       // Phone login on this screen. Markers fill from the typed
       // entries when the action runs. The city block below shows in
       // both states so a user can accept Bengaluru with one press.
-      if (hasTokens()) {
-        nodes.push(markdown("Zomato: ready."));
+      // Every other platform names itself in one line. Zomato owns a
+      // block of entries instead, so it takes a heading. Without it the
+      // phone and city boxes read as fields of no platform at all.
+      nodes.push(markdown("### Zomato"));
+      if (hasTokensSync()) {
+        nodes.push(markdown("Signed in and ready."));
       } else {
         nodes.push(textEntry("Phone number", "zomato-phone"));
         nodes.push(
@@ -573,7 +550,7 @@ function reviewStep(answerMap: Map<string, string[]>, ctx?: WizardCtx): Step {
       ),
     );
   }
-  if (picked.includes("zomato") && !hasTokens()) {
+  if (picked.includes("zomato") && !hasTokensSync()) {
     nodes.push(
       markdown(
         "Zomato: the fetch uses your saved sign in. Without it the fetch reports what is missing instead of orders.",

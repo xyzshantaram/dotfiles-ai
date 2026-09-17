@@ -1006,3 +1006,19 @@ Deno.test("confirm order radio hint names each person and amount", async () => {
   const zeroHint = String(third["hint"] ?? "");
   assert(zeroHint.includes("Bob 0.00"), "hint names a person who owes nothing");
 });
+
+// An order the payer bought for the payer alone is nobody else's
+// business, so it arrives on Skip. Chips is owed entirely by Ann, and
+// Ann paid. Milk and Eggs both carry a share for Bob.
+Deno.test("confirm order radio arrives on Skip when only the payer owes", async () => {
+  await fresh("t-push-confirm-solo");
+  const found = await confirmStepFor("t-push-confirm-solo", "2026-01-31");
+  const pickOf = (name: string): string => {
+    const node = radioByName(found, name) as unknown as Record<string, unknown>;
+    assert(node !== undefined, "radio shows for " + name);
+    return String(node["picked"] ?? "");
+  };
+  assert(pickOf("order-o1") === "Push", "a shared order arrives on Push");
+  assert(pickOf("order-o2") === "Push", "a shared order arrives on Push");
+  assert(pickOf("order-o3") === "Skip", "a payer only order arrives on Skip");
+});

@@ -70,18 +70,25 @@ export function loadConfig(): ZomatoConfig {
   return cachedConfig;
 }
 
-// Token store for the headless login flow. It lives under share.
-// The old state path stays as a read fallback.
-export const TOKENS_FILE = decodeURIComponent(
-  new URL("../state/share/zomato-tokens.json", import.meta.url).pathname,
-);
-const LEGACY_TOKENS_FILE = decodeURIComponent(
-  new URL("../state/zomato-tokens.json", import.meta.url).pathname,
-);
-
-// Resolve the token path under the active state root.
-function tokensPath(): string {
+// Token store for the headless login flow. It lives under share, and
+// the active state root alone decides where that is. Two hardcoded repo
+// paths used to stand behind this as read fallbacks. They ignored
+// SPLIT_UTILS_STATE, so a test with its own state root still read the
+// developer's live tokens, and the suite passed or failed depending on
+// whether anyone had signed in to Zomato.
+export function tokensPath(): string {
   return shareDir() + "/zomato-tokens.json";
+}
+
+// True when the stored pair holds both tokens. The step builders need a
+// sync answer, so this reads the same one path without awaiting.
+export function hasTokensSync(): boolean {
+  try {
+    const data = JSON.parse(Deno.readTextFileSync(tokensPath())) as Partial<ZomatoTokens>;
+    return Boolean(data.access_token && data.refresh_token);
+  } catch {
+    return false;
+  }
 }
 
 export interface ZomatoTokens {
@@ -90,20 +97,17 @@ export interface ZomatoTokens {
   obtained_at: string; // ISO string
 }
 
-// Read stored tokens. Try the share path first, then the old path.
-// Return null when both files miss or parse badly.
+// Read stored tokens from the active state root. Return null when the
+// file misses or parses badly.
 export async function loadTokens(): Promise<ZomatoTokens | null> {
-  for (const path of [tokensPath(), TOKENS_FILE, LEGACY_TOKENS_FILE]) {
-    try {
-      const raw = await Deno.readTextFile(path);
-      const data = JSON.parse(raw) as ZomatoTokens;
-      if (!data.access_token || !data.refresh_token) return null;
-      return data;
-    } catch {
-      // Try the next path.
-    }
+  try {
+    const raw = await Deno.readTextFile(tokensPath());
+    const data = JSON.parse(raw) as ZomatoTokens;
+    if (!data.access_token || !data.refresh_token) return null;
+    return data;
+  } catch {
+    return null;
   }
-  return null;
 }
 
 // Save a token pair with a fresh timestamp.

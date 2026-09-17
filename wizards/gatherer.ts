@@ -1735,6 +1735,19 @@ async function gatherBrowserPlatform(
   step("Opening " + platform + " headless for the scrape.");
   const session = await openSite(platform, siteUrl, "scrape");
   try {
+    // The scrape phase opens on about:blank, because the app window URL
+    // belongs to the headed login phase alone. Load the site before any
+    // gather step runs. Both failure modes come from the missing origin:
+    // Blinkit reads its access token out of localStorage, which is empty
+    // on about:blank, and Swiggy fetches relative paths, which cannot
+    // resolve there. Each one then reports zero orders and hides the
+    // cause. Zepto escaped it only because it navigates on its own.
+    await session.page.goto(siteUrl, {
+      waitUntil: "domcontentloaded",
+      timeout: 30_000,
+    });
+    // Let the app settle so it writes its storage before the first read.
+    await session.page.waitForTimeout(2000);
     if (platform === "zepto") {
       return await gatherZepto(session.page, days, shotDir);
     }

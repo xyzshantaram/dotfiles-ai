@@ -310,7 +310,7 @@ Deno.test("zomato step offers the live login fields, not the dead ones", async (
   if (body.includes('name="phone"')) throw new Error("phone field still present");
   if (body.includes('name="otp"')) throw new Error("otp field still present");
   // Copy names a real path: cached sign in, or the on-screen login actions.
-  const liveCopy = body.includes("Zomato: ready.") ||
+  const liveCopy = body.includes("Signed in and ready.") ||
     body.includes("Send the code");
   assert(liveCopy, "zomato copy names no live path");
   await cleanup(root);
@@ -658,7 +658,8 @@ Deno.test("zomato accounts with sign in shows ready and no phone entry", async (
       new Map([["platforms", ["Zomato"]], ["range", ["30"]]]),
     );
     const body = nodes.flatMap((node) => nodeWords(node)).join("\n");
-    if (!body.includes("Zomato: ready.")) throw new Error("ready line misses");
+    if (!body.includes("Signed in and ready.")) throw new Error("ready line misses");
+    if (!body.includes("Zomato")) throw new Error("zomato heading misses");
     if (entryIndex(nodes, "zomato-phone") >= 0) {
       throw new Error("phone entry shows while signed in");
     }

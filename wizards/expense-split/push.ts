@@ -360,12 +360,23 @@ function confirmStep(m?: Map<string, string[]>, ctx?: WizardCtx): Step {
         ));
         continue;
       }
+      // An order the payer bought for the payer alone is nobody else's
+      // business, so it arrives set to Skip. Splitwise exists to record
+      // what other people owe. Anything a second person shares arrives
+      // set to Push. A choice the user already posted beats both.
+      const owedByOthers = live.people
+        .filter((person) => person !== live.payer)
+        .reduce(
+          (sum, person) =>
+            sum + order.reduce((s, item) => s + (item.assignments[person] ?? 0), 0),
+          0,
+        );
       nodes.push(
         radio(
           label,
           "order-" + oid,
           ["Push", "Skip"],
-          m?.get("order-" + oid)?.[0] ?? "Push",
+          m?.get("order-" + oid)?.[0] ?? (owedByOthers >= 0.01 ? "Push" : "Skip"),
           live.people.map((person) => {
             const share = order.reduce((sum, item) => sum + (item.assignments[person] ?? 0), 0);
             return `${person} ${fmtRs(share)}`;

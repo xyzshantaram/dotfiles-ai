@@ -17,7 +17,7 @@ import {
   parseHistoryPage,
   saveTokens,
   sendOtp,
-  TOKENS_FILE,
+  tokensPath,
   verifyOtp,
 } from "../src/zomato.ts";
 
@@ -125,7 +125,7 @@ switch (cmd) {
 
   case "tokens": {
     try {
-      const raw = await Deno.readTextFile(TOKENS_FILE);
+      const raw = await Deno.readTextFile(tokensPath());
       const data = JSON.parse(raw) as { obtained_at?: string };
       console.log(`tokens present (obtained_at ${data.obtained_at ?? "unknown"})`);
     } catch {
