@@ -985,8 +985,8 @@ Deno.test("page shell holds layout plus the draft script", () => {
     assert(page.includes(name), "page holds " + name);
   }
   assert(page.includes("wiz-draft"), "page holds the draft script");
-  assert(page.includes("wa-callout"), "draft bar uses a callout");
-  assert(page.includes("Unsaved answers from before."), "bar names restore");
+  assert(page.includes("data-draft-offer"), "script marks the offer line");
+  assert(page.includes("You were on"), "offer names the saved step");
 });
 
 Deno.test("single tabs step renders a root tabbed view", () => {
@@ -2612,4 +2612,92 @@ Deno.test("posted field wins over stored answers in handler", async () => {
   const page = await handle(stepPost("b", "next", { run: "Monday" }));
   assert((await page.text()).includes("Third"), "next advances");
   assert(seen.join(",") === "Monday", "posted value wins over stored value");
+});
+
+// Post one draft resume click.
+function draftPost(id: string): Request {
+  return new Request("http://local/draft-resume", {
+    method: "POST",
+    body: new URLSearchParams({ id }),
+  });
+}
+
+// Build a two-step wizard with an optional drafts option.
+function draftsWizard(
+  drafts?: Parameters<typeof createWizard>[0]["drafts"],
+) {
+  return wiz({
+    title: "T",
+    steps: [
+      step("a", "First", [buttons([{ label: "N", action: "next" }])]),
+      step("b", "Second", [markdown("second tail")]),
+    ],
+    drafts,
+  });
+}
+
+Deno.test("draft resume without the option answers 404", async () => {
+  // Post an id with no drafts option set.
+  const handle = draftsWizard();
+  const res = await handle(draftPost("any"));
+  assert(res.status === 404, "missing option answers 404");
+});
+
+Deno.test("draft resume with a step id renders that step", async () => {
+  // The app maps the id back to step two.
+  const handle = draftsWizard({
+    list: () => [],
+    resume: (id) => (id === "s1" ? "b" : null),
+  });
+  await handle(new Request("http://local/"));
+  const res = await handle(draftPost("s1"));
+  const body = await res.text();
+  assert(body.includes("Second"), "resume renders step two");
+  assert(body.includes("second tail"), "step two content shows");
+  // Back follows the visit path to the start.
+  const back = await handle(stepPost("b", "back"));
+  assert((await back.text()).includes("First"), "back returns to step one");
+});
+
+Deno.test("draft resume with null keeps place plus an error line", async () => {
+  // The app refuses the id. The reply names the problem.
+  const handle = draftsWizard({
+    list: () => [],
+    resume: () => null,
+  });
+  await handle(new Request("http://local/"));
+  const res = await handle(draftPost("dead"));
+  const body = await res.text();
+  assert(body.includes("That session could not open."), "error line shows");
+  assert(body.includes("First"), "reply keeps the current step");
+  assert(!body.includes("Second"), "reply never advances");
+});
+
+Deno.test("the strip carries the newest draft entry", async () => {
+  // List two sessions. The page names the newer one.
+  const handle = draftsWizard({
+    list: () => [
+      { id: "old", label: "Old run", at: "2024-01-02T03:04:05.000Z" },
+      { id: "new", label: "New run", at: "2025-06-07T08:09:10.000Z" },
+    ],
+    resume: () => null,
+  });
+  const body = await (await handle(new Request("http://local/"))).text();
+  assert(body.includes('data-draft-id="new"'), "strip names the newer id");
+  assert(
+    body.includes('data-draft-label="New run"'),
+    "strip names the newer label",
+  );
+  assert(
+    body.includes('data-draft-at="2025-06-07T08:09:10.000Z"'),
+    "strip names the newer time",
+  );
+});
+
+Deno.test("the strip carries no draft attributes when empty", async () => {
+  // List no sessions. The footer stays plain.
+  const handle = draftsWizard({ list: () => [], resume: () => null });
+  const body = await (await handle(new Request("http://local/"))).text();
+  assert(!body.includes('data-draft-id="'), "strip holds no draft id");
+  assert(!body.includes('data-draft-at="'), "strip holds no draft time");
 });

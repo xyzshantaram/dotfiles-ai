@@ -190,15 +190,28 @@ Deno.test("the approve screen shows the link only to the browser that started it
   const connect = settingsSteps()[1] as (
     m: Map<string, string[]>,
     ctx?: { sessionId?: string },
-  ) => { nodes: unknown[] };
+  ) => {
+    nodes: unknown[];
+    nav?: {
+      back?: boolean;
+      next?: { label: string; run?: unknown } | string;
+      goto?: { step: string; label: string; run?: unknown };
+    };
+  };
 
-  const mine = JSON.stringify(connect(new Map(), { sessionId: "sid-A" }).nodes);
-  assert(mine.includes("example.test/authorize"), "starter sees the approve link");
-  assert(mine.includes("sw-verifier"), "starter sees the verifier box");
+  const mine = connect(new Map(), { sessionId: "sid-A" });
+  const mineText = JSON.stringify(mine.nodes);
+  assert(mineText.includes("example.test/authorize"), "starter sees the approve link");
+  assert(mineText.includes("sw-verifier"), "starter sees the verifier box");
+  const mineNext = mine.nav?.next;
+  assert(typeof mineNext === "object" && mineNext.label === "Next", "starter keeps Next");
+  assert(typeof mineNext === "object" && typeof mineNext.run === "function", "Next keeps its run");
 
-  const other = JSON.stringify(connect(new Map(), { sessionId: "sid-B" }).nodes);
-  assert(other.includes("No approval is waiting"), "other browser sees the plain line");
-  assert(!other.includes("sw-verifier"), "other browser sees no verifier box");
-  assert(other.includes("goto:settings"), "the dead end offers a way back to settings");
-  assert(!other.includes('"next"'), "the dead end offers no Next to validate");
+  const other = connect(new Map(), { sessionId: "sid-B" });
+  const otherText = JSON.stringify(other.nodes);
+  assert(otherText.includes("No approval is waiting"), "other browser sees the plain line");
+  assert(!otherText.includes("sw-verifier"), "other browser sees no verifier box");
+  assert(other.nav?.goto?.step === "settings", "the dead end offers a way back to settings");
+  assert(other.nav?.goto?.label === "Open Settings", "the way back keeps its label");
+  assert(other.nav?.next === undefined, "the dead end offers no Next to validate");
 });

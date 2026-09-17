@@ -25,6 +25,7 @@ import type {
   ButtonsNode,
   CheckboxNode,
   CopyableNode,
+  DraftEntry,
   LeaveDir,
   MarkdownNode,
   MenuNode,
@@ -795,7 +796,7 @@ export function renderStepFragment(input: Step): string {
 // Styles live in ./style.css, loaded as text above.
 
 // Draft saver with no dependency. It stores field values per step,
-// then offers a resume bar when a draft differs from the defaults.
+// then offers the newest draft in the footer strip.
 
 // Hash the wizard title to hex so each wizard keeps its own drafts.
 function titleHash(title: string): string {
@@ -808,10 +809,14 @@ function draftJs(title: string): string {
   const KEY = "wiz-draft-" + titleHash(title);
   return (
     `(function () {\n` +
-    `var KEY = ${JSON.stringify(KEY)}, VER = ${JSON.stringify(title + " v1")}, timer = null;\n` +
+    `var KEY = ${JSON.stringify(KEY)}, VER = ${JSON.stringify(title + " v1")}, timer = null, PENDING = KEY + "-pick";\n` +
     `function frm(el) { return (el && el.form) || el || null; }\n` +
     `function sid(f) {\n` +
     `var s = f.querySelector("[name=step]"); return s ? s.value : ""; }\n` +
+    `function stepTitle() {\n` +
+    `var h = document.querySelector(".wiz-step h2"); return h ? h.textContent : ""; }\n` +
+    `function formNow() {\n` +
+    `var host = document.querySelector(".wiz-step"); return host && host.querySelector("form"); }\n` +
     `function read(form) {\n` +
     `var out = {}, els = form.querySelectorAll("input,select,textarea"), i = 0;\n` +
     `for (; i < els.length; i++) {\n` +
@@ -826,10 +831,12 @@ function draftJs(title: string): string {
     `var d = new Date(), m = ("0" + d.getMinutes()).slice(-2);\n` +
     `st.textContent = "Draft saved " + d.getHours() + ":" + m; }\n` +
     `function save(f) {\n` +
-    `var d = { v: VER, step: sid(f), fields: read(f) };\n` +
-    `try { localStorage.setItem(KEY, JSON.stringify(d)); stamp(); } catch (e) {} }\n` +
+    `var d = { v: VER, step: sid(f), title: stepTitle(), at: new Date().toISOString(), fields: read(f) };\n` +
+    `try { localStorage.setItem(KEY, JSON.stringify(d)); stamp(); } catch (e) {}\n` +
+    `renderOffer(); }\n` +
     `function clearAll() { try { localStorage.removeItem(KEY); } catch (e) {}\n` +
-    `var st = document.getElementById("draft-status"); if (st) st.textContent = ""; }\n` +
+    `var st = document.getElementById("draft-status"); if (st) st.textContent = "";\n` +
+    `renderOffer(); }\n` +
     `function clearFor(s) { var old = load(); if (old && old.step === s) clearAll(); }\n` +
     `function fill(form, saved) {\n` +
     `var keys = Object.keys(saved.fields);\n` +
@@ -843,22 +850,77 @@ function draftJs(title: string): string {
     `function btn(l, f) { var b = document.createElement("wa-button");\n` +
     `b.setAttribute("size", "small"); b.textContent = l;\n` +
     `b.addEventListener("click", f); return b; }\n` +
-    `function maybeShow() {\n` +
-    `var host = document.querySelector(".wiz-step"), form = host && host.querySelector("form");\n` +
-    `if (!form || document.querySelector("wa-callout")) return;\n` +
-    `var saved = load();\n` +
-    `if (!saved || saved.v !== VER || saved.step !== sid(form)) return;\n` +
-    `var now = read(form), keys = Object.keys(saved.fields), hit = false;\n` +
-    `for (var i = 0; i < keys.length && !hit; i++) {\n` +
-    `hit = JSON.stringify(saved.fields[keys[i]]) !== JSON.stringify(now[keys[i]]); }\n` +
-    `if (!hit) return;\n` +
-    `var bar = document.createElement("wa-callout");\n` +
-    `var text = document.createElement("span");\n` +
-    `text.textContent = "Unsaved answers from before. ";\n` +
-    `bar.appendChild(text);\n` +
-    `bar.appendChild(btn("Restore", function () { fill(form, saved); bar.remove(); }));\n` +
-    `bar.appendChild(btn("Discard", function () { clearAll(); bar.remove(); }));\n` +
-    `host.parentNode.insertBefore(bar, host); }\n` +
+    `function foot() { return document.querySelector(".wiz-foot"); }\n` +
+    `function statusEl() { return document.getElementById("draft-status"); }\n` +
+    `function appEntry() {\n` +
+    `var f = foot(); if (!f) return null;\n` +
+    `var id = f.getAttribute("data-draft-id"), at = f.getAttribute("data-draft-at");\n` +
+    `if (!id || !at) return null;\n` +
+    `return { id: id, label: f.getAttribute("data-draft-label") || id, at: at }; }\n` +
+    `function takeMs(at) { var ms = Date.parse(at || ""); return isNaN(ms) ? 0 : ms; }\n` +
+    `function sameFields(form, saved) {\n` +
+    `var now = read(form), seen = {}, k;\n` +
+    `for (k in saved.fields) seen[k] = 1;\n` +
+    `for (k in now) seen[k] = 1;\n` +
+    `for (k in seen) { if (JSON.stringify(saved.fields[k]) !== JSON.stringify(now[k])) return false; }\n` +
+    `return true; }\n` +
+    `function clearOffer() {\n` +
+    `var f = foot(); if (!f) return;\n` +
+    `var o = f.querySelector("[data-draft-offer]"); if (o) o.remove(); }\n` +
+    `function offerLine(text) {\n` +
+    `var s = document.createElement("span");\n` +
+    `s.className = "draft-offer-text"; s.textContent = text; return s; }\n` +
+    `function renderOffer() {\n` +
+    `clearOffer();\n` +
+    `var f = foot(); if (!f) return;\n` +
+    `var form = formNow(), saved = load(), app = appEntry();\n` +
+    `var hasBrowser = !!(saved && saved.step);\n` +
+    `if (hasBrowser && saved.v !== VER) hasBrowser = false;\n` +
+    `if (hasBrowser && form && saved.step === sid(form) && sameFields(form, saved)) hasBrowser = false;\n` +
+    `var pickBrowser = hasBrowser && (!app || takeMs(saved.at) >= takeMs(app.at));\n` +
+    `if (!pickBrowser && !app) return;\n` +
+    `var box = document.createElement("span");\n` +
+    `box.className = "draft-offer";\n` +
+    `box.setAttribute("data-draft-offer", "1");\n` +
+    `if (pickBrowser) {\n` +
+    `box.appendChild(offerLine("You were on " + (saved.title || saved.step) + "."));\n` +
+    `box.appendChild(btn("Resume", function () { resumeBrowser(saved); }));\n` +
+    `box.appendChild(btn("Discard", function () { clearAll(); }));\n` +
+    `} else {\n` +
+    `box.appendChild(offerLine(app.label));\n` +
+    `box.appendChild(btn("Resume", function () { resumeApp(app); }));\n` +
+    `}\n` +
+    `var st = statusEl();\n` +
+    `if (st && st.parentNode === f) f.insertBefore(box, st); else f.appendChild(box); }\n` +
+    `function resumeBrowser(saved) {\n` +
+    `var form = formNow(); if (!form) return;\n` +
+    `try { sessionStorage.setItem(PENDING, JSON.stringify(saved)); } catch (e) {}\n` +
+    `var act = form.querySelector('input[name="action"]');\n` +
+    `if (!act) {\n` +
+    `act = document.createElement("input");\n` +
+    `act.type = "hidden"; act.name = "action"; form.appendChild(act); }\n` +
+    `act.value = "goto:" + saved.step;\n` +
+    `if (form.requestSubmit) form.requestSubmit(); else form.submit(); }\n` +
+    `function takePending() {\n` +
+    `var raw = null;\n` +
+    `try { raw = sessionStorage.getItem(PENDING); } catch (e) {}\n` +
+    `if (!raw) return null;\n` +
+    `try { return JSON.parse(raw); } catch (e) { return null; } }\n` +
+    `function dropPending() { try { sessionStorage.removeItem(PENDING); } catch (e) {} }\n` +
+    `function maybeFill() {\n` +
+    `var pend = takePending(); if (!pend || !pend.step) return;\n` +
+    `var form = formNow(); if (!form || sid(form) !== pend.step) return;\n` +
+    `if (pend.fields) fill(form, pend);\n` +
+    `dropPending(); renderOffer(); }\n` +
+    `function resumeApp(app) {\n` +
+    `if (window.htmx && htmx.ajax) {\n` +
+    `htmx.ajax("POST", "/draft-resume", { target: "#step", swap: "outerHTML", values: { id: app.id } });\n` +
+    `return; }\n` +
+    `var f = document.createElement("form");\n` +
+    `f.method = "post"; f.action = "/draft-resume";\n` +
+    `var i = document.createElement("input");\n` +
+    `i.type = "hidden"; i.name = "id"; i.value = app.id;\n` +
+    `f.appendChild(i); document.body.appendChild(f); f.submit(); }\n` +
     `function queue(ev) {\n` +
     `var f = frm(ev.target); if (!f) return;\n` +
     `clearTimeout(timer); timer = setTimeout(function () { save(f); }, 500); }\n` +
@@ -872,9 +934,10 @@ function draftJs(title: string): string {
     `var f = frm(ev.detail.elt); if (f) clearFor(sid(f)); });\n` +
     `document.addEventListener("htmx:afterSwap", function (ev) {\n` +
     `var out = ev.detail && ev.detail.target;\n` +
-    `if (!out || !out.classList || !out.classList.contains("action-out")) return;\n` +
+    `if (!out || !out.classList || !out.classList.contains("action-out")) {\n` +
+    `maybeFill(); renderOffer(); return; }\n` +
     `out.scrollTop = out.scrollHeight; });\n` +
-    `document.addEventListener("htmx:afterSwap", maybeShow); maybeShow(); })();`
+    `maybeFill(); renderOffer(); })();`
   );
 }
 
@@ -927,7 +990,12 @@ const BASE_PATH_JS =
 // Render a full page: WA theme plus loader, HTMX, layout CSS, shell.
 // Script, style, and markdown bodies inject as raw HTML because they
 // are trusted program output; Preact escapes every other text node.
-export function renderPage(title: string, fragment: string): string {
+// A draft entry adds resume attributes to the footer strip.
+export function renderPage(
+  title: string,
+  fragment: string,
+  draft?: DraftEntry | null,
+): string {
   return "<!DOCTYPE html>\n" + renderToString(
     <html lang="en">
       <head>
@@ -964,7 +1032,12 @@ export function renderPage(title: string, fragment: string): string {
           </form>
         </header>
         <main class="wiz-main" dangerouslySetInnerHTML={{ __html: fragment }} />
-        <footer class="wiz-foot">
+        <footer
+          class="wiz-foot"
+          data-draft-id={draft?.id}
+          data-draft-label={draft?.label}
+          data-draft-at={draft?.at}
+        >
           <span>{title}</span>
           <small id="draft-status" />
         </footer>
@@ -1010,6 +1083,15 @@ export interface WizardOptions {
     | { goto?: string }
     | void
     | Promise<{ goto?: string } | void>;
+  // Optional app sessions for the footer strip. list names every
+  // resumable session. resume maps one id back to a step id.
+  drafts?: {
+    list: (ctx: WizardCtx) => DraftEntry[] | Promise<DraftEntry[]>;
+    resume: (
+      id: string,
+      ctx: WizardCtx,
+    ) => string | null | Promise<string | null>;
+  };
 }
 
 // Wrap HTML with an HTML response.
@@ -1426,11 +1508,49 @@ export function createWizard(
     return { ...entry, nodes: [stages("Stages", head.names, head.current), ...nodes] };
   }
 
-  function reply(req: Request, step: Step, state: SessionRecord, nav?: NavContext): Response {
+  // Pick the newest draft entry by its timestamp. A missing or
+  // broken timestamp sorts last. Returns undefined when empty.
+  function newestDraft(entries: DraftEntry[]): DraftEntry | undefined {
+    let best: DraftEntry | undefined;
+    let bestAt = Number.NEGATIVE_INFINITY;
+    for (const entry of entries) {
+      const at = Date.parse(entry.at);
+      const rank = Number.isNaN(at) ? Number.NEGATIVE_INFINITY : at;
+      if (best === undefined || rank > bestAt) {
+        best = entry;
+        bestAt = rank;
+      }
+    }
+    return best;
+  }
+
+  // Read the newest app session for one request. Returns undefined
+  // when the option is absent, the list is empty, or the call throws.
+  async function readDraft(ctx: WizardCtx): Promise<DraftEntry | undefined> {
+    if (opts.drafts === undefined) return undefined;
+    try {
+      const entries = await opts.drafts.list(ctx);
+      if (!Array.isArray(entries)) return undefined;
+      return newestDraft(entries);
+    } catch {
+      return undefined;
+    }
+  }
+
+  // Reply with one step. A full page carries the newest app draft
+  // in the footer strip. A fragment swaps the step alone.
+  async function reply(
+    req: Request,
+    step: Step,
+    state: SessionRecord,
+    nav?: NavContext,
+    ctx?: WizardCtx,
+  ): Promise<Response> {
     state.lastStepId = step.id;
     const fragment = renderStepFragment(withStages(step, nav));
     if (req.headers.get("hx-request") === "true") return html(fragment);
-    return html(renderPage(opts.title, fragment));
+    const draft = ctx === undefined ? undefined : await readDraft(ctx);
+    return html(renderPage(opts.title, fragment, draft));
   }
 
   // Dir holding the vendored Web Awesome tree. Beside the binary in
@@ -1691,7 +1811,7 @@ export function createWizard(
       state.doneStep &&
       opts.done === undefined
     ) {
-      return reply(req, state.doneStep, state);
+      return reply(req, state.doneStep, state, undefined, ctx);
     }
     const fields: Record<string, string[]> = {};
     for (const [key, value] of form) {
@@ -1759,7 +1879,7 @@ export function createWizard(
       return reply(req, { ...cur, nodes }, state, {
         built: rebuilt,
         applies: vetoApplies,
-      });
+      }, ctx);
     }
     // A nav handler names no insert. Its goto rides the same path
     // as an onSubmit goto below.
@@ -1839,7 +1959,7 @@ export function createWizard(
             const pick = built[hit];
             if (pick !== undefined) {
               const resolvedGoto = await arrive(pick, state, answers, ctx, doneNav);
-              return reply(req, resolvedGoto.step, state, resolvedGoto.nav);
+              return reply(req, resolvedGoto.step, state, resolvedGoto.nav, ctx);
             }
           }
         }
@@ -1873,14 +1993,14 @@ export function createWizard(
             while (state.history.length > 50) state.history.shift();
           }
           state.doneStep = custom;
-          return reply(req, custom, state, doneNav);
+          return reply(req, custom, state, doneNav, ctx);
         }
       }
       state.doneStep = step("done", "Done", [
         ...outNodes,
         buttons([{ label: "Start over", action: "restart" }]),
       ]);
-      return reply(req, state.doneStep, state, doneNav);
+      return reply(req, state.doneStep, state, doneNav, ctx);
     }
     // One flag per step, in order. Every condition runs once here
     // against the posted answers, and every move below reuses it.
@@ -1898,7 +2018,7 @@ export function createWizard(
           if (found !== undefined) {
             await runLeave(postedStep, "back", answers, ctx);
             const resolvedBack = await arrive(found, state, answers, ctx, nav);
-            return reply(req, resolvedBack.step, state, resolvedBack.nav);
+            return reply(req, resolvedBack.step, state, resolvedBack.nav, ctx);
           }
         }
       }
@@ -1977,7 +2097,57 @@ export function createWizard(
         while (state.history.length > 50) state.history.shift();
       }
     }
-    return reply(req, finalPick, state, finalNav);
+    return reply(req, finalPick, state, finalNav, ctx);
+  }
+
+  // Resume one app session. A step id moves there like a named
+  // move. A null return re-renders the current step with one error
+  // line. No drafts option answers 404. Never throws.
+  async function handleDraftResume(
+    req: Request,
+    state: SessionRecord,
+    ctx: WizardCtx,
+  ): Promise<Response> {
+    if (opts.drafts === undefined) {
+      return new Response("Not found", { status: 404 });
+    }
+    const form = await req.formData();
+    const id = String(form.get("id") ?? "");
+    let target: string | null = null;
+    try {
+      target = await opts.drafts.resume(id, ctx);
+    } catch {
+      target = null;
+    }
+    const answers = currentAnswersFor(state);
+    const built = buildAll(answers, ctx, state.inserted);
+    if (built.length === 0) {
+      return new Response("No steps", { status: 500 });
+    }
+    const applies = applicability(built, answers);
+    const nav: NavContext = { built, applies };
+    if (typeof target === "string") {
+      const found = built.find((entry) => entry.id === target);
+      if (found !== undefined) {
+        const prev = state.lastStepId;
+        if (prev !== undefined && prev !== found.id) {
+          state.history.push(prev);
+          while (state.history.length > 50) state.history.shift();
+        }
+        const resolved = await arrive(found, state, answers, ctx, nav);
+        return await reply(req, resolved.step, state, resolved.nav, ctx);
+      }
+    }
+    const cur = built.find((entry) => entry.id === state.lastStepId) ??
+      built[0];
+    const line = "That session could not open.";
+    const nodes = cur.nodes.length > 0
+      ? [
+        { ...cur.nodes[0], error: line },
+        ...cur.nodes.slice(1),
+      ]
+      : [markdown(line)];
+    return await reply(req, { ...cur, nodes }, state, nav, ctx);
   }
 
   async function route(
@@ -2008,7 +2178,7 @@ export function createWizard(
       return reply(req, first, state, {
         built: rootBuilt,
         applies: rootApplies,
-      });
+      }, ctx);
     }
     if (req.method === "POST" && url.pathname === "/step") {
       // Serialize step posts. One in flight holds the others.
@@ -2016,6 +2186,16 @@ export function createWizard(
       stepBusy = true;
       try {
         return await handleStep(req, state, ctx);
+      } finally {
+        stepBusy = false;
+      }
+    }
+    if (req.method === "POST" && url.pathname === "/draft-resume") {
+      // Share the step lock. One in flight holds the others.
+      while (stepBusy) await new Promise((r) => setTimeout(r, 10));
+      stepBusy = true;
+      try {
+        return await handleDraftResume(req, state, ctx);
       } finally {
         stepBusy = false;
       }
@@ -2042,7 +2222,7 @@ export function createWizard(
             state,
             ctx,
           );
-          if (again !== undefined) return reply(req, again, state);
+          if (again !== undefined) return reply(req, again, state, undefined, ctx);
         } catch {
           // Fall through to the bare page below.
         }
@@ -2059,7 +2239,7 @@ export function createWizard(
         if (req.headers.get("hx-request") === "true") return html(missingBody);
         try {
           const again = stepWithActionOutput(id, message, state, ctx);
-          if (again !== undefined) return reply(req, again, state);
+          if (again !== undefined) return reply(req, again, state, undefined, ctx);
         } catch {
           // Fall through to the bare page below.
         }
@@ -2073,7 +2253,7 @@ export function createWizard(
         if (req.headers.get("hx-request") === "true") return html(body);
         try {
           const again = stepWithActionOutput(id, job?.output ?? "", state, ctx);
-          if (again !== undefined) return reply(req, again, state);
+          if (again !== undefined) return reply(req, again, state, undefined, ctx);
         } catch {
           // Fall through to the bare page below.
         }
@@ -2104,7 +2284,7 @@ export function createWizard(
         if (req.headers.get("hx-request") === "true") return html(body);
         try {
           const again = stepWithFinishedAll(state, ctx);
-          if (again !== undefined) return reply(req, again, state);
+          if (again !== undefined) return reply(req, again, state, undefined, ctx);
         } catch {
           // Fall through to the bare page below.
         }
@@ -2121,7 +2301,7 @@ export function createWizard(
         if (req.headers.get("hx-request") === "true") return html(body);
         try {
           const again = stepWithActionOutput(actionId, output, state, ctx);
-          if (again !== undefined) return reply(req, again, state);
+          if (again !== undefined) return reply(req, again, state, undefined, ctx);
         } catch {
           // Fall through to the bare page below.
         }

@@ -242,6 +242,15 @@ export interface WizardCtx {
   sessionId: string;
 }
 
+// One saved app session for the footer strip. id names the session.
+// label shows one short line. at holds an ISO timestamp.
+export interface DraftEntry {
+  id: string;
+  label: string;
+  at: string;
+  hint?: string;
+}
+
 // Arrival hook for one step. It takes the answers map plus the wizard
 // context. It may return a promise. The wizard runs it once when a
 // move lands on the step, before the step renders.

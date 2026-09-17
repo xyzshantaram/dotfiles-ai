@@ -2,7 +2,7 @@
 // surface, and resume routing by run status. A fake PushApi stands in
 // for Splitwise, so no network call happens. Each test owns its state
 // root and pushed map, and restores the env after itself.
-import { onSubmit } from "../wizards/expense-split.ts";
+import { resumeNext } from "../wizards/expense-split.ts";
 import { gatherSteps } from "../wizards/expense-split/gather.ts";
 import { exportStep, itemStep, routeStatus } from "../wizards/expense-split/split.ts";
 import { pushSteps } from "../wizards/expense-split/push.ts";
@@ -216,7 +216,7 @@ Deno.test("f6 failed run surfaces with reason and routes to gather", async () =>
     assert(body.includes("scrape timed out"), "picker shows the reason");
     // Status routing mirrors meta.ts: failed restarts at gather.
     assert(routeStatus("failed") === "gather-platforms", "failed routes to gather");
-    const res = await onSubmit({ "resume-pick": ["r-fail"] }, "resume");
+    const res = await resumeNext(new Map(), { "resume-pick": ["r-fail"] }, { sessionId: "t-f6-2" });
     assert(res?.goto === "gather-platforms", "submit routes failed to gather");
   } finally {
     restoreEnv(saved);
@@ -254,10 +254,10 @@ Deno.test("f6 each status routes to its next step", async () => {
     assert(routeStatus("assigned") === "push-source", "assigned routes to push");
     assert(routeStatus("pushed") === "resume-done", "pushed routes to done");
     for (const [id, _status, want] of cases) {
-      const res = await onSubmit({ "resume-pick": [id] }, "resume");
+      const res = await resumeNext(new Map(), { "resume-pick": [id] }, { sessionId: "t-f6-3" });
       assert(res?.goto === want, id + " routes to " + want);
     }
-    const gone = await onSubmit({ "resume-pick": ["no-such-run"] }, "resume");
+    const gone = await resumeNext(new Map(), { "resume-pick": ["no-such-run"] }, { sessionId: "t-f6-3" });
     assert(
       (gone?.errors ?? []).join("").includes("gone"),
       "missing run errors out",

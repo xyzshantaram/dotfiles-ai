@@ -19,23 +19,6 @@ Settled with the user on 2026-09-17. A step declares its own footer instead of h
 buttons row, the toolkit renders that footer stuck to the foot of the window, and each screen owns
 its own submit logic. This retires G17, which planned to spread the old `nav()` helper instead.
 
-- [ ] N2 the wizard skill teaches the new contract. wizard/SKILL.md gains the nav declaration, the
-      handler signatures, the silent return rules, and the onEnter and onLeave pair. The app skill
-      gains nothing: SKILL.md is how to build wizards. Eval: a reader with only SKILL.md can write a
-      step with a nav bar, one custom action, and an onLeave hook, without reading toolkit source.
-- [ ] N3 the gather flow moves to the bar, and its branches move out of onSubmit into step handlers.
-      Eval: every gather screen shows the sticky bar, Select all and Select none still re-render
-      without advancing, no gather branch remains in onSubmit, suite green.
-- [ ] N10 a handler receives an answers map that does not hold the post which triggered it, so any
-      check spanning both has to merge them by hand. `manualNext` in gather.ts already does, at
-      gather.ts line 436, and every later migration meets the same wall. Wanted: the toolkit passes
-      one map that already folds the current post in, with `fields` kept as the convenience view. Do
-      it with N4, before the split flow copies the merge. Eval: no app handler builds its own merged
-      map, and a handler reading a field posted on its own screen finds it in `answers`.
-- [ ] N4 the split flow moves the same way. It holds 21 hand built rows, the most of any module.
-      Eval: as N3, plus Repeat last still copies the previous assignment.
-- [ ] N5 the push flow moves the same way. Eval: as N3, plus the dry run export Finish still returns
-      to the menu.
 - [ ] N6 settings and the app shell move the same way. Then delete the app's `seen` store, which
       duplicates the toolkit answers map, and delete the unused `nav()` helper. Eval: a search for
       seenStore returns nothing, onSubmit holds only genuinely shared work or is gone, suite green.
@@ -196,11 +179,10 @@ Every entry here names work that is code complete and green. It counts as done o
 drives the real screen. Restart the server first. A fix cannot reach a process that started before
 it.
 
-- [ ] NAV hand-drive (your smoke test): run a real Zepto gather once N3 lands. The Back and Next bar
-      must stay at the foot of the window while a long screen scrolls, Select all and Select none
-      must tick and untick without leaving the screen, and Next must refuse an empty pick list with
-      one message. I proved every rule on a scratch wizard over HTTP, but nothing has scrolled in a
-      real window yet.
+- [ ] NAV hand-drive (your smoke test): the user confirmed on 2026-09-17 that the bar stays at the
+      foot of the window while a long screen scrolls. What is left to drive by hand: Select all and
+      Select none tick and untick without leaving the screen, Next refuses an empty pick list with
+      one message, and the split and push flows show the same bar now that they carry it too.
 - [ ] PICK detail hand-drive: on Pick orders each row now carries a second line naming up to five
       items with their quantities, then a count of the rest. Confirm it reads well on a real grocery
       order, which is the thing that made price and count too little to decide on.

@@ -1,23 +1,22 @@
 # Wizard contracts
 
-The seams every wizard builds against. Change a contract here first, then change the wizards. The
-main menu dispatches purely through these surfaces, so it builds in parallel with the wizards it
-calls.
+The seams every wizard builds against. Change a contract here first, then change the wizards.
 
-## Main menu
+## Menu step
 
-The main menu starts with one item while the settings file misses: item "Start here". After
-onboarding saves the file, the full menu appears with one description line under each title:
+The menu is the first step of the browser wizard, not a separate program. It shows one row while the
+settings file misses, "Start here". After onboarding saves that file, the full list appears with one
+description line under each title:
 
-1. "Split and push recent orders" — all three steps in order.
-2. "Pick up where you left off" — resume a saved session from run history.
-3. "Collect orders from platforms" — gather step only.
-4. "Assign per-order split" — split step on a picked run.
-5. "Upload orders to Splitwise" — push my orders, or push someone else's orders from a share link (a
-   file path still works).
-6. "Settings" — changes app settings.
-7. "Set up with an AI assistant" — prints a copyable setup prompt.
-8. "Exit" — leaves the menu.
+1. "Split and push recent orders" — all three flows in order.
+2. "Pick up where you left off" — resume a saved run from run history.
+3. "Collect orders from platforms" — the gather flow only.
+4. "Assign per-order split" — the split flow on a picked run.
+5. "Upload orders to Splitwise" — push your orders, or push a friend's orders from a share link. A
+   file path still works.
+6. "Settings" — currency, Splitwise access, and the AI assistant setup.
+
+Every step owns its own submit rule through the handler on its nav bar. No central hook remains.
 
 "Start here" asks how the user wants to use the app, saves the usage mode at once, then runs the
 currency flow, then offers Splitwise setup (or the AI setup prompt for the AI mode), and ends with

@@ -260,7 +260,8 @@ Deno.test("export handoff lands on push-source with the run preloaded", async ()
 });
 
 Deno.test("push source prefers the typed other run over the radio pick", async () => {
-  const { onSubmit } = await import("../wizards/expense-split.ts");
+  // The source step owns this rule now, through its own nav handler.
+  const { pushSourceNext } = await import("../wizards/expense-split/push.ts");
   const { pushSessionFor, resetPush } = await import(
     "../wizards/expense-split/push-engine.ts"
   );
@@ -302,18 +303,16 @@ Deno.test("push source prefers the typed other run over the radio pick", async (
         }) + "\n",
       );
     }
-    await onSubmit(
+    await pushSourceNext(
+      new Map(),
       { source: ["Assigned run"], "run-id": ["r-a"], "run-id-other": ["r-b"] },
-      "push-source",
-      "",
       { sessionId: "t-split-7" },
     );
     assertEquals(pushSessionFor("t-split-7").runId, "r-b");
     resetPush("t-split-7");
-    await onSubmit(
+    await pushSourceNext(
+      new Map(),
       { source: ["Assigned run"], "run-id": ["r-a"], "run-id-other": [""] },
-      "push-source",
-      "",
       { sessionId: "t-split-7" },
     );
     assertEquals(pushSessionFor("t-split-7").runId, "r-a");

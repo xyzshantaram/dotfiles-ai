@@ -2,8 +2,12 @@
 // "Type a different code" choice reads the custom field, uppercases it,
 // and accepts real ISO 4217 codes only.
 
-import { onSubmit } from "../wizards/expense-split.ts";
-import { settingsSteps } from "../wizards/expense-split/settings.ts";
+import { startUsageNext } from "../wizards/expense-split.ts";
+import {
+  settingsNext,
+  settingsReset,
+  settingsSteps,
+} from "../wizards/expense-split/settings.ts";
 import { loadSettings, saveSettings } from "../src/settings.ts";
 
 // Fail the test when a condition misses.
@@ -14,9 +18,10 @@ function assert(cond: boolean, msg: string): void {
 Deno.test("custom currency code saves in uppercase", async () => {
   const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "b1-state-" });
   Deno.env.set("SPLIT_UTILS_STATE", root);
-  const out = await onSubmit(
+  const out = await settingsNext(
+    new Map(),
     { currency: ["__custom__"], "custom-currency": ["eur"] },
-    "settings",
+    { sessionId: "t-b1-upper" },
   );
   assert(!out || !out.errors, "no error for a valid code");
   const settings = await loadSettings();
@@ -26,9 +31,10 @@ Deno.test("custom currency code saves in uppercase", async () => {
 Deno.test("custom currency rejects a bad code", async () => {
   const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "b1-state-" });
   Deno.env.set("SPLIT_UTILS_STATE", root);
-  const out = await onSubmit(
+  const out = await settingsNext(
+    new Map(),
     { currency: ["__custom__"], "custom-currency": ["e1"] },
-    "settings",
+    { sessionId: "t-b1-bad" },
   );
   assert(
     !!out?.errors && out.errors.length === 1,
@@ -43,9 +49,10 @@ Deno.test("custom currency rejects a bad code", async () => {
 Deno.test("custom currency rejects a code outside ISO 4217", async () => {
   const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "b1-state-" });
   Deno.env.set("SPLIT_UTILS_STATE", root);
-  const out = await onSubmit(
+  const out = await settingsNext(
+    new Map(),
     { currency: ["__custom__"], "custom-currency": ["zzz"] },
-    "settings",
+    { sessionId: "t-b1-iso" },
   );
   assert(
     !!out?.errors && out.errors.length === 1,
@@ -56,7 +63,11 @@ Deno.test("custom currency rejects a code outside ISO 4217", async () => {
 Deno.test("fixed currency pick still saves", async () => {
   const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "b1-state-" });
   Deno.env.set("SPLIT_UTILS_STATE", root);
-  const out = await onSubmit({ currency: ["USD"] }, "settings");
+  const out = await settingsNext(
+    new Map(),
+    { currency: ["USD"] },
+    { sessionId: "t-b1-fixed" },
+  );
   assert(!out || !out.errors, "no error for a fixed pick");
   const settings = await loadSettings();
   assert(settings.currency === "USD", "saved code is USD");
@@ -83,7 +94,11 @@ Deno.test("settings step renders all four tab labels", () => {
 Deno.test("currency field inside a tab still posts its answer", async () => {
   const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "b1-state-" });
   Deno.env.set("SPLIT_UTILS_STATE", root);
-  const out = await onSubmit({ currency: ["GBP"] }, "settings");
+  const out = await settingsNext(
+    new Map(),
+    { currency: ["GBP"] },
+    { sessionId: "t-b1-tab" },
+  );
   assert(!out || !out.errors, "no error for a tabbed pick");
   const settings = await loadSettings();
   assert(settings.currency === "GBP", "saved code is GBP");
@@ -92,10 +107,10 @@ Deno.test("currency field inside a tab still posts its answer", async () => {
 Deno.test("reset action refuses a wrong confirm word", async () => {
   const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "b1-state-" });
   Deno.env.set("SPLIT_UTILS_STATE", root);
-  const out = await onSubmit(
+  const out = await settingsReset(
+    new Map(),
     { currency: ["USD"], "reset-confirm": ["please"] },
-    "settings",
-    "reset",
+    { sessionId: "t-b1-reset" },
   );
   assert(
     !!out?.errors && out.errors.length === 1,
@@ -178,25 +193,55 @@ Deno.test("the answers map and the onboarding flag stay apart for A and B", asyn
   // Onboarding stays apart: A walks start-usage, then its settings
   // post returns to the menu. B never started, so its settings post
   // saves and stays.
-  const usageA = await onSubmit(
+  const usageA = await startUsageNext(
+    new Map(),
     { usage: ["By myself, push manually"] },
-    "start-usage",
-    "",
     { sessionId: sidA },
   );
   assert(usageA?.goto === "settings", "A enters onboarding");
-  const doneA = await onSubmit(
+  const doneA = await settingsNext(
+    new Map(),
     { currency: ["USD"] },
-    "settings",
-    "",
     { sessionId: sidA },
   );
   assert(doneA?.goto === "menu", "A leaves onboarding to the menu");
-  const doneB = await onSubmit(
+  const doneB = await settingsNext(
+    new Map(),
     { currency: ["USD"] },
-    "settings",
-    "",
     { sessionId: sidB },
   );
   assert(doneB === undefined || doneB.goto === undefined, "B never entered onboarding");
+});
+
+Deno.test("settings screen declares its bar", () => {
+  const entry = settingsSteps().find((item) =>
+    typeof item === "function" ? item(new Map()).id === "settings" : item.id === "settings"
+  );
+  if (entry === undefined || typeof entry !== "function") {
+    throw new Error("assert failed: settings step is a function");
+  }
+  const found = entry(new Map()) as unknown as {
+    id: string;
+    nav?: {
+      back?: boolean;
+      goto?: { step: string; label: string; run?: unknown };
+      actions?: Array<{ id: string; label: string; run?: unknown }>;
+    };
+  };
+  assert(found.id === "settings", "settings keeps its id");
+  const nav = found.nav;
+  if (nav === undefined) throw new Error("assert failed: settings declares a bar");
+  assert(nav.back === true, "bar holds Back");
+  if (nav.goto === undefined) throw new Error("assert failed: bar holds its forward button");
+  assert(nav.goto.step === "menu", "forward button targets the menu");
+  assert(nav.goto.label === "Save and return", "forward button keeps its label");
+  assert(typeof nav.goto.run === "function", "forward button keeps its run");
+  const actions = nav.actions ?? [];
+  assert(actions.length === 2, "bar holds both tab actions");
+  assert(actions[0].id === "connect", "first action keeps its id");
+  assert(actions[0].label === "Save keys and connect", "first action keeps its label");
+  assert(typeof actions[0].run === "function", "first action keeps its run");
+  assert(actions[1].id === "reset", "second action keeps its id");
+  assert(actions[1].label === "Factory reset", "second action keeps its label");
+  assert(typeof actions[1].run === "function", "second action keeps its run");
 });

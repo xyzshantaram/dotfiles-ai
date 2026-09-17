@@ -99,10 +99,29 @@ body {
      much. The strip holds one line of text. */
   height: var(--wiz-foot-h);
 }
-/* The footer only says something while a draft is alive: hide the
-   strip entirely when idle so the nav bar sits flush at the bottom. */
-.wiz-foot:has(#draft-status:empty) {
+/* Hide the strip while it holds no line. The status plus the offer
+   are its two lines, so the strip hides only while the status reads
+   empty plus no offer stands. */
+.wiz-foot:has(#draft-status:empty):not(:has([data-draft-offer])) {
   display: none;
+}
+/* The resume offer lives in the footer strip. It keeps one line at
+   desktop width. The text shrinks with an ellipsis. Buttons keep size. */
+.draft-offer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  flex: 1;
+}
+.draft-offer-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.draft-offer wa-button {
+  flex-shrink: 0;
 }
 .node {
   margin: 0.75rem 0;
@@ -305,8 +324,10 @@ wa-tab-group::part(tabs) {
   gap: 0.5rem;
 }
 /* The draft strip sits at the very bottom while a draft is alive, so
-   the bar rides above it instead of hiding behind it. */
-body:has(#draft-status:not(:empty)) .wiz-nav {
+   the bar rides above it instead of hiding behind it. The offer lifts
+   the bar the same way the status does. */
+body:has(#draft-status:not(:empty)) .wiz-nav,
+body:has([data-draft-offer]) .wiz-nav {
   bottom: var(--wiz-foot-h);
 }
 .wiz-nav-back {
