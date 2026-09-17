@@ -55,10 +55,7 @@ body {
   width: 100%;
   box-sizing: border-box;
   margin: 0 auto;
-  /* The nav bar sticks over the foot of this column, so the last node
-     needs room to scroll clear of it. Without this the final control on
-     a long screen sits behind the bar and cannot be reached. */
-  padding: 1.5rem 1rem 7rem;
+  padding: 1.5rem 1rem 0;
   flex: 1;
   /* No overflow here. An overflow value makes this element the scrollport
      for the sticky nav bar inside it, and this element never scrolls,

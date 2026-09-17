@@ -226,6 +226,10 @@ function boot(host, data) {
 
   // Indexes changed since the last successful post.
   const dirty = new Set();
+  // Indexes the reader has worked on in this visit. Leaving one of these
+  // saves it. Browsing past an untouched line assigns nothing, so the
+  // defaults on screen never become answers by accident.
+  const touched = new Set();
   // Drafts per line index, built lazily as lines show.
   const drafts = new Map();
   let current = 0;
@@ -259,11 +263,13 @@ function boot(host, data) {
   const headItem = doc.createElement("td");
   const headPlatform = doc.createElement("td");
   const headOrder = doc.createElement("td");
-  for (const row of [
-    ["Item", headItem],
-    ["Platform", headPlatform],
-    ["Order", headOrder],
-  ]) {
+  for (
+    const row of [
+      ["Item", headItem],
+      ["Platform", headPlatform],
+      ["Order", headOrder],
+    ]
+  ) {
     const tr = doc.createElement("tr");
     const th = doc.createElement("th");
     th.setAttribute("scope", "row");
@@ -463,10 +469,14 @@ function boot(host, data) {
   }
 
   // Show one line by index, clamped to the run.
+  // Leaving a line the reader worked on saves it first. Without this a
+  // whole run can be clicked through and nothing is ever assigned, which
+  // is how a full split was lost.
   function show(index) {
     if (items.length === 0) return;
     if (index < 0) index = 0;
     if (index > items.length - 1) index = items.length - 1;
+    if (index !== current && touched.has(current)) saveCurrent();
     current = index;
     draftFor(current);
     render();
@@ -474,6 +484,7 @@ function boot(host, data) {
 
   // Tick every person on the current line.
   function tickAll() {
+    touched.add(current);
     const draft = draftFor(current);
     draft.ticked = [...people];
     for (const name of people) {
@@ -489,6 +500,7 @@ function boot(host, data) {
 
   // Tick only the me name on the current line.
   function tickMe() {
+    touched.add(current);
     const draft = draftFor(current);
     draft.ticked = me !== "" && people.includes(me) ? [me] : [...people];
     render();
@@ -497,6 +509,7 @@ function boot(host, data) {
   // Copy the last saved assignment onto the current line. Amounts
   // recompute for the current price. A custom repeat saves as equal.
   function repeatSaved() {
+    touched.add(current);
     const at = lastSavedIndex();
     if (at < 0) {
       noticeLine.textContent = "No saved line to copy yet.";
@@ -523,6 +536,7 @@ function boot(host, data) {
 
   // Toggle skip on the current line and mark it for checkpoint.
   function toggleSkip() {
+    touched.add(current);
     const key = String(current);
     skipped[key] = skipped[key] === true ? false : true;
     dirty.add(current);
@@ -532,6 +546,7 @@ function boot(host, data) {
   // Pick one split mode on the current line.
   function setMode(mode) {
     if (!MODES.includes(mode)) return;
+    touched.add(current);
     draftFor(current).mode = mode;
     render();
   }
@@ -571,8 +586,7 @@ function boot(host, data) {
       res = null;
     }
     if (res === null || !res.ok) {
-      noticeLine.textContent =
-        "The last checkpoint did not land. Work stays in this page.";
+      noticeLine.textContent = "The last checkpoint did not land. Work stays in this page.";
       return;
     }
     const reply = await res.json();
@@ -584,8 +598,7 @@ function boot(host, data) {
       ":" + pad(clock.getSeconds());
     checkpointLine.textContent = "Last checkpoint " + lastCheckpoint + ".";
     if (reply.conflicted === true) {
-      noticeLine.textContent =
-        "The server saved a copy beside the run.";
+      noticeLine.textContent = "The server saved a copy beside the run.";
     } else {
       noticeLine.textContent = "";
     }
@@ -644,6 +657,7 @@ function boot(host, data) {
       box.setAttribute("value", name);
       box.checked = draft.ticked.includes(name);
       box.addEventListener("change", () => {
+        touched.add(current);
         if (box.checked) {
           if (draft.mode === "Single") {
             draft.ticked = [name];
@@ -677,6 +691,7 @@ function boot(host, data) {
           field.value = String(draft.amounts[name] ?? 0);
         }
         field.addEventListener("input", () => {
+          touched.add(current);
           const raw = Number(field.value);
           const value = Number.isFinite(raw) ? raw : 0;
           if (draft.mode === "Percentage") {
@@ -724,9 +739,7 @@ function boot(host, data) {
     // A custom input retargets its keydown to the host element.
     if (tag === "WA-INPUT") return true;
     if (tag === "INPUT") {
-      const raw = typeof el.getAttribute === "function"
-        ? el.getAttribute("type")
-        : "text";
+      const raw = typeof el.getAttribute === "function" ? el.getAttribute("type") : "text";
       const type = String(raw === null ? "text" : raw).toLowerCase();
       return type === "text" || type === "number" || type === "search" ||
         type === "tel" || type === "url" || type === "password";
@@ -734,8 +747,14 @@ function boot(host, data) {
     return el.isContentEditable === true;
   }
 
+  // Capture, not bubble. A Web Awesome radio group handles the arrow
+  // keys itself and stops them, and any focused control swallows the
+  // rest, so a bubbling listener sees nothing once the reader clicks a
+  // control. Capture runs before those components. The board also stops
+  // listening once its element leaves the page.
   doc.addEventListener("keydown", (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (host.isConnected === false) return;
     if (typingTarget(e)) return;
     const key = e.key;
     if (key === "ArrowLeft") {
@@ -764,8 +783,12 @@ function boot(host, data) {
       toggleSkip();
     } else if (lower >= "1" && lower <= "4") {
       setMode(MODES[Number(lower) - 1]);
+    } else {
+      return;
     }
-  });
+    e.preventDefault();
+    e.stopPropagation();
+  }, true);
 
   // Checkpoint while work waits, plus once while the page hides.
   // The wizard bar leaves through htmx, so flush before its posts.
