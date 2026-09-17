@@ -147,6 +147,16 @@ var BLOCK_TAGS = {
   THEAD: true,
   TBODY: true,
   TR: true,
+  // TD/TH are here because TR alone is not enough: a selection across two
+  // cells of ONE row has no boundary between them and concatenates
+  // ("firstsecond"). Assistant messages render tables routinely, so this was
+  // malformed output from ordinary content, not an exotic edge (found by the
+  // reviewer of fc4fc04). DT/DD/DL are the same shape for definition lists.
+  TD: true,
+  TH: true,
+  DL: true,
+  DT: true,
+  DD: true,
   HR: true
 };
 var SILENT_TAGS = { SCRIPT: true, STYLE: true, NOSCRIPT: true };
@@ -236,7 +246,9 @@ function makeQuoteButton() {
           hide(setQuote);
           return;
         }
-        var fenced = anchorEl.closest("pre") !== null;
+        var focusNode = sel.focusNode;
+        var focusEl = focusNode === null ? null : focusNode.nodeType === 1 ? focusNode : focusNode.parentElement;
+        var fenced = anchorEl.closest("pre") !== null || focusEl !== null && focusEl.closest("pre") !== null;
         var x = Math.min(Math.max(rect.left + rect.width / 2, 72), window.innerWidth - 72);
         var above = rect.top >= 64;
         var y = above ? rect.top - 8 : rect.bottom + 8;

@@ -104,9 +104,15 @@ export function toBlockquote(raw: string, fenced: boolean): string {
  * row stamped `data-chat-flow-kind="<kind>"` (verified in the installed
  * dsh-client-ui-conversation lib/client.js ChatView flowItem: the row carries
  * data-chat-anchor-key, data-chat-flow-key and data-chat-flow-kind set to the
- * routed node's kind). That attribute is read by the ship's own scroll and
- * paging code, so it is a load-bearing contract, not a hashed CSS class that
- * turns over every build. The repo's own user/steering bubble takeover only shadows
+ * routed node's kind). It is a ship-stamped, stable attribute rather than a
+ * hashed CSS class that turns over every build.
+ *
+ * ACCURACY NOTE, because the first version of this comment overstated it: the
+ * ship does NOT read this attribute back. Its scroll and paging code keys on
+ * data-chat-anchor-key and data-conversation-scroll; data-chat-flow-kind has
+ * exactly one occurrence in the bundle, the write. So it is a stable public
+ * hook, not a load-bearing contract the ship would notice breaking. Still the
+ * best key available here — but do not lean on it as if the ship guarded it. The repo's own user/steering bubble takeover only shadows
  * the `user` and `steering` keys, so assistant rows keep kind "assistant"
  * with or without that plugin — the test never names a bubble class and
  * cannot break when bubble markup is restyled. Selections in the composer, a

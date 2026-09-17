@@ -107,4 +107,35 @@ describe("quote-selection append contract: no second appendToDraft to drift", ()
   it("this plugin's copy matches it line for line", () => {
     for (const snippet of SNIPPETS) expect(mine).toContain(snippet);
   });
+
+  // HONEST SCOPE, corrected after review: these two snippets are the
+  // load-bearing semantics (trim the tail, then join with a blank line), and
+  // drift in EITHER of those lines fails here. Drift elsewhere in the helper
+  // -- a changed empty-check, an extra parameter, a trimEnd() refactor --
+  // passes silently. This is a tripwire on the semantics, not a byte-for-byte
+  // equality check, and it should not be described as the latter.
+});
+
+describe("quote-selection block boundaries (#155 review)", () => {
+  // WHY THIS EXISTS: TR was in the block-tag map but TD/TH were not, so a
+  // selection spanning two cells of ONE row had no boundary between them and
+  // produced "firstsecond". Assistant messages render tables constantly, so
+  // this was malformed output from ordinary content. The reviewer of fc4fc04
+  // named this exact test as the cheapest thing that would have caught it.
+  //
+  // A source pin rather than a behavioural one: the map lives in client.tsx,
+  // which needs a DOM to exercise, and this repo has no jsdom harness. It
+  // discriminates removal of these entries, not the walk's behaviour.
+  const CELL_TAGS = ["TD", "TH", "DL", "DT", "DD"];
+
+  it("treats table cells and definition terms as block boundaries", () => {
+    for (const tag of CELL_TAGS) expect(tsx).toContain(tag + ": true,");
+  });
+
+  it("still fences when EITHER selection endpoint is inside a pre", () => {
+    // Anchor-only checking fenced prose when a selection started in a code
+    // block and ended outside it, and emitted code as prose in the reverse.
+    expect(tsx).toContain('anchorEl.closest("pre") !== null ||');
+    expect(tsx).toContain('focusEl.closest("pre") !== null');
+  });
 });

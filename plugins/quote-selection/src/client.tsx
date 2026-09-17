@@ -73,6 +73,16 @@ var BLOCK_TAGS: Record<string, boolean> = {
   THEAD: true,
   TBODY: true,
   TR: true,
+  // TD/TH are here because TR alone is not enough: a selection across two
+  // cells of ONE row has no boundary between them and concatenates
+  // ("firstsecond"). Assistant messages render tables routinely, so this was
+  // malformed output from ordinary content, not an exotic edge (found by the
+  // reviewer of fc4fc04). DT/DD/DL are the same shape for definition lists.
+  TD: true,
+  TH: true,
+  DL: true,
+  DT: true,
+  DD: true,
   HR: true,
 };
 var SILENT_TAGS: Record<string, boolean> = { SCRIPT: true, STYLE: true, NOSCRIPT: true };
@@ -208,7 +218,20 @@ function makeQuoteButton() {
           hide(setQuote);
           return;
         }
-        var fenced = anchorEl.closest("pre") !== null;
+        // EITHER endpoint, not just the anchor: a selection that starts in a
+        // <pre> and ends outside it (or the reverse) would otherwise fence
+        // prose, or emit code as prose. Same-row gating bounds how far such a
+        // selection can stretch, but it does not prevent it.
+        var focusNode = sel.focusNode;
+        var focusEl =
+          focusNode === null
+            ? null
+            : focusNode.nodeType === 1
+              ? (focusNode as Element)
+              : focusNode.parentElement;
+        var fenced =
+          anchorEl.closest("pre") !== null ||
+          (focusEl !== null && focusEl.closest("pre") !== null);
         var x = Math.min(Math.max(rect.left + rect.width / 2, 72), window.innerWidth - 72);
         var above = rect.top >= 64;
         var y = above ? rect.top - 8 : rect.bottom + 8;
