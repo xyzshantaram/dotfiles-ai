@@ -151,9 +151,7 @@ export function resolveCommandMarkers(
 function OptionLabel(props: { option: WizardOption }) {
   const option = props.option;
   if (typeof option === "string") return <>{option}</>;
-  const text = option.label !== undefined && option.label !== ""
-    ? option.label
-    : option.value;
+  const text = option.label !== undefined && option.label !== "" ? option.label : option.value;
   if (option.hint === undefined || option.hint === "") {
     return <>{text}</>;
   }
@@ -809,7 +807,9 @@ function draftJs(title: string): string {
   const KEY = "wiz-draft-" + titleHash(title);
   return (
     `(function () {\n` +
-    `var KEY = ${JSON.stringify(KEY)}, VER = ${JSON.stringify(title + " v1")}, timer = null, PENDING = KEY + "-pick";\n` +
+    `var KEY = ${JSON.stringify(KEY)}, VER = ${
+      JSON.stringify(title + " v1")
+    }, timer = null, PENDING = KEY + "-pick", OFFKEY = KEY + "-off";\n` +
     `function frm(el) { return (el && el.form) || el || null; }\n` +
     `function sid(f) {\n` +
     `var s = f.querySelector("[name=step]"); return s ? s.value : ""; }\n` +
@@ -848,8 +848,22 @@ function draftJs(title: string): string {
     `el.checked = saved.fields[n].indexOf(el.value) > -1; } else el.value = saved.fields[n]; } }\n` +
     `}\n` +
     `function btn(l, f) { var b = document.createElement("wa-button");\n` +
-    `b.setAttribute("size", "small"); b.textContent = l;\n` +
+    `b.setAttribute("size", "small");\n` +
+    `b.setAttribute("appearance", "plain"); b.textContent = l;\n` +
     `b.addEventListener("click", f); return b; }\n` +
+    // The cross quiets one offer without deleting anything. It stores
+    // what it dismissed, so the same session stays silent and a newer
+    // one speaks up again.
+    `function cross(f) { var b = btn("\\u00d7", f);\n` +
+    `b.className = "draft-offer-close";\n` +
+    `b.setAttribute("aria-label", "Dismiss"); return b; }\n` +
+    `function offRead() {\n` +
+    `try { return JSON.parse(localStorage.getItem(OFFKEY)) || {}; } catch (e) { return {}; } }\n` +
+    `function offWrite(o) {\n` +
+    `try { localStorage.setItem(OFFKEY, JSON.stringify(o)); } catch (e) {}\n` +
+    `renderOffer(); }\n` +
+    `function dismissApp(id) { var o = offRead(); o.app = id; offWrite(o); }\n` +
+    `function dismissBrowser(at) { var o = offRead(); o.browserAt = takeMs(at); offWrite(o); }\n` +
     `function foot() { return document.querySelector(".wiz-foot"); }\n` +
     `function statusEl() { return document.getElementById("draft-status"); }\n` +
     `function appEntry() {\n` +
@@ -877,6 +891,10 @@ function draftJs(title: string): string {
     `var hasBrowser = !!(saved && saved.step);\n` +
     `if (hasBrowser && saved.v !== VER) hasBrowser = false;\n` +
     `if (hasBrowser && form && saved.step === sid(form) && sameFields(form, saved)) hasBrowser = false;\n` +
+    // A dismissed offer stays quiet until a newer one turns up.
+    `var off = offRead();\n` +
+    `if (hasBrowser && off.browserAt && takeMs(saved.at) <= off.browserAt) hasBrowser = false;\n` +
+    `if (app && off.app === app.id) app = null;\n` +
     `var pickBrowser = hasBrowser && (!app || takeMs(saved.at) >= takeMs(app.at));\n` +
     `if (!pickBrowser && !app) return;\n` +
     `var box = document.createElement("span");\n` +
@@ -886,9 +904,11 @@ function draftJs(title: string): string {
     `box.appendChild(offerLine("You were on " + (saved.title || saved.step) + "."));\n` +
     `box.appendChild(btn("Resume", function () { resumeBrowser(saved); }));\n` +
     `box.appendChild(btn("Discard", function () { clearAll(); }));\n` +
+    `box.appendChild(cross(function () { dismissBrowser(saved.at); }));\n` +
     `} else {\n` +
     `box.appendChild(offerLine(app.label));\n` +
     `box.appendChild(btn("Resume", function () { resumeApp(app); }));\n` +
+    `box.appendChild(cross(function () { dismissApp(app.id); }));\n` +
     `}\n` +
     `var st = statusEl();\n` +
     `if (st && st.parentNode === f) f.insertBefore(box, st); else f.appendChild(box); }\n` +
@@ -907,11 +927,17 @@ function draftJs(title: string): string {
     `if (!raw) return null;\n` +
     `try { return JSON.parse(raw); } catch (e) { return null; } }\n` +
     `function dropPending() { try { sessionStorage.removeItem(PENDING); } catch (e) {} }\n` +
+    // A resume that lands has served the draft, so the record goes. The
+    // fields sit in the form now, and a stale copy would offer to
+    // restore what is already on screen.
     `function maybeFill() {\n` +
     `var pend = takePending(); if (!pend || !pend.step) return;\n` +
     `var form = formNow(); if (!form || sid(form) !== pend.step) return;\n` +
     `if (pend.fields) fill(form, pend);\n` +
-    `dropPending(); renderOffer(); }\n` +
+    `dropPending();\n` +
+    `try { localStorage.removeItem(KEY); } catch (e) {}\n` +
+    `var st = statusEl(); if (st) st.textContent = "";\n` +
+    `renderOffer(); }\n` +
     `function resumeApp(app) {\n` +
     `if (window.htmx && htmx.ajax) {\n` +
     `htmx.ajax("POST", "/draft-resume", { target: "#step", swap: "outerHTML", values: { id: app.id } });\n` +
@@ -1856,9 +1882,7 @@ export function createWizard(
     const backward = action === "back" || action === "restart";
     // Errors from a nav handler re-render exactly like an onSubmit
     // veto. Nothing logs and no move runs.
-    const hookErrors = navResult.found
-      ? navResult.outcome?.errors
-      : outcome?.errors;
+    const hookErrors = navResult.found ? navResult.outcome?.errors : outcome?.errors;
     if (!backward && hookErrors !== undefined && hookErrors.length > 0) {
       // Reject the post. Nothing appends. Re-render the current step
       // with the joined errors on the first node error field.
@@ -1967,9 +1991,7 @@ export function createWizard(
       if (opts.done !== undefined) {
         let custom: Step | undefined;
         try {
-          custom = typeof opts.done === "function"
-            ? opts.done(answers)
-            : opts.done;
+          custom = typeof opts.done === "function" ? opts.done(answers) : opts.done;
         } catch {
           custom = undefined;
         }
@@ -1980,9 +2002,7 @@ export function createWizard(
           ) {
             await runEnter(custom, answers, ctx);
             try {
-              const again = typeof opts.done === "function"
-                ? opts.done(answers)
-                : opts.done;
+              const again = typeof opts.done === "function" ? opts.done(answers) : opts.done;
               custom = again;
             } catch {
               // Keep the first custom step.

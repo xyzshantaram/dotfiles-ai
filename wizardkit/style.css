@@ -119,9 +119,24 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+  /* Push the text and its controls to the end of the strip, so the
+     wizard name on the left keeps its place. */
+  margin-left: auto;
 }
+/* The offer controls read as links, not as buttons. The strip carries
+   one quiet line, and a filled button there would outrank the nav bar
+   above it. The plain appearance drops the fill, and the underline
+   reaches the slotted label through inheritance. */
 .draft-offer wa-button {
   flex-shrink: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+/* The cross is a mark, not a word, so it drops the underline. */
+.draft-offer-close {
+  text-decoration: none;
+  font-size: 1.1em;
+  line-height: 1;
 }
 .node {
   margin: 0.75rem 0;

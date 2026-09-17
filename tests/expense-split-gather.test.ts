@@ -729,20 +729,26 @@ Deno.test("manual rows saved under session A do not appear for session B", async
   try {
     const sidA = "iso-manual-A";
     const sidB = "iso-manual-B";
-    persistManualRun(sidA, new Map([
-      ["store", ["Store A"]],
-      ["date", ["2026-01-02"]],
-      ["item", ["Chips"]],
-      ["amount", ["111"]],
-      ["range", ["30"]],
-    ]));
-    persistManualRun(sidB, new Map([
-      ["store", ["Store B1", "Store B2"]],
-      ["date", ["2026-01-02", "2026-01-03"]],
-      ["item", ["Chips", "Apples"]],
-      ["amount", ["50", "60"]],
-      ["range", ["30"]],
-    ]));
+    persistManualRun(
+      sidA,
+      new Map([
+        ["store", ["Store A"]],
+        ["date", ["2026-01-02"]],
+        ["item", ["Chips"]],
+        ["amount", ["111"]],
+        ["range", ["30"]],
+      ]),
+    );
+    persistManualRun(
+      sidB,
+      new Map([
+        ["store", ["Store B1", "Store B2"]],
+        ["date", ["2026-01-02", "2026-01-03"]],
+        ["item", ["Chips", "Apples"]],
+        ["amount", ["50", "60"]],
+        ["range", ["30"]],
+      ]),
+    );
     const entries = gatherSteps();
     const reviewEntry = entries[4];
     if (typeof reviewEntry !== "function") throw new Error("review step is not a function");
@@ -807,11 +813,19 @@ function pickOrder(platform: string, date: string, paid: number, names: string[]
 }
 
 // Build the gather-pick step for one answers map plus session id.
-function pickStepFor(m: Map<string, string[]>, sid: string): { id: string; nodes: unknown[]; when?: (m: Map<string, string[]>) => boolean } {
+function pickStepFor(
+  m: Map<string, string[]>,
+  sid: string,
+): { id: string; nodes: unknown[]; when?: (m: Map<string, string[]>) => boolean } {
   const entries = gatherSteps();
   const entry = entries[entries.length - 1];
   if (typeof entry !== "function") throw new Error("pick step is not a function");
-  return (entry as (m: Map<string, string[]>, ctx?: { sessionId: string }) => { id: string; nodes: unknown[]; when?: (m: Map<string, string[]>) => boolean })(m, { sessionId: sid });
+  return (entry as (
+    m: Map<string, string[]>,
+    ctx?: { sessionId: string },
+  ) => { id: string; nodes: unknown[]; when?: (m: Map<string, string[]>) => boolean })(m, {
+    sessionId: sid,
+  });
 }
 
 // Checkbox node named pick in one step.
@@ -857,7 +871,9 @@ Deno.test("pick step lists one option per order with nothing ticked", async () =
 
 Deno.test("pick next with nothing ticked returns the tick error", async () => {
   const out = await pickNext(new Map(), {}, { sessionId: "t-pick-err-1" });
-  if (JSON.stringify(out?.errors ?? null) !== JSON.stringify(["Tick at least one order to split."])) {
+  if (
+    JSON.stringify(out?.errors ?? null) !== JSON.stringify(["Tick at least one order to split."])
+  ) {
     throw new Error("wrong errors: " + JSON.stringify(out));
   }
 });
@@ -901,7 +917,9 @@ Deno.test("pick-all re-renders the same step with every option ticked", async ()
       pickOrder("zepto", "2026-09-09", 120, ["B"]),
     ]);
     const out = await pickAll(new Map(), {}, { sessionId: sid });
-    if (out !== undefined) throw new Error("pick-all misses the silent re-render: " + JSON.stringify(out));
+    if (out !== undefined) {
+      throw new Error("pick-all misses the silent re-render: " + JSON.stringify(out));
+    }
     const found = pickStepFor(new Map([["platforms", ["zepto"]]]), sid);
     const ticked = pickBox(found)["ticked"] as string[];
     if (JSON.stringify(ticked) !== JSON.stringify(["0", "1"])) {
@@ -927,7 +945,9 @@ Deno.test("pick-none re-renders with nothing ticked", async () => {
       pickOrder("zepto", "2026-09-09", 120, ["B"]),
     ]);
     const out = await pickNone(new Map(), { pick: ["0", "1"] }, { sessionId: sid });
-    if (out !== undefined) throw new Error("pick-none misses the silent re-render: " + JSON.stringify(out));
+    if (out !== undefined) {
+      throw new Error("pick-none misses the silent re-render: " + JSON.stringify(out));
+    }
     const found = pickStepFor(
       new Map([["platforms", ["zepto"]], ["pick", ["0", "1"]]]),
       sid,
@@ -975,6 +995,28 @@ Deno.test("pick screen declares its bar with both actions and next", async () =>
     if (prev === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
     else Deno.env.set("SPLIT_UTILS_STATE", prev);
     await cleanup(root);
+  }
+});
+
+Deno.test("pick screen with no run points at the saved list", () => {
+  // A gather costs a real fetch, so this screen never leaves the reader
+  // stuck. It offers the resume picker beside Back.
+  const empty = pickStepFor(new Map(), "t-pick-empty-1") as unknown as {
+    id: string;
+    nodes: Array<{ kind: string; text?: string }>;
+    nav?: { back?: boolean; goto?: { step: string; label: string } };
+  };
+  if (empty.id !== "gather-pick") throw new Error("wrong step id: " + empty.id);
+  if (empty.nav?.back !== true) throw new Error("placeholder misses Back");
+  if (empty.nav?.goto?.step !== "resume") {
+    throw new Error("placeholder misses the resume route");
+  }
+  if (empty.nav?.goto?.label !== "Pick a saved run") {
+    throw new Error("placeholder misses the route label");
+  }
+  const text = empty.nodes.map((node) => node.text ?? "").join(" ");
+  if (!text.includes("Saved runs stay on disk")) {
+    throw new Error("placeholder misses the reassurance line");
   }
 });
 

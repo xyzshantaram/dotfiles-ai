@@ -722,8 +722,7 @@ export function isLedgerRow(name: string): boolean {
 }
 
 // Match a number plus a pack, weight, volume or count unit.
-const SIZE_PATTERN =
-  /\d+\s*(kg|ml|ltr|litre|liter|pieces|piece|pcs|pc|packs|pack|combo|g|l)\b/i;
+const SIZE_PATTERN = /\d+\s*(kg|ml|ltr|litre|liter|pieces|piece|pcs|pc|packs|pack|combo|g|l)\b/i;
 
 // Strip one trailing size group like pack, weight or volume.
 // Repeat the strip while the new tail still states a size.
@@ -774,20 +773,24 @@ function pickLabel(platform: string, date: string, paid: number, count: number):
   return name + " · " + date + " · " + fmtRs(paid) + " · " + count + unit;
 }
 
-// Show this screen when no run or no orders exist.
-// Pass the reason sentence for the empty state.
+// Show this screen when this flow cannot name a run, or when the run it
+// names holds no orders. A gathered run is expensive to fetch, so the
+// screen never claims the run is gone. It points at the saved list.
 function pickPlaceholder(sentence: string): Step {
   return {
     ...step(
       "gather-pick",
       "Pick orders",
       [
-        markdown(sentence),
+        markdown(sentence + "\n\nSaved runs stay on disk. Open one from the saved list."),
       ],
       "Tick the orders to split. " + sentence,
       (m) => !isDryMap(m),
     ),
-    nav: { back: true },
+    nav: {
+      back: true,
+      goto: { step: "resume", label: "Pick a saved run" },
+    },
   };
 }
 
