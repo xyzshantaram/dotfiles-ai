@@ -27,11 +27,14 @@ import {
 } from "../wizardkit/mod.ts";
 import {
   createWizard,
+  HTMX_CDN,
   renderNode,
   renderPage,
   renderStepFragment,
   replayAnswers,
   runCommand,
+  WA_LOADER,
+  WA_THEME,
   type WizardEvent,
 } from "../wizardkit/mod.ts";
 import { styleStep } from "../wizardkit/examples/demo.ts";
@@ -237,14 +240,15 @@ Deno.test("renderer output contains the node label", () => {
   const page = renderPage("Demo", html);
   assert(page.includes("htmx"), "page loads HTMX");
   assert(
-    page.includes("/vendor/htmx/htmx.min.js"),
-    "page loads HTMX from the vendored path",
+    page.includes("https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js"),
+    "page loads HTMX from the pinned CDN",
   );
-  assert(!page.includes("unpkg"), "page has no CDN reference");
+  assert(!page.includes("/vendor"), "page holds no vendor path");
+  assert(!page.includes("unpkg"), "page has no unpkg reference");
   assert(page.includes("Demo"), "page holds the title");
 });
 
-Deno.test("action output stays local, styled, and auto-scrolls", async () => {
+Deno.test("action output stays local, styled, and auto-scrolls", () => {
   // The served page never points at unpkg.
   const page = renderPage("Demo", renderStepFragment(goodStep()));
   assert(!page.includes("unpkg.com"), "page never references unpkg");
@@ -258,13 +262,12 @@ Deno.test("action output stays local, styled, and auto-scrolls", async () => {
     page.includes("scrollHeight"),
     "page script scrolls the output panel",
   );
-  // The vendored HTMX file exists and boots (version marker).
-  const htmxPath = new URL("../wizardkit/vendor/htmx/htmx.min.js", import.meta.url);
-  const htmx = await Deno.readTextFile(htmxPath);
+  // HTMX stays pinned at 2.0.4 on the CDN.
   assert(
-    htmx.includes('version:"2.0.4"'),
-    "vendored HTMX is pinned at 2.0.4",
+    HTMX_CDN === "https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js",
+    "HTMX CDN URL is pinned at 2.0.4",
   );
+  assert(page.includes(HTMX_CDN), "page loads the pinned HTMX URL");
 });
 
 Deno.test("renderer shows a step note under the title", () => {
@@ -1056,12 +1059,26 @@ Deno.test("progress, spoiler, plus markdown render web awesome tags", () => {
 });
 
 Deno.test("page shell loads web awesome plus dark mode", () => {
-  // Render a page and check the vendor assets.
+  // Render a page and check the CDN assets.
   const page = renderPage("Demo", "hi");
-  assert(page.includes("/vendor/webawesome/"), "page serves WA locally");
+  assert(page.includes("https://cdn.jsdelivr.net/"), "page loads WA from the CDN");
   assert(page.includes("webawesome.loader.js"), "page loads the WA loader");
   assert(page.includes("base-path.js"), "page sets the WA base path");
   assert(page.includes("wa-dark"), "page wires dark mode");
+  assert(!page.includes("/vendor"), "page holds no vendor path");
+});
+
+Deno.test("page shell loads browser libraries from the pinned CDN only", () => {
+  // The rendered page carries absolute CDN URLs and no local path.
+  const page = renderPage("Demo", "hi");
+  assert(
+    WA_LOADER.startsWith("https://cdn.jsdelivr.net/"),
+    "loader URL is an absolute CDN URL",
+  );
+  assert(page.includes(WA_LOADER), "page carries the absolute loader URL");
+  assert(page.includes(HTMX_CDN), "page carries the pinned HTMX URL");
+  assert(page.includes(WA_THEME), "page carries the pinned theme URL");
+  assert(!page.includes("/vendor"), "page holds no /vendor path at all");
 });
 
 Deno.test("back after done re-renders the done summary", async () => {
@@ -2130,7 +2147,7 @@ Deno.test("the stage marker counts only the applying steps", async () => {
   assert(first.includes("Three"), "marker keeps the last stage");
   assert(!first.includes("Two"), "marker drops the skipped stage");
   assert(first.includes("1/2"), "marker counts two stages");
-  assert(!first.includes("3/"), "marker shows no third slot");
+  assert(!first.includes("<small>3/"), "marker shows no third slot");
   // Walk forward. The last step marks now on the second slot.
   const last = await (await handle(stepPost("s1", "next"))).text();
   assert(last.includes("Gamma"), "next lands past the skipped step");

@@ -1,8 +1,8 @@
 # Wizard skill: ship a desktop wizard from one script
 
 Build interactive wizards (forms, splitters, dashboards, small apps) on wizardkit. One dependency
-only: Deno. HTMX and the Web Awesome controls ship inside wizardkit and are served from `/vendor`,
-so a wizard works with no network.
+only: Deno. HTMX and the Web Awesome controls load from a pinned CDN, so a wizard needs network
+access for its own UI.
 
 ## Layout
 

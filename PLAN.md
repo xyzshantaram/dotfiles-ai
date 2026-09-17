@@ -57,6 +57,53 @@ key fails on the settings screen and not halfway through a push.
 
 A1 to A4 have landed. The series is closed.
 
+### W series: three homes, a shared core, and a CLI
+
+Settled with the user on 2026-09-17 by grilling. The work splits into three homes. `~/repos/wizardkit`
+becomes the JSR package `@xyzshantaram/wizardkit`, holding `deno.json`, `license.md`, `readme.md`,
+`src/` and `tests/`. The `wizard` skill ships one file that imports that package. `split-utils` lives
+in `dotfiles-ai/skills/split-utils`, imports wizardkit from JSR, and runs straight from its GitHub
+URL. split-utils is never published to JSR, because the user does not want to maintain a release for
+it.
+
+Settled decisions, which no ticket may revisit. The work becomes pure functions with a thin CLI over
+them, and both the wizard and an agent use that core. The wizard calls the CLI through zx where that
+is easy, which is what gathering already does, and imports the functions where interaction demands
+it. The CLI carries six verbs: gather, validate, push, aggregate, share, wizard. The skill is a thin
+router that names the surface and sends the reader to `docs/schema.md` for the split format. An agent
+always dry runs, shows the expense table and the per person totals, and stops until the user says go.
+The skill explains all three push paths: aggregate for no API access, share to a friend who has
+access, and the user's own API key. An agent asks rather than guessing, accepts standing rules such
+as per person affinities and a fallback owner with a cap, and asks the user where to persist those
+rules using whatever the host offers, because split-utils stores none of it.
+
+- [ ] W1 browser libraries load from a CDN again. The vendored tree is 5.7 MB, it contradicts the
+      stated principle in Critical context, and its Web Awesome version is recorded nowhere, so it
+      cannot be rebuilt. Keep the import map, because the Web Awesome dist imports bare specifiers,
+      and repoint every entry at a pinned CDN URL. Identify the vendored Web Awesome version by
+      matching the loader against published releases, so the look does not change. Delete
+      `wizardkit/vendor` and the route that serves it. Eval: every gate stays green, and a real
+      browser shows the same screen as today.
+- [ ] W2 the push, aggregate and share work becomes pure functions that take their inputs and return
+      their results, with no session store and no wizard types in the signatures. Eval: the wizard
+      behaves exactly as it does now, and each function is called by a test with plain data.
+- [ ] W3 the CLI over that core, with the six verbs. Eval: a gather, a dry push, an aggregate write
+      and a share create all run from one command with no browser.
+- [ ] W4 move wizardkit to `~/repos/wizardkit` as a JSR package with `src/` and `tests/`. Eval:
+      `deno publish --dry-run` passes there.
+- [ ] W5 split-utils imports `jsr:@xyzshantaram/wizardkit`. Eval: the app runs with no local
+      wizardkit on the import path.
+- [ ] W6 the wizard skill ships one file that imports the JSR package. Eval: the template runs from
+      a directory holding nothing else.
+- [ ] W7 the split-utils skill, as a thin router, with the three push paths, the safety contract and
+      guidance for building and checking `output.json`. Eval: an agent with only the skill can drive
+      a whole job.
+- [ ] W8 a handoff prompt for a dotfiles-ai session: import split-utils and the new wizard skill,
+      and retire the ecommerce skill, the zepto, blinkit and swiggy MCP servers, and the old
+      expense-split skill. Eval: the prompt names every file to add and every entry to remove.
+- [ ] W9 publishing notes for wizardkit on JSR. Eval: a reader publishes a new version without
+      asking a question.
+
 ### Final gate, after every ticket above is closed
 
 - [ ] Z9 full code review plus slop audit of the whole repo. Look for dead code, unused imports,

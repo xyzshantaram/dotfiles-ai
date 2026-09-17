@@ -281,7 +281,7 @@ function boot(host, data) {
 
   // Root nodes. Every text passes through textContent, never innerHTML.
   // The block elements match the toolkit views, and the custom
-  // elements come from the vendored Web Awesome set.
+  // elements come from the Web Awesome set loaded from a pinned CDN.
   const root = doc.createElement("div");
   root.setAttribute("class", "split-board");
   const headline = doc.createElement("h3");

@@ -2,15 +2,17 @@
 // Nodes render as Preact components serialized by preact-render-to-
 // string. Text escapes by construction; only markdown bodies and the
 // page script blocks inject raw HTML. This file imports ./nodes.ts
-// plus zx. zx runs shell commands for action nodes. HTMX serves
-// vendored from /vendor (HTMX_CDN below), so live actions still post
-// inline when the network is down.
+// plus zx. zx runs shell commands for action nodes. HTMX loads from
+// a pinned CDN (HTMX_CDN below), so a wizard needs network access
+// for its own UI.
 
-// Pinned browser library paths. Web Awesome plus HTMX serve vendored
-// from /vendor (see vendorRoot plus vendor/update.sh).
-export const HTMX_CDN = "/vendor/htmx/htmx.min.js";
-export const WA_LOADER = "/vendor/webawesome/webawesome.loader.js";
-export const WA_THEME = "/vendor/webawesome/styles/themes/default.css";
+// Pinned browser library URLs. Web Awesome plus HTMX load from
+// https://cdn.jsdelivr.net/npm/ at pinned versions.
+export const HTMX_CDN = "https://cdn.jsdelivr.net/npm/htmx.org@2.0.4/dist/htmx.min.js";
+export const WA_LOADER =
+  "https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.11.0/dist/webawesome.loader.js";
+export const WA_THEME =
+  "https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.11.0/dist/styles/themes/default.css";
 
 import { $ } from "zx";
 import type { ComponentChildren } from "preact";
@@ -662,7 +664,7 @@ function SpoilerView(props: { node: SpoilerNode }) {
   );
 }
 
-// Render tabs through the vendored tab-container element. First tab
+// Render tabs through the Web Awesome tab-container element. First tab
 // starts selected; the element owns clicks plus arrow keys. A set
 // selected index marks that tab plus its panel active.
 function TabsView(props: { node: TabsNode }) {
@@ -1107,14 +1109,14 @@ const COPY_JS = `(function () {\n` +
 const DARK_JS =
   `try{var m=matchMedia("(prefers-color-scheme: dark)");var apply=function(){document.documentElement.classList.toggle("wa-dark",m.matches)};m.addEventListener("change",apply);apply();}catch(e){}`;
 
-// Import map for the vendored Web Awesome dependency tree. Kept as a
-// raw string so the page serializes it byte for byte.
+// Import map for the Web Awesome dependency tree on a pinned CDN.
+// Kept as a raw string so the page serializes it byte for byte.
 const IMPORT_MAP =
-  `{"imports":{"@shoelace-style/animations":"/vendor/shoelace-style/index.js","@shoelace-style/localize":"/vendor/shoelace-localize/dist/index.js","@ctrl/tinycolor":"/vendor/tinycolor/dist/module/public_api.js","@floating-ui/dom":"/vendor/floating-ui-dom/dist/floating-ui.dom.esm.js","@floating-ui/core":"/vendor/floating-ui-core/dist/floating-ui.core.esm.js","@floating-ui/utils":"/vendor/floating-ui-utils/dist/floating-ui.utils.esm.js","@floating-ui/utils/dom":"/vendor/floating-ui-utils/dist/floating-ui.utils.dom.esm.js","@lit/context":"/vendor/lit-context/index.js","@lit/reactive-element":"/vendor/lit-reactive-element/reactive-element.js","@lit/reactive-element/":"/vendor/lit-reactive-element/","lit-element":"/vendor/lit-element/lit-element.js","lit-element/":"/vendor/lit-element/","lit-html":"/vendor/lit-html/lit-html.js","lit-html/":"/vendor/lit-html/","nanoid":"/vendor/nanoid/index.browser.js","composed-offset-position":"/vendor/composed-offset-position/dist/composed-offset-position.esm.js","lit":"/vendor/lit/index.js","lit/":"/vendor/lit/"}}`;
+  `{"imports":{"@shoelace-style/animations":"https://cdn.jsdelivr.net/npm/@shoelace-style/animations@1.2.0/dist/index.js","@shoelace-style/localize":"https://cdn.jsdelivr.net/npm/@shoelace-style/localize@3.2.3/dist/index.js","@ctrl/tinycolor":"https://cdn.jsdelivr.net/npm/@ctrl/tinycolor@4.1.0/dist/module/public_api.js","@floating-ui/dom":"https://cdn.jsdelivr.net/npm/@floating-ui/dom@1.6.13/dist/floating-ui.dom.esm.js","@floating-ui/core":"https://cdn.jsdelivr.net/npm/@floating-ui/core@1.8.0/dist/floating-ui.core.esm.js","@floating-ui/utils":"https://cdn.jsdelivr.net/npm/@floating-ui/utils@0.2.12/dist/floating-ui.utils.esm.js","@floating-ui/utils/dom":"https://cdn.jsdelivr.net/npm/@floating-ui/utils@0.2.12/dist/floating-ui.utils.dom.esm.js","@lit/context":"https://cdn.jsdelivr.net/npm/@lit/context@1.1.6/index.js","@lit/reactive-element":"https://cdn.jsdelivr.net/npm/@lit/reactive-element@2.0.4/reactive-element.js","@lit/reactive-element/":"https://cdn.jsdelivr.net/npm/@lit/reactive-element@2.0.4/","lit-element":"https://cdn.jsdelivr.net/npm/lit-element@4.1.0/lit-element.js","lit-element/":"https://cdn.jsdelivr.net/npm/lit-element@4.1.0/","lit-html":"https://cdn.jsdelivr.net/npm/lit-html@3.2.0/lit-html.js","lit-html/":"https://cdn.jsdelivr.net/npm/lit-html@3.2.0/","nanoid":"https://cdn.jsdelivr.net/npm/nanoid@5.1.5/index.browser.js","composed-offset-position":"https://cdn.jsdelivr.net/npm/composed-offset-position@0.0.6/dist/composed-offset-position.esm.js","lit":"https://cdn.jsdelivr.net/npm/lit@3.2.1/index.js","lit/":"https://cdn.jsdelivr.net/npm/lit@3.2.1/"}}`;
 
-// Module script that points Web Awesome at the vendored base path.
+// Module script that points Web Awesome at the CDN base path.
 const BASE_PATH_JS =
-  `import{setBasePath}from"/vendor/webawesome/utilities/base-path.js";setBasePath("/vendor/webawesome/");`;
+  `import{setBasePath}from"https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.11.0/dist/utilities/base-path.js";setBasePath("https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.11.0/dist/");`;
 
 // Render a full page: WA theme plus loader, HTMX, layout CSS, shell.
 // Script, style, and markdown bodies inject as raw HTML because they
@@ -1697,42 +1699,6 @@ export function createWizard(
     return html(renderPage(opts.title, fragment, draft, first, opts.scripts));
   }
 
-  // Dir holding the vendored Web Awesome tree. Beside the binary in
-  // a packaged app (or under APPDIR), in the checkout layouts under
-  // the working dir, else beside this file (plain run, JSR cache).
-  function vendorRoot(): string {
-    const here = import.meta.dirname ?? ".";
-    const appDir = Deno.env.get("APPDIR") ?? "";
-    let cwd = "";
-    try {
-      cwd = Deno.cwd();
-    } catch {
-      // No working dir here. Fall through to the source dir.
-    }
-    let exec = "";
-    try {
-      exec = Deno.execPath().replace(/\/[^/]+$/, "");
-    } catch {
-      // No executable path here. Fall through to the source dir.
-    }
-    for (
-      const dir of [
-        `${appDir}/vendor`,
-        `${exec}/vendor`,
-        `${cwd}/vendor`,
-        `${cwd}/wizardkit/vendor`,
-        `${here}/vendor`,
-      ]
-    ) {
-      try {
-        if (Deno.statSync(dir).isDirectory) return dir;
-      } catch {
-        // Missing candidate. Try the next one.
-      }
-    }
-    return `${here}/vendor`;
-  }
-
   interface LiveJob {
     output: string;
     done: boolean;
@@ -2295,9 +2261,6 @@ export function createWizard(
     ctx: WizardCtx,
   ): Promise<Response> {
     const url = new URL(req.url);
-    if (req.method === "GET" && url.pathname.startsWith("/vendor/")) {
-      return serveFile(url.pathname, "/vendor", vendorRoot());
-    }
     if (req.method === "GET" && url.pathname === "/") {
       const rootAnswers = currentAnswersFor(state);
       let rootBuilt = buildAll(rootAnswers, ctx, state.inserted);

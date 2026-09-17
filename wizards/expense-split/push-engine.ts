@@ -5,18 +5,12 @@
 // holds one push session in memory between renders, like connect.ts
 // holds the handshake. Tests drive the exports with a fake API.
 
-import {
-  fmtRs,
-  formatDayISO,
-  formatMoney,
-  type OutputDoc,
-  parseDate,
-  type SplitEntry,
-} from "../../src/common.ts";
+import { formatDayISO, type OutputDoc, parseDate, type SplitEntry } from "../../src/common.ts";
+import { runPush } from "../../src/pushcore.ts";
+import type { PushApi, PushOutcome } from "../../src/pushcore.ts";
+export type { PushApi, PushOutcome } from "../../src/pushcore.ts";
 import {
   buildAggregateSummary,
-  buildItemizedComment,
-  formatTitle,
   groupOrders,
   inferPayer,
   orderFingerprint,
@@ -38,15 +32,6 @@ import { sessionStore, sidOf } from "../../src/sessionstore.ts";
 
 // One order groups split lines from one platform order.
 type Order = SplitEntry[];
-
-// The part of SplitwiseAPI that the push needs. Tests pass a fake.
-export interface PushApi {
-  getCurrentUser(): Promise<Record<string, unknown>>;
-  getFriends(): Promise<Record<string, unknown>[]>;
-  getGroups(): Promise<Record<string, unknown>[]>;
-  createExpense(data: Record<string, string>): Promise<{ expenses?: { id?: number }[] }>;
-  createComment(expenseId: number, content: string): Promise<unknown>;
-}
 
 // Everything one push attempt carries between steps.
 export interface PushSession {
@@ -91,20 +76,6 @@ export interface NamePick {
   candidates: { id: number; name: string }[];
 }
 
-// Final counts and notes for the report step.
-export interface PushOutcome {
-  pushed: number;
-  skippedDupes: number;
-  skippedByChoice: number;
-  failed: boolean;
-  // True for a dry run. Counts name what would push; nothing lands.
-  dry: boolean;
-  totalRs: number;
-  aggregateFile: string | null;
-  archived: boolean;
-  note: string;
-}
-
 // Push sessions, one per browser session. The wizard serves many
 // humans, so each browser keeps its own staged source, name map, and
 // outcome. The store replaces the module level session value, which
@@ -146,16 +117,6 @@ function freshSession(): PushSession {
 // Clear push state for one session. Tests call this between cases.
 export function resetPush(sessionId: string): void {
   Object.assign(pushSessionFor(sessionId), freshSession());
-}
-
-// Sum one order to the currency units.
-function orderTotal(order: Order): number {
-  return order.reduce((sum, item) => sum + item.price, 0);
-}
-
-// Sum many orders.
-function ordersTotalRs(orders: Order[]): number {
-  return orders.reduce((sum, order) => sum + orderTotal(order), 0);
 }
 
 // Check the cutoff shape and confirm the date is real. The noon parse
@@ -277,46 +238,6 @@ export function resolveNamePicks(
   }
   live.namePicks = [];
   return { ok: true };
-}
-
-// Push one order and save its fingerprint. Ported from pusher.ts
-// pushOneOrder: one expense per order, payer paid the total, comment
-// holds the itemized split, and the fingerprint records the expense id.
-export async function pushOneOrder(
-  api: PushApi,
-  order: Order,
-  people: string[],
-  nameMap: Map<string, number>,
-  payer: string,
-  groupId: number,
-  currency: string,
-): Promise<string | null> {
-  const total = orderTotal(order);
-  const owed = new Map<string, number>();
-  for (const item of order) {
-    for (const [name, amount] of Object.entries(item.assignments)) {
-      owed.set(name, (owed.get(name) ?? 0) + amount);
-    }
-  }
-  const data: Record<string, string> = {
-    cost: fmtRs(total),
-    description: formatTitle(order, currency + " "),
-    group_id: String(groupId),
-    currency_code: currency,
-  };
-  people.forEach((person, i) => {
-    data[`users__${i}__user_id`] = String(nameMap.get(person));
-    data[`users__${i}__paid_share`] = person === payer ? fmtRs(total) : "0.00";
-    data[`users__${i}__owed_share`] = fmtRs(owed.get(person) ?? 0);
-  });
-  const result = await api.createExpense(data);
-  const eid = result.expenses?.[0]?.id;
-  if (eid === undefined || eid === null) return null;
-  await api.createComment(eid, buildItemizedComment(order, people));
-  const merged = await loadPushed();
-  merged[orderFingerprint(order)] = eid;
-  await savePushed(merged);
-  return String(eid);
 }
 
 // The third push-source choice: a share link from a friend. The menu
@@ -606,62 +527,54 @@ export function applyCutoff(
   return { ok: true };
 }
 
-// Run the push loop. `choices` maps order id to the radio value. Orders
-// already sent (fingerprint on disk) skip without asking. A failed call
-// takes the failPush path: a plain error, no fingerprint saved, push
-// halted. A dry run walks the same loop and counts the would-push plan, but it
-// writes nothing: no expense, no fingerprint, no summary file, no
-// archive, no run meta change.
+// Thin adapter over the pure push core. It reads the session, calls
+// runPush, then performs the I/O the core no longer does: saving the
+// fingerprints, writing the aggregate file in aggregate mode,
+// archiving the run, and storing the outcome on the session. The
+// wizard sees the same screens in the same order.
 export async function executePush(
   sessionId: string,
   choices: Record<string, string>,
   opts?: { dry?: boolean },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const live = pushSessionFor(sessionId);
-  const groups = live.groups;
-  const pushed = await loadPushed();
-  const outcome: PushOutcome = {
-    pushed: 0,
-    skippedDupes: 0,
-    skippedByChoice: 0,
-    failed: false,
-    dry: opts?.dry === true,
-    totalRs: 0,
-    aggregateFile: null,
-    archived: false,
-    note: "",
-  };
-  if (outcome.dry) {
-    // Mirror the live loop shape: dupes skip, Push counts, Skip and
-    // unpicked orders stay out.
-    for (const order of groups) {
-      const fingerprint = orderFingerprint(order);
-      const oid = order[0].order_id ?? "unknown";
-      if (Object.hasOwn(pushed, fingerprint)) {
-        outcome.skippedDupes += 1;
-        continue;
-      }
-      const choice = choices[oid];
-      if (choice !== "Push") {
-        outcome.skippedByChoice += 1;
-        continue;
-      }
-      outcome.pushed += 1;
-      outcome.totalRs += orderTotal(order);
-    }
-    outcome.note = "Dry run. Nothing went to Splitwise. " + outcome.pushed +
-      " order(s) would push, " +
-      (outcome.skippedDupes + outcome.skippedByChoice) + " skipped. Total " +
-      formatMoney(outcome.totalRs, live.currency) + " would push.";
+  const dry = opts?.dry === true;
+  const onDisk = await loadPushed();
+  const nameRecord: Record<string, number> = Object.fromEntries(live.nameMap);
+  if (dry) {
+    const { outcome } = await runPush({
+      api: live.api,
+      groups: live.groups,
+      people: live.people,
+      payer: live.payer,
+      currency: live.currency,
+      groupId: live.groupId,
+      nameMap: nameRecord,
+      choices,
+      pushed: onDisk,
+      dry: true,
+    });
     live.outcome = outcome;
     return { ok: true };
   }
   if (live.mode !== "live") {
-    // Aggregate fallback: rebuild the summary from the orders the API
-    // never pushed, and write it beside the source file.
-    const remaining = groups.filter((order) => !Object.hasOwn(pushed, orderFingerprint(order)));
-    outcome.skippedDupes = groups.length - remaining.length;
-    outcome.totalRs = ordersTotalRs(remaining);
+    // Aggregate fallback: the core counts the plan, and this adapter
+    // writes the summary beside the source file.
+    const { outcome } = await runPush({
+      api: null,
+      groups: live.groups,
+      people: live.people,
+      payer: live.payer,
+      currency: live.currency,
+      groupId: live.groupId,
+      nameMap: nameRecord,
+      choices,
+      pushed: onDisk,
+      dry: false,
+    });
+    const remaining = live.groups.filter((order) =>
+      !Object.hasOwn(onDisk, orderFingerprint(order))
+    );
     if (remaining.length > 0) {
       const block = buildAggregateSummary(
         remaining,
@@ -680,8 +593,6 @@ export async function executePush(
       }
       outcome.aggregateFile = path;
     }
-    outcome.note =
-      "No Splitwise access, so a summary file took the place of a push. Enter the amounts in Splitwise by hand.";
     live.outcome = outcome;
     return { ok: true };
   }
@@ -689,56 +600,32 @@ export async function executePush(
   if (api === null) {
     return { ok: false, error: "Splitwise access is missing. Set it up in Settings first." };
   }
-  for (const order of groups) {
-    const fingerprint = orderFingerprint(order);
-    const oid = order[0].order_id ?? "unknown";
-    if (Object.hasOwn(pushed, fingerprint)) {
-      outcome.skippedDupes += 1;
-      continue;
-    }
-    const choice = choices[oid];
-    if (choice === "Skip") {
-      outcome.skippedByChoice += 1;
-      continue;
-    }
-    // Unpicked orders stay out, like an explicit skip.
-    if (choice !== "Push") {
-      outcome.skippedByChoice += 1;
-      continue;
-    }
-    try {
-      const eid = await pushOneOrder(
-        api,
-        order,
-        live.people,
-        live.nameMap,
-        live.payer,
-        live.groupId,
-        live.currency,
-      );
-      if (eid === null) {
-        // No expense id means the fingerprint stays unsaved, so a rerun
-        // can push the order again. Stop before anything double lands.
-        outcome.failed = true;
-        outcome.note = "Splitwise gave no expense id for order " + oid +
-          ". The order was not marked as sent. Check Splitwise, then push again.";
-        live.outcome = outcome;
-        return { ok: false, error: outcome.note };
-      }
-      // loadPushed returns numeric ids, so store the id as a number.
-      pushed[fingerprint] = Number(eid);
-      outcome.pushed += 1;
-      outcome.totalRs += orderTotal(order);
-    } catch {
-      // failPush path: a plain message, no raw error text, no fingerprint.
-      outcome.failed = true;
-      outcome.note = "The push failed on order " + oid +
-        ". The order was not marked as sent, so a rerun will offer it again. Check Splitwise before you retry.";
-      live.outcome = outcome;
-      return { ok: false, error: outcome.note };
-    }
+  const { outcome, pushed: updated } = await runPush({
+    api,
+    groups: live.groups,
+    people: live.people,
+    payer: live.payer,
+    currency: live.currency,
+    groupId: live.groupId,
+    nameMap: nameRecord,
+    choices,
+    pushed: onDisk,
+    dry: false,
+    // Save after every expense, the way the loop did before the core
+    // was split out. A batch save after the loop would lose the lot on
+    // a crash, and the rerun would send every sent expense again.
+    onExpense: async (fingerprint, expenseId) => {
+      onDisk[fingerprint] = expenseId;
+      await savePushed(onDisk);
+    },
+  });
+  if (outcome.failed) {
+    await savePushed(updated);
+    live.outcome = outcome;
+    return { ok: false, error: outcome.note };
   }
-  if (live.runId !== null && !outcome.failed) {
+  await savePushed(updated);
+  if (live.runId !== null) {
     try {
       await archiveRun(live.runId);
       outcome.archived = true;
