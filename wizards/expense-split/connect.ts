@@ -78,7 +78,20 @@ export async function startHandshake(
 // pair or the token, because this text reaches the screen. A status
 // number from Splitwise is the most useful part, so it leads.
 function verifierReason(err: unknown): string {
-  const raw = err instanceof Error ? err.message : String(err);
+  // node-oauth rejects with a plain object holding statusCode and data,
+  // not with an Error. Reading only err.message therefore read nothing,
+  // and every failure reported that it gave no reason.
+  let raw = "";
+  if (err instanceof Error) {
+    raw = err.message;
+  } else if (err !== null && typeof err === "object") {
+    const bag = err as { statusCode?: unknown; data?: unknown };
+    const code = typeof bag.statusCode === "number" ? String(bag.statusCode) : "";
+    const data = typeof bag.data === "string" ? bag.data : "";
+    raw = (code + " " + data).trim();
+  } else {
+    raw = String(err);
+  }
   const status = raw.match(/\b(400|401|403|404|429|5\d\d)\b/);
   if (status !== null) {
     if (status[1] === "401" || status[1] === "403") {
@@ -90,7 +103,10 @@ function verifierReason(err: unknown): string {
   if (/timeout|timed out|network|dns|econn/i.test(raw)) {
     return "The request did not reach Splitwise.";
   }
-  return "It gave no reason.";
+  // Nothing recognised. The screen says so and the detail goes to the
+  // server log, because the raw text can echo the verifier or the key
+  // pair back, and this string reaches a page.
+  return "It gave no reason, and the detail is in the server log.";
 }
 
 // Step 2: swap the verifier for an access token, cache it owner only,
@@ -138,6 +154,9 @@ export async function completeHandshake(
     // copy the same good code again, with nothing to act on. The reason
     // separates a mistyped code from an expired handshake, a wrong key
     // pair, and a network fault, which need different answers.
+    // The raw fault goes to the server log only. It can echo the
+    // verifier or the key pair, and the message below reaches a page.
+    console.error("[connect] verifier swap failed:", err);
     return {
       ok: false,
       error: "Splitwise did not accept the verifier. " + verifierReason(err) +
