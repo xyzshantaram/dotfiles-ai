@@ -10,12 +10,24 @@ import { shareDir, zomatoConfigPath } from "./paths.ts";
 export const BASE = "https://api.zomato.com";
 export const ACCOUNTS = "https://accounts.zomato.com";
 
-// Static app constants from the app binary and public notes.
-// These stay empty in source. The dev constants wizard writes live
-// values to state/share/config/zomato.json and that file provides them,
-// so an app update never needs a source change.
-export const DEFAULT_API_KEY = "";
-export const DEFAULT_CLIENT_ID = "";
+// Static app constants, harvested from Zomato's own public web client by
+// scripts/dev/zomato-consts.ts, which scans the site's served JavaScript for
+// them. They are the same values every visitor's browser receives. They are
+// not credentials, nothing is issued to a user, and they identify the client
+// rather than the account.
+//
+// THEY SHIP AS DEFAULTS so a fresh checkout works with no setup. Two of these
+// four were already filled in here while the other two were left empty, so the
+// config file existed to supply exactly two strings that the other two proved
+// were fine to ship. A user on Windows hit that gap as a hard failure with no
+// way to proceed.
+//
+// The config file at state/share/config/zomato.json still OVERRIDES any of
+// them, so when Zomato rotates a value the constants wizard writes the new one
+// and no source change is needed. That was the original intent; only the empty
+// defaults were wrong.
+export const DEFAULT_API_KEY = "7749b19667964b87a3efc739e254ada2";
+export const DEFAULT_CLIENT_ID = "5276d7f1-910b-4243-92ea-d27e758ad02b";
 export const DEFAULT_APP_VERSION = "986";
 export const DEFAULT_APP_VERSION_CODE = "1710019860";
 
