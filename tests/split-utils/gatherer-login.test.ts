@@ -3,7 +3,7 @@
 // reach past validation toward the browser. Success paths need a
 // headed window, so source assertions do not cover them here.
 
-const GATHERER = new URL("../scripts/gatherer.ts", import.meta.url).pathname;
+const GATHERER = new URL(import.meta.resolve("@app/scripts/gatherer.ts")).pathname;
 
 // Throw on a false check with a plain message.
 function assert(cond: boolean, msg: string): void {

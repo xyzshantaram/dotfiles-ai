@@ -17,9 +17,9 @@ import {
   snapshotMtime,
   tmpStatePath,
   writeSplitState,
-} from "../src/splitstate.ts";
-import type { Order } from "../src/common.ts";
-import { createRun, readRun, updateRun } from "../src/runstate.ts";
+} from "@app/src/splitstate.ts";
+import type { Order } from "@app/src/common.ts";
+import { createRun, readRun, updateRun } from "@app/src/runstate.ts";
 
 // Fail the test when a flag misses.
 function assert(cond: boolean, msg: string): void {

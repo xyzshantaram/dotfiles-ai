@@ -1,7 +1,7 @@
 // Client proof for the API key transport. Each test passes a stub
 // fetch, so no test touches the network or the global fetch.
 
-import { loadCredentials, SplitwiseAPI } from "../src/splitwise.ts";
+import { loadCredentials, SplitwiseAPI } from "@app/src/splitwise.ts";
 
 // Fail the test when a condition misses.
 function assert(cond: boolean, msg: string): void {

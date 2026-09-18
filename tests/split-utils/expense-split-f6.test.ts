@@ -2,10 +2,10 @@
 // surface, and resume routing by run status. A fake PushApi stands in
 // for Splitwise, so no network call happens. Each test owns its state
 // root and pushed map, and restores the env after itself.
-import { listResumableDrafts, resumeDraft, resumeNext } from "../app/expense-split.ts";
-import { gatherPickRunId, gatherSteps } from "../app/expense-split/gather.ts";
-import { exportStep, itemStep, routeStatus } from "../app/expense-split/split.ts";
-import { pushSteps } from "../app/expense-split/push.ts";
+import { listResumableDrafts, resumeDraft, resumeNext } from "@app/app/expense-split.ts";
+import { gatherPickRunId, gatherSteps } from "@app/app/expense-split/gather.ts";
+import { exportStep, itemStep, routeStatus } from "@app/app/expense-split/split.ts";
+import { pushSteps } from "@app/app/expense-split/push.ts";
 import {
   applyCutoff,
   executePush,
@@ -14,8 +14,8 @@ import {
   type PushApi,
   pushSessionFor,
   resetPush,
-} from "../app/expense-split/push-engine.ts";
-import { backupFailedRun, isDryMap, listRunsSync } from "../src/runstate.ts";
+} from "@app/app/expense-split/push-engine.ts";
+import { backupFailedRun, isDryMap, listRunsSync } from "@app/src/runstate.ts";
 import type { Step } from "jsr:@xyzshantaram/wizardkit@^0.1.0";
 import type { StepFn } from "jsr:@xyzshantaram/wizardkit@^0.1.0";
 
@@ -210,7 +210,7 @@ Deno.test("f6 failed run surfaces with reason and routes to gather", async () =>
     assert(runs[0].status === "failed", "run marked failed");
     assert(runs[0].failureReason === "scrape timed out", "reason kept");
     // The resume picker shows the id plus the reason.
-    const { resumeStep } = await import("../app/expense-split/split.ts");
+    const { resumeStep } = await import("@app/app/expense-split/split.ts");
     const body = stepText(resumeStep());
     assert(body.includes("r-fail"), "picker names the failed run");
     assert(body.includes("scrape timed out"), "picker shows the reason");

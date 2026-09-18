@@ -1,7 +1,7 @@
 // Tests for the pure push core. runPush takes plain data and a fake
 // api, with no session store and no file writes.
-import { type PushApi, runPush } from "../src/pushcore.ts";
-import { orderFingerprint } from "../src/render.ts";
+import { type PushApi, runPush } from "@app/src/pushcore.ts";
+import { orderFingerprint } from "@app/src/render.ts";
 
 // Fail the test when a condition misses.
 function assert(cond: boolean, msg: string): void {

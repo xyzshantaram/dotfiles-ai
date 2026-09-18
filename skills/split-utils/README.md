@@ -174,9 +174,10 @@ Fix every `FAIL` line it prints.
 Site guides live in `docs/playbook-zepto.md`, `docs/playbook-blinkit.md`, `docs/playbook-zomato.md`,
 and `docs/playbook-swiggy.md`. The output format contract lives in `docs/schema.md`.
 
-Test fixtures are synthetic. `tests/fixtures/orders.json` holds invented people, items, and prices.
-`tests/expected/` holds frozen ground truth. Never add real names, real merchants, or real amounts
-to these files. The `state/` dir and `tests/actual/` stay out of git by design.
+The test suite lives outside this skill at `tests/split-utils/` (#182), so this
+directory stays copyable. Test fixtures are synthetic. `tests/split-utils/expected/`
+holds frozen ground truth. Never add real names, real merchants, or real amounts
+to these files. The `state/` dir and `tests/split-utils/actual/` stay out of git by design.
 
 A checkout writes to the same per-user data dir as an install. To keep development data separate,
 set `SPLIT_UTILS_STATE` to a dir inside the checkout:

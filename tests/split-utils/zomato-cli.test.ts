@@ -4,7 +4,7 @@
 // sentences for the login modes live in source assertions below because
 // those paths need the live network to send or verify a code.
 
-const GATHERER = new URL("../scripts/gatherer.ts", import.meta.url).pathname;
+const GATHERER = new URL(import.meta.resolve("@app/scripts/gatherer.ts")).pathname;
 
 // Throw on a false check with a plain message.
 function assert(cond: boolean, msg: string): void {

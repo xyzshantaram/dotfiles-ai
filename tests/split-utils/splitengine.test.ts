@@ -9,7 +9,7 @@ import {
   percentShare,
   scaleRepeat,
   singleShare,
-} from "../src/splitengine.ts";
+} from "@app/src/splitengine.ts";
 
 Deno.test(
   "equalShare splits evenly and puts the gap on the last person",

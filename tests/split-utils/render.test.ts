@@ -1,8 +1,8 @@
 // Tests for the push title builder. Run with deno test.
 // Each case checks one date path from the T15 ticket.
 
-import { buildItemizedComment, formatTitle, renderOrderTree, renderTree } from "../src/render.ts";
-import type { SplitEntry } from "../src/common.ts";
+import { buildItemizedComment, formatTitle, renderOrderTree, renderTree } from "@app/src/render.ts";
+import type { SplitEntry } from "@app/src/common.ts";
 
 // Throw on a false check with a plain message.
 function assert(cond: boolean, msg: string): void {

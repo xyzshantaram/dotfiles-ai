@@ -1,7 +1,7 @@
 // Paging and block checks run with plain functions. No browser opens here.
 
 import { assert, assertEquals } from "@std/assert";
-import { isBlockedStatus, pageThrough } from "../src/browser.ts";
+import { isBlockedStatus, pageThrough } from "@app/src/browser.ts";
 
 Deno.test("pageThrough stops at the end marker", async () => {
   let calls = 0;

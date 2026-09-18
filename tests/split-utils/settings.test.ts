@@ -1,6 +1,6 @@
 // Tests for the app settings store. Each test uses a fresh state root
 // and restores the env var on exit.
-import { loadSettings, saveSettings } from "../src/settings.ts";
+import { loadSettings, saveSettings } from "@app/src/settings.ts";
 
 // Fail the test when a flag misses.
 function assert(cond: boolean, msg: string): void {

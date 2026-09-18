@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 # Diff the TS render output against frozen fixtures.
 #
-# The tests/expected/ tree is frozen ground truth from the retired Python
-# reference. This runner never writes to it. It renders tests/actual/ with
-# scripts/render-fixtures.ts and diffs the two trees.
+# The tests/split-utils/expected/ tree is frozen ground truth from the
+# retired Python reference. This runner never writes to it. It renders
+# tests/split-utils/actual/ with the skill's scripts/render-fixtures.ts
+# and diffs the two trees.
 #
-# Usage: bash tests/run.sh
+# Usage: bash tests/split-utils/run.sh
 # Exit 0 means all files match. Exit 1 means a file differs.
 
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$HERE/.."
+ROOT="$HERE/../../skills/split-utils"
 
 FIXTURE="$HERE/fixtures/orders.json"
 EXPECTED="$HERE/expected"

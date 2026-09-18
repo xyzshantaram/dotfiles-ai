@@ -3,8 +3,8 @@
 // retired the token writer, so the key file write is the save path
 // that still holds a secret.
 
-import { writeSplitwiseEnv } from "../app/expense-split/settings.ts";
-import { splitwiseEnvPath } from "../src/paths.ts";
+import { writeSplitwiseEnv } from "@app/app/expense-split/settings.ts";
+import { splitwiseEnvPath } from "@app/src/paths.ts";
 
 // Throw on a false check with a plain message.
 function assert(cond: boolean, msg: string): void {

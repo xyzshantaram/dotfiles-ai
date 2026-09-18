@@ -1,5 +1,5 @@
-import { buildAggregateSummary } from "../src/render.ts";
-import type { SplitEntry } from "../src/common.ts";
+import { buildAggregateSummary } from "@app/src/render.ts";
+import type { SplitEntry } from "@app/src/common.ts";
 
 // Three people keep the hand check short.
 const people = ["Asha", "Dev", "Mira"];

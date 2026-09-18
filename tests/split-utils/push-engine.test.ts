@@ -10,10 +10,10 @@ import {
   pushSessionFor,
   resetPush,
   resolveNamePicks,
-} from "../app/expense-split/push-engine.ts";
-import { loadPushed } from "../src/splitwise.ts";
-import { pushedFilePath, splitwiseEnvPath } from "../src/paths.ts";
-import { pushSteps, sourceStep } from "../app/expense-split/push.ts";
+} from "@app/app/expense-split/push-engine.ts";
+import { loadPushed } from "@app/src/splitwise.ts";
+import { pushedFilePath, splitwiseEnvPath } from "@app/src/paths.ts";
+import { pushSteps, sourceStep } from "@app/app/expense-split/push.ts";
 
 // Fail the test when a condition misses.
 function assert(cond: boolean, msg: string): void {
@@ -693,7 +693,7 @@ Deno.test("the push session prepared under A does not serve B", async () => {
     fileB,
     JSON.stringify(doc(["Cara", "Dev"])),
   );
-  const { pushSessionFor } = await import("../app/expense-split/push-engine.ts");
+  const { pushSessionFor } = await import("@app/app/expense-split/push-engine.ts");
   const srcA = await prepareSource("iso-push-A", "Split JSON file", "", fileA);
   assert(srcA.ok, "A source loads");
   const srcB = await prepareSource("iso-push-B", "Split JSON file", "", fileB);
@@ -1032,7 +1032,7 @@ Deno.test("the pushed file saves under a path holding a hash mark", async () => 
   const root = base + "/od#d";
   Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
-    const { savePushed } = await import("../src/splitwise.ts");
+    const { savePushed } = await import("@app/src/splitwise.ts");
     await savePushed({ "fp-one": 4242 });
     const back = JSON.parse(await Deno.readTextFile(root + "/config/splitwise_pushed.json"));
     if (back.pushed["fp-one"] !== 4242) throw new Error("the fingerprint did not save");

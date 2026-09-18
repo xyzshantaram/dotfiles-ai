@@ -11,7 +11,7 @@
 // So the rule is a pure function now, and these are its pins. They assert the
 // ORDER and the guarantee, not the spelling of a path.
 import { assertEquals, assertStringIncludes } from "@std/assert";
-import { binaryOrder } from "../src/browser.ts";
+import { binaryOrder } from "@app/src/browser.ts";
 
 Deno.test("an explicit path is used alone", () => {
   assertEquals(binaryOrder({ executablePath: "/opt/chrome" }), ["explicit"]);
@@ -49,7 +49,7 @@ Deno.test("the bundled build is always last and always reachable", () => {
 Deno.test("no developer machine path survives in the shipped source", () => {
   // The defect itself, pinned directly. Any absolute home path in a shipped
   // module is wrong for every machine except the one it was written on.
-  const src = Deno.readTextFileSync(new URL("../src/browser.ts", import.meta.url));
+  const src = Deno.readTextFileSync(new URL(import.meta.resolve("@app/src/browser.ts")));
   const live = src
     .split("\n")
     .filter((line) => !line.trimStart().startsWith("//"))

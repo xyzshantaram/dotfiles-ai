@@ -17,9 +17,9 @@ import {
   setSplitRun,
   shareDoneStep,
   summaryStep,
-} from "../app/expense-split/split.ts";
-import { freshState, type SplitStateDoc, writeSplitState } from "../src/splitstate.ts";
-import { handleBoardRoute } from "../app/expense-split/board-routes.ts";
+} from "@app/app/expense-split/split.ts";
+import { freshState, type SplitStateDoc, writeSplitState } from "@app/src/splitstate.ts";
+import { handleBoardRoute } from "@app/app/expense-split/board-routes.ts";
 import {
   buildPatch,
   personForDigit,
@@ -30,9 +30,9 @@ import {
   sharePercent,
   shareSingle,
   skipSettles,
-} from "../app/expense-split/split-board.js";
+} from "@app/app/expense-split/split-board.js";
 import type { Node } from "jsr:@xyzshantaram/wizardkit@^0.1.0";
-import type { Order } from "../src/common.ts";
+import type { Order } from "@app/src/common.ts";
 import {
   confirmLastPush,
   daysSincePush,
@@ -41,7 +41,7 @@ import {
   readLastPushSync,
   resolveRangeDays,
   writeLastPush,
-} from "../src/lastpush.ts";
+} from "@app/src/lastpush.ts";
 
 // One order with one 10.00 item and no fees.
 const ORDERS: Order[] = [{
@@ -274,7 +274,7 @@ function otherRunValue(step: { id: string; nodes: Node[] }): string {
 
 Deno.test("export handoff lands on push-source with the run preloaded", async () => {
   const { pushSourceStep } = await import(
-    "../app/expense-split.ts"
+    "@app/app/expense-split.ts"
   );
   const root = await Deno.makeTempDir();
   Deno.env.set("SPLIT_UTILS_STATE", root);
@@ -311,9 +311,9 @@ Deno.test("export handoff lands on push-source with the run preloaded", async ()
 
 Deno.test("push source prefers the typed other run over the radio pick", async () => {
   // The source step owns this rule now, through its own nav handler.
-  const { pushSourceNext } = await import("../app/expense-split/push.ts");
+  const { pushSourceNext } = await import("@app/app/expense-split/push.ts");
   const { pushSessionFor, resetPush } = await import(
-    "../app/expense-split/push-engine.ts"
+    "@app/app/expense-split/push-engine.ts"
   );
   const root = await Deno.makeTempDir();
   Deno.env.set("SPLIT_UTILS_STATE", root);
@@ -596,7 +596,7 @@ Deno.test("empty run branch asks nothing", async () => {
   const root = await Deno.makeTempDir();
   Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
-    const { splitSteps } = await import("../app/expense-split/split.ts");
+    const { splitSteps } = await import("@app/app/expense-split/split.ts");
     const entry = splitSteps()[0];
     const found = typeof entry === "function" ? entry(new Map()) : entry;
     assertEquals(found.id, "split-run");
@@ -1477,7 +1477,7 @@ function fieldOf(node: Node, key: string): unknown {
 }
 
 Deno.test("range step offers the last push above the number entry", async () => {
-  const { gatherSteps } = await import("../app/expense-split/gather.ts");
+  const { gatherSteps } = await import("@app/app/expense-split/gather.ts");
   const root = await Deno.makeTempDir();
   Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
@@ -1611,7 +1611,7 @@ function menuChoices(step: { nodes: Node[] }): Array<{ value: string; hint: stri
 }
 
 Deno.test("menu shows Review pushes only while a push waits", async () => {
-  const { menuStep } = await import("../app/expense-split.ts");
+  const { menuStep } = await import("@app/app/expense-split.ts");
   const root = await Deno.makeTempDir();
   Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
@@ -1631,7 +1631,7 @@ Deno.test("menu shows Review pushes only while a push waits", async () => {
 });
 
 // Validator subprocess path for the direct flag tests below.
-const VALIDATOR = new URL("../scripts/validate.ts", import.meta.url).pathname;
+const VALIDATOR = new URL(import.meta.resolve("@app/scripts/validate.ts")).pathname;
 
 // Run the validator as a subprocess and capture the result.
 async function runValidator(

@@ -1,0 +1,14 @@
+{
+  "imports": {
+    // One line points every test at the skill. If the skill ever moves
+    // again, change this path instead of rewriting every test file.
+    // The app itself names every dependency in full so it can run
+    // straight from a raw GitHub URL. No bare specifier may cross
+    // into skills/split-utils/src, app, or scripts.
+    "@app/": "../../skills/split-utils/",
+    "@std/assert": "jsr:@std/assert@^1.0.19"
+  },
+  "tasks": {
+    "test": "deno test --no-lock --min-dep-age=0 --allow-read --allow-write --allow-env --allow-sys --allow-run ."
+  }
+}

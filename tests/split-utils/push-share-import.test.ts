@@ -1,14 +1,14 @@
 // Tests for the share-link push screen. A fetch stub stands in for
 // the paste hosts, so no network call happens. A temp dir holds the
 // state root with its share imports.
-import { codeToKey, encryptForShare, fetchShareLink } from "../src/share.ts";
+import { codeToKey, encryptForShare, fetchShareLink } from "@app/src/share.ts";
 import {
   prepareShareImport,
   prepareSource,
   pushSessionFor,
   resetPush,
-} from "../app/expense-split/push-engine.ts";
-import { stateRoot } from "../src/runstate.ts";
+} from "@app/app/expense-split/push-engine.ts";
+import { stateRoot } from "@app/src/runstate.ts";
 
 // Fail the test when a condition misses.
 function assert(cond: boolean, msg: string): void {

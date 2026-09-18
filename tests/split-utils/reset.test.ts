@@ -1,8 +1,8 @@
 // Factory reset checks. The reset removes each target, names each
 // one, reruns clean, and leaves neighbours beside the root alone.
 
-import { factoryReset, resetTargets } from "../src/reset.ts";
-import { profileDir, pushedFilePath, stateRoot, tokenFilePath } from "../src/paths.ts";
+import { factoryReset, resetTargets } from "@app/src/reset.ts";
+import { profileDir, pushedFilePath, stateRoot, tokenFilePath } from "@app/src/paths.ts";
 
 // Fail the test when a condition misses.
 function assert(cond: boolean, msg: string): void {

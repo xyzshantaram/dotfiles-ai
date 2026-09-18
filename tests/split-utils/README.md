@@ -12,11 +12,17 @@ They reach the app through an import map rather than a relative path, so if
 the skill ever moves again this costs one line instead of rewriting every
 file.
 
-Run them with:
+Run them from the repo root with:
 
-    DENO_DIR=/tmp/dsh/deno deno test --no-lock --min-dep-age=0 \
+    DENO_DIR=/tmp/dsh/deno deno test --config tests/split-utils/deno.json \
+      --no-lock --min-dep-age=0 \
       --allow-read --allow-write --allow-env --allow-sys --allow-run \
       tests/split-utils/
+
+The `--config` flag points at this dir's own import map. Deno finds its
+config from the working dir, so without the flag a root run misses the
+`@app/` mapping. From inside this dir, `deno task test` runs the same
+suite with no flag.
 
 `vitest.config.ts` excludes this tree: vitest owns the plugins, `deno test`
 owns this.

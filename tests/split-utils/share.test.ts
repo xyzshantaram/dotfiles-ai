@@ -1,5 +1,5 @@
 // Tests for encrypted share links. All tests run offline.
-import { decryptForShare, encryptForShare, generateShareKey } from "../src/share.ts";
+import { decryptForShare, encryptForShare, generateShareKey } from "@app/src/share.ts";
 
 // Fail the test when a flag misses.
 function assert(cond: boolean, msg: string): void {

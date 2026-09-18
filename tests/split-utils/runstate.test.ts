@@ -11,8 +11,8 @@ import {
   runsDir,
   stateRoot,
   updateRun,
-} from "../src/runstate.ts";
-import { loadSettingsSync } from "../src/settings.ts";
+} from "@app/src/runstate.ts";
+import { loadSettingsSync } from "@app/src/settings.ts";
 
 // Fail the test when a flag misses.
 function assert(cond: boolean, msg: string): void {

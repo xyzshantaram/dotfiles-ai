@@ -13,10 +13,10 @@
 // lets a guessed price read as a known one.
 
 import { assertEquals } from "@std/assert";
-import { mapOrder as mapBlinkit } from "../src/blinkit.ts";
-import { mapFoodOrder } from "../src/swiggy.ts";
-import { mapOrder as mapZepto } from "../src/zepto.ts";
-import type { Order } from "../src/common.ts";
+import { mapOrder as mapBlinkit } from "@app/src/blinkit.ts";
+import { mapFoodOrder } from "@app/src/swiggy.ts";
+import { mapOrder as mapZepto } from "@app/src/zepto.ts";
+import type { Order } from "@app/src/common.ts";
 
 // Assert the shared rules for one mapped order.
 function assertStamped(mapped: Order, platform: string): void {

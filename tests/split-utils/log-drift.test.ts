@@ -1,8 +1,8 @@
 // Tests for run log redaction and drift detection. Run with deno test.
 // Each case checks one rule from the T15 ticket.
 
-import { createRunLog, redact } from "../src/log.ts";
-import { detectDrift, driftMessage, ISSUES_URL } from "../src/drift.ts";
+import { createRunLog, redact } from "@app/src/log.ts";
+import { detectDrift, driftMessage, ISSUES_URL } from "@app/src/drift.ts";
 
 // Throw on a false check with a plain message.
 function assert(cond: boolean, msg: string): void {

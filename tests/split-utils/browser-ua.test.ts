@@ -9,7 +9,7 @@ import {
   uaMajorVersion,
   uaMetadata,
   uaPlatform,
-} from "../src/browser.ts";
+} from "@app/src/browser.ts";
 
 const HEADLESS =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36";

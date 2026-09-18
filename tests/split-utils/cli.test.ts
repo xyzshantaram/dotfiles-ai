@@ -1,8 +1,8 @@
 // Tests for the CLI pure pieces. No subprocess, no browser, and no
 // network call happens here. The flag parser, the --map parser, the
 // push input builder, and the usage text are all pure.
-import { buildPushInput, parseNameMap, parsePushFlags, usageText } from "../scripts/cli.ts";
-import type { OutputDoc } from "../src/common.ts";
+import { buildPushInput, parseNameMap, parsePushFlags, usageText } from "@app/scripts/cli.ts";
+import type { OutputDoc } from "@app/src/common.ts";
 
 // Fail the test when a condition misses.
 function assert(cond: boolean, msg: string): void {

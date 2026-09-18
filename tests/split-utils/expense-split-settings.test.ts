@@ -2,9 +2,9 @@
 // "Type a different code" choice reads the custom field, uppercases it,
 // and accepts real ISO 4217 codes only.
 
-import { startUsageNext } from "../app/expense-split.ts";
-import { settingsNext, settingsReset, settingsSteps } from "../app/expense-split/settings.ts";
-import { loadSettings, saveSettings } from "../src/settings.ts";
+import { startUsageNext } from "@app/app/expense-split.ts";
+import { settingsNext, settingsReset, settingsSteps } from "@app/app/expense-split/settings.ts";
+import { loadSettings, saveSettings } from "@app/src/settings.ts";
 
 // Fail the test when a condition misses.
 function assert(cond: boolean, msg: string): void {

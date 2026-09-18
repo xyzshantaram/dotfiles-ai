@@ -1,4 +1,4 @@
-import { dot, lineEnd, lineStart } from "../src/term.ts";
+import { dot, lineEnd, lineStart } from "@app/src/term.ts";
 
 // Collect encoded stdout text while the callback runs.
 function captureWrites(run: () => void): string {
