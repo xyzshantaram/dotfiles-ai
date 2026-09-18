@@ -105,7 +105,13 @@ Deno.test("pushcore: a dry run sends nothing, counts the plan, and leaves the ma
   assert(Object.keys(pushed).length === 0, "fingerprint map unchanged");
 });
 
-Deno.test("pushcore: a failing create halts the loop with no fingerprint for it", async () => {
+// REWRITTEN, NOT DELETED. This test used to assert `calls === 1` —
+// that one failure ENDED the run. That was the defect the owner hit:
+// one refused order left a hundred and fifty untried. The facts the old
+// test protected are all still pinned below (failed is set, nothing
+// counts as pushed, no fingerprint is saved for a failed order); only
+// the halt is gone, and the reason each failure gives is now pinned too.
+Deno.test("pushcore: a failing create is recorded with its reason and the run goes on", async () => {
   const base = fakeApi();
   let calls = 0;
   const api: PushApi = {
@@ -118,9 +124,58 @@ Deno.test("pushcore: a failing create halts the loop with no fingerprint for it"
   const { outcome, pushed } = await runPush(baseInput({ api }));
   assert(outcome.failed === true, "outcome marked failed");
   assert(outcome.pushed === 0, "nothing counted as pushed");
-  assert(calls === 1, "loop halted after the first failure");
+  assert(calls === 2, "every order was attempted, not just the first");
   assert(Object.keys(pushed).length === 0, "no fingerprint saved");
+  assert(outcome.failures.length === 2, "one failure entry per attempted order");
+  // The message must SURVIVE. A generic sentence in its place is what
+  // left the owner with a failure and no way to learn its cause.
+  assert(
+    outcome.failures.every((f) => f.reason.includes("splitwise 500")),
+    "each failure carries the thrown message verbatim",
+  );
+  assert(
+    outcome.failures.every((f) => f.order !== ""),
+    "each failure names its order",
+  );
   assert(outcome.note.length > 0, "note names the failure");
+});
+
+// A failure is not a skip. The report sums the two skip kinds, so a
+// failure counted as a skip would read as a decision the user made.
+Deno.test("pushcore: a failure is not counted as a skip", async () => {
+  const base = fakeApi();
+  const api: PushApi = {
+    ...base.api,
+    createExpense: (_data) => {
+      throw new Error("Splitwise create_expense: base: nope");
+    },
+  };
+  const { outcome } = await runPush(baseInput({ api }));
+  assert(outcome.skippedByChoice === 0, "a refused order is not a skip by choice");
+  assert(outcome.skippedDupes === 0, "a refused order is not a duplicate");
+  assert(outcome.failures.length === 2, "it is a failure");
+});
+
+// A person with no Splitwise id used to be sent as the string
+// "undefined", and Splitwise then refused the expense while naming a
+// user id the reader has never seen. The request must not leave at all,
+// and the complaint must name the PERSON.
+Deno.test("pushcore: an unmapped person fails before the request, by name", async () => {
+  const base = fakeApi();
+  const sent: Record<string, string>[] = [];
+  const api: PushApi = {
+    ...base.api,
+    createExpense: (data) => {
+      sent.push(data);
+      return Promise.resolve({ expenses: [{ id: 1 }] });
+    },
+  };
+  const { outcome } = await runPush(baseInput({ api, nameMap: {} }));
+  assert(sent.length === 0, "nothing was sent");
+  assert(outcome.failures.length > 0, "the order is recorded as failed");
+  const reason = outcome.failures[0].reason;
+  assert(!reason.includes("undefined"), "the reason never shows the string undefined");
+  assert(reason.includes("No Splitwise id for"), "the reason names the missing mapping");
 });
 
 // A push of 38 orders takes half a minute of network calls. If the

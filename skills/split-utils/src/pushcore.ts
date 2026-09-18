@@ -30,6 +30,12 @@ export interface PushOutcome {
   aggregateFile: string | null;
   archived: boolean;
   note: string;
+  // One entry per order that was ATTEMPTED and did not land. A failure
+  // is not a skip: a skip is a decision, a failure is an accident, and
+  // summing them together (as the report used to) tells the reader that
+  // nothing is wrong. Each carries the reason Splitwise gave, because
+  // the reason is the only part the reader can act on.
+  failures: { order: string; reason: string }[];
 }
 
 // One person the auto name map could not settle. Empty candidates
@@ -145,6 +151,19 @@ async function createOneExpense(
       owed.set(name, (owed.get(name) ?? 0) + amount);
     }
   }
+  // A person with no Splitwise id would otherwise be sent as the literal
+  // string "undefined", because String(undefined) is a perfectly good
+  // string. Splitwise then rejects the whole expense, and its complaint
+  // names a user id rather than the person the reader knows. Catch it
+  // here, where the person's NAME is still in hand: that name is the one
+  // thing the reader can act on.
+  const unmapped = people.filter((person) => typeof nameMap[person] !== "number");
+  if (unmapped.length > 0) {
+    throw new Error(
+      "No Splitwise id for " + unmapped.join(", ") +
+        ". Add them in Splitwise, or map them on the names step, then push again.",
+    );
+  }
   const data: Record<string, string> = {
     cost: fmtRs(total),
     description: formatTitle(order, currency + " "),
@@ -200,6 +219,7 @@ export async function runPush(input: {
       aggregateFile: null,
       archived: false,
       note: "",
+      failures: [],
     };
     for (const order of groups) {
       const fingerprint = orderFingerprint(order);
@@ -238,6 +258,7 @@ export async function runPush(input: {
       archived: false,
       note:
         "No Splitwise access, so a summary file took the place of a push. Enter the amounts in Splitwise by hand.",
+      failures: [],
     };
     return { outcome, pushed: { ...input.pushed } };
   }
@@ -253,6 +274,7 @@ export async function runPush(input: {
     aggregateFile: null,
     archived: false,
     note: "",
+    failures: [],
   };
   for (const order of groups) {
     const fingerprint = orderFingerprint(order);
@@ -282,12 +304,15 @@ export async function runPush(input: {
         input.currency,
       );
       if (eid === null) {
-        // No expense id means the fingerprint stays unsaved, so a rerun
-        // can push the order again. Stop before anything double lands.
+        // Reaching here now means a 200 with an empty `expenses` array and
+        // no `errors` either — the API said nothing at all. Rare, and the
+        // note says exactly that rather than implying a reason.
         outcome.failed = true;
-        outcome.note = "Splitwise gave no expense id for order " + oid +
-          ". The order was not marked as sent. Check Splitwise, then push again.";
-        return { outcome, pushed: next };
+        outcome.failures.push({
+          order: oid,
+          reason: "Splitwise returned no expense id and gave no reason.",
+        });
+        continue;
       }
       // loadPushed returns numeric ids, so store the id as a number.
       next[fingerprint] = Number(eid);
@@ -295,13 +320,30 @@ export async function runPush(input: {
       await input.onExpense?.(fingerprint, Number(eid));
       outcome.pushed += 1;
       outcome.totalRs += orderTotal(order);
-    } catch {
-      // failPush path: a plain message, no raw error text, no fingerprint.
+    } catch (err) {
+      // KEEP THE MESSAGE. This catch used to replace it with a generic
+      // sentence, on a rule borrowed from the SHARE path, where the link,
+      // the key fragment and the plaintext must never be logged. Nothing
+      // of that kind is in reach here: the bearer token rides an
+      // Authorization header, and this message is Splitwise describing
+      // what it refused. Dropping it left the owner with a failure and no
+      // way to learn its cause.
       outcome.failed = true;
-      outcome.note = "The push failed on order " + oid +
-        ". The order was not marked as sent, so a rerun will offer it again. Check Splitwise before you retry.";
-      return { outcome, pushed: next };
+      outcome.failures.push({
+        order: oid,
+        reason: err instanceof Error ? err.message : String(err),
+      });
+      // CARRY ON. This used to return, so one bad order ended the run and
+      // every later order went unattempted. What stops a double send is
+      // the fingerprint staying unsaved for THIS order, which has already
+      // happened; the next order is a different expense and cannot be
+      // double sent by trying it.
+      continue;
     }
+  }
+  if (outcome.failures.length > 0) {
+    outcome.note = outcome.failures.length + " order(s) did not go through. " +
+      "None of them was marked as sent, so a rerun offers them again.";
   }
   return { outcome, pushed: next };
 }

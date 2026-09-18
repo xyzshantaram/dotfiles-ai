@@ -534,6 +534,18 @@ function reportStep(_m?: Map<string, string[]>, ctx?: WizardCtx): Step {
     if (outcome.note !== "") {
       lines.push(outcome.note);
     }
+    // A FAILURE IS NOT A SKIP. The counts row below sums the two kinds of
+    // skip, both of which are decisions; an order that was attempted and
+    // refused is an accident, and it needs its own line carrying the
+    // reason Splitwise gave. Every failed order is listed, not a sample:
+    // a run that refused thirty orders for thirty different reasons has
+    // thirty things the reader may need to fix.
+    if (outcome.failures.length > 0) {
+      lines.push("Did not go through: " + outcome.failures.length + " order(s).");
+      for (const failure of outcome.failures) {
+        lines.push("- Order " + failure.order + ": " + failure.reason);
+      }
+    }
     lines.push(
       (outcome.dry ? "Total that would push: " : "Total pushed amount: ") +
         formatMoney(outcome.totalRs, live.currency) + ".",
@@ -554,6 +566,9 @@ function reportStep(_m?: Map<string, string[]>, ctx?: WizardCtx): Step {
       answers("Push", [
         { name: "Pushed", values: [String(outcome.pushed)] },
         { name: "Skipped", values: [String(outcome.skippedDupes + outcome.skippedByChoice)] },
+        ...(outcome.failures.length > 0
+          ? [{ name: "Failed", values: [String(outcome.failures.length)] }]
+          : []),
       ]),
     );
   }

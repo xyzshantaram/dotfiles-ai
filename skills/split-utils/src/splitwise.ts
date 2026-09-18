@@ -35,6 +35,30 @@ export function fullName(user: Record<string, unknown>): string {
   return (first + " " + last).trim();
 }
 
+// Read Splitwise's own complaint out of a response body, or null when
+// the body carries none. The shape is documented as an object, with no
+// promise about what sits under each key, so this handles the forms the
+// API actually uses: `{"base": ["..."]}` for a whole-request problem and
+// a field name for a per-field one, with either an array of strings or a
+// bare string under it. An `errors` key present but EMPTY means success,
+// which is why an empty object must return null rather than "".
+export function errorText(body: unknown): string | null {
+  if (typeof body !== "object" || body === null) return null;
+  const errors = (body as { errors?: unknown }).errors;
+  if (typeof errors !== "object" || errors === null) return null;
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(errors as Record<string, unknown>)) {
+    const messages = Array.isArray(value) ? value : [value];
+    for (const message of messages) {
+      if (typeof message !== "string" || message === "") continue;
+      // "base" is Splitwise's name for a problem with the request as a
+      // whole. Printing it would name a field the reader cannot find.
+      parts.push(key === "base" ? message : `${key}: ${message}`);
+    }
+  }
+  return parts.length === 0 ? null : parts.join("; ");
+}
+
 export class SplitwiseAPI {
   private doFetch: typeof fetch;
 
@@ -62,7 +86,19 @@ export class SplitwiseAPI {
     if (res.status < 200 || res.status >= 300) {
       throw new Error(`Splitwise ${path}: ${res.status} ${text}`);
     }
-    return JSON.parse(text || "{}");
+    const body = JSON.parse(text || "{}");
+    // A 200 IS NOT A SUCCESS HERE. The Splitwise docs state it outright
+    // for create_expense: "200 OK does not indicate a successful
+    // response. The operation was successful only if `errors` is empty."
+    // (https://dev.splitwise.com/). So a rejected expense arrives as a
+    // 200 whose body holds the reason and an empty `expenses` array.
+    // Reading only the status let that body through, and the caller then
+    // reported the ABSENCE of an id — "Splitwise gave no expense id" —
+    // while the reason sat unread one field away. Raise it here, once,
+    // where every endpoint passes.
+    const problem = errorText(body);
+    if (problem !== null) throw new Error(`Splitwise ${path}: ${problem}`);
+    return body;
   }
 
   getCurrentUser(): Promise<Record<string, unknown>> {

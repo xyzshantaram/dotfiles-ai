@@ -1,7 +1,7 @@
 // Client proof for the API key transport. Each test passes a stub
 // fetch, so no test touches the network or the global fetch.
 
-import { loadCredentials, SplitwiseAPI } from "@app/src/splitwise.ts";
+import { errorText, loadCredentials, SplitwiseAPI } from "@app/src/splitwise.ts";
 
 // Fail the test when a condition misses.
 function assert(cond: boolean, msg: string): void {
@@ -92,4 +92,77 @@ Deno.test("loadCredentials reads API_KEY and names a bad file", async () => {
   } finally {
     await Deno.remove(base, { recursive: true }).catch(() => {});
   }
+});
+
+// A 200 IS NOT A SUCCESS. From the Splitwise API reference for
+// create_expense: "200 OK does not indicate a successful response. The
+// operation was successful only if `errors` is empty."
+// (https://dev.splitwise.com/). The body shapes below are that contract:
+// `base` for a whole-request problem, a field name for a per-field one,
+// each holding an array of strings. Reading only the HTTP status let
+// these through, and the caller reported the ABSENCE of an expense id
+// while the reason sat unread in the same response.
+Deno.test("a 200 carrying errors throws with Splitwise's own words", async () => {
+  const body = JSON.stringify({
+    expenses: [],
+    errors: { base: ["You are not a member of that group."] },
+  });
+  const doFetch = ((): Promise<Response> =>
+    Promise.resolve(new Response(body, { status: 200 }))) as typeof fetch;
+  const api = new SplitwiseAPI({ apiKey: "k" }, doFetch);
+  let err: unknown = null;
+  try {
+    await api.createExpense({ cost: "10.00" });
+  } catch (e) {
+    err = e;
+  }
+  if (!(err instanceof Error)) throw new Error("assert failed: a 200 with errors throws");
+  assert(
+    err.message.includes("You are not a member of that group."),
+    "the reason survives verbatim",
+  );
+  assert(err.message.includes("create_expense"), "the message names the endpoint");
+  assert(!err.message.includes("base:"), "the base key is not shown as a field name");
+});
+
+Deno.test("a 200 carrying a field error names the field", async () => {
+  const body = JSON.stringify({
+    expenses: [],
+    errors: { cost: ["is not a valid number", "must be positive"] },
+  });
+  const doFetch = ((): Promise<Response> =>
+    Promise.resolve(new Response(body, { status: 200 }))) as typeof fetch;
+  const api = new SplitwiseAPI({ apiKey: "k" }, doFetch);
+  let err: unknown = null;
+  try {
+    await api.createExpense({ cost: "x" });
+  } catch (e) {
+    err = e;
+  }
+  if (!(err instanceof Error)) throw new Error("assert failed: a field error throws");
+  assert(err.message.includes("cost: is not a valid number"), "the field is named");
+  assert(err.message.includes("must be positive"), "every message survives");
+});
+
+// An `errors` key present but EMPTY is the documented success shape, so
+// it must not throw. This is the pin that stops the fix above from
+// turning every successful call into a failure.
+Deno.test("an empty errors object is a success, not a failure", async () => {
+  const body = JSON.stringify({ expenses: [{ id: 42 }], errors: {} });
+  const doFetch = ((): Promise<Response> =>
+    Promise.resolve(new Response(body, { status: 200 }))) as typeof fetch;
+  const api = new SplitwiseAPI({ apiKey: "k" }, doFetch);
+  const out = await api.createExpense({ cost: "10.00" });
+  assert(out.expenses?.[0]?.id === 42, "the expense id comes back");
+});
+
+Deno.test("errorText reads the documented shapes and nothing else", () => {
+  assert(errorText({ errors: {} }) === null, "an empty errors object is no error");
+  assert(errorText({ expenses: [{ id: 1 }] }) === null, "no errors key is no error");
+  assert(errorText(null) === null, "a null body is no error");
+  assert(errorText("plain") === null, "a non-object body is no error");
+  assert(errorText({ errors: { base: ["one"] } }) === "one", "base prints bare");
+  assert(errorText({ errors: { cost: "bad" } }) === "cost: bad", "a bare string reads too");
+  const two = errorText({ errors: { base: ["one"], cost: ["bad"] } });
+  assert(two === "one; cost: bad", "several problems join, got " + two);
 });
