@@ -1,5 +1,6 @@
 // Unit tests for the guarded-approvals projection's apply fold. Pure state
 // checks: no React render, no DOM, no plugin host.
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { guardedApprovalsProjection, GUARDED_APPROVALS_CAP, GUARD_REASON_MAX } from "./guarded-approvals";
 
@@ -291,5 +292,51 @@ describe("guardedApprovalsProjection.apply", () => {
       outcomes: {},
       reasons: {},
     });
+  });
+});
+
+describe("the #177 durable side: guard still beats error, still loses to escalated", () => {
+  // Source-structure pins again, same honesty note as the wiring tests:
+  // without a render harness these prove the rules exist with the shape
+  // the criteria name, not that a pixel paints. The escalation.test.ts
+  // resolver next door proves the cascade outcome from the same text.
+  const css = readFileSync(new URL("./client.module.css", import.meta.url), "utf8");
+  const view = readFileSync(new URL("./client.tsx", import.meta.url), "utf8");
+
+  function ruleBlock(selector: string): string {
+    const at = css.indexOf("\n" + selector + " {");
+    expect(at).toBeGreaterThan(-1);
+    const open = css.indexOf("{", at);
+    const close = css.indexOf("}", open);
+    expect(close).toBeGreaterThan(open);
+    return css.slice(open, close + 1);
+  }
+
+  it("the doubled guard rule still outranks the red rules", () => {
+    const guard = ruleBlock(
+      ".tool-render-card[data-guard-approval][data-guard-approval]:not([data-escalated]):not([data-escalation-pending])",
+    );
+    expect(guard).toContain("var(--dsh-outline-guard)");
+    // The red rules sit earlier at lower specificity, so this rule wins a
+    // guard plus error card that carries no escalation mark.
+    expect(css.indexOf(".tool-render-card[data-error] {")).toBeLessThan(
+      css.indexOf("[data-guard-approval][data-guard-approval]"),
+    );
+  });
+
+  it("the doubled guard rule names escalation as the mark it loses to", () => {
+    // Narrowed, not reordered: the exclusions hand the both case to the
+    // settled and pending escalation rules without touching the red wins.
+    expect(css).toContain(":not([data-escalated])");
+    expect(css).toContain(":not([data-escalation-pending])");
+  });
+
+  it("the durable sources still feed data-guard-approval", () => {
+    // The outline keeps reading was-guarded-ever: the open guard ask, the
+    // durable fold, and the recorded rewrite. #177 changes which mark wins,
+    // never what the guard mark remembers.
+    expect(view).toContain("data-guard-approval={options.guardApproval || undefined}");
+    expect(view).toContain("durableGuardApproval.guarded[props.callId]");
+    expect(view).toContain("guardRewriteOf(block, output)");
   });
 });

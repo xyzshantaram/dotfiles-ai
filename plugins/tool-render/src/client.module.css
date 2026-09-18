@@ -633,17 +633,23 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
   background: var(--dsw-alias-bg-layer-1);
   padding: 0.15625rem 0.5rem;
 }
-.tool-render-card[data-escalated] {
-  outline: 0.1875rem solid var(--dsh-outline-escalated);
-}
-/* A call waiting on a bash-guard approval is outlined in electric blue, so it
-   reads differently from a sandbox_permissions escalation. This rule follows
-   the escalated one, so blue wins when a call is somehow both. A rewritten
-   command keeps the outline permanently, because the rewrite is recorded in
-   the durable result metadata. A pending approval that caused no rewrite
+/* A call that bash-guard approved carries electric blue as its durable
+   mark, so it reads differently from a sandbox_permissions escalation.
+   This rule comes BEFORE the escalated one at equal (0,2,0) specificity,
+   so a call that carries both marks settles yellow. A rewritten command
+   keeps the mark permanently, because the rewrite is recorded in the
+   durable result metadata. A pending approval that caused no rewrite
    loses the mark once it is answered. */
 .tool-render-card[data-guard-approval] {
   outline: 0.1875rem solid var(--dsh-outline-guard);
+}
+/* A call that asked for sandbox escalation carries yellow as its durable
+   mark. It follows the guard rule at equal (0,2,0) specificity, so the
+   later rule wins the both case and the chip and the outline state the
+   same thing. It still loses to the error rule below, exactly as before,
+   so a failed escalation reads red. */
+.tool-render-card[data-escalated] {
+  outline: 0.1875rem solid var(--dsh-outline-escalated);
 }
 /* Once answered, the outline dulls to translucent white instead of
    vanishing. This rule sits BEFORE error/stopped/guard so a failed or
@@ -662,15 +668,41 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
 .tool-render-card[data-stopped] {
   outline: 0.125rem solid color-mix(in srgb, var(--dsw-alias-state-error-primary) 55%, transparent);
 }
-/* The guard outline outranks error and stopped, not just escalated. A
+/* The durable guard mark outranks error and stopped, and nothing else. A
    rewritten command often exits non-zero (rg exits 1 on no match, and
    bashErrorState promotes any [exit code: N>=1] result to error), which
-   used to hand blue's 3px to the later red 2px rules at equal (0,2,0)
-   specificity. The doubled attribute selector (0,3,0) wins over all
-   three without !important, so the durable "this call was guarded" mark
-   survives a failing exit. */
-.tool-render-card[data-guard-approval][data-guard-approval] {
+   used to hand blue to the later red rules at equal (0,2,0) specificity.
+   The doubled attribute selector plus the two exclusions counts (0,5,0),
+   so it wins over error, stopped, answered, and both single-mark rules
+   without !important. Each :not() names a rule it must lose to. The
+   [data-escalated] exclusion hands the settled both case to the yellow
+   rule above. The [data-escalation-pending] exclusion hands an open
+   escalation ask to the pending yellow rule below, even before the call
+   args carry the mark. The pending blue rule below agrees with this one,
+   so no exclusion names it. Question pending keeps its own place last,
+   and the tie cannot happen because guard approvals are bash-only. */
+.tool-render-card[data-guard-approval][data-guard-approval]:not([data-escalated]):not([data-escalation-pending]) {
   outline: 0.1875rem solid var(--dsh-outline-guard);
+}
+/* The open guard ask names its own colour. While a bash-guard approval
+   is open for this call the outline stays blue even when the call
+   already carries a settled escalation mark. This single-attribute rule
+   counts (0,2,0) and needs no doubling. It sits after every settled rule
+   it must beat, and the durable guard rule above already agrees with it,
+   so position alone decides. */
+.tool-render-card[data-guard-pending] {
+  outline: 0.1875rem solid var(--dsh-outline-guard);
+}
+/* The open escalation ask names its own colour. While a sandbox
+   escalation approval is open for this call the outline turns yellow
+   even when the call already carries a durable guard mark. Like its blue
+   twin this rule counts (0,2,0) and wins by position alone. It follows
+   the guard pending rule, so when both asks are somehow open at once the
+   later ask in the known sequence wins. No order assumption lives here
+   beyond that tiebreak. Each pending rule reads the open approval kind
+   directly, so an escalation ask that arrives first still paints yellow. */
+.tool-render-card[data-escalation-pending] {
+  outline: 0.1875rem solid var(--dsh-outline-escalated);
 }
 /* A call waiting on the human's answer to its question is outlined in
    solid white at the same 3px weight as the other state outlines. This
@@ -1546,12 +1578,12 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
    card outline means the chip and the outline state the same thing in the
    same colour, so the eye pairs them.
 
-   Independent of the outline defect this was reported alongside (#105: a
-   REJECTED escalation currently outlines guard-blue instead of escalated,
-   cause still unproven). The owner chose to ship the chip first, accepting
-   that until #105 lands a rejected card shows a yellow chip inside a blue
-   outline. Do not "fix" that mismatch by neutralising the chip again — the
-   outline is the wrong half. */
+   The outline half of #105 landed in #177. A settled escalation now keeps
+   the yellow outline even when the call was also guard approved, and an
+   open escalation ask paints yellow while it waits. The chip and the
+   outline agree in every state, so a mismatch between them is a bug, not
+   a known gap. Do not fix one by neutralising the chip again. The outline
+   was the wrong half, and now it is the right one. */
 .tool-render-escalation-mode {
   font: inherit;
   white-space: nowrap;

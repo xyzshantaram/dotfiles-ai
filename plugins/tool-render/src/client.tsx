@@ -644,6 +644,8 @@ function renderToolRenderCard(options, approvalOpen) {
           : undefined
       }
       data-guard-approval={options.guardApproval || undefined}
+      data-guard-pending={options.guardPending || undefined}
+      data-escalation-pending={options.escalationPending || undefined}
       data-question-pending={options.questionState === "pending" || undefined}
       data-question-answered={options.questionState === "answered" || undefined}
       data-error={options.state === "error" || undefined}
@@ -1793,21 +1795,33 @@ function BashRow(props) {
   // projection, which folds the session log's `approval/asked` events and
   // so survives both the decision and a page reload; and a rewritten
   // command, whose `meta.rewritten` is durable on the completed block.
+  // This durable mark answers was-guarded-ever, never what is open now.
   var durableGuardApproval = useGuardedApprovals(props.useSession, props.useProjection);
-  var guardApproval =
+  // THE open-ask kind for this card (#177). The outline names the question
+  // the human answers right now, not the durable history above. A guard
+  // reason paints blue while it waits. Any other open reason paints
+  // yellow, which names the sandbox escalation, the only other ask a bash
+  // call raises. Both flags read the same live pending set the answer bar
+  // reads, so the outline and the bar change together. Neither flag
+  // assumes an order. An escalation ask that arrives first still paints
+  // yellow, because each flag classifies the open approval on its own.
+  var openGuardApproval =
     props.useSession(function (snapshot) {
-      var pending = snapshot !== null && snapshot !== undefined ? snapshot.pending : undefined;
-      if (!Array.isArray(pending)) return false;
-      for (var p = 0; p < pending.length; p++) {
-        var item = pending[p];
-        if (item === null || item === undefined || item.kind !== "approval") continue;
-        var payload = item.payload;
-        if (payload === null || payload === undefined) continue;
-        if (payload.callId !== props.callId) continue;
-        return isBashGuardReason(payload.reason);
-      }
-      return false;
+      var open = pendingApprovalOf(snapshot, props.callId);
+      if (open === null) return false;
+      var payload = open.payload;
+      if (payload === null || payload === undefined) return false;
+      return isBashGuardReason(payload.reason);
     }) === true;
+  var openEscalationApproval =
+    props.useSession(function (snapshot) {
+      var open = pendingApprovalOf(snapshot, props.callId);
+      if (open === null) return false;
+      var payload = open.payload;
+      if (payload === null || payload === undefined) return false;
+      return !isBashGuardReason(payload.reason);
+    }) === true;
+  var guardApproval = openGuardApproval;
   if (
     durableGuardApproval !== null &&
     durableGuardApproval !== undefined &&
@@ -1981,6 +1995,8 @@ function BashRow(props) {
     escalated: escalated,
     escalation: escalation,
     guardApproval: guardApproval,
+    guardPending: openGuardApproval,
+    escalationPending: openEscalationApproval,
     verdictTip: verdictTip,
     state: state,
     expandable: body !== null,
