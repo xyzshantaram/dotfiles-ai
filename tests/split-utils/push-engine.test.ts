@@ -389,33 +389,52 @@ function textNodes(step: { nodes: { kind: string }[] }) {
   }[];
 }
 
-Deno.test("source step renders one value entry for the picked choice", async () => {
+Deno.test("source step renders EVERY value entry, whatever is picked (#191)", async () => {
+  // THE CONTRACT CHANGED, AND THIS TEST CHANGED WITH IT. It used to assert
+  // exactly one entry per pick. That was the bug: `picked` only updates on a
+  // post, and wizardkit re-renders on a post rather than on a control change,
+  // so choosing the share source rendered nothing new. The share box never
+  // appeared, a user typed the link into "Other run", and the handler read an
+  // empty "share-link" and said "Nothing pasted".
+  //
+  // The new contract is stronger and is what criterion 7 of #191 asks for:
+  // the handler must never be able to read a field the render did not emit.
+  // So every choice renders every entry, and this test holds that for all of
+  // them rather than for one.
   const saved = Deno.env.get("SPLIT_UTILS_STATE");
   const empty = await Deno.makeTempDir({ prefix: "push-source-empty-" });
   Deno.env.set("SPLIT_UTILS_STATE", empty);
   try {
-    // No pick yet: the first choice shows as picked, and no assigned
-    // run means the Other run entry shows with its helper line.
+    // Every name pushSourceNext can read, for any pick.
+    const readable = ["run-id-other", "split-file", "share-link"];
+    for (const pick of [null, "Assigned run", "Split JSON file", "Share link from a friend"]) {
+      const m = pick === null ? new Map() : new Map([["source", [pick]]]);
+      const step = sourceStep(m as Map<string, string[]>, "r9");
+      const names = textNodes(step).map((t) => t.name);
+      for (const name of readable) {
+        assert(
+          names.includes(name),
+          "pick " + String(pick) + " must render " + name + ", which the handler can read",
+        );
+      }
+    }
+
+    // The radio still reports the pick, and still defaults to the first.
     const initial = sourceStep(new Map(), "r9");
     const initialRadio = initial.nodes.find((n) => n.kind === "radio") as {
       picked?: string;
     };
     assert(initialRadio.picked === "Assigned run", "first choice picked by default");
-    const initialTexts = textNodes(initial);
-    assert(initialTexts.length === 1, "one value entry before a pick");
-    assert(initialTexts[0].name === "run-id-other", "other run entry shown first");
-    assert(initialTexts[0].value === "", "other run starts empty");
-
-    // A picked file choice shows only the file entry, not the run entry.
     const picked = new Map([["source", ["Split JSON file"]]]);
-    const step = sourceStep(picked, "r9");
-    const texts = textNodes(step);
-    assert(texts.length === 1, "exactly one value entry after a pick");
-    assert(texts[0].name === "split-file", "the picked file entry shows");
-    const radioNode = step.nodes.find((n) => n.kind === "radio") as {
+    const radioNode = sourceStep(picked, "r9").nodes.find((n) => n.kind === "radio") as {
       picked?: string;
     };
     assert(radioNode.picked === "Split JSON file", "radio shows the pick");
+
+    // Entries still start empty rather than carrying a stale value.
+    const texts = textNodes(initial);
+    const other = texts.find((t) => t.name === "run-id-other");
+    assert(other !== undefined && other.value === "", "other run starts empty");
   } finally {
     if (saved === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
     else Deno.env.set("SPLIT_UTILS_STATE", saved);
@@ -519,7 +538,10 @@ Deno.test("source step starts on the prefill id when it names a run in the list"
   }
 });
 
-Deno.test("source step with no assigned run shows the line plus the free text entry and no radio", async () => {
+Deno.test("source step with no assigned run shows the line and no run radio", async () => {
+  // The empty-list behaviour is unchanged: the helper line explains where a
+  // run comes from and no empty radio is drawn. What changed is the entry
+  // count, which is now every entry rather than one (#191).
   const saved = Deno.env.get("SPLIT_UTILS_STATE");
   const state = await Deno.makeTempDir({ prefix: "push-source-none-" });
   Deno.env.set("SPLIT_UTILS_STATE", state);
@@ -530,10 +552,12 @@ Deno.test("source step with no assigned run shows the line plus the free text en
     const body = markdownTexts(found).join("\n");
     assert(body.includes("No assigned run exists yet"), "line names the empty list");
     assert(body.includes("split stage creates one"), "line names the split stage");
-    const texts = textNodes(found);
-    assert(texts.length === 1, "only the free text entry shows");
-    assert(texts[0].name === "run-id-other", "free text entry alone");
-    assert(texts[0].value === "", "free text entry starts empty");
+    const names = textNodes(found).map((t) => t.name);
+    for (const name of ["run-id-other", "split-file", "share-link"]) {
+      assert(names.includes(name), name + " must render even with no assigned run");
+    }
+    const other = textNodes(found).find((t) => t.name === "run-id-other");
+    assert(other !== undefined && other.value === "", "free text entry starts empty");
   } finally {
     if (saved === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
     else Deno.env.set("SPLIT_UTILS_STATE", saved);

@@ -62,7 +62,17 @@ export async function pushSourceNext(
   const sessionId = ctx.sessionId;
   const source = fields["source"]?.[0] ?? "";
   if (source === SHARE_SOURCE) {
-    const imported = await prepareShareImport(sessionId, fields["share-link"]?.[0] ?? "");
+    const link = fields["share-link"]?.[0] ?? "";
+    if (link.trim() === "") {
+      // Name the field. "Nothing pasted" to someone who pasted into the wrong
+      // box sends them looking in the wrong place (#191).
+      return {
+        errors: [
+          'Paste the link into "Paste the share link". The box is on this screen, below "Split JSON file".',
+        ],
+      };
+    }
+    const imported = await prepareShareImport(sessionId, link);
     if (!imported.ok) return { errors: [imported.error] };
   } else {
     const typed = field(fields, "run-id-other");
@@ -157,32 +167,43 @@ export function sourceStep(m: Map<string, string[]>, prefillRunId: string): Step
   const nodes: Node[] = [
     radio("Whose orders", "source", SOURCE_CHOICES, picked),
   ];
-  if (picked === SOURCE_CHOICES[0]) {
-    const assigned = listRunsSync().filter((run) => run.status === "assigned");
-    if (assigned.length === 0) {
-      nodes.push(markdown("No assigned run exists yet. The split stage creates one."));
-      nodes.push(textEntry("Other run", "run-id-other", ""));
-    } else {
-      const start = assigned.some((run) => run.id === prefillRunId) ? prefillRunId : assigned[0].id;
-      nodes.push(
-        radio(
-          "Run",
-          "run-id",
-          assigned.map((run) => ({ value: run.id, hint: runHint(run) })),
-          start,
-        ),
-      );
-      nodes.push(textEntry("Other run", "run-id-other", ""));
-    }
-  } else if (picked === "Split JSON file") {
-    nodes.push(
-      textEntry("Split JSON file", "split-file", m.get("split-file")?.[0] ?? ""),
-    );
+  // EVERY INPUT IS RENDERED, NOT ONLY THE PICKED ONE (#191).
+  //
+  // This step used to show one branch at a time, chosen from `picked`. But
+  // `picked` comes from the ANSWERS MAP, which only updates on a post, and
+  // wizardkit re-renders on a post rather than on a control change: its own
+  // notes say a custom action re-renders and that there is no in-page button
+  // node. So changing the radio changed nothing on screen. The share and
+  // split-file branches were unreachable, and only the assigned-run branch
+  // worked, because it is the default.
+  //
+  // A user who picked "share url from a friend" therefore saw no share box,
+  // typed the link into the only text field on screen, "Other run", and was
+  // told "Nothing pasted" about a field that had never been rendered.
+  //
+  // Rendering all three costs a busier form and removes the whole class:
+  // the handler can no longer read a field the user could not see.
+  const assigned = listRunsSync().filter((run) => run.status === "assigned");
+  if (assigned.length === 0) {
+    nodes.push(markdown("No assigned run exists yet. The split stage creates one."));
   } else {
+    const start = assigned.some((run) => run.id === prefillRunId) ? prefillRunId : assigned[0].id;
     nodes.push(
-      textEntry("Paste the share link", "share-link", m.get("share-link")?.[0] ?? ""),
+      radio(
+        "Run",
+        "run-id",
+        assigned.map((run) => ({ value: run.id, hint: runHint(run) })),
+        start,
+      ),
     );
   }
+  nodes.push(textEntry("Other run", "run-id-other", ""));
+  nodes.push(
+    textEntry("Split JSON file", "split-file", m.get("split-file")?.[0] ?? ""),
+  );
+  nodes.push(
+    textEntry("Paste the share link", "share-link", m.get("share-link")?.[0] ?? ""),
+  );
   nodes.push(dryBox(isDryMap(m)));
   return {
     ...step(
