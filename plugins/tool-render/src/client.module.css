@@ -2062,3 +2062,23 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
   flex-direction: column;
   min-width: 0;
 }
+/* #173: production home for the fair-copy highlight colours. The module
+   references --proto-str/path/flag/var, whose only definitions lived in the
+   prototype :root blocks; those blocks do not ship (stripBashGraphRoot drops
+   them: global token values would leak across the page). The names resolve
+   here instead, scoped to the graph panel, in both themes. The values are
+   the prototype's per-theme stand-ins, kept because they were tuned against
+   this palette; the host --dsw-* tokens they sit beside resolve from the
+   production theme untouched. */
+.tool-render-bash-panel {
+  --proto-str: #9ece6a;
+  --proto-path: #e0af68;
+  --proto-flag: #7aa2f7;
+  --proto-var: #bb9af7;
+}
+html[data-theme="light"] .tool-render-bash-panel {
+  --proto-str: #2c7a2c;
+  --proto-path: #9a5b00;
+  --proto-flag: #1d4fd7;
+  --proto-var: #6d28d9;
+}

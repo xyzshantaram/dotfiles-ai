@@ -107,12 +107,15 @@ describe("the view is WIRED to the panel seam, not around it", () => {
     const seamCalls = view.match(/=\s*chainPanelRows\(chain\)/g) ?? [];
     expect(seamCalls).toHaveLength(1);
     expect(view).toContain("model={parts[r]}");
-    // Whole-file ceiling: the plain-diagram branch, the panel, and #164's
-    // Graph-tab body (model={diagram}) are the only BashCommandDiagram sites
-    // — three before this ticket, three after. A fourth site is a branch gone
-    // around the seam and reddens here.
+    // Whole-file ceiling: the plain-diagram branch and the panel are the only
+    // BashCommandDiagram sites left. It was three until #173 stage one, which
+    // replaced #164's Graph-tab body (model={diagram}) with the fair-copy
+    // renderer. TWO is therefore the correct count today, and this whole test
+    // is OLD-LAYOUT by the #173 classification: it dies with BashCommandDiagram
+    // in stage two. The count is corrected rather than deleted here so the
+    // seam assertion above keeps working until then.
     const sites = view.match(/<BashCommandDiagram\s/g) ?? [];
-    expect(sites).toHaveLength(3);
+    expect(sites).toHaveLength(2);
   });
 
   it("the conditional marker is painted in exactly one place: inside the part card", () => {
@@ -490,10 +493,25 @@ describe("the #169 scale: one vocabulary for the whole file", () => {
 
   it("hex colors are closed over the documented set", () => {
     // #fff is absolute bright on purpose (pending ask, answered wash base,
-    // armed reject text); the two others are the diff content hues, which
-    // are deliberately NOT theme tokens. Any fourth hex reddens here.
+    // armed reject text); the next two are the diff content hues, which are
+    // deliberately NOT theme tokens. The eight that follow are the fair-copy
+    // syntax hues (#173), and they join for the SAME reason the diff hues did:
+    // syntax colour is content language, and no host token expresses "this
+    // span is a string" or "this span is a path". They arrive in pairs
+    // because the graph panel is the first rule in this file to carry a
+    // light-theme override, which the diff hues never did — a real
+    // improvement, and one worth naming rather than absorbing silently.
+    // Any hex outside this set still reddens here.
     const found = bare.match(/#[0-9a-fA-F]{3,8}\b/g) ?? [];
-    const allowed = ["#fff", "#ffb86c", "#7db4ff"];
+    const allowed = [
+      "#fff",
+      "#ffb86c",
+      "#7db4ff",
+      "#9ece6a", "#2c7a2c",
+      "#e0af68", "#9a5b00",
+      "#7aa2f7", "#1d4fd7",
+      "#bb9af7", "#6d28d9",
+    ];
     expect([...new Set(found)].filter((h) => !allowed.includes(h)).sort()).toEqual([]);
     expect(found.length).toBeGreaterThan(0);
   });

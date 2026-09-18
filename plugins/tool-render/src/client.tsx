@@ -183,7 +183,16 @@ var EXTENSION_LANGUAGE = {
 // ---- Platform modules: resolved by the shell loader seed at runtime. ----
 import React from "react";
 import { isBashGuardReason } from "./guard";
-import { attributePipeStages, attributeSequenceStages, chainPanelRows, sequenceUnitDiagramModel, resolveBashTab, getBashDiagram, getBashSequenceDiagram } from "./bash-diagram";
+import { resolveBashTab, chainPanelRows, sequenceUnitDiagramModel } from "./bash-diagram";
+// ---- #173: the fair-copy renderer. resolveBashTab is the only LIVE import
+// from the old module (the strip and the Command tab still read through
+// it); chainPanelRows and sequenceUnitDiagramModel feed the old sequence
+// component, which stays mounted nowhere but stays compiling until stage
+// two deletes it with the module.
+import { renderOne } from "./bash-graph/render";
+import { cardAvail } from "./bash-graph/constants";
+import { PIPE_GLYPH_SYMBOL } from "./bash-graph/primitives";
+import bashGraphCss from "./bash-graph/styles.css";
 import { escalationDetailOf, escalationLabel, escalationReasonClassName } from "./escalation";
 import {
   composeVerdictTooltip,
@@ -236,6 +245,13 @@ var HLJS_BOX_CSS = [
 ].join("");
 
 injectStyle(PLUGIN_NAME, STYLE_TAG_ID, mergeCss(localCss, HLJS_BOX_CSS));
+// ---- #173: the fair-copy stylesheet ships through the same mechanism: the
+// css-text build plugin inlines the file as a string, and a second tag id
+// keeps it removable apart from the module CSS above. stripBashGraphRoot
+// drops the prototype :root value blocks before injection (they would
+// overwrite the host theme page-wide); the --proto-* highlight names it
+// leaves dangling resolve from the scoped block in client.module.css.
+injectStyle(PLUGIN_NAME, "tool-render/bash-graph.css", stripBashGraphRoot(bashGraphCss));
 /** Shared highlight.js token colors. The shared tag id dedupes with any other injector of the same tokens, so only one tag exists. */
 injectStyle(PLUGIN_NAME, "dsh-hljs-theme", HLJS_THEME_CSS);
 /** Shared permission outline tokens. The id matches the other injectors, so only one tag exists. */
@@ -1233,6 +1249,159 @@ function escalationBanner(detail, settled) {
     </div>
   );
 }
+// ---- #173: the fair-copy renderer, wired in. One helper owns the whole
+// path from command string to panel HTML strings: getBashGraphPanels.
+// Everything below follows from four decisions, each stated so stage two
+// (test migration plus deletion) can see what it inherits.
+//
+// SCAN PATH: SYNC. renderOne takes a scan, and unbashScan is async, while
+// the strip and the panel must agree inside one synchronous render pass
+// (resolveBashTab is sync; an async scan would flicker the default tab).
+// The wiring therefore passes the standalone scan ({ status:
+// "stable-unavailable", nodes: [] }) and renders synchronously. That is the
+// exact path the 34-card equivalence proof verified, so the swap inherits
+// its evidence. Consequence, stated plainly: NO span adoption happens here.
+// The adopted count reads 0 and unbash never narrows a span. Ticket #181
+// owns the adoption bug (the real path narrows subshells and backgrounding
+// until text goes missing); when it lands, this call site is the one line
+// that changes, and the behaviour change stays visible here instead of
+// hiding inside the module. Choosing sync means choosing the behaviour #181
+// is about to change: today a subshell draws whole, after #181 it adopts.
+//
+// MEMOISATION AND CAP. The new renderer measures and runs a layout DP per
+// row where the old one did neither, so per-row memoisation is load-bearing
+// here, not an optimisation. The cache mirrors the old module's shape: a
+// bounded module-level Map keyed by command string (null = not drawable),
+// the base never mutated by per-row meta. The cache key folds the exit-code
+// stages in as JSON, so identical stages hit and live updates do not
+// re-measure. Commands past 20000 characters stay undrawable, the old
+// BASH_DIAGRAM_MAX_COMMAND bound carried across by value.
+//
+// MEASURER. measure.ts reads globalThis.document.querySelector("#measure")
+// and falls back to 120px silently when the element is absent, so the
+// wiring guarantees the element before every render: ensureBashMeasure
+// creates one shared off-screen div on first use and reuses it after. The
+// element's styling arrives with the injected bash-graph stylesheet (which
+// carries the #measure positioning plus the icon-reserve rules), so the
+// measurer always renders in the same context as the final panels. The id
+// stays "#measure" (renaming it belongs to #172's boundary); the repo-wide
+// sweep found no other claimant. Exported for the wiring test: absence must
+// stay loud, never silent.
+//
+// PANELS AND CLICKS. renderOne returns HTML strings, and this file already
+// renders those with dangerouslySetInnerHTML in eight places. BashGraphPanels
+// mounts the pipe-glyph symbol once (the <use href="#pipe-glyph"> tags
+// resolve against it) plus one div per panel, and delegates clicks: any
+// [data-hd] or [data-arg] button toggles its matching hidden block below
+// the panel. Icons otherwise degrade to their text fallbacks: no lucide
+// swap pass exists yet (the old diagram had no icons at all), and the
+// measurer already reserves the icon space structurally, so a later swap
+// cannot move text.
+var BASH_GRAPH_MAX_COMMAND = 20000;
+var BASH_GRAPH_CACHE_LIMIT = 200;
+var bashGraphCache = new Map();
+var bashGraphNextIdx = 0;
+var BASH_MEASURE_ID = "measure";
+
+/** Create the shared measurer element when absent. True when it exists after. */
+export function ensureBashGraphMeasure() {
+  if (typeof document === "undefined") return false;
+  if (document.querySelector("#" + BASH_MEASURE_ID) !== null) return true;
+  var el = document.createElement("div");
+  el.id = BASH_MEASURE_ID;
+  var parent = document.body || document.documentElement;
+  if (!parent) return false;
+  parent.appendChild(el);
+  return document.querySelector("#" + BASH_MEASURE_ID) !== null;
+}
+
+/**
+ * Drop the prototype :root value blocks from the fair-copy stylesheet. The
+ * token NAMES are real (the host theme owns their values); the VALUES are
+ * stand-ins that would overwrite the theme page-wide. Both blocks are
+ * single-brace rules, and the wiring test fails if any :root selector or
+ * light-theme html selector survives.
+ */
+export function stripBashGraphRoot(cssText) {
+  return String(cssText)
+    .replace(/:root[^{]*\{[^}]*\}/g, "")
+    .replace(/html\[data-theme="light"\]\{[^}]*\}/g, "");
+}
+
+/** Cache key: the command plus the exit-code stages as JSON ("" when none). */
+export function bashGraphCacheKey(command, pipeStages) {
+  var stages = "";
+  if (pipeStages !== undefined && pipeStages !== null) {
+    try {
+      stages = JSON.stringify(pipeStages);
+    } catch (err) {
+      stages = String(pipeStages);
+    }
+  }
+  return command + "\n" + stages;
+}
+
+/**
+ * Render one command to panel HTML strings, memoised. Returns [] for
+ * over-cap or blank commands (the new drawability predicate: panels exist).
+ * The scan is the sync standalone (see SCAN PATH above); pipeStages is the
+ * #180 seam and reaches only the final panel through attributeFinalSegment.
+ */
+export function getBashGraphPanels(command, pipeStages) {
+  if (typeof command !== "string" || command.length > BASH_GRAPH_MAX_COMMAND) return [];
+  ensureBashGraphMeasure();
+  var key = bashGraphCacheKey(command, pipeStages);
+  var hit = bashGraphCache.get(key);
+  if (hit !== undefined) return hit;
+  var engines = { adopted: 0, avail: cardAvail() };
+  var scan = { status: "stable-unavailable", nodes: [] };
+  var idx = bashGraphNextIdx;
+  var result = renderOne(idx, command, scan, engines, pipeStages);
+  bashGraphNextIdx = idx + 1;
+  if (bashGraphCache.size >= BASH_GRAPH_CACHE_LIMIT) {
+    var oldest = bashGraphCache.keys().next();
+    if (!oldest.done) bashGraphCache.delete(oldest.value);
+  }
+  bashGraphCache.set(key, result.panelsHTML);
+  return result.panelsHTML;
+}
+
+/** Toggle one heredoc/arg expand block from its button. Exported for the wiring test. */
+export function toggleBashGraphBlock(doc, btn) {
+  if (doc === null || doc === undefined || btn === null || btn === undefined) return false;
+  var hd = btn.getAttribute("data-hd");
+  var el = null;
+  if (hd !== null) {
+    el = doc.getElementById("hd-" + hd);
+  } else {
+    var arg = btn.getAttribute("data-arg");
+    if (arg !== null) el = doc.getElementById("arg-" + arg);
+  }
+  if (el === null || el === undefined) return false;
+  var willShow = el.hasAttribute("hidden");
+  if (willShow) el.removeAttribute("hidden");
+  else el.setAttribute("hidden", "");
+  btn.setAttribute("aria-expanded", willShow ? "true" : "false");
+  return true;
+}
+
+/** The Graph tab body: glyph symbol once, one div per panel, delegated expand. */
+function BashGraphPanels(props) {
+  var panels = props.panels;
+  var onPanelsClick = function (event) {
+    var root = event.target && event.target.closest ? event.target.closest("[data-hd],[data-arg]") : null;
+    if (root === null || typeof document === "undefined") return;
+    toggleBashGraphBlock(document, root);
+  };
+  return (
+    <div className="tool-render-bash-graph" onClick={onPanelsClick}>
+      <div dangerouslySetInnerHTML={{ __html: '<svg aria-hidden="true" style="display:none">' + PIPE_GLYPH_SYMBOL + "</svg>" }} />
+      {panels.map(function (html, i) {
+        return <div key={i} dangerouslySetInnerHTML={{ __html: html }} />;
+      })}
+    </div>
+  );
+}
 // ---- #149: read-only dataflow diagram for pipe/redirect commands, plus
 // #160: multi-statement scripts as an ordered SEQUENCE of statement groups.
 // Auto-rendered when the command is a single non-backgrounded statement
@@ -1893,6 +2062,31 @@ function BashRow(props) {
       // drift from what ran.
       var rewrittenPair = guardRewrite !== null && guardRewrite.ran !== command;
       var tabs = resolveBashTab(command, rewrittenPair);
+      var diagramMeta =
+        block.meta !== null && typeof block.meta === "object" && !Array.isArray(block.meta)
+          ? block.meta
+          : null;
+      // #173: the drawable verdict now comes from the fair copy, not from
+      // the old getters. resolveBashTab still owns the rewrite branch (the
+      // only guard-state pin in the suite) and the commandText, but its
+      // drawable/showTabs/defaultTab derive from the dying predicate, so
+      // they are overridden here whenever a single command text is on show.
+      // The predicate is panelsHTML.length > 0: blank commands render no
+      // panels and keep the old no-tabs behaviour. Exit-code stages ride the
+      // same call (length is identical with or without them: attribution
+      // never adds or removes a panel), so one cached render feeds both the
+      // verdict and the body below.
+      if (!rewrittenPair) {
+        var graphStages = diagramMeta !== null ? diagramMeta.pipeStages : undefined;
+        var graphPanelsNow = getBashGraphPanels(command, graphStages);
+        var graphDrawableNow = graphPanelsNow.length > 0;
+        tabs = {
+          drawable: graphDrawableNow,
+          showTabs: graphDrawableNow,
+          defaultTab: graphDrawableNow ? "graph" : "command",
+          commandText: tabs.commandText,
+        };
+      }
       if (rewrittenPair) {
         inner.push.apply(
           inner,
@@ -1901,27 +2095,10 @@ function BashRow(props) {
           ),
         );
       } else if (tabs.showTabs) {
-        // #149/#160: auto-diagram pipe/redirect commands and multi-statement
-        // scripts. Only the single-command branch diagrams.
-        // getBashDiagram (one statement) and getBashSequenceDiagram (two or
-        // more) parse client-side and memoise by command string; the
-        // attribute* copies layer this row's meta.pipeStages onto the cached
-        // base (or none). The two predicates are disjoint by construction,
-        // so at most one of sequence/diagram is non-null.
-        var diagramBase = getBashDiagram(command);
-        var sequenceBase = getBashSequenceDiagram(command);
-        var diagramMeta =
-          block.meta !== null && typeof block.meta === "object" && !Array.isArray(block.meta)
-            ? block.meta
-            : null;
-        var sequence =
-          sequenceBase !== null
-            ? attributeSequenceStages(sequenceBase, diagramMeta !== null ? diagramMeta.pipeStages : undefined)
-            : null;
-        var diagram =
-          sequence !== null || diagramBase === null
-            ? null
-            : attributePipeStages(diagramBase, diagramMeta !== null ? diagramMeta.pipeStages : undefined);
+        // #173: the Graph tab renders the fair-copy panels for this row's
+        // command, memoised by command plus stages (see getBashGraphPanels).
+        // The Command tab below still renders tabs.commandText and nothing
+        // else, exactly as before.
         var activeTab = bashTabUser === null ? tabs.defaultTab : bashTabUser;
         var tabPrefix =
           props.callId !== undefined && props.callId !== null
@@ -1936,18 +2113,14 @@ function BashRow(props) {
             idPrefix={tabPrefix}
           />,
         );
-        // The Graph panel reuses the same diagram/sequence elements the row
-        // rendered before tabs: no rebuilt model, no second seam. showTabs is
-        // true only when drawable, so one of the two branches always fills
-        // the panel; the null fallback below is unreachable, kept so a future
-        // predicate change fails to an empty panel rather than a crash.
+        // The Graph panel renders the same cached panels the verdict above
+        // used: no second render, no second seam. showTabs is true only when
+        // panels exist, so the graph branch always has content; the null
+        // fallback below is unreachable, kept so a future predicate change
+        // fails to an empty panel rather than a crash.
         var tabBody = null;
         if (activeTab === "graph") {
-          if (sequence !== null) {
-            tabBody = <BashSequenceDiagram model={sequence} />;
-          } else if (diagram !== null) {
-            tabBody = <BashCommandDiagram model={diagram} />;
-          }
+          tabBody = <BashGraphPanels panels={graphPanelsNow} />;
         } else {
           tabBody = commandBlock(null, tabs.commandText ?? command);
         }
@@ -1962,10 +2135,9 @@ function BashRow(props) {
           </div>,
         );
       } else {
-        // No tabs: the command cannot be drawn (background jobs, unparseable
-        // input, heredoc chains) or there is nothing to draw it against, so
-        // the verbatim text renders directly, exactly as the row does today —
-        // never an empty Graph tab.
+        // No tabs: the fair copy rendered no panels (blank or over-cap
+        // command), so the verbatim text renders directly, exactly as the
+        // row does today — never an empty Graph tab.
         inner.push.apply(inner, commandBlock(null, tabs.commandText ?? command));
       }
     }

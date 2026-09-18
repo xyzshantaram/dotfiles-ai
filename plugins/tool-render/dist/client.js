@@ -1597,8 +1597,13 @@ var require_core = __commonJS({
 var client_exports = {};
 __export(client_exports, {
   apply: () => apply,
+  bashGraphCacheKey: () => bashGraphCacheKey,
+  ensureBashGraphMeasure: () => ensureBashGraphMeasure,
+  getBashGraphPanels: () => getBashGraphPanels,
   inject: () => inject,
-  name: () => name
+  name: () => name,
+  stripBashGraphRoot: () => stripBashGraphRoot,
+  toggleBashGraphBlock: () => toggleBashGraphBlock
 });
 module.exports = __toCommonJS(client_exports);
 
@@ -2263,7 +2268,7 @@ function escapeHtml(s) {
 }
 
 // css-text:/home/sid/repos/dotfiles-ai/plugins/tool-render/src/client.module.css
-var client_default = '/* ==========================================================================\n * THE SCALE (#169) \u2014 the file\'s contract. Read this before adding a rule.\n *\n * Seven tickets (#148, #149, #160, #162, #164, #165, #167) each added\n * surfaces to solve their own problem, and the audit counted the result:\n * 14+ padding values, 8 radii, five rem type sizes plus raw 10/11/12px, a\n * raw 5px 12px, a raw 4px, and one hardcoded rgba red. Every rule below is\n * on exactly one step of each scale in this header. A value not listed here\n * is a fifth scheme, not a judgment call.\n *\n * SCOPE: the whole file, deliberately. The raw pixels lived OUTSIDE the\n * diagram (ask buttons, approval buttons, the verdict stamp, the reason\n * lines) \u2014 a diagram-only pass would have added a scale without removing\n * the alternatives, which is the worst outcome. So every family below \u2014\n * row chrome, run-code sections, card outlines, ask form, roster, bodies,\n * approval, diagram \u2014 cites these steps.\n *\n * INHERITED, not revisited (#168, minutes old): the box-earning rule (a\n * stage draws its box only for redirects, an exit pill, or verbatim words),\n * the conditional chip, the part card values, the weighted panel voice,\n * and the tightened rhythm (statement stack 1.25rem -> 0.875rem, in-panel\n * gap 0.375 -> 0.25rem). If this scale ever wants one of those values\n * changed, that is a new ticket with a screenshot, not a drive-by here.\n * Inherited from #167 the same way: the bg-base field, content-sized\n * stages, the rail-free boundary, nowrap+scroll (C0).\n *\n * PADDING steps (vertical rhythm is margin+gap as well as padding \u2014 the\n * steps are shared). P-FLUSH 0. P-HAIR 0.0625rem. P-TIGHT 0.125rem.\n * P-CHIP 0.25rem. P-STAMP 0.375rem. P-CARD 0.5rem. P-CODE-V 0.625rem.\n * P-BTN-W 0.75rem. P-CODE-H 0.8125rem. Indents: 1.125rem (lists),\n * 1.375rem (nested calls), 1.625rem (answer notes). The full closed set is\n * pinned in bash-chain-panel.test.ts \u2014 any padding outside it fails the\n * suite. Named idioms: pill P-HAIR P-STAMP (badges, name badge, reminder\n * chip); chip-inline `0 P-CHIP` in dense chip rows (argument chips) vs\n * `0 P-STAMP` for standalone stamps (conditional, exit, diagram badge);\n * card P-STAMP P-CARD (#168 rhythm); card-tight 0.15625rem P-CARD (#165\'s\n * restraint, kept verbatim); verbatim block P-CODE-V P-CODE-H; text body\n * P-CARD P-CODE-V (steps are per-axis values and re-compose across\n * idioms); button P-CHIP P-BTN-W (was raw 5px 12px, now exact-rem\n * except 1px tighter vertically \u2014 flagged in the #169 report).\n *\n * RADIUS steps. R-DOT 0.0625rem (the sep dot only). R-CHIP 0.25rem (every\n * chip, badge, pill, heredoc, tab focus \u2014 absorbs raw 4px exactly).\n * R-CONTROL 0.375rem (name badge, inspect, text bodies, approval comment \u2014\n * absorbs 0.4375rem and the 6px join corners exactly). R-CARD 0.5rem\n * (stage, part, ask options). R-GROUP 0.625rem (the dashed verbatim group\n * ONLY \u2014 see below). R-PANEL 0.75rem (card, verbatim blocks, chain panel).\n * R-PILL 999px (pills read as pills at any height). R-FLAT 0 (joined\n * card corners where sections meet).\n *\n * TYPE steps, each with its line-height voice. T-STAMP 0.6875rem/1rem\n * (chips, badges, pills, tabs, captions, the verdict stamp \u2014 absorbs raw\n * 10px and 11px, +1px flagged). T-META 0.75rem/1.125rem (endpoints,\n * arguments, conditional, heredoc, roster ids; the roster rows pair it\n * with 1.25rem). T-CODE 0.8125rem/1.375rem (verbatim blocks; the diagram\n * surface and UI prose pair 0.8125rem with 1.25rem, dense notes with\n * 1.125rem). T-TITLE 0.875rem/1.5rem (row title; the summary override\n * drops to 0.8125rem for de-emphasis). T-ICON 1rem/1 (pager glyphs only \u2014\n * an icon metric, exempt by nature). `font: inherit` is always allowed: it\n * inherits a scale step, it is not a new one.\n *\n * BORDER levels \u2014 what each MEANS, not merely that three exist. L1 is a\n * line drawn ON a surface to divide content: code-block edges, text-body\n * edges, question separators, the compaction footer, the diff-path rule.\n * L2 is the edge of a discrete OBJECT against its field: the card, the\n * part, the run-code section sides, the conditional chip (dashed). L3 is\n * glance chrome: token chips, badges, pills, the stage box, the hover\n * lift, ask options. DASHED is the annotation voice \u2014 a claim ABOUT the\n * command (conditional, heredoc, endpoint, verbatim group, bound value),\n * answered at a glance against solid-outline token chips (pieces OF the\n * command). Dashed takes the level that reads against its host (L2 on\n * layer-1, L3 on code-block); that is contrast, not a fourth level.\n *\n * SURFACES \u2014 visual difference MEANS something. REGION is bg-base: the\n * chain panel field, and markdown `pre` blocks (a region nested inside a\n * body). OBJECT is bg-layer-1: the card, the part, argument chips, the\n * run-code sections. VERBATIM is markdown-code-block: outputs, code,\n * diffs, the earned stage box \u2014 bytes from the machine. CHROME is\n * interactive-bg-hover (+solid) and label-secondary fills: badges, the\n * reminder chip, primary buttons \u2014 UI the renderer added, not command\n * content. GLYPH is label-caption / border-l2-as-background: the sep dot,\n * the diff-sep rules \u2014 marks, not surfaces.\n *\n * STATE MARKS ride OUTLINES, never backgrounds: 0.1875rem escalated /\n * guard / answered / pending, 0.125rem error / stopped / focus. Outlines\n * paint outside the box, so a state change never reflows a row. #fff is\n * absolute bright on purpose (the pending ask must win on either theme);\n * the diff hues (orange/blue del/add, marker hexes) are a content language\n * \u2014 a deletion is not an error \u2014 and deliberately NOT theme tokens.\n *\n * THE THEME CONTRACT (criterion 5): every token above is a dsw-alias \u2014\n * elevation, not colour. bg-base stays distinguishable from bg-layer-1\n * either way the themes flip it (#167\'s proof, inherited). The error wash\n * derives from the theme\'s own error token via color-mix, so it follows\n * the theme instead of fighting it (the old hardcoded rgba red assumed\n * one theme). The one standing px exception is the picture edge: a 2px\n * label-tertiary border that must read against ARBITRARY image content,\n * where the quiet border tokens are exactly wrong (commented at the rule).\n * 1px hairlines are the other: a physical hairline is 1px in both themes.\n * ========================================================================== */\n.tool-render-row {\n  align-items: center;\n  min-width: 0;\n  height: 2rem;\n  display: flex;\n  position: relative;\n  overflow: hidden;\n}\n.tool-render-row[data-expandable] {\n  cursor: pointer;\n}\n.tool-render-chevron {\n  color: var(--dsw-alias-label-secondary);\n  flex: none;\n  margin-right: 0.25rem;\n  transform: rotate(-90deg);\n  transition: transform 0.12s;\n}\n.tool-render-chevron-open {\n  transform: rotate(0deg);\n}\n.tool-render-chevron-disabled {\n  opacity: 0.35;\n  pointer-events: none;\n}\n.tool-render-title {\n  color: var(--dsw-alias-label-secondary);\n  flex: none;\n  font-size: 0.875rem;\n  line-height: 1.5rem;\n}\n/* The always-on raw tool-name badge: the row\'s own icon plus the registered\n   tool name, on a hashed-hue background. */\n.tool-render-name-badge {\n  box-sizing: border-box;\n  display: inline-flex;\n  align-items: center;\n  justify-content: flex-start;\n  gap: 0.25rem;\n  width: 6.75rem;\n  height: 1.5rem;\n  flex: none;\n  overflow: hidden;\n  border: 1px solid;\n  border-radius: 0.375rem;\n  padding: 0.0625rem 0.375rem;\n  margin-right: 0.375rem;\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-name-badge-icon {\n  display: inline-flex;\n  flex: none;\n  align-items: center;\n}\n.tool-render-name-badge-text {\n  flex: 1;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  text-align: center;\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  font-weight: 500;\n}\n/* The producer/source badge on a context-injection or send_message row.\n   A small pill, not the sentence-in-body treatment it replaces. This is the\n   older optional per-row badge, not the tool-name badge above. */\n.tool-render-badge {\n  flex: none;\n  white-space: nowrap;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border-radius: 999px;\n  margin-left: 0.375rem;\n  padding: 0.0625rem 0.375rem;\n  font-size: 0.6875rem;\n  line-height: 1rem;\n}\n.tool-render-sep {\n  background: var(--dsw-alias-label-caption);\n  border-radius: 0.0625rem;\n  flex: none;\n  width: 0.125rem;\n  height: 0.125rem;\n  margin: 0 0.5rem;\n}\n.tool-render-summary {\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  min-width: 0;\n  color: var(--dsw-alias-label-tertiary);\n  flex: auto;\n  font-size: 0.875rem;\n  line-height: 1.5rem;\n  overflow: hidden;\n}\n.tool-render-summary[tool-render-error] {\n  color: var(--dsw-alias-state-error-primary);\n  font-weight: 500;\n}\n.tool-render-path {\n  color: var(--dsw-alias-label-tertiary);\n  cursor: pointer;\n  min-width: 0;\n  max-width: 100%;\n  display: inline-block;\n  vertical-align: bottom;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 0.875rem;\n  line-height: 1.5rem;\n}\n.tool-render-path:hover {\n  color: var(--dsw-alias-label-primary);\n  text-decoration: underline;\n}\n.tool-render-body {\n  flex-direction: column;\n  display: flex;\n}\n.tool-render-io {\n  flex-direction: column;\n  display: flex;\n}\n.tool-render-cmd-label {\n  font-family: var(--ds-font-family-code);\n  font-size: 0.6875rem;\n  line-height: 1rem;\n  color: var(--dsw-alias-label-tertiary);\n  opacity: 0.75;\n  margin: 0.375rem 0 0 0.25rem;\n}\n.tool-render-command {\n  font-family: var(--ds-font-family-code);\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-tertiary);\n  margin: 0.25rem 0 0 0.25rem;\n  padding: 0.125rem 0;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n}\n.tool-render-command code.hljs {\n  background: transparent;\n  padding: 0;\n  font-family: inherit;\n  font-size: inherit;\n  line-height: inherit;\n  white-space: inherit;\n}\n.tool-render-output {\n  box-sizing: border-box;\n  background: var(--dsw-alias-markdown-code-block);\n  font-family: var(--ds-font-family-code);\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-primary);\n  border-radius: 0.75rem;\n  margin: 0.25rem 0 0.25rem 0.25rem;\n  padding: 0.625rem 0.8125rem;\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  max-height: 17.5rem;\n  overflow-y: auto;\n}\n.tool-render-output[tool-render-error] {\n  color: var(--dsw-alias-state-error-primary);\n  /* #169: the error wash derives from the theme\'s own error token instead\n     of a hardcoded rgba red \u2014 darker wash in the dark theme, tinted wash in\n     the light one, the same 45%/8% weights either way. */\n  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 45%, transparent);\n  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 8%, transparent);\n  font-weight: 500;\n}\n/* #152 Part C: IN / TOOL CALLS / OUT read as ONE card with the nested calls.\n   All three section labels reuse .tool-render-code-out-label \u2014 one visual\n   language, not a new one. The IN code block reuses .tool-render-code and the\n   OUT text reuses .tool-render-output; the cap below mirrors the rule the OUT\n   row has today: upstream .ioSection scrolls internally past 150px\n   (max-height:150px; overflow-y:auto), so long output scrolls instead of\n   flooding the transcript, with the full text retained in the DOM. */\n.tool-render-code-out {\n  display: flex;\n  flex-direction: column;\n}\n.tool-render-code-out-label {\n  font-family: var(--ds-font-family-code);\n  font-size: 0.6875rem;\n  line-height: 1rem;\n  color: var(--dsw-alias-label-caption);\n  margin: 0.375rem 0 0 0.25rem;\n}\n.tool-render-output.tool-render-code-out-text {\n  max-height: 9.375rem;\n}\n/* The IN/OUT section spoilers: a chevron plus a mono line-count summary\n   (`ts [263]`, `2 lines`), collapsed by default. A button element, so keyboard\n   interaction is native; the reset below strips the native button chrome so it\n   reads as a row, not a control. An errored OUT spoiler reads red even while\n   collapsed, so the failure signals without opening. */\n.tool-render-runcode-spoiler {\n  display: flex;\n  align-items: center;\n  gap: 0.25rem;\n  align-self: flex-start;\n  background: none;\n  border: none;\n  padding: 0.125rem 0;\n  margin: 0 0 0 0.25rem;\n  cursor: pointer;\n  font-family: var(--ds-font-family-code);\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n  text-align: left;\n}\n.tool-render-runcode-spoiler:hover {\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-runcode-spoiler:focus-visible {\n  outline: 0.125rem solid var(--dsw-alias-state-business-primary);\n  outline-offset: -0.125rem;\n}\n.tool-render-runcode-spoiler-label {\n  white-space: nowrap;\n}\n.tool-render-runcode-spoiler[tool-render-error] {\n  color: var(--dsw-alias-state-error-primary);\n  font-weight: 500;\n}\n\n/* #152 nesting layout: head -> IN -> TOOL CALLS label -> nested -> OUT.\n\n   THE SHAPE, measured in the live DOM rather than inferred from the bundle --\n   an earlier version of this block guessed and matched nothing:\n\n     div[data-chat-call-id]                     <- upstream\'s call row\n       div[data-slot="tool.call.toolview"]      <- THE RENDERER\'S WRAPPER,\n                                                    style="display: contents"\n         .tool-render-card[data-run-code]       <- our head\n         .tool-render-runcode-in                <- our IN section\n         .tool-render-runcode-calls-label       <- our TOOL CALLS label\n         .tool-render-runcode-out               <- our OUT section\n       div.<hashed>subCalls                     <- the nested calls\n\n   Two consequences, and the layout hangs on both. (1) Our nodes are NOT direct\n   children of the call row, so any `:has(> .tool-render-card\u2026)` selector fails\n   silently -- which is exactly how this shipped broken once. (2) The wrapper\n   carries `display: contents`, so it generates no box and OUR FOUR NODES BECOME\n   FLEX ITEMS OF THE CALL ROW ANYWAY. That is the only reason ordering can work\n   across the wrapper at all; if upstream ever gives that wrapper a real display\n   value, the sections stop being siblings of .subCalls and this flattens back\n   to DOM order -- ugly, not broken.\n\n   On the hook: data-chat-call-id is stamped by upstream on every call row and\n   is stable and unhashed, which is why it is used here. It is NOT read by\n   upstream\'s own code -- the bundle contains exactly one occurrence, the write\n   -- so this is a public attribute we rely on, not a contract upstream would\n   notice breaking. */\ndiv[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-card[data-run-code]) {\n  display: flex;\n  flex-direction: column;\n}\n.tool-render-card[data-run-code] {\n  order: 0;\n}\n.tool-render-runcode-in {\n  order: 1;\n}\n.tool-render-runcode-calls-label {\n  order: 2;\n}\n.tool-render-runcode-out {\n  order: 4;\n}\n/* Everything else upstream puts in the row -- today only the nested-call\n   container -- sits between the TOOL CALLS label and OUT. Selected by\n   excluding the slot wrapper rather than by upstream\'s .subCalls class, which\n   is content-hashed and turns over every build. */\ndiv[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-card[data-run-code])\n  > *:not([data-slot]) {\n  order: 3;\n}\n/* No nested calls, no TOOL CALLS heading: a card with no nested calls must\n   not show an empty label. Whether nested calls exist is unknowable from our\n   props \u2014 upstream renders them outside our view \u2014 so the row hides our label\n   when it carries no non-wrapper child. The label renders by default and only\n   this rule removes it, so dropping the wrapper step here fails LOUD (an empty\n   heading on every plain card) rather than SILENT. */\ndiv[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-card[data-run-code]):not(:has(> *:not([data-slot]))) > [data-slot="tool.call.toolview"] > .tool-render-runcode-calls-label {\n  display: none;\n}\n\n/* The five read as ONE card: the head loses its bottom rounding, the middle\n   sections continue the side borders, the OUT block loses its top rounding,\n   and the nested calls are indented between the TOOL CALLS label and OUT with\n   the side borders continued. */\n.tool-render-card[data-run-code] {\n  border-bottom-left-radius: 0;\n  border-bottom-right-radius: 0;\n  border-bottom: 0;\n  margin-bottom: 0;\n}\n.tool-render-runcode-in,\n.tool-render-runcode-calls-label {\n  border-left: 1px solid var(--dsw-alias-border-l2);\n  border-right: 1px solid var(--dsw-alias-border-l2);\n  margin: 0;\n  background: var(--dsw-alias-bg-layer-1);\n}\n.tool-render-runcode-in {\n  padding: 0 0.5rem 0.375rem;\n}\n.tool-render-runcode-calls-label {\n  padding: 0 0.5rem 0.125rem;\n}\n.tool-render-runcode-out {\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-top: 0;\n  border-radius: 0 0 0.375rem 0.375rem;\n  background: var(--dsw-alias-bg-layer-1);\n  padding: 0 0.5rem 0.375rem;\n}\ndiv[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-card[data-run-code])\n  > *:not([data-slot]) {\n  border-left: 1px solid var(--dsw-alias-border-l2);\n  border-right: 1px solid var(--dsw-alias-border-l2);\n  margin: 0;\n  padding: 0.25rem 0.5rem 0.25rem 1.375rem;\n  background: var(--dsw-alias-bg-layer-1);\n}\n.tool-render-row[data-state="error"] .tool-render-title {\n  color: var(--dsw-alias-state-error-primary);\n  font-weight: 500;\n}\n/* A stopped call mutes its title and summary, since it no longer has its own\n   state dot to mark it. */\n.tool-render-row[data-state="stopped"] .tool-render-title,\n.tool-render-row[data-state="stopped"] .tool-render-summary {\n  color: var(--dsw-alias-label-tertiary);\n}\n.tool-render-code {\n  box-sizing: border-box;\n  background: var(--dsw-alias-markdown-code-block);\n  font-family: var(--ds-font-family-code);\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-primary);\n  border-radius: 0.75rem;\n  margin: 0.25rem 0 0.25rem 0.25rem;\n  padding: 0.625rem 0.8125rem;\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  max-height: 25rem;\n  overflow-y: auto;\n}\n.tool-render-inspect {\n  border: 1px solid var(--dsw-alias-border-l2);\n  background: var(--dsw-alias-bg-base);\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  opacity: 0;\n  border-radius: 0.375rem;\n  align-self: flex-start;\n  align-items: center;\n  gap: 0.25rem;\n  margin: 0.25rem 0 0.125rem 0.25rem;\n  padding: 0.125rem 0.375rem;\n  font-size: 0.6875rem;\n  line-height: 1rem;\n  transition: opacity 0.1s;\n  display: inline-flex;\n}\n.tool-render-card:hover .tool-render-inspect,\n.tool-render-inspect:focus-visible {\n  opacity: 1;\n}\n.tool-render-inspect:hover {\n  background: var(--dsw-alias-interactive-bg-hover-solid);\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-diff-fallback {\n  box-sizing: border-box;\n  background: var(--dsw-alias-markdown-code-block);\n  font-family: var(--ds-font-family-code);\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-primary);\n  border-radius: 0.75rem;\n  margin: 0.25rem 0 0.25rem 0.25rem;\n  padding: 0.625rem 0.8125rem;\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  max-height: 25rem;\n  overflow-y: auto;\n}\n.tool-render-fallback-note {\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  margin-bottom: 0.375rem;\n}\n.tool-render-write {\n  flex-direction: column;\n  display: flex;\n}\n.tool-render-write-diff {\n  box-sizing: border-box;\n  background: var(--dsw-alias-markdown-code-block);\n  font-family: var(--ds-font-family-code);\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-primary);\n  border-radius: 0.75rem;\n  margin: 0.25rem 0 0.25rem 0.25rem;\n  padding: 0.625rem 0.8125rem;\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  max-height: 25rem;\n  overflow-y: auto;\n}\n.tool-render-line-same {\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-diff-row.tool-render-line-del,\n.tool-render-diff-cell.tool-render-line-del {\n  background: rgba(255, 166, 87, 0.16);\n}\n.tool-render-diff-row.tool-render-line-add,\n.tool-render-diff-cell.tool-render-line-add {\n  background: rgba(125, 180, 255, 0.16);\n}\n.tool-render-diff-marker {\n  flex: none;\n  width: 2ch;\n  text-align: center;\n  align-self: flex-start;\n  user-select: none;\n  color: var(--dsw-alias-label-tertiary);\n}\n.tool-render-diff-marker-del {\n  color: #ffb86c;\n}\n.tool-render-diff-marker-add {\n  color: #7db4ff;\n}\n.tool-render-write-note {\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  margin-bottom: 0.375rem;\n}\n.tool-render-code-row,\n.tool-render-diff-row {\n  display: flex;\n  align-items: flex-start;\n  min-width: 0;\n}\n.tool-render-diff-pair {\n  display: flex;\n  align-items: stretch;\n  min-width: 0;\n}\n.tool-render-diff-cell {\n  flex: 1 1 0;\n  min-width: 0;\n  display: flex;\n  align-items: flex-start;\n}\n.tool-render-diff-cell + .tool-render-diff-cell {\n  border-left: 0.0625rem solid var(--dsw-alias-border-l2);\n}\n.tool-render-gutter {\n  flex: none;\n  align-self: flex-start;\n  padding-right: 0.75rem;\n  text-align: right;\n  color: var(--dsw-alias-label-tertiary);\n  user-select: none;\n  font-family: var(--ds-font-family-code);\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n}\n.tool-render-line-cell {\n  flex: auto;\n  min-width: 0;\n  display: block;\n  font-family: var(--ds-font-family-code);\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  white-space: pre-wrap;\n  word-break: break-word;\n}\n.tool-render-line-cell.hljs {\n  background: transparent;\n  padding: 0;\n  font-family: inherit;\n  font-size: inherit;\n  line-height: inherit;\n  white-space: inherit;\n}\n.tool-render-diff-path {\n  color: var(--dsw-alias-label-secondary);\n  font-family: var(--ds-font-family-code);\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  border-bottom: 0.0625rem solid var(--dsw-alias-border-l2);\n  padding-bottom: 0.25rem;\n  margin-bottom: 0.375rem;\n}\n.tool-render-diff-sep {\n  display: flex;\n  align-items: center;\n  gap: 0.625rem;\n  color: var(--dsw-alias-label-caption);\n  font-family: var(--ds-font-family-code);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  margin: 0.5rem 0;\n}\n.tool-render-diff-sep::before,\n.tool-render-diff-sep::after {\n  content: "";\n  flex: 1;\n  height: 0.0625rem;\n  background: var(--dsw-alias-border-l2);\n}\n.tool-render-card {\n  box-sizing: border-box;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.75rem;\n  background: var(--dsw-alias-bg-layer-1);\n  padding: 0.15625rem 0.5rem;\n}\n/* A call that bash-guard approved carries electric blue as its durable\n   mark, so it reads differently from a sandbox_permissions escalation.\n   This rule comes BEFORE the escalated one at equal (0,2,0) specificity,\n   so a call that carries both marks settles yellow. A rewritten command\n   keeps the mark permanently, because the rewrite is recorded in the\n   durable result metadata. A pending approval that caused no rewrite\n   loses the mark once it is answered. */\n.tool-render-card[data-guard-approval] {\n  outline: 0.1875rem solid var(--dsh-outline-guard);\n}\n/* A call that asked for sandbox escalation carries yellow as its durable\n   mark. It follows the guard rule at equal (0,2,0) specificity, so the\n   later rule wins the both case and the chip and the outline state the\n   same thing. It still loses to the error rule below, exactly as before,\n   so a failed escalation reads red. */\n.tool-render-card[data-escalated] {\n  outline: 0.1875rem solid var(--dsh-outline-escalated);\n}\n/* Once answered, the outline dulls to translucent white instead of\n   vanishing. This rule sits BEFORE error/stopped/guard so a failed or\n   guarded call keeps its own stronger mark. */\n.tool-render-card[data-question-answered] {\n  outline: 0.1875rem solid color-mix(in srgb, #fff 40%, transparent);\n}\n/* An errored call is outlined the way an escalated one is, in red and a little\n   thinner. The outline follows the card\'s rounded corners. It replaces the old\n   tinted row background and inset left bar. */\n.tool-render-card[data-error] {\n  outline: 0.125rem solid var(--dsw-alias-state-error-primary);\n}\n/* A stopped call (interrupted) gets a dimmer red outline, since it no longer\n   carries its own state dot. */\n.tool-render-card[data-stopped] {\n  outline: 0.125rem solid color-mix(in srgb, var(--dsw-alias-state-error-primary) 55%, transparent);\n}\n/* The durable guard mark outranks error and stopped, and nothing else. A\n   rewritten command often exits non-zero (rg exits 1 on no match, and\n   bashErrorState promotes any [exit code: N>=1] result to error), which\n   used to hand blue to the later red rules at equal (0,2,0) specificity.\n   The doubled attribute selector plus the two exclusions counts (0,5,0),\n   so it wins over error, stopped, answered, and both single-mark rules\n   without !important. Each :not() names a rule it must lose to. The\n   [data-escalated] exclusion hands the settled both case to the yellow\n   rule above. The [data-escalation-pending] exclusion hands an open\n   escalation ask to the pending yellow rule below, even before the call\n   args carry the mark. The pending blue rule below agrees with this one,\n   so no exclusion names it. Question pending keeps its own place last,\n   and the tie cannot happen because guard approvals are bash-only. */\n.tool-render-card[data-guard-approval][data-guard-approval]:not([data-escalated]):not([data-escalation-pending]) {\n  outline: 0.1875rem solid var(--dsh-outline-guard);\n}\n/* The open guard ask names its own colour. While a bash-guard approval\n   is open for this call the outline stays blue even when the call\n   already carries a settled escalation mark. This single-attribute rule\n   counts (0,2,0) and needs no doubling. It sits after every settled rule\n   it must beat, and the durable guard rule above already agrees with it,\n   so position alone decides. */\n.tool-render-card[data-guard-pending] {\n  outline: 0.1875rem solid var(--dsh-outline-guard);\n}\n/* The open escalation ask names its own colour. While a sandbox\n   escalation approval is open for this call the outline turns yellow\n   even when the call already carries a durable guard mark. Like its blue\n   twin this rule counts (0,2,0) and wins by position alone. It follows\n   the guard pending rule, so when both asks are somehow open at once the\n   later ask in the known sequence wins. No order assumption lives here\n   beyond that tiebreak. Each pending rule reads the open approval kind\n   directly, so an escalation ask that arrives first still paints yellow. */\n.tool-render-card[data-escalation-pending] {\n  outline: 0.1875rem solid var(--dsh-outline-escalated);\n}\n/* A call waiting on the human\'s answer to its question is outlined in\n   solid white at the same 3px weight as the other state outlines. This\n   rule sits after error/stopped/guard so the bright "answer me" mark wins\n   while pending (a pending call is still running, so error/stopped cannot\n   co-occur; the doubled guard rule above still wins a true tie, which\n   cannot happen because guard approvals are bash-only). */\n.tool-render-card[data-question-pending] {\n  outline: 0.1875rem solid #fff;\n}\n.tool-render-card:hover {\n  border-color: var(--dsw-alias-border-l3);\n}\n.tool-render-title {\n  font-weight: 500;\n}\n.tool-render-summary,\n.tool-render-path {\n  font-size: 0.8125rem;\n}\n.tool-render-output,\n.tool-render-code,\n.tool-render-write-diff,\n.tool-render-diff-fallback {\n  border: 1px solid var(--dsw-alias-border-l1);\n}\n.tool-render-row:focus-visible {\n  outline: 0.125rem solid var(--dsw-alias-state-business-primary);\n  outline-offset: -0.125rem;\n}\n\n/* todo_write and ask_user_question shared body layout. */\n.tool-render-plan {\n  flex-direction: column;\n  display: flex;\n}\n/* Plan row (item, checkbox, content) is shared PLAN_ROW_CSS from\n   shared/client-util.ts, injected via the dsh-plan-row style tag. */\n\n/* ask_user_question questions, options, and answers. */\n.tool-render-ask {\n  flex-direction: column;\n  display: flex;\n}\n.tool-render-question {\n  flex-direction: column;\n  display: flex;\n  padding: 0.125rem 0;\n}\n.tool-render-question + .tool-render-question {\n  border-top: 1px solid var(--dsw-alias-border-l1);\n  margin-top: 0.25rem;\n  padding-top: 0.375rem;\n}\n.tool-render-question-prompt {\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  overflow-wrap: anywhere;\n  padding: 0 0 0.125rem 0.25rem;\n}\n.tool-render-option {\n  align-items: baseline;\n  display: flex;\n  gap: 0.375rem;\n  padding: 0.125rem 0 0.125rem 0.25rem;\n}\n.tool-render-option-marker {\n  flex: none;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  width: 1rem;\n}\n.tool-render-option-text {\n  display: flex;\n  flex-direction: column;\n  gap: 0.0625rem;\n  min-width: 0;\n}\n.tool-render-option-label {\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  overflow-wrap: anywhere;\n}\n.tool-render-option-description {\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.8125rem;\n  line-height: 1.125rem;\n  overflow-wrap: anywhere;\n}\n.tool-render-option[data-selected] .tool-render-option-label {\n  color: var(--dsw-alias-label-primary);\n  font-weight: 700;\n}\n.tool-render-answer-note {\n  color: var(--dsw-alias-label-caption);\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  font-style: italic;\n  padding: 0.125rem 0 0 1.625rem;\n  overflow-wrap: anywhere;\n}\n.tool-render-ask[tool-render-error] .tool-render-question-prompt {\n  color: var(--dsw-alias-label-tertiary);\n}\n/* Each of the four ask-card text fields now renders through MarkdownText,\n   which wraps even one plain line in its own markup. That cost two things\n   this row depended on: MarkdownText\'s own prose elements carry their own\n   color and font shorthand at every level of whatever it nests (a wrapper\n   div, then a <p>, and so on), overriding these four classes\' own colors\n   (including the data-selected bold+primary label) and sizes, and a\n   paragraph\'s default block margin added unwanted vertical gaps in what is\n   one line of layout, not a markdown body. `*` resets color and font on\n   EVERY descendant, however deep MarkdownText nests -- each level inherits\n   from its own immediate parent, so the reset cascades all the way down to\n   the actual text, including an ancestor\'s font-weight or font-style such as\n   data-selected\'s bold or the note\'s italic. `margin: 0` on `p` alone\n   removes the paragraph gap. A genuine list or heading inside an answer\n   still renders; it just does not get this rule\'s own tight spacing or\n   color override. */\n.tool-render-question-prompt *,\n.tool-render-option-label *,\n.tool-render-option-description *,\n.tool-render-answer-note * {\n  color: inherit;\n  font: inherit;\n}\n.tool-render-question-prompt p,\n.tool-render-option-label p,\n.tool-render-option-description p,\n.tool-render-answer-note p {\n  margin: 0;\n}\n\n/* ask_user_question answer form: the interactive UI on the pending card,\n   ported from the shipped QuestionComposer. Option buttons follow the\n   approval-btn recipe (1px border, surface bg); the selected option takes\n   the business-primary border, the primary action the filled recipe. */\n.tool-render-qform {\n  flex-direction: column;\n  display: flex;\n  gap: 0.375rem;\n  padding: 0.25rem 0 0.25rem 0.25rem;\n}\n.tool-render-qheader {\n  align-items: flex-start;\n  justify-content: space-between;\n  display: flex;\n  gap: 0.5rem;\n}\n.tool-render-qheading {\n  min-width: 0;\n  flex: 1 1 auto;\n}\n.tool-render-qeyebrow {\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.6875rem;\n  line-height: 1rem;\n}\n.tool-render-qtitle {\n  color: var(--dsw-alias-label-primary);\n  font-size: 0.8125rem;\n  font-weight: 600;\n  line-height: 1.25rem;\n  overflow-wrap: anywhere;\n}\n.tool-render-qdismiss {\n  flex: none;\n  border: none;\n  background: none;\n  color: var(--dsw-alias-label-tertiary);\n  cursor: pointer;\n  font-size: 0.6875rem;\n  line-height: 1rem;\n  padding: 0.0625rem 0.25rem;\n  text-decoration: underline dotted;\n}\n.tool-render-qdismiss:hover:enabled {\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-qdismiss:disabled {\n  opacity: 0.55;\n  cursor: default;\n}\n.tool-render-qbody {\n  flex-direction: column;\n  display: flex;\n  gap: 0.375rem;\n}\n.tool-render-qdetail {\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  overflow-wrap: anywhere;\n}\n.tool-render-qoptions {\n  flex-direction: column;\n  display: flex;\n  gap: 0.25rem;\n}\n.tool-render-qoption {\n  align-items: baseline;\n  display: flex;\n  gap: 0.375rem;\n  width: 100%;\n  box-sizing: border-box;\n  text-align: left;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  background: var(--dsw-alias-bg-base);\n  color: inherit;\n  font: inherit;\n  cursor: pointer;\n  padding: 0.375rem 0.5rem;\n}\n.tool-render-qoption:hover:enabled {\n  background: var(--dsw-alias-interactive-bg-hover-solid);\n}\n.tool-render-qoption:disabled {\n  cursor: default;\n}\n.tool-render-qoption[data-selected] {\n  border-color: var(--dsw-alias-state-business-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.tool-render-qoption-marker {\n  flex: none;\n  width: 1rem;\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  text-align: center;\n}\n.tool-render-qoption[data-selected] .tool-render-qoption-marker {\n  color: var(--dsw-alias-state-business-primary);\n}\n.tool-render-qoption-text {\n  display: flex;\n  flex-direction: column;\n  min-width: 0;\n  flex: 1 1 auto;\n}\n.tool-render-qoption-line {\n  align-items: baseline;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 0.25rem 0.5rem;\n}\n.tool-render-qoption-label {\n  color: var(--dsw-alias-label-primary);\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  overflow-wrap: anywhere;\n}\n.tool-render-qoption[data-selected] .tool-render-qoption-label {\n  font-weight: 700;\n}\n.tool-render-qoption-description {\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.8125rem;\n  line-height: 1.125rem;\n  overflow-wrap: anywhere;\n}\n.tool-render-qbadge {\n  flex: none;\n  border: 1px solid var(--dsw-alias-state-business-primary);\n  border-radius: 999px;\n  color: var(--dsw-alias-state-business-primary);\n  font-size: 0.6875rem;\n  line-height: 1rem;\n  padding: 0 0.375rem;\n}\n.tool-render-qcustom-row {\n  align-items: center;\n  display: flex;\n  gap: 0.375rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  background: var(--dsw-alias-bg-base);\n  padding: 0.375rem 0.5rem;\n}\n.tool-render-qcustom-row[data-active] {\n  border-color: var(--dsw-alias-state-business-primary);\n}\n.tool-render-qcustom-input {\n  flex: 1 1 auto;\n  min-width: 0;\n  border: none;\n  outline: none;\n  background: none;\n  color: var(--dsw-alias-label-primary);\n  font: inherit;\n  padding: 0;\n}\n.tool-render-qcustom-input::placeholder {\n  color: var(--dsw-alias-label-caption);\n}\n.tool-render-qcustom-textarea {\n  box-sizing: border-box;\n  width: 100%;\n  resize: vertical;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  background: var(--dsw-alias-bg-base);\n  color: var(--dsw-alias-label-primary);\n  font: inherit;\n  padding: 0.375rem 0.5rem;\n}\n.tool-render-qcustom-textarea:focus {\n  border-color: var(--dsw-alias-state-business-primary);\n  outline: none;\n}\n.tool-render-qfooter {\n  align-items: center;\n  display: flex;\n  gap: 0.5rem;\n}\n.tool-render-qpager {\n  flex: none;\n  align-items: center;\n  display: flex;\n  gap: 0.25rem;\n}\n.tool-render-qnav {\n  border: none;\n  background: none;\n  color: var(--dsw-alias-label-tertiary);\n  cursor: pointer;\n  border-radius: 999px;\n  font-size: 1rem;\n  line-height: 1;\n  padding: 0.125rem 0.375rem;\n}\n.tool-render-qnav:hover:enabled {\n  background: var(--dsw-alias-interactive-bg-hover);\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-qnav:disabled {\n  opacity: 0.4;\n  cursor: default;\n}\n.tool-render-qprogress {\n  color: var(--dsw-alias-label-secondary);\n  white-space: nowrap;\n  font-size: 0.8125rem;\n  font-weight: 500;\n  line-height: 1.25rem;\n}\n.tool-render-qfeedback {\n  flex: 1 1 auto;\n  min-height: 1rem;\n  color: var(--dsw-alias-state-error-primary);\n  font-size: 0.6875rem;\n  line-height: 1rem;\n}\n.tool-render-qactions {\n  flex: none;\n  align-items: center;\n  display: flex;\n  gap: 0.25rem;\n}\n.tool-render-qbtn {\n  border: 1px solid var(--dsw-alias-border-l3);\n  background: var(--dsw-alias-bg-base);\n  color: var(--dsw-alias-label-secondary);\n  border-radius: 0.25rem;\n  cursor: pointer;\n  font-size: 0.75rem;\n  line-height: 1.25rem;\n  padding: 0.25rem 0.75rem;\n}\n.tool-render-qbtn:hover:enabled {\n  background: var(--dsw-alias-interactive-bg-hover-solid);\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-qbtn:disabled {\n  opacity: 0.45;\n  cursor: default;\n}\n.tool-render-qbtn-primary {\n  border-color: transparent;\n  background: var(--dsw-alias-label-secondary);\n  color: var(--dsw-alias-bg-base);\n  font-weight: 600;\n}\n.tool-render-qbtn-primary:hover:enabled {\n  background: var(--dsw-alias-label-secondary);\n  color: var(--dsw-alias-bg-base);\n  filter: brightness(1.15);\n}\n\n/* list_agents roster: one line per agent, status first so the column reads\n   down the left edge. A descendants listing indents each line by its own\n   depth through an inline padding, so the tree shape is visible without a\n   parent id on every row. */\n.tool-render-agents {\n  display: flex;\n  flex-direction: column;\n  padding: 0.125rem 0 0.125rem 0.25rem;\n}\n.tool-render-agent {\n  align-items: baseline;\n  display: flex;\n  gap: 0.375rem;\n  min-width: 0;\n  padding: 0.0625rem 0;\n}\n.tool-render-agent-status {\n  flex: none;\n  width: 5rem;\n  font-size: 0.75rem;\n  line-height: 1.25rem;\n  color: var(--dsw-alias-label-caption);\n}\n.tool-render-agent-status[data-status="running"] {\n  color: var(--dsh-outline-guard);\n}\n.tool-render-agent-status[data-status="diagnostic"] {\n  color: var(--dsw-alias-state-error-primary);\n}\n.tool-render-agent-id {\n  flex: none;\n  font-family: var(--ds-font-family-code);\n  font-size: 0.75rem;\n  line-height: 1.25rem;\n  color: var(--dsw-alias-label-tertiary);\n  max-width: 12rem;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n.tool-render-agent-label {\n  color: var(--dsw-alias-label-primary);\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n/* Shared capped, scrollable markdown body. Used by every row whose body is\n   rendered text: subagent prompt, context injection, send_message delivery.\n   One block, so a future row family member gets the same rules for free\n   instead of a fourth copy. */\n.tool-render-markdown-body {\n  border: 1px solid var(--dsw-alias-border-l1);\n  border-radius: 0.375rem;\n  margin: 0.25rem 0 0.125rem 0.25rem;\n  max-height: 16rem;\n  overflow-y: auto;\n  padding: 0.5rem 0.625rem;\n}\n.tool-render-markdown-body :where(h1, h2, h3, h4, h5, h6),\n.tool-render-fetch-body :where(h1, h2, h3, h4, h5, h6) {\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  margin: 0.5rem 0 0.25rem;\n}\n.tool-render-markdown-body :where(h1, h2, h3, h4, h5, h6):first-child,\n.tool-render-fetch-body :where(h1, h2, h3, h4, h5, h6):first-child {\n  margin-top: 0;\n}\n.tool-render-markdown-body :where(p, ul, ol, pre, blockquote, table),\n.tool-render-fetch-body :where(p, ul, ol, pre, blockquote, table) {\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  margin: 0.25rem 0;\n}\n.tool-render-markdown-body :where(ul, ol),\n.tool-render-fetch-body :where(ul, ol) {\n  padding-left: 1.125rem;\n}\n.tool-render-markdown-body :where(pre),\n.tool-render-fetch-body :where(pre) {\n  background: var(--dsw-alias-bg-base);\n  border-radius: 0.25rem;\n  overflow-x: auto;\n  padding: 0.375rem 0.5rem;\n}\n.tool-render-markdown-body :where(code),\n.tool-render-fetch-body :where(code) {\n  font-family: var(--ds-font-family-code);\n}\n.tool-render-markdown-body :where(code):not(:where(pre code)),\n.tool-render-fetch-body :where(code):not(:where(pre code)) {\n  background: var(--dsw-alias-bg-base);\n  border-radius: 0.25rem;\n  padding: 0 0.25rem;\n}\n\n/* web_fetch body. Same bounded-scroll shape as the markdown body but its\n   own block, so a fetched page scrolls inside the card. A raw-HTML page\n   renders as escaped code text in this container instead, never as\n   markup. */\n.tool-render-fetch-body {\n  border: 1px solid var(--dsw-alias-border-l1);\n  border-radius: 0.375rem;\n  margin: 0.25rem 0 0.125rem 0.25rem;\n  max-height: 16rem;\n  overflow-y: auto;\n  padding: 0.5rem 0.625rem;\n}\n.tool-render-fetch-raw {\n  font-family: var(--ds-font-family-code);\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-primary);\n  margin: 0;\n}\n/* A <system-reminder> block, framed instead of hidden: every character of\n   its text still renders, just under a chip instead of literal tags. The\n   left border this used to carry read as a blockquote and was mistaken for\n   a stray outline on the whole card; dropped. */\n.tool-render-reminder {\n  margin: 0.5rem 0;\n}\n.tool-render-reminder-chip {\n  display: inline-block;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border-radius: 999px;\n  margin-bottom: 0.25rem;\n  padding: 0.0625rem 0.375rem;\n  font-size: 0.6875rem;\n  line-height: 1rem;\n}\n/* Skill frontmatter table (name, resource-resolution hint). Only what the\n   loaded skill\'s canonical output actually carries -- description and\n   whenToUse are catalog-only fields, stripped before a skill loads. */\n.tool-render-skill-table {\n  border-collapse: collapse;\n  margin-bottom: 0.5rem;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n}\n.tool-render-skill-table th {\n  color: var(--dsw-alias-label-tertiary);\n  text-align: left;\n  font-weight: 400;\n  padding: 0.125rem 0.5rem 0.125rem 0;\n  vertical-align: top;\n  white-space: nowrap;\n}\n.tool-render-skill-table td {\n  color: var(--dsw-alias-label-primary);\n  padding: 0.125rem 0;\n  white-space: pre-wrap;\n}\n\n/* read_image and see image bodies. One bounded container per card, with one\n   interior scroll area. Picture cards hold mixed content, so this rule is\n   shaped like .tool-render-markdown-body but stands alone instead of\n   overloading it. */\n.tool-render-image-body {\n  border: 1px solid var(--dsw-alias-border-l1);\n  border-radius: 0.375rem;\n  margin: 0.25rem 0 0.125rem 0.25rem;\n  max-height: 25rem;\n  overflow-y: auto;\n  padding: 0.5rem 0.625rem;\n}\n.tool-render-image-body > .tool-render-markdown-body {\n  margin: 0 0 0.375rem;\n}\n/* The picture shrinks to the card width, keeps its aspect ratio, and never\n   grows past its natural pixel size. width and height stay auto, so the\n   browser only ever scales down. The link centers the picture when it is\n   narrower than the card. */\n.tool-render-image-link {\n  display: flex;\n  justify-content: center;\n}\n/* A 2px border in a LABEL token, not a border token: the border tokens are\n   tuned to sit quietly against panel backgrounds, which is exactly wrong\n   here, where the job is to mark where the picture\'s own edge is against\n   arbitrary image content. */\n.tool-render-image {\n  max-width: 100%;\n  width: auto;\n  height: auto;\n  border: 0.125rem solid var(--dsw-alias-label-tertiary);\n  border-radius: 0.25rem;\n}\n/* Metadata lines under the picture: name, type, full path. */\n.tool-render-image-meta {\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  overflow-wrap: anywhere;\n  margin-top: 0.375rem;\n}\n/* A path the route cannot serve. The message sits where the picture would\n   sit, so a broken load is always visible. */\n.tool-render-image-broken {\n  color: var(--dsw-alias-state-error-primary);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  overflow-wrap: anywhere;\n  padding: 0.5rem 0;\n  text-align: center;\n}\n/* The see row description clamp. The cap applies only while collapsed, so\n   this rule rides beside .tool-render-markdown-body and comes after it in\n   this file to win the max-height and overflow contest. */\n.tool-render-see-desc {\n  max-height: 8rem;\n  overflow: hidden;\n}\n.tool-render-see-toggle {\n  align-self: flex-start;\n  background: transparent;\n  border: none;\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  margin: 0 0 0.375rem;\n  padding: 0;\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n}\n.tool-render-see-toggle:hover {\n  color: var(--dsw-alias-label-primary);\n  text-decoration: underline;\n}\n\n/* Compaction checkpoint card. One line per compacted message, count-badged\n   tool strips, elision notes, and a stats footer. Message lines clamp to a\n   single line with an ellipsis: the full text lives on the surface the\n   marker replaced, so the card only summarizes. */\n.tool-render-compaction {\n  flex-direction: column;\n  display: flex;\n  padding-bottom: 0.25rem;\n}\n.tool-render-compaction-line {\n  display: flex;\n  align-items: baseline;\n  gap: 0.375rem;\n  min-width: 0;\n  padding: 0.0625rem 0 0.0625rem 0.25rem;\n}\n.tool-render-compaction-role {\n  flex: none;\n  color: var(--dsw-alias-label-caption);\n  font-size: 0.6875rem;\n  line-height: 1.125rem;\n  text-transform: uppercase;\n}\n.tool-render-compaction-text {\n  flex: 1 1 auto;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n}\n.tool-render-compaction-strip {\n  display: flex;\n  align-items: center;\n  gap: 0.375rem;\n  min-width: 0;\n  padding: 0.0625rem 0 0.0625rem 0.25rem;\n}\n.tool-render-compaction-strip .tool-render-compaction-text {\n  flex: 0 1 auto;\n}\n.tool-render-compaction-note {\n  color: var(--dsw-alias-label-caption);\n  font-style: italic;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  padding: 0.0625rem 0 0.0625rem 0.25rem;\n}\n.tool-render-compaction-stats {\n  color: var(--dsw-alias-label-caption);\n  font-size: 0.6875rem;\n  line-height: 1.125rem;\n  border-top: 1px solid var(--dsw-alias-border-l1);\n  margin-top: 0.25rem;\n  padding: 0.25rem 0 0 0.25rem;\n}\n\n/* ---- Approval answer bar and decided badge. While an approval that\n   carries this card\'s callId is pending, the card answers it inline; once\n   decided, a durable badge keeps the outcome. The strip is additive: the\n   card keeps rendering its normal content above it. */\n/* A COLUMN, not a row: the comment affordance is a precondition of the\n   decision, so it reads above the buttons rather than beside them. Order is\n   "add comment" (left) -> optional textarea (full width) -> the decision\n   pair (right), which is also the order the user moves through them. */\n.tool-render-approval-strip {\n  display: flex;\n  flex-direction: column;\n  align-items: stretch;\n  gap: 0.25rem;\n  /* Bottom margin matches .tool-render-output\'s own 0.25rem, so the\n     strip\'s last row does not kiss the card\'s bottom border. */\n  margin: 0.25rem 0 0.25rem 0.25rem;\n}\n/* Reject/approve pack to the card\'s bottom-right corner (aidos queue recipe:\n   actions sit at the end of their container). */\n.tool-render-approval-actions {\n  display: flex;\n  align-items: center;\n  justify-content: flex-end;\n  gap: 0.25rem;\n  padding-bottom: 0.25rem;\n}\n/* The toggle sits above the buttons on the card\'s RIGHT edge, matching the\n   actions below it \u2014 the whole comment affordance reads as one right-aligned\n   column, and only the textarea spans the full width. */\n.tool-render-approval-comment-toggle {\n  align-self: flex-end;\n}\n/* (The decided badge that used to live here was retired on 2026-09-08: the\n   durable verdict is now a badge on the collapsed row, .tool-render-verdict,\n   and the answer bar renders nothing once a decision has settled.) */\n/* Aidios review-queue button recipe, mapped onto dsw-alias tokens and the\n   #169 scale: 1px hairline border, surface bg, secondary text, R-CHIP\n   radius, T-META type, P-CHIP P-BTN-W padding, hover raises surface +\n   primary text, disabled 0.45. (Was raw 5px 12px: 12px is exactly\n   P-BTN-W, 5px tightens 1px to P-CHIP \u2014 flagged in the #169 report.) */\n.tool-render-approval-btn {\n  border: 1px solid var(--dsw-alias-border-l3);\n  background: var(--dsw-alias-bg-base);\n  color: var(--dsw-alias-label-secondary);\n  border-radius: 0.25rem;\n  cursor: pointer;\n  font-size: 0.75rem;\n  line-height: 1.25rem;\n  padding: 0.25rem 0.75rem;\n}\n.tool-render-approval-btn:hover:enabled {\n  background: var(--dsw-alias-interactive-bg-hover-solid);\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-approval-btn:disabled {\n  opacity: 0.45;\n  cursor: default;\n}\n.tool-render-approval-reject {\n  color: var(--dsw-alias-state-error-primary);\n  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 55%, var(--dsw-alias-border-l3));\n}\n/* First click arms ("? Confirm reject"), second click rejects; the armed\n   fill makes the confirm step read unmistakably. */\n.tool-render-approval-reject[data-armed] {\n  background: var(--dsw-alias-state-error-primary);\n  border-color: var(--dsw-alias-state-error-primary);\n  color: #fff;\n  font-weight: 600;\n}\n/* Primary/confirm button of the recipe: filled secondary-label bg with\n   surface text, weight 600, no border. */\n.tool-render-approval-approve {\n  border-color: transparent;\n  background: var(--dsw-alias-label-secondary);\n  color: var(--dsw-alias-bg-base);\n  font-weight: 600;\n}\n.tool-render-approval-approve:hover:enabled {\n  background: var(--dsw-alias-label-secondary);\n  color: var(--dsw-alias-bg-base);\n  filter: brightness(1.15);\n}\n/* A comment draft relabels the action "Approve + send", so it reads warn:\n   the click now also steers the comment to the running agent. */\n.tool-render-approval-approve[data-with-comment] {\n  color: var(--dsw-alias-state-warn-primary);\n}\n.tool-render-approval-approve[data-with-comment]:hover:enabled {\n  background: var(--dsw-alias-label-secondary);\n  color: var(--dsw-alias-state-warn-primary);\n  filter: brightness(1.15);\n}\n.tool-render-approval-comment-toggle {\n  border: none;\n  background: none;\n  color: var(--dsw-alias-label-tertiary);\n  cursor: pointer;\n  font-size: 0.6875rem;\n  line-height: 1rem;\n  padding: 0.0625rem 0.25rem;\n  text-decoration: underline dotted;\n}\n.tool-render-approval-comment-toggle:hover:enabled {\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-approval-comment-toggle:disabled {\n  opacity: 0.55;\n  cursor: default;\n}\n.tool-render-approval-comment {\n  box-sizing: border-box;\n  flex-basis: 100%;\n  resize: vertical;\n  min-height: 2.5rem;\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 0.375rem;\n  background: var(--dsw-alias-bg-base);\n  color: var(--dsw-alias-label-primary);\n  font-family: inherit;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  padding: 0.25rem 0.5rem;\n}\n.tool-render-approval-comment:focus {\n  outline: 0.125rem solid var(--dsw-alias-state-business-primary);\n  outline-offset: -0.0625rem;\n}\n/* The durable approval verdict on the COLLAPSED row (owner, 2026-09-08):\n   [shield | APPROVED], sitting immediately after the tool-call label badge.\n   It reads as a small status stamp \u2014 uppercase, tight, nowrap \u2014 so the row\n   still scans as one line and the verdict is legible without expanding.\n   Approved carries no accent: at row scale a coloured pill competes with the\n   tool name for attention, and "it was approved" is the unremarkable case.\n   Rejected keeps the error tint, because a refusal that looks identical to an\n   approval is worth exactly one colour.\n   Sourced from the guarded-approvals fold, so it survives a page reload. */\n.tool-render-verdict {\n  display: inline-flex;\n  align-items: center;\n  gap: 0.25rem;\n  flex: none;\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 0.25rem;\n  padding: 0 0.375rem;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.6875rem;\n  font-weight: 600;\n  letter-spacing: 0.04em;\n  line-height: 1.125rem;\n  white-space: nowrap;\n}\n.tool-render-verdict[data-outcome="rejected"] {\n  color: var(--dsw-alias-state-error-primary);\n  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 55%, var(--dsw-alias-border-l3));\n}\n.tool-render-verdict-shield {\n  flex: none;\n}\n/* The pending ask\'s reason (owner, 2026-09-08): while an approval is open the\n   card must say WHY it is being asked. Tertiary label, wrapping, sitting above\n   the actions so the question reads before the answer. */\n.tool-render-approval-reason {\n  align-self: stretch;\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  margin-bottom: 0.25rem;\n  overflow-wrap: anywhere;\n  white-space: pre-wrap;\n}\n/* The sandbox-escalation banner (owner, 2026-09-09). The label line reuses\n   the guard rewrite banner\'s .tool-render-cmd-label styling, so the two\n   "something happened to this call" annotations read as one family. The\n   mode rides the label line as its own chip \u2014 it decides how far the\n   sandbox widens, so it stays discoverable without being jammed into the\n   justification sentence. The justification below is prose in the same\n   tertiary 12px/18px voice as the approval reason, never code. */\n/* The chip carries the ESCALATION colour, not a neutral one (owner,\n   2026-09-09). The mode is the single most consequential fact on the card \u2014\n   how far the sandbox widens \u2014 and a grey chip made it read as incidental\n   metadata beside its own warning. Sharing --dsh-outline-escalated with the\n   card outline means the chip and the outline state the same thing in the\n   same colour, so the eye pairs them.\n\n   The outline half of #105 landed in #177. A settled escalation now keeps\n   the yellow outline even when the call was also guard approved, and an\n   open escalation ask paints yellow while it waits. The chip and the\n   outline agree in every state, so a mismatch between them is a bug, not\n   a known gap. Do not fix one by neutralising the chip again. The outline\n   was the wrong half, and now it is the right one. */\n.tool-render-escalation-mode {\n  font: inherit;\n  white-space: nowrap;\n  color: var(--dsh-outline-escalated);\n  border: 1px solid var(--dsh-outline-escalated);\n  border-radius: 0.25rem;\n  margin-left: 0.375rem;\n  padding: 0 0.25rem;\n}\n.tool-render-escalation-reason {\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  margin: 0.125rem 0 0.25rem 0.25rem;\n  overflow-wrap: anywhere;\n  white-space: pre-wrap;\n}\n/* The settled ask (approved OR rejected \u2014 the trigger is settledness, not\n   approval): muted and small, so a decided request no longer reads as\n   though it still needed an answer. This quiets the ASK only \u2014 the outcome\n   keeps its own surfaces (the collapsed-row verdict badge, the error\n   outline), which this rule never touches. */\n.tool-render-escalation-reason-muted {\n  color: var(--dsw-alias-label-caption);\n  font-size: 0.6875rem;\n  line-height: 1rem;\n}\n/* #149: read-only dataflow diagram for pipe/redirect bash commands. Stages\n   are blocks in execution order joined by typed arrows; redirects are\n   labelled endpoints under their stage; heredoc bodies collapse to one\n   disclosure each. Plain flexbox + glyphs, no graph dependency. */\n.tool-render-diagram {\n  font-family: var(--ds-font-family-code);\n  margin: 0.25rem 0 0 0.25rem;\n  padding: 0.125rem 0;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  color: var(--dsw-alias-label-tertiary);\n}\n/* #162 criterion 0. v1/v2 shipped `row wrap`, and the LIVE measurements\n   against real commands showed why that lied by layout: flex line-breaking\n   runs on items\' MAX-content base sizes (a stage with a long flag cluster\n   or a quoted string carries a 380-640px base), so the row wrapped as soon\n   as the base sum exceeded the pane -- at the dsh chat column\'s 748px cap,\n   the owner\'s journalctl|rg|tail fixture wrapped its tail stage and a\n   `node -e "..."` stage never fit below ~1270px. A wrapped row is visually\n   indistinguishable from a stacked sequence, so the horizontal=pipe/axis\n   claim did not exist at those widths. The fix: the stage row stays ONE row\n   ALWAYS (nowrap); stages shrink inside it (see the stage rule) and only\n   overflow horizontally with a scroll when a pipeline genuinely cannot\n   fit. An overflowed pipe row reads as one band cut at its right edge with\n   a scroll affordance -- nothing like the stacked vertical sequence, whose\n   members have no lateral overflow (-- #162 criterion 0\'s stated answer:\n   horizontal scroll, plus content-proportional shrink, below). */\n/* #167 criterion 8: equal HEIGHT stays \u2014 a measured decision, not the\n   default. The screenshot\'s empty boxes had TWO causes: equal width (fixed\n   in the stage rule below) and every item stretching to the tallest. Both\n   were measured on the owner\'s command (see the ticket report): the width\n   fix drops the row from four lines to two, so keeping `align-items:\n   stretch` leaves each short box one line emptier than its content; hugging\n   (`flex-start`) removes that line but breaks the row into ragged bottoms \u2014\n   and a ragged pipe row stops reading as ONE band, which is the axis\n   contract\'s whole claim above. One line of dead space keeps the band; the\n   declaration below is the decision, not an inheritance. */\n.tool-render-diagram-flow {\n  display: flex;\n  flex-flow: row nowrap;\n  align-items: stretch;\n  gap: 0.25rem;\n  overflow-x: auto;\n}\n/* Content-proportional stage blocks (#167 criterion 6, narrowing #162\'s\n   equal-share a second time). #162 set `flex: 1 1 0%` DELIBERATELY, to spend\n   horizontal width rather than waste it (the freed width goes to the\n   parsed-argument chips). #165 narrowed it once: a LONE stage hugs content,\n   because it has nothing to share with \u2014 but kept equal-share where several\n   stages share a row. The owner\'s screenshot sanctions narrowing it again:\n   equal slices give the `rg` stage (regex plus a long path) one fifth of the\n   row, so it wraps to four lines and sets a row height four nearly-empty\n   boxes inherit. `flex: 1 1 auto` keeps the GROW (the row still spends its\n   full width \u2014 #162\'s criterion is honoured, not reverted) but sizes from\n   CONTENT (flex-basis auto): free space beyond the content bases still\n   spreads evenly, so a longer stage gets more width and wraps less, which\n   drops the row height for every box in it. THE TRADE, stated plainly: short\n   stages no longer soak an equal share, and rows whose natural widths exceed\n   the pane reach their horizontal scroll sooner (C0 below: they scroll, they\n   never wrap). min-width 0 plus the words block\'s pre-wrap still lets long\n   content wrap INSIDE its share; a genuinely unbreakable token still slides\n   the row into its own horizontal scroll (-- #162: the pipe row never\n   becomes a stack). */\n.tool-render-diagram-stage {\n  box-sizing: border-box;\n  display: flex;\n  flex-direction: column;\n  gap: 0.25rem;\n  flex: 1 1 auto;\n  min-width: 0;\n  background: var(--dsw-alias-markdown-code-block);\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 0.5rem;\n  padding: 0.375rem 0.5rem;\n}\n.tool-render-diagram-words {\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-diagram-words code.hljs {\n  background: transparent;\n  padding: 0;\n  font-family: inherit;\n  font-size: inherit;\n  line-height: inherit;\n  white-space: inherit;\n}\n/* #162 criteria 3-5: parsed-argument chips. Each chip\'s text is the\n   VERBATIM source slice of the token it names (never a re-serialisation \u2014\n   criterion 3; quoting/escaping/spacing read as typed). Roles: the command\n   head (first chip), flags, a bound value, a subcommand, positionals.\n   .tool-render-diagram-args is a wrap ROW so chips hug horizontally and the\n   freed width the equal-share stage blocks freed (criterion 1) goes here.\n   Chips are plain code text, not highlighted: the slice is data the reader\n   checks against the raw command, and hljs would REPRINT it. */\n.tool-render-diagram-args {\n  display: flex;\n  flex-flow: row wrap;\n  gap: 0.25rem;\n  min-width: 0;\n}\n.tool-render-diagram-arg {\n  box-sizing: border-box;\n  font-family: var(--ds-font-family-code);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-bg-layer-1);\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 0.25rem;\n  padding: 0 0.25rem;\n  white-space: pre-wrap;\n  word-break: break-word;\n  min-width: 0;\n}\n.tool-render-diagram-arg-cmd {\n  color: var(--dsw-alias-label-primary);\n  font-weight: 600;\n}\n.tool-render-diagram-arg-subcommand {\n  font-weight: 600;\n  border-color: var(--dsw-alias-border-l2);\n}\n.tool-render-diagram-arg-value {\n  color: var(--dsw-alias-label-tertiary);\n  border-style: dashed;\n}\n.tool-render-diagram-arg-positional {\n  color: var(--dsw-alias-label-tertiary);\n}\n/* The arrow carries its verbatim operator as text (`|` vs `|&`), so the two\n   are visually distinguishable without the tooltip; the title states what\n   each carries for discoverability. */\n.tool-render-diagram-arrow {\n  align-self: center;\n  white-space: nowrap;\n  color: var(--dsw-alias-label-tertiary);\n}\n.tool-render-diagram-arrow-stderr {\n  color: var(--dsw-alias-label-primary);\n  font-weight: 600;\n}\n.tool-render-diagram-endpoint {\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-tertiary);\n  border-top: 1px dashed var(--dsw-alias-border-l3);\n  padding-top: 0.25rem;\n}\n.tool-render-diagram-endpoint code.hljs {\n  background: transparent;\n  padding: 0;\n  font-family: inherit;\n  font-size: inherit;\n  line-height: inherit;\n  white-space: inherit;\n}\n.tool-render-diagram-badge {\n  display: inline-block;\n  font-size: 0.6875rem;\n  line-height: 1rem;\n  color: var(--dsw-alias-label-tertiary);\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 0.25rem;\n  padding: 0 0.375rem;\n  margin: 0 0.375rem 0.375rem 0;\n  white-space: nowrap;\n}\n.tool-render-diagram-exit {\n  font-size: 0.6875rem;\n  line-height: 1rem;\n  white-space: nowrap;\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 0.25rem;\n  padding: 0 0.375rem;\n  align-self: flex-start;\n}\n.tool-render-diagram-exit-ok {\n  color: var(--dsw-alias-label-tertiary);\n}\n.tool-render-diagram-exit-fail {\n  color: var(--dsw-alias-state-error-primary);\n  border-color: var(--dsw-alias-state-error-primary);\n  font-weight: 600;\n}\n.tool-render-diagram-heredoc {\n  font: inherit;\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  color: var(--dsw-alias-label-tertiary);\n  background: transparent;\n  border: 1px dashed var(--dsw-alias-border-l3);\n  border-radius: 0.25rem;\n  padding: 0.125rem 0.375rem;\n  cursor: pointer;\n  text-align: left;\n  white-space: pre-wrap;\n  word-break: break-word;\n}\n.tool-render-diagram-heredoc-open {\n  display: flex;\n  flex-direction: column;\n  gap: 0.25rem;\n  align-items: flex-start;\n}\n.tool-render-diagram-heredoc-body {\n  box-sizing: border-box;\n  margin: 0;\n  max-width: 100%;\n  max-height: 10rem;\n  overflow-y: auto;\n  white-space: pre-wrap;\n  word-break: break-word;\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  color: var(--dsw-alias-label-primary);\n}\n/* #160: a multi-statement script as an ordered sequence of statement groups.\n   The visual contract against #149\'s refusal: pipes lay stages side-by-side\n   in one row (left to right = data movement) with the verbatim operator plus\n   `\u2192`; sequence members stack VERTICALLY here (top to bottom = time order),\n   joined by a "then \u2193" marker that shares no glyph with any pipe. The word\n   "then" is doing the work \u2014 plain English for order, impossible to read as\n   bytes flowing. Verbatim text groups (subshells, &&-chains) get a dashed\n   outline to signal "shown, not drawn". */\n.tool-render-diagram-seq {\n  display: flex;\n  flex-direction: column;\n  gap: 0.25rem;\n}\n/* A reused single-statement diagram nested in a sequence keeps v1\'s blocks\n   untouched; only its outer margin is neutralised so members align. */\n.tool-render-diagram-seq .tool-render-diagram {\n  margin: 0;\n}\n/* #167 criterion 1: NO RAIL between independent statements. #162 made the\n   unconditional boundary a rail-with-no-word so it could never be mistaken\n   for a conditional one \u2014 "one is nothing, the other is prominent text".\n   The rail still drew a connector between statements that are INDEPENDENT\n   (the second runs whether or not the first succeeded), implying a\n   dependency that does not exist \u2014 the same class of falsehood #162 removed\n   the `then` marker for. The boundary is now genuinely nothing: an empty\n   separator paints no box at all (its padding/min-height is pure vertical\n   rhythm, kept wider than the in-panel card gap so statement edges breathe\n   more than chain-part edges). A comment riding the separator is CONTENT,\n   not chrome, and still renders verbatim in its muted voice beside nothing\n   \u2014 removing the rail must never remove the comment with it (pinned). The\n   conditional boundary stays marked ON the dependent part\'s own panel (see\n   .tool-render-diagram-conditional): one is nothing, the other is prominent\n   text \u2014 that distinction never touched the rail. */\n.tool-render-diagram-seq-sep {\n  display: flex;\n  flex-flow: row nowrap;\n  align-items: baseline;\n  gap: 0.5rem;\n  margin-left: 0.375rem;\n  padding: 0.0625rem 0 0.0625rem 0.5rem;\n  min-height: 0.25rem;\n}\n.tool-render-diagram-seq-sep-text {\n  background: transparent;\n  padding: 0;\n  font-family: inherit;\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-tertiary);\n}\n/* #162 criterion 2 (amended by #168): the conditional marker is a CHIP at\n   the top of the DEPENDENT row\'s own panel \u2014 just `&&` or `||`, with the\n   plain-language condition on hover (title + data-dsh-tip: one string feeds\n   the styled tooltip and the screen-reader name alike, so no aria-label is\n   introduced that could drift from the visual). Never on a chain\'s base row\n   (the base runs unconditionally, #162 criterion 2b). Chip-sized, but never\n   mistaken for an argument chip: it leads the card ABOVE the stage flow\n   (never inline in the chip row), and the dashed outline against bold type\n   answers the solid-outline regular-weight argument chips at a glance. */\n.tool-render-diagram-conditional {\n  display: inline-flex;\n  flex-flow: row nowrap;\n  align-items: baseline;\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  font-weight: 700;\n  color: var(--dsw-alias-label-primary);\n  border: 1px dashed var(--dsw-alias-border-l2);\n  border-radius: 0.25rem;\n  padding: 0 0.375rem;\n  margin-bottom: 0.25rem;\n  white-space: nowrap;\n}\n/* #168: a stage that earns no box. Chips already delimit themselves, so the\n   stage outline is redundant here \u2014 transparent border and background plus\n   zero padding leave the chips and arrows to read as the row. The rule for\n   earning a box lives in BashCommandDiagram (redirects, an exit pill, or\n   verbatim words); this class only removes the chrome, never the layout \u2014\n   the nowrap flow, the scroll, and the content-proportional flex above are\n   untouched, so #162\'s C0 holds exactly as pinned. */\n.tool-render-diagram-stage-bare {\n  border-color: transparent;\n  background: transparent;\n  padding: 0;\n}\n.tool-render-diagram-text {\n  box-sizing: border-box;\n  display: flex;\n  flex-direction: column;\n  gap: 0.25rem;\n  border: 1px dashed var(--dsw-alias-border-l3);\n  border-radius: 0.625rem;\n  padding: 0.5rem 0.625rem;\n  min-width: 0;\n  max-width: 100%;\n}\n/* #165: one `&&`/`||` chain as ONE panel, rows as cards inside it. #167\n   changed the panel\'s voice from outline to weight (see the rule below):\n   the panel is a weighted field (darker than the card in the dark theme),\n   and each part keeps its card outline exactly\n   (same border, layer-1 background, tight 0.15625rem vertical padding \u2014 the\n   restraint that makes the target read clean). The part, not\n   the stage box, is now the outline unit: stages inside a part go FLAT\n   (borderless, backgroundless, paddingless \u2014 see the descendant rule below),\n   which removes the second outline level the ticket calls excessive. A\n   reused single-statement diagram nested in a part keeps v1\'s blocks\n   untouched otherwise; only its outer margin is neutralised, as in sequences.\n   AXIS CONTRACT (criterion 3): parts stack vertically at CONTENT width\n   (align-items: flex-start \u2014 time passes, like sequence members) and never\n   sit side by side, so they cannot read as pipe stages; a pipe row keeps its\n   horizontal nowrap band with `|`/`\u2192` glyphs and its own scroll (C0 below,\n   untouched). max-width + min-width keep an overlong pipeline\'s scroll\n   inside the card instead of breaking the pane. */\n/* #167 criteria 3-5, THE TOKEN CHOICE: bg-base. These aliases are ELEVATION,\n   not literal darkness \u2014 base is the canvas layer-1 sits on in BOTH themes,\n   so a base field stays distinguishable from the layer-1 tool card behind\n   it either way (darker field in the dark theme, lighter field in the light\n   one: the direction flips, the region-vs-objects read does not). layer-2\n   would elevate the WRONG way (a raised surface, not a field); mask/primary/\n   tertiary are overlays and accents, not surfaces. The parts reuse layer-1\n   exactly as before, so the field cannot collide with them: base and\n   layer-1 are adjacent but distinct steps on the scale, and every part keeps\n   its own border-l2 outline on top. Radius and padding stay: they shape the\n   field and inset the cards, not draw an outline. */\n.tool-render-diagram-chainpanel {\n  box-sizing: border-box;\n  display: flex;\n  flex-direction: column;\n  gap: 0.25rem;\n  background: var(--dsw-alias-bg-base);\n  border-radius: 0.75rem;\n  padding: 0.375rem 0.5rem;\n  min-width: 0;\n  max-width: 100%;\n}\n.tool-render-diagram-part {\n  box-sizing: border-box;\n  align-self: flex-start;\n  min-width: 0;\n  max-width: 100%;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  background: var(--dsw-alias-bg-layer-1);\n  padding: 0.15625rem 0.5rem;\n}\n.tool-render-diagram-part .tool-render-diagram {\n  margin: 0;\n  padding: 0;\n}\n.tool-render-diagram-part .tool-render-diagram-stage {\n  border-color: transparent;\n  background: transparent;\n  padding: 0;\n}\n/* #165, THE DELIBERATE TRADE against #162 criterion 1 \u2014 kept by #167.\n   #162 set equal-share stages ON PURPOSE, to spend horizontal width rather\n   than waste it (the freed width goes to the parsed-argument chips).\n   Equal-share is exactly what stretches a SHORT command across a wide row:\n   a single stage has nothing to share its row WITH, so equal-share there is\n   pure stretch \u2014 the "negative space created by the empty portion of a\n   command line" the owner is describing. The reversal is therefore NARROW:\n   single-stage flows (data-stages="1", set by BashCommandDiagram) size to\n   content with NO grow (`flex: 0 1 auto`), while multi-stage pipelines now\n   size from content WITH grow (`flex: 1 1 auto` above, #167) \u2014 #162\'s\n   spend-the-width decision stands everywhere as grow, but no stage starts\n   from a zero base anymore.\n   #162\'s C0 re-checked in the same breath: the flow rule above stays\n   `flex-flow: row nowrap` with `overflow-x: auto`, so a pipeline row still\n   never wraps into a column (a wrapped pipe row is indistinguishable from a\n   stacked sequence) \u2014 it scrolls. Single-stage hug cannot break C0: one\n   stage has no row-mate to wrap against; its chips wrap INSIDE it, as before. */\n.tool-render-diagram-flow[data-stages="1"] .tool-render-diagram-stage {\n  flex: 0 1 auto;\n}\n.tool-render-diagram-lead {\n  white-space: pre-wrap;\n  word-break: break-word;\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  color: var(--dsw-alias-label-tertiary);\n  margin-bottom: 0.375rem;\n}\n/* #164: Graph / Command tabs on the expanded bash row. The strip reuses the\n   repo\'s existing chrome rather than inventing a tab language: the button\n   reset and focus ring come from the run_code spoiler\n   (.tool-render-runcode-spoiler), the mono small-label voice from the IN/OUT\n   section labels (.tool-render-code-out-label), and the selected-border idiom\n   from the ask form\'s selected option (.tool-render-qoption[data-selected]).\n   The selected paint keys on the SAME aria-selected attribute assistive\n   technology reads, so the two cannot disagree. */\n.tool-render-bash-tabs {\n  display: flex;\n  flex-flow: row nowrap;\n  gap: 0.25rem;\n  margin: 0.375rem 0 0 0.25rem;\n}\n.tool-render-bash-tab {\n  background: none;\n  border: none;\n  border-bottom: 0.125rem solid transparent;\n  padding: 0.125rem 0.375rem;\n  cursor: pointer;\n  font-family: var(--ds-font-family-code);\n  font-size: 0.6875rem;\n  line-height: 1rem;\n  color: var(--dsw-alias-label-tertiary);\n  text-align: left;\n}\n.tool-render-bash-tab:hover {\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-bash-tab[aria-selected="true"] {\n  color: var(--dsw-alias-label-primary);\n  font-weight: 600;\n  border-bottom-color: var(--dsw-alias-state-business-primary);\n}\n.tool-render-bash-tab:focus-visible {\n  outline: 0.125rem solid var(--dsw-alias-state-business-primary);\n  outline-offset: 0.125rem;\n  border-radius: 0.25rem;\n}\n/* The tab panel is a neutral container: the graph and the command keep their\n   own margins and scrolling, so switching tabs changes the content, never\n   the card\'s shape language. */\n.tool-render-bash-panel {\n  display: flex;\n  flex-direction: column;\n  min-width: 0;\n}\n';
+var client_default = '/* ==========================================================================\n * THE SCALE (#169) \u2014 the file\'s contract. Read this before adding a rule.\n *\n * Seven tickets (#148, #149, #160, #162, #164, #165, #167) each added\n * surfaces to solve their own problem, and the audit counted the result:\n * 14+ padding values, 8 radii, five rem type sizes plus raw 10/11/12px, a\n * raw 5px 12px, a raw 4px, and one hardcoded rgba red. Every rule below is\n * on exactly one step of each scale in this header. A value not listed here\n * is a fifth scheme, not a judgment call.\n *\n * SCOPE: the whole file, deliberately. The raw pixels lived OUTSIDE the\n * diagram (ask buttons, approval buttons, the verdict stamp, the reason\n * lines) \u2014 a diagram-only pass would have added a scale without removing\n * the alternatives, which is the worst outcome. So every family below \u2014\n * row chrome, run-code sections, card outlines, ask form, roster, bodies,\n * approval, diagram \u2014 cites these steps.\n *\n * INHERITED, not revisited (#168, minutes old): the box-earning rule (a\n * stage draws its box only for redirects, an exit pill, or verbatim words),\n * the conditional chip, the part card values, the weighted panel voice,\n * and the tightened rhythm (statement stack 1.25rem -> 0.875rem, in-panel\n * gap 0.375 -> 0.25rem). If this scale ever wants one of those values\n * changed, that is a new ticket with a screenshot, not a drive-by here.\n * Inherited from #167 the same way: the bg-base field, content-sized\n * stages, the rail-free boundary, nowrap+scroll (C0).\n *\n * PADDING steps (vertical rhythm is margin+gap as well as padding \u2014 the\n * steps are shared). P-FLUSH 0. P-HAIR 0.0625rem. P-TIGHT 0.125rem.\n * P-CHIP 0.25rem. P-STAMP 0.375rem. P-CARD 0.5rem. P-CODE-V 0.625rem.\n * P-BTN-W 0.75rem. P-CODE-H 0.8125rem. Indents: 1.125rem (lists),\n * 1.375rem (nested calls), 1.625rem (answer notes). The full closed set is\n * pinned in bash-chain-panel.test.ts \u2014 any padding outside it fails the\n * suite. Named idioms: pill P-HAIR P-STAMP (badges, name badge, reminder\n * chip); chip-inline `0 P-CHIP` in dense chip rows (argument chips) vs\n * `0 P-STAMP` for standalone stamps (conditional, exit, diagram badge);\n * card P-STAMP P-CARD (#168 rhythm); card-tight 0.15625rem P-CARD (#165\'s\n * restraint, kept verbatim); verbatim block P-CODE-V P-CODE-H; text body\n * P-CARD P-CODE-V (steps are per-axis values and re-compose across\n * idioms); button P-CHIP P-BTN-W (was raw 5px 12px, now exact-rem\n * except 1px tighter vertically \u2014 flagged in the #169 report).\n *\n * RADIUS steps. R-DOT 0.0625rem (the sep dot only). R-CHIP 0.25rem (every\n * chip, badge, pill, heredoc, tab focus \u2014 absorbs raw 4px exactly).\n * R-CONTROL 0.375rem (name badge, inspect, text bodies, approval comment \u2014\n * absorbs 0.4375rem and the 6px join corners exactly). R-CARD 0.5rem\n * (stage, part, ask options). R-GROUP 0.625rem (the dashed verbatim group\n * ONLY \u2014 see below). R-PANEL 0.75rem (card, verbatim blocks, chain panel).\n * R-PILL 999px (pills read as pills at any height). R-FLAT 0 (joined\n * card corners where sections meet).\n *\n * TYPE steps, each with its line-height voice. T-STAMP 0.6875rem/1rem\n * (chips, badges, pills, tabs, captions, the verdict stamp \u2014 absorbs raw\n * 10px and 11px, +1px flagged). T-META 0.75rem/1.125rem (endpoints,\n * arguments, conditional, heredoc, roster ids; the roster rows pair it\n * with 1.25rem). T-CODE 0.8125rem/1.375rem (verbatim blocks; the diagram\n * surface and UI prose pair 0.8125rem with 1.25rem, dense notes with\n * 1.125rem). T-TITLE 0.875rem/1.5rem (row title; the summary override\n * drops to 0.8125rem for de-emphasis). T-ICON 1rem/1 (pager glyphs only \u2014\n * an icon metric, exempt by nature). `font: inherit` is always allowed: it\n * inherits a scale step, it is not a new one.\n *\n * BORDER levels \u2014 what each MEANS, not merely that three exist. L1 is a\n * line drawn ON a surface to divide content: code-block edges, text-body\n * edges, question separators, the compaction footer, the diff-path rule.\n * L2 is the edge of a discrete OBJECT against its field: the card, the\n * part, the run-code section sides, the conditional chip (dashed). L3 is\n * glance chrome: token chips, badges, pills, the stage box, the hover\n * lift, ask options. DASHED is the annotation voice \u2014 a claim ABOUT the\n * command (conditional, heredoc, endpoint, verbatim group, bound value),\n * answered at a glance against solid-outline token chips (pieces OF the\n * command). Dashed takes the level that reads against its host (L2 on\n * layer-1, L3 on code-block); that is contrast, not a fourth level.\n *\n * SURFACES \u2014 visual difference MEANS something. REGION is bg-base: the\n * chain panel field, and markdown `pre` blocks (a region nested inside a\n * body). OBJECT is bg-layer-1: the card, the part, argument chips, the\n * run-code sections. VERBATIM is markdown-code-block: outputs, code,\n * diffs, the earned stage box \u2014 bytes from the machine. CHROME is\n * interactive-bg-hover (+solid) and label-secondary fills: badges, the\n * reminder chip, primary buttons \u2014 UI the renderer added, not command\n * content. GLYPH is label-caption / border-l2-as-background: the sep dot,\n * the diff-sep rules \u2014 marks, not surfaces.\n *\n * STATE MARKS ride OUTLINES, never backgrounds: 0.1875rem escalated /\n * guard / answered / pending, 0.125rem error / stopped / focus. Outlines\n * paint outside the box, so a state change never reflows a row. #fff is\n * absolute bright on purpose (the pending ask must win on either theme);\n * the diff hues (orange/blue del/add, marker hexes) are a content language\n * \u2014 a deletion is not an error \u2014 and deliberately NOT theme tokens.\n *\n * THE THEME CONTRACT (criterion 5): every token above is a dsw-alias \u2014\n * elevation, not colour. bg-base stays distinguishable from bg-layer-1\n * either way the themes flip it (#167\'s proof, inherited). The error wash\n * derives from the theme\'s own error token via color-mix, so it follows\n * the theme instead of fighting it (the old hardcoded rgba red assumed\n * one theme). The one standing px exception is the picture edge: a 2px\n * label-tertiary border that must read against ARBITRARY image content,\n * where the quiet border tokens are exactly wrong (commented at the rule).\n * 1px hairlines are the other: a physical hairline is 1px in both themes.\n * ========================================================================== */\n.tool-render-row {\n  align-items: center;\n  min-width: 0;\n  height: 2rem;\n  display: flex;\n  position: relative;\n  overflow: hidden;\n}\n.tool-render-row[data-expandable] {\n  cursor: pointer;\n}\n.tool-render-chevron {\n  color: var(--dsw-alias-label-secondary);\n  flex: none;\n  margin-right: 0.25rem;\n  transform: rotate(-90deg);\n  transition: transform 0.12s;\n}\n.tool-render-chevron-open {\n  transform: rotate(0deg);\n}\n.tool-render-chevron-disabled {\n  opacity: 0.35;\n  pointer-events: none;\n}\n.tool-render-title {\n  color: var(--dsw-alias-label-secondary);\n  flex: none;\n  font-size: 0.875rem;\n  line-height: 1.5rem;\n}\n/* The always-on raw tool-name badge: the row\'s own icon plus the registered\n   tool name, on a hashed-hue background. */\n.tool-render-name-badge {\n  box-sizing: border-box;\n  display: inline-flex;\n  align-items: center;\n  justify-content: flex-start;\n  gap: 0.25rem;\n  width: 6.75rem;\n  height: 1.5rem;\n  flex: none;\n  overflow: hidden;\n  border: 1px solid;\n  border-radius: 0.375rem;\n  padding: 0.0625rem 0.375rem;\n  margin-right: 0.375rem;\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-name-badge-icon {\n  display: inline-flex;\n  flex: none;\n  align-items: center;\n}\n.tool-render-name-badge-text {\n  flex: 1;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  text-align: center;\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  font-weight: 500;\n}\n/* The producer/source badge on a context-injection or send_message row.\n   A small pill, not the sentence-in-body treatment it replaces. This is the\n   older optional per-row badge, not the tool-name badge above. */\n.tool-render-badge {\n  flex: none;\n  white-space: nowrap;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border-radius: 999px;\n  margin-left: 0.375rem;\n  padding: 0.0625rem 0.375rem;\n  font-size: 0.6875rem;\n  line-height: 1rem;\n}\n.tool-render-sep {\n  background: var(--dsw-alias-label-caption);\n  border-radius: 0.0625rem;\n  flex: none;\n  width: 0.125rem;\n  height: 0.125rem;\n  margin: 0 0.5rem;\n}\n.tool-render-summary {\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  min-width: 0;\n  color: var(--dsw-alias-label-tertiary);\n  flex: auto;\n  font-size: 0.875rem;\n  line-height: 1.5rem;\n  overflow: hidden;\n}\n.tool-render-summary[tool-render-error] {\n  color: var(--dsw-alias-state-error-primary);\n  font-weight: 500;\n}\n.tool-render-path {\n  color: var(--dsw-alias-label-tertiary);\n  cursor: pointer;\n  min-width: 0;\n  max-width: 100%;\n  display: inline-block;\n  vertical-align: bottom;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 0.875rem;\n  line-height: 1.5rem;\n}\n.tool-render-path:hover {\n  color: var(--dsw-alias-label-primary);\n  text-decoration: underline;\n}\n.tool-render-body {\n  flex-direction: column;\n  display: flex;\n}\n.tool-render-io {\n  flex-direction: column;\n  display: flex;\n}\n.tool-render-cmd-label {\n  font-family: var(--ds-font-family-code);\n  font-size: 0.6875rem;\n  line-height: 1rem;\n  color: var(--dsw-alias-label-tertiary);\n  opacity: 0.75;\n  margin: 0.375rem 0 0 0.25rem;\n}\n.tool-render-command {\n  font-family: var(--ds-font-family-code);\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-tertiary);\n  margin: 0.25rem 0 0 0.25rem;\n  padding: 0.125rem 0;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n}\n.tool-render-command code.hljs {\n  background: transparent;\n  padding: 0;\n  font-family: inherit;\n  font-size: inherit;\n  line-height: inherit;\n  white-space: inherit;\n}\n.tool-render-output {\n  box-sizing: border-box;\n  background: var(--dsw-alias-markdown-code-block);\n  font-family: var(--ds-font-family-code);\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-primary);\n  border-radius: 0.75rem;\n  margin: 0.25rem 0 0.25rem 0.25rem;\n  padding: 0.625rem 0.8125rem;\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  max-height: 17.5rem;\n  overflow-y: auto;\n}\n.tool-render-output[tool-render-error] {\n  color: var(--dsw-alias-state-error-primary);\n  /* #169: the error wash derives from the theme\'s own error token instead\n     of a hardcoded rgba red \u2014 darker wash in the dark theme, tinted wash in\n     the light one, the same 45%/8% weights either way. */\n  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 45%, transparent);\n  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 8%, transparent);\n  font-weight: 500;\n}\n/* #152 Part C: IN / TOOL CALLS / OUT read as ONE card with the nested calls.\n   All three section labels reuse .tool-render-code-out-label \u2014 one visual\n   language, not a new one. The IN code block reuses .tool-render-code and the\n   OUT text reuses .tool-render-output; the cap below mirrors the rule the OUT\n   row has today: upstream .ioSection scrolls internally past 150px\n   (max-height:150px; overflow-y:auto), so long output scrolls instead of\n   flooding the transcript, with the full text retained in the DOM. */\n.tool-render-code-out {\n  display: flex;\n  flex-direction: column;\n}\n.tool-render-code-out-label {\n  font-family: var(--ds-font-family-code);\n  font-size: 0.6875rem;\n  line-height: 1rem;\n  color: var(--dsw-alias-label-caption);\n  margin: 0.375rem 0 0 0.25rem;\n}\n.tool-render-output.tool-render-code-out-text {\n  max-height: 9.375rem;\n}\n/* The IN/OUT section spoilers: a chevron plus a mono line-count summary\n   (`ts [263]`, `2 lines`), collapsed by default. A button element, so keyboard\n   interaction is native; the reset below strips the native button chrome so it\n   reads as a row, not a control. An errored OUT spoiler reads red even while\n   collapsed, so the failure signals without opening. */\n.tool-render-runcode-spoiler {\n  display: flex;\n  align-items: center;\n  gap: 0.25rem;\n  align-self: flex-start;\n  background: none;\n  border: none;\n  padding: 0.125rem 0;\n  margin: 0 0 0 0.25rem;\n  cursor: pointer;\n  font-family: var(--ds-font-family-code);\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n  text-align: left;\n}\n.tool-render-runcode-spoiler:hover {\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-runcode-spoiler:focus-visible {\n  outline: 0.125rem solid var(--dsw-alias-state-business-primary);\n  outline-offset: -0.125rem;\n}\n.tool-render-runcode-spoiler-label {\n  white-space: nowrap;\n}\n.tool-render-runcode-spoiler[tool-render-error] {\n  color: var(--dsw-alias-state-error-primary);\n  font-weight: 500;\n}\n\n/* #152 nesting layout: head -> IN -> TOOL CALLS label -> nested -> OUT.\n\n   THE SHAPE, measured in the live DOM rather than inferred from the bundle --\n   an earlier version of this block guessed and matched nothing:\n\n     div[data-chat-call-id]                     <- upstream\'s call row\n       div[data-slot="tool.call.toolview"]      <- THE RENDERER\'S WRAPPER,\n                                                    style="display: contents"\n         .tool-render-card[data-run-code]       <- our head\n         .tool-render-runcode-in                <- our IN section\n         .tool-render-runcode-calls-label       <- our TOOL CALLS label\n         .tool-render-runcode-out               <- our OUT section\n       div.<hashed>subCalls                     <- the nested calls\n\n   Two consequences, and the layout hangs on both. (1) Our nodes are NOT direct\n   children of the call row, so any `:has(> .tool-render-card\u2026)` selector fails\n   silently -- which is exactly how this shipped broken once. (2) The wrapper\n   carries `display: contents`, so it generates no box and OUR FOUR NODES BECOME\n   FLEX ITEMS OF THE CALL ROW ANYWAY. That is the only reason ordering can work\n   across the wrapper at all; if upstream ever gives that wrapper a real display\n   value, the sections stop being siblings of .subCalls and this flattens back\n   to DOM order -- ugly, not broken.\n\n   On the hook: data-chat-call-id is stamped by upstream on every call row and\n   is stable and unhashed, which is why it is used here. It is NOT read by\n   upstream\'s own code -- the bundle contains exactly one occurrence, the write\n   -- so this is a public attribute we rely on, not a contract upstream would\n   notice breaking. */\ndiv[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-card[data-run-code]) {\n  display: flex;\n  flex-direction: column;\n}\n.tool-render-card[data-run-code] {\n  order: 0;\n}\n.tool-render-runcode-in {\n  order: 1;\n}\n.tool-render-runcode-calls-label {\n  order: 2;\n}\n.tool-render-runcode-out {\n  order: 4;\n}\n/* Everything else upstream puts in the row -- today only the nested-call\n   container -- sits between the TOOL CALLS label and OUT. Selected by\n   excluding the slot wrapper rather than by upstream\'s .subCalls class, which\n   is content-hashed and turns over every build. */\ndiv[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-card[data-run-code])\n  > *:not([data-slot]) {\n  order: 3;\n}\n/* No nested calls, no TOOL CALLS heading: a card with no nested calls must\n   not show an empty label. Whether nested calls exist is unknowable from our\n   props \u2014 upstream renders them outside our view \u2014 so the row hides our label\n   when it carries no non-wrapper child. The label renders by default and only\n   this rule removes it, so dropping the wrapper step here fails LOUD (an empty\n   heading on every plain card) rather than SILENT. */\ndiv[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-card[data-run-code]):not(:has(> *:not([data-slot]))) > [data-slot="tool.call.toolview"] > .tool-render-runcode-calls-label {\n  display: none;\n}\n\n/* The five read as ONE card: the head loses its bottom rounding, the middle\n   sections continue the side borders, the OUT block loses its top rounding,\n   and the nested calls are indented between the TOOL CALLS label and OUT with\n   the side borders continued. */\n.tool-render-card[data-run-code] {\n  border-bottom-left-radius: 0;\n  border-bottom-right-radius: 0;\n  border-bottom: 0;\n  margin-bottom: 0;\n}\n.tool-render-runcode-in,\n.tool-render-runcode-calls-label {\n  border-left: 1px solid var(--dsw-alias-border-l2);\n  border-right: 1px solid var(--dsw-alias-border-l2);\n  margin: 0;\n  background: var(--dsw-alias-bg-layer-1);\n}\n.tool-render-runcode-in {\n  padding: 0 0.5rem 0.375rem;\n}\n.tool-render-runcode-calls-label {\n  padding: 0 0.5rem 0.125rem;\n}\n.tool-render-runcode-out {\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-top: 0;\n  border-radius: 0 0 0.375rem 0.375rem;\n  background: var(--dsw-alias-bg-layer-1);\n  padding: 0 0.5rem 0.375rem;\n}\ndiv[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-card[data-run-code])\n  > *:not([data-slot]) {\n  border-left: 1px solid var(--dsw-alias-border-l2);\n  border-right: 1px solid var(--dsw-alias-border-l2);\n  margin: 0;\n  padding: 0.25rem 0.5rem 0.25rem 1.375rem;\n  background: var(--dsw-alias-bg-layer-1);\n}\n.tool-render-row[data-state="error"] .tool-render-title {\n  color: var(--dsw-alias-state-error-primary);\n  font-weight: 500;\n}\n/* A stopped call mutes its title and summary, since it no longer has its own\n   state dot to mark it. */\n.tool-render-row[data-state="stopped"] .tool-render-title,\n.tool-render-row[data-state="stopped"] .tool-render-summary {\n  color: var(--dsw-alias-label-tertiary);\n}\n.tool-render-code {\n  box-sizing: border-box;\n  background: var(--dsw-alias-markdown-code-block);\n  font-family: var(--ds-font-family-code);\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-primary);\n  border-radius: 0.75rem;\n  margin: 0.25rem 0 0.25rem 0.25rem;\n  padding: 0.625rem 0.8125rem;\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  max-height: 25rem;\n  overflow-y: auto;\n}\n.tool-render-inspect {\n  border: 1px solid var(--dsw-alias-border-l2);\n  background: var(--dsw-alias-bg-base);\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  opacity: 0;\n  border-radius: 0.375rem;\n  align-self: flex-start;\n  align-items: center;\n  gap: 0.25rem;\n  margin: 0.25rem 0 0.125rem 0.25rem;\n  padding: 0.125rem 0.375rem;\n  font-size: 0.6875rem;\n  line-height: 1rem;\n  transition: opacity 0.1s;\n  display: inline-flex;\n}\n.tool-render-card:hover .tool-render-inspect,\n.tool-render-inspect:focus-visible {\n  opacity: 1;\n}\n.tool-render-inspect:hover {\n  background: var(--dsw-alias-interactive-bg-hover-solid);\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-diff-fallback {\n  box-sizing: border-box;\n  background: var(--dsw-alias-markdown-code-block);\n  font-family: var(--ds-font-family-code);\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-primary);\n  border-radius: 0.75rem;\n  margin: 0.25rem 0 0.25rem 0.25rem;\n  padding: 0.625rem 0.8125rem;\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  max-height: 25rem;\n  overflow-y: auto;\n}\n.tool-render-fallback-note {\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  margin-bottom: 0.375rem;\n}\n.tool-render-write {\n  flex-direction: column;\n  display: flex;\n}\n.tool-render-write-diff {\n  box-sizing: border-box;\n  background: var(--dsw-alias-markdown-code-block);\n  font-family: var(--ds-font-family-code);\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-primary);\n  border-radius: 0.75rem;\n  margin: 0.25rem 0 0.25rem 0.25rem;\n  padding: 0.625rem 0.8125rem;\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  max-height: 25rem;\n  overflow-y: auto;\n}\n.tool-render-line-same {\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-diff-row.tool-render-line-del,\n.tool-render-diff-cell.tool-render-line-del {\n  background: rgba(255, 166, 87, 0.16);\n}\n.tool-render-diff-row.tool-render-line-add,\n.tool-render-diff-cell.tool-render-line-add {\n  background: rgba(125, 180, 255, 0.16);\n}\n.tool-render-diff-marker {\n  flex: none;\n  width: 2ch;\n  text-align: center;\n  align-self: flex-start;\n  user-select: none;\n  color: var(--dsw-alias-label-tertiary);\n}\n.tool-render-diff-marker-del {\n  color: #ffb86c;\n}\n.tool-render-diff-marker-add {\n  color: #7db4ff;\n}\n.tool-render-write-note {\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  margin-bottom: 0.375rem;\n}\n.tool-render-code-row,\n.tool-render-diff-row {\n  display: flex;\n  align-items: flex-start;\n  min-width: 0;\n}\n.tool-render-diff-pair {\n  display: flex;\n  align-items: stretch;\n  min-width: 0;\n}\n.tool-render-diff-cell {\n  flex: 1 1 0;\n  min-width: 0;\n  display: flex;\n  align-items: flex-start;\n}\n.tool-render-diff-cell + .tool-render-diff-cell {\n  border-left: 0.0625rem solid var(--dsw-alias-border-l2);\n}\n.tool-render-gutter {\n  flex: none;\n  align-self: flex-start;\n  padding-right: 0.75rem;\n  text-align: right;\n  color: var(--dsw-alias-label-tertiary);\n  user-select: none;\n  font-family: var(--ds-font-family-code);\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n}\n.tool-render-line-cell {\n  flex: auto;\n  min-width: 0;\n  display: block;\n  font-family: var(--ds-font-family-code);\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  white-space: pre-wrap;\n  word-break: break-word;\n}\n.tool-render-line-cell.hljs {\n  background: transparent;\n  padding: 0;\n  font-family: inherit;\n  font-size: inherit;\n  line-height: inherit;\n  white-space: inherit;\n}\n.tool-render-diff-path {\n  color: var(--dsw-alias-label-secondary);\n  font-family: var(--ds-font-family-code);\n  font-size: 0.8125rem;\n  line-height: 1.375rem;\n  border-bottom: 0.0625rem solid var(--dsw-alias-border-l2);\n  padding-bottom: 0.25rem;\n  margin-bottom: 0.375rem;\n}\n.tool-render-diff-sep {\n  display: flex;\n  align-items: center;\n  gap: 0.625rem;\n  color: var(--dsw-alias-label-caption);\n  font-family: var(--ds-font-family-code);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  margin: 0.5rem 0;\n}\n.tool-render-diff-sep::before,\n.tool-render-diff-sep::after {\n  content: "";\n  flex: 1;\n  height: 0.0625rem;\n  background: var(--dsw-alias-border-l2);\n}\n.tool-render-card {\n  box-sizing: border-box;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.75rem;\n  background: var(--dsw-alias-bg-layer-1);\n  padding: 0.15625rem 0.5rem;\n}\n/* A call that bash-guard approved carries electric blue as its durable\n   mark, so it reads differently from a sandbox_permissions escalation.\n   This rule comes BEFORE the escalated one at equal (0,2,0) specificity,\n   so a call that carries both marks settles yellow. A rewritten command\n   keeps the mark permanently, because the rewrite is recorded in the\n   durable result metadata. A pending approval that caused no rewrite\n   loses the mark once it is answered. */\n.tool-render-card[data-guard-approval] {\n  outline: 0.1875rem solid var(--dsh-outline-guard);\n}\n/* A call that asked for sandbox escalation carries yellow as its durable\n   mark. It follows the guard rule at equal (0,2,0) specificity, so the\n   later rule wins the both case and the chip and the outline state the\n   same thing. It still loses to the error rule below, exactly as before,\n   so a failed escalation reads red. */\n.tool-render-card[data-escalated] {\n  outline: 0.1875rem solid var(--dsh-outline-escalated);\n}\n/* Once answered, the outline dulls to translucent white instead of\n   vanishing. This rule sits BEFORE error/stopped/guard so a failed or\n   guarded call keeps its own stronger mark. */\n.tool-render-card[data-question-answered] {\n  outline: 0.1875rem solid color-mix(in srgb, #fff 40%, transparent);\n}\n/* An errored call is outlined the way an escalated one is, in red and a little\n   thinner. The outline follows the card\'s rounded corners. It replaces the old\n   tinted row background and inset left bar. */\n.tool-render-card[data-error] {\n  outline: 0.125rem solid var(--dsw-alias-state-error-primary);\n}\n/* A stopped call (interrupted) gets a dimmer red outline, since it no longer\n   carries its own state dot. */\n.tool-render-card[data-stopped] {\n  outline: 0.125rem solid color-mix(in srgb, var(--dsw-alias-state-error-primary) 55%, transparent);\n}\n/* The durable guard mark outranks error and stopped, and nothing else. A\n   rewritten command often exits non-zero (rg exits 1 on no match, and\n   bashErrorState promotes any [exit code: N>=1] result to error), which\n   used to hand blue to the later red rules at equal (0,2,0) specificity.\n   The doubled attribute selector plus the two exclusions counts (0,5,0),\n   so it wins over error, stopped, answered, and both single-mark rules\n   without !important. Each :not() names a rule it must lose to. The\n   [data-escalated] exclusion hands the settled both case to the yellow\n   rule above. The [data-escalation-pending] exclusion hands an open\n   escalation ask to the pending yellow rule below, even before the call\n   args carry the mark. The pending blue rule below agrees with this one,\n   so no exclusion names it. Question pending keeps its own place last,\n   and the tie cannot happen because guard approvals are bash-only. */\n.tool-render-card[data-guard-approval][data-guard-approval]:not([data-escalated]):not([data-escalation-pending]) {\n  outline: 0.1875rem solid var(--dsh-outline-guard);\n}\n/* The open guard ask names its own colour. While a bash-guard approval\n   is open for this call the outline stays blue even when the call\n   already carries a settled escalation mark. This single-attribute rule\n   counts (0,2,0) and needs no doubling. It sits after every settled rule\n   it must beat, and the durable guard rule above already agrees with it,\n   so position alone decides. */\n.tool-render-card[data-guard-pending] {\n  outline: 0.1875rem solid var(--dsh-outline-guard);\n}\n/* The open escalation ask names its own colour. While a sandbox\n   escalation approval is open for this call the outline turns yellow\n   even when the call already carries a durable guard mark. Like its blue\n   twin this rule counts (0,2,0) and wins by position alone. It follows\n   the guard pending rule, so when both asks are somehow open at once the\n   later ask in the known sequence wins. No order assumption lives here\n   beyond that tiebreak. Each pending rule reads the open approval kind\n   directly, so an escalation ask that arrives first still paints yellow. */\n.tool-render-card[data-escalation-pending] {\n  outline: 0.1875rem solid var(--dsh-outline-escalated);\n}\n/* A call waiting on the human\'s answer to its question is outlined in\n   solid white at the same 3px weight as the other state outlines. This\n   rule sits after error/stopped/guard so the bright "answer me" mark wins\n   while pending (a pending call is still running, so error/stopped cannot\n   co-occur; the doubled guard rule above still wins a true tie, which\n   cannot happen because guard approvals are bash-only). */\n.tool-render-card[data-question-pending] {\n  outline: 0.1875rem solid #fff;\n}\n.tool-render-card:hover {\n  border-color: var(--dsw-alias-border-l3);\n}\n.tool-render-title {\n  font-weight: 500;\n}\n.tool-render-summary,\n.tool-render-path {\n  font-size: 0.8125rem;\n}\n.tool-render-output,\n.tool-render-code,\n.tool-render-write-diff,\n.tool-render-diff-fallback {\n  border: 1px solid var(--dsw-alias-border-l1);\n}\n.tool-render-row:focus-visible {\n  outline: 0.125rem solid var(--dsw-alias-state-business-primary);\n  outline-offset: -0.125rem;\n}\n\n/* todo_write and ask_user_question shared body layout. */\n.tool-render-plan {\n  flex-direction: column;\n  display: flex;\n}\n/* Plan row (item, checkbox, content) is shared PLAN_ROW_CSS from\n   shared/client-util.ts, injected via the dsh-plan-row style tag. */\n\n/* ask_user_question questions, options, and answers. */\n.tool-render-ask {\n  flex-direction: column;\n  display: flex;\n}\n.tool-render-question {\n  flex-direction: column;\n  display: flex;\n  padding: 0.125rem 0;\n}\n.tool-render-question + .tool-render-question {\n  border-top: 1px solid var(--dsw-alias-border-l1);\n  margin-top: 0.25rem;\n  padding-top: 0.375rem;\n}\n.tool-render-question-prompt {\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  overflow-wrap: anywhere;\n  padding: 0 0 0.125rem 0.25rem;\n}\n.tool-render-option {\n  align-items: baseline;\n  display: flex;\n  gap: 0.375rem;\n  padding: 0.125rem 0 0.125rem 0.25rem;\n}\n.tool-render-option-marker {\n  flex: none;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  width: 1rem;\n}\n.tool-render-option-text {\n  display: flex;\n  flex-direction: column;\n  gap: 0.0625rem;\n  min-width: 0;\n}\n.tool-render-option-label {\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  overflow-wrap: anywhere;\n}\n.tool-render-option-description {\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.8125rem;\n  line-height: 1.125rem;\n  overflow-wrap: anywhere;\n}\n.tool-render-option[data-selected] .tool-render-option-label {\n  color: var(--dsw-alias-label-primary);\n  font-weight: 700;\n}\n.tool-render-answer-note {\n  color: var(--dsw-alias-label-caption);\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  font-style: italic;\n  padding: 0.125rem 0 0 1.625rem;\n  overflow-wrap: anywhere;\n}\n.tool-render-ask[tool-render-error] .tool-render-question-prompt {\n  color: var(--dsw-alias-label-tertiary);\n}\n/* Each of the four ask-card text fields now renders through MarkdownText,\n   which wraps even one plain line in its own markup. That cost two things\n   this row depended on: MarkdownText\'s own prose elements carry their own\n   color and font shorthand at every level of whatever it nests (a wrapper\n   div, then a <p>, and so on), overriding these four classes\' own colors\n   (including the data-selected bold+primary label) and sizes, and a\n   paragraph\'s default block margin added unwanted vertical gaps in what is\n   one line of layout, not a markdown body. `*` resets color and font on\n   EVERY descendant, however deep MarkdownText nests -- each level inherits\n   from its own immediate parent, so the reset cascades all the way down to\n   the actual text, including an ancestor\'s font-weight or font-style such as\n   data-selected\'s bold or the note\'s italic. `margin: 0` on `p` alone\n   removes the paragraph gap. A genuine list or heading inside an answer\n   still renders; it just does not get this rule\'s own tight spacing or\n   color override. */\n.tool-render-question-prompt *,\n.tool-render-option-label *,\n.tool-render-option-description *,\n.tool-render-answer-note * {\n  color: inherit;\n  font: inherit;\n}\n.tool-render-question-prompt p,\n.tool-render-option-label p,\n.tool-render-option-description p,\n.tool-render-answer-note p {\n  margin: 0;\n}\n\n/* ask_user_question answer form: the interactive UI on the pending card,\n   ported from the shipped QuestionComposer. Option buttons follow the\n   approval-btn recipe (1px border, surface bg); the selected option takes\n   the business-primary border, the primary action the filled recipe. */\n.tool-render-qform {\n  flex-direction: column;\n  display: flex;\n  gap: 0.375rem;\n  padding: 0.25rem 0 0.25rem 0.25rem;\n}\n.tool-render-qheader {\n  align-items: flex-start;\n  justify-content: space-between;\n  display: flex;\n  gap: 0.5rem;\n}\n.tool-render-qheading {\n  min-width: 0;\n  flex: 1 1 auto;\n}\n.tool-render-qeyebrow {\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.6875rem;\n  line-height: 1rem;\n}\n.tool-render-qtitle {\n  color: var(--dsw-alias-label-primary);\n  font-size: 0.8125rem;\n  font-weight: 600;\n  line-height: 1.25rem;\n  overflow-wrap: anywhere;\n}\n.tool-render-qdismiss {\n  flex: none;\n  border: none;\n  background: none;\n  color: var(--dsw-alias-label-tertiary);\n  cursor: pointer;\n  font-size: 0.6875rem;\n  line-height: 1rem;\n  padding: 0.0625rem 0.25rem;\n  text-decoration: underline dotted;\n}\n.tool-render-qdismiss:hover:enabled {\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-qdismiss:disabled {\n  opacity: 0.55;\n  cursor: default;\n}\n.tool-render-qbody {\n  flex-direction: column;\n  display: flex;\n  gap: 0.375rem;\n}\n.tool-render-qdetail {\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  overflow-wrap: anywhere;\n}\n.tool-render-qoptions {\n  flex-direction: column;\n  display: flex;\n  gap: 0.25rem;\n}\n.tool-render-qoption {\n  align-items: baseline;\n  display: flex;\n  gap: 0.375rem;\n  width: 100%;\n  box-sizing: border-box;\n  text-align: left;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  background: var(--dsw-alias-bg-base);\n  color: inherit;\n  font: inherit;\n  cursor: pointer;\n  padding: 0.375rem 0.5rem;\n}\n.tool-render-qoption:hover:enabled {\n  background: var(--dsw-alias-interactive-bg-hover-solid);\n}\n.tool-render-qoption:disabled {\n  cursor: default;\n}\n.tool-render-qoption[data-selected] {\n  border-color: var(--dsw-alias-state-business-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.tool-render-qoption-marker {\n  flex: none;\n  width: 1rem;\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  text-align: center;\n}\n.tool-render-qoption[data-selected] .tool-render-qoption-marker {\n  color: var(--dsw-alias-state-business-primary);\n}\n.tool-render-qoption-text {\n  display: flex;\n  flex-direction: column;\n  min-width: 0;\n  flex: 1 1 auto;\n}\n.tool-render-qoption-line {\n  align-items: baseline;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 0.25rem 0.5rem;\n}\n.tool-render-qoption-label {\n  color: var(--dsw-alias-label-primary);\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  overflow-wrap: anywhere;\n}\n.tool-render-qoption[data-selected] .tool-render-qoption-label {\n  font-weight: 700;\n}\n.tool-render-qoption-description {\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.8125rem;\n  line-height: 1.125rem;\n  overflow-wrap: anywhere;\n}\n.tool-render-qbadge {\n  flex: none;\n  border: 1px solid var(--dsw-alias-state-business-primary);\n  border-radius: 999px;\n  color: var(--dsw-alias-state-business-primary);\n  font-size: 0.6875rem;\n  line-height: 1rem;\n  padding: 0 0.375rem;\n}\n.tool-render-qcustom-row {\n  align-items: center;\n  display: flex;\n  gap: 0.375rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  background: var(--dsw-alias-bg-base);\n  padding: 0.375rem 0.5rem;\n}\n.tool-render-qcustom-row[data-active] {\n  border-color: var(--dsw-alias-state-business-primary);\n}\n.tool-render-qcustom-input {\n  flex: 1 1 auto;\n  min-width: 0;\n  border: none;\n  outline: none;\n  background: none;\n  color: var(--dsw-alias-label-primary);\n  font: inherit;\n  padding: 0;\n}\n.tool-render-qcustom-input::placeholder {\n  color: var(--dsw-alias-label-caption);\n}\n.tool-render-qcustom-textarea {\n  box-sizing: border-box;\n  width: 100%;\n  resize: vertical;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  background: var(--dsw-alias-bg-base);\n  color: var(--dsw-alias-label-primary);\n  font: inherit;\n  padding: 0.375rem 0.5rem;\n}\n.tool-render-qcustom-textarea:focus {\n  border-color: var(--dsw-alias-state-business-primary);\n  outline: none;\n}\n.tool-render-qfooter {\n  align-items: center;\n  display: flex;\n  gap: 0.5rem;\n}\n.tool-render-qpager {\n  flex: none;\n  align-items: center;\n  display: flex;\n  gap: 0.25rem;\n}\n.tool-render-qnav {\n  border: none;\n  background: none;\n  color: var(--dsw-alias-label-tertiary);\n  cursor: pointer;\n  border-radius: 999px;\n  font-size: 1rem;\n  line-height: 1;\n  padding: 0.125rem 0.375rem;\n}\n.tool-render-qnav:hover:enabled {\n  background: var(--dsw-alias-interactive-bg-hover);\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-qnav:disabled {\n  opacity: 0.4;\n  cursor: default;\n}\n.tool-render-qprogress {\n  color: var(--dsw-alias-label-secondary);\n  white-space: nowrap;\n  font-size: 0.8125rem;\n  font-weight: 500;\n  line-height: 1.25rem;\n}\n.tool-render-qfeedback {\n  flex: 1 1 auto;\n  min-height: 1rem;\n  color: var(--dsw-alias-state-error-primary);\n  font-size: 0.6875rem;\n  line-height: 1rem;\n}\n.tool-render-qactions {\n  flex: none;\n  align-items: center;\n  display: flex;\n  gap: 0.25rem;\n}\n.tool-render-qbtn {\n  border: 1px solid var(--dsw-alias-border-l3);\n  background: var(--dsw-alias-bg-base);\n  color: var(--dsw-alias-label-secondary);\n  border-radius: 0.25rem;\n  cursor: pointer;\n  font-size: 0.75rem;\n  line-height: 1.25rem;\n  padding: 0.25rem 0.75rem;\n}\n.tool-render-qbtn:hover:enabled {\n  background: var(--dsw-alias-interactive-bg-hover-solid);\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-qbtn:disabled {\n  opacity: 0.45;\n  cursor: default;\n}\n.tool-render-qbtn-primary {\n  border-color: transparent;\n  background: var(--dsw-alias-label-secondary);\n  color: var(--dsw-alias-bg-base);\n  font-weight: 600;\n}\n.tool-render-qbtn-primary:hover:enabled {\n  background: var(--dsw-alias-label-secondary);\n  color: var(--dsw-alias-bg-base);\n  filter: brightness(1.15);\n}\n\n/* list_agents roster: one line per agent, status first so the column reads\n   down the left edge. A descendants listing indents each line by its own\n   depth through an inline padding, so the tree shape is visible without a\n   parent id on every row. */\n.tool-render-agents {\n  display: flex;\n  flex-direction: column;\n  padding: 0.125rem 0 0.125rem 0.25rem;\n}\n.tool-render-agent {\n  align-items: baseline;\n  display: flex;\n  gap: 0.375rem;\n  min-width: 0;\n  padding: 0.0625rem 0;\n}\n.tool-render-agent-status {\n  flex: none;\n  width: 5rem;\n  font-size: 0.75rem;\n  line-height: 1.25rem;\n  color: var(--dsw-alias-label-caption);\n}\n.tool-render-agent-status[data-status="running"] {\n  color: var(--dsh-outline-guard);\n}\n.tool-render-agent-status[data-status="diagnostic"] {\n  color: var(--dsw-alias-state-error-primary);\n}\n.tool-render-agent-id {\n  flex: none;\n  font-family: var(--ds-font-family-code);\n  font-size: 0.75rem;\n  line-height: 1.25rem;\n  color: var(--dsw-alias-label-tertiary);\n  max-width: 12rem;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n.tool-render-agent-label {\n  color: var(--dsw-alias-label-primary);\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n/* Shared capped, scrollable markdown body. Used by every row whose body is\n   rendered text: subagent prompt, context injection, send_message delivery.\n   One block, so a future row family member gets the same rules for free\n   instead of a fourth copy. */\n.tool-render-markdown-body {\n  border: 1px solid var(--dsw-alias-border-l1);\n  border-radius: 0.375rem;\n  margin: 0.25rem 0 0.125rem 0.25rem;\n  max-height: 16rem;\n  overflow-y: auto;\n  padding: 0.5rem 0.625rem;\n}\n.tool-render-markdown-body :where(h1, h2, h3, h4, h5, h6),\n.tool-render-fetch-body :where(h1, h2, h3, h4, h5, h6) {\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  margin: 0.5rem 0 0.25rem;\n}\n.tool-render-markdown-body :where(h1, h2, h3, h4, h5, h6):first-child,\n.tool-render-fetch-body :where(h1, h2, h3, h4, h5, h6):first-child {\n  margin-top: 0;\n}\n.tool-render-markdown-body :where(p, ul, ol, pre, blockquote, table),\n.tool-render-fetch-body :where(p, ul, ol, pre, blockquote, table) {\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  margin: 0.25rem 0;\n}\n.tool-render-markdown-body :where(ul, ol),\n.tool-render-fetch-body :where(ul, ol) {\n  padding-left: 1.125rem;\n}\n.tool-render-markdown-body :where(pre),\n.tool-render-fetch-body :where(pre) {\n  background: var(--dsw-alias-bg-base);\n  border-radius: 0.25rem;\n  overflow-x: auto;\n  padding: 0.375rem 0.5rem;\n}\n.tool-render-markdown-body :where(code),\n.tool-render-fetch-body :where(code) {\n  font-family: var(--ds-font-family-code);\n}\n.tool-render-markdown-body :where(code):not(:where(pre code)),\n.tool-render-fetch-body :where(code):not(:where(pre code)) {\n  background: var(--dsw-alias-bg-base);\n  border-radius: 0.25rem;\n  padding: 0 0.25rem;\n}\n\n/* web_fetch body. Same bounded-scroll shape as the markdown body but its\n   own block, so a fetched page scrolls inside the card. A raw-HTML page\n   renders as escaped code text in this container instead, never as\n   markup. */\n.tool-render-fetch-body {\n  border: 1px solid var(--dsw-alias-border-l1);\n  border-radius: 0.375rem;\n  margin: 0.25rem 0 0.125rem 0.25rem;\n  max-height: 16rem;\n  overflow-y: auto;\n  padding: 0.5rem 0.625rem;\n}\n.tool-render-fetch-raw {\n  font-family: var(--ds-font-family-code);\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-primary);\n  margin: 0;\n}\n/* A <system-reminder> block, framed instead of hidden: every character of\n   its text still renders, just under a chip instead of literal tags. The\n   left border this used to carry read as a blockquote and was mistaken for\n   a stray outline on the whole card; dropped. */\n.tool-render-reminder {\n  margin: 0.5rem 0;\n}\n.tool-render-reminder-chip {\n  display: inline-block;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border-radius: 999px;\n  margin-bottom: 0.25rem;\n  padding: 0.0625rem 0.375rem;\n  font-size: 0.6875rem;\n  line-height: 1rem;\n}\n/* Skill frontmatter table (name, resource-resolution hint). Only what the\n   loaded skill\'s canonical output actually carries -- description and\n   whenToUse are catalog-only fields, stripped before a skill loads. */\n.tool-render-skill-table {\n  border-collapse: collapse;\n  margin-bottom: 0.5rem;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n}\n.tool-render-skill-table th {\n  color: var(--dsw-alias-label-tertiary);\n  text-align: left;\n  font-weight: 400;\n  padding: 0.125rem 0.5rem 0.125rem 0;\n  vertical-align: top;\n  white-space: nowrap;\n}\n.tool-render-skill-table td {\n  color: var(--dsw-alias-label-primary);\n  padding: 0.125rem 0;\n  white-space: pre-wrap;\n}\n\n/* read_image and see image bodies. One bounded container per card, with one\n   interior scroll area. Picture cards hold mixed content, so this rule is\n   shaped like .tool-render-markdown-body but stands alone instead of\n   overloading it. */\n.tool-render-image-body {\n  border: 1px solid var(--dsw-alias-border-l1);\n  border-radius: 0.375rem;\n  margin: 0.25rem 0 0.125rem 0.25rem;\n  max-height: 25rem;\n  overflow-y: auto;\n  padding: 0.5rem 0.625rem;\n}\n.tool-render-image-body > .tool-render-markdown-body {\n  margin: 0 0 0.375rem;\n}\n/* The picture shrinks to the card width, keeps its aspect ratio, and never\n   grows past its natural pixel size. width and height stay auto, so the\n   browser only ever scales down. The link centers the picture when it is\n   narrower than the card. */\n.tool-render-image-link {\n  display: flex;\n  justify-content: center;\n}\n/* A 2px border in a LABEL token, not a border token: the border tokens are\n   tuned to sit quietly against panel backgrounds, which is exactly wrong\n   here, where the job is to mark where the picture\'s own edge is against\n   arbitrary image content. */\n.tool-render-image {\n  max-width: 100%;\n  width: auto;\n  height: auto;\n  border: 0.125rem solid var(--dsw-alias-label-tertiary);\n  border-radius: 0.25rem;\n}\n/* Metadata lines under the picture: name, type, full path. */\n.tool-render-image-meta {\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  overflow-wrap: anywhere;\n  margin-top: 0.375rem;\n}\n/* A path the route cannot serve. The message sits where the picture would\n   sit, so a broken load is always visible. */\n.tool-render-image-broken {\n  color: var(--dsw-alias-state-error-primary);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  overflow-wrap: anywhere;\n  padding: 0.5rem 0;\n  text-align: center;\n}\n/* The see row description clamp. The cap applies only while collapsed, so\n   this rule rides beside .tool-render-markdown-body and comes after it in\n   this file to win the max-height and overflow contest. */\n.tool-render-see-desc {\n  max-height: 8rem;\n  overflow: hidden;\n}\n.tool-render-see-toggle {\n  align-self: flex-start;\n  background: transparent;\n  border: none;\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  margin: 0 0 0.375rem;\n  padding: 0;\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n}\n.tool-render-see-toggle:hover {\n  color: var(--dsw-alias-label-primary);\n  text-decoration: underline;\n}\n\n/* Compaction checkpoint card. One line per compacted message, count-badged\n   tool strips, elision notes, and a stats footer. Message lines clamp to a\n   single line with an ellipsis: the full text lives on the surface the\n   marker replaced, so the card only summarizes. */\n.tool-render-compaction {\n  flex-direction: column;\n  display: flex;\n  padding-bottom: 0.25rem;\n}\n.tool-render-compaction-line {\n  display: flex;\n  align-items: baseline;\n  gap: 0.375rem;\n  min-width: 0;\n  padding: 0.0625rem 0 0.0625rem 0.25rem;\n}\n.tool-render-compaction-role {\n  flex: none;\n  color: var(--dsw-alias-label-caption);\n  font-size: 0.6875rem;\n  line-height: 1.125rem;\n  text-transform: uppercase;\n}\n.tool-render-compaction-text {\n  flex: 1 1 auto;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n}\n.tool-render-compaction-strip {\n  display: flex;\n  align-items: center;\n  gap: 0.375rem;\n  min-width: 0;\n  padding: 0.0625rem 0 0.0625rem 0.25rem;\n}\n.tool-render-compaction-strip .tool-render-compaction-text {\n  flex: 0 1 auto;\n}\n.tool-render-compaction-note {\n  color: var(--dsw-alias-label-caption);\n  font-style: italic;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  padding: 0.0625rem 0 0.0625rem 0.25rem;\n}\n.tool-render-compaction-stats {\n  color: var(--dsw-alias-label-caption);\n  font-size: 0.6875rem;\n  line-height: 1.125rem;\n  border-top: 1px solid var(--dsw-alias-border-l1);\n  margin-top: 0.25rem;\n  padding: 0.25rem 0 0 0.25rem;\n}\n\n/* ---- Approval answer bar and decided badge. While an approval that\n   carries this card\'s callId is pending, the card answers it inline; once\n   decided, a durable badge keeps the outcome. The strip is additive: the\n   card keeps rendering its normal content above it. */\n/* A COLUMN, not a row: the comment affordance is a precondition of the\n   decision, so it reads above the buttons rather than beside them. Order is\n   "add comment" (left) -> optional textarea (full width) -> the decision\n   pair (right), which is also the order the user moves through them. */\n.tool-render-approval-strip {\n  display: flex;\n  flex-direction: column;\n  align-items: stretch;\n  gap: 0.25rem;\n  /* Bottom margin matches .tool-render-output\'s own 0.25rem, so the\n     strip\'s last row does not kiss the card\'s bottom border. */\n  margin: 0.25rem 0 0.25rem 0.25rem;\n}\n/* Reject/approve pack to the card\'s bottom-right corner (aidos queue recipe:\n   actions sit at the end of their container). */\n.tool-render-approval-actions {\n  display: flex;\n  align-items: center;\n  justify-content: flex-end;\n  gap: 0.25rem;\n  padding-bottom: 0.25rem;\n}\n/* The toggle sits above the buttons on the card\'s RIGHT edge, matching the\n   actions below it \u2014 the whole comment affordance reads as one right-aligned\n   column, and only the textarea spans the full width. */\n.tool-render-approval-comment-toggle {\n  align-self: flex-end;\n}\n/* (The decided badge that used to live here was retired on 2026-09-08: the\n   durable verdict is now a badge on the collapsed row, .tool-render-verdict,\n   and the answer bar renders nothing once a decision has settled.) */\n/* Aidios review-queue button recipe, mapped onto dsw-alias tokens and the\n   #169 scale: 1px hairline border, surface bg, secondary text, R-CHIP\n   radius, T-META type, P-CHIP P-BTN-W padding, hover raises surface +\n   primary text, disabled 0.45. (Was raw 5px 12px: 12px is exactly\n   P-BTN-W, 5px tightens 1px to P-CHIP \u2014 flagged in the #169 report.) */\n.tool-render-approval-btn {\n  border: 1px solid var(--dsw-alias-border-l3);\n  background: var(--dsw-alias-bg-base);\n  color: var(--dsw-alias-label-secondary);\n  border-radius: 0.25rem;\n  cursor: pointer;\n  font-size: 0.75rem;\n  line-height: 1.25rem;\n  padding: 0.25rem 0.75rem;\n}\n.tool-render-approval-btn:hover:enabled {\n  background: var(--dsw-alias-interactive-bg-hover-solid);\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-approval-btn:disabled {\n  opacity: 0.45;\n  cursor: default;\n}\n.tool-render-approval-reject {\n  color: var(--dsw-alias-state-error-primary);\n  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 55%, var(--dsw-alias-border-l3));\n}\n/* First click arms ("? Confirm reject"), second click rejects; the armed\n   fill makes the confirm step read unmistakably. */\n.tool-render-approval-reject[data-armed] {\n  background: var(--dsw-alias-state-error-primary);\n  border-color: var(--dsw-alias-state-error-primary);\n  color: #fff;\n  font-weight: 600;\n}\n/* Primary/confirm button of the recipe: filled secondary-label bg with\n   surface text, weight 600, no border. */\n.tool-render-approval-approve {\n  border-color: transparent;\n  background: var(--dsw-alias-label-secondary);\n  color: var(--dsw-alias-bg-base);\n  font-weight: 600;\n}\n.tool-render-approval-approve:hover:enabled {\n  background: var(--dsw-alias-label-secondary);\n  color: var(--dsw-alias-bg-base);\n  filter: brightness(1.15);\n}\n/* A comment draft relabels the action "Approve + send", so it reads warn:\n   the click now also steers the comment to the running agent. */\n.tool-render-approval-approve[data-with-comment] {\n  color: var(--dsw-alias-state-warn-primary);\n}\n.tool-render-approval-approve[data-with-comment]:hover:enabled {\n  background: var(--dsw-alias-label-secondary);\n  color: var(--dsw-alias-state-warn-primary);\n  filter: brightness(1.15);\n}\n.tool-render-approval-comment-toggle {\n  border: none;\n  background: none;\n  color: var(--dsw-alias-label-tertiary);\n  cursor: pointer;\n  font-size: 0.6875rem;\n  line-height: 1rem;\n  padding: 0.0625rem 0.25rem;\n  text-decoration: underline dotted;\n}\n.tool-render-approval-comment-toggle:hover:enabled {\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-approval-comment-toggle:disabled {\n  opacity: 0.55;\n  cursor: default;\n}\n.tool-render-approval-comment {\n  box-sizing: border-box;\n  flex-basis: 100%;\n  resize: vertical;\n  min-height: 2.5rem;\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 0.375rem;\n  background: var(--dsw-alias-bg-base);\n  color: var(--dsw-alias-label-primary);\n  font-family: inherit;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  padding: 0.25rem 0.5rem;\n}\n.tool-render-approval-comment:focus {\n  outline: 0.125rem solid var(--dsw-alias-state-business-primary);\n  outline-offset: -0.0625rem;\n}\n/* The durable approval verdict on the COLLAPSED row (owner, 2026-09-08):\n   [shield | APPROVED], sitting immediately after the tool-call label badge.\n   It reads as a small status stamp \u2014 uppercase, tight, nowrap \u2014 so the row\n   still scans as one line and the verdict is legible without expanding.\n   Approved carries no accent: at row scale a coloured pill competes with the\n   tool name for attention, and "it was approved" is the unremarkable case.\n   Rejected keeps the error tint, because a refusal that looks identical to an\n   approval is worth exactly one colour.\n   Sourced from the guarded-approvals fold, so it survives a page reload. */\n.tool-render-verdict {\n  display: inline-flex;\n  align-items: center;\n  gap: 0.25rem;\n  flex: none;\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 0.25rem;\n  padding: 0 0.375rem;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.6875rem;\n  font-weight: 600;\n  letter-spacing: 0.04em;\n  line-height: 1.125rem;\n  white-space: nowrap;\n}\n.tool-render-verdict[data-outcome="rejected"] {\n  color: var(--dsw-alias-state-error-primary);\n  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 55%, var(--dsw-alias-border-l3));\n}\n.tool-render-verdict-shield {\n  flex: none;\n}\n/* The pending ask\'s reason (owner, 2026-09-08): while an approval is open the\n   card must say WHY it is being asked. Tertiary label, wrapping, sitting above\n   the actions so the question reads before the answer. */\n.tool-render-approval-reason {\n  align-self: stretch;\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  margin-bottom: 0.25rem;\n  overflow-wrap: anywhere;\n  white-space: pre-wrap;\n}\n/* The sandbox-escalation banner (owner, 2026-09-09). The label line reuses\n   the guard rewrite banner\'s .tool-render-cmd-label styling, so the two\n   "something happened to this call" annotations read as one family. The\n   mode rides the label line as its own chip \u2014 it decides how far the\n   sandbox widens, so it stays discoverable without being jammed into the\n   justification sentence. The justification below is prose in the same\n   tertiary 12px/18px voice as the approval reason, never code. */\n/* The chip carries the ESCALATION colour, not a neutral one (owner,\n   2026-09-09). The mode is the single most consequential fact on the card \u2014\n   how far the sandbox widens \u2014 and a grey chip made it read as incidental\n   metadata beside its own warning. Sharing --dsh-outline-escalated with the\n   card outline means the chip and the outline state the same thing in the\n   same colour, so the eye pairs them.\n\n   The outline half of #105 landed in #177. A settled escalation now keeps\n   the yellow outline even when the call was also guard approved, and an\n   open escalation ask paints yellow while it waits. The chip and the\n   outline agree in every state, so a mismatch between them is a bug, not\n   a known gap. Do not fix one by neutralising the chip again. The outline\n   was the wrong half, and now it is the right one. */\n.tool-render-escalation-mode {\n  font: inherit;\n  white-space: nowrap;\n  color: var(--dsh-outline-escalated);\n  border: 1px solid var(--dsh-outline-escalated);\n  border-radius: 0.25rem;\n  margin-left: 0.375rem;\n  padding: 0 0.25rem;\n}\n.tool-render-escalation-reason {\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  margin: 0.125rem 0 0.25rem 0.25rem;\n  overflow-wrap: anywhere;\n  white-space: pre-wrap;\n}\n/* The settled ask (approved OR rejected \u2014 the trigger is settledness, not\n   approval): muted and small, so a decided request no longer reads as\n   though it still needed an answer. This quiets the ASK only \u2014 the outcome\n   keeps its own surfaces (the collapsed-row verdict badge, the error\n   outline), which this rule never touches. */\n.tool-render-escalation-reason-muted {\n  color: var(--dsw-alias-label-caption);\n  font-size: 0.6875rem;\n  line-height: 1rem;\n}\n/* #149: read-only dataflow diagram for pipe/redirect bash commands. Stages\n   are blocks in execution order joined by typed arrows; redirects are\n   labelled endpoints under their stage; heredoc bodies collapse to one\n   disclosure each. Plain flexbox + glyphs, no graph dependency. */\n.tool-render-diagram {\n  font-family: var(--ds-font-family-code);\n  margin: 0.25rem 0 0 0.25rem;\n  padding: 0.125rem 0;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  color: var(--dsw-alias-label-tertiary);\n}\n/* #162 criterion 0. v1/v2 shipped `row wrap`, and the LIVE measurements\n   against real commands showed why that lied by layout: flex line-breaking\n   runs on items\' MAX-content base sizes (a stage with a long flag cluster\n   or a quoted string carries a 380-640px base), so the row wrapped as soon\n   as the base sum exceeded the pane -- at the dsh chat column\'s 748px cap,\n   the owner\'s journalctl|rg|tail fixture wrapped its tail stage and a\n   `node -e "..."` stage never fit below ~1270px. A wrapped row is visually\n   indistinguishable from a stacked sequence, so the horizontal=pipe/axis\n   claim did not exist at those widths. The fix: the stage row stays ONE row\n   ALWAYS (nowrap); stages shrink inside it (see the stage rule) and only\n   overflow horizontally with a scroll when a pipeline genuinely cannot\n   fit. An overflowed pipe row reads as one band cut at its right edge with\n   a scroll affordance -- nothing like the stacked vertical sequence, whose\n   members have no lateral overflow (-- #162 criterion 0\'s stated answer:\n   horizontal scroll, plus content-proportional shrink, below). */\n/* #167 criterion 8: equal HEIGHT stays \u2014 a measured decision, not the\n   default. The screenshot\'s empty boxes had TWO causes: equal width (fixed\n   in the stage rule below) and every item stretching to the tallest. Both\n   were measured on the owner\'s command (see the ticket report): the width\n   fix drops the row from four lines to two, so keeping `align-items:\n   stretch` leaves each short box one line emptier than its content; hugging\n   (`flex-start`) removes that line but breaks the row into ragged bottoms \u2014\n   and a ragged pipe row stops reading as ONE band, which is the axis\n   contract\'s whole claim above. One line of dead space keeps the band; the\n   declaration below is the decision, not an inheritance. */\n.tool-render-diagram-flow {\n  display: flex;\n  flex-flow: row nowrap;\n  align-items: stretch;\n  gap: 0.25rem;\n  overflow-x: auto;\n}\n/* Content-proportional stage blocks (#167 criterion 6, narrowing #162\'s\n   equal-share a second time). #162 set `flex: 1 1 0%` DELIBERATELY, to spend\n   horizontal width rather than waste it (the freed width goes to the\n   parsed-argument chips). #165 narrowed it once: a LONE stage hugs content,\n   because it has nothing to share with \u2014 but kept equal-share where several\n   stages share a row. The owner\'s screenshot sanctions narrowing it again:\n   equal slices give the `rg` stage (regex plus a long path) one fifth of the\n   row, so it wraps to four lines and sets a row height four nearly-empty\n   boxes inherit. `flex: 1 1 auto` keeps the GROW (the row still spends its\n   full width \u2014 #162\'s criterion is honoured, not reverted) but sizes from\n   CONTENT (flex-basis auto): free space beyond the content bases still\n   spreads evenly, so a longer stage gets more width and wraps less, which\n   drops the row height for every box in it. THE TRADE, stated plainly: short\n   stages no longer soak an equal share, and rows whose natural widths exceed\n   the pane reach their horizontal scroll sooner (C0 below: they scroll, they\n   never wrap). min-width 0 plus the words block\'s pre-wrap still lets long\n   content wrap INSIDE its share; a genuinely unbreakable token still slides\n   the row into its own horizontal scroll (-- #162: the pipe row never\n   becomes a stack). */\n.tool-render-diagram-stage {\n  box-sizing: border-box;\n  display: flex;\n  flex-direction: column;\n  gap: 0.25rem;\n  flex: 1 1 auto;\n  min-width: 0;\n  background: var(--dsw-alias-markdown-code-block);\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 0.5rem;\n  padding: 0.375rem 0.5rem;\n}\n.tool-render-diagram-words {\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-diagram-words code.hljs {\n  background: transparent;\n  padding: 0;\n  font-family: inherit;\n  font-size: inherit;\n  line-height: inherit;\n  white-space: inherit;\n}\n/* #162 criteria 3-5: parsed-argument chips. Each chip\'s text is the\n   VERBATIM source slice of the token it names (never a re-serialisation \u2014\n   criterion 3; quoting/escaping/spacing read as typed). Roles: the command\n   head (first chip), flags, a bound value, a subcommand, positionals.\n   .tool-render-diagram-args is a wrap ROW so chips hug horizontally and the\n   freed width the equal-share stage blocks freed (criterion 1) goes here.\n   Chips are plain code text, not highlighted: the slice is data the reader\n   checks against the raw command, and hljs would REPRINT it. */\n.tool-render-diagram-args {\n  display: flex;\n  flex-flow: row wrap;\n  gap: 0.25rem;\n  min-width: 0;\n}\n.tool-render-diagram-arg {\n  box-sizing: border-box;\n  font-family: var(--ds-font-family-code);\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-bg-layer-1);\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 0.25rem;\n  padding: 0 0.25rem;\n  white-space: pre-wrap;\n  word-break: break-word;\n  min-width: 0;\n}\n.tool-render-diagram-arg-cmd {\n  color: var(--dsw-alias-label-primary);\n  font-weight: 600;\n}\n.tool-render-diagram-arg-subcommand {\n  font-weight: 600;\n  border-color: var(--dsw-alias-border-l2);\n}\n.tool-render-diagram-arg-value {\n  color: var(--dsw-alias-label-tertiary);\n  border-style: dashed;\n}\n.tool-render-diagram-arg-positional {\n  color: var(--dsw-alias-label-tertiary);\n}\n/* The arrow carries its verbatim operator as text (`|` vs `|&`), so the two\n   are visually distinguishable without the tooltip; the title states what\n   each carries for discoverability. */\n.tool-render-diagram-arrow {\n  align-self: center;\n  white-space: nowrap;\n  color: var(--dsw-alias-label-tertiary);\n}\n.tool-render-diagram-arrow-stderr {\n  color: var(--dsw-alias-label-primary);\n  font-weight: 600;\n}\n.tool-render-diagram-endpoint {\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-tertiary);\n  border-top: 1px dashed var(--dsw-alias-border-l3);\n  padding-top: 0.25rem;\n}\n.tool-render-diagram-endpoint code.hljs {\n  background: transparent;\n  padding: 0;\n  font-family: inherit;\n  font-size: inherit;\n  line-height: inherit;\n  white-space: inherit;\n}\n.tool-render-diagram-badge {\n  display: inline-block;\n  font-size: 0.6875rem;\n  line-height: 1rem;\n  color: var(--dsw-alias-label-tertiary);\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 0.25rem;\n  padding: 0 0.375rem;\n  margin: 0 0.375rem 0.375rem 0;\n  white-space: nowrap;\n}\n.tool-render-diagram-exit {\n  font-size: 0.6875rem;\n  line-height: 1rem;\n  white-space: nowrap;\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 0.25rem;\n  padding: 0 0.375rem;\n  align-self: flex-start;\n}\n.tool-render-diagram-exit-ok {\n  color: var(--dsw-alias-label-tertiary);\n}\n.tool-render-diagram-exit-fail {\n  color: var(--dsw-alias-state-error-primary);\n  border-color: var(--dsw-alias-state-error-primary);\n  font-weight: 600;\n}\n.tool-render-diagram-heredoc {\n  font: inherit;\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  color: var(--dsw-alias-label-tertiary);\n  background: transparent;\n  border: 1px dashed var(--dsw-alias-border-l3);\n  border-radius: 0.25rem;\n  padding: 0.125rem 0.375rem;\n  cursor: pointer;\n  text-align: left;\n  white-space: pre-wrap;\n  word-break: break-word;\n}\n.tool-render-diagram-heredoc-open {\n  display: flex;\n  flex-direction: column;\n  gap: 0.25rem;\n  align-items: flex-start;\n}\n.tool-render-diagram-heredoc-body {\n  box-sizing: border-box;\n  margin: 0;\n  max-width: 100%;\n  max-height: 10rem;\n  overflow-y: auto;\n  white-space: pre-wrap;\n  word-break: break-word;\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  color: var(--dsw-alias-label-primary);\n}\n/* #160: a multi-statement script as an ordered sequence of statement groups.\n   The visual contract against #149\'s refusal: pipes lay stages side-by-side\n   in one row (left to right = data movement) with the verbatim operator plus\n   `\u2192`; sequence members stack VERTICALLY here (top to bottom = time order),\n   joined by a "then \u2193" marker that shares no glyph with any pipe. The word\n   "then" is doing the work \u2014 plain English for order, impossible to read as\n   bytes flowing. Verbatim text groups (subshells, &&-chains) get a dashed\n   outline to signal "shown, not drawn". */\n.tool-render-diagram-seq {\n  display: flex;\n  flex-direction: column;\n  gap: 0.25rem;\n}\n/* A reused single-statement diagram nested in a sequence keeps v1\'s blocks\n   untouched; only its outer margin is neutralised so members align. */\n.tool-render-diagram-seq .tool-render-diagram {\n  margin: 0;\n}\n/* #167 criterion 1: NO RAIL between independent statements. #162 made the\n   unconditional boundary a rail-with-no-word so it could never be mistaken\n   for a conditional one \u2014 "one is nothing, the other is prominent text".\n   The rail still drew a connector between statements that are INDEPENDENT\n   (the second runs whether or not the first succeeded), implying a\n   dependency that does not exist \u2014 the same class of falsehood #162 removed\n   the `then` marker for. The boundary is now genuinely nothing: an empty\n   separator paints no box at all (its padding/min-height is pure vertical\n   rhythm, kept wider than the in-panel card gap so statement edges breathe\n   more than chain-part edges). A comment riding the separator is CONTENT,\n   not chrome, and still renders verbatim in its muted voice beside nothing\n   \u2014 removing the rail must never remove the comment with it (pinned). The\n   conditional boundary stays marked ON the dependent part\'s own panel (see\n   .tool-render-diagram-conditional): one is nothing, the other is prominent\n   text \u2014 that distinction never touched the rail. */\n.tool-render-diagram-seq-sep {\n  display: flex;\n  flex-flow: row nowrap;\n  align-items: baseline;\n  gap: 0.5rem;\n  margin-left: 0.375rem;\n  padding: 0.0625rem 0 0.0625rem 0.5rem;\n  min-height: 0.25rem;\n}\n.tool-render-diagram-seq-sep-text {\n  background: transparent;\n  padding: 0;\n  font-family: inherit;\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  white-space: pre-wrap;\n  word-break: break-word;\n  color: var(--dsw-alias-label-tertiary);\n}\n/* #162 criterion 2 (amended by #168): the conditional marker is a CHIP at\n   the top of the DEPENDENT row\'s own panel \u2014 just `&&` or `||`, with the\n   plain-language condition on hover (title + data-dsh-tip: one string feeds\n   the styled tooltip and the screen-reader name alike, so no aria-label is\n   introduced that could drift from the visual). Never on a chain\'s base row\n   (the base runs unconditionally, #162 criterion 2b). Chip-sized, but never\n   mistaken for an argument chip: it leads the card ABOVE the stage flow\n   (never inline in the chip row), and the dashed outline against bold type\n   answers the solid-outline regular-weight argument chips at a glance. */\n.tool-render-diagram-conditional {\n  display: inline-flex;\n  flex-flow: row nowrap;\n  align-items: baseline;\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  font-weight: 700;\n  color: var(--dsw-alias-label-primary);\n  border: 1px dashed var(--dsw-alias-border-l2);\n  border-radius: 0.25rem;\n  padding: 0 0.375rem;\n  margin-bottom: 0.25rem;\n  white-space: nowrap;\n}\n/* #168: a stage that earns no box. Chips already delimit themselves, so the\n   stage outline is redundant here \u2014 transparent border and background plus\n   zero padding leave the chips and arrows to read as the row. The rule for\n   earning a box lives in BashCommandDiagram (redirects, an exit pill, or\n   verbatim words); this class only removes the chrome, never the layout \u2014\n   the nowrap flow, the scroll, and the content-proportional flex above are\n   untouched, so #162\'s C0 holds exactly as pinned. */\n.tool-render-diagram-stage-bare {\n  border-color: transparent;\n  background: transparent;\n  padding: 0;\n}\n.tool-render-diagram-text {\n  box-sizing: border-box;\n  display: flex;\n  flex-direction: column;\n  gap: 0.25rem;\n  border: 1px dashed var(--dsw-alias-border-l3);\n  border-radius: 0.625rem;\n  padding: 0.5rem 0.625rem;\n  min-width: 0;\n  max-width: 100%;\n}\n/* #165: one `&&`/`||` chain as ONE panel, rows as cards inside it. #167\n   changed the panel\'s voice from outline to weight (see the rule below):\n   the panel is a weighted field (darker than the card in the dark theme),\n   and each part keeps its card outline exactly\n   (same border, layer-1 background, tight 0.15625rem vertical padding \u2014 the\n   restraint that makes the target read clean). The part, not\n   the stage box, is now the outline unit: stages inside a part go FLAT\n   (borderless, backgroundless, paddingless \u2014 see the descendant rule below),\n   which removes the second outline level the ticket calls excessive. A\n   reused single-statement diagram nested in a part keeps v1\'s blocks\n   untouched otherwise; only its outer margin is neutralised, as in sequences.\n   AXIS CONTRACT (criterion 3): parts stack vertically at CONTENT width\n   (align-items: flex-start \u2014 time passes, like sequence members) and never\n   sit side by side, so they cannot read as pipe stages; a pipe row keeps its\n   horizontal nowrap band with `|`/`\u2192` glyphs and its own scroll (C0 below,\n   untouched). max-width + min-width keep an overlong pipeline\'s scroll\n   inside the card instead of breaking the pane. */\n/* #167 criteria 3-5, THE TOKEN CHOICE: bg-base. These aliases are ELEVATION,\n   not literal darkness \u2014 base is the canvas layer-1 sits on in BOTH themes,\n   so a base field stays distinguishable from the layer-1 tool card behind\n   it either way (darker field in the dark theme, lighter field in the light\n   one: the direction flips, the region-vs-objects read does not). layer-2\n   would elevate the WRONG way (a raised surface, not a field); mask/primary/\n   tertiary are overlays and accents, not surfaces. The parts reuse layer-1\n   exactly as before, so the field cannot collide with them: base and\n   layer-1 are adjacent but distinct steps on the scale, and every part keeps\n   its own border-l2 outline on top. Radius and padding stay: they shape the\n   field and inset the cards, not draw an outline. */\n.tool-render-diagram-chainpanel {\n  box-sizing: border-box;\n  display: flex;\n  flex-direction: column;\n  gap: 0.25rem;\n  background: var(--dsw-alias-bg-base);\n  border-radius: 0.75rem;\n  padding: 0.375rem 0.5rem;\n  min-width: 0;\n  max-width: 100%;\n}\n.tool-render-diagram-part {\n  box-sizing: border-box;\n  align-self: flex-start;\n  min-width: 0;\n  max-width: 100%;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  background: var(--dsw-alias-bg-layer-1);\n  padding: 0.15625rem 0.5rem;\n}\n.tool-render-diagram-part .tool-render-diagram {\n  margin: 0;\n  padding: 0;\n}\n.tool-render-diagram-part .tool-render-diagram-stage {\n  border-color: transparent;\n  background: transparent;\n  padding: 0;\n}\n/* #165, THE DELIBERATE TRADE against #162 criterion 1 \u2014 kept by #167.\n   #162 set equal-share stages ON PURPOSE, to spend horizontal width rather\n   than waste it (the freed width goes to the parsed-argument chips).\n   Equal-share is exactly what stretches a SHORT command across a wide row:\n   a single stage has nothing to share its row WITH, so equal-share there is\n   pure stretch \u2014 the "negative space created by the empty portion of a\n   command line" the owner is describing. The reversal is therefore NARROW:\n   single-stage flows (data-stages="1", set by BashCommandDiagram) size to\n   content with NO grow (`flex: 0 1 auto`), while multi-stage pipelines now\n   size from content WITH grow (`flex: 1 1 auto` above, #167) \u2014 #162\'s\n   spend-the-width decision stands everywhere as grow, but no stage starts\n   from a zero base anymore.\n   #162\'s C0 re-checked in the same breath: the flow rule above stays\n   `flex-flow: row nowrap` with `overflow-x: auto`, so a pipeline row still\n   never wraps into a column (a wrapped pipe row is indistinguishable from a\n   stacked sequence) \u2014 it scrolls. Single-stage hug cannot break C0: one\n   stage has no row-mate to wrap against; its chips wrap INSIDE it, as before. */\n.tool-render-diagram-flow[data-stages="1"] .tool-render-diagram-stage {\n  flex: 0 1 auto;\n}\n.tool-render-diagram-lead {\n  white-space: pre-wrap;\n  word-break: break-word;\n  font-size: 0.75rem;\n  line-height: 1.125rem;\n  color: var(--dsw-alias-label-tertiary);\n  margin-bottom: 0.375rem;\n}\n/* #164: Graph / Command tabs on the expanded bash row. The strip reuses the\n   repo\'s existing chrome rather than inventing a tab language: the button\n   reset and focus ring come from the run_code spoiler\n   (.tool-render-runcode-spoiler), the mono small-label voice from the IN/OUT\n   section labels (.tool-render-code-out-label), and the selected-border idiom\n   from the ask form\'s selected option (.tool-render-qoption[data-selected]).\n   The selected paint keys on the SAME aria-selected attribute assistive\n   technology reads, so the two cannot disagree. */\n.tool-render-bash-tabs {\n  display: flex;\n  flex-flow: row nowrap;\n  gap: 0.25rem;\n  margin: 0.375rem 0 0 0.25rem;\n}\n.tool-render-bash-tab {\n  background: none;\n  border: none;\n  border-bottom: 0.125rem solid transparent;\n  padding: 0.125rem 0.375rem;\n  cursor: pointer;\n  font-family: var(--ds-font-family-code);\n  font-size: 0.6875rem;\n  line-height: 1rem;\n  color: var(--dsw-alias-label-tertiary);\n  text-align: left;\n}\n.tool-render-bash-tab:hover {\n  color: var(--dsw-alias-label-primary);\n}\n.tool-render-bash-tab[aria-selected="true"] {\n  color: var(--dsw-alias-label-primary);\n  font-weight: 600;\n  border-bottom-color: var(--dsw-alias-state-business-primary);\n}\n.tool-render-bash-tab:focus-visible {\n  outline: 0.125rem solid var(--dsw-alias-state-business-primary);\n  outline-offset: 0.125rem;\n  border-radius: 0.25rem;\n}\n/* The tab panel is a neutral container: the graph and the command keep their\n   own margins and scrolling, so switching tabs changes the content, never\n   the card\'s shape language. */\n.tool-render-bash-panel {\n  display: flex;\n  flex-direction: column;\n  min-width: 0;\n}\n/* #173: production home for the fair-copy highlight colours. The module\n   references --proto-str/path/flag/var, whose only definitions lived in the\n   prototype :root blocks; those blocks do not ship (stripBashGraphRoot drops\n   them: global token values would leak across the page). The names resolve\n   here instead, scoped to the graph panel, in both themes. The values are\n   the prototype\'s per-theme stand-ins, kept because they were tuned against\n   this palette; the host --dsw-* tokens they sit beside resolve from the\n   production theme untouched. */\n.tool-render-bash-panel {\n  --proto-str: #9ece6a;\n  --proto-path: #e0af68;\n  --proto-flag: #7aa2f7;\n  --proto-var: #bb9af7;\n}\nhtml[data-theme="light"] .tool-render-bash-panel {\n  --proto-str: #2c7a2c;\n  --proto-path: #9a5b00;\n  --proto-flag: #1d4fd7;\n  --proto-var: #6d28d9;\n}\n';
 
 // node_modules/.pnpm/highlight.js@11.12.0/node_modules/highlight.js/es/languages/javascript.js
 var IDENT_RE = "[A-Za-z$_][0-9A-Za-z$_]*";
@@ -20683,53 +20688,6 @@ function getBashDiagram(command) {
   diagramCache.set(command, built);
   return built;
 }
-function attributePipeStages(model, pipeStages) {
-  const stages = model.stages.map((s) => ({
-    slice: s.slice,
-    words: s.words,
-    redirects: s.redirects,
-    exitCode: void 0,
-    args: s.args
-  }));
-  if (Array.isArray(pipeStages) && pipeStages.length === stages.length) {
-    let ok = true;
-    const codes = [];
-    for (const entry of pipeStages) {
-      if (entry === null || typeof entry !== "object" || typeof entry.name !== "string" || entry.name.length === 0 || !Number.isInteger(entry.exitCode)) {
-        ok = false;
-        break;
-      }
-      codes.push(entry.exitCode);
-    }
-    if (ok) {
-      for (let i = 0; i < stages.length; i++) stages[i].exitCode = codes[i];
-    }
-  }
-  return {
-    kind: model.kind,
-    negated: model.negated,
-    timed: model.timed,
-    leadingGap: model.leadingGap,
-    stages,
-    arrows: model.arrows,
-    trailing: model.trailing
-  };
-}
-function sequenceUnitDiagramModel(row) {
-  return {
-    kind: row.kind,
-    negated: row.negated,
-    timed: row.timed,
-    leadingGap: row.leadingGap,
-    stages: row.stages,
-    arrows: row.arrows,
-    conditional: row.conditional,
-    trailing: row.groupGap === "" ? [] : [{ kind: "gap", text: row.groupGap }]
-  };
-}
-function chainPanelRows(chain) {
-  return chain.rows.map((row) => sequenceUnitDiagramModel(row));
-}
 function subtreeHasHeredoc(node) {
   if (node === null || typeof node !== "object") return false;
   if (Array.isArray(node)) {
@@ -21090,43 +21048,6 @@ function getBashSequenceDiagram(command) {
   sequenceCache.set(command, built);
   return built;
 }
-function attributeSequenceStages(model, pipeStages) {
-  const statements = model.statements.map((group, i) => {
-    if (group.kind !== "diagram" || i !== model.statements.length - 1) return group;
-    const coded = attributePipeStages(
-      {
-        kind: group.unit.kind,
-        negated: group.unit.negated,
-        timed: group.unit.timed,
-        leadingGap: group.unit.leadingGap,
-        stages: group.unit.stages,
-        arrows: group.unit.arrows,
-        trailing: []
-      },
-      pipeStages
-    );
-    return {
-      kind: "diagram",
-      unit: {
-        kind: coded.kind,
-        negated: coded.negated,
-        timed: coded.timed,
-        leadingGap: coded.leadingGap,
-        stages: coded.stages,
-        arrows: coded.arrows,
-        groupGap: group.unit.groupGap,
-        conditional: group.unit.conditional
-      }
-    };
-  });
-  return {
-    kind: model.kind,
-    leadingGap: model.leadingGap,
-    statements,
-    separators: model.separators,
-    trailing: model.trailing
-  };
-}
 function resolveBashTab(command, rewritten) {
   const commandText = typeof command === "string" ? command : null;
   if (commandText === null || rewritten === true) {
@@ -21135,6 +21056,1835 @@ function resolveBashTab(command, rewritten) {
   const drawable = getBashDiagram(commandText) !== null || getBashSequenceDiagram(commandText) !== null;
   return drawable ? { drawable: true, showTabs: true, defaultTab: "graph", commandText } : { drawable: false, showTabs: false, defaultTab: "command", commandText };
 }
+
+// plugins/tool-render/src/bash-graph/constants.ts
+var SCALE = [
+  { key: "xs", max: 12, w: 112 },
+  { key: "s", max: 28, w: 168 },
+  { key: "m", max: 56, w: 232 },
+  { key: "l", max: 96, w: 312 },
+  { key: "xl", max: 150, w: 400 }
+];
+function sizeFor(len) {
+  for (const s of SCALE) if (len <= s.max) return s;
+  return null;
+}
+function stepFor(nat) {
+  for (const s of SCALE) if (nat <= s.w) return s.key;
+  return "xl";
+}
+var NODE_M = 10;
+var OP_W = 36;
+var PILL_MAX_PX = 220;
+var PIPE_GAP = 80;
+var GAP = 22;
+var ROWGAP = 22;
+var IND = 32;
+var SHORT_T = 16;
+var ARG_T = 80;
+var CARD_AVAIL = 716;
+function cardAvail() {
+  try {
+    const g = globalThis;
+    const col = g.document ? g.document.querySelector("#col") : null;
+    const w = col && col.clientWidth ? col.clientWidth : 748;
+    return Math.max(200, w - 32);
+  } catch {
+    return CARD_AVAIL;
+  }
+}
+
+// plugins/tool-render/src/bash-graph/measure.ts
+function activeDocument() {
+  const g = globalThis;
+  if (!g.document) throw new Error("bash-graph: no document for measurement");
+  return g.document;
+}
+function naturalWidth(html, sk) {
+  if (sk === "op") return OP_W + NODE_M * 2;
+  try {
+    const meas = activeDocument().querySelector("#measure");
+    if (!meas) return 120;
+    meas.innerHTML = `<div style="width:max-content;white-space:nowrap">${html}</div>`;
+    const nodeEl = meas.firstChild && meas.firstChild.firstChild;
+    if (nodeEl && nodeEl.style) nodeEl.style.width = "auto";
+    const sw = nodeEl ? nodeEl.scrollWidth || 0 : 0;
+    const ow = nodeEl ? nodeEl.offsetWidth || 0 : 0;
+    meas.innerHTML = "";
+    if (sw > 0) return Math.ceil(sw) + 2 + NODE_M * 2;
+    if (ow > 0) return Math.ceil(ow) + NODE_M * 2;
+  } catch {
+  }
+  return 120;
+}
+function measureH(html, w) {
+  const meas = activeDocument().querySelector("#measure");
+  if (!meas) return 30;
+  meas.innerHTML = `<div class="fobjwrap" style="width:${w}px">${html}</div>`;
+  const inner = meas.firstChild;
+  const node = inner && inner.firstChild ? inner.firstChild : null;
+  if (node && node.style && node.classList && node.classList.contains("prim-node") && !node.classList.contains("op")) {
+    node.style.width = Math.max(0, w - NODE_M * 2) + "px";
+    node.style.maxWidth = Math.max(0, w - NODE_M * 2) + "px";
+  }
+  let h = inner ? inner.offsetHeight : 0;
+  try {
+    if (inner && inner.getBoundingClientRect) {
+      const bb = inner.getBoundingClientRect();
+      if (bb.height > h) h = bb.height;
+    }
+  } catch {
+  }
+  meas.innerHTML = "";
+  return Math.max(30, Math.ceil(h));
+}
+function setNodeWidth(s, step) {
+  if (s.sk === "op") return;
+  if (s.html.includes('class="prim-node has-chip"'))
+    s.html = s.html.replace(
+      'class="prim-node has-chip"',
+      `class="prim-node has-chip" style="width:${Math.max(0, s.w - NODE_M * 2)}px"`
+    );
+  else
+    s.html = s.html.replace(
+      'class="prim-node"',
+      `class="prim-node" style="width:${Math.max(0, s.w - NODE_M * 2)}px"`
+    );
+  s.html = s.html.replace(/data-size="[a-z]+"/, `data-size="${step}"`);
+}
+function fitWidth(html, wMax, minw, Hw) {
+  void html;
+  const lo0 = minw || 0;
+  if (!(wMax > lo0)) return wMax;
+  const hMax = Hw(wMax);
+  if (Hw(lo0) <= hMax) return lo0;
+  let lo = lo0;
+  let hi = wMax;
+  while (hi - lo > 4) {
+    const mid = (lo + hi) / 2;
+    if (Hw(mid) <= hMax) hi = mid;
+    else lo = mid;
+  }
+  const w = Math.ceil(hi);
+  return Hw(w) <= hMax ? w : wMax;
+}
+function fillLevel(nats, budget) {
+  const s = [...nats].sort((a, b) => a - b);
+  let prev = 0;
+  let rem = budget;
+  for (let i = 0; i < s.length; i++) {
+    const need = (s[i] - prev) * (s.length - i);
+    if (rem >= need) {
+      rem -= need;
+      prev = s[i];
+    } else return prev + rem / (s.length - i);
+  }
+  return prev;
+}
+function unescapeEntities(s) {
+  return s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+}
+function specMinW(html) {
+  const tx = unescapeEntities;
+  const hasIcon = html.includes("data-lucide");
+  const chipR = chipReserve(html, tx);
+  const chrome = 16 + 2 + (hasIcon ? 20 : 0) + NODE_M * 2 + chipR;
+  let mx = 0;
+  let m;
+  const reSeg = /<span class="seg">(.*?)<\/span>/g;
+  while (m = reSeg.exec(html)) mx = Math.max(mx, tx(m[1]).length * 7.2);
+  const rePill = /<button class="prim-badge"[^>]*>([\s\S]*?)<\/button>/g;
+  while (m = rePill.exec(html)) {
+    const pl = tx(m[1].replace(/<[^>]*>/g, ""));
+    mx = Math.max(mx, Math.min(pl.length * 7.2, PILL_MAX_PX + (m[0].includes("data-hd") ? 18 : 14)));
+  }
+  return mx > 0 ? Math.ceil(mx + chrome) : 0;
+}
+function chipReserve(html, tx) {
+  const cm = /<span class="op-chip"[^>]*>([\s\S]*?)<\/span>/.exec(html);
+  if (!cm) return 0;
+  return Math.min(tx(cm[1]).length * 7.2, 200) + 30;
+}
+
+// plugins/tool-render/src/bash-graph/layout.ts
+function layoutRow(items) {
+  let x = 10;
+  const H = Math.max(...items.map((it) => it.h)) + 6;
+  const pos = /* @__PURE__ */ new Map();
+  for (const it of items) {
+    pos.set(it.id, { x: x + it.w / 2, y: H / 2 });
+    x += it.w + 22;
+  }
+  let W = x - 22 + 10;
+  const engine = "fallback-chain";
+  let minL = Infinity;
+  let maxR = -Infinity;
+  for (const it of items) {
+    const q = pos.get(it.id);
+    if (!q) continue;
+    minL = Math.min(minL, q.x - it.w / 2);
+    maxR = Math.max(maxR, q.x + it.w / 2);
+  }
+  const sh = -minL;
+  if (sh !== 0)
+    for (const it of items) {
+      const q = pos.get(it.id);
+      if (q) q.x += sh;
+    }
+  W = maxR + sh + NODE_M;
+  return { W, H, pos, engine };
+}
+function enforceGaps(lay, items, gap = GAP) {
+  let acc = 0;
+  for (let i = 0; i < items.length; i++) {
+    const p = lay.pos.get(items[i].id);
+    if (!p) continue;
+    p.x += acc;
+    if (i + 1 < items.length) {
+      const req = items[i].gapAfter != null ? items[i].gapAfter : gap;
+      const nx = (lay.pos.get(items[i + 1].id)?.x ?? 0) + acc;
+      const need = p.x + items[i].w / 2 + req + items[i + 1].w / 2;
+      if (need > nx + 1e-9) acc += need - nx;
+    }
+  }
+  lay.W += acc;
+  return acc;
+}
+function planRows(items, avail, ind = IND, gap = GAP, rowGap = ROWGAP, H) {
+  const n = items.length;
+  if (!n) return { rows: [], totalH: 0 };
+  const hcache = /* @__PURE__ */ new Map();
+  const Hc = (it, w) => {
+    const k = it.id + "@" + w;
+    let v = hcache.get(k);
+    if (v === void 0) {
+      v = H(it, w);
+      hcache.set(k, v);
+    }
+    return v;
+  };
+  function rowCost(js, ie, first) {
+    const g = items.slice(js, ie + 1);
+    const aw = avail - (first ? 0 : ind);
+    const gaps = g.slice(0, -1).reduce((a, s) => a + (s.gapAfter != null ? s.gapAfter : gap), 0) + 20;
+    const natSum = g.reduce((a, s) => a + s.nat, 0);
+    const widths = /* @__PURE__ */ new Map();
+    if (natSum + gaps <= aw) {
+      let h2 = 0;
+      for (const s of g) {
+        widths.set(s.id, s.nat);
+        h2 = Math.max(h2, Hc(s, s.nat));
+      }
+      return { h: h2 + (first ? 6 : 0), widths, scroll: false, left: aw - natSum - (gaps - 20) };
+    }
+    const inflex = g.filter((s) => !s.flex);
+    const flex = g.filter((s) => s.flex);
+    const iSum = inflex.reduce((a, s) => a + s.nat, 0);
+    const budget = aw - gaps - iSum;
+    const L = budget >= 0 && flex.length ? fillLevel(flex.map((s) => s.nat), budget) : -1;
+    if (L < 0 || flex.some((s) => Math.min(s.nat, L) < (s.minw || 0))) {
+      let h2 = 0;
+      for (const s of g) {
+        widths.set(s.id, s.nat);
+        h2 = Math.max(h2, Hc(s, s.nat));
+      }
+      const hidden = Math.max(0, natSum + gaps - aw);
+      return { h: h2 + (first ? 6 : 0) + hidden, widths, scroll: true, left: 0 };
+    }
+    let h = 0;
+    const rawW = /* @__PURE__ */ new Map();
+    for (const s of g) {
+      const w = s.flex ? Math.ceil(Math.min(s.nat, L)) : s.nat;
+      rawW.set(s.id, w);
+      h = Math.max(h, Hc(s, w));
+    }
+    for (const s of g) {
+      widths.set(
+        s.id,
+        s.flex ? fitWidth(s.html ?? "", rawW.get(s.id) ?? 0, s.minw || 0, (w) => Hc(s, w)) : s.nat
+      );
+    }
+    let used = 0;
+    for (const s of g) used += widths.get(s.id) ?? 0;
+    return { h: h + (first ? 6 : 0), widths, scroll: false, left: aw - used - (gaps - 20) };
+  }
+  const INF = 1e15;
+  const dp = new Array(n + 1).fill(INF);
+  const par = new Array(n + 1).fill(-1);
+  const rc = new Array(
+    n + 1
+  ).fill(null);
+  dp[0] = 0;
+  for (let i2 = 1; i2 <= n; i2++) {
+    for (let j = 0; j < i2; j++) {
+      const c2 = rowCost(j, i2 - 1, j === 0);
+      const tot = dp[j] + c2.h + (j > 0 ? rowGap : 0);
+      if (tot < dp[i2] || tot === dp[i2] && j > par[i2]) {
+        dp[i2] = tot;
+        par[i2] = j;
+        rc[i2] = c2;
+      }
+    }
+  }
+  const rows = [];
+  let i = n;
+  while (i > 0) {
+    const j = par[i];
+    const c2 = rc[i];
+    if (!c2 || j < 0) break;
+    const ids = [];
+    for (let k = j; k < i; k++) ids.push(items[k].id);
+    rows.unshift({
+      ids,
+      widths: ids.map((id) => c2.widths.get(id) ?? 0),
+      left: Math.max(0, Math.round(c2.left)),
+      first: j === 0,
+      scroll: c2.scroll
+    });
+    i = j;
+  }
+  return { rows, totalH: dp[n] };
+}
+
+// plugins/tool-render/src/bash-graph/text.ts
+function esc(s) {
+  return String(s).replace(
+    /[&<>"']/g,
+    (c2) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c2]
+  );
+}
+function SL(src, a, b) {
+  return src.slice(a, b);
+}
+function segHTML(raw) {
+  return String(raw).split("/").map((p) => `<span class="seg">${esc(p)}</span>`).join("/<wbr>");
+}
+function wbrHTML(s) {
+  return esc(s).replace(/\//g, "/<wbr>");
+}
+function xRunHTML(s, isName) {
+  let named = !isName;
+  return String(s).split(/(\s+)/g).map((p) => {
+    if (p === "" || /^\s+$/.test(p)) return esc(p);
+    const inner = segHTML(p);
+    if (!named) {
+      named = true;
+      return `<span class="node-name">${inner}</span>`;
+    }
+    return inner;
+  }).join("");
+}
+function hlCmd(src, ta, tb, isFirst) {
+  const raw = SL(src, ta, tb);
+  const toks = [];
+  let m;
+  const re = /("[^"]*"|'[^']*'|\$[\w{}()#]+|--?[A-Za-z0-9_][\w.-]*|\/[^\s'"`|&;()]*|\b\d[\d.]*\b)/g;
+  let last = 0;
+  while (m = re.exec(raw)) {
+    if (m.index > last) toks.push({ t: "x", s: raw.slice(last, m.index) });
+    const s = m[0];
+    let cls = "x";
+    if (/^['"]/.test(s)) cls = "hl-str";
+    else if (/^\$/.test(s)) cls = "hl-var";
+    else if (/^-/.test(s)) cls = "hl-flag";
+    else if (/^\//.test(s)) cls = "hl-path";
+    toks.push({ t: cls, s });
+    last = m.index + s.length;
+  }
+  if (last < raw.length) toks.push({ t: "x", s: raw.slice(last) });
+  const first = /^\s*\S+/.exec(raw);
+  const nameEnd = first ? first[0].length : 0;
+  let html = "";
+  let pos = 0;
+  for (const tk of toks) {
+    const end = pos + tk.s.length;
+    if (tk.t === "x") html += xRunHTML(tk.s, pos < nameEnd && isFirst !== false);
+    else if (tk.t === "hl-path") html += `<span class="hl-path">${segHTML(tk.s)}</span>`;
+    else html += `<span class="${tk.t}">${wbrHTML(tk.s)}</span>`;
+    pos = end;
+  }
+  const nm = (first ? first[0] : "").trim();
+  return { html, name: nm };
+}
+function hlBody(text) {
+  return esc(text).replace(
+    /(&quot;.*?&quot;|&#39;.*?&#39;|(?<!&)#[^\n]*)/g,
+    (s) => s.startsWith("#") ? `<span class="hl-var">${s}</span>` : `<span class="hl-str">${s}</span>`
+  );
+}
+function hlArgBody(text) {
+  return `<span class="hl-str">${esc(text)}</span>`;
+}
+function cmdNameOf(src, t) {
+  const raw = SL(src, t.ta, t.tb);
+  const words = raw.match(/[^\s'"]+|'[^']*'|"[^"]*"/g) || [];
+  for (const w0 of words) {
+    const w = w0.trim();
+    if (!w) continue;
+    if (/^[A-Za-z_]\w*=/.test(w)) continue;
+    return w;
+  }
+  return "?";
+}
+
+// plugins/tool-render/src/bash-graph/primitives.ts
+var OP_MEANING = {
+  "|": "pipe: passes the previous step's output as input to the next step",
+  "&&": "and: runs only if the previous step succeeded",
+  "||": "or: runs only if the previous step failed",
+  ">": "redirect: writes the previous step's output into a file (truncate)",
+  ">>": "redirect: appends the previous step's output to a file",
+  "2>&1": "merge: folds error output into standard output",
+  "2>&1 |": "merge then pipe: folds error output into standard output and passes it on as input to the next step",
+  "<<": "heredoc: feeds the collapsed lines below as input \u2014 activate the node to expand"
+};
+var OP_ICON = {
+  "|": "pipe-glyph",
+  "&&": "check",
+  "||": "circle-plus",
+  ">": "file-output",
+  ">>": "file-output",
+  "2>&1": "merge",
+  "2>&1 |": "merge",
+  "<<": "scroll-text"
+};
+var CMD_ICON = {
+  git: "git-branch",
+  npm: "package",
+  node: "hexagon",
+  deno: "shell",
+  python: "file-code",
+  python3: "file-code",
+  rg: "search",
+  sed: "scissors",
+  cd: "folder",
+  echo: "megaphone",
+  cat: "file-text",
+  ls: "list",
+  head: "chevrons-up",
+  tail: "chevrons-down",
+  wc: "hash",
+  sort: "arrow-down-wide-narrow",
+  uniq: "list-checks",
+  export: "upload",
+  timeout: "timer"
+};
+var PIPE_GLYPH_SYMBOL = `<symbol id="pipe-glyph" viewBox="0 0 512 512"><g transform="rotate(-90 256 256)"><path d="m 488.727,232.727 h -93.091 c -12.853,0 -23.273,10.42 -23.273,23.273 v 23.273 H 232.727 V 139.636 H 256 c 12.853,0 23.273,-10.42 23.273,-23.273 V 23.273 C 279.273,10.42 268.853,0 256,0 H 23.273 C 10.42,0 0,10.42 0,23.273 v 93.091 c 0,12.853 10.42,23.273 23.273,23.273 h 23.273 v 219.415 c 0,58.77 47.633,106.403 106.403,106.403 h 219.415 v 23.273 c 0,12.853 10.42,23.273 23.273,23.273 h 93.091 C 501.58,512 512,501.58 512,488.727 V 256 c 0,-12.853 -10.42,-23.273 -23.273,-23.273 z M 46.545,46.545 H 232.727 V 93.09 H 209.454 69.818 46.545 Z m 106.403,372.364 c -33.064,0 -59.857,-26.794 -59.857,-59.857 V 139.636 h 93.091 v 162.909 c 0,12.853 10.42,23.273 23.273,23.273 h 162.909 v 93.091 z m 312.507,46.546 H 418.91 V 442.182 302.545 279.272 h 46.545 z" fill="currentColor"/></g></symbol>`;
+function PipeGlyph() {
+  return `<span class="prim-icon"><svg aria-hidden="true"><use href="#pipe-glyph"></use></svg></span>`;
+}
+function Icon(name2, fb, cls) {
+  if (name2 === "pipe-glyph") return PipeGlyph();
+  return `<span class="prim-icon${cls ? " " + cls : ""}"><i data-lucide="${esc(name2)}" data-fb="${esc(fb || "\u2022")}"></i></span>`;
+}
+function Badge(text, tone) {
+  return `<span class="prim-badge"${tone ? ` data-tone="${tone}"` : ""}>${esc(text)}</span>`;
+}
+function chipHTML(sym, meaning) {
+  const body = sym === "||" ? Icon(OP_ICON["||"], "||") : segHTML(sym);
+  return `<span class="op-chip" title="${esc(meaning)}">${body}</span>`;
+}
+function pipeTagHTML(kind, mx, y) {
+  const cfg = kind === "pipe" ? { icon: "pipe-glyph", fb: "|", spin: null, meaning: OP_MEANING["|"] } : { icon: "merge", fb: "2>&1 |", spin: "rot90", meaning: OP_MEANING["2>&1 |"] };
+  return `<span class="pipe-tag" data-pipe="${kind}" title="${esc(cfg.meaning)}" style="left:${mx.toFixed(1)}px;top:${y.toFixed(1)}px">${Icon(cfg.icon, cfg.fb, cfg.spin ?? void 0)}</span>`;
+}
+function Node(o) {
+  if (o.op)
+    return `<div class="prim-node op" data-size="op" title="${esc(o.meaning ?? "")}">${Icon(o.icon ?? "", o.sym ?? "", o.spin ?? void 0)}<span class="op-sym">${esc(o.sym ?? "")}</span></div>`;
+  const main = (o.icon ? Icon(o.icon, o.iconFb ?? "") : "") + `<span class="node-text"><code>${o.bodyHTML ?? ""}</code></span>` + (o.dockHTML ? `<div class="hdock">${o.dockHTML}</div>` : "");
+  if (o.chip)
+    return `<div class="prim-node has-chip" data-size="${o.size}"${o.name ? ` data-cmd="${esc(o.name)}"` : ""}>` + chipHTML(o.chip.sym, o.chip.meaning) + `<span class="node-main">${main}</span></div>`;
+  return `<div class="prim-node" data-size="${o.size}"${o.name ? ` data-cmd="${esc(o.name)}"` : ""}${o.meaning ? ` title="${esc(o.meaning)}"` : ""}>` + main + `</div>`;
+}
+
+// plugins/tool-render/src/bash-graph/parse.ts
+function countLines(txt) {
+  return txt === "" ? 0 : txt.split("\n").length - (txt.endsWith("\n") ? 1 : 0);
+}
+function parseHeredocOpen(src, i) {
+  let j = i + 2;
+  let allowTabs = false;
+  if (src[j] === "-") {
+    allowTabs = true;
+    j++;
+  }
+  while (src[j] === " " || src[j] === "	") j++;
+  let qc = null;
+  if (src[j] === "'" || src[j] === '"' || src[j] === "\\") {
+    qc = src[j];
+    j++;
+  }
+  let delim = "";
+  if (qc) {
+    while (j < src.length && src[j] !== qc) {
+      delim += src[j];
+      j++;
+    }
+    j++;
+  } else {
+    const m = /^[A-Za-z0-9_]+/.exec(src.slice(j));
+    if (!m) return null;
+    delim = m[0];
+    j += delim.length;
+  }
+  if (!delim) return null;
+  return { delim, allowTabs, end: j };
+}
+function splitLines2(src) {
+  const N = src.length;
+  const lines = [];
+  let i = 0;
+  let start = 0;
+  let q = null;
+  let depth = 0;
+  let esc2 = false;
+  let pending = [];
+  const flushLine = (nlPos, _isEOF) => {
+    const bodyStart = nlPos != null ? nlPos + 1 : N;
+    const bodies = [];
+    let pos = bodyStart;
+    for (const h of pending) {
+      let p = pos;
+      let found = false;
+      while (p <= N) {
+        let e = src.indexOf("\n", p);
+        if (e === -1) e = N;
+        let cmp = src.slice(p, e);
+        if (h.allowTabs) cmp = cmp.replace(/^\t+/, "");
+        if (cmp === h.delim) {
+          const txt = src.slice(pos, p);
+          bodies.push({ delim: h.delim, a: pos, b: p, lines: countLines(txt), unterminated: false });
+          pos = e + 1;
+          found = true;
+          break;
+        }
+        p = e + 1;
+      }
+      if (!found) {
+        const txt = src.slice(pos);
+        bodies.push({ delim: h.delim, a: pos, b: N, lines: countLines(txt), unterminated: true });
+        pos = N;
+      }
+    }
+    if (src.slice(start, nlPos ?? N).trim() !== "" || bodies.length)
+      lines.push({ a: start, b: nlPos ?? N, endExt: pos, heredocs: bodies });
+    if (nlPos != null) {
+      i = pos;
+      start = pos;
+    }
+    pending = [];
+  };
+  while (i < N) {
+    const c2 = src[i];
+    if (esc2) {
+      esc2 = false;
+      i++;
+      continue;
+    }
+    if (q) {
+      if (c2 === "\\" && q !== "'") esc2 = true;
+      else if (c2 === q) q = null;
+      i++;
+      continue;
+    }
+    if (c2 === "\\") {
+      esc2 = true;
+      i++;
+      continue;
+    }
+    if (c2 === "'" || c2 === '"' || c2 === "`") {
+      q = c2;
+      i++;
+      continue;
+    }
+    if (c2 === "$" && (src[i + 1] === "(" || src[i + 1] === "{")) {
+      depth++;
+      i += 2;
+      continue;
+    }
+    if (c2 === "(" || c2 === "{") {
+      depth++;
+      i++;
+      continue;
+    }
+    if ((c2 === ")" || c2 === "}") && depth > 0) {
+      depth--;
+      i++;
+      continue;
+    }
+    if (depth === 0 && c2 === "<" && src[i + 1] === "<") {
+      const h = parseHeredocOpen(src, i);
+      if (h) {
+        pending.push(h);
+        i = h.end;
+        continue;
+      }
+      i++;
+      continue;
+    }
+    if (depth === 0 && c2 === "\n") {
+      flushLine(i, false);
+      continue;
+    }
+    i++;
+  }
+  flushLine(null, true);
+  return lines;
+}
+function splitSemis(src, a, b) {
+  const parts = [];
+  let i = a;
+  let start = a;
+  let q = null;
+  let depth = 0;
+  let esc2 = false;
+  const push = (e) => {
+    if (src.slice(start, e).trim() !== "") parts.push({ a: start, b: e });
+    start = e + 1;
+  };
+  while (i < b) {
+    const c2 = src[i];
+    if (esc2) {
+      esc2 = false;
+      i++;
+      continue;
+    }
+    if (q) {
+      if (c2 === "\\" && q !== "'") esc2 = true;
+      else if (c2 === q) q = null;
+      i++;
+      continue;
+    }
+    if (c2 === "\\" && q !== null) {
+      esc2 = true;
+      i++;
+      continue;
+    }
+    if (c2 === "\\" && q === null) {
+      esc2 = true;
+      i++;
+      continue;
+    }
+    if (c2 === "'" || c2 === '"' || c2 === "`") {
+      q = c2;
+      i++;
+      continue;
+    }
+    if (c2 === "$" && (src[i + 1] === "(" || src[i + 1] === "{")) {
+      depth++;
+      i += 2;
+      continue;
+    }
+    if (c2 === "(" || c2 === "{") {
+      depth++;
+      i++;
+      continue;
+    }
+    if ((c2 === ")" || c2 === "}") && depth > 0) {
+      depth--;
+      i++;
+      continue;
+    }
+    if (depth === 0 && c2 === ";") {
+      push(i);
+      i++;
+      continue;
+    }
+    i++;
+  }
+  if (src.slice(start, b).trim() !== "") parts.push({ a: start, b });
+  return parts;
+}
+var OPS = ["2>&1", "1>&2", "&>", "<<-", "<<", ">>", "&&", "||", ">", "<", "|"];
+function tokenizeParts(src, a, b) {
+  const items = [];
+  let i = a;
+  let cur = null;
+  const q_ = { q: null, depth: 0, esc: false };
+  const isOp = () => {
+    if (q_.q || q_.depth > 0) return null;
+    for (const o of OPS) if (src.startsWith(o, i)) return o;
+    return null;
+  };
+  const closeCmd = (e) => {
+    if (cur !== null) {
+      let ta = cur;
+      let tb = e;
+      while (ta < tb && /\s/.test(src[ta])) ta++;
+      while (tb > ta && /\s/.test(src[tb - 1])) tb--;
+      if (tb > ta) items.push({ t: "cmd", a: cur, b: e, ta, tb });
+      cur = null;
+    }
+  };
+  while (i < b) {
+    const c2 = src[i];
+    if (q_.esc) {
+      q_.esc = false;
+      i++;
+      continue;
+    }
+    if (q_.q) {
+      if (c2 === "\\" && q_.q !== "'") q_.esc = true;
+      else if (c2 === q_.q) q_.q = null;
+      i++;
+      continue;
+    }
+    if (c2 === "\\") {
+      q_.esc = true;
+      i++;
+      continue;
+    }
+    if (c2 === "'" || c2 === '"' || c2 === "`") {
+      if (cur === null) cur = i;
+      q_.q = c2;
+      i++;
+      continue;
+    }
+    if (c2 === "$" && (src[i + 1] === "(" || src[i + 1] === "{")) {
+      if (cur === null) cur = i;
+      q_.depth++;
+      i += 2;
+      continue;
+    }
+    if (c2 === "(" || c2 === "{") {
+      if (cur === null) cur = i;
+      q_.depth++;
+      i++;
+      continue;
+    }
+    if ((c2 === ")" || c2 === "}") && q_.depth > 0) {
+      q_.depth--;
+      i++;
+      continue;
+    }
+    if (q_.depth === 0 && /\s/.test(c2)) {
+      i++;
+      continue;
+    }
+    const o = isOp();
+    if (o) {
+      closeCmd(i);
+      if (o === ">" || o === ">>" || o === "<") {
+        items.push({ t: "op", op: o, a: i, b: i + o.length });
+        i += o.length;
+        while (i < b && /\s/.test(src[i])) i++;
+        const s = i;
+        let qq = null;
+        let e2 = false;
+        while (i < b) {
+          const d = src[i];
+          if (e2) {
+            e2 = false;
+            i++;
+            continue;
+          }
+          if (qq) {
+            if (d === "\\" && qq !== "'") e2 = true;
+            else if (d === qq) qq = null;
+            i++;
+            continue;
+          }
+          if (d === "\\" && qq === null) {
+            e2 = true;
+            i++;
+            continue;
+          }
+          if (d === "'" || d === '"') {
+            qq = d;
+            i++;
+            continue;
+          }
+          if (/\s/.test(d)) break;
+          if ("><|&;".includes(d)) break;
+          i++;
+        }
+        let ta = s;
+        let tb = i;
+        while (ta < tb && /\s/.test(src[ta])) ta++;
+        while (tb > ta && /\s/.test(src[tb - 1])) tb--;
+        if (tb > ta) items.push({ t: "target", a: s, b: i, ta, tb });
+        continue;
+      }
+      if (o === "<<" || o === "<<-") {
+        items.push({ t: "op", op: "<<", a: i, b: i + o.length });
+        i += o.length;
+        while (i < b && /\s/.test(src[i])) i++;
+        const s = i;
+        if (src[i] === "'" || src[i] === '"') {
+          const qq = src[i];
+          i++;
+          while (i < b && src[i] !== qq) i++;
+          i++;
+        } else while (i < b && /[A-Za-z0-9_]+/.test(src[i]) && !/\s/.test(src[i])) i++;
+        items.push({ t: "delim", a: s, b: i, ta: s, tb: i });
+        continue;
+      }
+      items.push({ t: "op", op: o, a: i, b: i + o.length });
+      i += o.length;
+      continue;
+    }
+    if (cur === null) cur = i;
+    i++;
+  }
+  closeCmd(b);
+  return items;
+}
+function detectGroup(src, ta, tb) {
+  const head = src.slice(ta, Math.min(tb, ta + 24));
+  const m = /^\s*(for|while|until|select|if|case)\b/.exec(head);
+  if (m) return { kind: "kw", kw: m[1] };
+  if (/^\s*\(/.test(head)) return { kind: "subshell" };
+  if (/^\s*\{/.test(head)) return { kind: "brace" };
+  if (/^\s*\w[\w-]*\s*\(\)/.test(src.slice(ta, tb))) return { kind: "function" };
+  return null;
+}
+function parseTest(raw) {
+  const mOpen = /^\s*(\[\[?)\s+/.exec(raw);
+  if (!mOpen) return null;
+  const dbl = mOpen[1] === "[[";
+  const endRe = dbl ? /\s+\]\]\s*$/ : /\s+\]\s*$/;
+  if (!endRe.test(raw)) return null;
+  const inner = raw.slice(mOpen[0].length).replace(endRe, "");
+  const toks = [];
+  let i = 0;
+  let cur = "";
+  let q = null;
+  let closed = true;
+  const push = () => {
+    toks.push(cur);
+    cur = "";
+  };
+  while (i < inner.length) {
+    const c2 = inner[i];
+    if (q) {
+      cur += c2;
+      if (c2 === "\\" && q === '"' && i + 1 < inner.length) {
+        cur += inner[i + 1];
+        i += 2;
+        continue;
+      }
+      if (c2 === q) q = null;
+      i++;
+      continue;
+    }
+    if (c2 === "'" || c2 === '"') {
+      q = c2;
+      cur += c2;
+      i++;
+      continue;
+    }
+    if (c2 === "\\") {
+      cur += c2;
+      if (i + 1 < inner.length) cur += inner[i + 1];
+      i += 2;
+      continue;
+    }
+    if (/\s/.test(c2)) {
+      if (cur !== "") push();
+      i++;
+      continue;
+    }
+    cur += c2;
+    i++;
+  }
+  if (q) closed = false;
+  if (cur !== "") push();
+  if (!closed || !toks.length) return null;
+  const U = {
+    "-e": "exists?",
+    "-f": "is a file?",
+    "-d": "is a directory?",
+    "-L": "is a symlink?",
+    "-h": "is a symlink?",
+    "-r": "is readable?",
+    "-w": "is writable?",
+    "-x": "is executable?",
+    "-s": "is non-empty?",
+    "-z": "is empty?",
+    "-n": "is non-empty?"
+  };
+  const BNUM = {
+    "-eq": "is numerically equal to",
+    "-ne": "is numerically different from",
+    "-lt": "is numerically less than",
+    "-le": "is numerically at most",
+    "-gt": "is numerically greater than",
+    "-ge": "is numerically at least"
+  };
+  if (toks.length === 2 && U[toks[0]]) return { op1: toks[1], mid: U[toks[0]], op2: null };
+  if (toks.length === 3) {
+    if (!dbl && toks[1] === "=") return { op1: toks[0], mid: "equals", op2: toks[2] };
+    if (!dbl && toks[1] === "!=") return { op1: toks[0], mid: "is not equal to", op2: toks[2] };
+    if (dbl && (toks[1] === "=" || toks[1] === "=="))
+      return { op1: toks[0], mid: "matches the pattern", op2: toks[2] };
+    if (dbl && toks[1] === "!=") return { op1: toks[0], mid: "does not match the pattern", op2: toks[2] };
+    if (dbl && toks[1] === "=~") return { op1: toks[0], mid: "matches the regex", op2: toks[2] };
+    if (BNUM[toks[1]]) return { op1: toks[0], mid: BNUM[toks[1]], op2: toks[2] };
+  }
+  return null;
+}
+function testBodyHTML(d) {
+  const W = (s) => `<span class="test-word">${esc(s)}</span>`;
+  if (d.op2 == null) return `<code>${segHTML(d.op1)}</code> ${W(d.mid)}`;
+  return `<code>${segHTML(d.op1)}</code> ${W(d.mid)} <code>${segHTML(d.op2)}</code>${W("?")}`;
+}
+function extractArgs(src, ta, tb, idx, seq2, argBodies) {
+  const spans = [];
+  let i = ta;
+  let sub = 0;
+  while (i < tb) {
+    const c2 = src[i];
+    if (c2 === "$" && (src[i + 1] === "(" || src[i + 1] === "{")) {
+      sub++;
+      i += 2;
+      continue;
+    }
+    if ((c2 === ")" || c2 === "}") && sub > 0) {
+      sub--;
+      i++;
+      continue;
+    }
+    if (sub === 0 && (c2 === "'" || c2 === '"')) {
+      const q = c2;
+      let j = i + 1;
+      let isEsc = false;
+      let closed = false;
+      while (j < tb) {
+        const d = src[j];
+        if (isEsc) {
+          isEsc = false;
+          j++;
+          continue;
+        }
+        if (d === "\\" && q === '"') {
+          isEsc = true;
+          j++;
+          continue;
+        }
+        if (d === q) {
+          closed = true;
+          break;
+        }
+        j++;
+      }
+      if (closed) {
+        if (j - (i + 1) > ARG_T) spans.push({ a: i, b: j + 1 });
+        i = j + 1;
+        continue;
+      }
+      i++;
+      continue;
+    }
+    i++;
+  }
+  let html = "";
+  let pos = ta;
+  for (const s of spans) {
+    const fm = /(--[A-Za-z][\w-]*|-[A-Za-z])(\s*)$/.exec(SL(src, ta, s.a));
+    const flag = fm ? fm[1] : null;
+    const fa = fm ? s.a - fm[0].length : s.a;
+    if (fa > pos) html += hlCmd(src, pos, fa, false).html;
+    const bodyText = SL(src, fa, s.b);
+    const inner = SL(src, s.a + 1, s.b - 1);
+    const lines = countLines(inner) || 1;
+    const id = `a${idx}_${seq2.n++}`;
+    let front = inner.slice(0, 48);
+    if (inner.length > 48) {
+      const sp = front.lastIndexOf(" ");
+      if (sp > 20) front = front.slice(0, sp);
+    }
+    const unitLen = s.b - fa;
+    const label = (flag ? flag + " " : "") + `'${front}${inner.length > front.length ? "\u2026" : ""}' \xB7 ${unitLen}ch \xB7 ${lines} line${lines > 1 ? "s" : ""}`;
+    html += `<button class="prim-badge" data-arg="${id}" aria-expanded="false" title="quoted argument${flag ? ` to ${flag}` : ""} \xB7 verbatim front slice, activate to expand below the panel."><span class="pill-label">${esc(label)}</span></button>`;
+    argBodies.push({ id, flag, chars: unitLen, lines, body: bodyText });
+    pos = s.b;
+  }
+  if (pos < tb) html += hlCmd(src, pos, tb, false).html;
+  return { html, count: spans.length };
+}
+function adoptSpans(src, cmds, ub) {
+  void src;
+  if (ub.status !== "ok" || !ub.nodes.length) return { adopted: 0, total: 0 };
+  const like = ub.nodes.filter(
+    (n) => /command/i.test(n.type) && !/list|pipeline|script|program|compound|clause|file|word|redirect|expansion/i.test(n.type)
+  );
+  let adopted = 0;
+  for (const c2 of cmds) {
+    const hit = like.find((n) => Math.abs(n.pos - c2.ta) <= 2 && n.end <= c2.tb + 2 && n.end > n.pos);
+    if (hit) {
+      c2.ta = hit.pos;
+      c2.tb = Math.min(hit.end, c2.tb);
+      adopted++;
+    }
+  }
+  return { adopted, total: like.length };
+}
+
+// plugins/tool-render/src/bash-graph/model.ts
+function makeBuildContext(idx) {
+  return {
+    idx,
+    hdN: { n: 0 },
+    argSeq: { n: 0 },
+    argBodies: [],
+    adopted: { n: 0 },
+    counts: { nCmd: 0, nOp: 0, nRedir: 0, nHd: 0, nArg: 0, nChip: 0, nPipe: 0 },
+    maxSeg: { n: 0 }
+  };
+}
+function buildNodes(src, items, line, segKeys, ub, ctx) {
+  const { idx, counts, maxSeg } = ctx;
+  const { li, si } = segKeys;
+  const cmds = items.filter((t) => t.t === "cmd");
+  const r = adoptSpans(src, cmds, ub);
+  ctx.adopted.n += r.adopted;
+  const hdItems = items.filter((t) => t.t === "delim").map((d) => {
+    if (d.t !== "delim") return { item: d, hd: null };
+    const hb = line.heredocs[hdItemsCount(items, d)];
+    if (hb) {
+      const owned = {
+        ...hb,
+        n: ++ctx.hdN.n,
+        raw: SL(src, d.ta, d.tb)
+      };
+      d.hd = owned;
+      return { item: d, hd: owned };
+    }
+    return { item: d, hd: null };
+  });
+  const nodes = [];
+  const skip = /* @__PURE__ */ new Set();
+  items.forEach((t, k) => {
+    if (t.t === "op" && (t.op === ">" || t.op === ">>" || t.op === "<") && items[k + 1] && items[k + 1].t === "target") {
+      const tgt = items[k + 1];
+      if (tgt.t !== "target") return;
+      skip.add(k + 1);
+      t.merge = { kind: "redir", text: SL(src, tgt.ta, tgt.tb) };
+    } else if (t.t === "op" && t.op === "<<" && items[k + 1] && items[k + 1].t === "delim" && items[k + 1].hd) {
+      const d = items[k + 1];
+      skip.add(k + 1);
+      if (d.hd) d.hd.consumed = true;
+      t.merge = { kind: "heredoc", hd: d.hd };
+    }
+  });
+  items.forEach((t, k) => {
+    if (skip.has(k)) return;
+    if (t.t === "cmd") {
+      const ex = extractArgs(src, t.ta, t.tb, idx, ctx.argSeq, ctx.argBodies);
+      counts.nArg += ex.count;
+      const len = t.tb - t.ta;
+      if (len > maxSeg.n) maxSeg.n = len;
+      const sz = sizeFor(len);
+      counts.nCmd++;
+      const nm = cmdNameOf(src, t);
+      const grp = detectGroup(src, t.ta, t.tb);
+      const tst = ex.count === 0 ? parseTest(SL(src, t.ta, t.tb)) : null;
+      const owned = hdItems.filter((d) => {
+        if (!d.hd || d.hd.consumed) return false;
+        const di = items.indexOf(d.item);
+        if (di < k) return false;
+        for (let q = k + 1; q < di; q++) if (items[q].t === "cmd") return false;
+        return true;
+      }).map((d) => d.hd);
+      nodes.push({
+        kind: "cmd",
+        key: "n" + idx + "_" + li + "_" + si + "_" + k,
+        hl: tst ? testBodyHTML(tst) : ex.html,
+        len,
+        sz,
+        name: nm,
+        grp,
+        hd: owned,
+        test: tst ? 1 : 0
+      });
+    } else if (t.t === "op" && t.merge) {
+      const merge2 = t.merge;
+      if (merge2.kind === "redir") {
+        counts.nOp++;
+        counts.nRedir++;
+        const sz = sizeFor(t.op.length + 1 + (merge2.text ?? "").length) || { key: "breakout", w: 680, max: 0 };
+        nodes.push({
+          kind: "redir",
+          key: "n" + idx + "_" + li + "_" + si + "_" + k,
+          op: t.op,
+          text: merge2.text,
+          sz
+        });
+      } else if (merge2.kind === "heredoc") {
+        counts.nOp++;
+        counts.nHd++;
+        nodes.push({
+          kind: "heredoc",
+          key: "n" + idx + "_" + li + "_" + si + "_" + k,
+          hd: merge2.hd
+        });
+      }
+    } else if (t.t === "op") {
+      counts.nOp++;
+      nodes.push({ kind: "op", key: "n" + idx + "_" + li + "_" + si + "_" + k, op: t.op, a: t.a, b: t.b });
+    } else if (t.t === "target") {
+      nodes.push({ kind: "chip", key: "n" + idx + "_" + li + "_" + si + "_" + k, text: SL(src, t.ta, t.tb) });
+    } else if (t.t === "delim") {
+      if (!t.hd || !t.hd?.consumed)
+        nodes.push({ kind: "chip", key: "n" + idx + "_" + li + "_" + si + "_" + k, text: SL(src, t.ta, t.tb) });
+    }
+  });
+  reorderInputs(nodes);
+  fuseMergePipe(src, nodes);
+  const segLinks = consumeOperators(src, nodes, counts);
+  return { nodes, segLinks, hdItems };
+}
+function hdItemsCount(items, d) {
+  let n = 0;
+  for (const t of items) {
+    if (t === d) return n;
+    if (t.t === "delim") n++;
+  }
+  return n;
+}
+function reorderInputs(nodes) {
+  const isIn = (n) => n.kind === "heredoc" || n.kind === "redir" && n.op === "<";
+  const isBrk = (n) => n.kind === "op" && (n.op === "|" || n.op === "&&" || n.op === "||");
+  const st = [[]];
+  for (const n of nodes) {
+    if (isBrk(n)) {
+      st.push([n]);
+      st.push([]);
+    } else st[st.length - 1].push(n);
+  }
+  nodes.length = 0;
+  for (const s of st) {
+    const ci = s.findIndex((n) => n.kind === "cmd");
+    if (ci < 0) {
+      for (const n of s) nodes.push(n);
+      continue;
+    }
+    nodes.push(s[ci]);
+    for (let i = 0; i < s.length; i++) if (i !== ci && isIn(s[i])) nodes.push(s[i]);
+    for (let i = 0; i < s.length; i++) if (i !== ci && !isIn(s[i])) nodes.push(s[i]);
+  }
+}
+function fuseMergePipe(src, nodes) {
+  for (let fi = 0; fi + 1 < nodes.length; fi++) {
+    const fa = nodes[fi];
+    const fb = nodes[fi + 1];
+    if (fa.kind === "op" && fa.op === "2>&1" && fb.kind === "op" && fb.op === "|") {
+      nodes.splice(fi, 2, {
+        kind: "op",
+        key: fa.key + "+" + ((fb.key.match(/(\d+)$/) || [])[1] ?? ""),
+        op: "2>&1 |",
+        sym: SL(src, fa.a ?? 0, fb.b ?? 0),
+        a: fa.a,
+        b: fb.b,
+        fused: true
+      });
+    }
+  }
+}
+function consumeOperators(src, nodes, counts) {
+  const segLinks = /* @__PURE__ */ new Map();
+  const out = [];
+  const cmdish = (t) => !!t && (t.kind === "cmd" || t.kind === "redir" || t.kind === "heredoc");
+  for (let ci = 0; ci < nodes.length; ci++) {
+    const n = nodes[ci];
+    if (n.kind === "op" && (n.op === "&&" || n.op === "||") && cmdish(nodes[ci + 1])) {
+      const t = nodes[ci + 1];
+      t.chip = { sym: SL(src, n.a ?? 0, n.b ?? 0), meaning: OP_MEANING[n.op ?? ""] || n.op };
+      t.incoming = "chip";
+      counts.nChip++;
+      if (out.length) segLinks.set(out[out.length - 1].key + ">" + t.key, "chip");
+      continue;
+    }
+    if (n.kind === "op" && (n.op === "|" || n.op === "2>&1 |") && out.length && cmdish(nodes[ci + 1])) {
+      const t = nodes[ci + 1];
+      t.incoming = n.op === "|" ? "pipe" : "pipe-fused";
+      counts.nPipe++;
+      segLinks.set(out[out.length - 1].key + ">" + t.key, t.incoming);
+      continue;
+    }
+    if (out.length && !segLinks.has(out[out.length - 1].key + ">" + n.key)) {
+      const A = out[out.length - 1];
+      const isStdin = n.kind === "heredoc" || n.kind === "redir" && n.op === "<";
+      segLinks.set(A.key + ">" + n.key, isStdin && A.kind === "cmd" ? "stdin" : "flow");
+    }
+    out.push(n);
+  }
+  nodes.length = 0;
+  for (const n of out) nodes.push(n);
+  return segLinks;
+}
+function exitBadgeHTML(code) {
+  const failed = code !== 0;
+  const tip = failed ? "stage exit code " + code + " (failed)" : "stage exit code 0";
+  return `<span class="prim-badge"${failed ? ` data-tone="error"` : ""} title="${esc(tip)}">exit ${code}</span>`;
+}
+function attributePipeStages(nodes, pipeStages) {
+  const out = nodes.map((n) => ({ ...n }));
+  const cmds = out.filter((n) => n.kind === "cmd");
+  for (const c2 of cmds) c2.exitCode = void 0;
+  if (Array.isArray(pipeStages) && pipeStages.length === cmds.length) {
+    let ok = true;
+    const codes = [];
+    for (const entry of pipeStages) {
+      if (entry === null || typeof entry !== "object" || typeof entry.name !== "string" || entry.name.length === 0 || !Number.isInteger(entry.exitCode)) {
+        ok = false;
+        break;
+      }
+      codes.push(entry.exitCode);
+    }
+    if (ok) {
+      for (let i = 0; i < cmds.length; i++) cmds[i].exitCode = codes[i];
+    }
+  }
+  return out;
+}
+function attributeFinalSegment(nodes, pipeStages, isLast) {
+  if (!isLast) return nodes.map((n) => ({ ...n }));
+  if (nodes.some((n) => n.chip)) return nodes.map((n) => ({ ...n }));
+  return attributePipeStages(nodes, pipeStages);
+}
+function buildSpecs(src, nodes, ctx) {
+  void src;
+  const { idx } = ctx;
+  return nodes.map((nd) => {
+    if (nd.kind === "cmd") {
+      const iconName = CMD_ICON[nd.name ?? ""] || CMD_ICON[(nd.name ?? "").replace(/\d+$/, "")] || null;
+      const dock = (nd.hd ?? []).map(
+        (h) => `<button class="prim-badge" data-hd="${idx}_${h.n}" title="heredoc [${h.n}:${esc(h.raw)}] feeds ${h.lines} lines as input; the terminator line itself is not drawn. Click to expand below the panel.">&lt;&lt;${esc(h.raw)} [${h.n}:${h.lines}]</button>`
+      ).join("") + (nd.grp ? Badge(nd.grp.kind === "kw" ? "starts a " + nd.grp.kw : nd.grp.kind, "") : "") + (nd.exitCode !== void 0 ? exitBadgeHTML(nd.exitCode) : "");
+      const sizeKey = nd.sz ? nd.sz.key : "breakout";
+      const w2 = nd.sz ? nd.sz.w : 680;
+      return {
+        id: nd.key,
+        flex: (nd.len ?? 0) > SHORT_T,
+        sk: sizeKey,
+        w: w2,
+        h: 50,
+        html: Node({
+          size: sizeKey,
+          icon: iconName ?? void 0,
+          iconFb: nd.name ? nd.name[0] : "\u2022",
+          name: nd.name,
+          bodyHTML: nd.hl,
+          dockHTML: dock,
+          chip: nd.chip
+        })
+      };
+    }
+    if (nd.kind === "redir") {
+      const sz = nd.sz ?? { key: "breakout", w: 680, max: 0 };
+      return {
+        id: nd.key,
+        flex: true,
+        sk: sz.key,
+        w: sz.w,
+        h: 40,
+        html: Node({
+          size: sz.key,
+          icon: OP_ICON[nd.op ?? ""] || "chevron-right",
+          iconFb: nd.op,
+          meaning: OP_MEANING[nd.op ?? ""],
+          bodyHTML: `<span class="prim-chip">${segHTML(nd.text ?? "")}</span>`,
+          chip: nd.chip
+        })
+      };
+    }
+    if (nd.kind === "heredoc") {
+      const hh = nd.hd;
+      const label = `<<${hh.raw} [${hh.n}:${hh.lines}]`;
+      const tip = `heredoc [${hh.n}:${hh.raw}] feeds ${hh.lines} lines as input; the terminator line itself is not drawn. Activate to expand below the panel.`;
+      const sk0 = sizeFor(label.length) || { key: "breakout", w: 680, max: 0 };
+      return {
+        id: nd.key,
+        flex: false,
+        sk: sk0.key,
+        w: sk0.w,
+        h: 50,
+        html: `<button class="prim-node${nd.chip ? " has-chip" : ""}" data-size="${sk0.key}" data-hd="${idx}_${hh.n}" aria-expanded="false" title="${esc(tip)}">` + (nd.chip ? chipHTML(nd.chip.sym, nd.chip.meaning) : "") + (nd.chip ? `<span class="node-main">` : "") + `<span class="hd-pair">${Icon("scroll-text", "<<")}<span class="node-text"><code><span class="hd-label">${esc(label)}</span></code></span></span>` + (nd.chip ? `</span>` : "") + `</button>`
+      };
+    }
+    if (nd.kind === "op")
+      return {
+        id: nd.key,
+        flex: false,
+        sk: "op",
+        w: OP_W + NODE_M * 2,
+        h: 44,
+        html: Node({
+          op: nd.op,
+          sym: nd.sym || nd.op,
+          icon: OP_ICON[nd.op ?? ""] || "chevron-right",
+          meaning: OP_MEANING[nd.op ?? ""] || nd.op,
+          spin: nd.fused ? "rot90" : null
+        })
+      };
+    const w = sizeFor((nd.text ?? "").length + 4);
+    return {
+      id: nd.key,
+      flex: true,
+      sk: w ? w.key : "breakout",
+      w: w ? w.w : 400,
+      h: 34,
+      html: `<div class="prim-node" data-size="${w ? w.key : "breakout"}"><span class="prim-chip">${segHTML(nd.text ?? "")}</span></div>`
+    };
+  });
+}
+
+// plugins/tool-render/src/bash-graph/render.ts
+var uidc = 0;
+function svgRowHTML(rowItems, edges) {
+  for (const r of rowItems) {
+    r.h = measureH(r.html, r.w);
+  }
+  const lay = layoutRow(rowItems);
+  enforceGaps(lay, rowItems, GAP);
+  const gapsAttr = rowItems.slice(0, -1).map((s2) => s2.gapAfter != null ? s2.gapAfter : GAP).join(",");
+  let T = Infinity;
+  let maxB = -Infinity;
+  let hmin = Infinity;
+  let maxh = 0;
+  for (const r of rowItems) {
+    const p = lay.pos.get(r.id);
+    if (!p) continue;
+    T = Math.min(T, p.y - r.h / 2);
+    maxB = Math.max(maxB, p.y + r.h / 2);
+    hmin = Math.min(hmin, r.h);
+    maxh = Math.max(maxh, r.h);
+  }
+  const H2 = T + maxh + (lay.H - maxB);
+  const yEdge = T + hmin / 2;
+  const aid = "arr" + ++uidc;
+  let s = `<svg width="${Math.ceil(lay.W)}" height="${Math.ceil(H2)}" data-gaps="${gapsAttr}" role="img"><defs><marker id="${aid}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M3 1 L10 5 L3 9" fill="none" stroke="var(--dsw-alias-label-tertiary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>`;
+  for (const r of rowItems) {
+    const p = lay.pos.get(r.id);
+    if (!p) continue;
+    s += `<foreignObject x="${(p.x - r.w / 2).toFixed(1)}" y="${T.toFixed(1)}" width="${r.w}" height="${r.h}"><div class="fobjwrap" style="width:${r.w}px" xmlns="http://www.w3.org/1999/xhtml">${r.html}</div></foreignObject>`;
+  }
+  const tags = [];
+  for (const e of edges) {
+    const A = rowItems.find((q) => q.id === e.a);
+    const B = rowItems.find((q) => q.id === e.b);
+    if (!A || !B) continue;
+    const x1 = (lay.pos.get(A.id)?.x ?? 0) + A.w / 2;
+    const x2 = (lay.pos.get(B.id)?.x ?? 0) - B.w / 2;
+    if (e.link === "stdin")
+      s += `<path class="prim-edge reversed" d="M${x2.toFixed(1)} ${yEdge.toFixed(1)} L${x1.toFixed(1)} ${yEdge.toFixed(1)}" marker-end="url(#${aid})"/>`;
+    else
+      s += `<path class="prim-edge" d="M${x1.toFixed(1)} ${yEdge.toFixed(1)} L${x2.toFixed(1)} ${yEdge.toFixed(1)}" marker-end="url(#${aid})"/>`;
+    if (e.link === "pipe" || e.link === "pipe-fused")
+      tags.push(pipeTagHTML(e.link, (x1 + x2) / 2, yEdge));
+  }
+  return { svg: s + "</svg>", engine: lay.engine, tags };
+}
+function svgStatement(plan, specs, ind = IND, rowGap = ROWGAP, engines, segLinks) {
+  const byId = new Map(specs.map((s2) => [s2.id, s2]));
+  const f = (x) => x.toFixed(1);
+  const laid = [];
+  let y = 0;
+  let maxW = 0;
+  plan.rows.forEach((r) => {
+    for (const id of r.ids) {
+      const s2 = byId.get(id);
+      if (s2) s2.h = measureH(s2.html, s2.w);
+    }
+    const items = r.ids.map((id) => byId.get(id)).filter((s2) => !!s2);
+    const lay = layoutRow(items);
+    enforceGaps(lay, items, GAP);
+    if (engines) engines[lay.engine] = true;
+    const dx = r.first ? 0 : ind;
+    let T = Infinity;
+    let maxB = -Infinity;
+    let hmin = Infinity;
+    let maxh = 0;
+    for (const id of r.ids) {
+      const s2 = byId.get(id);
+      const q = lay.pos.get(id);
+      if (!s2 || !q) continue;
+      T = Math.min(T, q.y - s2.h / 2);
+      maxB = Math.max(maxB, q.y + s2.h / 2);
+      hmin = Math.min(hmin, s2.h);
+      maxh = Math.max(maxh, s2.h);
+    }
+    const H2 = T + maxh + (lay.H - maxB);
+    const pos = /* @__PURE__ */ new Map();
+    for (const id of r.ids) {
+      const s2 = byId.get(id);
+      const q = lay.pos.get(id);
+      if (!s2 || !q) continue;
+      pos.set(id, { x: q.x + dx, y: T + s2.h / 2 + y });
+    }
+    laid.push({
+      r,
+      lay,
+      dx,
+      dy: y,
+      H: H2,
+      yEdge: T + hmin / 2 + y,
+      pos,
+      links: r.ids.map(
+        (id, k) => k + 1 < r.ids.length ? segLinks?.get(id + ">" + r.ids[k + 1]) || "flow" : null
+      )
+    });
+    maxW = Math.max(maxW, lay.W + dx);
+    y += H2 + rowGap;
+  });
+  const H = y - rowGap;
+  const aid = "arr" + ++uidc;
+  const gapsAttr = specs.slice(0, -1).map((s2) => s2.gapAfter != null ? s2.gapAfter : GAP).join(",");
+  let s = `<svg width="${Math.ceil(maxW)}" height="${Math.ceil(H)}" data-rows="${plan.rows.length}" data-left="${plan.rows.map((r) => r.left ?? "").join(",")}" data-gaps="${gapsAttr}" role="img"><defs><marker id="${aid}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M3 1 L10 5 L3 9" fill="none" stroke="var(--dsw-alias-label-tertiary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>`;
+  const clip = (c2, t) => {
+    const dx = t.x - c2.x;
+    const dy = t.y - c2.y;
+    if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) return { x: c2.x, y: c2.y };
+    let k = 1;
+    if (Math.abs(dx) > 1e-9) k = Math.min(k, c2.hw / Math.abs(dx));
+    if (Math.abs(dy) > 1e-9) k = Math.min(k, c2.hh / Math.abs(dy));
+    return { x: c2.x + dx * k, y: c2.y + dy * k };
+  };
+  const boxOf = (L, id) => {
+    const r = byId.get(id);
+    const q = L.pos.get(id);
+    return { x: q.x, y: q.y, hw: r.w / 2, hh: r.h / 2 };
+  };
+  const tags = [];
+  laid.forEach((L, ri) => {
+    for (const id of L.r.ids) {
+      const r = byId.get(id);
+      const q = L.pos.get(id);
+      if (!r || !q) continue;
+      s += `<foreignObject x="${f(q.x - r.w / 2)}" y="${f(q.y - r.h / 2)}" width="${r.w}" height="${r.h}"><div class="fobjwrap" style="width:${r.w}px" xmlns="http://www.w3.org/1999/xhtml">${r.html}</div></foreignObject>`;
+    }
+    for (let k = 0; k + 1 < L.r.ids.length; k++) {
+      const lk = L.links[k];
+      const A = boxOf(L, L.r.ids[k]);
+      const B = boxOf(L, L.r.ids[k + 1]);
+      if (lk === "stdin")
+        s += `<path class="prim-edge reversed" d="M${f(B.x - B.hw)} ${f(L.yEdge)} L${f(A.x + A.hw)} ${f(L.yEdge)}" marker-end="url(#${aid})"/>`;
+      else
+        s += `<path class="prim-edge" d="M${f(A.x + A.hw)} ${f(L.yEdge)} L${f(B.x - B.hw)} ${f(L.yEdge)}" marker-end="url(#${aid})"/>`;
+      if (lk === "pipe" || lk === "pipe-fused")
+        tags.push(pipeTagHTML(lk, (A.x + A.hw + B.x - B.hw) / 2, L.yEdge));
+    }
+    if (ri + 1 < laid.length) {
+      const A = boxOf(L, L.r.ids[L.r.ids.length - 1]);
+      const B = boxOf(laid[ri + 1], laid[ri + 1].r.ids[0]);
+      const gy = L.dy + L.H + rowGap * 0.25;
+      const p0 = clip(A, { x: A.x, y: A.y + 1e3 });
+      const p3 = clip(B, { x: B.x, y: B.y - 1e3 });
+      const dx = Math.sign(p3.x - p0.x);
+      let d;
+      if (Math.abs(p3.x - p0.x) < 1e-9) {
+        d = `M${f(p0.x)} ${f(p0.y)} V${f(p3.y)}`;
+      } else {
+        const R = Math.max(
+          0,
+          Math.min(6, (gy - p0.y) / 2, (p3.y - gy) / 2, Math.abs(p3.x - p0.x) / 2)
+        );
+        d = `M${f(p0.x)} ${f(p0.y)} V${f(gy - R)} Q${f(p0.x)} ${f(gy)} ${f(p0.x + dx * R)} ${f(gy)} H${f(p3.x - dx * R)} Q${f(p3.x)} ${f(gy)} ${f(p3.x)} ${f(gy + R)} V${f(p3.y)}`;
+      }
+      s += `<path class="prim-edge hook" d="${d}" marker-end="url(#${aid})"/>`;
+      const hlink = segLinks && segLinks.get(L.r.ids[L.r.ids.length - 1] + ">" + laid[ri + 1].r.ids[0]) || "flow";
+      if (hlink === "pipe" || hlink === "pipe-fused")
+        tags.push(pipeTagHTML(hlink, (p0.x + p3.x) / 2, gy));
+    }
+  });
+  return `<div class="panel-scroll"><div class="edgewrap">${s}</svg>${tags.join("")}</div></div>`;
+}
+function renderOne(idx, src, ub, engines, pipeStages) {
+  const lines = splitLines2(src);
+  const ctx = makeBuildContext(idx);
+  const panelsHTML = [];
+  let nPanels = 0;
+  let lastKey = null;
+  if (pipeStages !== void 0) {
+    lines.forEach((ln, li) => {
+      const segs = splitSemis(src, ln.a, ln.b);
+      segs.forEach((sg, si) => {
+        if (tokenizeParts(src, sg.a, sg.b).length > 0) lastKey = li + "_" + si;
+      });
+    });
+  }
+  lines.forEach((ln, li) => {
+    const segs = splitSemis(src, ln.a, ln.b);
+    segs.forEach((sg, si) => {
+      const items = tokenizeParts(src, sg.a, sg.b);
+      if (!items.length) return;
+      const adoptedBefore = ctx.adopted.n;
+      const { nodes, segLinks, hdItems } = buildNodes(src, items, ln, { li, si }, ub, ctx);
+      engines.adopted += ctx.adopted.n - adoptedBefore;
+      const attrNodes = lastKey !== null && li + "_" + si === lastKey ? attributeFinalSegment(nodes, pipeStages, true) : nodes;
+      const specs = buildSpecs(src, attrNodes, ctx);
+      specs.forEach((s) => {
+        s.nat = naturalWidth(s.html, s.sk);
+      });
+      specs.forEach((s) => {
+        s.minw = s.flex ? specMinW(s.html) : 0;
+      });
+      specs.forEach((s, k) => {
+        const nx = attrNodes[k + 1];
+        const lk = nx ? segLinks.get(attrNodes[k].key + ">" + nx.key) : null;
+        s.gapAfter = lk === "pipe" || lk === "pipe-fused" ? PIPE_GAP : GAP;
+      });
+      const avail = engines.avail || CARD_AVAIL;
+      const planItems = specs.map((s) => ({
+        id: s.id,
+        nat: s.nat ?? 0,
+        flex: s.flex,
+        minw: s.minw ?? 0,
+        html: s.html,
+        gapAfter: s.gapAfter
+      }));
+      const plan = planRows(planItems, avail, IND, GAP, ROWGAP, (it, w) => {
+        const spec = specs.find((q) => q.id === it.id);
+        return measureH(spec ? spec.html : it.html ?? "", w);
+      });
+      let html = "";
+      if (plan.rows.length === 1 && plan.rows[0].ids.length === 1) {
+        const s = specs[0];
+        s.w = s.nat ?? s.w;
+        s.html = s.html.replace(/data-size="[a-z]+"/, 'data-size="lone"');
+        html += `<div class="panel-scroll">${s.html}</div>`;
+      } else {
+        plan.rows.forEach((r) => {
+          r.ids.forEach((id, k) => {
+            const s = specs.find((q) => q.id === id);
+            if (!s) return;
+            s.w = r.widths[k];
+            setNodeWidth(s, stepFor(s.nat ?? 0));
+          });
+        });
+        if (plan.rows.length === 1) {
+          const rowItems = plan.rows[0].ids.map((id) => specs.find((q) => q.id === id)).filter((s) => !!s);
+          const edges = [];
+          for (let k = 0; k + 1 < rowItems.length; k++) {
+            const A = rowItems[k].id;
+            const B = rowItems[k + 1].id;
+            edges.push({ a: A, b: B, link: segLinks.get(A + ">" + B) || "flow" });
+          }
+          const r1 = svgRowHTML(rowItems, edges);
+          if (engines) engines[r1.engine] = true;
+          html += `<div class="panel-scroll"><div class="edgewrap">${r1.svg}${r1.tags.join("")}</div></div>`;
+        } else {
+          const rows = plan.rows.map((r) => ({ ids: r.ids, first: r.first, left: r.left }));
+          html += svgStatement({ rows }, specs, IND, ROWGAP, engines, segLinks);
+        }
+      }
+      nPanels++;
+      const hdBlocks = hdItems.map((d) => d.hd).filter((h) => Boolean(h)).map(
+        (h) => `<div class="hd-body" id="hd-${idx}_${h.n}" hidden><div class="hd-cap">heredoc [${h.n}] \xB7 ${h.lines} lines \xB7 expanded from the node above; the terminator line is not drawn</div><pre>${hlBody(SL(src, h.a, h.b))}</pre></div>`
+      ).join("");
+      const argBlocks = ctx.argBodies.splice(0).map(
+        (a) => `<div class="hd-body" id="arg-${a.id}" hidden><div class="hd-cap">${a.flag ? esc(a.flag) + " \xB7 " : ""}${a.chars} chars \xB7 ${a.lines} line${a.lines > 1 ? "s" : ""} \xB7 full verbatim argument</div><pre>${hlArgBody(a.body)}</pre></div>`
+      ).join("");
+      panelsHTML.push(
+        `<div class="prim-panel stmt" data-seg="${li}_${si}" data-nodes="${nodes.length}">${html}</div>` + hdBlocks + argBlocks
+      );
+    });
+  });
+  return {
+    panelsHTML,
+    nCmd: ctx.counts.nCmd,
+    nOp: ctx.counts.nOp,
+    nRedir: ctx.counts.nRedir,
+    nHd: ctx.counts.nHd,
+    nArg: ctx.counts.nArg,
+    nChip: ctx.counts.nChip,
+    nPipe: ctx.counts.nPipe,
+    nPanels,
+    maxSeg: ctx.maxSeg.n,
+    adopted: ctx.adopted.n
+  };
+}
+
+// css-text:/home/sid/repos/dotfiles-ai/plugins/tool-render/src/bash-graph/styles.css
+var styles_default = `/* bash-graph styles: fair copy of the prototype diagram rules.
+ *
+ * PORT NOTE (criterion 4): this file transcribes the prototype <style>
+ * rules for everything render.ts emits. Page chrome is dropped (body,
+ * .page-head, .controls, #col, .colmeta, .foot, legend/coverage helpers,
+ * pre.orig show-original, .cmd card frame): the prototype NOTES list those
+ * as incidental scaffolding, and this module stops at the panelsHTML
+ * boundary. Rule order and values are otherwise verbatim, including the
+ * round comments that record which bug each rule exists for (criterion 6).
+ *
+ * THEME NOTE for ticket #173 (the swap): the :root token VALUES below are
+ * prototype stand-ins; only the token NAMES are real. The swap must
+ * reconcile these with the production theme instead of shipping the
+ * stand-in values as global overrides. The --proto-* highlight colours
+ * likewise need a production home.
+ */
+
+/* ---- real repo token NAMES, plausible values per theme ---- */
+:root, :root[data-theme="dark"], html[data-theme="dark"]{
+  --dsw-alias-bg-base:#16161a;
+  --dsw-alias-bg-layer-1:#232329;
+  --dsw-alias-border-l1:#2e2e37;
+  --dsw-alias-border-l2:#41414d;
+  --dsw-alias-border-l3:#5b5b68;
+  --dsw-alias-label-primary:#ececf1;
+  --dsw-alias-label-secondary:#b9b9c6;
+  --dsw-alias-label-tertiary:#8e8e9a;
+  --dsw-alias-label-caption:#6d6d78;
+  --dsw-alias-markdown-code-block:#0f0f13;
+  --dsw-alias-state-error-primary:#f2555a;
+  --dsw-alias-state-business-primary:#5b9bff;
+  --dsw-alias-interactive-bg-hover:#33333d;
+  --ds-font-family-code:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --proto-str:#9ece6a; --proto-path:#e0af68; --proto-flag:#7aa2f7; --proto-var:#bb9af7;
+}
+html[data-theme="light"]{
+  --dsw-alias-bg-base:#f3f3f5;
+  --dsw-alias-bg-layer-1:#ffffff;
+  --dsw-alias-border-l1:#e3e3e8;
+  --dsw-alias-border-l2:#d2d2da;
+  --dsw-alias-border-l3:#a8a8b5;
+  --dsw-alias-label-primary:#191920;
+  --dsw-alias-label-secondary:#41414c;
+  --dsw-alias-label-tertiary:#71717e;
+  --dsw-alias-label-caption:#a0a0ab;
+  --dsw-alias-markdown-code-block:#e9e9ed;
+  --dsw-alias-state-error-primary:#c81e1e;
+  --dsw-alias-state-business-primary:#0b5cff;
+  --dsw-alias-interactive-bg-hover:#e4e4ea;
+  --ds-font-family-code:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --proto-str:#2c7a2c; --proto-path:#9a5b00; --proto-flag:#1d4fd7; --proto-var:#6d28d9;
+}
+/* ---- the six primitives ---- */
+.prim-panel{box-sizing:border-box;border:none;
+  border-radius:.75rem;background:var(--dsw-alias-bg-base);
+  margin-top:.125rem;margin-bottom:.125rem;padding:.25rem .375rem;}
+.prim-panel-head{display:flex;flex-wrap:wrap;gap:.375rem;align-items:baseline;
+  font-size:.75rem;color:var(--dsw-alias-label-secondary);margin-bottom:.25rem;}
+.prim-panel-head .idx{font-family:var(--ds-font-family-code);color:var(--dsw-alias-label-primary);font-weight:600;}
+.prim-node{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l3);
+  border-radius:.5rem;background:var(--dsw-alias-bg-layer-1);
+  padding:.375rem .5rem;font-family:var(--ds-font-family-code);
+  font-size:.75rem;line-height:1.25rem;color:var(--dsw-alias-label-primary);}
+/* R10.1: length steps are MAX-WIDTH ceilings, never assigned widths. JS assigns
+   inline widths at or below natural (which never exceeds the step recorded for
+   it \u2014 stepFor(nat) >= nat by definition), so the ceiling is a no-op safety
+   net, not a sizer; the top step is open (a >400px natural must never clip).
+   Lone rows keep width:auto/max-width:100% (a node alone is never capped). */
+.prim-node[data-size="xs"]{max-width:112px;} .prim-node[data-size="s"]{max-width:168px;}
+.prim-node[data-size="m"]{max-width:232px;} .prim-node[data-size="l"]{max-width:312px;}
+.prim-node[data-size="xl"]{max-width:none;} .prim-node[data-size="op"]{width:36px;text-align:center;}
+.prim-node[data-size="breakout"]{width:100%;}
+.prim-node[data-size="lone"]{width:auto;max-width:100%;}
+button.prim-node[data-size="lone"]{width:max-content;min-width:max-content;max-width:none;}
+.prim-node.op{background:transparent;border-style:solid;border-color:var(--dsw-alias-border-l3);
+  padding:.25rem .125rem;}
+.prim-node .node-text{overflow-wrap:anywhere;word-break:normal;}
+/* D3: .seg is the token-aware part (paths break ONLY after "/"; everywhere
+   else the breaker prefers spaces and fires anywhere solely on genuine
+   overflow of one token). anywhere stays as the last resort so an over-long
+   slash-less word wraps visibly instead of spilling out of the foreignObject
+   with no indication. */
+.seg{white-space:nowrap;}
+/* R10.2/R11.2: the heredoc chip summary (<<'DELIM' [n:lines]) is unbreakable
+   by rule \u2014 heredoc nodes are inflexible (keep natural width), so this guard
+   can never clip: it only forbids a wrap the layout already priced out.
+   R11.2: nowrap alone was NOT unbreakable. overflow-wrap is inherited, so
+   .prim-node .node-text{overflow-wrap:anywhere} reached straight through the
+   guard and broke the label mid-token on any overflow (the node inline width
+   derives from scrollWidth, which excludes the 1px borders \u2014 the content
+   area is systematically ~2px short of natural, i.e. it always overflows).
+   The guard must cover the overflow-wrap axis too (word-break is already
+   normal by inheritance; stated here so the contract survives later edits). */
+.hd-label{white-space:nowrap;overflow-wrap:normal;word-break:normal;}
+/* R12.2: the icon and the label are one atomic pair. The R11.2 guard covers
+   text INSIDE the label but says nothing about the icon/label boundary, and
+   the owner saw them separate across lines (any overflow + anywhere can split
+   two inline boxes with no whitespace between them). The wrapper carries the
+   full guard on both axes, so the pair cannot separate whatever overflows;
+   it stays an inline span (no box change), and there is no whitespace inside
+   the markup to offer a break. */
+.hd-pair{white-space:nowrap;overflow-wrap:normal;word-break:normal;}
+/* R13.1 SUPERSEDED BY THE OWNER, same day, after seeing both in the browser.
+   The four declarations tried here (padding-left, padding-right,
+   display:inline-block on the pair, transform:translateX(-0.75rem)) are GONE.
+   The replacement below is better for a reason beyond taste: translateX moves
+   PAINT ONLY, so every measured width, DP decision and edge coordinate would
+   have kept describing the un-shifted box, and the -12px answered to no
+   declared constant. margin-left on an inline-block CHILD is real layout: the
+   measurer sees it, so the model and the browser keep agreeing (the round-8
+   rule). No compensating constant survives into the port. */
+.hd-pair .node-text{display:inline-block;margin-left:0.3rem;}
+.prim-node .node-text code{font:inherit;background:none;padding:0;}
+/* R13.3: generated test words are prose, not source. The operand stays
+   code-styled (verbatim slice); the surrounding words render in the system
+   sans at secondary color, so no reader mistakes a claim for a quote. (The
+   prototype page has no UI-sans token - everything is --ds-font-family-code -
+   so the stack is explicit; the production host should use its UI font.) */
+.test-word{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--dsw-alias-label-secondary);}
+.prim-node .hdock{margin-top:.375rem;}
+.prim-chip{display:inline;font-family:var(--ds-font-family-code);font-size:.6875rem;
+  line-height:1rem;border:1px solid var(--dsw-alias-border-l3);border-radius:.25rem;
+  padding:0 .25rem;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);
+  overflow-wrap:anywhere;-webkit-box-decoration-break:clone;box-decoration-break:clone;}
+.prim-badge{display:inline-flex;align-items:center;gap:.25rem;border:1px solid var(--dsw-alias-border-l3);
+  background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary);
+  border-radius:999px;padding:.0625rem .375rem;font-size:.6875rem;line-height:1rem;
+  white-space:nowrap;cursor:default;}
+button.prim-badge{cursor:pointer;font:inherit;max-width:100%;}
+/* R12.3: pills can never exceed their node. The button cap alone is not
+   enough: as a flex item the label's min-width:auto (its full nowrap text)
+   would refuse to shrink and spill past the capped box. min-width:0 lets it
+   shrink into its existing ellipsis instead \u2014 truncation with \u2026 (the full
+   text stays one click away), never a spill past the foreignObject edge. */
+button.prim-badge:hover{color:var(--dsw-alias-label-primary);}
+.prim-badge[data-tone="error"]{color:var(--dsw-alias-state-error-primary);}
+/* R7.2: arg pills are compact badges, not banners. The label is already a
+   truncated front slice with an explicit \u2026 + counts (full text expands below
+   the panel), so capping the visual width loses nothing. */
+.prim-badge[data-hd]{padding-right:.625rem;}
+/* R12.5: heredoc chips breathe on the right edge (.375rem -> .625rem,
+   right-only). Padding, not a width bump and not a margin: the heredoc pill
+   is one of the measured elements this round's borders fix touched, so the
+   extra 4px rides INSIDE its measured width everywhere the width is priced \u2014
+   naturalWidth reads the rendered scrollWidth, and specMinW charges the
+   18px-wide data-hd chrome (6px left + 10px right + 2 borders) instead of
+   the 14px blanket. Arg pills stay symmetric. */
+
+.prim-badge .pill-label{display:block;min-width:0;max-width:220px;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;}
+.prim-icon{display:inline-flex;vertical-align:-2px;margin-right:.375rem;
+  color:var(--dsw-alias-label-tertiary);}
+.prim-icon svg{width:14px;height:14px;}
+.prim-node.op .prim-icon{margin-right:0;color:var(--dsw-alias-label-secondary);}
+.prim-node.op .prim-icon svg{width:16px;height:16px;}
+/* R7.5: the merge-then-pipe node reuses the merge glyph rotated to point
+   RIGHT (the glyph as drawn points up: chevron apex at the top). Rotation
+   is in place on the square icon box, so measurement is unaffected. */
+.prim-icon.rot90 svg{transform:rotate(90deg);}
+/* R8.1: nodes rendered inside SVG foreignObjects carry NO vertical margin.
+   The 10px .prim-node margins are load-bearing ONLY on the horizontal axis
+   (10px gutters inside the foreignObject; nodes are x-positioned). On the
+   vertical axis the foreignObject height IS the row pitch, so any vertical
+   margin is either phantom (collapses through the wrapper div and renders
+   as dead space below the node) or a clip risk (if it does not collapse).
+   Zeroing it in BOTH the measurer and the render (same .fobjwrap wrapper
+   class) makes collapse behaviour irrelevant: measurer and render agree by
+   construction, and the foreignObject fits the border-box exactly. Lone
+   HTML-flow nodes keep their margins (BFC container, real breathing room). */
+.fobjwrap>.prim-node{margin-top:0;margin-bottom:0;}
+/* R8.3: operator symbols never wrap mid-label (the fused 2>&1 | stays one
+   line even on its degenerate standalone-node fallback path). */
+.prim-node.op .op-sym{white-space:nowrap;}
+/* R8.4: CONDITIONALS ride as prefix chips on the dependent card \u2014 one split
+   card, chip one colour and body the other, sharing one outline. The chip is
+   a full-height bar on the left edge (flex stretch); the body keeps normal
+   inline flow inside .node-main, so icon-inline and token wrapping behave
+   exactly as on unchipped nodes. Chip text is the verbatim operator slice
+   (seg-wrapped: unbreakable, counted in the unbreakable-run minimum). */
+.prim-node.has-chip{display:flex;align-items:stretch;padding-top:0;padding-bottom:0;padding-left:0;}
+.prim-node.has-chip .op-chip{flex:none;display:flex;align-items:center;
+  background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary);
+  border-right:1px solid var(--dsw-alias-border-l3);
+  border-radius:calc(.5rem - 1px) 0 0 calc(.5rem - 1px);
+  padding:.375rem .5rem;margin-right:.5rem;white-space:nowrap;font-weight:700;}
+.prim-node.has-chip .node-main{min-width:0;padding-top:.375rem;padding-bottom:.375rem;}
+/* R13.2: a glyph-only || chip carries no text after its icon, so the
+   .prim-icon trailing margin would be dead space inside the bar - zeroed,
+   mirroring the pipe-tag precedent (.pipe-tag .prim-icon{margin-right:0}). */
+.prim-node.has-chip .op-chip .prim-icon{margin-right:0;}
+/* R8.4: PIPES are split arrows \u2014 one continuous edge with the glyph inline.
+   R9.3/R10.3: the tag is a SQUARE overlay centred on the edge line \u2014
+   explicit 26px border-box with a .25rem (chip-step) radius, square by
+   construction (the round-9 999px radius rendered a circle, which is why the
+   badge read as "not square"). The 18px glyph is the largest with >=3px
+   clearance per side ((26-2-18)/2); overflow:hidden keeps the box square
+   even on the no-lucide fallback path, where the text glyph would otherwise
+   spill past the box. R9.5: tags live inside .edgewrap (the padding-free
+   positioned wrapper around each svg), so svg-space left/top resolve
+   against the svg origin whatever padding .panel-scroll carries. The
+   single marker-end arrowhead underneath keeps direction unambiguous; the
+   tooltip carries the meaning the old operator node used to hold. */
+.edgewrap{position:relative;}
+.pipe-tag{position:absolute;transform:translate(-50%,-50%);
+  display:inline-flex;align-items:center;justify-content:center;
+  box-sizing:border-box;width:26px;height:26px;padding:0;overflow:hidden;
+  background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l3);
+  border-radius:.25rem;line-height:1;white-space:nowrap;}
+.pipe-tag .prim-icon{margin-right:0;vertical-align:0;color:var(--dsw-alias-label-secondary);}
+.pipe-tag .prim-icon svg{width:18px;height:18px;}
+button.prim-node{cursor:pointer;text-align:left;}
+button.prim-node:hover{border-color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover);}
+button.prim-node:active{transform:translateY(1px);}
+button.prim-node:focus-visible{outline:.125rem solid var(--dsw-alias-state-business-primary);outline-offset:2px;}
+button.prim-node[aria-expanded="true"]{border-color:var(--dsw-alias-label-secondary);}
+/* R10.7: arrowheads are stroked outline chevrons (production primitive
+   IconChevronDownOutline14 \u2014 outline, stroked, not filled), not solid
+   triangles. The marker keeps the old viewBox/refX/size/orient and the tip
+   stays at (10,5): the tip lands exactly where the triangle tip landed, so
+   no edge endpoint moves and heads neither float short nor overlap into
+   cards. Only the path changed (fill -> 2-unit round stroke). */
+.prim-edge{fill:none;stroke:var(--dsw-alias-label-tertiary);stroke-width:1.5;}
+/* ---- diagram-only helpers (candidate one-offs, see NOTES.md) ---- */
+.panel-scroll{overflow-x:scroll;scrollbar-width:thin;
+  scrollbar-color:var(--dsw-alias-border-l3) var(--dsw-alias-border-l2);}
+/* R9B/R10.8 (owner decision: option 2 \u2014 always visible, styled). The
+   horizontal track is permanently present (~8px: thin in Firefox, 8px in
+   WebKit) so a row never changes height when its content starts or stops
+   overflowing \u2014 layout stability worth 8px per scroll container. R10.8:
+   the track token moved border-l1 -> border-l2 because a DISABLED
+   (nothing-to-scroll) bar paints track-only, and l1 on bg-base is near
+   invisible in both themes \u2014 the page paid the gutter everywhere while
+   showing a track nowhere. l2 stays a border token, readable against the
+   panel field in both themes and distinct from the l3 thumb. The old
+   unconditional padding-bottom:.25rem is gone (4px x every container for
+   nothing): with a permanent gutter the track itself is the separation.
+   All colours are existing theme tokens, so light and dark follow with no
+   hardcoded grey; radii reuse the .25rem chip step. Firefox (the owner's
+   browser) is styled by the base rule above \u2014 scrollbar-width/color \u2014 NOT
+   by the WebKit pseudos below; the two APIs do not overlap, so neither
+   engine is an afterthought. Vertical overflow stays auto: content always
+   fits by construction, so no vertical bar appears and no vertical slack
+   is introduced by this rule. */
+.panel-scroll::-webkit-scrollbar{height:8px;}
+.panel-scroll::-webkit-scrollbar-track{background:var(--dsw-alias-border-l2);border-radius:.25rem;}
+.panel-scroll::-webkit-scrollbar-thumb{background:var(--dsw-alias-border-l3);border-radius:.25rem;}
+.panel-scroll::-webkit-scrollbar-thumb:hover{background:var(--dsw-alias-label-secondary);}
+/* R9.5/R9A: breathing room above diagram svgs \u2014 scoped as a CHILD of the
+   statement region, not a descendant of any panel. A bare
+   \`.panel-scroll:has(svg)\` (or \`.prim-panel .panel-scroll\`) would also match
+   a scroll nested DEEPER inside a panel (expanded bodies, future nested
+   diagrams); the child combinator pins the rule to exactly the outer,
+   statement-level scroll, so no second rule ever has to fight it. Lone
+   panels (no svg) keep no top padding. Safe ONLY because pipe tags resolve
+   against .edgewrap (the svg's own origin): container padding shifts the
+   svg and its tags together, so nothing offsets. */
+.prim-panel.stmt > .panel-scroll:has(svg){padding-top:10px;}
+.panel-scroll svg{display:block;}
+.op-sym{display:block;font-size:.6875rem;color:var(--dsw-alias-label-caption);line-height:1rem;}
+.node-name{font-weight:700;}
+.hl-flag{color:var(--proto-flag);} .hl-str{color:var(--proto-str);}
+.hl-path{color:var(--proto-path);} .hl-var{color:var(--proto-var);}
+.hd-body{margin:.25rem 0 .125rem .25rem;}
+.hd-body pre{background:transparent;border:none;margin:.125rem 0 0;padding:0 0 0 .5rem;
+  font-family:var(--ds-font-family-code);font-size:.75rem;line-height:1.25rem;
+  color:var(--dsw-alias-label-secondary);white-space:pre-wrap;overflow-wrap:anywhere;}
+.hd-cap{font-size:.6875rem;color:var(--dsw-alias-label-caption);}
+#measure{position:absolute;left:-9999px;top:0;visibility:hidden;pointer-events:none;}
+/* D1: reserve the icon's rendered size while measuring. Node HTML is measured
+   with empty <i data-lucide> placeholders; after the lucide swap they become
+   14px (16px on op discs) SVGs plus the .prim-icon margin. Without this the
+   measured width is ~20px short, text wraps one row deeper than measured, and
+   the fixed-height foreignObject clips the last line. */
+#measure i[data-lucide]{display:inline-block;width:14px;height:14px;}
+#measure .prim-node.op i[data-lucide]{width:16px;height:16px;}
+/* R7.3, owner's exact CSS (R10.4: px, not rem \u2014 the margin IS NODE_M, the
+   same 10px the layout normalises every svg row origin to, so HTML lone
+   nodes and svg rows share a left edge by construction, not by coincidence.
+   Heights/widths measured in JS add the margin back \u2014 see NODE_M \u2014 since
+   offsetHeight/scrollWidth exclude margins.) */
+.prim-panel{margin:0;padding:0;}
+.prim-node{margin:10px;}
+/* R10.5: lone (plain-HTML) rows carry no dagre pitch and no hooks \u2014 their
+   only vertical cost is this margin plus the scroll container. 6px keeps
+   breathing room while halving the 24px stacked gap (10+4+10) the owner
+   flagged. Horizontal margins stay 10px (the shared left-edge origin). */
+.prim-panel.stmt>.panel-scroll>.prim-node[data-size="lone"]{margin-top:6px;margin-bottom:6px;}
+`;
 
 // plugins/tool-render/src/escalation.ts
 var ESCALATION_LABEL = "agent requests sandbox access escalation";
@@ -21388,7 +23138,7 @@ var LucideContext = (0, import_react.createContext)({});
 var useLucideContext = () => (0, import_react.useContext)(LucideContext);
 
 // node_modules/.pnpm/lucide-react@1.46.0_react@19.3.0/node_modules/lucide-react/dist/esm/Icon.mjs
-var Icon = (0, import_react2.forwardRef)(
+var Icon2 = (0, import_react2.forwardRef)(
   ({
     color,
     size,
@@ -21445,7 +23195,7 @@ var Icon = (0, import_react2.forwardRef)(
 function createLucideIcon(iconDataOrName, iconNode = [], aliases = []) {
   const iconData = typeof iconDataOrName === "string" ? toLucideIconData(iconDataOrName, iconNode, aliases) : iconDataOrName;
   const Component = (0, import_react3.forwardRef)(
-    ({ className, ...props }, ref) => (0, import_react3.createElement)(Icon, {
+    ({ className, ...props }, ref) => (0, import_react3.createElement)(Icon2, {
       ref,
       icon: iconData,
       className,
@@ -21561,6 +23311,7 @@ var HLJS_BOX_CSS = [
   ".hljs{color:#c9d1d9;background:#0d1117}"
 ].join("");
 injectStyle(PLUGIN_NAME, STYLE_TAG_ID, mergeCss(client_default, HLJS_BOX_CSS));
+injectStyle(PLUGIN_NAME, "tool-render/bash-graph.css", stripBashGraphRoot(styles_default));
 injectStyle(PLUGIN_NAME, "dsh-hljs-theme", HLJS_THEME_CSS);
 injectStyle(PLUGIN_NAME, "dsh-permission-outline", PERMISSION_OUTLINE_CSS);
 injectStyle(PLUGIN_NAME, "dsh-plan-row", PLAN_ROW_CSS);
@@ -22187,274 +23938,80 @@ function escalationBanner(detail, settled) {
     detail.mode
   )), /* @__PURE__ */ import_react4.default.createElement("div", { className: escalationReasonClassName(settled) }, detail.justification));
 }
-function BashDiagramHeredoc(props) {
-  var endpoint = props.endpoint;
-  var heredoc = endpoint.heredoc;
-  var openState = useState(false);
-  var open = openState[0];
-  var setOpen = openState[1];
-  var lines = heredoc.lines;
-  var label = endpoint.slice + " \xB7 " + String(lines) + (lines === 1 ? " line" : " lines") + " hidden";
-  if (!open) {
-    return /* @__PURE__ */ import_react4.default.createElement(
-      "button",
-      {
-        className: "tool-render-diagram-heredoc",
-        title: "heredoc body: one collapsed element, never one per line",
-        "data-dsh-tip": "",
-        onClick: function() {
-          setOpen(true);
-        }
-      },
-      label + " \u2014 show"
-    );
-  }
-  return /* @__PURE__ */ import_react4.default.createElement("span", { className: "tool-render-diagram-heredoc-open" }, /* @__PURE__ */ import_react4.default.createElement(
-    "button",
-    {
-      className: "tool-render-diagram-heredoc",
-      title: "heredoc body",
-      "data-dsh-tip": "",
-      onClick: function() {
-        setOpen(false);
-      }
-    },
-    label + " \u2014 hide"
-  ), /* @__PURE__ */ import_react4.default.createElement("pre", { className: "tool-render-diagram-heredoc-body" }, heredoc.body + heredoc.delimiter));
+var BASH_GRAPH_MAX_COMMAND = 2e4;
+var BASH_GRAPH_CACHE_LIMIT = 200;
+var bashGraphCache = /* @__PURE__ */ new Map();
+var bashGraphNextIdx = 0;
+var BASH_MEASURE_ID = "measure";
+function ensureBashGraphMeasure() {
+  if (typeof document === "undefined") return false;
+  if (document.querySelector("#" + BASH_MEASURE_ID) !== null) return true;
+  var el = document.createElement("div");
+  el.id = BASH_MEASURE_ID;
+  var parent = document.body || document.documentElement;
+  if (!parent) return false;
+  parent.appendChild(el);
+  return document.querySelector("#" + BASH_MEASURE_ID) !== null;
 }
-function BashCommandDiagram(props) {
-  var model = props.model;
-  var head = [];
-  if (model.conditional === "&&" || model.conditional === "||") {
-    var why = model.conditional === "&&" ? "runs only if the previous step succeeded" : "runs only if the previous step failed";
-    head.push(
-      /* @__PURE__ */ import_react4.default.createElement(
-        "div",
-        {
-          className: "tool-render-diagram-conditional",
-          title: "conditional step: " + why + " \u2014 unlike `;`, this step may not run at all",
-          "data-dsh-tip": ""
-        },
-        /* @__PURE__ */ import_react4.default.createElement("span", null, model.conditional)
-      )
-    );
-  }
-  if (model.timed) {
-    head.push(
-      /* @__PURE__ */ import_react4.default.createElement(
-        "span",
-        {
-          className: "tool-render-diagram-badge",
-          title: "`time` prefix: the command was timed, which changes what its exit code means",
-          "data-dsh-tip": ""
-        },
-        "time"
-      )
-    );
-  }
-  if (model.negated) {
-    head.push(
-      /* @__PURE__ */ import_react4.default.createElement(
-        "span",
-        {
-          className: "tool-render-diagram-badge",
-          title: "`!` negation: the pipeline exit code is inverted",
-          "data-dsh-tip": ""
-        },
-        "!"
-      )
-    );
-  }
-  if (model.leadingGap.trim() !== "") {
-    head.push(/* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-lead" }, model.leadingGap));
-  }
-  var flow = [];
-  for (var i = 0; i < model.stages.length; i++) {
-    if (i > 0) {
-      var arrow = model.arrows[i - 1];
-      var carriesStderr = arrow.operator === "|&";
-      flow.push(
-        /* @__PURE__ */ import_react4.default.createElement(
-          "span",
-          {
-            className: "tool-render-diagram-arrow" + (carriesStderr ? " tool-render-diagram-arrow-stderr" : ""),
-            title: carriesStderr ? "pipe stdout and stderr together (|&)" : "pipe stdout only (|)",
-            "data-dsh-tip": ""
-          },
-          arrow.operator + " \u2192"
-        )
-      );
-    }
-    var stage = model.stages[i];
-    var parts = [];
-    if (stage.args !== void 0 && stage.args.args.length > 1) {
-      var chipRow = [];
-      for (var a = 0; a < stage.args.args.length; a++) {
-        var arg = stage.args.args[a];
-        var roleLabel = arg.role === "value" ? "value (bound; verbatim slice)" : arg.role === "subcommand" ? "subcommand (verbatim slice)" : arg.role === "flag" ? "flag (verbatim slice)" : "positional (verbatim slice)";
-        chipRow.push(
-          /* @__PURE__ */ import_react4.default.createElement(
-            "code",
-            {
-              className: "tool-render-diagram-arg tool-render-diagram-arg-" + arg.role + (a === 0 ? " tool-render-diagram-arg-cmd" : ""),
-              title: roleLabel,
-              "data-dsh-tip": ""
-            },
-            arg.slice
-          )
-        );
-      }
-      parts.push(/* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-args" }, chipRow));
-    } else if (stage.words !== "") {
-      parts.push(
-        /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-words" }, /* @__PURE__ */ import_react4.default.createElement(
-          "code",
-          {
-            className: "hljs",
-            "data-highlighted": "yes",
-            dangerouslySetInnerHTML: { __html: highlightCode(stage.words, "bash") }
-          }
-        ))
-      );
-    }
-    for (var r = 0; r < stage.redirects.length; r++) {
-      var redirect = stage.redirects[r];
-      if (redirect.heredoc !== null) {
-        parts.push(/* @__PURE__ */ import_react4.default.createElement(BashDiagramHeredoc, { endpoint: redirect }));
-      } else {
-        parts.push(
-          /* @__PURE__ */ import_react4.default.createElement(
-            "span",
-            {
-              className: "tool-render-diagram-endpoint",
-              title: "redirect (" + redirect.operator + ")",
-              "data-dsh-tip": ""
-            },
-            /* @__PURE__ */ import_react4.default.createElement(
-              "code",
-              {
-                className: "hljs",
-                "data-highlighted": "yes",
-                dangerouslySetInnerHTML: { __html: highlightCode(redirect.slice, "bash") }
-              }
-            )
-          )
-        );
-      }
-    }
-    if (stage.exitCode !== void 0) {
-      var failed = stage.exitCode !== 0;
-      parts.push(
-        /* @__PURE__ */ import_react4.default.createElement(
-          "span",
-          {
-            className: "tool-render-diagram-exit" + (failed ? " tool-render-diagram-exit-fail" : " tool-render-diagram-exit-ok"),
-            title: failed ? "stage exit code " + String(stage.exitCode) + " (failed)" : "stage exit code 0",
-            "data-dsh-tip": ""
-          },
-          "exit " + String(stage.exitCode)
-        )
-      );
-    }
-    var bare = stage.redirects.length === 0 && stage.exitCode === void 0 && stage.args !== void 0 && stage.args.args.length > 1;
-    flow.push(
-      /* @__PURE__ */ import_react4.default.createElement(
-        "div",
-        {
-          className: "tool-render-diagram-stage" + (bare ? " tool-render-diagram-stage-bare" : "")
-        },
-        parts
-      )
-    );
-  }
-  var tail = [];
-  for (var t = 0; t < model.trailing.length; t++) {
-    var piece = model.trailing[t];
-    if (piece.kind === "gap" && piece.text.trim() !== "") {
-      tail.push(/* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-lead" }, piece.text));
-    }
-  }
-  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram" }, head, /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-flow", "data-stages": model.stages.length }, flow), tail);
+function stripBashGraphRoot(cssText) {
+  return String(cssText).replace(/:root[^{]*\{[^}]*\}/g, "").replace(/html\[data-theme="light"\]\{[^}]*\}/g, "");
 }
-function BashSequenceTextGroup(props) {
-  var group = props.group;
-  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-text" }, /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-words" }, /* @__PURE__ */ import_react4.default.createElement(
-    "code",
-    {
-      className: "hljs",
-      "data-highlighted": "yes",
-      dangerouslySetInnerHTML: { __html: highlightCode(group.slice, "bash") }
+function bashGraphCacheKey(command, pipeStages) {
+  var stages = "";
+  if (pipeStages !== void 0 && pipeStages !== null) {
+    try {
+      stages = JSON.stringify(pipeStages);
+    } catch (err) {
+      stages = String(pipeStages);
     }
-  )));
+  }
+  return command + "\n" + stages;
 }
-function BashSequenceSeparator(props) {
-  var separator = props.text;
-  var residue = separator.replace(/[;\s]/g, "");
-  if (typeof props.operator === "string" && residue === props.operator) residue = "";
-  var carriesContent = residue !== "";
-  if (carriesContent !== true && props.hideWhenEmpty === true) return null;
-  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-seq-sep" }, carriesContent ? /* @__PURE__ */ import_react4.default.createElement(
-    "code",
-    {
-      className: "hljs tool-render-diagram-seq-sep-text",
-      "data-highlighted": "yes",
-      dangerouslySetInnerHTML: { __html: highlightCode(separator, "bash") }
-    }
-  ) : null);
+function getBashGraphPanels(command, pipeStages) {
+  if (typeof command !== "string" || command.length > BASH_GRAPH_MAX_COMMAND) return [];
+  ensureBashGraphMeasure();
+  var key = bashGraphCacheKey(command, pipeStages);
+  var hit = bashGraphCache.get(key);
+  if (hit !== void 0) return hit;
+  var engines = { adopted: 0, avail: cardAvail() };
+  var scan = { status: "stable-unavailable", nodes: [] };
+  var idx = bashGraphNextIdx;
+  var result = renderOne(idx, command, scan, engines, pipeStages);
+  bashGraphNextIdx = idx + 1;
+  if (bashGraphCache.size >= BASH_GRAPH_CACHE_LIMIT) {
+    var oldest = bashGraphCache.keys().next();
+    if (!oldest.done) bashGraphCache.delete(oldest.value);
+  }
+  bashGraphCache.set(key, result.panelsHTML);
+  return result.panelsHTML;
 }
-function BashChainPanel(props) {
-  var chain = props.chain;
-  var parts = chainPanelRows(chain);
-  var children = [];
-  if (chain.leadingGap.trim() !== "") {
-    children.push(/* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-lead" }, chain.leadingGap));
+function toggleBashGraphBlock(doc, btn) {
+  if (doc === null || doc === void 0 || btn === null || btn === void 0) return false;
+  var hd = btn.getAttribute("data-hd");
+  var el = null;
+  if (hd !== null) {
+    el = doc.getElementById("hd-" + hd);
+  } else {
+    var arg = btn.getAttribute("data-arg");
+    if (arg !== null) el = doc.getElementById("arg-" + arg);
   }
-  for (var r = 0; r < parts.length; r++) {
-    if (r > 0) {
-      children.push(
-        /* @__PURE__ */ import_react4.default.createElement(
-          BashSequenceSeparator,
-          {
-            text: chain.separators[r - 1],
-            operator: chain.operators[r - 1],
-            hideWhenEmpty: true
-          }
-        )
-      );
-    }
-    children.push(
-      /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-part" }, /* @__PURE__ */ import_react4.default.createElement(BashCommandDiagram, { model: parts[r] }))
-    );
-  }
-  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-chainpanel" }, children);
+  if (el === null || el === void 0) return false;
+  var willShow = el.hasAttribute("hidden");
+  if (willShow) el.removeAttribute("hidden");
+  else el.setAttribute("hidden", "");
+  btn.setAttribute("aria-expanded", willShow ? "true" : "false");
+  return true;
 }
-function BashSequenceDiagram(props) {
-  var model = props.model;
-  var children = [];
-  if (model.leadingGap.trim() !== "") {
-    children.push(/* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-lead" }, model.leadingGap));
-  }
-  for (var i = 0; i < model.statements.length; i++) {
-    if (i > 0) {
-      children.push(/* @__PURE__ */ import_react4.default.createElement(BashSequenceSeparator, { text: model.separators[i - 1] }));
-    }
-    var group = model.statements[i];
-    if (group.kind === "diagram") {
-      children.push(/* @__PURE__ */ import_react4.default.createElement(BashCommandDiagram, { model: sequenceUnitDiagramModel(group.unit) }));
-    } else if (group.kind === "chain") {
-      var chain = group.chain;
-      children.push(/* @__PURE__ */ import_react4.default.createElement(BashChainPanel, { chain }));
-    } else {
-      children.push(/* @__PURE__ */ import_react4.default.createElement(BashSequenceTextGroup, { group }));
-    }
-  }
-  for (var t = 0; t < model.trailing.length; t++) {
-    var piece = model.trailing[t];
-    if (piece.kind === "gap" && piece.text.trim() !== "") {
-      children.push(/* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram-lead" }, piece.text));
-    }
-  }
-  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-diagram tool-render-diagram-seq" }, children);
+function BashGraphPanels(props) {
+  var panels = props.panels;
+  var onPanelsClick = function(event) {
+    var root = event.target && event.target.closest ? event.target.closest("[data-hd],[data-arg]") : null;
+    if (root === null || typeof document === "undefined") return;
+    toggleBashGraphBlock(document, root);
+  };
+  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-bash-graph", onClick: onPanelsClick }, /* @__PURE__ */ import_react4.default.createElement("div", { dangerouslySetInnerHTML: { __html: '<svg aria-hidden="true" style="display:none">' + PIPE_GLYPH_SYMBOL + "</svg>" } }), panels.map(function(html, i) {
+    return /* @__PURE__ */ import_react4.default.createElement("div", { key: i, dangerouslySetInnerHTML: { __html: html } });
+  }));
 }
 function BashTabStrip(props) {
   var tab = props.tab;
@@ -22599,6 +24156,18 @@ function BashRow(props) {
       };
       var rewrittenPair = guardRewrite !== null && guardRewrite.ran !== command;
       var tabs = resolveBashTab(command, rewrittenPair);
+      var diagramMeta = block.meta !== null && typeof block.meta === "object" && !Array.isArray(block.meta) ? block.meta : null;
+      if (!rewrittenPair) {
+        var graphStages = diagramMeta !== null ? diagramMeta.pipeStages : void 0;
+        var graphPanelsNow = getBashGraphPanels(command, graphStages);
+        var graphDrawableNow = graphPanelsNow.length > 0;
+        tabs = {
+          drawable: graphDrawableNow,
+          showTabs: graphDrawableNow,
+          defaultTab: graphDrawableNow ? "graph" : "command",
+          commandText: tabs.commandText
+        };
+      }
       if (rewrittenPair) {
         inner.push.apply(
           inner,
@@ -22607,11 +24176,6 @@ function BashRow(props) {
           )
         );
       } else if (tabs.showTabs) {
-        var diagramBase = getBashDiagram(command);
-        var sequenceBase = getBashSequenceDiagram(command);
-        var diagramMeta = block.meta !== null && typeof block.meta === "object" && !Array.isArray(block.meta) ? block.meta : null;
-        var sequence = sequenceBase !== null ? attributeSequenceStages(sequenceBase, diagramMeta !== null ? diagramMeta.pipeStages : void 0) : null;
-        var diagram = sequence !== null || diagramBase === null ? null : attributePipeStages(diagramBase, diagramMeta !== null ? diagramMeta.pipeStages : void 0);
         var activeTab = bashTabUser === null ? tabs.defaultTab : bashTabUser;
         var tabPrefix = props.callId !== void 0 && props.callId !== null ? "bash-tab-" + String(props.callId) : null;
         inner.push(
@@ -22628,11 +24192,7 @@ function BashRow(props) {
         );
         var tabBody = null;
         if (activeTab === "graph") {
-          if (sequence !== null) {
-            tabBody = /* @__PURE__ */ import_react4.default.createElement(BashSequenceDiagram, { model: sequence });
-          } else if (diagram !== null) {
-            tabBody = /* @__PURE__ */ import_react4.default.createElement(BashCommandDiagram, { model: diagram });
-          }
+          tabBody = /* @__PURE__ */ import_react4.default.createElement(BashGraphPanels, { panels: graphPanelsNow });
         } else {
           tabBody = commandBlock(null, tabs.commandText ?? command);
         }
@@ -22765,12 +24325,12 @@ function latestReadText(snapshot, path, beforeTime, cwd) {
   var reads = readsOf(snapshot, path, beforeTime, cwd);
   return reads.length === 0 ? null : reads[0].text;
 }
-function splitLines2(text) {
+function splitLines3(text) {
   return typeof text === "string" && text !== "" ? text.split("\n") : [];
 }
 function diffLines(oldText, newText) {
-  var a = splitLines2(oldText);
-  var b = splitLines2(newText);
+  var a = splitLines3(oldText);
+  var b = splitLines3(newText);
   var n = a.length;
   var m = b.length;
   var dp = [];
@@ -22901,7 +24461,7 @@ function diffFallbackBody(diffs, language) {
   for (var i = 0; i < diffs.length; i++) {
     var d = diffs[i];
     var text = onlyDels ? deIndent(typeof d.oldText === "string" ? d.oldText : "") : deIndent(typeof d.newText === "string" ? d.newText : "");
-    var parts = splitLines2(text);
+    var parts = splitLines3(text);
     var startBase = typeof d.startOld === "number" ? d.startOld : 1;
     for (var j = 0; j < parts.length; j++) {
       lines.push(parts[j]);
@@ -23167,7 +24727,7 @@ function editDiffBody(diffs) {
     } else {
       var type = hasDel ? "del" : hasAdd ? "add" : "same";
       var text = hasDel ? oldText : hasAdd ? newText : oldText;
-      var parts = splitLines2(text);
+      var parts = splitLines3(text);
       var startBase = typeof file.startOld === "number" ? file.startOld : 1;
       var numbers = [];
       for (var l = 0; l < parts.length; l++) numbers.push(startBase + l);
@@ -23210,7 +24770,7 @@ function writeBody(path, before, newText) {
   } else {
     var type = hasDel ? "del" : hasAdd ? "add" : "same";
     var text = hasDel ? deIndent(cleaned.content) : hasAdd ? deIndent(newText) : deIndent(cleaned.content);
-    var parts = splitLines2(text);
+    var parts = splitLines3(text);
     var startBase = typeof cleaned.start === "number" ? cleaned.start : 1;
     var numbers = [];
     for (var i = 0; i < parts.length; i++) numbers.push(startBase + i);
