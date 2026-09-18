@@ -2,7 +2,8 @@
   "commands": ["git"],
   "verdict": "deny",
   "//read-tree": "read-tree ASKS rather than allows, deliberately; the asymmetry with hash-object is not an oversight to tidy away. hash-object only ever writes a LOOSE OBJECT (additive, unreferenced, gc-collected) and cannot overwrite anything. read-tree writes the INDEX, and with -u / -m -u / --reset it updates the WORKING TREE, silently overwriting uncommitted files — the same capability that puts checkout, switch, restore and clean in the ask list. The schema is verb-level (deny|ask|allow), so allowing the verb would allow every flag with it.",
-  "reason": "Raw git is denied for this subcommand. These run without asking: status, add, log, diff, show, blame, shortlog, describe, rev-parse, rev-list, ls-files, ls-remote, cat-file, merge-base, diff-tree, diff-index, diff-files, hash-object, version, help, check-ignore. These prompt instead of failing: clone, worktree, stash, branch, tag, fetch, pull, remote, checkout, switch, restore, apply, push, commit, reset, merge, rebase, cherry-pick, clean, read-tree. Anything in neither list is denied here, so pick the nearest listed verb or ask the owner. Note: plugin git via ctx.subprocess (dsh-worktree, dsh-git-plugin) bypasses this guard — it gates only model bash calls.",
+  "//subtree-rm-mv": "These three ASK rather than stay denied, because denying them did not prevent anything, it relocated the work into a form that is harder to read and harder to review. subtree add expands to fetch + merge -s ours + read-tree --prefix -u + commit, and all four of those already ask; read-tree is the more dangerous of the pair by any measure. Denying git rm produced 'rm -rf' followed by 'git add', where the recursive filesystem delete is unguarded and add does not even ask. git mv joins them on the same argument: 'mv' plus 'git add' reproduces it exactly, and rename detection is content-based, so history follows either way. A rule that pushes an operation into its own lower-level parts buys no safety.",
+  "reason": "Raw git is denied for this subcommand. These run without asking: status, add, log, diff, show, blame, shortlog, describe, rev-parse, rev-list, ls-files, ls-remote, cat-file, merge-base, diff-tree, diff-index, diff-files, hash-object, version, help, check-ignore. These prompt instead of failing: clone, worktree, stash, branch, tag, fetch, pull, remote, checkout, switch, restore, apply, push, commit, reset, merge, rebase, cherry-pick, clean, read-tree, subtree, rm, mv. Anything in neither list is denied here, so pick the nearest listed verb or ask the owner. Note: plugin git via ctx.subprocess (dsh-worktree, dsh-git-plugin) bypasses this guard — it gates only model bash calls.",
   "subcommands": {
     "clone": "ask",
     "status": "allow",
@@ -44,6 +45,9 @@
     "merge": "ask",
     "rebase": "ask",
     "cherry-pick": "ask",
-    "clean": "ask"
+    "clean": "ask",
+    "subtree": "ask",
+    "rm": "ask",
+    "mv": "ask"
   }
 }
