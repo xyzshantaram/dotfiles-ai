@@ -212,7 +212,7 @@ var settings_default = "/* Shared settings-page vocabulary, normalized from the 
 var client_default = ".profiles-client-root {\n  display: inline-block;\n  min-width: 0;\n  position: relative;\n}\n.profiles-client-trigger {\n  min-width: 0;\n  max-width: min(22.5rem, 45cqw);\n  height: 1.75rem;\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  background: 0 0;\n  border: none;\n  border-radius: 0.75rem;\n  outline: none;\n  align-items: center;\n  gap: 0.3125rem;\n  padding: 0 0.4375rem;\n  font-size: 0.8125rem;\n  font-weight: 500;\n  line-height: 1.25rem;\n  display: flex;\n}\n.profiles-client-trigger:hover:not(:disabled) {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.profiles-client-trigger:focus-visible {\n  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);\n}\n.profiles-client-trigger:disabled {\n  color: var(--dsw-alias-label-dimmed);\n  cursor: default;\n}\n.profiles-client-badge {\n  box-sizing: border-box;\n  display: inline-flex;\n  align-items: stretch;\n  flex: 1;\n  min-width: 0;\n  height: 1.5rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.375rem;\n  overflow: hidden;\n}\n.profiles-client-badge-segment {\n  display: inline-flex;\n  align-items: center;\n  gap: 0.25rem;\n  padding: 0 0.375rem;\n  min-width: 0;\n  white-space: nowrap;\n}\n.profiles-client-badge-segment + .profiles-client-badge-segment {\n  border-left: 1px solid var(--dsw-alias-border-l2);\n}\n.profiles-client-badge-model {\n  flex: 1;\n  min-width: 0;\n  overflow: hidden;\n}\n.profiles-client-badge-segment svg {\n  flex: none;\n  width: 14px;\n  height: 14px;\n  color: var(--dsw-alias-label-caption);\n}\n.profiles-client-profile-name {\n  flex: none;\n  white-space: nowrap;\n  color: #fff;\n  font-size: 0.75rem;\n  font-weight: 700;\n  line-height: 1rem;\n  text-transform: uppercase;\n}\n.profiles-client-pill-dot {\n  flex: none;\n  width: 0.375rem;\n  height: 0.375rem;\n  border-radius: 50%;\n}\n.profiles-client-pill-dot.profiles-client-pill-dot-matched {\n  background: var(--dsw-alias-state-info-primary, #3b82f6);\n}\n.profiles-client-pill-dot.profiles-client-pill-dot-changed {\n  background: #f59e0b;\n}\n.profiles-client-model-name {\n  flex: 1;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  color: #fff;\n  font-size: 0.75rem;\n  line-height: 1rem;\n}\n.profiles-client-model-provider {\n  flex: none;\n  min-width: 0;\n  max-width: 7rem;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  color: rgba(255, 255, 255, 0.75);\n  font-size: 0.6875rem;\n  line-height: 1rem;\n  /* Optical nudge: 11px glyphs center a hair high next to 12px model text. */\n  transform: translateY(1px);\n}\n.profiles-client-badge-failover {\n  cursor: pointer;\n}\n.profiles-client-failover-rung {\n  flex: none;\n  white-space: nowrap;\n  color: #fff;\n  font-size: 0.75rem;\n  font-weight: 500;\n  line-height: 1rem;\n}\n.profiles-client-chevron {\n  color: var(--dsw-alias-label-caption);\n  flex: none;\n  transform: rotate(0deg);\n  transition: transform 0.12s;\n}\n.profiles-client-chevron-open {\n  transform: rotate(180deg);\n}\n.profiles-client-menu {\n  z-index: 20;\n  border: 1px solid var(--dsw-alias-border-inverted);\n  background: var(--dsw-specific-menu);\n  width: max-content;\n  min-width: 13.75rem;\n  max-width: min(26.25rem, 100vw - 2rem);\n  max-height: min(25rem, 100vh - 6rem);\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-primary);\n  border-radius: 0.5rem;\n  flex-direction: column;\n  padding: 0.1875rem;\n  display: flex;\n  position: absolute;\n  bottom: calc(100% + 0.5rem);\n  left: 0;\n  right: 0;\n  width: max-content;\n  margin-left: auto;\n  margin-right: auto;\n  overflow-x: hidden;\n  overflow-y: auto;\n}\n.profiles-client-option {\n  box-sizing: border-box;\n  width: auto;\n  min-width: 100%;\n  min-height: 2.125rem;\n  color: inherit;\n  text-align: left;\n  cursor: pointer;\n  background: 0 0;\n  border: none;\n  border-radius: 0.5rem;\n  outline: none;\n  align-items: center;\n  gap: 0.5rem;\n  padding: 0.25rem 0.4375rem;\n  display: flex;\n}\n.profiles-client-option:hover:not(:disabled) {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.profiles-client-option-copy {\n  flex-direction: column;\n  flex: 1;\n  min-width: 0;\n  display: flex;\n}\n.profiles-client-option-copy-model {\n  flex-direction: row;\n  align-items: baseline;\n  gap: 0.5rem;\n}\n.profiles-client-option-copy-model .profiles-client-option-name {\n  flex: 1;\n  min-width: 0;\n}\n.profiles-client-option-copy-model .profiles-client-option-detail {\n  flex: none;\n  flex-shrink: 0;\n}\n.profiles-client-option-name {\n  color: inherit;\n  flex: 1;\n  min-width: 0;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 0.8125rem;\n  font-weight: 500;\n  line-height: 1.25rem;\n  overflow: hidden;\n}\n.profiles-client-option-profile {\n  font-weight: 700;\n  text-transform: uppercase;\n}\n.profiles-client-option-model {\n  font-size: 0.75rem;\n  font-weight: 700;\n}\n.profiles-client-option-detail {\n  color: var(--dsw-alias-label-tertiary);\n  flex: none;\n  flex-shrink: 0;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 0.75rem;\n  line-height: 1rem;\n  overflow: hidden;\n}\n.profiles-client-check {\n  color: var(--dsw-alias-label-primary);\n  flex: 0 0 0.875rem;\n}\n.profiles-client-effort-row {\n  display: flex;\n  flex-direction: column;\n  align-items: stretch;\n  gap: 0.375rem;\n  box-sizing: border-box;\n  width: 100%;\n  min-width: 0;\n  padding: 0.25rem 0.4375rem;\n}\n.profiles-client-effort-title {\n  font-size: 0.75rem;\n  line-height: 1rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.profiles-client-error-row {\n  display: flex;\n  align-items: center;\n  gap: 0.5rem;\n  min-width: 0;\n  padding: 0.25rem 0.4375rem;\n  font-size: 0.75rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.profiles-client-error-count {\n  flex: 1;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n.profiles-client-error-reset {\n  flex: none;\n  flex-shrink: 0;\n  cursor: pointer;\n  border: none;\n  background: none;\n  padding: 0;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.75rem;\n  line-height: 1rem;\n}\n.profiles-client-error-reset:hover {\n  color: var(--dsw-alias-label-primary);\n}\n.profiles-client-effort {\n  box-sizing: border-box;\n  width: calc(100% - 1rem);\n  min-width: 0;\n  margin-left: 0.5rem;\n  height: 1.5rem;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  padding: 0 0.375rem;\n  font-size: 0.6875rem;\n  line-height: 1rem;\n}\n.profiles-client-effort-row .profiles-client-effort {\n  flex: 1;\n  width: auto;\n  margin-left: 0;\n}\n.profiles-client-effort-slider {\n  width: 100%;\n  min-width: 0;\n  height: 1.5rem;\n  margin: 0;\n  background: transparent;\n  cursor: pointer;\n  appearance: none;\n  -webkit-appearance: none;\n}\n.profiles-client-effort-slider::-webkit-slider-runnable-track {\n  height: 0.5rem;\n  background: linear-gradient(90deg, #0a5cff 0%, #ff8400 100%);\n  border-radius: 0.25rem;\n}\n.profiles-client-effort-slider::-webkit-slider-thumb {\n  width: 0.875rem;\n  height: 0.875rem;\n  margin-top: -0.1875rem;\n  background: #fff;\n  border: none;\n  border-radius: 50%;\n  appearance: none;\n  -webkit-appearance: none;\n  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);\n}\n.profiles-client-effort-slider::-moz-range-track {\n  height: 0.5rem;\n  background: linear-gradient(90deg, #0a5cff 0%, #ff8400 100%);\n  border-radius: 0.25rem;\n}\n.profiles-client-effort-slider::-moz-range-progress {\n  height: 0.5rem;\n  background: transparent;\n  border-radius: 0.25rem;\n}\n.profiles-client-effort-slider::-moz-range-thumb {\n  width: 0.875rem;\n  height: 0.875rem;\n  background: #fff;\n  border: none;\n  border-radius: 50%;\n  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);\n}\n.profiles-client-effort-slider-wrap {\n  position: relative;\n  width: 100%;\n}\n.profiles-client-effort-tick {\n  position: absolute;\n  top: calc(50% - 0.25rem);\n  transform: translate(-50%, -50%);\n  width: 2px;\n  height: 0.625rem;\n  background: #fff;\n  pointer-events: none;\n}\n.profiles-client-effort-labels {\n  position: relative;\n  width: 100%;\n  height: 1rem;\n}\n.profiles-client-effort-stop {\n  position: absolute;\n  top: 0;\n  transform: translateX(-50%);\n  text-transform: uppercase;\n  font-size: 0.625rem;\n  line-height: 1rem;\n  white-space: nowrap;\n  color: var(--dsw-alias-label-secondary);\n}\n.profiles-client-effort-stop-active {\n  color: var(--dsw-alias-label-primary);\n}\n.profiles-client-effort-chevron {\n  flex: none;\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 1rem;\n  line-height: 1;\n}\n.profiles-client-effort-popover {\n  position: fixed;\n  z-index: 30;\n  box-sizing: border-box;\n  width: 15rem;\n  background: var(--dsw-specific-menu);\n  border: 1px solid var(--dsw-alias-border-inverted);\n  border-radius: 0.5rem;\n  box-shadow: var(--dsw-shadow-lv3);\n  padding: 0.5rem;\n  color: var(--dsw-alias-label-primary);\n}\n.profiles-client-search {\n  box-sizing: border-box;\n  width: 100%;\n  height: 2rem;\n  margin: 0.25rem 0 0.5rem;\n  padding: 0 0.625rem;\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  outline: none;\n}\n.profiles-client-search::placeholder {\n  color: var(--dsw-alias-label-tertiary);\n}\n.profiles-client-search:focus-visible {\n  border-color: var(--dsw-alias-border-l3);\n  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);\n}\n.profiles-client-strip {\n  color: var(--dsw-alias-label-tertiary);\n  padding: 0.625rem;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n}\n\n.pf-panel-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 0.75rem;\n}\n.pf-panel-active {\n  display: flex;\n  gap: 0.75rem;\n  flex-wrap: wrap;\n}\n.pf-panel-active-btn {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  padding: 0.3125rem 0.625rem;\n  min-height: 2.375rem;\n  cursor: pointer;\n}\n.pf-panel-active-btn-on {\n  color: var(--dsw-alias-label-primary);\n  border-color: var(--dsw-alias-border-l3);\n}\n.pf-panel-entry {\n  display: flex;\n  flex-direction: column;\n  gap: 0.625rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.625rem;\n  padding: 0.875rem;\n  background: var(--dsw-alias-bg-tertiary);\n}\n.pf-panel-entry-title {\n  font-size: 0.9375rem;\n  font-weight: 600;\n  margin: 0;\n  color: var(--dsw-alias-label-primary);\n}\n.pf-panel-chain {\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n}\n.pf-panel-chain-title {\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  color: var(--dsw-alias-label-secondary);\n  margin: 0;\n}\n.pf-panel-row {\n  display: flex;\n  gap: 0.75rem;\n  align-items: center;\n  min-width: 0;\n}\n.pf-panel-input {\n  box-sizing: border-box;\n  flex: 1;\n  min-width: 0;\n  height: 2.5rem;\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  padding: 0 0.5rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n}\n.pf-panel-input:focus-visible {\n  outline: 2px solid var(--dsw-alias-state-business-primary);\n  outline-offset: -0.125rem;\n}\n.pf-panel-del {\n  flex: none;\n  cursor: pointer;\n  border: none;\n  background: none;\n  padding: 0 0.25rem;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 1rem;\n  line-height: 1.25rem;\n}\n/* Drag handle on each chain rung. Only the handle starts a drag, so the\n * row's selects and buttons keep working; touch-action lets pointer drags\n * begin on touch, and the focus ring marks the keyboard-reorder target. */\n.pf-panel-grip {\n  flex: none;\n  cursor: grab;\n  border: none;\n  background: none;\n  padding: 0 0.25rem;\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  touch-action: none;\n}\n.pf-panel-grip:active {\n  cursor: grabbing;\n}\n.pf-panel-grip:focus-visible {\n  outline: 2px solid var(--dsw-alias-state-business-primary);\n  outline-offset: -0.125rem;\n}\n/* A `chain:<name>` reference rung: visually distinct from provider/model\n * rungs, and reordering moves the reference itself, never its expansion. */\n.pf-panel-chainref {\n  border-left: 2px solid var(--dsw-alias-state-business-primary);\n  padding-left: 0.5rem;\n}\n.pf-panel-add {\n  align-self: flex-start;\n  color: var(--dsw-alias-label-secondary);\n  background: none;\n  border: 1px dashed var(--dsw-alias-border-l2);\n  border-radius: 0.4375rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n  padding: 0.1875rem 0.6875rem;\n  cursor: pointer;\n}\n.pf-panel-add:hover {\n  color: var(--dsw-alias-label-primary);\n}\n.pf-panel-meta {\n  font-size: 0.875rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.pf-panel-ref {\n  flex: none;\n  color: var(--dsw-alias-label-tertiary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border-radius: 0.4375rem;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  padding: 0.0625rem 0.5rem;\n}\n.pf-panel-actions {\n  display: flex;\n  align-items: center;\n  gap: 0.75rem;\n}\n.pf-panel-save {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 0.5rem;\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  padding: 0.3125rem 0.625rem;\n  min-height: 2.375rem;\n  cursor: pointer;\n}\n.pf-panel-save:disabled {\n  opacity: 0.5;\n  cursor: default;\n}\n.pf-panel-status {\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n}\n.pf-panel-ok {\n  color: var(--dsw-alias-state-success-primary);\n}\n.pf-panel-bad {\n  color: var(--dsw-alias-state-error-primary);\n}\n.pf-panel-select {\n  box-sizing: border-box;\n  flex: 1;\n  min-width: 0;\n  height: 2.5rem;\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  padding: 0 0.5rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n  cursor: pointer;\n}\n.pf-panel-select:focus-visible {\n  outline: 2px solid var(--dsw-alias-state-business-primary);\n  outline-offset: -0.125rem;\n}\n.pf-panel-effort {\n  box-sizing: border-box;\n  flex: 0 0 auto;\n  min-width: 0;\n  margin-left: 0.5rem;\n  height: 2.5rem;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  padding: 0 0.5rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n  cursor: pointer;\n}\n.pf-panel-select option,\n.pf-panel-effort option {\n  background: var(--dsw-alias-bg-layer-1);\n  color: var(--dsw-alias-label-primary);\n}\n/* Dropdown group headings invert \u2014 black on white \u2014 so they never render\n   white-on-white against the dropdown surface in the dark theme. */\n.pf-panel-select optgroup,\n.pf-panel-effort optgroup {\n  color: #000;\n  background: #fff;\n  font-weight: 700;\n}\n.pf-panel-model-row {\n  display: flex;\n  flex-direction: column;\n  gap: 0.125rem;\n}\n.pf-panel-add-select {\n  align-self: flex-start;\n  border-style: dashed;\n}\n.profiles-client-menu .dsp-section-title {\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  font-weight: 700;\n  text-transform: uppercase;\n  color: var(--dsw-alias-label-tertiary);\n  margin: 0.25rem 0 0;\n  padding: 0.25rem 0.4375rem;\n}\n";
 
 // plugins/profiles-client/src/client.tsx
-var react = __toESM(require("react"), 1);
+var React4 = __toESM(require("react"), 1);
 
 // plugins/profiles-client/node_modules/@dnd-kit/core/dist/core.esm.js
 var import_react3 = __toESM(require("react"));
@@ -4200,7 +4200,7 @@ var primitivesModule = __toESM(require("@deepseek-ai/dsh-client-ui-primitives"),
 var IconChevronDownOutline142 = primitivesModule.IconChevronDownOutline14;
 var SortableCtx = SortableContext;
 function BrainIcon14() {
-  return /* @__PURE__ */ react.createElement("svg", { width: 14, height: 14, viewBox: "0 0 480 480", fill: "none", "aria-hidden": true }, /* @__PURE__ */ react.createElement("g", { transform: "matrix(2.6933 0 0 2.808 -33.019 -25.795)" }, /* @__PURE__ */ react.createElement(
+  return /* @__PURE__ */ React4.createElement("svg", { width: 14, height: 14, viewBox: "0 0 480 480", fill: "none", "aria-hidden": true }, /* @__PURE__ */ React4.createElement("g", { transform: "matrix(2.6933 0 0 2.808 -33.019 -25.795)" }, /* @__PURE__ */ React4.createElement(
     "g",
     {
       transform: "rotate(90,100,100)",
@@ -4210,19 +4210,19 @@ function BrainIcon14() {
       strokeLinejoin: "round",
       strokeWidth: 14
     },
-    /* @__PURE__ */ react.createElement("path", { d: "m96 166v-132c0-12-12-20-23-16-9 3-15 10-16 19-12-5-25 3-27 16-1 8 2 14 6 18-14 6-21 20-18 33 3 14 15 23 28 21-8 11-6 25 4 32 6 4 14 5 21 2 5 11 15 17 25 7z" }),
-    /* @__PURE__ */ react.createElement("path", { d: "m102 100h50" }),
-    /* @__PURE__ */ react.createElement("path", { d: "m102 72h28l25-25" }),
-    /* @__PURE__ */ react.createElement("path", { d: "m102 128h28l25 25" }),
-    /* @__PURE__ */ react.createElement("circle", { cx: "161", cy: "100", r: "9" }),
-    /* @__PURE__ */ react.createElement("circle", { cx: "161", cy: "41", r: "9" }),
-    /* @__PURE__ */ react.createElement("circle", { cx: "161", cy: "159", r: "9" }),
-    /* @__PURE__ */ react.createElement("circle", { cx: "122", cy: "30", r: "9" }),
-    /* @__PURE__ */ react.createElement("circle", { cx: "122", cy: "170", r: "9" })
+    /* @__PURE__ */ React4.createElement("path", { d: "m96 166v-132c0-12-12-20-23-16-9 3-15 10-16 19-12-5-25 3-27 16-1 8 2 14 6 18-14 6-21 20-18 33 3 14 15 23 28 21-8 11-6 25 4 32 6 4 14 5 21 2 5 11 15 17 25 7z" }),
+    /* @__PURE__ */ React4.createElement("path", { d: "m102 100h50" }),
+    /* @__PURE__ */ React4.createElement("path", { d: "m102 72h28l25-25" }),
+    /* @__PURE__ */ React4.createElement("path", { d: "m102 128h28l25 25" }),
+    /* @__PURE__ */ React4.createElement("circle", { cx: "161", cy: "100", r: "9" }),
+    /* @__PURE__ */ React4.createElement("circle", { cx: "161", cy: "41", r: "9" }),
+    /* @__PURE__ */ React4.createElement("circle", { cx: "161", cy: "159", r: "9" }),
+    /* @__PURE__ */ React4.createElement("circle", { cx: "122", cy: "30", r: "9" }),
+    /* @__PURE__ */ React4.createElement("circle", { cx: "122", cy: "170", r: "9" })
   )));
 }
 function NetworkIcon14() {
-  return /* @__PURE__ */ react.createElement(
+  return /* @__PURE__ */ React4.createElement(
     "svg",
     {
       width: 14,
@@ -4235,18 +4235,18 @@ function NetworkIcon14() {
       strokeLinejoin: "round",
       "aria-hidden": true
     },
-    /* @__PURE__ */ react.createElement("rect", { x: "16", y: "16", width: "6", height: "6", rx: "1" }),
-    /* @__PURE__ */ react.createElement("rect", { x: "2", y: "16", width: "6", height: "6", rx: "1" }),
-    /* @__PURE__ */ react.createElement("rect", { x: "9", y: "2", width: "6", height: "6", rx: "1" }),
-    /* @__PURE__ */ react.createElement("path", { d: "M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" }),
-    /* @__PURE__ */ react.createElement("path", { d: "M12 12V8" })
+    /* @__PURE__ */ React4.createElement("rect", { x: "16", y: "16", width: "6", height: "6", rx: "1" }),
+    /* @__PURE__ */ React4.createElement("rect", { x: "2", y: "16", width: "6", height: "6", rx: "1" }),
+    /* @__PURE__ */ React4.createElement("rect", { x: "9", y: "2", width: "6", height: "6", rx: "1" }),
+    /* @__PURE__ */ React4.createElement("path", { d: "M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" }),
+    /* @__PURE__ */ React4.createElement("path", { d: "M12 12V8" })
   );
 }
-var useSyncExternalStore2 = react.useSyncExternalStore;
-var useCallback5 = react.useCallback;
-var useState5 = react.useState;
-var useEffect5 = react.useEffect;
-var useRef5 = react.useRef;
+var useSyncExternalStore2 = React4.useSyncExternalStore;
+var useCallback5 = React4.useCallback;
+var useState5 = React4.useState;
+var useEffect5 = React4.useEffect;
+var useRef5 = React4.useRef;
 var PLUGIN_NAME = "profiles-client";
 var LOCALE_NS = "profiles-client";
 function emptySubscribe() {
@@ -4661,7 +4661,7 @@ function makeModelSeat(profileScope) {
     var onMenuScroll = function() {
       if (effortOpen) closeEffort();
     };
-    return /* @__PURE__ */ react.createElement("div", { className: "profiles-client-root", ref: rootRef, onKeyDown }, /* @__PURE__ */ react.createElement(
+    return /* @__PURE__ */ React4.createElement("div", { className: "profiles-client-root", ref: rootRef, onKeyDown }, /* @__PURE__ */ React4.createElement(
       "button",
       {
         type: "button",
@@ -4677,40 +4677,40 @@ function makeModelSeat(profileScope) {
           load();
         }
       },
-      /* @__PURE__ */ react.createElement("span", { className: "profiles-client-badge" }, hasProfile ? /* @__PURE__ */ react.createElement(
+      /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-badge" }, hasProfile ? /* @__PURE__ */ React4.createElement(
         "span",
         {
           className: "profiles-client-badge-segment",
           title: "profile " + face.active + (matched ? "" : " (off profile head)"),
           "data-dsh-tip": ""
         },
-        /* @__PURE__ */ react.createElement(
+        /* @__PURE__ */ React4.createElement(
           "span",
           {
             className: "profiles-client-pill-dot" + (matched ? " profiles-client-pill-dot-matched" : " profiles-client-pill-dot-changed"),
             "aria-hidden": true
           }
         ),
-        /* @__PURE__ */ react.createElement("span", { className: "profiles-client-profile-name" }, face.active)
-      ) : null, triggerProviderText !== null ? /* @__PURE__ */ react.createElement(
+        /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-profile-name" }, face.active)
+      ) : null, triggerProviderText !== null ? /* @__PURE__ */ React4.createElement(
         "span",
         {
           className: "profiles-client-badge-segment",
           title: "provider " + triggerProviderRaw,
           "data-dsh-tip": ""
         },
-        /* @__PURE__ */ react.createElement(NetworkIcon14, null),
-        /* @__PURE__ */ react.createElement("span", { className: "profiles-client-model-provider" }, triggerProviderText)
-      ) : null, /* @__PURE__ */ react.createElement(
+        /* @__PURE__ */ React4.createElement(NetworkIcon14, null),
+        /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-model-provider" }, triggerProviderText)
+      ) : null, /* @__PURE__ */ React4.createElement(
         "span",
         {
           className: "profiles-client-badge-segment profiles-client-badge-model",
           title: "model " + triggerModelRaw,
           "data-dsh-tip": ""
         },
-        /* @__PURE__ */ react.createElement(BrainIcon14, null),
-        /* @__PURE__ */ react.createElement("span", { className: "profiles-client-model-name" }, triggerModelText)
-      ), !matched && current !== void 0 && current !== null ? /* @__PURE__ */ react.createElement(
+        /* @__PURE__ */ React4.createElement(BrainIcon14, null),
+        /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-model-name" }, triggerModelText)
+      ), !matched && current !== void 0 && current !== null ? /* @__PURE__ */ React4.createElement(
         "span",
         {
           className: "profiles-client-badge-segment",
@@ -4724,16 +4724,16 @@ function makeModelSeat(profileScope) {
             }
           }
         },
-        /* @__PURE__ */ react.createElement("span", { className: "profiles-client-model-name" }, "~")
+        /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-model-name" }, "~")
       ) : null),
-      /* @__PURE__ */ react.createElement(
+      /* @__PURE__ */ React4.createElement(
         IconChevronDownOutline142,
         {
           className: open ? "profiles-client-chevron profiles-client-chevron-open" : "profiles-client-chevron",
           "aria-hidden": true
         }
       )
-    ), open ? /* @__PURE__ */ react.createElement(
+    ), open ? /* @__PURE__ */ React4.createElement(
       "div",
       {
         className: "profiles-client-menu",
@@ -4741,7 +4741,7 @@ function makeModelSeat(profileScope) {
         ref: menuRef,
         onScroll: onMenuScroll
       },
-      seatEffortList.length > 0 && current !== void 0 && current !== null ? /* @__PURE__ */ react.createElement("div", null, /* @__PURE__ */ react.createElement(
+      seatEffortList.length > 0 && current !== void 0 && current !== null ? /* @__PURE__ */ React4.createElement("div", null, /* @__PURE__ */ React4.createElement(
         "button",
         {
           type: "button",
@@ -4751,9 +4751,9 @@ function makeModelSeat(profileScope) {
           "aria-haspopup": "dialog",
           onClick: toggleEffort
         },
-        /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-copy" }, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-name" }, "Reasoning"), /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-detail" }, seatEffortName)),
-        /* @__PURE__ */ react.createElement("span", { className: "profiles-client-effort-chevron", "aria-hidden": true }, "\u203A")
-      ), effortOpen ? /* @__PURE__ */ react.createElement(
+        /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-option-copy" }, /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-option-name" }, "Reasoning"), /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-option-detail" }, seatEffortName)),
+        /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-effort-chevron", "aria-hidden": true }, "\u203A")
+      ), effortOpen ? /* @__PURE__ */ React4.createElement(
         "div",
         {
           className: "profiles-client-effort-popover",
@@ -4765,7 +4765,7 @@ function makeModelSeat(profileScope) {
             left: effortPos !== null ? effortPos.left : 0
           }
         },
-        /* @__PURE__ */ react.createElement("div", { className: "profiles-client-effort-row" }, /* @__PURE__ */ react.createElement("div", { className: "profiles-client-effort-slider-wrap" }, /* @__PURE__ */ react.createElement(
+        /* @__PURE__ */ React4.createElement("div", { className: "profiles-client-effort-row" }, /* @__PURE__ */ React4.createElement("div", { className: "profiles-client-effort-slider-wrap" }, /* @__PURE__ */ React4.createElement(
           "input",
           {
             type: "range",
@@ -4786,7 +4786,7 @@ function makeModelSeat(profileScope) {
             }
           }
         ), seatEffortStops.map(function(stop, tickIndex) {
-          return /* @__PURE__ */ react.createElement(
+          return /* @__PURE__ */ React4.createElement(
             "span",
             {
               key: stop.id !== "" ? stop.id : "default",
@@ -4795,8 +4795,8 @@ function makeModelSeat(profileScope) {
               style: { left: stopLeftOf(tickIndex) }
             }
           );
-        })), /* @__PURE__ */ react.createElement("div", { className: "profiles-client-effort-labels" }, seatEffortStops.map(function(stop, labelIndex) {
-          return /* @__PURE__ */ react.createElement(
+        })), /* @__PURE__ */ React4.createElement("div", { className: "profiles-client-effort-labels" }, seatEffortStops.map(function(stop, labelIndex) {
+          return /* @__PURE__ */ React4.createElement(
             "span",
             {
               key: stop.id !== "" ? stop.id : "default",
@@ -4807,10 +4807,10 @@ function makeModelSeat(profileScope) {
           );
         })))
       ) : null) : null,
-      profileRows.length > 0 ? /* @__PURE__ */ react.createElement("div", null, /* @__PURE__ */ react.createElement("div", { className: "dsp-section-title" }, t("menu.profiles")), profileRows.map(function(row) {
+      profileRows.length > 0 ? /* @__PURE__ */ React4.createElement("div", null, /* @__PURE__ */ React4.createElement("div", { className: "dsp-section-title" }, t("menu.profiles")), profileRows.map(function(row) {
         var isActive = row.key === face.active;
         var headPretty = prettyOf(row.head.provider, row.head.model);
-        return /* @__PURE__ */ react.createElement(
+        return /* @__PURE__ */ React4.createElement(
           "button",
           {
             key: row.key,
@@ -4829,11 +4829,11 @@ function makeModelSeat(profileScope) {
               );
             }
           },
-          /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-copy" }, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-name profiles-client-option-profile" }, row.key + (isActive ? " \xB7" : "")), /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-detail" }, headPretty.provider + "/" + headPretty.model)),
-          isActive ? /* @__PURE__ */ react.createElement("span", { className: "profiles-client-check", "aria-hidden": true }, "\u2713") : null
+          /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-option-copy" }, /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-option-name profiles-client-option-profile" }, row.key + (isActive ? " \xB7" : "")), /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-option-detail" }, headPretty.provider + "/" + headPretty.model)),
+          isActive ? /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-check", "aria-hidden": true }, "\u2713") : null
         );
       })) : null,
-      /* @__PURE__ */ react.createElement("div", null, /* @__PURE__ */ react.createElement("div", { className: "dsp-section-title" }, t("menu.models")), /* @__PURE__ */ react.createElement(
+      /* @__PURE__ */ React4.createElement("div", null, /* @__PURE__ */ React4.createElement("div", { className: "dsp-section-title" }, t("menu.models")), /* @__PURE__ */ React4.createElement(
         "button",
         {
           type: "button",
@@ -4842,8 +4842,8 @@ function makeModelSeat(profileScope) {
             if (face.head !== void 0) pick(face.head);
           }
         },
-        /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-copy" }, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-name profiles-client-option-profile" }, t("menu.default")), /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-detail" }, face.head !== void 0 ? prettyOf(face.head.provider, face.head.model).provider + "/" + prettyOf(face.head.provider, face.head.model).model : ""))
-      ), /* @__PURE__ */ react.createElement(
+        /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-option-copy" }, /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-option-name profiles-client-option-profile" }, t("menu.default")), /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-option-detail" }, face.head !== void 0 ? prettyOf(face.head.provider, face.head.model).provider + "/" + prettyOf(face.head.provider, face.head.model).model : ""))
+      ), /* @__PURE__ */ React4.createElement(
         "input",
         {
           ref: searchInputRef,
@@ -4862,10 +4862,10 @@ function makeModelSeat(profileScope) {
             event.stopPropagation();
           }
         }
-      ), state.status === "error" && state.error ? /* @__PURE__ */ react.createElement("div", { className: "profiles-client-strip" }, state.error) : null, modelGroups.length === 0 && trimmedQuery !== "" ? /* @__PURE__ */ react.createElement("div", { className: "profiles-client-strip" }, t("menu.noResults")) : modelGroups.map(function(grp) {
-        return /* @__PURE__ */ react.createElement("div", { key: grp.id }, /* @__PURE__ */ react.createElement("div", { className: "dsp-section-title" }, grp.label), grp.models.map(function(row) {
+      ), state.status === "error" && state.error ? /* @__PURE__ */ React4.createElement("div", { className: "profiles-client-strip" }, state.error) : null, modelGroups.length === 0 && trimmedQuery !== "" ? /* @__PURE__ */ React4.createElement("div", { className: "profiles-client-strip" }, t("menu.noResults")) : modelGroups.map(function(grp) {
+        return /* @__PURE__ */ React4.createElement("div", { key: grp.id }, /* @__PURE__ */ React4.createElement("div", { className: "dsp-section-title" }, grp.label), grp.models.map(function(row) {
           var isActive = current !== void 0 && current !== null && current.provider === grp.id && current.model === row.id;
-          return /* @__PURE__ */ react.createElement(
+          return /* @__PURE__ */ React4.createElement(
             "button",
             {
               key: grp.id + "/" + row.id,
@@ -4875,12 +4875,12 @@ function makeModelSeat(profileScope) {
                 pick({ provider: grp.id, model: row.id });
               }
             },
-            /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-copy profiles-client-option-copy-model" }, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-name profiles-client-option-model" }, row.name), /* @__PURE__ */ react.createElement("span", { className: "profiles-client-option-detail" }, grp.label)),
-            isActive ? /* @__PURE__ */ react.createElement("span", { className: "profiles-client-check", "aria-hidden": true }, "\u2713") : null
+            /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-option-copy profiles-client-option-copy-model" }, /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-option-name profiles-client-option-model" }, row.name), /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-option-detail" }, grp.label)),
+            isActive ? /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-check", "aria-hidden": true }, "\u2713") : null
           );
         }));
       })),
-      errorDown.length > 0 ? /* @__PURE__ */ react.createElement("div", { className: "profiles-client-error-row" }, /* @__PURE__ */ react.createElement("span", { className: "profiles-client-error-count" }, errorDown.length + " cached down"), /* @__PURE__ */ react.createElement(
+      errorDown.length > 0 ? /* @__PURE__ */ React4.createElement("div", { className: "profiles-client-error-row" }, /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-error-count" }, errorDown.length + " cached down"), /* @__PURE__ */ React4.createElement(
         "button",
         {
           type: "button",
@@ -4896,7 +4896,7 @@ function makeModelSeat(profileScope) {
   return ProfileModelSeat;
 }
 function SettingsSection(props) {
-  return /* @__PURE__ */ react.createElement("div", { className: "dsp-root" }, /* @__PURE__ */ react.createElement("div", { className: "dsp-head" }, /* @__PURE__ */ react.createElement("h3", { className: "dsp-title" }, props.title), props.onRefresh ? /* @__PURE__ */ react.createElement("button", { className: "dsp-refresh", onClick: props.onRefresh }, props.refreshLabel === void 0 ? "Refresh" : props.refreshLabel) : null), props.children);
+  return /* @__PURE__ */ React4.createElement("div", { className: "dsp-root" }, /* @__PURE__ */ React4.createElement("div", { className: "dsp-head" }, /* @__PURE__ */ React4.createElement("h3", { className: "dsp-title" }, props.title), props.onRefresh ? /* @__PURE__ */ React4.createElement("button", { className: "dsp-refresh", onClick: props.onRefresh }, props.refreshLabel === void 0 ? "Refresh" : props.refreshLabel) : null), props.children);
 }
 function SortableRung(props) {
   var sort = useSortable({ id: props.id });
@@ -4909,7 +4909,7 @@ function SortableRung(props) {
   if (sort.isDragging) {
     style.opacity = 0.4;
   }
-  return /* @__PURE__ */ react.createElement("div", { ref: sort.setNodeRef, style, className: props.className }, props.children({ attributes: sort.attributes, listeners: sort.listeners }));
+  return /* @__PURE__ */ React4.createElement("div", { ref: sort.setNodeRef, style, className: props.className }, props.children({ attributes: sort.attributes, listeners: sort.listeners }));
 }
 function cloneConfig(config) {
   function cloneRoutes(routes) {
@@ -5200,10 +5200,10 @@ function makeProfilesPanel(models, sessions) {
       fetchConfig();
     }, []);
     if (load === null) {
-      return /* @__PURE__ */ react.createElement(SettingsSection, { title: "Profiles", onRefresh: fetchConfig, refreshLabel: "Refresh" });
+      return /* @__PURE__ */ React4.createElement(SettingsSection, { title: "Profiles", onRefresh: fetchConfig, refreshLabel: "Refresh" });
     }
     if (load.error) {
-      return /* @__PURE__ */ react.createElement(SettingsSection, { title: "Profiles", onRefresh: fetchConfig, refreshLabel: "Refresh" }, /* @__PURE__ */ react.createElement("div", { className: "dsp-err" }, "Profiles: " + load.error));
+      return /* @__PURE__ */ React4.createElement(SettingsSection, { title: "Profiles", onRefresh: fetchConfig, refreshLabel: "Refresh" }, /* @__PURE__ */ React4.createElement("div", { className: "dsp-err" }, "Profiles: " + load.error));
     }
     var config = draft;
     var errorCache = load.errorCache || {};
@@ -5311,7 +5311,7 @@ function makeProfilesPanel(models, sessions) {
     }
     function staleStepOption(value) {
       if (value === "" || value === void 0 || stepIsKnown(value)) return null;
-      return /* @__PURE__ */ react.createElement("option", { value }, value + " (not in catalog)");
+      return /* @__PURE__ */ React4.createElement("option", { value }, value + " (not in catalog)");
     }
     function entryRefIsKnown(ref) {
       if (ref === void 0) return true;
@@ -5321,8 +5321,8 @@ function makeProfilesPanel(models, sessions) {
       var groups = [];
       if (includeChains && chainKeys.length > 0) {
         groups.push(
-          /* @__PURE__ */ react.createElement("optgroup", { key: "chains", label: "Chains" }, chainKeys.map(function(key) {
-            return /* @__PURE__ */ react.createElement("option", { key: "chain:" + key, value: "chain:" + key }, "chain:" + key);
+          /* @__PURE__ */ React4.createElement("optgroup", { key: "chains", label: "Chains" }, chainKeys.map(function(key) {
+            return /* @__PURE__ */ React4.createElement("option", { key: "chain:" + key, value: "chain:" + key }, "chain:" + key);
           }))
         );
       }
@@ -5330,8 +5330,8 @@ function makeProfilesPanel(models, sessions) {
         var group = catalogGroups[g];
         if (group.models === void 0 || group.models.length === 0) continue;
         groups.push(
-          /* @__PURE__ */ react.createElement("optgroup", { key: group.id, label: group.name || group.id }, group.models.map(function(m) {
-            return /* @__PURE__ */ react.createElement("option", { key: group.id + "/" + m.id, value: group.id + "/" + m.id }, (group.name || group.id) + " / " + m.name);
+          /* @__PURE__ */ React4.createElement("optgroup", { key: group.id, label: group.name || group.id }, group.models.map(function(m) {
+            return /* @__PURE__ */ React4.createElement("option", { key: group.id + "/" + m.id, value: group.id + "/" + m.id }, (group.name || group.id) + " / " + m.name);
           }))
         );
       }
@@ -5350,8 +5350,8 @@ function makeProfilesPanel(models, sessions) {
     }
     var currentEffortList = currentCat !== null ? effortsOf(currentCat.reasoning) : [];
     var currentEffortValue = currentModel !== void 0 && currentModel !== null && typeof currentModel.reasoningEffort === "string" && currentModel.reasoningEffort !== "" ? currentModel.reasoningEffort : currentCat !== null && currentCat.reasoning !== void 0 && currentCat.reasoning !== null && typeof currentCat.reasoning.defaultEffort === "string" ? currentCat.reasoning.defaultEffort : "";
-    return /* @__PURE__ */ react.createElement(SettingsSection, { title: "Profiles", onRefresh: fetchConfig, refreshLabel: "Refresh" }, /* @__PURE__ */ react.createElement("div", { className: "pf-panel-active" }, entries.map(function(name2) {
-      return /* @__PURE__ */ react.createElement(
+    return /* @__PURE__ */ React4.createElement(SettingsSection, { title: "Profiles", onRefresh: fetchConfig, refreshLabel: "Refresh" }, /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-active" }, entries.map(function(name2) {
+      return /* @__PURE__ */ React4.createElement(
         "button",
         {
           key: name2,
@@ -5363,7 +5363,7 @@ function makeProfilesPanel(models, sessions) {
         },
         name2
       );
-    })), currentEffortList.length > 0 && currentModel !== void 0 && currentModel !== null ? /* @__PURE__ */ react.createElement("div", { className: "pf-panel-model-row" }, /* @__PURE__ */ react.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ react.createElement("span", { className: "pf-panel-ref", title: "Current model", "data-dsh-tip": "" }, currentCat !== null ? currentCat.label : currentModel.provider + "/" + currentModel.model), /* @__PURE__ */ react.createElement(
+    })), currentEffortList.length > 0 && currentModel !== void 0 && currentModel !== null ? /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-model-row" }, /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ React4.createElement("span", { className: "pf-panel-ref", title: "Current model", "data-dsh-tip": "" }, currentCat !== null ? currentCat.label : currentModel.provider + "/" + currentModel.model), /* @__PURE__ */ React4.createElement(
       "select",
       {
         className: "pf-panel-effort",
@@ -5378,9 +5378,9 @@ function makeProfilesPanel(models, sessions) {
           });
         }
       },
-      /* @__PURE__ */ react.createElement("option", { value: "" }, "Default"),
+      /* @__PURE__ */ React4.createElement("option", { value: "" }, "Default"),
       currentEffortList.map(function(eff) {
-        return /* @__PURE__ */ react.createElement(
+        return /* @__PURE__ */ React4.createElement(
           "option",
           {
             key: eff.id,
@@ -5392,7 +5392,7 @@ function makeProfilesPanel(models, sessions) {
       })
     ))) : null, entries.map(function(name2) {
       var entry = config[name2];
-      return /* @__PURE__ */ react.createElement("div", { className: "pf-panel-entry", key: name2 }, /* @__PURE__ */ react.createElement("h4", { className: "pf-panel-entry-title" }, name2 === "work" ? "Work" : "Personal"), ["orchestrator", "subagent"].map(function(chainKey) {
+      return /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-entry", key: name2 }, /* @__PURE__ */ React4.createElement("h4", { className: "pf-panel-entry-title" }, name2 === "work" ? "Work" : "Personal"), ["orchestrator", "subagent"].map(function(chainKey) {
         var field = entry[chainKey];
         var label = chainKey === "orchestrator" ? "orchestrator" : "subagent";
         var currentRef = refNameOf(field);
@@ -5403,7 +5403,7 @@ function makeProfilesPanel(models, sessions) {
             isInline = true;
         }
         var selectValue = currentRef !== void 0 ? currentRef : isInline ? "__inline__" : "__detach__";
-        return /* @__PURE__ */ react.createElement("div", { className: "pf-panel-chain", key: chainKey }, /* @__PURE__ */ react.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ react.createElement("h5", { className: "pf-panel-chain-title" }, label), /* @__PURE__ */ react.createElement(
+        return /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-chain", key: chainKey }, /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ React4.createElement("h5", { className: "pf-panel-chain-title" }, label), /* @__PURE__ */ React4.createElement(
           "select",
           {
             className: "pf-panel-select",
@@ -5419,13 +5419,13 @@ function makeProfilesPanel(models, sessions) {
               }
             }
           },
-          /* @__PURE__ */ react.createElement("option", { value: "__detach__" }, "\u2014 none \u2014"),
+          /* @__PURE__ */ React4.createElement("option", { value: "__detach__" }, "\u2014 none \u2014"),
           chainKeys.map(function(key) {
-            return /* @__PURE__ */ react.createElement("option", { key, value: key }, key);
+            return /* @__PURE__ */ React4.createElement("option", { key, value: key }, key);
           }),
-          currentRef !== void 0 && !entryRefIsKnown(currentRef) ? /* @__PURE__ */ react.createElement("option", { value: currentRef }, currentRef + " (not in catalog)") : null,
-          isInline ? /* @__PURE__ */ react.createElement("option", { value: "__inline__" }, fieldSummary(field, config.chains)) : null
-        ), /* @__PURE__ */ react.createElement(
+          currentRef !== void 0 && !entryRefIsKnown(currentRef) ? /* @__PURE__ */ React4.createElement("option", { value: currentRef }, currentRef + " (not in catalog)") : null,
+          isInline ? /* @__PURE__ */ React4.createElement("option", { value: "__inline__" }, fieldSummary(field, config.chains)) : null
+        ), /* @__PURE__ */ React4.createElement(
           "button",
           {
             type: "button",
@@ -5439,7 +5439,7 @@ function makeProfilesPanel(models, sessions) {
           "\xD7"
         )));
       }));
-    }), /* @__PURE__ */ react.createElement("div", { className: "pf-panel-entry" }, /* @__PURE__ */ react.createElement("div", { className: "pf-panel-head" }, /* @__PURE__ */ react.createElement("h4", { className: "pf-panel-entry-title" }, "Chains"), addingChain ? null : /* @__PURE__ */ react.createElement(
+    }), /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-entry" }, /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-head" }, /* @__PURE__ */ React4.createElement("h4", { className: "pf-panel-entry-title" }, "Chains"), addingChain ? null : /* @__PURE__ */ React4.createElement(
       "button",
       {
         type: "button",
@@ -5449,7 +5449,7 @@ function makeProfilesPanel(models, sessions) {
         }
       },
       "+ Add"
-    )), addingChain ? /* @__PURE__ */ react.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ react.createElement(
+    )), addingChain ? /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ React4.createElement(
       "input",
       {
         className: "pf-panel-input",
@@ -5467,14 +5467,14 @@ function makeProfilesPanel(models, sessions) {
           }
         }
       }
-    ), /* @__PURE__ */ react.createElement("button", { type: "button", className: "pf-panel-save", onClick: commitChain }, "Add")) : null, Object.keys(config.chains).length === 0 && !addingChain ? /* @__PURE__ */ react.createElement("div", { className: "pf-panel-meta" }, "None") : Object.keys(config.chains).map(function(chainName) {
+    ), /* @__PURE__ */ React4.createElement("button", { type: "button", className: "pf-panel-save", onClick: commitChain }, "Add")) : null, Object.keys(config.chains).length === 0 && !addingChain ? /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-meta" }, "None") : Object.keys(config.chains).map(function(chainName) {
       var chain = config.chains[chainName];
       var isComposition = isCompositionChain(chain);
       var resolved = normalizeEntry(chain, config.chains);
       var steps = isComposition ? chain.map(function(step) {
         return { step };
       }) : chain !== void 0 && Array.isArray(chain.routes) ? chain.routes : [];
-      return /* @__PURE__ */ react.createElement("div", { className: "pf-panel-chain", key: chainName }, /* @__PURE__ */ react.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ react.createElement("h5", { className: "pf-panel-chain-title" }, chainName), /* @__PURE__ */ react.createElement(
+      return /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-chain", key: chainName }, /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ React4.createElement("h5", { className: "pf-panel-chain-title" }, chainName), /* @__PURE__ */ React4.createElement(
         "button",
         {
           type: "button",
@@ -5486,7 +5486,7 @@ function makeProfilesPanel(models, sessions) {
           }
         },
         "\xD7"
-      )), /* @__PURE__ */ react.createElement(
+      )), /* @__PURE__ */ React4.createElement(
         DndContext,
         {
           sensors,
@@ -5498,7 +5498,7 @@ function makeProfilesPanel(models, sessions) {
             if (from !== to) moveChainRung(chainName, from, to);
           }
         },
-        /* @__PURE__ */ react.createElement(
+        /* @__PURE__ */ React4.createElement(
           SortableCtx,
           {
             items: steps.map(function(_, i) {
@@ -5534,7 +5534,7 @@ function makeProfilesPanel(models, sessions) {
             var efforts = catModel !== null ? effortsOf(catModel.reasoning) : [];
             var currentEffort = isPair && typeof step.reasoningEffort === "string" ? step.reasoningEffort : "";
             var isChainRef = typeof stepValue === "string" && stepValue.indexOf("chain:") === 0;
-            return /* @__PURE__ */ react.createElement(
+            return /* @__PURE__ */ React4.createElement(
               SortableRung,
               {
                 id: String(index),
@@ -5542,7 +5542,7 @@ function makeProfilesPanel(models, sessions) {
                 className: "pf-panel-row" + (isChainRef ? " pf-panel-chainref" : "")
               },
               function(handle) {
-                return /* @__PURE__ */ react.createElement(react.Fragment, null, /* @__PURE__ */ react.createElement(
+                return /* @__PURE__ */ React4.createElement(React4.Fragment, null, /* @__PURE__ */ React4.createElement(
                   "button",
                   {
                     type: "button",
@@ -5553,7 +5553,7 @@ function makeProfilesPanel(models, sessions) {
                     ...handle.listeners
                   },
                   "\u283F"
-                ), /* @__PURE__ */ react.createElement(
+                ), /* @__PURE__ */ React4.createElement(
                   "select",
                   {
                     className: "pf-panel-select",
@@ -5562,10 +5562,10 @@ function makeProfilesPanel(models, sessions) {
                       setChainStepModel(chainName, index, event.target.value);
                     }
                   },
-                  /* @__PURE__ */ react.createElement("option", { value: "" }, "Select\u2026"),
+                  /* @__PURE__ */ React4.createElement("option", { value: "" }, "Select\u2026"),
                   modelChainOptions(true),
                   staleStepOption(stepValue)
-                ), efforts.length > 0 ? /* @__PURE__ */ react.createElement(
+                ), efforts.length > 0 ? /* @__PURE__ */ React4.createElement(
                   "select",
                   {
                     className: "pf-panel-effort",
@@ -5574,9 +5574,9 @@ function makeProfilesPanel(models, sessions) {
                       setChainRungEffort(chainName, index, event.target.value);
                     }
                   },
-                  /* @__PURE__ */ react.createElement("option", { value: "" }, "Default"),
+                  /* @__PURE__ */ React4.createElement("option", { value: "" }, "Default"),
                   efforts.map(function(eff) {
-                    return /* @__PURE__ */ react.createElement(
+                    return /* @__PURE__ */ React4.createElement(
                       "option",
                       {
                         key: eff.id,
@@ -5586,7 +5586,7 @@ function makeProfilesPanel(models, sessions) {
                       eff.name
                     );
                   })
-                ) : null, /* @__PURE__ */ react.createElement(
+                ) : null, /* @__PURE__ */ React4.createElement(
                   "button",
                   {
                     type: "button",
@@ -5614,7 +5614,7 @@ function makeProfilesPanel(models, sessions) {
             var efforts = catModel !== null ? effortsOf(catModel.reasoning) : [];
             var currentEffort = typeof rung.reasoningEffort === "string" ? rung.reasoningEffort : "";
             var rungStale = rungSelectValue !== "" && !catalogHasRoute(rungSelectValue);
-            return /* @__PURE__ */ react.createElement(
+            return /* @__PURE__ */ React4.createElement(
               SortableRung,
               {
                 id: String(index),
@@ -5622,7 +5622,7 @@ function makeProfilesPanel(models, sessions) {
                 className: "pf-panel-model-row"
               },
               function(handle) {
-                return /* @__PURE__ */ react.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ react.createElement(
+                return /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ React4.createElement(
                   "button",
                   {
                     type: "button",
@@ -5633,7 +5633,7 @@ function makeProfilesPanel(models, sessions) {
                     ...handle.listeners
                   },
                   "\u283F"
-                ), /* @__PURE__ */ react.createElement(
+                ), /* @__PURE__ */ React4.createElement(
                   "select",
                   {
                     className: "pf-panel-select",
@@ -5642,10 +5642,10 @@ function makeProfilesPanel(models, sessions) {
                       setChainRungModel(chainName, index, event.target.value);
                     }
                   },
-                  /* @__PURE__ */ react.createElement("option", { value: "" }, "Select\u2026"),
+                  /* @__PURE__ */ React4.createElement("option", { value: "" }, "Select\u2026"),
                   modelChainOptions(false),
-                  rungStale ? /* @__PURE__ */ react.createElement("option", { value: rungSelectValue }, rungSelectValue + " (not in catalog)") : null
-                ), efforts.length > 0 ? /* @__PURE__ */ react.createElement(
+                  rungStale ? /* @__PURE__ */ React4.createElement("option", { value: rungSelectValue }, rungSelectValue + " (not in catalog)") : null
+                ), efforts.length > 0 ? /* @__PURE__ */ React4.createElement(
                   "select",
                   {
                     className: "pf-panel-effort",
@@ -5654,9 +5654,9 @@ function makeProfilesPanel(models, sessions) {
                       setChainRungEffort(chainName, index, event.target.value);
                     }
                   },
-                  /* @__PURE__ */ react.createElement("option", { value: "" }, "Default"),
+                  /* @__PURE__ */ React4.createElement("option", { value: "" }, "Default"),
                   efforts.map(function(eff) {
-                    return /* @__PURE__ */ react.createElement(
+                    return /* @__PURE__ */ React4.createElement(
                       "option",
                       {
                         key: eff.id,
@@ -5666,7 +5666,7 @@ function makeProfilesPanel(models, sessions) {
                       eff.name
                     );
                   })
-                ) : null, /* @__PURE__ */ react.createElement(
+                ) : null, /* @__PURE__ */ React4.createElement(
                   "button",
                   {
                     type: "button",
@@ -5683,7 +5683,7 @@ function makeProfilesPanel(models, sessions) {
             );
           })
         )
-      ), /* @__PURE__ */ react.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ react.createElement(
+      ), /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ React4.createElement(
         "select",
         {
           className: "pf-panel-select pf-panel-add-select",
@@ -5694,10 +5694,10 @@ function makeProfilesPanel(models, sessions) {
             event.target.value = "";
           }
         },
-        /* @__PURE__ */ react.createElement("option", { value: "" }, "+ Add \u25BE"),
+        /* @__PURE__ */ React4.createElement("option", { value: "" }, "+ Add \u25BE"),
         isComposition ? modelChainOptions(true) : modelChainOptions(false)
-      )), resolved.length > 0 ? /* @__PURE__ */ react.createElement("div", { className: "pf-panel-meta" }, "\u2192 " + resolved[0].provider + "/" + resolved[0].model + (resolved.length > 1 ? " +" + (resolved.length - 1) : "")) : null);
-    })), /* @__PURE__ */ react.createElement("div", { className: "pf-panel-meta" }, downRungs > 0 ? /* @__PURE__ */ react.createElement("span", null, downRungs + " down ", /* @__PURE__ */ react.createElement(
+      )), resolved.length > 0 ? /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-meta" }, "\u2192 " + resolved[0].provider + "/" + resolved[0].model + (resolved.length > 1 ? " +" + (resolved.length - 1) : "")) : null);
+    })), /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-meta" }, downRungs > 0 ? /* @__PURE__ */ React4.createElement("span", null, downRungs + " down ", /* @__PURE__ */ React4.createElement(
       "button",
       {
         type: "button",
@@ -5709,7 +5709,7 @@ function makeProfilesPanel(models, sessions) {
         }
       },
       "Reset"
-    )) : null), /* @__PURE__ */ react.createElement("div", { className: "pf-panel-actions" }, /* @__PURE__ */ react.createElement(
+    )) : null), /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-actions" }, /* @__PURE__ */ React4.createElement(
       "button",
       {
         type: "button",
@@ -5718,7 +5718,7 @@ function makeProfilesPanel(models, sessions) {
         onClick: saveConfig
       },
       save.busy === true ? "Saving\u2026" : "Save"
-    ), save.note ? /* @__PURE__ */ react.createElement("span", { className: "pf-panel-status " + (save.ok ? "pf-panel-ok" : "pf-panel-bad") }, save.note) : null));
+    ), save.note ? /* @__PURE__ */ React4.createElement("span", { className: "pf-panel-status " + (save.ok ? "pf-panel-ok" : "pf-panel-bad") }, save.note) : null));
   }
   return ProfilesPanel;
 }
@@ -5776,7 +5776,7 @@ function apply(ctx) {
       return ctx.slots.register(
         { name: "settings.section", id: PLUGIN_NAME, order: 27, label: "Profiles" },
         function() {
-          return /* @__PURE__ */ react.createElement(Panel, null);
+          return /* @__PURE__ */ React4.createElement(Panel, null);
         }
       );
     });

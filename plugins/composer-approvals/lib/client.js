@@ -40,7 +40,7 @@ __export(client_exports, {
   name: () => name
 });
 module.exports = __toCommonJS(client_exports);
-var react = __toESM(require("react"), 1);
+var React = __toESM(require("react"), 1);
 var runtime = __toESM(require("@deepseek-ai/dsh-client-runtime/client"), 1);
 
 // plugins/shared/client-util.ts
@@ -7237,7 +7237,7 @@ function respondToApproval(pending, outcome) {
     }
   });
 }
-var SafeItemBody = class extends react.Component {
+var SafeItemBody = class extends React.Component {
   props;
   state;
   constructor(props) {
@@ -7253,14 +7253,14 @@ var SafeItemBody = class extends react.Component {
   render() {
     if (this.state.error !== null && this.state.error !== void 0) {
       var fallback = bodyFallbackFor(this.props.surfaceName);
-      return /* @__PURE__ */ react.createElement(
+      return /* @__PURE__ */ React.createElement(
         "div",
         {
           className: "composer-approvals-fallback",
           "data-surface": fallback.surface,
           role: "note"
         },
-        /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-fallback-text" }, fallback.message)
+        /* @__PURE__ */ React.createElement("span", { className: "composer-approvals-fallback-text" }, fallback.message)
       );
     }
     var bodyProps = this.props.bodyProps || {};
@@ -7269,34 +7269,34 @@ var SafeItemBody = class extends react.Component {
       if (Object.prototype.hasOwnProperty.call(bodyProps, key)) merged[key] = bodyProps[key];
     }
     merged.ask = this.props.ask;
-    return react.createElement(this.props.component, merged);
+    return React.createElement(this.props.component, merged);
   }
 };
 function ApprovalBody(props) {
   var detail = typeof props.detail === "string" && props.detail !== "" ? props.detail : null;
-  return /* @__PURE__ */ react.createElement("div", { className: "composer-approvals-detail" }, detail === null ? /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-detail-empty" }, "Waiting on your answer.") : /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-detail-text", title: detail }, detail));
+  return /* @__PURE__ */ React.createElement("div", { className: "composer-approvals-detail" }, detail === null ? /* @__PURE__ */ React.createElement("span", { className: "composer-approvals-detail-empty" }, "Waiting on your answer.") : /* @__PURE__ */ React.createElement("span", { className: "composer-approvals-detail-text", title: detail }, detail));
 }
 function QuestionBody(props) {
   var detail = typeof props.detail === "string" && props.detail !== "" ? props.detail : null;
-  return /* @__PURE__ */ react.createElement("div", { className: "composer-approvals-detail" }, detail === null ? /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-detail-empty" }, "Answer on the running card.") : /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-detail-text", title: detail }, detail));
+  return /* @__PURE__ */ React.createElement("div", { className: "composer-approvals-detail" }, detail === null ? /* @__PURE__ */ React.createElement("span", { className: "composer-approvals-detail-empty" }, "Answer on the running card.") : /* @__PURE__ */ React.createElement("span", { className: "composer-approvals-detail-text", title: detail }, detail));
 }
 function AttentionCard(props) {
   var item = props.item;
   var bodyProps = item.props;
-  var armedState = react.useState(false);
+  var armedState = React.useState(false);
   var armed = armedState[0];
   var setArmed = armedState[1];
-  var answeredState = react.useState(false);
+  var answeredState = React.useState(false);
   var answered = answeredState[0];
   var setAnswered = answeredState[1];
-  var armTimer = react.useRef(0);
-  react.useEffect(function() {
+  var armTimer = React.useRef(0);
+  React.useEffect(function() {
     return function() {
       if (armTimer.current !== 0) window.clearTimeout(armTimer.current);
     };
   }, []);
   var verdict = evaluateItemExpiry(item);
-  react.useEffect(
+  React.useEffect(
     function() {
       if (verdict === "expired") {
         props.store.removeItem(item.key);
@@ -7342,7 +7342,7 @@ function AttentionCard(props) {
     var tone = action.tone === "approve" ? "approve" : action.tone === "reject" ? "reject" : "jump";
     var className = tone === "approve" ? "composer-approvals-approve" : tone === "reject" ? "composer-approvals-reject" : "composer-approvals-jump";
     var isArmed = tone === "reject" && armed;
-    return /* @__PURE__ */ react.createElement(
+    return /* @__PURE__ */ React.createElement(
       "button",
       {
         key: action.id,
@@ -7357,16 +7357,16 @@ function AttentionCard(props) {
       isArmed && action.confirmLabel ? action.confirmLabel : action.label
     );
   });
-  return /* @__PURE__ */ react.createElement(
+  return /* @__PURE__ */ React.createElement(
     "li",
     {
       className: "composer-approvals-card",
       "data-kind": typeof kind === "string" ? kind : void 0,
       "data-unverifiable": verdict === "unverifiable" ? "1" : void 0
     },
-    /* @__PURE__ */ react.createElement("div", { className: "composer-approvals-card-head" }, kindLabel === null ? null : /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-kind" }, kindLabel), /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-title", title }, title)),
-    /* @__PURE__ */ react.createElement("div", { className: "composer-approvals-attr" }, props.sessionLabel),
-    verdict === "unverifiable" ? /* @__PURE__ */ react.createElement("div", { className: "composer-approvals-unverifiable", role: "note" }, /* @__PURE__ */ react.createElement("span", null, "Could not verify whether this ask is still live, so it stays visible \u2014 a hidden live ask would strand an agent."), /* @__PURE__ */ react.createElement(
+    /* @__PURE__ */ React.createElement("div", { className: "composer-approvals-card-head" }, kindLabel === null ? null : /* @__PURE__ */ React.createElement("span", { className: "composer-approvals-kind" }, kindLabel), /* @__PURE__ */ React.createElement("span", { className: "composer-approvals-title", title }, title)),
+    /* @__PURE__ */ React.createElement("div", { className: "composer-approvals-attr" }, props.sessionLabel),
+    verdict === "unverifiable" ? /* @__PURE__ */ React.createElement("div", { className: "composer-approvals-unverifiable", role: "note" }, /* @__PURE__ */ React.createElement("span", null, "Could not verify whether this ask is still live, so it stays visible \u2014 a hidden live ask would strand an agent."), /* @__PURE__ */ React.createElement(
       "button",
       {
         type: "button",
@@ -7377,7 +7377,7 @@ function AttentionCard(props) {
       },
       "Remove"
     )) : null,
-    /* @__PURE__ */ react.createElement("div", { className: "composer-approvals-body" }, /* @__PURE__ */ react.createElement(
+    /* @__PURE__ */ React.createElement("div", { className: "composer-approvals-body" }, /* @__PURE__ */ React.createElement(
       SafeItemBody,
       {
         key: item.key,
@@ -7388,7 +7388,7 @@ function AttentionCard(props) {
         itemKey: item.key
       }
     )),
-    /* @__PURE__ */ react.createElement("div", { className: "composer-approvals-actions" }, callId === null ? actions.length === 0 ? /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-no-call" }, "no tool call") : null : /* @__PURE__ */ react.createElement(
+    /* @__PURE__ */ React.createElement("div", { className: "composer-approvals-actions" }, callId === null ? actions.length === 0 ? /* @__PURE__ */ React.createElement("span", { className: "composer-approvals-no-call" }, "no tool call") : null : /* @__PURE__ */ React.createElement(
       "button",
       {
         type: "button",
@@ -7404,17 +7404,17 @@ function AttentionCard(props) {
 }
 function AttentionModal(props) {
   var store = props.store;
-  var snapshot = react.useSyncExternalStore(store.subscribe, store.getSnapshot);
+  var snapshot = React.useSyncExternalStore(store.subscribe, store.getSnapshot);
   var tabs = visibleTabsOf(snapshot, props.sessionId);
-  var activeState = react.useState(null);
+  var activeState = React.useState(null);
   var activeId = activeState[0];
   var setActiveId = activeState[1];
   var active = tabs.length === 0 ? null : tabs.find(function(tab) {
     return tab.surface.id === activeId;
   }) || tabs[0];
-  var bar = tabs.length < 2 ? null : /* @__PURE__ */ react.createElement("div", { className: "composer-approvals-tabs", role: "tablist" }, tabs.map(function(tab) {
+  var bar = tabs.length < 2 ? null : /* @__PURE__ */ React.createElement("div", { className: "composer-approvals-tabs", role: "tablist" }, tabs.map(function(tab) {
     var selected = active !== null && tab.surface.id === active.surface.id;
-    return /* @__PURE__ */ react.createElement(
+    return /* @__PURE__ */ React.createElement(
       "button",
       {
         key: tab.surface.id,
@@ -7427,12 +7427,12 @@ function AttentionModal(props) {
           setActiveId(tab.surface.id);
         }
       },
-      /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-tab-name" }, tab.surface.displayName),
-      tab.items.length > 1 ? /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-tab-count", "aria-hidden": true }, tab.items.length) : null
+      /* @__PURE__ */ React.createElement("span", { className: "composer-approvals-tab-name" }, tab.surface.displayName),
+      tab.items.length > 1 ? /* @__PURE__ */ React.createElement("span", { className: "composer-approvals-tab-count", "aria-hidden": true }, tab.items.length) : null
     );
   }));
-  return /* @__PURE__ */ react.createElement(react.Fragment, null, bar, active === null ? null : /* @__PURE__ */ react.createElement("ul", { className: "composer-approvals-list" }, active.items.map(function(item) {
-    return /* @__PURE__ */ react.createElement(
+  return /* @__PURE__ */ React.createElement(React.Fragment, null, bar, active === null ? null : /* @__PURE__ */ React.createElement("ul", { className: "composer-approvals-list" }, active.items.map(function(item) {
+    return /* @__PURE__ */ React.createElement(
       AttentionCard,
       {
         key: item.key,
@@ -7449,7 +7449,7 @@ function AttentionModal(props) {
 }
 function useBuiltInSurfaces(sessionId, approvalRows, questionRows, pendingOf) {
   var store = getAttentionStore();
-  var box = react.useRef(null);
+  var box = React.useRef(null);
   if (box.current === null) {
     mountSeq += 1;
     var suffix = String(mountSeq);
@@ -7466,7 +7466,7 @@ function useBuiltInSurfaces(sessionId, approvalRows, questionRows, pendingOf) {
       handlesByItem: /* @__PURE__ */ new Map()
     };
   }
-  react.useEffect(function() {
+  React.useEffect(function() {
     var owned = box.current;
     if (owned === null) return void 0;
     return function() {
@@ -7481,7 +7481,7 @@ function useBuiltInSurfaces(sessionId, approvalRows, questionRows, pendingOf) {
       box.current = null;
     };
   }, []);
-  react.useEffect(
+  React.useEffect(
     function() {
       var owned = box.current;
       if (owned === null) return;
@@ -7599,23 +7599,23 @@ function useBuiltInSurfaces(sessionId, approvalRows, questionRows, pendingOf) {
 }
 function makeIndicator() {
   return function Indicator(props) {
-    var selectorTools = react.useMemo(makeSelector, []);
+    var selectorTools = React.useMemo(makeSelector, []);
     var approvalRows = props.useSession(selectorTools.selectApprovals);
-    var questionTools = react.useMemo(makeQuestionSelector, []);
+    var questionTools = React.useMemo(makeQuestionSelector, []);
     var questionInputs = props.useSession(questionTools.selectQuestions);
-    var modalId = react.useRef(null);
-    var missingState = react.useState(function() {
+    var modalId = React.useRef(null);
+    var missingState = React.useState(function() {
       return /* @__PURE__ */ new Set();
     });
     var missing = missingState[0];
     var setMissing = missingState[1];
-    var fadeState = react.useState(function() {
+    var fadeState = React.useState(function() {
       return initialRingFade(questionInputs.answered);
     });
     var fade = fadeState[0];
     var setFade = fadeState[1];
     var paint = composerRingPaint(questionInputs.pending, questionInputs.answered, fade);
-    react.useEffect(
+    React.useEffect(
       function() {
         if (paint.next === null) return void 0;
         if (paint.next === "hold") {
@@ -7637,7 +7637,8 @@ function makeIndicator() {
           window.clearTimeout(remove);
         };
       },
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+      // exhaustive-deps is deliberately NOT enabled repo-wide (#154: narrow
+      // by default), so there is no suppression here -- just the deps.
       [paint.next, questionInputs.answered, fade.faded, fade.zeroed]
     );
     var approvalReasons = [];
@@ -7656,7 +7657,7 @@ function makeIndicator() {
       questionInputs.rows,
       selectorTools.pendingOf
     );
-    var liveHandlers = react.useRef({
+    var liveHandlers = React.useRef({
       jumpableOf: function(_item) {
         return false;
       },
@@ -7709,7 +7710,7 @@ function makeIndicator() {
         onClose: function() {
           modalId.current = null;
         },
-        body: /* @__PURE__ */ react.createElement(
+        body: /* @__PURE__ */ React.createElement(
           AttentionModal,
           {
             sessionId,
@@ -7734,7 +7735,7 @@ function makeIndicator() {
         toast("Approvals modal is unavailable", "refusal");
       }
     };
-    return /* @__PURE__ */ react.createElement(react.Fragment, null, /* @__PURE__ */ react.createElement(
+    return /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(
       "button",
       {
         type: "button",
@@ -7748,8 +7749,8 @@ function makeIndicator() {
           openAttention();
         }
       },
-      /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-glyph", "aria-hidden": true }, "!"),
-      count > 1 ? /* @__PURE__ */ react.createElement("span", { className: "composer-approvals-count", "aria-hidden": true }, count) : null
+      /* @__PURE__ */ React.createElement("span", { className: "composer-approvals-glyph", "aria-hidden": true }, "!"),
+      count > 1 ? /* @__PURE__ */ React.createElement("span", { className: "composer-approvals-count", "aria-hidden": true }, count) : null
     ));
   };
 }

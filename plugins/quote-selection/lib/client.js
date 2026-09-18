@@ -40,7 +40,7 @@ __export(client_exports, {
   name: () => name
 });
 module.exports = __toCommonJS(client_exports);
-var react = __toESM(require("react"), 1);
+var React = __toESM(require("react"), 1);
 
 // plugins/shared/client-util.ts
 function injectStyle(pluginName, styleId, cssText) {
@@ -201,10 +201,10 @@ function makeQuoteButton() {
     var draft = props.useInput(function(input) {
       return input.draft;
     });
-    var stateAndSet = react.useState(null);
+    var stateAndSet = React.useState(null);
     var quote = stateAndSet[0];
     var setQuote = stateAndSet[1];
-    react.useEffect(function() {
+    React.useEffect(function() {
       function onSelectionChange() {
         var sel = window.getSelection();
         if (sel === null || sel.isCollapsed || sel.rangeCount === 0 || sel.anchorNode === null || sel.focusNode === null) {
@@ -263,7 +263,7 @@ function makeQuoteButton() {
         document.removeEventListener("selectionchange", onSelectionChange);
       };
     }, []);
-    react.useEffect(
+    React.useEffect(
       function() {
         if (quote === null) return void 0;
         function onScroll() {
@@ -293,7 +293,7 @@ function makeQuoteButton() {
       var sel = window.getSelection();
       if (sel !== null) sel.removeAllRanges();
     }
-    return /* @__PURE__ */ react.createElement(
+    return /* @__PURE__ */ React.createElement(
       "button",
       {
         type: "button",
@@ -317,7 +317,7 @@ function apply(ctx) {
     return ctx.slots.register(
       { name: "conversation.input.dock", id: "quote-selection", order: 30 },
       function(props) {
-        return /* @__PURE__ */ react.createElement(Button, { ...props });
+        return /* @__PURE__ */ React.createElement(Button, { ...props });
       }
     );
   });

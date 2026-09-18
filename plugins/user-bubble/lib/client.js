@@ -40,7 +40,7 @@ __export(client_exports, {
   name: () => name
 });
 module.exports = __toCommonJS(client_exports);
-var react = __toESM(require("react"), 1);
+var React = __toESM(require("react"), 1);
 var primitives = __toESM(require("@deepseek-ai/dsh-client-ui-primitives"), 1);
 
 // plugins/user-bubble/src/text.ts
@@ -252,7 +252,7 @@ function fetchJson(url) {
   return request("GET", url);
 }
 
-// css-text:/home/sid/.dsh/aidos/scratch/--home-sid-repos-dotfiles-ai--/wt/148/plugins/user-bubble/src/client.module.css
+// css-text:/home/sid/repos/dotfiles-ai/plugins/user-bubble/src/client.module.css
 var client_default = '/*\n * Bubble chrome for the user-bubble takeover (#125). The shipped bubble CSS\n * is internal to the conversation package, so the takeover restyles from\n * scratch; upstream restyles stop propagating (accepted in the loss list).\n * Class names are literal: the build injects this file as raw text.\n */\n/*\n * THE AXIS IS LOAD-BEARING, and getting it wrong is what the owner reported\n * on 2026-09-17: "the timestamp is rendering to the right of the message\n * instead of below it which pushes the entire chat bubble to the left".\n *\n * The actions row is a SIBLING of the bubble stack, so in a horizontal row it\n * consumes width beside the bubble and \u2014 because the row is right-aligned \u2014\n * displaces every bubble leftward by the width of the clock. The shipped\n * component stacks them: its .gdEzaW_userRow is `flex-direction: column;\n * align-items: flex-end; gap: 6px`. Keep this a COLUMN, and the existing JSX\n * needs no sibling-shuffling to put the clock underneath.\n *\n * THE SPLIT WITH UPSTREAM IS DELIBERATE (owner, 2026-09-17), not a migration\n * someone abandoned half way. We KEEP OUR colours and type scale (the fill\n * token below, 13px/20px) because the owner prefers them to the shipped\n * 16px/24px, and we TAKE UPSTREAM\'S shape metrics (radius 22px, padding\n * 10px 16px, gaps 6px/8px, max-width min(525px, 82%)) so the bubble sits in\n * the same geometry as the assistant rows around it. Do NOT "finish the job"\n * by pulling the shipped font size across: the smaller type is the choice.\n */\n.user-bubble-row {\n  display: flex;\n  flex-direction: column;\n  align-items: flex-end;\n  gap: 6px;\n  padding: 1px 0;\n}\n.user-bubble-stack {\n  display: flex;\n  flex-direction: column;\n  align-items: flex-end;\n  gap: 8px;\n  min-width: 0;\n  max-width: min(525px, 82%);\n}\n.user-bubble-body {\n  background: var(--dsw-alias-fill-l2, rgba(128, 128, 128, 0.14));\n  /* Upstream\'s radius against our smaller line-height makes a short bubble a\n     full pill. That is a CONSEQUENCE of the owner\'s split, not a defect. */\n  border-radius: 22px;\n  padding: 10px 16px;\n  overflow-wrap: anywhere;\n  font-size: 13px;\n  line-height: 20px;\n}\n/*\n * CHIPS ARE LINKS (#148, defect B). The bubble renders ONE MarkdownText for\n * the whole body so text and chips share a single paragraph flow, and the\n * chips ride inside that flow as markdown links \u2014 a link is the only\n * attribute-carrying inline element markdown offers. The href is an opaque\n * hook (never navigated), the title carries the full label. Visuals match\n * the old span chip exactly; behaviour is deliberately non-interactive\n * (these are decorations of sent text, not navigation), announced to\n * assistive tech as links rather than buttons.\n */\n.user-bubble-body a[href^="#ub-ref/"] {\n  display: inline-block;\n  background: var(--dsw-alias-fill-l3, rgba(128, 128, 128, 0.22));\n  border-radius: 5px;\n  padding: 0 5px;\n  margin: 0 1px;\n  font-size: 12px;\n  line-height: 18px;\n  vertical-align: baseline;\n  white-space: nowrap;\n  color: inherit;\n  text-decoration: none;\n  pointer-events: none;\n  cursor: text;\n}\n.user-bubble-refs {\n  font-size: 11px;\n  color: var(--dsw-alias-label-tertiary, #8a8a8a);\n}\n/*\n * THE 28px IS UPSTREAM\'S OWN (.p-xYUq_actions), kept so a user row occupies\n * the same vertical rhythm as the assistant rows it sits between.\n *\n * AN EARLIER VERSION OF THIS COMMENT CALLED IT REFLOW PREVENTION, AND THAT\n * WAS WRONG \u2014 caught in review (subagent 9c62b952). The row hides with\n * `opacity: 0`, which KEEPS it in layout, so hover moves nothing with or\n * without an explicit height. The height is rhythm, not a jump guard. It\n * would BECOME load-bearing the moment anyone swapped the opacity fade for\n * `display: none`, which is the real reason not to reclaim it.\n *\n * OUR SMALLER SCALE DIVERGES FROM UPSTREAM IN TWO MORE PLACES, deliberately,\n * so that nobody "corrects" them later: the clock drops upstream\'s\n * padding-right: 12px (the flex gap already separates it), and\n * .user-bubble-action is 20x20 with a 5px radius where upstream is 28x28 and\n * fully round. Both follow the owner\'s kept-ours type scale.\n *\n * WE FADE THE WHOLE ROW, upstream fades only the clock (its .p-xYUq_action\n * carries no opacity rule). Chosen deliberately: a copy button on every user\n * message is visual noise in a long transcript, and the affordance is still\n * one hover away. Flip this by moving the opacity pair onto .user-bubble-time\n * alone.\n */\n.user-bubble-actions {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  height: 28px;\n  flex: none;\n  opacity: 0;\n  transition: opacity 80ms ease;\n}\n.user-bubble-row:hover .user-bubble-actions,\n.user-bubble-row:focus-within .user-bubble-actions {\n  opacity: 1;\n}\n.user-bubble-time {\n  font-size: 11px;\n  color: var(--dsw-alias-label-tertiary, #8a8a8a);\n  white-space: nowrap;\n}\n.user-bubble-action {\n  display: grid;\n  place-items: center;\n  width: 20px;\n  height: 20px;\n  padding: 0;\n  border: none;\n  border-radius: 5px;\n  background: transparent;\n  color: var(--dsw-alias-label-tertiary, #8a8a8a);\n  cursor: pointer;\n}\n.user-bubble-action:hover {\n  color: var(--dsw-alias-label-primary, #f0f0f0);\n  background: var(--dsw-alias-fill-l2, rgba(128, 128, 128, 0.14));\n}\n';
 
 // plugins/user-bubble/src/client.tsx
@@ -320,8 +320,8 @@ function fetchSlashNames(sessionId) {
   return pending;
 }
 function useSlashNames(sessionId) {
-  var state = react.useState(null);
-  react.useEffect(
+  var state = React.useState(null);
+  React.useEffect(
     function() {
       var cancelled = false;
       fetchSlashNames(sessionId).then(function(names) {
@@ -336,9 +336,9 @@ function useSlashNames(sessionId) {
   return state[0];
 }
 function BubbleActions({ text, time, t }) {
-  var copied = react.useState(false);
+  var copied = React.useState(false);
   var setCopied = copied[1];
-  var onCopy = react.useCallback(
+  var onCopy = React.useCallback(
     function() {
       if (copied[0]) return;
       writeClipboard2(text).then(function(ok) {
@@ -351,7 +351,7 @@ function BubbleActions({ text, time, t }) {
     },
     [copied[0], text]
   );
-  return /* @__PURE__ */ react.createElement("div", { className: "user-bubble-actions" }, time !== void 0 ? /* @__PURE__ */ react.createElement("span", { className: "user-bubble-time" }, formatMessageClock(time, t)) : null, /* @__PURE__ */ react.createElement(Tooltip2, { label: copied[0] ? t("copied") : t("copy"), side: "bottom" }, /* @__PURE__ */ react.createElement(
+  return /* @__PURE__ */ React.createElement("div", { className: "user-bubble-actions" }, time !== void 0 ? /* @__PURE__ */ React.createElement("span", { className: "user-bubble-time" }, formatMessageClock(time, t)) : null, /* @__PURE__ */ React.createElement(Tooltip2, { label: copied[0] ? t("copied") : t("copy"), side: "bottom" }, /* @__PURE__ */ React.createElement(
     "button",
     {
       type: "button",
@@ -359,10 +359,10 @@ function BubbleActions({ text, time, t }) {
       "aria-label": copied[0] ? t("copied") : t("copy"),
       onClick: onCopy
     },
-    copied[0] ? /* @__PURE__ */ react.createElement(IconCheckOutline162, null) : /* @__PURE__ */ react.createElement(IconCopyOutline162, null)
+    copied[0] ? /* @__PURE__ */ React.createElement(IconCheckOutline162, null) : /* @__PURE__ */ React.createElement(IconCopyOutline162, null)
   )));
 }
-var UserBubbleNodeView = react.memo(function UserBubbleNodeView2({ node, renderMessageImages, t, sessionId }) {
+var UserBubbleNodeView = React.memo(function UserBubbleNodeView2({ node, renderMessageImages, t, sessionId }) {
   var data = node.data;
   var parts = contentParts(data.content);
   var body = hardBreakOutsideFences(parts.text);
@@ -377,11 +377,11 @@ var UserBubbleNodeView = react.memo(function UserBubbleNodeView2({ node, renderM
   var truncated = function(total) {
     return t("json.truncated", { total });
   };
-  return /* @__PURE__ */ react.createElement("div", { className: "user-bubble-row", "data-time-hover-root": "true" }, /* @__PURE__ */ react.createElement("div", { className: "user-bubble-stack" }, renderMessageImages({ images: parts.images, align: "end" }), showBubble ? /* @__PURE__ */ react.createElement("div", { className: "user-bubble-body" }, /* @__PURE__ */ react.createElement(MarkdownText2, { text: markdown }), parts.rest.map(function(block, i) {
-    return /* @__PURE__ */ react.createElement(JsonBlock2, { key: i, label: t("message.extraBlock"), payload: block, truncatedLabel: truncated });
-  })) : null, data.referenceLabels !== void 0 && data.referenceLabels.length > 0 ? /* @__PURE__ */ react.createElement("div", { className: "user-bubble-refs" }, t("message.referenceSummary", {
+  return /* @__PURE__ */ React.createElement("div", { className: "user-bubble-row", "data-time-hover-root": "true" }, /* @__PURE__ */ React.createElement("div", { className: "user-bubble-stack" }, renderMessageImages({ images: parts.images, align: "end" }), showBubble ? /* @__PURE__ */ React.createElement("div", { className: "user-bubble-body" }, /* @__PURE__ */ React.createElement(MarkdownText2, { text: markdown }), parts.rest.map(function(block, i) {
+    return /* @__PURE__ */ React.createElement(JsonBlock2, { key: i, label: t("message.extraBlock"), payload: block, truncatedLabel: truncated });
+  })) : null, data.referenceLabels !== void 0 && data.referenceLabels.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "user-bubble-refs" }, t("message.referenceSummary", {
     labels: data.referenceLabels.join(t("message.referenceSeparator"))
-  })) : null), /* @__PURE__ */ react.createElement(BubbleActions, { text: body, time: data.time, t }));
+  })) : null), /* @__PURE__ */ React.createElement(BubbleActions, { text: body, time: data.time, t }));
 });
 var name = PLUGIN_NAME;
 var inject = ["slots"];

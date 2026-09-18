@@ -40,12 +40,12 @@ __export(client_exports, {
   name: () => name
 });
 module.exports = __toCommonJS(client_exports);
-var react = __toESM(require("react"), 1);
+var React35 = __toESM(require("react"), 1);
 
-// node_modules/.pnpm/@radix-ui+react-dropdown-menu@2.1.24_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/@radix-ui/react-dropdown-menu/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-dropdown-menu@2.1.24_react-dom@19.3.0_react@19.3.0__react@19.3.0/node_modules/@radix-ui/react-dropdown-menu/dist/index.mjs
 var React34 = __toESM(require("react"), 1);
 
-// node_modules/.pnpm/@radix-ui+primitive@1.1.7/node_modules/@radix-ui/primitive/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+primitive@1.1.7/node_modules/@radix-ui/primitive/dist/index.mjs
 var __defProp2 = Object.defineProperty;
 var __name = (target, value) => __defProp2(target, "name", { value, configurable: true });
 var canUseDOM = !!(typeof window !== "undefined" && window.document && window.document.createElement);
@@ -97,7 +97,7 @@ function isFrame(element) {
 }
 __name(isFrame, "isFrame");
 
-// node_modules/.pnpm/@radix-ui+react-compose-refs@1.1.5_react@19.2.8/node_modules/@radix-ui/react-compose-refs/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-compose-refs@1.1.5_react@19.3.0/node_modules/@radix-ui/react-compose-refs/dist/index.mjs
 var React = __toESM(require("react"), 1);
 var __defProp3 = Object.defineProperty;
 var __name2 = (target, value) => __defProp3(target, "name", { value, configurable: true });
@@ -139,7 +139,7 @@ function useComposedRefs(...refs) {
 }
 __name2(useComposedRefs, "useComposedRefs");
 
-// node_modules/.pnpm/@radix-ui+react-context@1.2.2_react@19.2.8/node_modules/@radix-ui/react-context/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-context@1.2.2_react@19.3.0/node_modules/@radix-ui/react-context/dist/index.mjs
 var React2 = __toESM(require("react"), 1);
 var import_jsx_runtime = require("react/jsx-runtime");
 var __defProp4 = Object.defineProperty;
@@ -232,21 +232,21 @@ function composeContextScopes(...scopes) {
 }
 __name3(composeContextScopes, "composeContextScopes");
 
-// node_modules/.pnpm/@radix-ui+react-use-controllable-state@1.2.6_react@19.2.8/node_modules/@radix-ui/react-use-controllable-state/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-use-controllable-state@1.2.6_react@19.3.0/node_modules/@radix-ui/react-use-controllable-state/dist/index.mjs
 var React5 = __toESM(require("react"), 1);
 
-// node_modules/.pnpm/@radix-ui+primitive@1.1.7/node_modules/@radix-ui/primitive/dist/internal/is-development.false.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+primitive@1.1.7/node_modules/@radix-ui/primitive/dist/internal/is-development.false.mjs
 var IS_DEVELOPMENT = false;
 
-// node_modules/.pnpm/@radix-ui+react-use-layout-effect@1.1.4_react@19.2.8/node_modules/@radix-ui/react-use-layout-effect/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-use-layout-effect@1.1.4_react@19.3.0/node_modules/@radix-ui/react-use-layout-effect/dist/index.mjs
 var React3 = __toESM(require("react"), 1);
 var useLayoutEffect2 = globalThis?.document ? React3.useLayoutEffect : () => {
 };
 
-// node_modules/.pnpm/@radix-ui+react-use-controllable-state@1.2.6_react@19.2.8/node_modules/@radix-ui/react-use-controllable-state/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-use-controllable-state@1.2.6_react@19.3.0/node_modules/@radix-ui/react-use-controllable-state/dist/index.mjs
 var React22 = __toESM(require("react"), 1);
 
-// node_modules/.pnpm/@radix-ui+react-use-effect-event@0.0.5_react@19.2.8/node_modules/@radix-ui/react-use-effect-event/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-use-effect-event@0.0.5_react@19.3.0/node_modules/@radix-ui/react-use-effect-event/dist/index.mjs
 var React4 = __toESM(require("react"), 1);
 var __defProp5 = Object.defineProperty;
 var __name4 = (target, value) => __defProp5(target, "name", { value, configurable: true });
@@ -272,7 +272,7 @@ function useEffectEvent(callback) {
 }
 __name4(useEffectEvent, "useEffectEvent");
 
-// node_modules/.pnpm/@radix-ui+react-use-controllable-state@1.2.6_react@19.2.8/node_modules/@radix-ui/react-use-controllable-state/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-use-controllable-state@1.2.6_react@19.3.0/node_modules/@radix-ui/react-use-controllable-state/dist/index.mjs
 var __defProp6 = Object.defineProperty;
 var __name5 = (target, value) => __defProp6(target, "name", { value, configurable: true });
 var useInsertionEffect = React5[" useInsertionEffect ".trim().toString()] || useLayoutEffect2;
@@ -404,11 +404,11 @@ function useControllableStateReducer(reducer, userArgs, initialArg, init) {
 }
 __name5(useControllableStateReducer, "useControllableStateReducer");
 
-// node_modules/.pnpm/@radix-ui+react-primitive@2.1.10_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/@radix-ui/react-primitive/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-primitive@2.1.10_react-dom@19.3.0_react@19.3.0__react@19.3.0/node_modules/@radix-ui/react-primitive/dist/index.mjs
 var React7 = __toESM(require("react"), 1);
 var ReactDOM = __toESM(require("react-dom"), 1);
 
-// node_modules/.pnpm/@radix-ui+react-slot@1.3.3_react@19.2.8/node_modules/@radix-ui/react-slot/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-slot@1.3.3_react@19.3.0/node_modules/@radix-ui/react-slot/dist/index.mjs
 var React6 = __toESM(require("react"), 1);
 var __defProp7 = Object.defineProperty;
 var __name6 = (target, value) => __defProp7(target, "name", { value, configurable: true });
@@ -544,7 +544,7 @@ var createSlottableError = /* @__PURE__ */ __name6((ownerName) => {
 }, "createSlottableError");
 var use = React6[" use ".trim().toString()];
 
-// node_modules/.pnpm/@radix-ui+react-primitive@2.1.10_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/@radix-ui/react-primitive/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-primitive@2.1.10_react-dom@19.3.0_react@19.3.0__react@19.3.0/node_modules/@radix-ui/react-primitive/dist/index.mjs
 var import_jsx_runtime2 = require("react/jsx-runtime");
 var __defProp8 = Object.defineProperty;
 var __name7 = (target, value) => __defProp8(target, "name", { value, configurable: true });
@@ -585,10 +585,10 @@ function dispatchDiscreteCustomEvent(target, event) {
 }
 __name7(dispatchDiscreteCustomEvent, "dispatchDiscreteCustomEvent");
 
-// node_modules/.pnpm/@radix-ui+react-menu@2.1.24_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/@radix-ui/react-menu/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-menu@2.1.24_react-dom@19.3.0_react@19.3.0__react@19.3.0/node_modules/@radix-ui/react-menu/dist/index.mjs
 var React33 = __toESM(require("react"), 1);
 
-// node_modules/.pnpm/@radix-ui+react-collection@1.1.15_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/@radix-ui/react-collection/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-collection@1.1.15_react-dom@19.3.0_react@19.3.0__react@19.3.0/node_modules/@radix-ui/react-collection/dist/index.mjs
 var React8 = __toESM(require("react"), 1);
 var import_jsx_runtime3 = require("react/jsx-runtime");
 var React23 = __toESM(require("react"), 1);
@@ -1134,7 +1134,7 @@ function getChildListObserver(callback) {
 }
 __name8(getChildListObserver, "getChildListObserver");
 
-// node_modules/.pnpm/@radix-ui+react-direction@1.1.4_react@19.2.8/node_modules/@radix-ui/react-direction/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-direction@1.1.4_react@19.3.0/node_modules/@radix-ui/react-direction/dist/index.mjs
 var React9 = __toESM(require("react"), 1);
 var import_jsx_runtime5 = require("react/jsx-runtime");
 var __defProp10 = Object.defineProperty;
@@ -1146,10 +1146,10 @@ function useDirection(localDir) {
 }
 __name9(useDirection, "useDirection");
 
-// node_modules/.pnpm/@radix-ui+react-dismissable-layer@1.1.19_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/@radix-ui/react-dismissable-layer/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-dismissable-layer@1.1.19_react-dom@19.3.0_react@19.3.0__react@19.3.0/node_modules/@radix-ui/react-dismissable-layer/dist/index.mjs
 var React11 = __toESM(require("react"), 1);
 
-// node_modules/.pnpm/@radix-ui+react-use-callback-ref@1.1.4_react@19.2.8/node_modules/@radix-ui/react-use-callback-ref/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-use-callback-ref@1.1.4_react@19.3.0/node_modules/@radix-ui/react-use-callback-ref/dist/index.mjs
 var React10 = __toESM(require("react"), 1);
 var __defProp11 = Object.defineProperty;
 var __name10 = (target, value) => __defProp11(target, "name", { value, configurable: true });
@@ -1162,7 +1162,7 @@ function useCallbackRef(callback) {
 }
 __name10(useCallbackRef, "useCallbackRef");
 
-// node_modules/.pnpm/@radix-ui+react-dismissable-layer@1.1.19_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/@radix-ui/react-dismissable-layer/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-dismissable-layer@1.1.19_react-dom@19.3.0_react@19.3.0__react@19.3.0/node_modules/@radix-ui/react-dismissable-layer/dist/index.mjs
 var import_jsx_runtime6 = require("react/jsx-runtime");
 var __defProp12 = Object.defineProperty;
 var __name11 = (target, value) => __defProp12(target, "name", { value, configurable: true });
@@ -1495,7 +1495,7 @@ function handleAndDispatchCustomEvent(name2, handler, detail, { discrete }) {
 }
 __name11(handleAndDispatchCustomEvent, "handleAndDispatchCustomEvent");
 
-// node_modules/.pnpm/@radix-ui+react-focus-guards@1.1.6_react@19.2.8/node_modules/@radix-ui/react-focus-guards/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-focus-guards@1.1.6_react@19.3.0/node_modules/@radix-ui/react-focus-guards/dist/index.mjs
 var React12 = __toESM(require("react"), 1);
 var __defProp13 = Object.defineProperty;
 var __name12 = (target, value) => __defProp13(target, "name", { value, configurable: true });
@@ -1542,7 +1542,7 @@ function createFocusGuard() {
 }
 __name12(createFocusGuard, "createFocusGuard");
 
-// node_modules/.pnpm/@radix-ui+react-focus-scope@1.1.16_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/@radix-ui/react-focus-scope/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-focus-scope@1.1.16_react-dom@19.3.0_react@19.3.0__react@19.3.0/node_modules/@radix-ui/react-focus-scope/dist/index.mjs
 var React13 = __toESM(require("react"), 1);
 var import_jsx_runtime7 = require("react/jsx-runtime");
 var __defProp14 = Object.defineProperty;
@@ -1765,7 +1765,7 @@ function removeLinks(items) {
 }
 __name13(removeLinks, "removeLinks");
 
-// node_modules/.pnpm/@radix-ui+react-id@1.1.4_react@19.2.8/node_modules/@radix-ui/react-id/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-id@1.1.4_react@19.3.0/node_modules/@radix-ui/react-id/dist/index.mjs
 var React14 = __toESM(require("react"), 1);
 var __defProp15 = Object.defineProperty;
 var __name14 = (target, value) => __defProp15(target, "name", { value, configurable: true });
@@ -1780,10 +1780,10 @@ function useId(deterministicId) {
 }
 __name14(useId, "useId");
 
-// node_modules/.pnpm/@radix-ui+react-popper@1.3.7_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/@radix-ui/react-popper/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-popper@1.3.7_react-dom@19.3.0_react@19.3.0__react@19.3.0/node_modules/@radix-ui/react-popper/dist/index.mjs
 var React17 = __toESM(require("react"), 1);
 
-// node_modules/.pnpm/@floating-ui+utils@0.2.12/node_modules/@floating-ui/utils/dist/floating-ui.utils.mjs
+// plugins/composer-menu/node_modules/.pnpm/@floating-ui+utils@0.2.12/node_modules/@floating-ui/utils/dist/floating-ui.utils.mjs
 var sides = ["top", "right", "bottom", "left"];
 var min = Math.min;
 var max = Math.max;
@@ -1912,7 +1912,7 @@ function rectToClientRect(rect) {
   };
 }
 
-// node_modules/.pnpm/@floating-ui+core@1.8.0/node_modules/@floating-ui/core/dist/floating-ui.core.mjs
+// plugins/composer-menu/node_modules/.pnpm/@floating-ui+core@1.8.0/node_modules/@floating-ui/core/dist/floating-ui.core.mjs
 function computeCoordsFromPlacement(_ref, placement, rtl) {
   let {
     reference,
@@ -2610,7 +2610,7 @@ var size = function(options2) {
   };
 };
 
-// node_modules/.pnpm/@floating-ui+utils@0.2.12/node_modules/@floating-ui/utils/dist/floating-ui.utils.dom.mjs
+// plugins/composer-menu/node_modules/.pnpm/@floating-ui+utils@0.2.12/node_modules/@floating-ui/utils/dist/floating-ui.utils.dom.mjs
 function hasWindow() {
   return typeof window !== "undefined";
 }
@@ -2766,7 +2766,7 @@ function getFrameElement(win) {
   return win.parent && Object.getPrototypeOf(win.parent) ? win.frameElement : null;
 }
 
-// node_modules/.pnpm/@floating-ui+dom@1.8.0/node_modules/@floating-ui/dom/dist/floating-ui.dom.mjs
+// plugins/composer-menu/node_modules/.pnpm/@floating-ui+dom@1.8.0/node_modules/@floating-ui/dom/dist/floating-ui.dom.mjs
 function getCssDimensions(element) {
   const css = getComputedStyle2(element);
   let width = parseFloat(css.width) || 0;
@@ -3375,7 +3375,7 @@ var computePosition2 = (reference, floating, options2) => {
   });
 };
 
-// node_modules/.pnpm/@floating-ui+react-dom@2.1.9_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/@floating-ui/react-dom/dist/floating-ui.react-dom.mjs
+// plugins/composer-menu/node_modules/.pnpm/@floating-ui+react-dom@2.1.9_react-dom@19.3.0_react@19.3.0__react@19.3.0/node_modules/@floating-ui/react-dom/dist/floating-ui.react-dom.mjs
 var React15 = __toESM(require("react"), 1);
 var import_react = require("react");
 var ReactDOM2 = __toESM(require("react-dom"), 1);
@@ -3686,7 +3686,7 @@ var arrow3 = (options2, deps) => {
   };
 };
 
-// node_modules/.pnpm/@radix-ui+react-use-size@1.1.4_react@19.2.8/node_modules/@radix-ui/react-use-size/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-use-size@1.1.4_react@19.3.0/node_modules/@radix-ui/react-use-size/dist/index.mjs
 var React16 = __toESM(require("react"), 1);
 var __defProp16 = Object.defineProperty;
 var __name15 = (target, value) => __defProp16(target, "name", { value, configurable: true });
@@ -3726,7 +3726,7 @@ function useSize(element) {
 }
 __name15(useSize, "useSize");
 
-// node_modules/.pnpm/@radix-ui+react-popper@1.3.7_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/@radix-ui/react-popper/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-popper@1.3.7_react-dom@19.3.0_react@19.3.0__react@19.3.0/node_modules/@radix-ui/react-popper/dist/index.mjs
 var import_jsx_runtime8 = require("react/jsx-runtime");
 var __defProp17 = Object.defineProperty;
 var __name16 = (target, value) => __defProp17(target, "name", { value, configurable: true });
@@ -3998,7 +3998,7 @@ var Root2 = Popper;
 var Anchor = PopperAnchor;
 var Content = PopperContent;
 
-// node_modules/.pnpm/@radix-ui+react-portal@1.1.17_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/@radix-ui/react-portal/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-portal@1.1.17_react-dom@19.3.0_react@19.3.0__react@19.3.0/node_modules/@radix-ui/react-portal/dist/index.mjs
 var React18 = __toESM(require("react"), 1);
 var ReactDOM3 = __toESM(require("react-dom"), 1);
 var import_jsx_runtime9 = require("react/jsx-runtime");
@@ -4014,7 +4014,7 @@ var Portal = /* @__PURE__ */ React18.forwardRef(
   }, "Portal")
 );
 
-// node_modules/.pnpm/@radix-ui+react-presence@1.1.10_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/@radix-ui/react-presence/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-presence@1.1.10_react-dom@19.3.0_react@19.3.0__react@19.3.0/node_modules/@radix-ui/react-presence/dist/index.mjs
 var React24 = __toESM(require("react"), 1);
 var React19 = __toESM(require("react"), 1);
 var __defProp19 = Object.defineProperty;
@@ -4193,10 +4193,10 @@ function getElementRef2(element) {
 }
 __name18(getElementRef2, "getElementRef");
 
-// node_modules/.pnpm/@radix-ui+react-roving-focus@1.1.19_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/@radix-ui/react-roving-focus/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-roving-focus@1.1.19_react-dom@19.3.0_react@19.3.0__react@19.3.0/node_modules/@radix-ui/react-roving-focus/dist/index.mjs
 var React21 = __toESM(require("react"), 1);
 
-// node_modules/.pnpm/@radix-ui+react-use-is-hydrated@0.1.3_react@19.2.8/node_modules/@radix-ui/react-use-is-hydrated/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-use-is-hydrated@0.1.3_react@19.3.0/node_modules/@radix-ui/react-use-is-hydrated/dist/index.mjs
 var React25 = __toESM(require("react"), 1);
 var React20 = __toESM(require("react"), 1);
 var __defProp20 = Object.defineProperty;
@@ -4229,7 +4229,7 @@ function useIsHydratedModern() {
 __name19(useIsHydratedModern, "useIsHydratedModern");
 var useIsHydrated2 = typeof useReactSyncExternalStore === "function" ? useIsHydratedModern : useIsHydrated;
 
-// node_modules/.pnpm/@radix-ui+react-roving-focus@1.1.19_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/@radix-ui/react-roving-focus/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-roving-focus@1.1.19_react-dom@19.3.0_react@19.3.0__react@19.3.0/node_modules/@radix-ui/react-roving-focus/dist/index.mjs
 var import_jsx_runtime10 = require("react/jsx-runtime");
 var __defProp21 = Object.defineProperty;
 var __name20 = (target, value) => __defProp21(target, "name", { value, configurable: true });
@@ -4456,7 +4456,7 @@ __name20(wrapArray, "wrapArray");
 var Root = RovingFocusGroup;
 var Item = RovingFocusGroupItem;
 
-// node_modules/.pnpm/aria-hidden@1.2.6/node_modules/aria-hidden/dist/es2015/index.js
+// plugins/composer-menu/node_modules/.pnpm/aria-hidden@1.2.6/node_modules/aria-hidden/dist/es2015/index.js
 var getDefaultParent = function(originalTarget) {
   if (typeof document === "undefined") {
     return null;
@@ -4577,7 +4577,7 @@ var hideOthers = function(originalTarget, parentNode, markerName) {
   return applyAttributeToOthers(targets, activeParentNode, markerName, "aria-hidden");
 };
 
-// node_modules/.pnpm/tslib@2.8.1/node_modules/tslib/tslib.es6.mjs
+// plugins/composer-menu/node_modules/.pnpm/tslib@2.8.1/node_modules/tslib/tslib.es6.mjs
 var __assign = function() {
   __assign = Object.assign || function __assign2(t) {
     for (var s, i = 1, n = arguments.length; i < n; i++) {
@@ -4609,19 +4609,19 @@ function __spreadArray(to, from, pack) {
   return to.concat(ar || Array.prototype.slice.call(from));
 }
 
-// node_modules/.pnpm/react-remove-scroll@2.7.2_react@19.2.8/node_modules/react-remove-scroll/dist/es2015/Combination.js
+// plugins/composer-menu/node_modules/.pnpm/react-remove-scroll@2.7.2_react@19.3.0/node_modules/react-remove-scroll/dist/es2015/Combination.js
 var React32 = __toESM(require("react"));
 
-// node_modules/.pnpm/react-remove-scroll@2.7.2_react@19.2.8/node_modules/react-remove-scroll/dist/es2015/UI.js
+// plugins/composer-menu/node_modules/.pnpm/react-remove-scroll@2.7.2_react@19.3.0/node_modules/react-remove-scroll/dist/es2015/UI.js
 var React28 = __toESM(require("react"));
 
-// node_modules/.pnpm/react-remove-scroll-bar@2.3.8_react@19.2.8/node_modules/react-remove-scroll-bar/dist/es2015/constants.js
+// plugins/composer-menu/node_modules/.pnpm/react-remove-scroll-bar@2.3.8_react@19.3.0/node_modules/react-remove-scroll-bar/dist/es2015/constants.js
 var zeroRightClassName = "right-scroll-bar-position";
 var fullWidthClassName = "width-before-scroll-bar";
 var noScrollbarsClassName = "with-scroll-bars-hidden";
 var removedBarSizeVariable = "--removed-body-scroll-bar-size";
 
-// node_modules/.pnpm/use-callback-ref@1.3.3_react@19.2.8/node_modules/use-callback-ref/dist/es2015/assignRef.js
+// plugins/composer-menu/node_modules/.pnpm/use-callback-ref@1.3.3_react@19.3.0/node_modules/use-callback-ref/dist/es2015/assignRef.js
 function assignRef(ref, value) {
   if (typeof ref === "function") {
     ref(value);
@@ -4631,7 +4631,7 @@ function assignRef(ref, value) {
   return ref;
 }
 
-// node_modules/.pnpm/use-callback-ref@1.3.3_react@19.2.8/node_modules/use-callback-ref/dist/es2015/useRef.js
+// plugins/composer-menu/node_modules/.pnpm/use-callback-ref@1.3.3_react@19.3.0/node_modules/use-callback-ref/dist/es2015/useRef.js
 var import_react2 = require("react");
 function useCallbackRef2(initialValue, callback) {
   var ref = (0, import_react2.useState)(function() {
@@ -4659,7 +4659,7 @@ function useCallbackRef2(initialValue, callback) {
   return ref.facade;
 }
 
-// node_modules/.pnpm/use-callback-ref@1.3.3_react@19.2.8/node_modules/use-callback-ref/dist/es2015/useMergeRef.js
+// plugins/composer-menu/node_modules/.pnpm/use-callback-ref@1.3.3_react@19.3.0/node_modules/use-callback-ref/dist/es2015/useMergeRef.js
 var React26 = __toESM(require("react"));
 var useIsomorphicLayoutEffect = typeof window !== "undefined" ? React26.useLayoutEffect : React26.useEffect;
 var currentValues = /* @__PURE__ */ new WeakMap();
@@ -4691,7 +4691,7 @@ function useMergeRefs(refs, defaultValue) {
   return callbackRef;
 }
 
-// node_modules/.pnpm/use-sidecar@1.1.3_react@19.2.8/node_modules/use-sidecar/dist/es2015/medium.js
+// plugins/composer-menu/node_modules/.pnpm/use-sidecar@1.1.3_react@19.3.0/node_modules/use-sidecar/dist/es2015/medium.js
 function ItoI(a) {
   return a;
 }
@@ -4777,7 +4777,7 @@ function createSidecarMedium(options2) {
   return medium;
 }
 
-// node_modules/.pnpm/use-sidecar@1.1.3_react@19.2.8/node_modules/use-sidecar/dist/es2015/exports.js
+// plugins/composer-menu/node_modules/.pnpm/use-sidecar@1.1.3_react@19.3.0/node_modules/use-sidecar/dist/es2015/exports.js
 var React27 = __toESM(require("react"));
 var SideCar = function(_a) {
   var sideCar = _a.sideCar, rest = __rest(_a, ["sideCar"]);
@@ -4796,10 +4796,10 @@ function exportSidecar(medium, exported) {
   return SideCar;
 }
 
-// node_modules/.pnpm/react-remove-scroll@2.7.2_react@19.2.8/node_modules/react-remove-scroll/dist/es2015/medium.js
+// plugins/composer-menu/node_modules/.pnpm/react-remove-scroll@2.7.2_react@19.3.0/node_modules/react-remove-scroll/dist/es2015/medium.js
 var effectCar = createSidecarMedium();
 
-// node_modules/.pnpm/react-remove-scroll@2.7.2_react@19.2.8/node_modules/react-remove-scroll/dist/es2015/UI.js
+// plugins/composer-menu/node_modules/.pnpm/react-remove-scroll@2.7.2_react@19.3.0/node_modules/react-remove-scroll/dist/es2015/UI.js
 var nothing = function() {
   return;
 };
@@ -4831,16 +4831,16 @@ RemoveScroll.classNames = {
   zeroRight: zeroRightClassName
 };
 
-// node_modules/.pnpm/react-remove-scroll@2.7.2_react@19.2.8/node_modules/react-remove-scroll/dist/es2015/SideEffect.js
+// plugins/composer-menu/node_modules/.pnpm/react-remove-scroll@2.7.2_react@19.3.0/node_modules/react-remove-scroll/dist/es2015/SideEffect.js
 var React31 = __toESM(require("react"));
 
-// node_modules/.pnpm/react-remove-scroll-bar@2.3.8_react@19.2.8/node_modules/react-remove-scroll-bar/dist/es2015/component.js
+// plugins/composer-menu/node_modules/.pnpm/react-remove-scroll-bar@2.3.8_react@19.3.0/node_modules/react-remove-scroll-bar/dist/es2015/component.js
 var React30 = __toESM(require("react"));
 
-// node_modules/.pnpm/react-style-singleton@2.2.3_react@19.2.8/node_modules/react-style-singleton/dist/es2015/hook.js
+// plugins/composer-menu/node_modules/.pnpm/react-style-singleton@2.2.3_react@19.3.0/node_modules/react-style-singleton/dist/es2015/hook.js
 var React29 = __toESM(require("react"));
 
-// node_modules/.pnpm/get-nonce@1.0.1/node_modules/get-nonce/dist/es2015/index.js
+// plugins/composer-menu/node_modules/.pnpm/get-nonce@1.0.1/node_modules/get-nonce/dist/es2015/index.js
 var currentNonce;
 var getNonce = function() {
   if (currentNonce) {
@@ -4852,7 +4852,7 @@ var getNonce = function() {
   return void 0;
 };
 
-// node_modules/.pnpm/react-style-singleton@2.2.3_react@19.2.8/node_modules/react-style-singleton/dist/es2015/singleton.js
+// plugins/composer-menu/node_modules/.pnpm/react-style-singleton@2.2.3_react@19.3.0/node_modules/react-style-singleton/dist/es2015/singleton.js
 function makeStyleTag() {
   if (!document)
     return null;
@@ -4898,7 +4898,7 @@ var stylesheetSingleton = function() {
   };
 };
 
-// node_modules/.pnpm/react-style-singleton@2.2.3_react@19.2.8/node_modules/react-style-singleton/dist/es2015/hook.js
+// plugins/composer-menu/node_modules/.pnpm/react-style-singleton@2.2.3_react@19.3.0/node_modules/react-style-singleton/dist/es2015/hook.js
 var styleHookSingleton = function() {
   var sheet = stylesheetSingleton();
   return function(styles, isDynamic) {
@@ -4911,7 +4911,7 @@ var styleHookSingleton = function() {
   };
 };
 
-// node_modules/.pnpm/react-style-singleton@2.2.3_react@19.2.8/node_modules/react-style-singleton/dist/es2015/component.js
+// plugins/composer-menu/node_modules/.pnpm/react-style-singleton@2.2.3_react@19.3.0/node_modules/react-style-singleton/dist/es2015/component.js
 var styleSingleton = function() {
   var useStyle = styleHookSingleton();
   var Sheet = function(_a) {
@@ -4922,7 +4922,7 @@ var styleSingleton = function() {
   return Sheet;
 };
 
-// node_modules/.pnpm/react-remove-scroll-bar@2.3.8_react@19.2.8/node_modules/react-remove-scroll-bar/dist/es2015/utils.js
+// plugins/composer-menu/node_modules/.pnpm/react-remove-scroll-bar@2.3.8_react@19.3.0/node_modules/react-remove-scroll-bar/dist/es2015/utils.js
 var zeroGap = {
   left: 0,
   top: 0,
@@ -4957,7 +4957,7 @@ var getGapWidth = function(gapMode) {
   };
 };
 
-// node_modules/.pnpm/react-remove-scroll-bar@2.3.8_react@19.2.8/node_modules/react-remove-scroll-bar/dist/es2015/component.js
+// plugins/composer-menu/node_modules/.pnpm/react-remove-scroll-bar@2.3.8_react@19.3.0/node_modules/react-remove-scroll-bar/dist/es2015/component.js
 var Style = styleSingleton();
 var lockAttribute = "data-scroll-locked";
 var getStyles = function(_a, allowRelative, gapMode, important) {
@@ -4997,7 +4997,7 @@ var RemoveScrollBar = function(_a) {
   return React30.createElement(Style, { styles: getStyles(gap, !noRelative, gapMode, !noImportant ? "!important" : "") });
 };
 
-// node_modules/.pnpm/react-remove-scroll@2.7.2_react@19.2.8/node_modules/react-remove-scroll/dist/es2015/aggresiveCapture.js
+// plugins/composer-menu/node_modules/.pnpm/react-remove-scroll@2.7.2_react@19.3.0/node_modules/react-remove-scroll/dist/es2015/aggresiveCapture.js
 var passiveSupported = false;
 if (typeof window !== "undefined") {
   try {
@@ -5016,7 +5016,7 @@ if (typeof window !== "undefined") {
 var options;
 var nonPassive = passiveSupported ? { passive: false } : false;
 
-// node_modules/.pnpm/react-remove-scroll@2.7.2_react@19.2.8/node_modules/react-remove-scroll/dist/es2015/handleScroll.js
+// plugins/composer-menu/node_modules/.pnpm/react-remove-scroll@2.7.2_react@19.3.0/node_modules/react-remove-scroll/dist/es2015/handleScroll.js
 var alwaysContainsScroll = function(node) {
   return node.tagName === "TEXTAREA";
 };
@@ -5116,7 +5116,7 @@ var handleScroll = function(axis, endTarget, event, sourceDelta, noOverscroll) {
   return shouldCancelScroll;
 };
 
-// node_modules/.pnpm/react-remove-scroll@2.7.2_react@19.2.8/node_modules/react-remove-scroll/dist/es2015/SideEffect.js
+// plugins/composer-menu/node_modules/.pnpm/react-remove-scroll@2.7.2_react@19.3.0/node_modules/react-remove-scroll/dist/es2015/SideEffect.js
 var getTouchXY = function(event) {
   return "changedTouches" in event ? [event.changedTouches[0].clientX, event.changedTouches[0].clientY] : [0, 0];
 };
@@ -5287,17 +5287,17 @@ function getOutermostShadowParent(node) {
   return shadowParent;
 }
 
-// node_modules/.pnpm/react-remove-scroll@2.7.2_react@19.2.8/node_modules/react-remove-scroll/dist/es2015/sidecar.js
+// plugins/composer-menu/node_modules/.pnpm/react-remove-scroll@2.7.2_react@19.3.0/node_modules/react-remove-scroll/dist/es2015/sidecar.js
 var sidecar_default = exportSidecar(effectCar, RemoveScrollSideCar);
 
-// node_modules/.pnpm/react-remove-scroll@2.7.2_react@19.2.8/node_modules/react-remove-scroll/dist/es2015/Combination.js
+// plugins/composer-menu/node_modules/.pnpm/react-remove-scroll@2.7.2_react@19.3.0/node_modules/react-remove-scroll/dist/es2015/Combination.js
 var ReactRemoveScroll = React32.forwardRef(function(props, ref) {
   return React32.createElement(RemoveScroll, __assign({}, props, { ref, sideCar: sidecar_default }));
 });
 ReactRemoveScroll.classNames = RemoveScroll.classNames;
 var Combination_default = ReactRemoveScroll;
 
-// node_modules/.pnpm/@radix-ui+react-menu@2.1.24_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/@radix-ui/react-menu/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-menu@2.1.24_react-dom@19.3.0_react@19.3.0__react@19.3.0/node_modules/@radix-ui/react-menu/dist/index.mjs
 var import_jsx_runtime11 = require("react/jsx-runtime");
 var __defProp22 = Object.defineProperty;
 var __name21 = (target, value) => __defProp22(target, "name", { value, configurable: true });
@@ -6071,7 +6071,7 @@ var Sub = MenuSub;
 var SubTrigger = MenuSubTrigger;
 var SubContent = MenuSubContent;
 
-// node_modules/.pnpm/@radix-ui+react-dropdown-menu@2.1.24_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/@radix-ui/react-dropdown-menu/dist/index.mjs
+// plugins/composer-menu/node_modules/.pnpm/@radix-ui+react-dropdown-menu@2.1.24_react-dom@19.3.0_react@19.3.0__react@19.3.0/node_modules/@radix-ui/react-dropdown-menu/dist/index.mjs
 var import_jsx_runtime12 = require("react/jsx-runtime");
 var __defProp23 = Object.defineProperty;
 var __name22 = (target, value) => __defProp23(target, "name", { value, configurable: true });
@@ -6471,12 +6471,12 @@ function apply(ctx) {
     );
   }
   function Menu2(props) {
-    react.useEffect(() => {
+    React35.useEffect(() => {
       ensureShippedHidden();
       ensureModesCollapsed();
       placePickerBeforeSend();
     });
-    const [open, setOpen] = react.useState(false);
+    const [open, setOpen] = React35.useState(false);
     const permissions = props.useProjection("permissions");
     const options2 = permissions === void 0 ? [] : permissions.options.filter((option) => option.value !== "custom");
     const SHIELD_OUTLINE = "M8.20554 0.899994L14.7901 3.36857V7.01026C14.7901 12 11.0466 14.2103 8.20554 15.3C5.36446 14.2103 1.62012 12 1.62012 7.01026V3.36857L8.20554 0.899994Z";
@@ -6523,35 +6523,35 @@ function apply(ctx) {
     function permissionIcon(value2) {
       const paths = PERMISSION_PATHS[value2];
       if (paths === void 0) return null;
-      return react.createElement(
+      return React35.createElement(
         "svg",
         { width: 14, height: 14, viewBox: "0 0 16 16", fill: "none", "aria-hidden": true },
-        paths.map((path, i) => react.createElement("path", { key: i, ...path }))
+        paths.map((path, i) => React35.createElement("path", { key: i, ...path }))
       );
     }
-    const check = () => react.createElement(
+    const check = () => React35.createElement(
       ItemIndicator2,
       { className: "composer-menu-indicator" },
       "\u2713"
     );
     const row = (label, icon) => [
-      react.createElement("span", { key: "icon", className: "composer-menu-icon" }, icon ?? null),
-      react.createElement("span", { key: "label", className: "composer-menu-label" }, label),
-      react.createElement("span", { key: "mark", className: "composer-menu-mark" }, check())
+      React35.createElement("span", { key: "icon", className: "composer-menu-icon" }, icon ?? null),
+      React35.createElement("span", { key: "label", className: "composer-menu-label" }, label),
+      React35.createElement("span", { key: "mark", className: "composer-menu-mark" }, check())
     ];
     let sandboxBody;
     if (permissions === void 0) {
-      sandboxBody = react.createElement(
+      sandboxBody = React35.createElement(
         Item22,
         { className: "composer-menu-item", disabled: true },
         row("Not available")
       );
     } else {
-      sandboxBody = react.createElement(
+      sandboxBody = React35.createElement(
         RadioGroup2,
         { value: permissions.currentValue },
         options2.map(
-          (option) => react.createElement(
+          (option) => React35.createElement(
             RadioItem2,
             {
               key: option.value,
@@ -6564,9 +6564,9 @@ function apply(ctx) {
         )
       );
     }
-    const [value, setValue] = react.useState("auto");
-    const inFlight = react.useRef(false);
-    const refresh = react.useCallback(() => {
+    const [value, setValue] = React35.useState("auto");
+    const inFlight = React35.useRef(false);
+    const refresh = React35.useCallback(() => {
       Promise.all([
         postJson("/web-tools/api/search-mode/get", { sessionId: props.sessionId }),
         postJson("/composer-menu/api/web-mode/get", { sessionId: props.sessionId })
@@ -6581,7 +6581,7 @@ function apply(ctx) {
         setValue(payload && payload.mode === "required" ? "force" : "auto");
       });
     }, [props.sessionId]);
-    react.useEffect(() => {
+    React35.useEffect(() => {
       refresh();
       window.addEventListener("focus", refresh);
       return () => window.removeEventListener("focus", refresh);
@@ -6614,11 +6614,11 @@ function apply(ctx) {
         refresh();
       });
     };
-    const searchBody = react.createElement(
+    const searchBody = React35.createElement(
       RadioGroup2,
       { value },
       ["force", "auto", "off"].map(
-        (mode) => react.createElement(
+        (mode) => React35.createElement(
           RadioItem2,
           {
             key: mode,
@@ -6630,78 +6630,78 @@ function apply(ctx) {
         )
       )
     );
-    const searchSub = react.createElement(
+    const searchSub = React35.createElement(
       Sub2,
       null,
-      react.createElement(
+      React35.createElement(
         SubTrigger2,
         { className: "composer-menu-item" },
-        react.createElement("span", { key: "mark", className: "composer-menu-mark" }),
-        react.createElement(
+        React35.createElement("span", { key: "mark", className: "composer-menu-mark" }),
+        React35.createElement(
           "span",
           { key: "label", className: "composer-menu-label" },
           "Web search"
         ),
-        react.createElement("span", { key: "chev", className: "composer-menu-chevron" }, "\u203A")
+        React35.createElement("span", { key: "chev", className: "composer-menu-chevron" }, "\u203A")
       ),
-      react.createElement(
+      React35.createElement(
         Portal22,
         null,
-        react.createElement(
+        React35.createElement(
           SubContent2,
           { className: "composer-menu-content" },
           searchBody
         )
       )
     );
-    const sandboxSub = react.createElement(
+    const sandboxSub = React35.createElement(
       Sub2,
       null,
-      react.createElement(
+      React35.createElement(
         SubTrigger2,
         { className: "composer-menu-item", disabled: permissions === void 0 },
-        react.createElement("span", { key: "mark", className: "composer-menu-mark" }),
-        react.createElement("span", { key: "label", className: "composer-menu-label" }, "Sandbox"),
-        react.createElement("span", { key: "chev", className: "composer-menu-chevron" }, "\u203A")
+        React35.createElement("span", { key: "mark", className: "composer-menu-mark" }),
+        React35.createElement("span", { key: "label", className: "composer-menu-label" }, "Sandbox"),
+        React35.createElement("span", { key: "chev", className: "composer-menu-chevron" }, "\u203A")
       ),
-      react.createElement(
+      React35.createElement(
         Portal22,
         null,
-        react.createElement(
+        React35.createElement(
           SubContent2,
           { className: "composer-menu-content" },
           sandboxBody
         )
       )
     );
-    return react.createElement(
+    return React35.createElement(
       Root22,
       { open, onOpenChange: setOpen },
-      react.createElement(
+      React35.createElement(
         Trigger,
         { asChild: true },
-        react.createElement(
+        React35.createElement(
           "button",
           { type: "button", className: "composer-menu-trigger", "aria-label": "More options" },
-          react.createElement(
+          React35.createElement(
             "svg",
             { width: 14, height: 14, viewBox: "0 0 14 14", "aria-hidden": true },
             [
-              react.createElement("circle", {
+              React35.createElement("circle", {
                 key: "a",
                 cx: 7,
                 cy: 4,
                 r: 1.3,
                 fill: "currentColor"
               }),
-              react.createElement("circle", {
+              React35.createElement("circle", {
                 key: "b",
                 cx: 7,
                 cy: 7,
                 r: 1.3,
                 fill: "currentColor"
               }),
-              react.createElement("circle", {
+              React35.createElement("circle", {
                 key: "c",
                 cx: 7,
                 cy: 10,
@@ -6712,10 +6712,10 @@ function apply(ctx) {
           )
         )
       ),
-      react.createElement(
+      React35.createElement(
         Portal22,
         null,
-        react.createElement(
+        React35.createElement(
           Content22,
           { side: "top", align: "start", sideOffset: 8, className: "composer-menu-content" },
           sandboxSub,
@@ -6725,7 +6725,7 @@ function apply(ctx) {
           // when the entry declares children, so a future edit that drops the
           // declaration would crash the menu rather than just lose the
           // contributed items. Fail soft instead.
-          react.createElement(
+          React35.createElement(
             "div",
             { style: { display: "contents" } },
             typeof props.renderSlot === "function" ? props.renderSlot("composer.overflow.item", {}) : null

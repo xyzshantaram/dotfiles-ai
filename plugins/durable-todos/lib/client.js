@@ -40,7 +40,7 @@ __export(client_exports, {
   name: () => name
 });
 module.exports = __toCommonJS(client_exports);
-var react = __toESM(require("react"), 1);
+var React = __toESM(require("react"), 1);
 var primitives = __toESM(require("@deepseek-ai/dsh-client-ui-primitives"), 1);
 
 // plugins/shared/client-util.ts
@@ -169,7 +169,7 @@ function makePanel() {
     });
     var todos = value === null || value === void 0 ? null : value.todos;
     var unfinished = todos === null ? [] : todos.filter(isUnfinished);
-    var [collapsed, setCollapsed] = react.useState(true);
+    var [collapsed, setCollapsed] = React.useState(true);
     var draft = props.useInput(function(input) {
       return input.draft;
     });
@@ -216,7 +216,7 @@ function makePanel() {
       return segment.keep;
     });
     if (isNewChat) return null;
-    return /* @__PURE__ */ react.createElement("div", { className: "durable-todos-card" }, /* @__PURE__ */ react.createElement("div", { className: "durable-todos-header" }, /* @__PURE__ */ react.createElement(
+    return /* @__PURE__ */ React.createElement("div", { className: "durable-todos-card" }, /* @__PURE__ */ React.createElement("div", { className: "durable-todos-header" }, /* @__PURE__ */ React.createElement(
       "button",
       {
         type: "button",
@@ -227,20 +227,20 @@ function makePanel() {
           setCollapsed(!collapsed);
         }
       },
-      /* @__PURE__ */ react.createElement(
+      /* @__PURE__ */ React.createElement(
         IconChevronDownOutline142,
         {
           className: collapsed ? expandable ? "durable-todos-chevron" : "durable-todos-chevron durable-todos-chevron-disabled" : "durable-todos-chevron durable-todos-chevron-open",
           "aria-hidden": true
         }
       ),
-      /* @__PURE__ */ react.createElement("span", { className: "durable-todos-name-badge" }, /* @__PURE__ */ react.createElement(IconChecklistOutline142, { size: 14 }), /* @__PURE__ */ react.createElement("span", null, "To-do list"), totalCount > 0 ? /* @__PURE__ */ react.createElement(react.Fragment, null, /* @__PURE__ */ react.createElement("span", { className: "durable-todos-count-sep", "aria-hidden": true }, "\xB7"), /* @__PURE__ */ react.createElement("span", { className: "durable-todos-count-value" }, totalCount)) : null),
-      /* @__PURE__ */ react.createElement("span", { className: "durable-todos-counts" }, countSegments.map(function(segment) {
-        return /* @__PURE__ */ react.createElement("span", { key: segment.key, className: "durable-todos-count", "data-state": segment.key }, /* @__PURE__ */ react.createElement(segment.Icon, { size: 14 }), /* @__PURE__ */ react.createElement("span", { className: "durable-todos-count-label" }, segment.label), /* @__PURE__ */ react.createElement("span", { className: "durable-todos-count-sep", "aria-hidden": true }, "\xB7"), /* @__PURE__ */ react.createElement("span", { className: "durable-todos-count-value" }, segment.value));
+      /* @__PURE__ */ React.createElement("span", { className: "durable-todos-name-badge" }, /* @__PURE__ */ React.createElement(IconChecklistOutline142, { size: 14 }), /* @__PURE__ */ React.createElement("span", null, "To-do list"), totalCount > 0 ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("span", { className: "durable-todos-count-sep", "aria-hidden": true }, "\xB7"), /* @__PURE__ */ React.createElement("span", { className: "durable-todos-count-value" }, totalCount)) : null),
+      /* @__PURE__ */ React.createElement("span", { className: "durable-todos-counts" }, countSegments.map(function(segment) {
+        return /* @__PURE__ */ React.createElement("span", { key: segment.key, className: "durable-todos-count", "data-state": segment.key }, /* @__PURE__ */ React.createElement(segment.Icon, { size: 14 }), /* @__PURE__ */ React.createElement("span", { className: "durable-todos-count-label" }, segment.label), /* @__PURE__ */ React.createElement("span", { className: "durable-todos-count-sep", "aria-hidden": true }, "\xB7"), /* @__PURE__ */ React.createElement("span", { className: "durable-todos-count-value" }, segment.value));
       }))
-    ), unfinished.length > 0 ? /* @__PURE__ */ react.createElement("button", { type: "button", className: "durable-todos-remind", onClick: onRemind }, /* @__PURE__ */ react.createElement(IconRefreshOutline142, { size: 14 }), /* @__PURE__ */ react.createElement("span", null, "Remind")) : null), inProgressItem ? /* @__PURE__ */ react.createElement("div", { className: "durable-todos-running-line" }, "Current: " + inProgressItem.content) : null, !collapsed ? /* @__PURE__ */ react.createElement("div", { className: "durable-todos-plan" }, todos.map(function(item, index) {
+    ), unfinished.length > 0 ? /* @__PURE__ */ React.createElement("button", { type: "button", className: "durable-todos-remind", onClick: onRemind }, /* @__PURE__ */ React.createElement(IconRefreshOutline142, { size: 14 }), /* @__PURE__ */ React.createElement("span", null, "Remind")) : null), inProgressItem ? /* @__PURE__ */ React.createElement("div", { className: "durable-todos-running-line" }, "Current: " + inProgressItem.content) : null, !collapsed ? /* @__PURE__ */ React.createElement("div", { className: "durable-todos-plan" }, todos.map(function(item, index) {
       var attrs = item.status === "completed" ? { "data-done": true } : item.status === "in_progress" ? { "data-active": true } : { "data-pending": true };
-      return /* @__PURE__ */ react.createElement("div", { key: index, className: "dsh-plan-item", ...attrs }, /* @__PURE__ */ react.createElement("span", { className: "dsh-plan-checkbox", "aria-hidden": true }), /* @__PURE__ */ react.createElement("span", { className: "dsh-plan-content" }, item.content));
+      return /* @__PURE__ */ React.createElement("div", { key: index, className: "dsh-plan-item", ...attrs }, /* @__PURE__ */ React.createElement("span", { className: "dsh-plan-checkbox", "aria-hidden": true }), /* @__PURE__ */ React.createElement("span", { className: "dsh-plan-content" }, item.content));
     })) : null);
   };
 }
@@ -256,7 +256,7 @@ function apply(ctx) {
     return ctx.slots.register(
       { name: "conversation.input.dock", id: "durable-todos", order: 10 },
       function(props) {
-        return /* @__PURE__ */ react.createElement(Panel, { ...props });
+        return /* @__PURE__ */ React.createElement(Panel, { ...props });
       }
     );
   });
