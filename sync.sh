@@ -42,7 +42,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#a00cfe9b68a475770c8c3f5b4e4d113f7fddd970}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#9ac2e88ed8a6ba27fc0f6917c8899fa8408716be}"
 
 # Git-hosted specs whose build scripts pnpm must be allowed to run. pnpm 10+
 # blocks lifecycle scripts (prepare/postinstall) unless the exact resolved
@@ -134,7 +134,7 @@ step_write_web_patch() {
       name: $HERE/plugins/bash-guard.js
       config:
         guardsDir: $DSH_HOME/plugins/guards
-    # subagent-steer registers its own `send_message` (#129), so the preset's
+    # subagent-steer registers its own send_message (#129), so the preset's
     # builtin tool-subagent-control row is disabled below -- two registrars
     # for one tool name would throw on the duplicate. tool-subagent-list-agents
     # is a SEPARATE row and stays enabled: list_agents is unchanged.
@@ -1733,7 +1733,7 @@ step_set_defaults() {
 	# overwrite it — but it is NOT stateless, and the old comment here claiming
 	# it was is what made this step destroy per-instance config for months.
 	#
-	# TWO pieces of runtime state survive a sync:
+	# THREE pieces of runtime state survive a sync:
 	#   1. profile.active — the profiles tool flips it; patched back with sed
 	#      below (byte-preserving, see the note on the YAML 1.1 `off:` hazard).
 	#   2. profile.chains — chain config is PER-INSTANCE (#77): different DSH
