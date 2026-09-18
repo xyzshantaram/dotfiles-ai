@@ -67,6 +67,42 @@ describe("corpus equivalence (prototype vs fair copy)", () => {
     expect(CORPUS.length + GCORPUS.length).toBe(34);
   });
 
+  it("renders degenerate op-disc commands byte-identically", () => {
+    // THE PROOF GAP THE #172 REVIEW FOUND, by taking its own census: across
+    // all 34 corpus cards there are ZERO op discs. Every operator in real
+    // commands becomes a chip or an inline pipe tag, so the op-disc render
+    // path never runs under the corpus comparison. Dropping the op-sym span
+    // would have been invisible to every test in this suite -- the reviewer's
+    // own words were that nothing would catch it. These five degenerate
+    // inputs are the only things that reach that path: an operator with a
+    // missing operand on one side, or a bare redirection with no pipe.
+    const proto = loadPrototype();
+    const restore = installStub();
+    try {
+      const strays = ["| head -20", "cat file |", "echo hi &&", "2>&1", "echo a && && echo b"];
+      for (let s = 0; s < strays.length; s++) {
+        const src = strays[s];
+        resetStats("dp" + s);
+        const p = proto.renderOne(900 + s, src, UB_STUB, { adopted: 0, avail: 716 });
+        resetStats("dm" + s);
+        const m = moduleRenderOne(900 + s, src, UB_STUB, { adopted: 0, avail: 716 });
+        expect(m.panelsHTML.length, `stray ${s} panel count`).toBe(p.panelsHTML.length);
+        for (let k = 0; k < p.panelsHTML.length; k++) {
+          expect(normMarkers(m.panelsHTML[k]), `stray ${s} panel ${k}`).toBe(
+            normMarkers(p.panelsHTML[k]),
+          );
+        }
+      }
+      // The point of the case: at least one stray must actually render an op
+      // disc, or this test proves nothing and the gap is still open.
+      resetStats("dprobe");
+      const probe = moduleRenderOne(950, "| head -20", UB_STUB, { adopted: 0, avail: 716 });
+      expect(probe.panelsHTML.join("")).toContain("prim-node op");
+    } finally {
+      restore();
+    }
+  });
+
   it("renders every corpus command byte-identically (scanner path)", () => {
     const proto = loadPrototype();
     const restore = installStub();

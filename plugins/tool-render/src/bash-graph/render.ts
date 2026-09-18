@@ -16,8 +16,7 @@
 // and none is shorter than hmin. Every intra-row edge is a horizontal
 // segment of that one line; split-arrow glyph tags sit centred on it.
 
-import { CARD_AVAIL, GAP, IND, ROWGAP } from "./constants.js";
-import { stepFor } from "./constants.js";
+import { CARD_AVAIL, GAP, IND, PIPE_GAP, ROWGAP, stepFor } from "./constants.js";
 import { layoutRow, planRows, enforceGaps, type PlanItem } from "./layout.js";
 import { measureH, naturalWidth, setNodeWidth, specMinW } from "./measure.js";
 import {
@@ -30,7 +29,6 @@ import {
 import { splitLines, splitSemis, tokenizeParts, type UnbashScan } from "./parse.js";
 import { pipeTagHTML } from "./primitives.js";
 import { SL, esc, hlArgBody, hlBody } from "./text.js";
-import { PIPE_GAP } from "./constants.js";
 
 /** Engine telemetry bag, threaded through renders. */
 export interface EngineFlags {
@@ -323,7 +321,13 @@ export function renderOne(idx: number, src: string, ub: UnbashScan, engines: Eng
     segs.forEach((sg, si) => {
       const items = tokenizeParts(src, sg.a, sg.b);
       if (!items.length) return;
+      // Mirror the prototype's adopted-span telemetry back into the engines
+      // bag (prototype index.html:1295). The build context accumulates the
+      // count, but the prototype also writes it back, and a caller reading
+      // engines after a render must see the same number in both.
+      const adoptedBefore = ctx.adopted.n;
       const { nodes, segLinks, hdItems } = buildNodes(src, items, ln, { li, si }, ub, ctx);
+      engines.adopted += ctx.adopted.n - adoptedBefore;
       const specs = buildSpecs(src, nodes, ctx);
       specs.forEach((s) => {
         s.nat = naturalWidth(s.html, s.sk);

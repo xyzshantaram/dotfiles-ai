@@ -7,6 +7,8 @@
 // byte-identity, report counts.
 
 import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { CORPUS, GCORPUS } from "./corpus.fixture.js";
 import { NODE_M } from "./constants.js";
@@ -17,7 +19,13 @@ import { parseTest, testBodyHTML } from "./parse.js";
 import { chipHTML } from "./primitives.js";
 import { renderOne } from "./render.js";
 
-const DIR = "/tmp/dsh/aidos/--home-sid-repos-dotfiles-ai--/172/plugins/tool-render/src/bash-graph";
+// Self-locating, deliberately. These paths were absolute into the ticket's
+// disposable worktree under /tmp, which passes today and breaks the moment
+// the worktree is cleaned up or the machine reboots -- and /tmp does not
+// survive hibernation on this host. The repo already has this convention
+// (plugins/user-bubble/src/chrome.test.ts).
+const DIR = dirname(fileURLToPath(import.meta.url));
+const DIST = join(DIR, "..", "..", "dist");
 const UB_STUB = { status: "stable-unavailable", nodes: [] };
 
 describe("measurement contract", () => {
@@ -380,15 +388,23 @@ describe("ship-clean (criterion 7)", () => {
     }
   });
 
+  it("the DP prices with the shared fitWidth", () => {
+    // Contract clause 5 says the DP prices and the render assigns through ONE
+    // function, so cost cannot drift from drawing. Every other clause has a
+    // test; this one only had its consequences tested. A copy of fitWidth
+    // living in layout.ts with a subtle difference would satisfy every
+    // existing check. This pins the mechanism instead of the symptom.
+    const src = readFileSync(join(DIR, "layout.ts"), "utf8");
+    expect(src).toContain('from "./measure.js"');
+    expect(src).not.toContain("function fitWidth");
+  });
+
   it("the built client bundle carries no corpus text", () => {
     // REJECTS a bundle that ships the fixture: the corpus signature string
     // must not appear in dist. (Nothing imports bash-graph yet, so no bundle
     // can change in this ticket; this pin holds the line for later tickets.)
     for (const f of ["client.js", "index.js"]) {
-      const src = readFileSync(
-        "/tmp/dsh/aidos/--home-sid-repos-dotfiles-ai--/172/plugins/tool-render/dist/" + f,
-        "utf8",
-      );
+      const src = readFileSync(join(DIST, f), "utf8");
       expect(src, f).not.toContain("ai-scratch/split-utils");
     }
   });

@@ -99,11 +99,6 @@ export function Icon(name: string, fb: string, cls?: string): string {
   return `<span class="prim-icon${cls ? " " + cls : ""}"><i data-lucide="${esc(name)}" data-fb="${esc(fb || "•")}"></i></span>`;
 }
 
-/** Inline chip: filenames, heredoc delimiters. */
-export function Chip(text: string): string {
-  return `<span class="prim-chip">${segHTML(text)}</span>`;
-}
-
 /** Count or parse-mode badge. */
 export function Badge(text: string, tone: string): string {
   return `<span class="prim-badge"${tone ? ` data-tone="${tone}"` : ""}>${esc(text)}</span>`;
@@ -181,12 +176,8 @@ export function Node(o: NodeOptions): string {
     `</div>`;
 }
 
-/** Edge primitive: coordinates only; stroke lives in .prim-edge. */
-export function Edge(x1: number, y1: number, x2: number, y2: number): { x1: number; y1: number; x2: number; y2: number } {
-  return { x1, y1, x2, y2 };
-}
-
-/** Panel primitive: head, body, optional foot. */
-export function Panel(headHTML: string, bodyHTML: string, footHTML?: string): string {
-  return `<section class="prim-panel"><div class="prim-panel-head">${headHTML}</div><div>${bodyHTML}</div>${footHTML ? `<div>${footHTML}</div>` : ""}</section>`;
-}
+// REMOVED in review of #172: Chip, Edge and Panel were transcribed from the
+// prototype but never called here. The prototype used Chip for op-disc and
+// stray bodies and Panel for page chrome; this module inlines the identical
+// chip markup at model.ts and drops page chrome by design, and Edge was dead
+// in the prototype too. cardAvail is kept: #173 needs it.
