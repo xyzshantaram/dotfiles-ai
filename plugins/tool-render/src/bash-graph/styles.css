@@ -51,9 +51,25 @@ html[data-theme="light"]{
   --proto-str:#2c7a2c; --proto-path:#9a5b00; --proto-flag:#1d4fd7; --proto-var:#6d28d9;
 }
 /* ---- the six primitives ---- */
+/* R14.1 (owner, 2026-09-18): panels stack flush, so the RUN reads as one
+   surface rather than a column of separate lozenges — only the outer two
+   corners of the stack are rounded, every seam between panels is square.
+   A panel cannot express this with :first-child/:last-child on itself:
+   client.tsx mounts EACH panel in its own wrapper div and appends the
+   heredoc/argument bodies after it inside that wrapper, so every panel is
+   already :first-child of its wrapper, and :last-child would turn on and
+   off with whether the statement happens to carry a heredoc. The wrapper
+   class carries the position instead: a wrapper PRECEDED by a wrapper is
+   not first, and one FOLLOWED by a wrapper is not last. A lone panel
+   matches neither rule and keeps all four corners. */
 .prim-panel{box-sizing:border-box;border:none;
-  border-radius:.75rem;background:var(--dsw-alias-bg-base);
+  border-radius:0;background:var(--dsw-alias-bg-base);
   margin-top:.125rem;margin-bottom:.125rem;padding:.25rem .375rem;}
+.prim-panel-wrap > .prim-panel{border-radius:.75rem;}
+.prim-panel-wrap ~ .prim-panel-wrap > .prim-panel{
+  border-top-left-radius:0;border-top-right-radius:0;}
+.prim-panel-wrap:has(~ .prim-panel-wrap) > .prim-panel{
+  border-bottom-left-radius:0;border-bottom-right-radius:0;}
 .prim-panel-head{display:flex;flex-wrap:wrap;gap:.375rem;align-items:baseline;
   font-size:.75rem;color:var(--dsw-alias-label-secondary);margin-bottom:.25rem;}
 .prim-panel-head .idx{font-family:var(--ds-font-family-code);color:var(--dsw-alias-label-primary);font-weight:600;}
@@ -100,16 +116,19 @@ button.prim-node[data-size="lone"]{width:max-content;min-width:max-content;max-w
    it stays an inline span (no box change), and there is no whitespace inside
    the markup to offer a break. */
 .hd-pair{white-space:nowrap;overflow-wrap:normal;word-break:normal;}
-/* R13.1 SUPERSEDED BY THE OWNER, same day, after seeing both in the browser.
-   The four declarations tried here (padding-left, padding-right,
-   display:inline-block on the pair, transform:translateX(-0.75rem)) are GONE.
-   The replacement below is better for a reason beyond taste: translateX moves
-   PAINT ONLY, so every measured width, DP decision and edge coordinate would
-   have kept describing the un-shifted box, and the -12px answered to no
-   declared constant. margin-left on an inline-block CHILD is real layout: the
-   measurer sees it, so the model and the browser keep agreeing (the round-8
-   rule). No compensating constant survives into the port. */
-.hd-pair .node-text{display:inline-block;margin-left:0.3rem;}
+/* R13.1 history, kept because the reasoning still governs this line. Four
+   declarations were tried and dropped (padding-left, padding-right,
+   display:inline-block on the pair, transform:translateX(-0.75rem)): a
+   translateX moves PAINT ONLY, so every measured width, DP decision and edge
+   coordinate would have kept describing the un-shifted box.
+   R14.2 (owner, 2026-09-18): the 0.3rem margin-left this line carried is now
+   GONE too — the icon and the label sit flush. The inline-block stays: it is
+   what makes the pair one measurable box, and dropping it would reopen the
+   R12.2 split the wrapper exists to prevent. Because the margin was real
+   layout rather than paint, removing it needs no compensating constant — the
+   measurer reads the same CSS the browser does, so the model and the browser
+   keep agreeing (the round-8 rule) with the margin at zero. */
+.hd-pair .node-text{display:inline-block;}
 .prim-node .node-text code{font:inherit;background:none;padding:0;}
 /* R13.3: generated test words are prose, not source. The operand stays
    code-styled (verbatim slice); the surrounding words render in the system

@@ -1399,7 +1399,12 @@ function BashGraphPanels(props) {
     <div className="tool-render-bash-graph" onClick={onPanelsClick}>
       <div dangerouslySetInnerHTML={{ __html: '<svg aria-hidden="true" style="display:none">' + PIPE_GLYPH_SYMBOL + "</svg>" }} />
       {panels.map(function (html, i) {
-        return <div key={i} dangerouslySetInnerHTML={{ __html: html }} />;
+        // The class is load-bearing, not decoration: styles.css rounds only
+        // the OUTER corners of the panel run, and the panel itself cannot
+        // tell first from last (it is always :first-child of this wrapper,
+        // and the heredoc bodies appended after it inside the same wrapper
+        // decide :last-child). The wrapper carries that position.
+        return <div key={i} className="prim-panel-wrap" dangerouslySetInnerHTML={{ __html: html }} />;
       })}
     </div>
   );

@@ -446,4 +446,39 @@ describe("ship-clean (criterion 7)", () => {
       restore();
     }
   });
+
+  it("the panel-run rounding is keyed on a class the client actually mounts", () => {
+    // R14.1 coupling pin. The rounding of the stack's outer corners is split
+    // across two files: styles.css selects `.prim-panel-wrap`, and client.tsx
+    // is the only thing that puts that class on the DOM. Nothing else ties
+    // them together, so a rename on either side silently restores the old
+    // look — every panel fully rounded again — with every other test green.
+    // The test above walks the same ground in the opposite direction, but it
+    // reads panelsHTML, and this class is never in panelsHTML: the renderer
+    // does not emit the wrapper, React does.
+    const css = readFileSync(`${DIR}/styles.css`, "utf8");
+    const client = readFileSync(join(DIR, "..", "client.tsx"), "utf8");
+    expect(css).toContain(".prim-panel-wrap ~ .prim-panel-wrap > .prim-panel");
+    expect(css).toContain(".prim-panel-wrap:has(~ .prim-panel-wrap) > .prim-panel");
+    expect(client).toContain('className="prim-panel-wrap"');
+    // The base panel is square; the rounding arrives only through a wrapper
+    // rule. A .75rem default here would round every seam in the stack.
+    const base = css.match(/\.prim-panel\{[^}]*\}/);
+    expect(base, "the .prim-panel base rule exists").toBeTruthy();
+    expect(base![0]).toContain("border-radius:0;");
+  });
+
+  it("the heredoc icon and its label sit flush, with the pair still one box", () => {
+    // R14.2. The margin-left was real layout that the MEASURER read, so its
+    // removal is not cosmetic: a stale 0.3rem left in any measuring path
+    // would put the model and the browser back into disagreement. The
+    // inline-block must survive the removal — it is what makes the pair a
+    // single measurable box (R12.2), and deleting the whole declaration
+    // rather than the one property would reopen the icon/label split.
+    const css = readFileSync(`${DIR}/styles.css`, "utf8");
+    const rule = css.match(/\.hd-pair \.node-text\{[^}]*\}/);
+    expect(rule, "the .hd-pair .node-text rule exists").toBeTruthy();
+    expect(rule![0]).toContain("display:inline-block");
+    expect(rule![0]).not.toContain("margin");
+  });
 });
