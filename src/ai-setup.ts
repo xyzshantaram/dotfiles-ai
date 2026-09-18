@@ -5,9 +5,9 @@
 export const AI_SETUP_LINES = [
   "Install the split utils skill from the dotfiles-ai repo path skills/split-utils.",
   "Read docs/schema.md for the output format.",
-  "Gather orders from the main menu.",
+  "Gather orders with scripts/cli.ts gather.",
   "Write the split result as output.json.",
-  "Check the file with scripts/validate.ts before you push.",
+  "Check the file with scripts/cli.ts validate before you push.",
 ];
 
 /** The same message as one block, ready to select and copy. */

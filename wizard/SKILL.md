@@ -104,6 +104,34 @@ then read `.stdout` off the result. Reach for it whenever bash is the shorter pa
 The `files` proxy serves one root read-only (traversal, dotfiles, and directories 404) so pages can
 fetch images or JSON.
 
+## Browser component through mount
+
+Use a browser component for one case only. Use it when the user moves fast through a long list. Do
+not use it for a form. A form needs one screen per post. A long list needs no round trip per move.
+The split screen hit this wall on a real 137 item run.
+
+Call `mount(id, data)` to hand one page region to code of your own. Pass a stable id string as the
+first arg. Pass plain JSON data as the second arg. Pass runId, currency, payer, me, and people. Pass
+items as full rows with index, name, price, platform, orderId, and isFee. Pass assignments, skipped,
+and at. Draw no per item nodes beside the mount. Let the component draw the items.
+
+List the component file in `scripts` on `createWizard`. The toolkit renders each entry as a module
+script tag. Serve that path from the app itself. Keep the file beside the step code and serve it
+with no store cache. Keep the component in the app, never in wizardkit. Only this pattern ships with
+wizardkit.
+
+Read the mount data from the page on boot. Find the host with `[data-mount="your-id"]`. Find the
+JSON island with `script[data-mount-data="your-id"]`. Parse the island text as JSON. Guard for a
+missing host or bad JSON. Run boot again after each `htmx:afterSwap`. Flag the host when done. Treat
+a fresh host as a fresh boot. Import nothing in the component file. Use no build step.
+
+Hold working state in the browser between checkpoints. Post changed lines to the server at
+checkpoints. Post on a timer. Post when the page hides. Post before each wizard post. Send runId,
+changed assignments, changed skipped, and baseline. Keep dirty marks until the server answers ok.
+Show a note when a post fails. Keep failed work in the page. Treat the server file as the sole
+source of truth. Reload server state on each step render when the disk time moved on. Never write
+the file from the browser directly.
+
 ## Ship it
 
 `deno task dev` opens the chromeless window with hot reload. `deno task compile` emits the binary

@@ -52,7 +52,7 @@ else {
   Remove-Item $Tmp, $Zip -Recurse -Force
 }
 
-# Run the main menu from the repo dir.
-Write-Host 'Starting split-utils.'
+# Start the browser app from the repo dir.
+Write-Host 'Starting split-utils. Open the address it prints in a browser.'
 Set-Location $DestDir
-deno task menu
+deno task start

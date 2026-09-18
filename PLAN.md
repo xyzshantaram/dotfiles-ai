@@ -37,10 +37,6 @@ pattern goes in the wizard skill.
 
 V1 to V4 have landed. What is left of the series:
 
-- [ ] V5 record the pattern in wizard/SKILL.md. State when a wizard should reach for a component,
-      how the mount node and the script list work, and the checkpoint rule that keeps the server the
-      owner of the file. Eval: a reader with only the skill can build a component of their own.
-
 ### A series: the Splitwise API key replaces the OAuth handshake
 
 Settled with the user on 2026-09-17. The push flow dies at the verifier swap with a 401 that reads
@@ -109,19 +105,9 @@ from pinned CDN URLs, and the push work is a callable core in `src/pushcore.ts`.
 - [x] W10 wizardkit's installer and runtime parse flags with `parseArgs` from `@std/cli` instead of
       a hand-rolled reader. The runtime also drops its manual `--` split. Eval: a bare word and an
       unknown flag both throw, and the runtime still starts a child after `--`.
-- [ ] W11 wizardkit's client scripts become real files under `src/client/`, loaded by text import
-      the way `style.css` already is. Today about 255 lines of browser JavaScript are assembled by
-      string concatenation, so no editor, formatter or linter can see them. Eval: no client script
-      is built by concatenation, and the rendered page still carries the same behaviour.
 - [x] W12 move `cli.ts` into `scripts/`, beside `validate.ts`. It is a runnable entry, not a library
       module. Eval: the six verbs still work, including the two subprocess dispatches whose targets
       resolve relative to the entry.
-- [ ] W13 rework the split-utils readme. An AI harness user pastes one prompt and is set up; a
-      reader without a harness gets plain instructions for running the app alone. The Windows path
-      says how to open a terminal, for a reader who has never opened one. Eval: a reader with no
-      prior context reaches a working run by either route. wizardkit 0.1.0 is published at
-      https://jsr.io/@xyzshantaram/wizardkit. split-utils imports it from JSR with no local mapping
-      left. Three facts came out of publishing, and W9 must carry all three.
 
 `deno publish --dry-run` is not proof. It passed three times while the real publish failed twice.
 The global types check and the module graph build both run on the server only.
@@ -137,14 +123,6 @@ which carries no config to set the policy in.
 
 - [x] W6 the wizard skill ships one file that imports the JSR package. Eval: the template runs from
       a directory holding nothing else.
-- [ ] W7 the split-utils skill, as a thin router, with the three push paths, the safety contract and
-      guidance for building and checking `output.json`. Eval: an agent with only the skill can drive
-      a whole job.
-- [ ] W8 a handoff prompt for a dotfiles-ai session: import split-utils and the new wizard skill,
-      and retire the ecommerce skill, the zepto, blinkit and swiggy MCP servers, and the old
-      expense-split skill. Eval: the prompt names every file to add and every entry to remove.
-- [ ] W9 publishing notes for wizardkit on JSR. Eval: a reader publishes a new version without
-      asking a question.
 
 ### Final gate, after every ticket above is closed
 
@@ -153,7 +131,7 @@ which carries no config to set the policy in.
       definitions, and hand rolled code that a small well scoped dependency would replace. Review
       the wizards, the toolkit, and src together, not module by module. Eval: every finding lands as
       its own ticket here, or as a written reason to leave it alone. One finding from the pre commit
-      diff read is still open and starts the pass: wizards/expense-split/gather.ts defines its own
+      diff read is still open and starts the pass: app/expense-split/gather.ts defines its own
       `LEGACY_TOKENS_FILE`, duplicating the one in src/zomato.ts, and repeats that module's read
       chain of current path, then old path, then older path. The chain belongs in one place.
 
@@ -203,9 +181,15 @@ later, and the next app does not pay the same cost.
   answers is duplication. This is why N6 deletes the `seen` store rather than feeding it.
 - Back is unblockable by construction: the toolkit resolves a backward move before any app code
   runs. Departure work goes in `onLeave`, which takes the direction and cannot block.
-- The terminal era is over. One script still runs from a shell, `wizards/gatherer.ts`, and it takes
-  machine modes only. `wizards/dev-zomato-consts.ts` is a dev tool that takes an APK path. mepcli,
+- The terminal era is over. One script still runs from a shell, `scripts/gatherer.ts`, and it takes
+  machine modes only. `scripts/dev/zomato-consts.ts` is a dev tool that takes an APK path. mepcli,
   exotui, crayon and cliffy are gone, and zx stays because wizard authors run bash through it.
+- Three top level code dirs, renamed on 2026-09-18. `src/` is the library, `app/` is the wizard that
+  consumes it, and `scripts/` holds every command line entry point, with dev tools in
+  `scripts/dev/`. The boundary that matters is the UI framework: `src/` holds no wizardkit import
+  and no entry point, which is why `scripts/validate.ts` runs under `--allow-read` alone with no
+  toolkit. Dependencies point one way, `app` to `src`, and nothing enforces that beyond review. The
+  old `wizards/` dir also held two programs that were not wizards, which is what prompted the split.
 - State paths all resolve through src/paths.ts and honour `SPLIT_UTILS_STATE`. With no override the
   root is `<data>/split-utils`, where `<data>` comes from `@cross/dir`. That is the only portable
   answer: hand-rolling `~/.local/share` would have been Linux only, as the user pointed out on
@@ -214,7 +198,7 @@ later, and the next app does not pay the same cost.
   so `new URL("../state/", import.meta.url).pathname` resolved to `/state` and the headline raw-URL
   run had nowhere to write. Proven by importing src/paths.ts over http on 2026-09-18. The same fault
   hid in `src/log.ts` (logs dir), `src/zomato.ts` (two login-state fallbacks) and
-  `wizards/expense-split/split.ts` (the validator path, which took `.pathname` where `.href` is
+  `app/expense-split/split.ts` (the validator path, which took `.pathname` where `.href` is
   correct). Use `.href` when the target is a module to run or fetch, and paths.ts when it is data.
 - `@cross/dir` is async, and the path accessors cannot be: call sites include `Deno.statSync`,
   `Deno.readDirSync` and `Deno.readTextFileSync`, and `loadConfig` in src/zomato.ts is sync. So
@@ -334,9 +318,10 @@ it.
       foot of the window while a long screen scrolls. What is left to drive by hand: Select all and
       Select none tick and untick without leaving the screen, Next refuses an empty pick list with
       one message, and the split and push flows show the same bar now that they carry it too.
-- [ ] REPEAT hand-drive: split a run. The Repeat Last button must be absent on the first line and
-      present from the second. Press it and confirm the line takes the same people and the same
-      split type as the line before, and that the run dir grows no `split-state.conflict-` file.
+- [ ] REPEAT hand-drive: split a run on the board. Press `r` on the second line. Confirm the line
+      takes the same people and the same split type as the line before. The board starts every line
+      unticked, fees included, so `r` is now the only repeat path and no button exists. Confirm the
+      run dir grows no `split-state.conflict-` file.
 - [ ] CONFIRM hand-drive: reach the last push screen and read the summary above the bar, under the
       heading "Read this summary before you push." Confirm it matches what the push then sends, and
       that no file lands beside the source until a push with no Splitwise access writes one.
@@ -348,19 +333,12 @@ it.
       flow. Change one tick, press Next, and confirm the split opens on that run with the change.
 - [ ] R3 push source hand-drive: the source screen lists your assigned runs, newest first, and
       starts on the newest. A run id typed into Other run still wins.
-- [ ] G32 reset hand-drive: sign in to Splitwise, run a factory reset, then open the push flow. It
-      must ask you to connect again. The old cache copy used to survive a reset and get copied back
-      on the next read, which left you signed in.
 - [ ] G31 pick list hand-drive: finish a gather. The last screen lists every order with a tick box,
       none ticked. Select all ticks every row and Select none clears them. Next with nothing ticked
       refuses. Tick two, and the split walks only those two lines.
 - [ ] G30 sign in hand-drive (your bug): press Sign in to Zepto. A browser window opens for the sign
       in. The panel shows one sentence when it lands. No banner, no "Ready to start?", and no line
       about opening a main menu.
-- [ ] G23 Splitwise approve hand-drive (your bug): open Settings, paste a key pair, press Save keys
-      and connect. The approve link shows with a verifier box under it. Reaching that screen with no
-      handshake shows one plain line plus an Open Settings button, and no Next that asks for a box
-      the screen never drew.
 - [ ] G24 usage screen hand-drive (your bug): the first run screen shows one heading, one muted
       line, then the choices. No third block of text sits between them.
 - [ ] Z2 Zomato hand-drive: with no saved sign in, the accounts screen takes your phone, sends the
@@ -391,26 +369,14 @@ it.
       and from each settings step. Back never blocks and never validates.
 - [ ] S1 stage hand-drive: gather reads 1/3, split reads 2/3, push reads 3/3 on every screen. The
       menu and settings show no stage marker.
-- [ ] R2 resume hand-drive: pick a gathered run on the resume screen. The split run step opens with
-      that run already picked, and no screen asks for the run twice.
-- [ ] G1 fee hand-drive: a fresh fee line arrives ticked for everyone with the per person amount
-      stated. An item line still ticks you alone. A saved fee assignment wins over the default.
 - [ ] G2 cutoff hand-drive: leave the cutoff blank and push. Every order goes. A bad date still
       reports an error.
 - [ ] G5 money hand-drive: push confirm lines and the report now read currency first, for example
       "INR 100.00". Confirm the wording reads right on a real push.
-- [ ] J1 window hand-drive: open the demo in a real window, confirm web-awesome controls bind
-      (radios post, checked and autofocus hold), markdown renders headings and bold
-- [ ] B2 scrape hand-drive: block unpkg, press Scrape, output streams in the panel under the button,
-      step never leaves
 - [ ] B1 currency hand-drive (your bug): pick INR, press Next without touching any radio, currency
       saves; custom code path saves uppercase and rejects junk
-- [ ] U2 onboarding hand-drive: fresh settings state walks usage, currency, Splitwise, then menu; AI
-      answer jumps to AI setup; used state opens the menu with no Start here
 - [ ] U3 flow hand-drive: every gather, split, push step shows a muted description; no label echoes
       its heading; push report states what landed
-- [ ] B3/B4 hand-drive: scrape prints the human summary in auto mode (no agent block); Done on an
-      unscraped review names Scrape
 - [ ] F6 hand-drive: dry push prints the plan and writes nothing; resume picker routes each status
       to the right step
 - [ ] F8 handoff hand-drive: Finish offers Push, lands on push-source with the run loaded
@@ -433,31 +399,15 @@ it.
       counts match; duplicate names show the pick list, unknown names take a hand id
 - [ ] F4/F5 hand-drive: leave a split mid-way, come back, continue keeps assignments; one
       manual-expense run gathers and splits end to end
-- [ ] F2 live handshake hand-drive: real Splitwise approval in the browser, "Signed in as" names
-      you, token cached owner-only
 - [ ] Menu plus onboarding hand-drive: fresh settings state shows Start here on top; used state
       hides it; usage step leads into the settings chain; every menu item opens its module
-- [ ] W8 split hand-drive: serve `wizards/expense-split.ts` on a real run dir, split every line,
-      press Finish, confirm output.json plus the stamped copy land in the run dir
-- [ ] W3 gather hand-drive: serve `wizards/expense-split.ts`, walk Platforms through Review, confirm
+- [ ] W8 split hand-drive: serve `app/expense-split.ts` on a real run dir, split every line, press
+      Finish, confirm output.json plus the stamped copy land in the run dir
+- [ ] W3 gather hand-drive: serve `app/expense-split.ts`, walk Platforms through Review, confirm
       Back/Next on every step
-- [ ] W4 push hand-drive: same window, walk Source through Report, confirm OAuth prose and cutoff
-      field
-- [ ] W5 settings hand-drive: same window, pick a currency, open Splitwise and AI steps, confirm
-      navigation
 - [ ] WA restyle: restart the window (old bundle keeps serving stale pages), confirm tabs switch,
       dark mode follows the system, form posts record answers
-- [ ] R1 runtime window: `deno task desktop`, confirm a tall chromeless window opens on the demo
-      (window size itself is headless-untestable here); installer needs JSR publish before a real
-      install works
-- [ ] W1 template: copy the wizard/ trio to a fresh dir, map wizardkit local, run start, click Ask
-      to Review to Done
-- [ ] D1 demo round 3: `./desktop/demo.ts`, open :8371, confirm muted palette, tinted cards,
-      centered stage index, Stages clicks, draft resume bar, action strips, 25-line helper shape in
-      demo.ts
-- [ ] D1 demo: serve `desktop/demo.ts` and click all three steps in a window, confirm every core
-      widget renders and answers echo Dropped from this queue: T6 kit demo, T7 splitter run, and T7b
-      decision screen. They drove the Cliffy, exotui and MepCLI terminal builds, which the Desktop
-      port retired. U5 above still removes the code. The behaviour they checked lives on in this
-      queue: the end to end split of a real run sits in W8, skipped lines and the fee note sit in
-      G1, and the question that asks for names sits in N1.
+- [ ] W1 template hand-drive: copy the `wizard/` trio to a fresh dir, run `deno task start`, and
+      click Ask through Review to Done. wizardkit comes from JSR now, so no local mapping step
+      applies. I proved the template serves from a dir holding nothing else. The click through is
+      the part still unproven.

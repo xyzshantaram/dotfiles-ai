@@ -62,7 +62,7 @@ else
   rm -rf "$DEST_DIR/tmp-unpack" "$DEST_DIR/repo.zip"
 fi
 
-# Run the main menu from the repo dir.
-echo "Starting split-utils."
+# Start the browser app from the repo dir.
+echo "Starting split-utils. Open the address it prints in a browser."
 cd "$DEST_DIR"
-exec deno task menu
+exec deno task start
