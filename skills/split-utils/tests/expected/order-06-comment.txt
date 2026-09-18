@@ -1,0 +1,14 @@
+Blinkit — 09-09 12:00 PM
+A=Asha B=Ben C=Cara
+Red Onion (1 kg) (60) - A:20 B:20 C:20
+FarmHen Protein Eggs (10 pcs) (150) - A:50 B:50 C:50
+Fresh Tomato (500 g) (20) - A:6.67 B:6.67 C:6.66
+DailyHarvest Unpolished Red Lentils (500 g) (80) - A:26.67 B:26.67 C:26.66
+DailyHarvest Unpolished Red Lentils (500 g) (80) - A:26.67 B:26.67 C:26.66
+SpiceRoute Cumin Seeds (100 g) (40) - A:13.33 B:13.33 C:13.34
+GrainGold Everyday Basmati Rice (1 kg) (90) - A:30 B:30 C:30
+GrainGold Everyday Basmati Rice (1 kg) (90) - A:30 B:30 C:30
+SpiceRoute Garam Masala (100 g) (70) - A:23.33 B:23.33 C:23.34
+Fresh Okra (2 x 250 g) (30) - A:10 B:10 C:10
+Fees (12) - A:4 B:4 C:4
+Total - A:240.67 B:240.67 C:240.66

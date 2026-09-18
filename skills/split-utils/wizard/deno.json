@@ -1,0 +1,24 @@
+{
+  "version": "0.1.0",
+  "imports": {
+    // Published package. To develop against a checkout, point this at
+    // the checkout instead, for example "../wizardkit/src/mod.ts".
+    "wizardkit": "jsr:@xyzshantaram/wizardkit@^0.1.0"
+  },
+  "tasks": {
+    "start": "deno run --no-lock -A template.ts",
+    "dev": "deno desktop --hmr template.ts",
+    "check": "deno check --no-lock template.ts compile.ts",
+    "compile": "deno run --no-lock -A compile.ts"
+  },
+  "desktop": {
+    "app": {
+      "name": "My wizard",
+      "identifier": "dev.example.mywizard"
+    },
+    "backend": "webview",
+    "output": {
+      "linux": "./dist/my-wizard"
+    }
+  }
+}

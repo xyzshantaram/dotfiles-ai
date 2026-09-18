@@ -1,0 +1,1703 @@
+// Wizard-level split flow tests: resume, meta updates, validator gate,
+// and the currency label from settings.
+
+import { assert, assertEquals, assertStringIncludes } from "@std/assert";
+import {
+  collectedPeople,
+  countSplitProgress,
+  createSplitShareLink,
+  currentShareLink,
+  exportStep,
+  itemStep,
+  lastSaveError,
+  loadCurrency,
+  pendingSaves,
+  roleErrors,
+  setSaveWriterForTests,
+  setSplitRun,
+  shareDoneStep,
+  summaryStep,
+} from "../app/expense-split/split.ts";
+import { freshState, type SplitStateDoc, writeSplitState } from "../src/splitstate.ts";
+import { handleBoardRoute } from "../app/expense-split/board-routes.ts";
+import {
+  buildPatch,
+  personForDigit,
+  repeatOnto,
+  round2,
+  seedCheckpointLine,
+  shareEqual,
+  sharePercent,
+  shareSingle,
+  skipSettles,
+} from "../app/expense-split/split-board.js";
+import type { Node } from "jsr:@xyzshantaram/wizardkit@^0.1.0";
+import type { Order } from "../src/common.ts";
+import {
+  confirmLastPush,
+  daysSincePush,
+  type LastPush,
+  lastPushLabel,
+  readLastPushSync,
+  resolveRangeDays,
+  writeLastPush,
+} from "../src/lastpush.ts";
+
+// One order with one 10.00 item and no fees.
+const ORDERS: Order[] = [{
+  id: "o1",
+  platform: "swiggy",
+  date: "2026-09-01 10:00 AM",
+  paid: 10,
+  items: [{ name: "Pizza", price: 10, quantity: 1 }],
+  fees: { delivery: 0, packaging: 0 },
+}];
+
+// One order with one 10.00 item and a 5.00 delivery fee.
+const FEE_ORDERS: Order[] = [{
+  id: "o1",
+  platform: "swiggy",
+  date: "2026-09-01 10:00 AM",
+  paid: 15,
+  items: [{ name: "Pizza", price: 10, quantity: 1 }],
+  fees: { delivery: 5, packaging: 0 },
+}];
+// A saved doc with line 0 split evenly between Ann and Ben.
+function savedDoc(payer: string, amounts?: [number, number]): SplitStateDoc {
+  const doc = freshState(["Ann", "Ben"], payer);
+  doc.assignments["0"] = {
+    splitType: "equal",
+    people: ["Ann", "Ben"],
+    amounts: { Ann: amounts?.[0] ?? 5, Ben: amounts?.[1] ?? 5 },
+  };
+  return doc;
+}
+
+// Build one run dir with orders.json and an optional split-state.json.
+function makeRun(
+  root: string,
+  name: string,
+  state: SplitStateDoc | null,
+  orders: Order[] = ORDERS,
+): string {
+  const dir = root + "/" + name;
+  Deno.mkdirSync(dir, { recursive: true });
+  Deno.writeTextFileSync(
+    dir + "/orders.json",
+    JSON.stringify(orders) + "\n",
+  );
+  if (state !== null) {
+    Deno.writeTextFileSync(
+      dir + "/split-state.json",
+      JSON.stringify(state, null, 2) + "\n",
+    );
+  }
+  return dir;
+}
+
+// Read meta.json from a run dir.
+function readMeta(dir: string): Record<string, unknown> {
+  return JSON.parse(Deno.readTextFileSync(dir + "/meta.json"));
+}
+
+// Text of a node plus any nested item text, joined.
+function nodeText(node: Node): string {
+  const rec = node as unknown as Record<string, unknown>;
+  const parts: string[] = [];
+  if (typeof rec["text"] === "string") parts.push(rec["text"] as string);
+  if (typeof rec["label"] === "string") parts.push(rec["label"] as string);
+  if (Array.isArray(rec["items"])) {
+    for (const item of rec["items"] as unknown[]) {
+      if (item !== null && typeof item === "object") {
+        const ir = item as Record<string, unknown>;
+        if (typeof ir["text"] === "string") parts.push(ir["text"] as string);
+      }
+    }
+  }
+  if (Array.isArray(rec["rows"])) {
+    for (const row of rec["rows"] as unknown[]) {
+      if (row !== null && typeof row === "object") {
+        const rr = row as Record<string, unknown>;
+        if (typeof rr["text"] === "string") parts.push(rr["text"] as string);
+      }
+    }
+  }
+  return parts.join("\n");
+}
+
+// Mount data of one item step, by mount id.
+function mountData(nodes: Node[], id: string): Record<string, unknown> {
+  for (const node of nodes) {
+    const rec = node as unknown as Record<string, unknown>;
+    if (rec["kind"] === "mount" && rec["id"] === id) {
+      return rec["data"] as Record<string, unknown>;
+    }
+  }
+  throw new Error("no mount named " + id);
+}
+
+// Items list of one board mount.
+function mountItems(board: Record<string, unknown>): Array<Record<string, unknown>> {
+  return board["items"] as Array<Record<string, unknown>>;
+}
+
+// Text of every node in a step, joined.
+function stepText(nodes: Node[]): string {
+  return nodes.map(nodeText).join("\n");
+}
+
+// Answers map with the run typed, the resume question answered, and
+// an optional me name.
+function answers(run: string, resume?: string, me?: string): Map<string, string[]> {
+  const m = new Map<string, string[]>();
+  m.set("run", [run]);
+  if (resume !== undefined) m.set("resume", [resume]);
+  if (me !== undefined) m.set("me", [me]);
+  return m;
+}
+
+Deno.test("resume mid-way keeps saved assignments", async () => {
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "r1", savedDoc("Ann"));
+  // First render asks the resume question.
+  const ask = itemStep(answers(dir), { sessionId: "t-split-1" });
+  assertStringIncludes(stepText(ask.nodes), "Continue where you left off?");
+  // Nothing overwrote the saved state while asking.
+  const onDisk = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
+  assertEquals(onDisk.assignments["0"].amounts, { Ann: 5, Ben: 5 });
+  // Continue renders the mount, line 0 stays assigned.
+  const done = itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-1" });
+  const kept = mountData(done.nodes, "split-board")["assignments"] as Record<string, unknown>;
+  assertEquals(kept["0"], {
+    splitType: "equal",
+    people: ["Ann", "Ben"],
+    amounts: { Ann: 5, Ben: 5 },
+  });
+  const after = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
+  assertEquals(after.assignments["0"].amounts, { Ann: 5, Ben: 5 });
+  assertEquals(after.payer, "Ann");
+});
+
+Deno.test("start over clears saved assignments", async () => {
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "r2", savedDoc("Ann"));
+  itemStep(answers(dir), { sessionId: "t-split-2" });
+  const fresh = itemStep(answers(dir, "Start over"), { sessionId: "t-split-2" });
+  assertEquals(mountData(fresh.nodes, "split-board")["runId"], "r2");
+  // saveState writes in the background, so wait for the cleared file.
+  for (let i = 0; i < 50; i++) {
+    const after = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
+    if (Object.keys(after.assignments as string[]).length === 0) return;
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  throw new Error("start over never cleared the saved assignments");
+});
+
+Deno.test("finished split updates meta to assigned", async () => {
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "r3", savedDoc("Ann"));
+  itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-3" });
+  const out = exportStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-3" });
+  assertStringIncludes(stepText(out.nodes), "pays Ann"); // settlements render
+  const meta = readMeta(dir);
+  assertEquals(meta["status"], "assigned");
+  assertEquals(meta["outputFile"], "output.json");
+  assertEquals(meta["ordersDone"], 1);
+  assertEquals(meta["ordersTotal"], 1);
+  assertEquals(meta["lastPayer"], "Ann");
+  assertEquals(JSON.parse(Deno.readTextFileSync(dir + "/output.json")).people, [
+    "Ann",
+    "Ben",
+  ]);
+});
+
+Deno.test("validator failure blocks finish and assigned", async () => {
+  const root = await Deno.makeTempDir();
+  // Amounts 3 + 3 do not cover the 10.00 price, so validation must fail.
+  const dir = makeRun(root, "r4", savedDoc("Ann", [3, 3]));
+  itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-4" });
+  const out = exportStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-4" });
+  assertStringIncludes(stepText(out.nodes), "failed its own check");
+  assertStringIncludes(stepText(out.nodes), "FAIL");
+  const meta = readMeta(dir);
+  if (meta["status"] !== undefined) {
+    assertEquals(meta["status"], "gathered");
+  }
+});
+
+Deno.test("currency label follows settings", async () => {
+  const root = await Deno.makeTempDir();
+  Deno.mkdirSync(root + "/config", { recursive: true });
+  Deno.writeTextFileSync(
+    root + "/config/settings.json",
+    JSON.stringify({ currency: "USD" }) + "\n",
+  );
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    assertEquals(await loadCurrency("t-split-5"), "USD");
+    const dir = makeRun(root, "r5", savedDoc("Ann"));
+    const item = itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-5" });
+    const board = mountData(item.nodes, "split-board");
+    assertEquals(board["currency"], "USD");
+    assertEquals(mountItems(board)[0]["price"], 10);
+    const out = exportStep(answers(dir, "Continue where you left off?"), {
+      sessionId: "t-split-5",
+    });
+    assertStringIncludes(stepText(out.nodes), "USD 5.00");
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+  }
+});
+
+// Run id picked value of the push source step.
+function runIdValue(step: { id: string; nodes: Node[] }): string {
+  assertEquals(step.id, "push-source");
+  for (const node of step.nodes) {
+    const rec = node as unknown as Record<string, unknown>;
+    if (rec["name"] === "run-id") {
+      if (rec["kind"] === "radio") return String(rec["picked"] ?? "");
+      return String(rec["value"] ?? "");
+    }
+  }
+  return "";
+}
+
+// Other run entry value of the push source step.
+function otherRunValue(step: { id: string; nodes: Node[] }): string {
+  assertEquals(step.id, "push-source");
+  for (const node of step.nodes) {
+    const rec = node as unknown as Record<string, unknown>;
+    if (rec["name"] === "run-id-other") return String(rec["value"] ?? "");
+  }
+  return "";
+}
+
+Deno.test("export handoff lands on push-source with the run preloaded", async () => {
+  const { pushSourceStep } = await import(
+    "../app/expense-split.ts"
+  );
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    const runsRoot = root + "/share/runs";
+    const dir = makeRun(runsRoot, "r6", savedDoc("Ann"));
+    Deno.writeTextFileSync(
+      dir + "/meta.json",
+      JSON.stringify({
+        id: "r6",
+        label: "shop r6",
+        createdAt: "2026-01-06T09:00:00Z",
+        platforms: ["swiggy"],
+        rangeDays: 7,
+        status: "gathered",
+      }) + "\n",
+    );
+    itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-6" });
+    const out = exportStep(answers(dir, "Continue where you left off?"), {
+      sessionId: "t-split-6",
+    });
+    // The export step offers the jump into the push flow.
+    assertStringIncludes(stepText(out.nodes), "Send these to Splitwise now?");
+    const pushJump = (out.nav?.actions ?? []).find((entry) => entry.id === "push-source");
+    assertEquals(pushJump?.label, "Push to Splitwise");
+    // Following the handoff: the push-source step carries the run id.
+    assertEquals(runIdValue(pushSourceStep(new Map(), { sessionId: "t-split-6" })), "r6");
+    // The Other run entry starts empty beside the list.
+    assertEquals(otherRunValue(pushSourceStep(new Map(), { sessionId: "t-split-6" })), "");
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+  }
+});
+
+Deno.test("push source prefers the typed other run over the radio pick", async () => {
+  // The source step owns this rule now, through its own nav handler.
+  const { pushSourceNext } = await import("../app/expense-split/push.ts");
+  const { pushSessionFor, resetPush } = await import(
+    "../app/expense-split/push-engine.ts"
+  );
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  resetPush("t-split-7");
+  try {
+    for (const id of ["r-a", "r-b"]) {
+      const dir = root + "/share/runs/" + id;
+      Deno.mkdirSync(dir, { recursive: true });
+      Deno.writeTextFileSync(
+        dir + "/meta.json",
+        JSON.stringify({
+          id,
+          label: "shop " + id,
+          createdAt: "2026-01-06T09:00:00Z",
+          platforms: ["zepto"],
+          rangeDays: 7,
+          status: "assigned",
+          outputFile: "output.json",
+        }) + "\n",
+      );
+      Deno.writeTextFileSync(
+        dir + "/output.json",
+        JSON.stringify({
+          split_at: "2026-01-06T09:00:00Z",
+          people: ["Ann", "Bob"],
+          splits: [{
+            item: "Milk",
+            platform: "zepto",
+            order_id: "o1",
+            date: "2026-01-01T10:00:00",
+            price: 100,
+            split_type: "custom",
+            assignments: { Ann: 60, Bob: 40 },
+          }],
+          totals: { Ann: 60, Bob: 40 },
+          settlements: [{ from: "Bob", to: "Ann", amount: 40 }],
+        }) + "\n",
+      );
+    }
+    await pushSourceNext(
+      new Map(),
+      { source: ["Assigned run"], "run-id": ["r-a"], "run-id-other": ["r-b"] },
+      { sessionId: "t-split-7" },
+    );
+    assertEquals(pushSessionFor("t-split-7").runId, "r-b");
+    resetPush("t-split-7");
+    await pushSourceNext(
+      new Map(),
+      { source: ["Assigned run"], "run-id": ["r-a"], "run-id-other": [""] },
+      { sessionId: "t-split-7" },
+    );
+    assertEquals(pushSessionFor("t-split-7").runId, "r-a");
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+  }
+});
+
+Deno.test("people step takes a dynamic list", () => {
+  // Four names with blanks and a repeat: blanks drop, repeats merge.
+  const m = new Map<string, string[]>([
+    ["person", ["Ann", "", "Ben", "Cara", "Ann", "Dev"]],
+  ]);
+  assertEquals(collectedPeople(m), ["Ann", "Ben", "Cara", "Dev"]);
+  // Old fixed keys still feed the list for saved drafts.
+  const legacy = new Map<string, string[]>([["person-2", ["Ben"]]]);
+  assertEquals(collectedPeople(legacy), ["Ben"]);
+});
+
+Deno.test("roleErrors covers the empty, missing role, and complete cases", () => {
+  // No name at all: one plain message.
+  const empty = roleErrors({});
+  assertEquals(empty.length, 1);
+  assertStringIncludes(empty[0], "at least one name");
+  // A name exists but me is missing: one message naming both roles.
+  const noMe = roleErrors({ person: ["Ann"], payer: ["Ann"] });
+  assertEquals(noMe.length, 1);
+  assertStringIncludes(noMe[0], "who paid");
+  assertStringIncludes(noMe[0], "which name is you");
+  // Both roles picked: the step is complete.
+  assertEquals(roleErrors({ person: ["Ann"], payer: ["Ann"], me: ["Ann"] }), []);
+});
+
+Deno.test("a fresh line names the me person in the board data", async () => {
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "r7", null);
+  const m = answers(dir);
+  m.set("person", ["Ann", "Ben"]);
+  m.set("me", ["Ben"]);
+  const found = itemStep(m, { sessionId: "t-split-10" });
+  const board = mountData(found.nodes, "split-board");
+  assertEquals(board["me"], "Ben");
+  assertEquals(board["people"], ["Ann", "Ben"]);
+  assertEquals(mountItems(board).length, 1);
+});
+
+// Names of the answers node entries, in order.
+function answerNames(nodes: Node[]): string[] {
+  const out: string[] = [];
+  for (const node of nodes) {
+    const rec = node as unknown as Record<string, unknown>;
+    if (rec["kind"] !== "answers") continue;
+    for (const entry of (rec["entries"] as Array<Record<string, unknown>>) ?? []) {
+      out.push(String(entry["name"] ?? ""));
+    }
+  }
+  return out;
+}
+
+Deno.test("settlement rows read in second person for the me person", async () => {
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "r8", savedDoc("Ann"));
+  itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-11" });
+  const out = exportStep(answers(dir, "Continue where you left off?", "Ann"), {
+    sessionId: "t-split-11",
+  });
+  const text = stepText(out.nodes);
+  // Ann is the me person: her row reads in second person and her
+  // total comes first under her own label.
+  assertStringIncludes(text, "Ben pays you");
+  assertEquals(answerNames(out.nodes), ["Payer", "Your total", "Total Ben"]);
+});
+
+// Value of one textarea node, by field name.
+function textareaValue(nodes: Node[], name: string): string {
+  for (const node of nodes) {
+    const rec = node as unknown as Record<string, unknown>;
+    if (rec["kind"] === "textarea" && rec["name"] === name) {
+      return String(rec["value"] ?? "");
+    }
+  }
+  throw new Error("no textarea named " + name);
+}
+
+Deno.test("export offers push, summary, and share finish paths", async () => {
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "r9", savedDoc("Ann"));
+  itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-12" });
+  const out = exportStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-12" });
+  const bar = out.nav;
+  const jumpIds = (bar?.actions ?? []).map((entry) => entry.id);
+  assertEquals(jumpIds, ["push-source", "split-summary", "split-share"]);
+  assertEquals(bar?.goto, { step: "menu", label: "Back to menu" });
+  assertStringIncludes(stepText(out.nodes), "need no Splitwise account");
+});
+
+Deno.test("split-summary renders the summary text in a textarea", async () => {
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "r10", savedDoc("Ann"));
+  itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-13" });
+  exportStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-13" });
+  const found = summaryStep(answers(dir, "Continue where you left off?"), {
+    sessionId: "t-split-13",
+  });
+  assertEquals(found.id, "split-summary");
+  assertStringIncludes(
+    textareaValue(found.nodes, "summary-text"),
+    "Summary expense",
+  );
+  assertStringIncludes(stepText(found.nodes), "one expense");
+});
+
+Deno.test("split-share-done renders a stored link", async () => {
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    const dir = makeRun(root, "r11", savedDoc("Ann"));
+    itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-14" });
+    exportStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-14" });
+    // Stub the paste upload so no network call happens in a test.
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = () =>
+      Promise.resolve(new Response("https://paste.rs/abc123\n", { status: 200 }));
+    try {
+      const made = await createSplitShareLink(
+        "t-split-14",
+        answers(dir, "Continue where you left off?"),
+      );
+      assertEquals(made, { ok: true });
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    const done = shareDoneStep(new Map(), { sessionId: "t-split-14" });
+    assertEquals(done.id, "split-share-done");
+    const value = textareaValue(done.nodes, "share-link-out");
+    assertStringIncludes(value, "https://paste.rs/abc123");
+    assertStringIncludes(value, "#");
+    assertEquals(currentShareLink("t-split-14"), value);
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+  }
+});
+
+Deno.test("a fresh item line reaches the board as an item", async () => {
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "fee-item", null, FEE_ORDERS);
+  const m = answers(dir);
+  m.set("person", ["Ann", "Ben"]);
+  m.set("me", ["Ben"]);
+  const found = itemStep(m, { sessionId: "t-split-15" });
+  const items = mountItems(mountData(found.nodes, "split-board"));
+  assertEquals(items.length, 2);
+  assertEquals(items[0]["name"], "Pizza");
+  assertEquals(items[0]["price"], 10);
+  assertEquals(items[0]["isFee"], false);
+});
+
+Deno.test("a fresh fee line reaches the board flagged as a fee", async () => {
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "fee-fresh", null, FEE_ORDERS);
+  const m = answers(dir);
+  m.set("person", ["Ann", "Ben"]);
+  m.set("me", ["Ben"]);
+  const found = itemStep(m, { sessionId: "t-split-16" });
+  const board = mountData(found.nodes, "split-board");
+  const items = mountItems(board);
+  assertEquals(items.length, 2);
+  assertEquals(items[0]["isFee"], false);
+  assertEquals(items[1]["isFee"], true);
+  assertEquals(items[1]["price"], 5);
+  assertEquals(board["skipped"], {});
+});
+
+Deno.test("fee line with a saved assignment keeps the saved people", async () => {
+  const root = await Deno.makeTempDir();
+  const doc = freshState(["Ann", "Ben"], "Ann");
+  doc.assignments["0"] = {
+    splitType: "equal",
+    people: ["Ann", "Ben"],
+    amounts: { Ann: 5, Ben: 5 },
+  };
+  // The 5.00 delivery fee stays with Ann alone, not the equal default.
+  doc.assignments["1"] = {
+    splitType: "single",
+    people: ["Ann"],
+    amounts: { Ann: 5 },
+  };
+  const dir = makeRun(root, "fee-saved", doc, FEE_ORDERS);
+  const board = mountData(
+    itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-17" }).nodes,
+    "split-board",
+  );
+  const kept = board["assignments"] as Record<string, unknown>;
+  assertEquals((kept["1"] as Record<string, unknown>)["people"], ["Ann"]);
+  const after = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
+  assertEquals(after.assignments["1"].people, ["Ann"]);
+  assertEquals(after.assignments["1"].amounts, { Ann: 5 });
+  exportStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-17" });
+  assertEquals(
+    JSON.parse(Deno.readTextFileSync(dir + "/output.json")).totals,
+    { Ann: 10, Ben: 5 },
+  );
+});
+
+Deno.test("fee copy names the per person amount with the settings currency", async () => {
+  const root = await Deno.makeTempDir();
+  Deno.mkdirSync(root + "/config", { recursive: true });
+  Deno.writeTextFileSync(
+    root + "/config/settings.json",
+    JSON.stringify({ currency: "EUR" }) + "\n",
+  );
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    assertEquals(await loadCurrency("t-split-18"), "EUR");
+    const dir = makeRun(root, "fee-copy", null, FEE_ORDERS);
+    const m = answers(dir);
+    m.set("person", ["Ann", "Ben"]);
+    m.set("me", ["Ben"]);
+    const board = mountData(itemStep(m, { sessionId: "t-split-18" }).nodes, "split-board");
+    // The 5.00 fee reaches the board flagged as a fee in EUR.
+    assertEquals(board["currency"], "EUR");
+    assertEquals(mountItems(board)[1]["price"], 5);
+    assertEquals(mountItems(board)[1]["isFee"], true);
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+    await loadCurrency("t-split-18");
+  }
+});
+
+Deno.test("empty run branch asks nothing", async () => {
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    const { splitSteps } = await import("../app/expense-split/split.ts");
+    const entry = splitSteps()[0];
+    const found = typeof entry === "function" ? entry(new Map()) : entry;
+    assertEquals(found.id, "split-run");
+    assertStringIncludes(stepText(found.nodes), "No gathered runs exist yet");
+    for (const node of found.nodes) {
+      const rec = node as unknown as Record<string, unknown>;
+      if (rec["kind"] === "checkbox" && rec["name"] === "dry") {
+        throw new Error("empty run branch still shows the Dry run box");
+      }
+    }
+    assertEquals(found.nav?.back, true);
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+  }
+});
+
+Deno.test("rename through the save path keeps the assignment reachable", async () => {
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "rename-keep", savedDoc("Ann"));
+  const m = answers(dir, "Continue where you left off?");
+  m.set("person", ["Ann", "Bobby"]);
+  m.set("me", ["Ann"]);
+  const board = mountData(itemStep(m, { sessionId: "t-split-20" }).nodes, "split-board");
+  assertEquals(board["people"], ["Ann", "Bobby"]);
+  const out = exportStep(m, { sessionId: "t-split-20" });
+  assertStringIncludes(stepText(out.nodes), "Bobby pays you");
+  const written = JSON.parse(Deno.readTextFileSync(dir + "/output.json"));
+  assertEquals(written.people, ["Ann", "Bobby"]);
+  assertEquals(written.totals, { Ann: 5, Bobby: 5 });
+});
+
+// Answers for a fresh two line run with the people filled in.
+function freshFeeAnswers(dir: string): Map<string, string[]> {
+  const m = new Map<string, string[]>();
+  m.set("run", [dir]);
+  m.set("person", ["Ann", "Ben"]);
+  m.set("me", ["Ben"]);
+  return m;
+}
+
+Deno.test("a failed save keeps its reason until the next save lands", async () => {
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "save-warn", null, FEE_ORDERS);
+  const sid = "t-split-21";
+  // First render opens the session on the fresh run.
+  itemStep(freshFeeAnswers(dir), { sessionId: sid });
+  assertEquals(lastSaveError(sid), "");
+  // Force the next save to fail.
+  setSaveWriterForTests(() => Promise.reject(new Error("disk is full")));
+  try {
+    // Rename one person. The remap saves in the background and misses.
+    const renamed = freshFeeAnswers(dir);
+    renamed.set("person", ["Ann", "Bobby"]);
+    const board = mountData(itemStep(renamed, { sessionId: sid }).nodes, "split-board");
+    assertEquals(board["people"], ["Ann", "Bobby"]);
+    await pendingSaves(sid);
+    // Check the session holds the reason.
+    assertEquals(lastSaveError(sid), "disk is full");
+  } finally {
+    setSaveWriterForTests(writeSplitState);
+  }
+  // Rename back with the real writer. The save lands and clears the error.
+  itemStep(freshFeeAnswers(dir), { sessionId: sid });
+  await pendingSaves(sid);
+  assertEquals(lastSaveError(sid), "");
+});
+
+Deno.test("a split session opened under A does not serve B", async () => {
+  const root = await Deno.makeTempDir();
+  const dirA = makeRun(root, "iso-split-a", null, [{
+    id: "o1",
+    platform: "swiggy",
+    date: "2026-09-01 10:00 AM",
+    paid: 10,
+    items: [{ name: "PizzaA-x1", price: 10, quantity: 1 }],
+    fees: { delivery: 0, packaging: 0 },
+  }]);
+  const dirB = makeRun(root, "iso-split-b", null, [{
+    id: "o1",
+    platform: "swiggy",
+    date: "2026-09-01 10:00 AM",
+    paid: 10,
+    items: [{ name: "PizzaB-y2", price: 10, quantity: 1 }],
+    fees: { delivery: 0, packaging: 0 },
+  }]);
+  const sidA = "iso-split-A";
+  const sidB = "iso-split-B";
+  const mapFor = (dir: string) => {
+    const m = new Map<string, string[]>();
+    m.set("run", [dir]);
+    m.set("person", ["Ann", "Ben"]);
+    m.set("me", ["Ann"]);
+    return m;
+  };
+  const shownA = mountItems(
+    mountData(itemStep(mapFor(dirA), { sessionId: sidA }).nodes, "split-board"),
+  );
+  const shownB = mountItems(
+    mountData(itemStep(mapFor(dirB), { sessionId: sidB }).nodes, "split-board"),
+  );
+  assertEquals(shownA[0]["name"], "PizzaA-x1");
+  assertEquals(shownB[0]["name"], "PizzaB-y2");
+  // Re-render A after B opened: A still shows its own run.
+  const againA = mountItems(
+    mountData(itemStep(mapFor(dirA), { sessionId: sidA }).nodes, "split-board"),
+  );
+  assertEquals(againA[0]["name"], "PizzaA-x1");
+  assertEquals(shownB[0]["name"] === "PizzaA-x1", false);
+  assertEquals(shownA[0]["name"] === "PizzaB-y2", false);
+});
+
+// Two one line orders with distinct item names for the pick tests.
+function pickOrders(): Order[] {
+  return [
+    {
+      id: "o1",
+      platform: "zepto",
+      date: "2026-09-08",
+      paid: 100,
+      items: [{ name: "MilkA-pick", price: 100, quantity: 1 }],
+      fees: { delivery: 0, packaging: 0 },
+    },
+    {
+      id: "o2",
+      platform: "zepto",
+      date: "2026-09-09",
+      paid: 50,
+      items: [{ name: "MilkB-pick", price: 50, quantity: 1 }],
+      fees: { delivery: 0, packaging: 0 },
+    },
+  ];
+}
+
+// Write meta.json with a picked list for one run dir.
+function writePickedMeta(dir: string, id: string, picked: number[]): void {
+  Deno.writeTextFileSync(
+    dir + "/meta.json",
+    JSON.stringify({
+      id,
+      label: "shop " + id,
+      createdAt: "2026-09-08T09:00:00Z",
+      platforms: ["zepto"],
+      rangeDays: 7,
+      status: "gathered",
+      picked,
+    }) + "\n",
+  );
+}
+
+Deno.test("fresh split session skips the lines of unpicked orders", async () => {
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "pick-fresh", null, pickOrders());
+  writePickedMeta(dir, "pick-fresh", [1]);
+  const m = answers(dir);
+  m.set("person", ["Ann", "Ben"]);
+  m.set("me", ["Ann"]);
+  const found = itemStep(m, { sessionId: "t-pick-6" });
+  const board = mountData(found.nodes, "split-board");
+  const items = mountItems(board);
+  // Line 0 belongs to the unpicked order, so it stays skipped.
+  assertEquals(items.length, 2);
+  assertEquals(board["skipped"], { "0": true });
+  assertEquals(items[1]["name"], "MilkB-pick");
+});
+
+Deno.test("resumed split session keeps its saved skipped map", async () => {
+  const root = await Deno.makeTempDir();
+  const doc = freshState(["Ann", "Ben"], "Ann");
+  doc.skipped["0"] = true;
+  const dir = makeRun(root, "pick-resume", doc, pickOrders());
+  writePickedMeta(dir, "pick-resume", [0]);
+  const m = answers(dir, "Continue where you left off?");
+  const board = mountData(itemStep(m, { sessionId: "t-pick-7" }).nodes, "split-board");
+  // The saved skip on line 0 stays. Line 1 stays open.
+  assertEquals(mountItems(board).length, 2);
+  assertEquals(board["skipped"], { "0": true });
+  assertEquals(board["assignments"], {});
+  const after = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
+  assertEquals(after.skipped, { "0": true });
+});
+
+Deno.test("split item bar holds Back", async () => {
+  // Open a fresh one line run.
+  // Check the bar keeps Back.
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "nav-back", null);
+  const m = answers(dir);
+  m.set("person", ["Ann", "Ben"]);
+  m.set("me", ["Ben"]);
+  const found = itemStep(m, { sessionId: "t-split-nav-back" });
+  assertEquals(found.id, "split-item");
+  assertEquals(found.nav?.back, true);
+});
+
+Deno.test("split item bar finishes to split-export", async () => {
+  // Open a fresh one line run.
+  // Check the forward control names the export step.
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "nav-finish", null);
+  const m = answers(dir);
+  m.set("person", ["Ann", "Ben"]);
+  m.set("me", ["Ben"]);
+  const found = itemStep(m, { sessionId: "t-split-nav-finish" });
+  const goto = found.nav?.goto as unknown as Record<string, unknown>;
+  assertEquals(goto["step"], "split-export");
+  assertEquals(goto["label"], "Finish splitting");
+});
+
+Deno.test("split item bar declares no action", async () => {
+  // Open a two line run with line 0 saved.
+  // Check the bar lists no action even with saved work.
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "nav-no-action", savedDoc("Ann"), FEE_ORDERS);
+  const m = answers(dir, "Continue where you left off?");
+  m.set("person", ["Ann", "Ben"]);
+  m.set("me", ["Ben"]);
+  const found = itemStep(m, { sessionId: "t-split-nav-actions" });
+  assertEquals(found.nav?.back, true);
+  assertEquals(found.nav?.actions ?? [], []);
+  assertEquals(found.nav?.next, undefined);
+});
+
+Deno.test("repeatOnto copies single split with fresh amounts", () => {
+  // Repeat a single Ben line onto a higher price.
+  // Check the type and the people stay.
+  // Check the amounts recompute for the new price.
+  const made = repeatOnto(
+    { splitType: "single", people: ["Ben"], amounts: { Ben: 10 } },
+    ["Ann", "Ben"],
+    20,
+  );
+  assertEquals(made?.splitType, "single");
+  assertEquals(made?.people, ["Ben"]);
+  assertEquals(made?.amounts, { Ben: 20 });
+});
+
+Deno.test("repeatOnto drops unknown names and returns null with nobody", () => {
+  // Repeat an equal line after Ben left the run.
+  // Check Ann stays alone with a fresh amount.
+  const kept = repeatOnto(
+    { splitType: "equal", people: ["Ann", "Ben"], amounts: { Ann: 5, Ben: 5 } },
+    ["Ann"],
+    10,
+  );
+  assertEquals(kept?.splitType, "equal");
+  assertEquals(kept?.people, ["Ann"]);
+  assertEquals(kept?.amounts, { Ann: 10 });
+  // Repeat with no saved names.
+  // Check the helper returns null.
+  assertEquals(
+    repeatOnto({ splitType: "equal", people: [], amounts: {} }, ["Ann", "Ben"], 10),
+    null,
+  );
+});
+
+Deno.test("board data names the product and price", async () => {
+  // Open a fresh one line run.
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "header-alone", null);
+  const m = answers(dir);
+  m.set("person", ["Ann", "Ben"]);
+  m.set("me", ["Ann"]);
+  const found = itemStep(m, { sessionId: "t-header-1" });
+  // Check the island names the product and price.
+  const items = mountItems(mountData(found.nodes, "split-board"));
+  assertEquals(items.length, 1);
+  assertEquals(items[0]["name"], "Pizza");
+  assertEquals(items[0]["price"], 10);
+});
+
+Deno.test("board data carries the platform and order of every item", async () => {
+  // Open a fresh one line run.
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "header-table", null);
+  const m = answers(dir);
+  m.set("person", ["Ann", "Ben"]);
+  m.set("me", ["Ann"]);
+  const found = itemStep(m, { sessionId: "t-header-2" });
+  // Check the island holds the counter platform and order.
+  const items = mountItems(mountData(found.nodes, "split-board"));
+  assertEquals(items.length, 1);
+  assertEquals(items[0]["index"], 0);
+  assertEquals(items[0]["platform"], "swiggy");
+  assertEquals(items[0]["orderId"], "o1");
+});
+
+Deno.test("board data keeps skipped lines flagged in place", async () => {
+  // Build a two line run with line 0 skipped.
+  const orders: Order[] = [{
+    id: "o1",
+    platform: "swiggy",
+    date: "2026-09-01 10:00 AM",
+    paid: 30,
+    items: [{ name: "Pizza", price: 10, quantity: 1 }, { name: "Burger", price: 20, quantity: 1 }],
+    fees: { delivery: 0, packaging: 0 },
+  }];
+  const root = await Deno.makeTempDir();
+  const doc = freshState(["Ann", "Ben"], "Ann");
+  doc.skipped["0"] = true;
+  const dir = makeRun(root, "skip-hide", doc, orders);
+  const board = mountData(
+    itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-skip-1" }).nodes,
+    "split-board",
+  );
+  // Check the island holds both lines with the skip flagged.
+  const items = mountItems(board);
+  assertEquals(items.length, 2);
+  assertEquals(items[0]["name"], "Pizza");
+  assertEquals(items[1]["name"], "Burger");
+  assertEquals(board["skipped"], { "0": true });
+});
+
+Deno.test("board data carries the open line alongside the skip", async () => {
+  // Build a two line run with line 0 skipped.
+  const orders: Order[] = [{
+    id: "o1",
+    platform: "swiggy",
+    date: "2026-09-01 10:00 AM",
+    paid: 30,
+    items: [{ name: "Pizza", price: 10, quantity: 1 }, { name: "Burger", price: 20, quantity: 1 }],
+    fees: { delivery: 0, packaging: 0 },
+  }];
+  const root = await Deno.makeTempDir();
+  const doc = freshState(["Ann", "Ben"], "Ann");
+  doc.skipped["0"] = true;
+  const dir = makeRun(root, "skip-current", doc, orders);
+  const board = mountData(
+    itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-skip-2" }).nodes,
+    "split-board",
+  );
+  // Check the skipped map stays while line 1 stays open.
+  assertEquals(mountItems(board).length, 2);
+  assertEquals(board["skipped"], { "0": true });
+  assertEquals(board["assignments"], {});
+});
+
+Deno.test("stored split run opens the item step with no run answer", async () => {
+  // Build one fresh run.
+  // Store it for this session.
+  // Open the item step with no run answer.
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "store-fallback", null);
+  const sid = "t-split-store-1";
+  setSplitRun(sid, dir);
+  const m = new Map<string, string[]>();
+  m.set("person", ["Ann", "Ben"]);
+  m.set("me", ["Ann"]);
+  const found = itemStep(m, { sessionId: sid });
+  assertEquals(found.id, "split-item");
+  const board = mountData(found.nodes, "split-board");
+  assertEquals(board["runId"], "store-fallback");
+  assertEquals(mountItems(board)[0]["name"], "Pizza");
+});
+
+Deno.test("item step mounts the board node", async () => {
+  // Open a fresh one line run.
+  // Read the mount node id.
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "item-label", null);
+  const m = answers(dir);
+  m.set("person", ["Ann", "Ben"]);
+  m.set("me", ["Ann"]);
+  const found = itemStep(m, { sessionId: "t-item-label-1" });
+  assertEquals(mountData(found.nodes, "split-board")["runId"], "item-label");
+});
+
+Deno.test("item bar forward button reads Finish splitting", async () => {
+  // Open a fresh one line run.
+  // Read the forward control target.
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "next-item", null);
+  const m = answers(dir);
+  m.set("person", ["Ann", "Ben"]);
+  m.set("me", ["Ben"]);
+  const found = itemStep(m, { sessionId: "t-next-item-1" });
+  const goto = found.nav?.goto as unknown as Record<string, unknown>;
+  assertEquals(String(goto["label"]), "Finish splitting");
+  assertEquals(String(goto["step"]), "split-export");
+});
+
+// Build one run under the live runs dir with meta plus state.
+function makeBoardRun(
+  root: string,
+  id: string,
+  state: SplitStateDoc | null,
+): string {
+  const dir = root + "/share/runs/" + id;
+  Deno.mkdirSync(dir, { recursive: true });
+  Deno.writeTextFileSync(
+    dir + "/meta.json",
+    JSON.stringify({
+      id,
+      label: "shop " + id,
+      createdAt: "2026-01-06T09:00:00Z",
+      platforms: ["swiggy"],
+      rangeDays: 7,
+      status: "gathered",
+    }) + "\n",
+  );
+  Deno.writeTextFileSync(dir + "/orders.json", JSON.stringify(ORDERS) + "\n");
+  if (state !== null) {
+    Deno.writeTextFileSync(
+      dir + "/split-state.json",
+      JSON.stringify(state, null, 2) + "\n",
+    );
+  }
+  return dir;
+}
+
+// Post one patch body to the board route.
+function postPatch(body: unknown): Request {
+  return new Request("http://localhost/app/split-patch", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+Deno.test("board routes ignore an unknown path", async () => {
+  // Ask for a path the board never serves.
+  // Check the wizard keeps it.
+  assertEquals(
+    await handleBoardRoute(new Request("http://localhost/nope")),
+    null,
+  );
+});
+
+Deno.test("board file serves the component", async () => {
+  // Ask for the component file the board ticket wrote.
+  // Check the route answers 200 as JavaScript.
+  const res = await handleBoardRoute(
+    new Request("http://localhost/app/split-board.js"),
+  );
+  assert(res !== null);
+  assertEquals(res.status, 200);
+  assertEquals(res.headers.get("content-type"), "text/javascript; charset=utf-8");
+  assertStringIncludes(await res.text(), "shareEqual");
+});
+
+Deno.test("board patch names an unknown run with 404", async () => {
+  // Point the state root at a fresh temp dir.
+  // Patch a run id that holds no meta.
+  // Check the route answers 404.
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    const res = await handleBoardRoute(
+      postPatch({ runId: "no-such-run", assignments: {} }),
+    );
+    assert(res !== null);
+    assertEquals(res.status, 404);
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+  }
+});
+
+Deno.test("board patch names no run with 400", async () => {
+  // Send a body with no run id.
+  // Check the route answers 400.
+  const res = await handleBoardRoute(postPatch({ assignments: {} }));
+  assert(res !== null);
+  assertEquals(res.status, 400);
+});
+
+Deno.test("board patch writes the named assignment alone", async () => {
+  // Seed line 1 and patch line 0.
+  // Check line 0 lands and line 1 stays.
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    const seed = savedDoc("Ann");
+    seed.assignments["1"] = {
+      splitType: "single",
+      people: ["Ben"],
+      amounts: { Ben: 7 },
+    };
+    const dir = makeBoardRun(root, "board-write", seed);
+    const patch = {
+      runId: "board-write",
+      assignments: {
+        "0": { splitType: "equal", people: ["Ann"], amounts: { Ann: 10 } },
+      },
+      baseline: Date.now(),
+    };
+    const res = await handleBoardRoute(postPatch(patch));
+    assert(res !== null);
+    assertEquals(res.status, 200);
+    const reply = await res.json();
+    assertEquals(reply.ok, true);
+    assertEquals(reply.conflicted, false);
+    const after = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
+    assertEquals(after.assignments["0"], patch.assignments["0"]);
+    assertEquals(after.assignments["1"], seed.assignments["1"]);
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+  }
+});
+
+Deno.test("board patch drops a skip set false", async () => {
+  // Seed two skips and clear one.
+  // Check the cleared skip leaves and the other stays.
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    const seed = savedDoc("Ann");
+    seed.skipped["2"] = true;
+    seed.skipped["3"] = true;
+    const dir = makeBoardRun(root, "board-skip", seed);
+    const res = await handleBoardRoute(postPatch({
+      runId: "board-skip",
+      skipped: { "2": false },
+      baseline: Date.now(),
+    }));
+    assert(res !== null);
+    assertEquals(res.status, 200);
+    const after = JSON.parse(Deno.readTextFileSync(dir + "/split-state.json"));
+    assertEquals(after.skipped, { "3": true });
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+  }
+});
+
+Deno.test("equal split with a remainder still adds up", () => {
+  // Split 10.00 three ways. The parts must total the price exactly.
+  const parts: Record<string, number> = shareEqual(10, ["Ann", "Ben", "Cara"]);
+  const sum = round2(Object.values(parts).reduce((a, b) => a + b, 0));
+  assertEquals(sum, 10);
+  // The remainder lands on the first person.
+  assertEquals(parts["Ann"], 3.34);
+  assertEquals(parts["Ben"], 3.33);
+});
+
+Deno.test("percent split turns percents into money", () => {
+  // Split 10.00 by 60 and 40. The money must match the percents.
+  assertEquals(sharePercent(10, { Ann: 60, Ben: 40 }), { Ann: 6, Ben: 4 });
+});
+
+Deno.test("single split puts the whole price on one person", () => {
+  // Split 10.00 onto Ann alone. She carries the whole price.
+  assertEquals(shareSingle(10, "Ann"), { Ann: 10 });
+});
+
+Deno.test("buildPatch carries only the changed lines plus a set skip", () => {
+  // Mark line 1 dirty with a skip set. Line 0 stays out.
+  const patch = buildPatch(
+    new Set([1]),
+    {
+      "0": { splitType: "equal", people: ["Ann"], amounts: { Ann: 10 } },
+      "1": { splitType: "single", people: ["Ben"], amounts: { Ben: 10 } },
+    },
+    { "1": true },
+  );
+  assertEquals(Object.keys(patch.assignments), ["1"]);
+  assertEquals(patch.assignments["1"], {
+    splitType: "single",
+    people: ["Ben"],
+    amounts: { Ben: 10 },
+  });
+  assertEquals(patch.skipped, { "1": true });
+});
+
+Deno.test("board exports repeatOnto as a function", () => {
+  // Check the board keeps the repeat helper exported.
+  // Guard later changes from dropping it quietly.
+  assertEquals(typeof repeatOnto, "function");
+});
+
+Deno.test("item step mounts the board with the run people and items", async () => {
+  // Open a fresh one line run with the people filled in.
+  const root = await Deno.makeTempDir();
+  const dir = makeRun(root, "board-mount", null);
+  const m = answers(dir);
+  m.set("person", ["Ann", "Ben"]);
+  m.set("me", ["Ann"]);
+  m.set("payer", ["Ann"]);
+  const found = itemStep(m, { sessionId: "t-board-mount" });
+  // Check the step keeps its id plus its bar.
+  assertEquals(found.id, "split-item");
+  assertEquals(found.title, "Split item");
+  assertEquals(found.nav?.back, true);
+  // Check the island names the run, the people and every item.
+  const board = mountData(found.nodes, "split-board");
+  assertEquals(board["runId"], "board-mount");
+  assertEquals(board["currency"], "INR");
+  assertEquals(board["payer"], "Ann");
+  assertEquals(board["me"], "Ann");
+  assertEquals(board["people"], ["Ann", "Ben"]);
+  const items = mountItems(board);
+  assertEquals(items.length, 1);
+  assertEquals(items[0], {
+    index: 0,
+    name: "Pizza",
+    price: 10,
+    platform: "swiggy",
+    orderId: "o1",
+    isFee: false,
+  });
+  assertEquals(board["assignments"], {});
+  assertEquals(board["skipped"], {});
+  assertEquals(typeof board["at"], "number");
+});
+
+Deno.test("digit keys map onto people in order", () => {
+  // Map digit 1 onto Ann.
+  // Map digit 2 onto Ben.
+  // Check a digit past the end maps onto nothing.
+  assertEquals(personForDigit(["Ann", "Ben"], "1"), "Ann");
+  assertEquals(personForDigit(["Ann", "Ben"], "2"), "Ben");
+  assertEquals(personForDigit(["Ann", "Ben"], "3"), null);
+  assertEquals(personForDigit(["Ann", "Ben"], "9"), null);
+});
+
+Deno.test("checkpoint seed names the saved time", () => {
+  // Seed from an island time with one saved line.
+  // Check the line names the saved time.
+  // Check an empty run seeds an empty string.
+  const at = new Date(2026, 8, 17, 9, 4, 7).getTime();
+  const line = seedCheckpointLine(
+    { "0": { splitType: "equal", people: ["Ann"], amounts: { Ann: 10 } } },
+    {},
+    at,
+  );
+  assertStringIncludes(line, "Run last saved");
+  assertEquals(line.endsWith("."), true);
+  assertEquals(seedCheckpointLine({}, {}, at), "");
+  assertStringIncludes(seedCheckpointLine({}, { "0": true }, at), "Run last saved");
+});
+
+Deno.test("two board patches in a row leave no conflict copy", async () => {
+  // Patch line 0, then patch line 1 with the first reply time.
+  // Check no conflict copy lands beside the state file.
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    const dir = makeBoardRun(root, "board-chain", savedDoc("Ann"));
+    const first = await handleBoardRoute(postPatch({
+      runId: "board-chain",
+      assignments: {
+        "0": { splitType: "equal", people: ["Ann"], amounts: { Ann: 10 } },
+      },
+      baseline: Date.now(),
+    }));
+    assert(first !== null);
+    const at = (await first.json()).at;
+    const second = await handleBoardRoute(postPatch({
+      runId: "board-chain",
+      assignments: {
+        "1": { splitType: "single", people: ["Ben"], amounts: { Ben: 7 } },
+      },
+      baseline: at,
+    }));
+    assert(second !== null);
+    assertEquals((await second.json()).conflicted, false);
+    const names: string[] = [];
+    for await (const entry of Deno.readDir(dir)) {
+      if (entry.name.startsWith("split-state.conflict-")) names.push(entry.name);
+    }
+    assertEquals(names.length, 0);
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+  }
+});
+
+Deno.test("progress helper counts each state", () => {
+  // Build a three line doc with one of each state.
+  // Check each count.
+  const doc = freshState(["Ann", "Ben"], "Ann");
+  doc.assignments["0"] = {
+    splitType: "equal",
+    people: ["Ann", "Ben"],
+    amounts: { Ann: 5, Ben: 5 },
+  };
+  doc.skipped["1"] = true;
+  assertEquals(countSplitProgress(3, doc), {
+    assigned: 1,
+    skipped: 1,
+    waiting: 1,
+  });
+});
+
+Deno.test("progress helper ignores indexes outside the run", () => {
+  // Build a two line doc with stale entries past the end.
+  // Check stale entries count for nothing.
+  const doc = freshState(["Ann", "Ben"], "Ann");
+  doc.assignments["0"] = {
+    splitType: "equal",
+    people: ["Ann", "Ben"],
+    amounts: { Ann: 5, Ben: 5 },
+  };
+  doc.assignments["5"] = {
+    splitType: "single",
+    people: ["Ann"],
+    amounts: { Ann: 10 },
+  };
+  doc.skipped["1"] = true;
+  doc.skipped["9"] = true;
+  assertEquals(countSplitProgress(2, doc), {
+    assigned: 1,
+    skipped: 1,
+    waiting: 0,
+  });
+});
+
+Deno.test("resume question names progress and keeps both choices", async () => {
+  // Build a three line run with one assigned and one skipped.
+  // Check the question names the numbers.
+  // Check both choices stay word for word.
+  const orders: Order[] = [{
+    id: "o1",
+    platform: "swiggy",
+    date: "2026-09-01 10:00 AM",
+    paid: 30,
+    items: [
+      { name: "Pizza", price: 10, quantity: 1 },
+      { name: "Burger", price: 10, quantity: 1 },
+      { name: "Salad", price: 10, quantity: 1 },
+    ],
+    fees: { delivery: 0, packaging: 0 },
+  }];
+  const root = await Deno.makeTempDir();
+  const doc = freshState(["Ann", "Ben"], "Ann");
+  doc.assignments["0"] = {
+    splitType: "equal",
+    people: ["Ann", "Ben"],
+    amounts: { Ann: 5, Ben: 5 },
+  };
+  doc.skipped["1"] = true;
+  const dir = makeRun(root, "progress-resume", doc, orders);
+  const found = itemStep(answers(dir), { sessionId: "t-split-progress" });
+  const body = stepText(found.nodes);
+  assertStringIncludes(body, "This run holds a saved split in progress.");
+  assertStringIncludes(
+    body,
+    "It holds 1 assigned item, 1 skipped and 1 waiting out of 3 items.",
+  );
+  const radioNode = found.nodes.find((node) => {
+    const rec = node as unknown as Record<string, unknown>;
+    return rec["kind"] === "radio" && rec["name"] === "resume";
+  }) as unknown as Record<string, unknown>;
+  assert(radioNode !== undefined);
+  assertEquals(radioNode["label"], "Continue where you left off?");
+  const options = (radioNode["options"] as unknown[]).map((option) =>
+    typeof option === "string" ? option : (option as Record<string, unknown>)["value"]
+  );
+  assertEquals(options, ["Continue where you left off?", "Start over"]);
+});
+
+// A skipped line carries no people, so the board used to refuse to save
+// it and refused to advance. Enter looked dead and the skip looked lost.
+Deno.test("a skipped line with nobody ticked needs no assignment", () => {
+  assertEquals(skipSettles({ "3": true }, 3, 0), true, "skipped and untouched settles");
+});
+
+Deno.test("ticking a person on a skipped line still saves", () => {
+  assertEquals(skipSettles({ "3": true }, 3, 1), false, "a ticked person wins over the skip");
+});
+
+Deno.test("an unskipped line still needs an assignment", () => {
+  assertEquals(skipSettles({}, 3, 0), false, "no skip means no free pass");
+  assertEquals(skipSettles({ "3": false }, 3, 0), false, "a cleared skip means no free pass");
+  assertEquals(skipSettles({ "4": true }, 3, 0), false, "another line's skip does not count");
+});
+
+Deno.test("daysSincePush rounds partial days up with a floor of one", () => {
+  // An exact three day gap reads as three.
+  // A three and a half day gap rounds up to four.
+  const now = new Date("2026-09-19T12:00:00Z");
+  assertEquals(daysSincePush("2026-09-16T12:00:00Z", now), 3);
+  assertEquals(daysSincePush("2026-09-16T00:00:00Z", now), 4);
+  // The same instant, a future date, and a bad string all read as one.
+  assertEquals(daysSincePush("2026-09-19T12:00:00Z", now), 1);
+  assertEquals(daysSincePush("2026-09-20T12:00:00Z", now), 1);
+  assertEquals(daysSincePush("not a date", now), 1);
+});
+
+Deno.test("resolveRangeDays follows the mode then the typed value", () => {
+  const now = new Date("2026-09-19T12:00:00Z");
+  const last: LastPush = {
+    at: "2026-09-16T12:00:00Z",
+    kind: "splitwise",
+    confirmed: true,
+  };
+  // The last push wins when the user picked it.
+  assertEquals(resolveRangeDays("last", "30", last, now), 3);
+  // With no record the typed value wins, then the default.
+  assertEquals(resolveRangeDays("last", "7", null, now), 7);
+  assertEquals(resolveRangeDays("last", undefined, null, now), 30);
+  // A custom pick always uses the typed value.
+  assertEquals(resolveRangeDays("custom", "7", last, now), 7);
+  assertEquals(resolveRangeDays(undefined, "7", last, now), 7);
+  // A missing, zero, negative, or bad typed value falls back to thirty.
+  assertEquals(resolveRangeDays("custom", undefined, last, now), 30);
+  assertEquals(resolveRangeDays("custom", "0", last, now), 30);
+  assertEquals(resolveRangeDays("custom", "-5", last, now), 30);
+  assertEquals(resolveRangeDays("custom", "abc", last, now), 30);
+});
+
+Deno.test("last push write and read keep the date, kind, and flag", async () => {
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    // No file means no record.
+    assertEquals(readLastPushSync(), null);
+    // A share link stays unconfirmed.
+    await writeLastPush("share", new Date("2026-09-15T08:00:00Z"));
+    assertEquals(readLastPushSync(), {
+      at: "2026-09-15T08:00:00.000Z",
+      kind: "share",
+      confirmed: false,
+    });
+    // A live push counts as confirmed.
+    await writeLastPush("splitwise", new Date("2026-09-15T08:00:00Z"));
+    assertEquals(readLastPushSync(), {
+      at: "2026-09-15T08:00:00.000Z",
+      kind: "splitwise",
+      confirmed: true,
+    });
+    // A summary waits on hand entry, so it stays unconfirmed.
+    await writeLastPush("aggregate", new Date("2026-09-15T08:00:00Z"));
+    assertEquals(readLastPushSync(), {
+      at: "2026-09-15T08:00:00.000Z",
+      kind: "aggregate",
+      confirmed: false,
+    });
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+  }
+});
+
+Deno.test("last push read rejects a broken file or kind", async () => {
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    Deno.mkdirSync(root + "/config", { recursive: true });
+    // Broken JSON means no record.
+    Deno.writeTextFileSync(root + "/config/last-push.json", "{broken");
+    assertEquals(readLastPushSync(), null);
+    // An unknown kind means no record.
+    Deno.writeTextFileSync(
+      root + "/config/last-push.json",
+      JSON.stringify({ at: "2026-09-15T08:00:00.000Z", kind: "pigeon", confirmed: true }),
+    );
+    assertEquals(readLastPushSync(), null);
+    // A missing flag reads as false and keeps the record.
+    Deno.writeTextFileSync(
+      root + "/config/last-push.json",
+      JSON.stringify({ at: "2026-09-15T08:00:00.000Z", kind: "splitwise" }),
+    );
+    assertEquals(readLastPushSync(), {
+      at: "2026-09-15T08:00:00.000Z",
+      kind: "splitwise",
+      confirmed: false,
+    });
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+  }
+});
+
+Deno.test("last push labels name the path for summaries and shares", () => {
+  const now = new Date("2026-09-19T12:00:00Z");
+  assertEquals(
+    lastPushLabel({ at: "2026-09-15T08:00:00Z", kind: "splitwise", confirmed: true }, now),
+    "Since your last push (15 Sep, 5 days)",
+  );
+  assertEquals(
+    lastPushLabel({ at: "2026-09-15T08:00:00Z", kind: "aggregate", confirmed: false }, now),
+    "Since your last summary (15 Sep, 5 days)",
+  );
+  assertEquals(
+    lastPushLabel({ at: "2026-09-15T08:00:00Z", kind: "share", confirmed: false }, now),
+    "Since your last share (15 Sep, 5 days)",
+  );
+});
+
+// Field map of one node, for the range step checks below.
+function fieldOf(node: Node, key: string): unknown {
+  return (node as unknown as Record<string, unknown>)[key];
+}
+
+Deno.test("range step offers the last push above the number entry", async () => {
+  const { gatherSteps } = await import("../app/expense-split/gather.ts");
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    const rangeStep = (m: Map<string, string[]>) => {
+      for (const entry of gatherSteps()) {
+        const found = typeof entry === "function" ? entry(m) : entry;
+        if (found.id === "gather-range") return found;
+      }
+      throw new Error("no gather-range step");
+    };
+    // With no record the screen holds the number entry alone.
+    const plain = rangeStep(new Map());
+    assertEquals(
+      plain.nodes.filter((node) => fieldOf(node, "kind") === "radio").length,
+      0,
+    );
+    assertEquals(plain.nodes.map((node) => fieldOf(node, "kind")), ["number"]);
+    // With a record a line names it, then a range mode radio leads the number entry.
+    await writeLastPush("splitwise", new Date("2026-09-15T08:00:00Z"));
+    const found = rangeStep(new Map());
+    assertEquals(found.nodes.map((node) => fieldOf(node, "kind")), ["markdown", "radio", "number"]);
+    const radioNode = found.nodes[1];
+    assertEquals(fieldOf(radioNode, "name"), "range-mode");
+    assertEquals(fieldOf(radioNode, "picked"), "last");
+    const options = fieldOf(radioNode, "options") as Array<Record<string, unknown>>;
+    assertEquals(options.map((option) => String(option["value"] ?? "")), ["last", "custom"]);
+    assertEquals(String(options[1]["label"] ?? ""), "A number of days");
+    assert(String(options[0]["label"] ?? "").startsWith("Since your last push ("));
+    // A posted custom pick survives the next render.
+    const kept = rangeStep(new Map([["range-mode", ["custom"]]]));
+    assertEquals(fieldOf(kept.nodes[1], "picked"), "custom");
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+  }
+});
+
+// The record holds UTC. A push made late in the evening east of
+// Greenwich falls on the previous day in UTC, so a UTC label named a
+// day the user never pushed on. The label must read the local calendar.
+// On a machine set to UTC the two agree and this test cannot catch a
+// regression, which is why the rule is stated in the comment above.
+Deno.test("the last push label names the local calendar day", () => {
+  const at = "2026-09-17T20:30:00.000Z";
+  const local = new Date(at);
+  const entry: LastPush = { at, kind: "splitwise", confirmed: true };
+  const label = lastPushLabel(entry, new Date("2026-09-18T04:30:00.000Z"));
+  assertEquals(
+    label.includes("(" + String(local.getDate()) + " "),
+    true,
+    "names the local day, got: " + label,
+  );
+});
+
+// A one day gap read "1 days".
+Deno.test("the last push label says one day, not one days", () => {
+  const now = new Date("2026-09-18T10:00:00.000Z");
+  const entry: LastPush = { at: "2026-09-17T12:00:00.000Z", kind: "share", confirmed: false };
+  const label = lastPushLabel(entry, now);
+  assertEquals(label.includes("1 day)"), true, "singular day, got: " + label);
+  assertEquals(label.includes("1 days"), false, "no plural on one, got: " + label);
+});
+
+Deno.test("confirmLastPush marks an unconfirmed aggregate done and keeps its day", async () => {
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    // A summary waits on hand entry, so it starts unconfirmed.
+    await writeLastPush("aggregate", new Date("2026-09-15T08:00:00Z"));
+    const before = readLastPushSync();
+    assert(before !== null && before.confirmed === false);
+    assertEquals(await confirmLastPush(), true);
+    const after = readLastPushSync();
+    assert(after !== null);
+    // The flag flips, but the day and the path stay byte for byte.
+    assertEquals(after.confirmed, true);
+    assertEquals(after.at, before.at);
+    assertEquals(after.kind, before.kind);
+    assertEquals(after.at, "2026-09-15T08:00:00.000Z");
+    assertEquals(after.kind, "aggregate");
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+  }
+});
+
+Deno.test("confirmLastPush returns false when no record exists", async () => {
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    // No file means no record, so nothing confirms.
+    assertEquals(readLastPushSync(), null);
+    assertEquals(await confirmLastPush(), false);
+    assertEquals(readLastPushSync(), null);
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+  }
+});
+
+Deno.test("confirmLastPush returns false when the record is already confirmed", async () => {
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    // A live push counts as confirmed from the start.
+    await writeLastPush("splitwise", new Date("2026-09-15T08:00:00Z"));
+    const text = Deno.readTextFileSync(root + "/config/last-push.json");
+    assertEquals(await confirmLastPush(), false);
+    // No rewrite happened, so the file and the date stay untouched.
+    assertEquals(Deno.readTextFileSync(root + "/config/last-push.json"), text);
+    assertEquals(readLastPushSync()?.at, "2026-09-15T08:00:00.000Z");
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+  }
+});
+
+// Values and hints of the menu task radio, in order.
+function menuChoices(step: { nodes: Node[] }): Array<{ value: string; hint: string }> {
+  for (const node of step.nodes) {
+    const rec = node as unknown as Record<string, unknown>;
+    if (rec["kind"] === "radio" && rec["name"] === "task") {
+      const out: Array<{ value: string; hint: string }> = [];
+      for (const option of (rec["options"] as unknown[]) ?? []) {
+        if (typeof option === "string") out.push({ value: option, hint: "" });
+        else {
+          const or = option as Record<string, unknown>;
+          out.push({ value: String(or["value"] ?? ""), hint: String(or["hint"] ?? "") });
+        }
+      }
+      return out;
+    }
+  }
+  throw new Error("no task radio");
+}
+
+Deno.test("menu shows Review pushes only while a push waits", async () => {
+  const { menuStep } = await import("../app/expense-split.ts");
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    // No record means no entry.
+    assertEquals(menuChoices(menuStep()).some((entry) => entry.value === "Review pushes"), false);
+    // An unconfirmed summary shows the entry with its hint.
+    await writeLastPush("aggregate", new Date("2026-09-15T08:00:00Z"));
+    const waiting = menuChoices(menuStep()).find((entry) => entry.value === "Review pushes");
+    assert(waiting !== undefined);
+    assertEquals(waiting.hint, "1 unconfirmed push");
+    // A confirmed record hides the entry again.
+    assertEquals(await confirmLastPush(), true);
+    assertEquals(menuChoices(menuStep()).some((entry) => entry.value === "Review pushes"), false);
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+  }
+});
+
+// Validator subprocess path for the direct flag tests below.
+const VALIDATOR = new URL("../scripts/validate.ts", import.meta.url).pathname;
+
+// Run the validator as a subprocess and capture the result.
+async function runValidator(
+  args: string[],
+): Promise<{ code: number; out: string; err: string }> {
+  // Point state at a fresh temp dir so runs never touch real files.
+  const root = await Deno.makeTempDir();
+  const cmd = new Deno.Command(Deno.execPath(), {
+    args: ["run", "--no-lock", "--allow-read", VALIDATOR, ...args],
+    env: {
+      ...Deno.env.toObject(),
+      SPLIT_UTILS_STATE: root,
+      NO_COLOR: "1",
+    },
+    stdout: "piped",
+    stderr: "piped",
+  });
+  const { code, stdout, stderr } = await cmd.output();
+  return {
+    code,
+    out: new TextDecoder().decode(stdout),
+    err: new TextDecoder().decode(stderr),
+  };
+}
+
+// One passing output doc with one order group.
+function passingOutput(): Record<string, unknown> {
+  return {
+    split_at: "2026-09-01T10:00:00Z",
+    people: ["Ann", "Bob"],
+    splits: [{
+      item: "Pizza",
+      platform: "swiggy",
+      order_id: "o1",
+      date: "2026-09-01 10:00 AM",
+      price: 10,
+      split_type: "equal",
+      assignments: { Ann: 5, Bob: 5 },
+    }],
+    totals: { Ann: 5, Bob: 5 },
+    settlements: [{ from: "Bob", to: "Ann", amount: 5 }],
+  };
+}
+
+// Validator with matching orders passes and prints PASS.
+Deno.test("validator with matching orders passes", async () => {
+  const root = await Deno.makeTempDir();
+  const outPath = root + "/output.json";
+  Deno.writeTextFileSync(outPath, JSON.stringify(passingOutput()) + "\n");
+  const ordersPath = root + "/orders.json";
+  Deno.writeTextFileSync(ordersPath, JSON.stringify(ORDERS) + "\n");
+  const res = await runValidator([outPath, "--orders", ordersPath]);
+  // Assert the run exits with code 0.
+  assertEquals(res.code, 0, "matching orders exit 0");
+  // Assert stdout holds the pass line.
+  assertStringIncludes(res.out, "PASS");
+});
+
+// Validator with a bad flag exits 2 and names the flag.
+Deno.test("validator with a bad flag names the flag", async () => {
+  const root = await Deno.makeTempDir();
+  const outPath = root + "/output.json";
+  Deno.writeTextFileSync(outPath, JSON.stringify(passingOutput()) + "\n");
+  const res = await runValidator([outPath, "--bogus"]);
+  // Assert the run exits with code 2.
+  assertEquals(res.code, 2, "bad flag exits 2");
+  // Assert stderr names the bad flag.
+  assertStringIncludes(res.err, "Unknown option: --bogus");
+});

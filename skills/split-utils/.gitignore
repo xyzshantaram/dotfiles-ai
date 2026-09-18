@@ -1,0 +1,37 @@
+# Local state: logins, tokens, config with live keys, run cache.
+state/
+
+# Wizard session leftovers.
+wizard-progress.jsonl
+*.log
+
+# Environment files may hold consumer keys.
+.env
+splitwise.env
+
+# Generated outputs from dry runs and manual tests.
+output.json
+output-*.json
+aggregate-*.txt
+orders.json
+
+# Fixture runner output (tests/expected/ is frozen ground truth and IS committed).
+tests/actual/
+
+# Compiled desktop binaries plus shortcuts.
+dist/
+
+# Editors and OS noise.
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Throwaway scrape dumps from scripts/proto-*.ts.
+out/
+
+# Compiled desktop demo build.
+demo/
+
+# Every task passes --no-lock, so a lockfile here only goes stale.
+deno.lock

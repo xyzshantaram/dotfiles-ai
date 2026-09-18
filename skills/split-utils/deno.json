@@ -1,0 +1,41 @@
+{
+  "imports": {
+    // Only the tests need a mapped name. Every dependency the app
+    // itself uses is named in full inside the source, so this
+    // repository runs straight from a raw GitHub URL with no import
+    // map. A remote module cannot see a local one.
+    "@std/assert": "jsr:@std/assert@^1.0.19"
+  },
+  "tasks": {
+    "start": "deno run --no-lock -A app/expense-split.ts",
+    "check": "deno check --no-lock scripts/*.ts scripts/dev/*.ts src/*.ts app/*.ts app/expense-split/*.ts",
+    "test": "deno test --no-lock --allow-read --allow-write --allow-env --allow-sys --allow-run tests/",
+    "test:fixtures": "bash tests/run.sh",
+    "dev": "deno run --no-lock -A"
+  },
+  "fmt": {
+    "lineWidth": 100,
+    "exclude": [
+      "state",
+      "out",
+      "tests/fixtures"
+    ]
+  },
+  "lint": {
+    "exclude": [
+      "state",
+      "out",
+      "tests/fixtures"
+    ],
+    "rules": {
+      // This repository runs straight from a raw GitHub URL. Deno does
+      // not apply a local import map to a remote module, so a bare
+      // specifier fails there with "not a dependency". Naming every
+      // dependency in full inside the source is what makes the plain
+      // one-command run work, so the rule that forbids it is off.
+      "exclude": [
+        "no-import-prefix"
+      ]
+    }
+  }
+}
