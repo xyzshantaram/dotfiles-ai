@@ -251,6 +251,39 @@ describe("the #177 outline matrix: the open ask names the colour", () => {
     ).toContain("var(--dsh-outline-escalated)");
   });
 
+  it("an open escalation ask wins over a durable guard mark before the args carry it", () => {
+    // THE CELL THAT PROVED THE GAP. Every other escalation-pending case also
+    // carries data-escalated, so the settled yellow rule could win them all:
+    // deleting the pending yellow rule outright left the suite 30/30 green,
+    // which is a rule with zero coverage. This cell is the window the doubled
+    // rule's comment names -- the sandbox ask is OPEN but the call args do
+    // not yet carry the settled mark -- so only the pending yellow rule can
+    // beat the doubled blue rule here. It flips to blue if that rule is
+    // deleted, and it flips to blue if only its :not([data-escalation-pending])
+    // exclusion is dropped, so it pins both halves at once.
+    expect(
+      winningOutline(outlineRules(outlineCss), ["data-guard-approval", "data-escalation-pending"]),
+    ).toContain("var(--dsh-outline-escalated)");
+  });
+
+  it("both marks plus errored reads error red", () => {
+    // A deliberate change of behaviour, accepted by the owner: this cell read
+    // blue before #177, because the unexcluded doubled guard rule outranked
+    // error. Guard now loses to escalation first, and error already beat a
+    // settled escalation, so red follows. Red is the right answer -- a failed
+    // command that ran with a widened sandbox is the most important thing on
+    // the page, and the yellow chip and banner still record the widening. It
+    // is pinned so that a later reader does not restore blue by accident and
+    // call it a fix.
+    expect(
+      winningOutline(outlineRules(outlineCss), [
+        "data-escalated",
+        "data-guard-approval",
+        "data-error",
+      ]),
+    ).toContain("var(--dsw-alias-state-error-primary)");
+  });
+
   it("an open guard ask wins over a settled escalation mark", () => {
     // The reverse order proves no sequence assumption: if the guard ask is
     // the one open, the outline names it even beside a settled escalation.
