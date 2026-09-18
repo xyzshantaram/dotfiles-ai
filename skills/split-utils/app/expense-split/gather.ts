@@ -13,7 +13,7 @@ import {
   step,
   type StepFn,
   textEntry,
-} from "jsr:@xyzshantaram/wizardkit@^0.1.0";
+} from "jsr:@xyzshantaram/wizardkit@^0.1.1";
 import {
   isDryMap,
   listRunsSync,
@@ -33,7 +33,7 @@ import {
 } from "../../src/lastpush.ts";
 import { sessionStore, sidOf } from "../../src/sessionstore.ts";
 import { setSplitRun } from "./split.ts";
-import type { WizardCtx } from "jsr:@xyzshantaram/wizardkit@^0.1.0";
+import type { WizardCtx } from "jsr:@xyzshantaram/wizardkit@^0.1.1";
 import { dryBox, dryNote } from "./dry.ts";
 import { fmtRs, formatDayISO, isLedgerRow, itemSummary, parseDate } from "../../src/common.ts";
 import { profileDir } from "../../src/paths.ts";

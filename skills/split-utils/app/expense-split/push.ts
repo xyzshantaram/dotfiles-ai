@@ -13,7 +13,7 @@ import {
   step,
   type StepFn,
   textEntry,
-} from "jsr:@xyzshantaram/wizardkit@^0.1.0";
+} from "jsr:@xyzshantaram/wizardkit@^0.1.1";
 import { buildAggregateSummary, orderFingerprint } from "../../src/render.ts";
 import { fmtRs, formatDayISO, formatMoney, itemSummary, parseDate } from "../../src/common.ts";
 import { isDryMap, listRunsSync, runHint } from "../../src/runstate.ts";
@@ -30,7 +30,7 @@ import {
 } from "./push-engine.ts";
 import { field } from "../../src/answers.ts";
 import { sidOf } from "../../src/sessionstore.ts";
-import type { WizardCtx } from "jsr:@xyzshantaram/wizardkit@^0.1.0";
+import type { WizardCtx } from "jsr:@xyzshantaram/wizardkit@^0.1.1";
 
 // Choices for the source stage: an assigned run, a split file, or a
 // friend's share link, as pusher.ts reads them.

@@ -16,8 +16,8 @@ import {
   resetPush,
 } from "@app/app/expense-split/push-engine.ts";
 import { backupFailedRun, isDryMap, listRunsSync } from "@app/src/runstate.ts";
-import type { Step } from "jsr:@xyzshantaram/wizardkit@^0.1.0";
-import type { StepFn } from "jsr:@xyzshantaram/wizardkit@^0.1.0";
+import type { Step } from "jsr:@xyzshantaram/wizardkit@^0.1.1";
+import type { StepFn } from "jsr:@xyzshantaram/wizardkit@^0.1.1";
 
 // Fail the test when a condition misses.
 function assert(cond: boolean, msg: string): void {

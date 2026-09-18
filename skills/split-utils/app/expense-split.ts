@@ -12,7 +12,7 @@ import {
   type Step,
   step,
   type StepFn,
-} from "jsr:@xyzshantaram/wizardkit@^0.1.0";
+} from "jsr:@xyzshantaram/wizardkit@^0.1.1";
 import { confirmPushAction, gatherSteps, setResumedRun } from "./expense-split/gather.ts";
 import { handleBoardRoute } from "./expense-split/board-routes.ts";
 import { resumeStep, routeStatus, splitRunId, splitSteps } from "./expense-split/split.ts";
@@ -81,7 +81,7 @@ import { loadSettings, saveSettings, USAGE_MODES } from "../src/settings.ts";
 import { formatPushDay, pushNoun, readLastPushSync } from "../src/lastpush.ts";
 import { listRunsSync, readRun, runHint, stateRoot } from "../src/runstate.ts";
 import { sidOf } from "../src/sessionstore.ts";
-import type { WizardCtx } from "jsr:@xyzshantaram/wizardkit@^0.1.0";
+import type { WizardCtx } from "jsr:@xyzshantaram/wizardkit@^0.1.1";
 
 // Push source step with the finished split run preloaded. The export
 // step jumps here with goto:push-source, so the Run entry carries the

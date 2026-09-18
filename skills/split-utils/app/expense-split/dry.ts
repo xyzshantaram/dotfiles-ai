@@ -1,7 +1,7 @@
 // Shared Dry run helpers for the expense-split wizard.
 // One definition covers the gather, split, and push flows.
 
-import { checkbox, markdown, type Node } from "jsr:@xyzshantaram/wizardkit@^0.1.0";
+import { checkbox, markdown, type Node } from "jsr:@xyzshantaram/wizardkit@^0.1.1";
 
 // Dry run box shared by the first screen of each flow. Same name and
 // shape on every stage, so one pattern covers all three flows.

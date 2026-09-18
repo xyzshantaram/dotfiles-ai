@@ -14,7 +14,7 @@ import {
   type StepFn,
   textarea,
   textEntry,
-} from "jsr:@xyzshantaram/wizardkit@^0.1.0";
+} from "jsr:@xyzshantaram/wizardkit@^0.1.1";
 import {
   buildOutputDoc,
   countDoneOrders,
@@ -48,7 +48,7 @@ import {
 import { answer, answerList } from "../../src/answers.ts";
 import { sessionStore, sidOf } from "../../src/sessionstore.ts";
 import { listResumableDrafts } from "../expense-split.ts";
-import type { WizardCtx } from "jsr:@xyzshantaram/wizardkit@^0.1.0";
+import type { WizardCtx } from "jsr:@xyzshantaram/wizardkit@^0.1.1";
 import { dryBox, dryNote } from "./dry.ts";
 
 // Live split session for one run dir. The doc is the source of truth

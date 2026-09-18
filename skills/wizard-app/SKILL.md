@@ -11,7 +11,7 @@ this skill. Rename the title, steps, and the desktop block. That dir is the whol
 
 - `template.ts` imports everything from `"wizardkit"`: node builders, `createWizard`, plus
   re-exported shell (`$`).
-- `deno.json` maps `"wizardkit"` to `jsr:@xyzshantaram/wizardkit@^0.1.0`. To develop against a
+- `deno.json` maps `"wizardkit"` to `jsr:@xyzshantaram/wizardkit@^0.1.1`. To develop against a
   checkout, map it at that checkout's `src/mod.ts` instead.
 - `compile.ts` builds the binary plus the Linux shortcut. It reads the local `deno.json`, so it
   works unchanged per wizard.

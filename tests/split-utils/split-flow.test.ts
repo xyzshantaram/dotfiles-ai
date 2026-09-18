@@ -31,7 +31,7 @@ import {
   shareSingle,
   skipSettles,
 } from "@app/app/expense-split/split-board.js";
-import type { Node } from "jsr:@xyzshantaram/wizardkit@^0.1.0";
+import type { Node } from "jsr:@xyzshantaram/wizardkit@^0.1.1";
 import type { Order } from "@app/src/common.ts";
 import {
   confirmLastPush,
