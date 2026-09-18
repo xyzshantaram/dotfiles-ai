@@ -104,10 +104,10 @@
   work only because it feels professional. Decide first whether any old state exists. Say which
   evidence you used. ASK THE USER when the answer is not obvious. When you must judge alone, read
   the repo: its age (`git log --reverse --date=short --format=%ad | head -1`), the number of
-  distinct authors (`git shortlog -sne HEAD | wc -l` — the `HEAD` is load-bearing, because with
-  no revision `git shortlog` reads the log from STDIN and a bare pipe reports zero authors),
-  whether it was ever tagged or published, and whether anything else in this workspace reads the
-  format you are changing. Check also whether anyone outside this workspace holds the format: a
+  distinct authors (`git shortlog -sne HEAD | wc -l`), whether it was ever tagged or published,
+  and whether anything else in this workspace reads the format you are changing. Name HEAD in the
+  author command. Without a revision, `git shortlog` reads from STDIN and reports zero authors.
+  Check also whether anyone outside this workspace holds the format: a
   published package can have no reader here and many readers elsewhere. A repo that is days old,
   has one author, and has shipped to nobody holds no old state. Rename the field. Change the
   format. Delete the old path. Write the migration only when you can NAME the holder of the old
