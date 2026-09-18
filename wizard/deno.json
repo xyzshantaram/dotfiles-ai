@@ -3,7 +3,7 @@
   "imports": {
     // Published package. To develop against a checkout, point this at
     // the checkout instead, for example "../wizardkit/src/mod.ts".
-    "wizardkit": "jsr:@xyzshantaram/wizardkit"
+    "wizardkit": "jsr:@xyzshantaram/wizardkit@^0.1.0"
   },
   "tasks": {
     "start": "deno run --no-lock -A template.ts",

@@ -135,7 +135,7 @@ Deno refuses a JSR version younger than 24 hours by default. Right after a wizar
 consumer needs `--min-dep-age=0` until the version ages. This bites a raw URL run of split-utils,
 which carries no config to set the policy in.
 
-- [ ] W6 the wizard skill ships one file that imports the JSR package. Eval: the template runs from
+- [x] W6 the wizard skill ships one file that imports the JSR package. Eval: the template runs from
       a directory holding nothing else.
 - [ ] W7 the split-utils skill, as a thin router, with the three push paths, the safety contract and
       guidance for building and checking `output.json`. Eval: an agent with only the skill can drive

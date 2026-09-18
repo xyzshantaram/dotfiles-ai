@@ -11,18 +11,19 @@ this skill. Rename the title, steps, and the desktop block. That dir is the whol
 
 - `template.ts` imports everything from `"wizardkit"`: node builders, `createWizard`, plus
   re-exported shell (`$`).
-- `deno.json` maps `"wizardkit"` to `jsr:@xyzshantaram/wizardkit`. To develop against a checkout,
-  map it at that checkout's `src/mod.ts` instead.
+- `deno.json` maps `"wizardkit"` to `jsr:@xyzshantaram/wizardkit@^0.1.0`. To develop against a
+  checkout, map it at that checkout's `src/mod.ts` instead.
 - `compile.ts` builds the binary plus the Linux shortcut. It reads the local `deno.json`, so it
   works unchanged per wizard.
 
 ## Steps as data
 
 A step is `{ id, title, nodes }`, built with `step(id, title, nodes)` or hand-written as JSON. Node
-kinds: `menu`, `tree`, `progress`, `radio`, `checkbox`, `textEntry`, `numberEntry`, `markdown` (info
-panels only), `stages` (clickable `1/3` rows posting `goto:N`), `spoiler` (native details), `tabs`
-(CSS-only, radio-driven), `action` (runs a server command, output swaps inline), `answers` (review
-lists).
+kinds: `menu`, `tree`, `progress`, `radio`, `checkbox`, `textEntry`, `numberEntry`, `textarea`,
+`table`, `copyable` (text plus a copy button), `markdown` (info panels only), `stages` (clickable
+`1/3` rows posting `goto:N`), `spoiler` (native details), `tabs` (CSS-only, radio-driven), `action`
+(runs a server command, output swaps inline), `answers` (review lists), `repeating` (one group of
+fields per row), and `mount` (hands a region of the page to a component of your own).
 
 ```ts
 const handle = createWizard({
@@ -89,7 +90,8 @@ Two hooks bracket a step. Both swallow their own errors, and neither can block.
   status.
 - Theming: light and dark ship together (`prefers-color-scheme`). Neutrals carry surfaces; one
   pastel tint per node kind carries edges.
-- Text imports only (`style.css` pattern). No build step, ever.
+- No build step, ever. The toolkit's own CSS and browser scripts are real files under `src/client`,
+  pulled in with `with { type: "text" }` and served as written.
 - Run everything with `-A`. A wizard is deterministic; the user reviews the script before running
   it.
 
