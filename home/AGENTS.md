@@ -27,6 +27,13 @@
   not invent a workaround, and do not report the environment as broken, until
   that retry also fails. Redirecting the write into `/tmp/dsh` (for example
   `npm install --cache /tmp/dsh/npm-cache`) is the other correct fix.
+* For a repeated structural change across files, reach for `ast_grep` and `ast_edit` once this
+  setup installs them. `ast_grep` matches code by shape: the pattern `console.log($MSG)` finds
+  every such call whatever the spacing or the argument text, and `$MSG` holds what it found.
+  `ast_edit` rewrites through the same pattern. It previews by default and writes only with
+  `apply: true`, through the same checks as any other write. A one-off literal change is still
+  `edit`. A sed or python regex pass over source is the thing this replaces: use the tree
+  pattern instead.
 * NEVER EVER instruct subagents to return entire file contents. If you need to read a file,
   read it yourself. Subagents are to be used for tasks which can be compartmentalized
   easily and which you only need the indirect result off, like self-contained patches,
@@ -81,23 +88,19 @@
 * If the user makes a request in between tool calls you made, always add the task to the
   todo list (todo_write tool) before continuing with your current task, unless explicitly
   told to do the new task first.
-* NEVER EVER install dependencies manually by editing Cargo.toml/package.json/other package
-  manager configuration files. ALWAYS use the relevant command (cargo add / (p)npm add) instead.
-  This prohibition covers dependency VERSIONS and has no exception: a version you typed by hand
-  is a version nothing resolved. For a STRUCTURAL change no such command can make — scaffolding
-  a new manifest, or setting a field that is not a dependency — write a script that performs the
-  edit and tell the user to run it. Do not ask the user to work out the edit themselves: a
-  request they have to reconstruct is not a handoff, and a subagent cannot ask anyone at all.
-  The script route exists for structure only; reaching for it to set a dependency version is
-  the misreading it must not become.
+* Never set a dependency by hand: no hand edit of a manifest, no hand-typed version, no shell
+  heredoc around the guard. Use the package tool, which resolves the version for you. For a
+  STRUCTURAL change the package tool cannot make, write a script that performs the edit and tell
+  the user to run it. Do not ask the user to work out the edit. The script route exists for
+  structure only. A subagent cannot ask anyone at all, so the script is the handoff.
 * When writing CSS, unless the project already uses them, NEVER use camelCase class and id names.
   kebab-case only.
 * If a linter like cargo clippy or pnpm lint is available and you are doing any long-running or
   complex work, use the linter to check your work. Do not treat a successful build as proof
   you are done. This matters most for TypeScript.
-* if the user mentions nostr NIPs or event kinds, always try to look up the NIP with the
-  nostrbook MCP tools (mcp__nostrbook__*), and if not present, ask the user for a reference
-  document. Never hallucinate.
+* If the user mentions nostr NIPs or event kinds, load the `nostr` skill and look up the NIP
+  through it. If the NIP is not present, ask the user for a reference document. Never
+  hallucinate.
 * NEVER invent a backwards compatibility requirement. A migration path, a deprecation shim, a
   legacy code path, a dual-read fallback, a version flag: each one is real code with real bug
   surface, and each one is worthless when nobody holds the old state. Do not add compatibility
@@ -115,8 +118,7 @@
 * If the user asks for a change or review and you find pre-existing issues, ALWAYS surface them.
   Do not fix without asking. Do not dismiss them as pre-existing either. A lot of the time they
   are not pre-existing and you are just hallucinating.
-* do not use `find /` or similar long-running, inefficient commands to find files while gathering
-  context. If you are unsure where something is, ask.
+* Do not run long file searches while you gather context. If you cannot find a file, ask.
 * For any non-trivial software engineering request (implementing, building, fixing, refactoring —
   more than a one-line edit), load the `software-engineering` skill before proceeding. It governs
   when to just do it directly versus plan first, and when to delegate to `coder`/`tester`/
