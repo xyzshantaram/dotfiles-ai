@@ -81,6 +81,12 @@ export function pushedFilePath(): string {
   return configDir() + "/splitwise_pushed.json";
 }
 
+// Read the last push record file under the config dir.
+export function lastPushFilePath(): string {
+  // Join the config dir and the fixed file name.
+  return configDir() + "/last-push.json";
+}
+
 // Read the Splitwise key pair file under the config dir.
 export function splitwiseEnvPath(): string {
   // Join the config dir and the fixed file name.

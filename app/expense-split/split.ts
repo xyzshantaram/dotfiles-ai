@@ -35,6 +35,7 @@ import { loadSettings } from "../../src/settings.ts";
 import { formatMoney } from "../../src/common.ts";
 import { buildAggregateSummary, groupOrders } from "../../src/render.ts";
 import { createShareLink, type ShareLink } from "../../src/share.ts";
+import { writeLastPush } from "../../src/lastpush.ts";
 import {
   isDryMap,
   listRunsSync,
@@ -1150,6 +1151,12 @@ export async function createSplitShareLink(
     }
     const jsonText = await Deno.readTextFile(dir + "/output.json");
     shareLinks.for(sid).current = await createShareLink(jsonText);
+    try {
+      // Stamp the run after the link lands.
+      await writeLastPush("share");
+    } catch {
+      // A missed stamp never fails a good link.
+    }
     return { ok: true };
   } catch {
     return { ok: false, error: "The share upload failed. Try again later." };

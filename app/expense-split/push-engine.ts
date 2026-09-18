@@ -28,6 +28,7 @@ import {
   SplitwiseAPI,
 } from "../../src/splitwise.ts";
 import { splitwiseEnvPath } from "../../src/paths.ts";
+import { writeLastPush } from "../../src/lastpush.ts";
 import { OUTPUT_FILE } from "../../src/splitstate.ts";
 import { sessionStore, sidOf } from "../../src/sessionstore.ts";
 
@@ -517,6 +518,12 @@ export async function executePush(
       }
       outcome.aggregateFile = path;
     }
+    try {
+      // Stamp the run after the summary lands.
+      await writeLastPush("aggregate");
+    } catch {
+      // A missed stamp never fails a good summary.
+    }
     live.outcome = outcome;
     return { ok: true };
   }
@@ -549,6 +556,12 @@ export async function executePush(
     return { ok: false, error: outcome.note };
   }
   await savePushed(updated);
+  try {
+    // Stamp the run after the live push lands.
+    await writeLastPush("splitwise");
+  } catch {
+    // A missed stamp never fails a good push.
+  }
   if (live.runId !== null) {
     try {
       await archiveRun(live.runId);

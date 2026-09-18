@@ -7,6 +7,7 @@ import {
   markdown,
   type Node,
   numberEntry,
+  radio,
   repeating,
   type Step,
   step,
@@ -23,6 +24,7 @@ import {
   stateRoot,
 } from "../../src/runstate.ts";
 import { answer, answerList } from "../../src/answers.ts";
+import { lastPushLabel, readLastPushSync, resolveRangeDays } from "../../src/lastpush.ts";
 import { sessionStore, sidOf } from "../../src/sessionstore.ts";
 import { setSplitRun } from "./split.ts";
 import type { WizardCtx } from "jsr:@xyzshantaram/wizardkit@^0.1.0";
@@ -217,6 +219,32 @@ function accountsStep(answerMap: Map<string, string[]>): Step {
   };
 }
 
+// Day range step. A remembered push adds a fast choice above the
+// number entry. With no record the screen keeps its old shape.
+function rangeStep(answerMap: Map<string, string[]>): Step {
+  const nodes: Node[] = [];
+  const last = readLastPushSync();
+  if (last !== null) {
+    const picked = answerMap.get("range-mode")?.[0] ?? "last";
+    nodes.push(
+      radio("Range", "range-mode", [
+        { value: "last", label: lastPushLabel(last, new Date()) },
+        { value: "custom", label: "A number of days" },
+      ], picked),
+    );
+  }
+  nodes.push(numberEntry("Days back", "range", 30));
+  return {
+    ...step(
+      "gather-range",
+      "Day range",
+      nodes,
+      "Gather collects orders from the last days you type here.",
+    ),
+    nav: { back: true, next: "Next" },
+  };
+}
+
 export function gatherSteps(): Array<Step | StepFn> {
   return [
     (answerMap: Map<string, string[]>): Step => ({
@@ -236,17 +264,7 @@ export function gatherSteps(): Array<Step | StepFn> {
       ),
       nav: { back: true, next: "Next" },
     }),
-    {
-      ...step(
-        "gather-range",
-        "Day range",
-        [
-          numberEntry("Days back", "range", 30),
-        ],
-        "Gather collects orders from the last days you type here.",
-      ),
-      nav: { back: true, next: "Next" },
-    },
+    rangeStep,
     accountsStep,
     manualStep,
     reviewStep,
@@ -391,7 +409,12 @@ export function persistManualRun(
 ): void {
   const sid = sidOf({ sessionId });
   const rows = manualRows(m);
-  const days = Number(m.get("range")?.[0] ?? "") || 30;
+  const days = resolveRangeDays(
+    m.get("range-mode")?.[0],
+    m.get("range")?.[0],
+    readLastPushSync(),
+    new Date(),
+  );
   const signature = JSON.stringify([rows, days]);
   const held = manualRuns.for(sid);
   if (held.current !== null && held.current.signature === signature) return;
@@ -485,8 +508,12 @@ function reviewStep(answerMap: Map<string, string[]>, ctx?: WizardCtx): Step {
     .map((value) => value.toLowerCase())
     .filter((value): value is PlatformId => (PLATFORMS as readonly string[]).includes(value))
     .filter((id, index, all) => all.indexOf(id) === index);
-  const range = answerMap.get("range")?.[0];
-  const days = range ? Number(range) : 30;
+  const days = resolveRangeDays(
+    answerMap.get("range-mode")?.[0],
+    answerMap.get("range")?.[0],
+    readLastPushSync(),
+    new Date(),
+  );
   const dry = isDryMap(answerMap);
   if (dry) {
     // The markdown below names the platforms and the day range. An

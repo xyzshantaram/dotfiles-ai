@@ -33,6 +33,14 @@ import {
 } from "../app/expense-split/split-board.js";
 import type { Node } from "jsr:@xyzshantaram/wizardkit@^0.1.0";
 import type { Order } from "../src/common.ts";
+import {
+  daysSincePush,
+  type LastPush,
+  lastPushLabel,
+  readLastPushSync,
+  resolveRangeDays,
+  writeLastPush,
+} from "../src/lastpush.ts";
 
 // One order with one 10.00 item and no fees.
 const ORDERS: Order[] = [{
@@ -468,28 +476,33 @@ Deno.test("split-summary renders the summary text in a textarea", async () => {
 
 Deno.test("split-share-done renders a stored link", async () => {
   const root = await Deno.makeTempDir();
-  const dir = makeRun(root, "r11", savedDoc("Ann"));
-  itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-14" });
-  exportStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-14" });
-  // Stub the paste upload so no network call happens in a test.
-  const realFetch = globalThis.fetch;
-  globalThis.fetch = () =>
-    Promise.resolve(new Response("https://paste.rs/abc123\n", { status: 200 }));
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
-    const made = await createSplitShareLink(
-      "t-split-14",
-      answers(dir, "Continue where you left off?"),
-    );
-    assertEquals(made, { ok: true });
+    const dir = makeRun(root, "r11", savedDoc("Ann"));
+    itemStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-14" });
+    exportStep(answers(dir, "Continue where you left off?"), { sessionId: "t-split-14" });
+    // Stub the paste upload so no network call happens in a test.
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = () =>
+      Promise.resolve(new Response("https://paste.rs/abc123\n", { status: 200 }));
+    try {
+      const made = await createSplitShareLink(
+        "t-split-14",
+        answers(dir, "Continue where you left off?"),
+      );
+      assertEquals(made, { ok: true });
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    const done = shareDoneStep(new Map(), { sessionId: "t-split-14" });
+    assertEquals(done.id, "split-share-done");
+    const value = textareaValue(done.nodes, "share-link-out");
+    assertStringIncludes(value, "https://paste.rs/abc123");
+    assertStringIncludes(value, "#");
+    assertEquals(currentShareLink("t-split-14"), value);
   } finally {
-    globalThis.fetch = realFetch;
+    Deno.env.delete("SPLIT_UTILS_STATE");
   }
-  const done = shareDoneStep(new Map(), { sessionId: "t-split-14" });
-  assertEquals(done.id, "split-share-done");
-  const value = textareaValue(done.nodes, "share-link-out");
-  assertStringIncludes(value, "https://paste.rs/abc123");
-  assertStringIncludes(value, "#");
-  assertEquals(currentShareLink("t-split-14"), value);
 });
 
 Deno.test("a fresh item line reaches the board as an item", async () => {
@@ -1344,4 +1357,184 @@ Deno.test("an unskipped line still needs an assignment", () => {
   assertEquals(skipSettles({}, 3, 0), false, "no skip means no free pass");
   assertEquals(skipSettles({ "3": false }, 3, 0), false, "a cleared skip means no free pass");
   assertEquals(skipSettles({ "4": true }, 3, 0), false, "another line's skip does not count");
+});
+
+Deno.test("daysSincePush rounds partial days up with a floor of one", () => {
+  // An exact three day gap reads as three.
+  // A three and a half day gap rounds up to four.
+  const now = new Date("2026-09-19T12:00:00Z");
+  assertEquals(daysSincePush("2026-09-16T12:00:00Z", now), 3);
+  assertEquals(daysSincePush("2026-09-16T00:00:00Z", now), 4);
+  // The same instant, a future date, and a bad string all read as one.
+  assertEquals(daysSincePush("2026-09-19T12:00:00Z", now), 1);
+  assertEquals(daysSincePush("2026-09-20T12:00:00Z", now), 1);
+  assertEquals(daysSincePush("not a date", now), 1);
+});
+
+Deno.test("resolveRangeDays follows the mode then the typed value", () => {
+  const now = new Date("2026-09-19T12:00:00Z");
+  const last: LastPush = {
+    at: "2026-09-16T12:00:00Z",
+    kind: "splitwise",
+    confirmed: true,
+  };
+  // The last push wins when the user picked it.
+  assertEquals(resolveRangeDays("last", "30", last, now), 3);
+  // With no record the typed value wins, then the default.
+  assertEquals(resolveRangeDays("last", "7", null, now), 7);
+  assertEquals(resolveRangeDays("last", undefined, null, now), 30);
+  // A custom pick always uses the typed value.
+  assertEquals(resolveRangeDays("custom", "7", last, now), 7);
+  assertEquals(resolveRangeDays(undefined, "7", last, now), 7);
+  // A missing, zero, negative, or bad typed value falls back to thirty.
+  assertEquals(resolveRangeDays("custom", undefined, last, now), 30);
+  assertEquals(resolveRangeDays("custom", "0", last, now), 30);
+  assertEquals(resolveRangeDays("custom", "-5", last, now), 30);
+  assertEquals(resolveRangeDays("custom", "abc", last, now), 30);
+});
+
+Deno.test("last push write and read keep the date, kind, and flag", async () => {
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    // No file means no record.
+    assertEquals(readLastPushSync(), null);
+    // A share link stays unconfirmed.
+    await writeLastPush("share", new Date("2026-09-15T08:00:00Z"));
+    assertEquals(readLastPushSync(), {
+      at: "2026-09-15T08:00:00.000Z",
+      kind: "share",
+      confirmed: false,
+    });
+    // A live push counts as confirmed.
+    await writeLastPush("splitwise", new Date("2026-09-15T08:00:00Z"));
+    assertEquals(readLastPushSync(), {
+      at: "2026-09-15T08:00:00.000Z",
+      kind: "splitwise",
+      confirmed: true,
+    });
+    // A summary waits on hand entry, so it stays unconfirmed.
+    await writeLastPush("aggregate", new Date("2026-09-15T08:00:00Z"));
+    assertEquals(readLastPushSync(), {
+      at: "2026-09-15T08:00:00.000Z",
+      kind: "aggregate",
+      confirmed: false,
+    });
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+  }
+});
+
+Deno.test("last push read rejects a broken file or kind", async () => {
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    Deno.mkdirSync(root + "/config", { recursive: true });
+    // Broken JSON means no record.
+    Deno.writeTextFileSync(root + "/config/last-push.json", "{broken");
+    assertEquals(readLastPushSync(), null);
+    // An unknown kind means no record.
+    Deno.writeTextFileSync(
+      root + "/config/last-push.json",
+      JSON.stringify({ at: "2026-09-15T08:00:00.000Z", kind: "pigeon", confirmed: true }),
+    );
+    assertEquals(readLastPushSync(), null);
+    // A missing flag reads as false and keeps the record.
+    Deno.writeTextFileSync(
+      root + "/config/last-push.json",
+      JSON.stringify({ at: "2026-09-15T08:00:00.000Z", kind: "splitwise" }),
+    );
+    assertEquals(readLastPushSync(), {
+      at: "2026-09-15T08:00:00.000Z",
+      kind: "splitwise",
+      confirmed: false,
+    });
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+  }
+});
+
+Deno.test("last push labels name the path for summaries and shares", () => {
+  const now = new Date("2026-09-19T12:00:00Z");
+  assertEquals(
+    lastPushLabel({ at: "2026-09-15T08:00:00Z", kind: "splitwise", confirmed: true }, now),
+    "Since your last push (15 Sep, 5 days)",
+  );
+  assertEquals(
+    lastPushLabel({ at: "2026-09-15T08:00:00Z", kind: "aggregate", confirmed: false }, now),
+    "Since your last summary (15 Sep, 5 days)",
+  );
+  assertEquals(
+    lastPushLabel({ at: "2026-09-15T08:00:00Z", kind: "share", confirmed: false }, now),
+    "Since your last share (15 Sep, 5 days)",
+  );
+});
+
+// Field map of one node, for the range step checks below.
+function fieldOf(node: Node, key: string): unknown {
+  return (node as unknown as Record<string, unknown>)[key];
+}
+
+Deno.test("range step offers the last push above the number entry", async () => {
+  const { gatherSteps } = await import("../app/expense-split/gather.ts");
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    const rangeStep = (m: Map<string, string[]>) => {
+      for (const entry of gatherSteps()) {
+        const found = typeof entry === "function" ? entry(m) : entry;
+        if (found.id === "gather-range") return found;
+      }
+      throw new Error("no gather-range step");
+    };
+    // With no record the screen holds the number entry alone.
+    const plain = rangeStep(new Map());
+    assertEquals(
+      plain.nodes.filter((node) => fieldOf(node, "kind") === "radio").length,
+      0,
+    );
+    assertEquals(plain.nodes.map((node) => fieldOf(node, "kind")), ["number"]);
+    // With a record a range mode radio leads the number entry.
+    await writeLastPush("splitwise", new Date("2026-09-15T08:00:00Z"));
+    const found = rangeStep(new Map());
+    assertEquals(found.nodes.map((node) => fieldOf(node, "kind")), ["radio", "number"]);
+    const radioNode = found.nodes[0];
+    assertEquals(fieldOf(radioNode, "name"), "range-mode");
+    assertEquals(fieldOf(radioNode, "picked"), "last");
+    const options = fieldOf(radioNode, "options") as Array<Record<string, unknown>>;
+    assertEquals(options.map((option) => String(option["value"] ?? "")), ["last", "custom"]);
+    assertEquals(String(options[1]["label"] ?? ""), "A number of days");
+    assert(String(options[0]["label"] ?? "").startsWith("Since your last push ("));
+    // A posted custom pick survives the next render.
+    const kept = rangeStep(new Map([["range-mode", ["custom"]]]));
+    assertEquals(fieldOf(kept.nodes[0], "picked"), "custom");
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+  }
+});
+
+// The record holds UTC. A push made late in the evening east of
+// Greenwich falls on the previous day in UTC, so a UTC label named a
+// day the user never pushed on. The label must read the local calendar.
+// On a machine set to UTC the two agree and this test cannot catch a
+// regression, which is why the rule is stated in the comment above.
+Deno.test("the last push label names the local calendar day", () => {
+  const at = "2026-09-17T20:30:00.000Z";
+  const local = new Date(at);
+  const entry: LastPush = { at, kind: "splitwise", confirmed: true };
+  const label = lastPushLabel(entry, new Date("2026-09-18T04:30:00.000Z"));
+  assertEquals(
+    label.includes("(" + String(local.getDate()) + " "),
+    true,
+    "names the local day, got: " + label,
+  );
+});
+
+// A one day gap read "1 days".
+Deno.test("the last push label says one day, not one days", () => {
+  const now = new Date("2026-09-18T10:00:00.000Z");
+  const entry: LastPush = { at: "2026-09-17T12:00:00.000Z", kind: "share", confirmed: false };
+  const label = lastPushLabel(entry, now);
+  assertEquals(label.includes("1 day)"), true, "singular day, got: " + label);
+  assertEquals(label.includes("1 days"), false, "no plural on one, got: " + label);
 });

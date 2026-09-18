@@ -14,6 +14,7 @@ import { buildNameMap, type PushApi, runPush } from "../src/pushcore.ts";
 import { buildAggregateSummary, groupOrders, inferPayer } from "../src/render.ts";
 import { loadSettings } from "../src/settings.ts";
 import { createShareLink } from "../src/share.ts";
+import { writeLastPush } from "../src/lastpush.ts";
 import { loadCredentials, loadPushed, savePushed, SplitwiseAPI } from "../src/splitwise.ts";
 
 // Short usage block naming all six verbs.
@@ -270,6 +271,13 @@ async function runPushVerb(args: string[]): Promise<void> {
     },
   });
   if (outcome.failed) fail(outcome.note);
+  try {
+    // Stamp the run after a real push lands. This verb reaches
+    // Splitwise, so the record needs no later confirming.
+    await writeLastPush("splitwise");
+  } catch {
+    // A missed stamp never fails a good push.
+  }
   console.log("Pushed " + outcome.pushed + " expense(s).");
   console.log(
     "Skipped " + outcome.skippedDupes + " as already sent, " +
@@ -308,6 +316,12 @@ async function runAggregateVerb(args: string[]): Promise<void> {
       fail('Cannot write summary file "' + out + '".');
     }
   }
+  try {
+    // Stamp the run after the summary lands.
+    await writeLastPush("aggregate");
+  } catch {
+    // A missed stamp never fails a good summary.
+  }
 }
 
 // The share verb: make a share link for a split file.
@@ -325,6 +339,12 @@ async function runShareVerb(args: string[]): Promise<void> {
     console.log(link);
   } catch {
     fail("Share upload failed. Try again later.");
+  }
+  try {
+    // Stamp the run after the link lands.
+    await writeLastPush("share");
+  } catch {
+    // A missed stamp never fails a good link.
   }
 }
 
