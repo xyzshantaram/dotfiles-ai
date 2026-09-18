@@ -252,15 +252,12 @@ describe("the #177 outline matrix: the open ask names the colour", () => {
   });
 
   it("an open escalation ask wins over a durable guard mark before the args carry it", () => {
-    // THE CELL THAT PROVED THE GAP. Every other escalation-pending case also
-    // carries data-escalated, so the settled yellow rule could win them all:
-    // deleting the pending yellow rule outright left the suite 30/30 green,
-    // which is a rule with zero coverage. This cell is the window the doubled
-    // rule's comment names -- the sandbox ask is OPEN but the call args do
-    // not yet carry the settled mark -- so only the pending yellow rule can
-    // beat the doubled blue rule here. It flips to blue if that rule is
-    // deleted, and it flips to blue if only its :not([data-escalation-pending])
-    // exclusion is dropped, so it pins both halves at once.
+    // The window the doubled rule's comment names: the sandbox ask is OPEN
+    // but the call args do not yet carry the settled mark, so only the
+    // pending yellow rule can beat the doubled blue rule here. It flips to
+    // blue if that rule is deleted, and it flips to blue if only its
+    // :not([data-escalation-pending]) exclusion is dropped, so it pins both
+    // halves at once.
     expect(
       winningOutline(outlineRules(outlineCss), ["data-guard-approval", "data-escalation-pending"]),
     ).toContain("var(--dsh-outline-escalated)");
