@@ -182,6 +182,14 @@ step_write_web_patch() {
       name: $HERE/plugins/profiles.js
     - id: resume-command
       name: $HERE/plugins/resume.js
+    # ast_grep and ast_edit: structural search and rewrite over the packaged
+    # ast-grep engine. The row id matches the plugin's own cordis.patch.yml,
+    # so the upstream docs apply to this deployment unchanged. Ungated on
+    # purpose: ast_edit previews by default and writes through the same ctx.fs
+    # waterfall as every other write tool, so the observation watermark,
+    # version guard and sandbox policy already govern it.
+    - id: hy-sde-ast-tool-ast
+      name: '@hy-sde-org/dsh-tool-ast'
     # The cordis_* tools, gated behind the two cordis skills via context-guard.
     - id: tool-cordis
       name: '@deepseek-ai/dsh-tool-cordis'
@@ -368,6 +376,17 @@ step_install_plugins() {
 		pnpm_ins "github:sunshaobei/dsh-input-history#9b5b7a494a5c"
 		pnpm_ins "github:omdsh-dev/dsh-tool-calculator#05090e946113721c5295518cc20e74f427022c55"
 		pnpm_ins "github:omdsh-dev/dsh-tool-diff#d4afd6e2de0b411151fefc60adebd0973373ec10"
+		# ast_grep (structural search) and ast_edit (structural rewrite), one
+		# plugin, two tools, UNGATED like the builtins. Pinned to the exact
+		# published version: the repo is a monorepo whose root package is
+		# private, the plugin lives in packages/tool-ast, dist is not committed,
+		# and the subpackage has prepack but NO prepare -- so a git spec would
+		# install src with no build and fail at boot. npm ships the built dist.
+		# The upstream README warns that a dsh which adopts structural search
+		# itself would duplicate this row: checked 2026-09-18 against the
+		# installed dsh (no tool-ast, ast_grep or ast-grep anywhere). RE-CHECK
+		# ON ANY DSH UPGRADE.
+		pnpm_ins "@hy-sde-org/dsh-tool-ast@0.1.5-rc.1"
 		# The four tools the `util` skill gates (ticket E4). Installed as
 		# separate repos, NOT through the omdsh-dev/dsh-toolkit monorepo:
 		# that collection also registers calculator and diff, which are
@@ -552,6 +571,7 @@ step_report_extra_plugins() {
 		"@deepseek-ai/dsh-compaction-basic"
 		"@deepseek-ai/dsh-llm-pi-ai"
 		"@dsh-external/dsh-session-search"
+		"@hy-sde-org/dsh-tool-ast"
 		"@xgone/dsh-remote"
 		"aidos"
 		"approval-comment"
