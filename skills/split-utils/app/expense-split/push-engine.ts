@@ -64,7 +64,7 @@ export interface PushSession {
   // step shows these as auto-skips.
   dupes: Set<string>;
   groupId: number;
-  groupChoices: { id: number; name: string }[];
+  groupChoices: { id: number; name: string; members: Record<string, unknown>[] }[];
   api: PushApi | null;
   // Confirmation line after a share-link import. The setup step shows
   // it once, and any other source clears it.
@@ -304,9 +304,30 @@ function signInCheckError(value: unknown): string {
 // No key pair, or no cached token, falls back to the aggregate summary
 // path, like the pusher no-access fallback. A hand-built api overrides
 // discovery so tests never touch the network.
+
+// The people a name can match against: the chosen group's members when a
+// group is picked, otherwise undefined so buildNameMap falls back to friends
+// (#192). A group member need not be a Splitwise friend, which is why
+// matching friends alone left real people with no candidate at all.
+function matchPool(live: { groupId: number; groupChoices: { id: number; members: Record<string, unknown>[] }[] }): Record<string, unknown>[] | undefined {
+  if (!live.groupId) return undefined;
+  const group = live.groupChoices.find((g) => g.id === live.groupId);
+  return group !== undefined && group.members.length > 0 ? group.members : undefined;
+}
+
+/**
+ * Sign in, list the groups, and map local people to Splitwise users.
+ *
+ * `skipNames` defers the name mapping (#192). Names are matched against the
+ * chosen GROUP's members, and the group is picked on a later screen, so the
+ * first pass sets up access and the group list and maps nothing. Mapping runs
+ * again once the group is known, which is the only point at which the right
+ * pool of people exists.
+ */
 export async function prepareSplitwise(
   sessionId: string,
   apiOverride?: PushApi,
+  opts?: { skipNames?: boolean },
 ): Promise<{ ok: true } | { ok: false; error: string; needsNamePick?: true }> {
   const live = pushSessionFor(sessionId);
   live.setupError = null;
@@ -321,7 +342,9 @@ export async function prepareSplitwise(
     }
     let mapped: Awaited<ReturnType<typeof buildNameMap>>;
     try {
-      mapped = await buildNameMap(apiOverride, live.people, live.nameChoices);
+      mapped = opts?.skipNames === true
+        ? { ok: true as const, map: new Map<string, number>(), pending: [] }
+        : await buildNameMap(apiOverride, live.people, live.nameChoices, matchPool(live));
     } catch (err) {
       live.mode = "aggregate";
       live.api = null;
@@ -333,11 +356,17 @@ export async function prepareSplitwise(
       live.namePicks = mapped.pending;
       return { ok: false, error: namePickError(mapped.pending), needsNamePick: true };
     }
-    let choices: { id: number; name: string }[] = [];
+    let choices: { id: number; name: string; members: Record<string, unknown>[] }[] = [];
     try {
       choices = (await apiOverride.getGroups()).map((group) => ({
         id: Number(group.id),
         name: String(group.name ?? "group"),
+        // KEEP THE MEMBERS (#192). get_groups already returns them and this
+        // mapping used to discard them, so the name step had nothing to offer
+        // and fell back to a hand-typed id.
+        members: Array.isArray(group.members)
+          ? (group.members as Record<string, unknown>[])
+          : [],
       }));
     } catch {
       choices = [];
@@ -386,17 +415,22 @@ export async function prepareSplitwise(
     live.setupError = signInCheckError(err);
     return { ok: true };
   }
-  const mapped = await buildNameMap(api, live.people, live.nameChoices);
+  const mapped = opts?.skipNames === true
+    ? { ok: true as const, map: new Map<string, number>(), pending: [] }
+    : await buildNameMap(api, live.people, live.nameChoices, matchPool(live));
   if (mapped.pending.length > 0) {
     live.mode = "idle";
     live.namePicks = mapped.pending;
     return { ok: false, error: namePickError(mapped.pending), needsNamePick: true };
   }
-  let choices: { id: number; name: string }[] = [];
+  let choices: { id: number; name: string; members: Record<string, unknown>[] }[] = [];
   try {
     choices = (await api.getGroups()).map((group) => ({
       id: Number(group.id),
       name: String(group.name ?? "group"),
+      members: Array.isArray(group.members)
+        ? (group.members as Record<string, unknown>[])
+        : [],
     }));
   } catch {
     choices = [];

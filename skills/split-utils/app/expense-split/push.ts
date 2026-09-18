@@ -86,11 +86,12 @@ export async function pushSourceNext(
     );
     if (!prepared.ok) return { errors: [prepared.error] };
   }
-  const sw = await prepareSplitwise(sessionId);
-  if (!sw.ok) {
-    if (sw.needsNamePick) return { goto: "push-names" };
-    return { errors: [sw.error] };
-  }
+  // NAMES ARE MAPPED AFTER THE GROUP IS PICKED (#192), so this pass only
+  // signs in and lists the groups. Matching against friends here is what put
+  // a real person with no friend record in front of a "type the Splitwise id"
+  // box, when the group they are about to be split with lists them.
+  const sw = await prepareSplitwise(sessionId, undefined, { skipNames: true });
+  if (!sw.ok) return { errors: [sw.error] };
   return { goto: pushSessionFor(sessionId).mode === "live" ? "push-group" : "push-setup" };
 }
 
@@ -105,7 +106,9 @@ export async function pushNamesNext(
   if (!picked.ok) return { errors: [picked.error] };
   const sw = await prepareSplitwise(sessionId);
   if (!sw.ok) return { errors: [sw.error] };
-  return { goto: pushSessionFor(sessionId).mode === "live" ? "push-group" : "push-setup" };
+  // The group was already chosen before this screen (#192), so a settled name
+  // goes straight on rather than looping back through the group pick.
+  return { goto: pushSessionFor(sessionId).mode === "live" ? "push-cutoff" : "push-setup" };
 }
 
 // Route live access toward the group screen.
@@ -119,14 +122,22 @@ export function pushSetupNext(
 }
 
 // Store the picked group for this session.
-export function pushGroupNext(
+export async function pushGroupNext(
   _answers: Map<string, string[]>,
   fields: Record<string, string[]>,
   ctx: WizardCtx,
-): { errors?: string[]; goto?: string } | void {
+): Promise<{ errors?: string[]; goto?: string } | void> {
   const sessionId = ctx.sessionId;
   const picked = Number(fields["push-group"]?.[0] ?? "0");
   pushSessionFor(sessionId).groupId = Number.isFinite(picked) ? picked : 0;
+  // The group is known now, so the names can finally be matched against the
+  // right people (#192). A person the group settles never reaches the name
+  // screen at all, which is the point: it should be rare, not routine.
+  const sw = await prepareSplitwise(sessionId);
+  if (!sw.ok) {
+    if (sw.needsNamePick) return { goto: "push-names" };
+    return { errors: [sw.error] };
+  }
   return { goto: "push-cutoff" };
 }
 
@@ -287,10 +298,39 @@ function namePickStep(_m?: Map<string, string[]>, ctx?: WizardCtx): Step {
         textEntry("Type an id by hand for " + pick.person, "manual:" + pick.person, ""),
       );
     } else {
-      nodes.push(markdown(
-        "No Splitwise member matches " + pick.person +
-          " yet. Add them in Splitwise first, then come back.",
-      ));
+      // NO AUTOMATIC MATCH, BUT THE GROUP STILL HAS PEOPLE (#192). Offer them
+      // rather than asking for a numeric id: the group being pushed into is
+      // exactly where the other splitters live, and a member need not be a
+      // Splitwise "friend". Typing an id stays available underneath, because
+      // a group can be missing someone.
+      const live = pushSessionFor(sidOf(ctx));
+      const group = live.groupChoices.find((g) => g.id === live.groupId);
+      const members = (group?.members ?? []).map((member) => ({
+        id: Number(member.id),
+        name: [member.first_name, member.last_name].filter(Boolean).join(" ").trim() ||
+          String(member.email ?? member.id),
+      })).filter((member) => Number.isFinite(member.id));
+      if (members.length > 0) {
+        nodes.push(markdown(
+          "No name in this group matches " + pick.person +
+            " exactly. Pick who they are, or type an id.",
+        ));
+        nodes.push(
+          radio(
+            "Pick the user for " + pick.person,
+            "pick:" + pick.person,
+            members.map((member) => ({
+              value: String(member.id),
+              hint: member.name + " (id " + member.id + ")",
+            })),
+          ),
+        );
+      } else {
+        nodes.push(markdown(
+          "No Splitwise member matches " + pick.person +
+            " yet. Add them in Splitwise first, then come back.",
+        ));
+      }
       nodes.push(
         textEntry("Type the Splitwise id for " + pick.person, "manual:" + pick.person, ""),
       );

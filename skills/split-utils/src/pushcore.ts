@@ -64,10 +64,17 @@ export async function buildNameMap(
   api: PushApi,
   people: string[],
   resolutions?: Map<string, number>,
+  pool?: Record<string, unknown>[],
 ): Promise<{ ok: true; map: Map<string, number>; pending: NamePick[] }> {
   const me = await api.getCurrentUser();
-  const friends = await api.getFriends();
-  const all: Record<string, unknown>[] = [me, ...friends];
+  // MATCH AGAINST THE CHOSEN GROUP WHEN THERE IS ONE (#192). The people you
+  // split a bill with are, nearly always, the members of the group you are
+  // pushing into, and a group member need not be a Splitwise "friend".
+  // Matching friends only left a real person with NO candidate and asked the
+  // user to type a numeric id by hand, which is the screen this replaces.
+  // With no group picked there is no member list, so friends remain the pool.
+  const others = pool ?? await api.getFriends();
+  const all: Record<string, unknown>[] = [me, ...others];
   const byFull = new Map<string, Record<string, unknown>[]>();
   const byFirst = new Map<string, Record<string, unknown>[]>();
   for (const user of all) {

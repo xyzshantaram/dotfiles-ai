@@ -1066,3 +1066,68 @@ Deno.test("the pushed file saves under a path holding a hash mark", async () => 
     await Deno.remove(base, { recursive: true }).catch(() => {});
   }
 });
+
+// ---- assigning from the chosen group (#192) ----
+//
+// The owner's screenshot: three people, each with "No Splitwise member
+// matches <name> yet" and a box asking for a numeric Splitwise id. The cause
+// was that matching ran against FRIENDS only, so a person who is in the group
+// being pushed into, but is not a Splitwise "friend", had no candidate at all.
+//
+// These two pins are the case that was unrepresentable before. The first
+// proves the group settles a name that friends cannot. The second proves the
+// group is known BEFORE names are matched, which is what makes the first
+// possible: the flow used to map names first and pick the group afterwards.
+
+function groupApi(): PushApi {
+  return {
+    getCurrentUser: () => Promise.resolve({ first_name: "Ann", last_name: "", id: 1 }),
+    // Bob is the only friend. Hemang is NOT a friend.
+    getFriends: () => Promise.resolve([{ first_name: "Bob", last_name: "", id: 2 }]),
+    getGroups: () =>
+      Promise.resolve([{
+        name: "Flat",
+        id: 9,
+        members: [
+          { first_name: "Ann", last_name: "", id: 1 },
+          { first_name: "hemang", last_name: "", id: 55 },
+        ],
+      }]),
+    createExpense: () => Promise.resolve({ expenses: [{ id: 1 }] }),
+    createComment: () => Promise.resolve(),
+  };
+}
+
+Deno.test("a group member who is not a friend is matched (#192)", async () => {
+  await fresh("t-group-1");
+  await prepareSource("t-group-1", "Split JSON file", "", SPLIT_FILE);
+  const live = pushSessionFor("t-group-1");
+  live.people = ["hemang"];
+
+  // First pass: sign in and list groups, mapping nothing. Friends alone could
+  // never settle "hemang", which is exactly why it must not be asked yet.
+  const first = await prepareSplitwise("t-group-1", groupApi(), { skipNames: true });
+  assert(first.ok, "the first pass sets up access without asking about names");
+  assert(live.groupChoices.length === 1, "the group list is available for the pick");
+  assert(live.groupChoices[0].members.length === 2, "group members are kept, not discarded");
+
+  // The user picks the group, then names are matched against its members.
+  live.groupId = 9;
+  const second = await prepareSplitwise("t-group-1", groupApi());
+  assert(second.ok, "the group settles the name that friends could not");
+  assert(live.nameMap.get("hemang") === 55, "hemang maps to the group member id");
+});
+
+Deno.test("with no group picked, matching still falls back to friends (#192)", async () => {
+  await fresh("t-group-2");
+  await prepareSource("t-group-2", "Split JSON file", "", SPLIT_FILE);
+  const live = pushSessionFor("t-group-2");
+  live.people = ["Bob"];
+  await prepareSplitwise("t-group-2", groupApi(), { skipNames: true });
+  // "No group, a plain expense" is groupId 0 and has no member list, so the
+  // friends list must remain the pool rather than leaving everyone unmatched.
+  live.groupId = 0;
+  const done = await prepareSplitwise("t-group-2", groupApi());
+  assert(done.ok, "a friend still matches with no group chosen");
+  assert(live.nameMap.get("Bob") === 2, "Bob maps to the friend id");
+});
