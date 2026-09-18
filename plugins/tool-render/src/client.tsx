@@ -183,12 +183,9 @@ var EXTENSION_LANGUAGE = {
 // ---- Platform modules: resolved by the shell loader seed at runtime. ----
 import React from "react";
 import { isBashGuardReason } from "./guard";
-import { resolveBashTab, chainPanelRows, sequenceUnitDiagramModel } from "./bash-diagram";
-// ---- #173: the fair-copy renderer. resolveBashTab is the only LIVE import
-// from the old module (the strip and the Command tab still read through
-// it); chainPanelRows and sequenceUnitDiagramModel feed the old sequence
-// component, which stays mounted nowhere but stays compiling until stage
-// two deletes it with the module.
+// ---- #173 stage two: the fair-copy renderer. The old bash-diagram module
+// is deleted. Nothing below imports it. The tab seam reads the input string
+// directly for commandText and the fair copy for drawability.
 import { renderOne } from "./bash-graph/render";
 import { swapIcons } from "./bash-graph/icons";
 import { cardAvail } from "./bash-graph/constants";
@@ -1257,7 +1254,7 @@ function escalationBanner(detail, settled) {
 //
 // SCAN PATH: SYNC. renderOne takes a scan, and unbashScan is async, while
 // the strip and the panel must agree inside one synchronous render pass
-// (resolveBashTab is sync; an async scan would flicker the default tab).
+// (an async scan would flicker the default tab).
 // The wiring therefore passes the standalone scan ({ status:
 // "stable-unavailable", nodes: [] }) and renders synchronously. That is the
 // exact path the 34-card equivalence proof verified, so the swap inherits
@@ -1407,435 +1404,7 @@ function BashGraphPanels(props) {
     </div>
   );
 }
-// ---- #149: read-only dataflow diagram for pipe/redirect commands, plus
-// #160: multi-statement scripts as an ordered SEQUENCE of statement groups.
-// Auto-rendered when the command is a single non-backgrounded statement
-// that is either a multi-stage pipeline of plain commands or one command
-// carrying redirects (#149: getBashDiagram returns null elsewhere), or a
-// `;`/newline-separated script of such statements (#160:
-// getBashSequenceDiagram); everything else stays text. Stages are blocks in
-// execution order; `|` and `|&` are typed arrows; redirects are labelled
-// endpoints; each heredoc body is one collapsed disclosure. Per-stage exit
-// codes come from block.meta.pipeStages, attributed by attributePipeStages
-// (single) or attributeSequenceStages (final group only) — never from
-// host-computed offsets, which this component never sees.
-// ---- Sequence vs pipe, the visual contract (#160, amended by #162). Pipes
-// lay stages side-by-side in ONE row that never wraps (left to right = data
-// movement) with the verbatim operator plus `→`; an overlong pipeline scrolls
-// sideways rather than stacking, because a wrapped pipe row is
-// indistinguishable from a sequence and would imply time where there is only
-// dataflow. Sequence members stack VERTICALLY (top to bottom = time order).
-//
-// v2 joined them with a "then ↓" marker; #162 removed it. Labelling EVERY
-// boundary meant nothing stood out, and the one case that genuinely needs
-// explaining — a conditional — looked like just another chip. #167 removed
-// #162's rail too: a connector between INDEPENDENT statements implies a
-// dependency that does not exist. Now the unconditional boundary renders no
-// word, no glyph, and no rail — separation is carried by the stacked blocks
-// themselves plus whitespace — and conditionality is a property of the EDGE,
-// stated as a chip at the top of the DEPENDENT row's own panel. The
-// base row of a chain carries no marker: it runs unconditionally, so a
-// chain-wide badge stated something false about it.
-function BashDiagramHeredoc(props) {
-  var endpoint = props.endpoint;
-  var heredoc = endpoint.heredoc;
-  var openState = useState(false);
-  var open = openState[0];
-  var setOpen = openState[1];
-  var lines = heredoc.lines;
-  var label =
-    endpoint.slice + " \u00b7 " + String(lines) + (lines === 1 ? " line" : " lines") + " hidden";
-  if (!open) {
-    return (
-      <button
-        className="tool-render-diagram-heredoc"
-        title="heredoc body: one collapsed element, never one per line"
-        data-dsh-tip=""
-        onClick={function () {
-          setOpen(true);
-        }}
-      >
-        {label + " \u2014 show"}
-      </button>
-    );
-  }
-  return (
-    <span className="tool-render-diagram-heredoc-open">
-      <button
-        className="tool-render-diagram-heredoc"
-        title="heredoc body"
-        data-dsh-tip=""
-        onClick={function () {
-          setOpen(false);
-        }}
-      >
-        {label + " \u2014 hide"}
-      </button>
-      <pre className="tool-render-diagram-heredoc-body">{heredoc.body + heredoc.delimiter}</pre>
-    </span>
-  );
-}
-function BashCommandDiagram(props) {
-  var model = props.model;
-  var head = [];
-  // #162 criterion 2 (amended by #168): the condition is a CHIP at the top
-  // of THIS row's own panel — never on a chain's base row (2b). The chip
-  // shows just `&&` / `||`; the plain-language sentence rides the tooltip.
-  // ONE STRING FEEDS BOTH SURFACES: the title text is what the tooltip
-  // plugin shows AND what a screen reader announces, so no aria-label is
-  // introduced that could drift from the visual. The chip stays
-  // distinguishable from an argument chip by POSITION (it leads the card
-  // above the stage flow, never inline in the chip row), by TREATMENT
-  // (bold operator, dashed outline — argument chips are regular-weight with
-  // solid outlines), and by BEHAVIOR (it claims control flow on hover,
-  // while an argument chip's title names a token role).
-  if (model.conditional === "&&" || model.conditional === "||") {
-    var why =
-      model.conditional === "&&"
-        ? "runs only if the previous step succeeded"
-        : "runs only if the previous step failed";
-    head.push(
-      <div
-        className="tool-render-diagram-conditional"
-        title={"conditional step: " + why + " — unlike `;`, this step may not run at all"}
-        data-dsh-tip=""
-      >
-        <span>{model.conditional}</span>
-      </div>,
-    );
-  }
-  if (model.timed) {
-    head.push(
-      <span
-        className="tool-render-diagram-badge"
-        title="`time` prefix: the command was timed, which changes what its exit code means"
-        data-dsh-tip=""
-      >
-        time
-      </span>,
-    );
-  }
-  if (model.negated) {
-    head.push(
-      <span
-        className="tool-render-diagram-badge"
-        title="`!` negation: the pipeline exit code is inverted"
-        data-dsh-tip=""
-      >
-        !
-      </span>,
-    );
-  }
-  if (model.leadingGap.trim() !== "") {
-    head.push(<div className="tool-render-diagram-lead">{model.leadingGap}</div>);
-  }
-  var flow = [];
-  for (var i = 0; i < model.stages.length; i++) {
-    if (i > 0) {
-      var arrow = model.arrows[i - 1];
-      var carriesStderr = arrow.operator === "|&";
-      flow.push(
-        <span
-          className={
-            "tool-render-diagram-arrow" +
-            (carriesStderr ? " tool-render-diagram-arrow-stderr" : "")
-          }
-          title={
-            carriesStderr ? "pipe stdout and stderr together (|&)" : "pipe stdout only (|)"
-          }
-          data-dsh-tip=""
-        >
-          {arrow.operator + " \u2192"}
-        </span>,
-      );
-    }
-    var stage = model.stages[i];
-    var parts = [];
-    // #162 criteria 3-5: parsed-argument CHIPS cut from the stage's own
-    // slice — never a re-serialisation of the parser's values, so quoting,
-    // escaping and spacing read exactly as typed. A chip's `title` states
-    // its role; the `slice` (shown) and the parser's value (in the title
-    // when it differs) are both visible, so a reader can always check the
-    // diagram against the command above it. When stage.args is undefined
-    // (#162 criterion 4: fail closed) the row renders plain verbatim text.
-    if (stage.args !== undefined && stage.args.args.length > 1) {
-      var chipRow = [];
-      for (var a = 0; a < stage.args.args.length; a++) {
-        var arg = stage.args.args[a];
-        var roleLabel =
-          arg.role === "value" ? "value (bound; verbatim slice)" :
-          arg.role === "subcommand" ? "subcommand (verbatim slice)" :
-          arg.role === "flag" ? "flag (verbatim slice)" :
-          "positional (verbatim slice)";
-        chipRow.push(
-          <code
-            className={
-              "tool-render-diagram-arg tool-render-diagram-arg-" + arg.role +
-              (a === 0 ? " tool-render-diagram-arg-cmd" : "")
-            }
-            title={roleLabel}
-            data-dsh-tip=""
-          >
-            {arg.slice}
-          </code>,
-        );
-      }
-      parts.push(<div className="tool-render-diagram-args">{chipRow}</div>);
-    } else if (stage.words !== "") {
-      parts.push(
-        <div className="tool-render-diagram-words">
-          <code
-            className="hljs"
-            data-highlighted="yes"
-            dangerouslySetInnerHTML={{ __html: highlightCode(stage.words, "bash") }}
-          />
-        </div>,
-      );
-    }
-    for (var r = 0; r < stage.redirects.length; r++) {
-      var redirect = stage.redirects[r];
-      if (redirect.heredoc !== null) {
-        parts.push(<BashDiagramHeredoc endpoint={redirect} />);
-      } else {
-        parts.push(
-          <span
-            className="tool-render-diagram-endpoint"
-            title={"redirect (" + redirect.operator + ")"}
-            data-dsh-tip=""
-          >
-            <code
-              className="hljs"
-              data-highlighted="yes"
-              dangerouslySetInnerHTML={{ __html: highlightCode(redirect.slice, "bash") }}
-            />
-          </span>,
-        );
-      }
-    }
-    if (stage.exitCode !== undefined) {
-      var failed = stage.exitCode !== 0;
-      parts.push(
-        <span
-          className={
-            "tool-render-diagram-exit" +
-            (failed ? " tool-render-diagram-exit-fail" : " tool-render-diagram-exit-ok")
-          }
-          title={
-            failed
-              ? "stage exit code " + String(stage.exitCode) + " (failed)"
-              : "stage exit code 0"
-          }
-          data-dsh-tip=""
-        >
-          {"exit " + String(stage.exitCode)}
-        </span>,
-      );
-    }
-    // #168: the stage box is drawn ONLY when it earns its place. Chips are
-    // already self-delimiting (each with its own border and background), so
-    // a box around a bare chip row draws a third outline to say what the
-    // chips already said. The box stays exactly when the stage carries
-    // something BELOW the command line that needs grouping — a redirect
-    // list (including the heredoc disclosure) or an exit pill — or when the
-    // stage fell back to verbatim words (no chips to delimit it). Wrapping
-    // alone never earns a box: boxing does not delimit wrapped content, and
-    // wrap is viewport-dependent, so no static rule could award it evenly.
-    var bare =
-      stage.redirects.length === 0 &&
-      stage.exitCode === undefined &&
-      stage.args !== undefined &&
-      stage.args.args.length > 1;
-    flow.push(
-      <div
-        className={
-          "tool-render-diagram-stage" + (bare ? " tool-render-diagram-stage-bare" : "")
-        }
-      >
-        {parts}
-      </div>,
-    );
-  }
-  var tail = [];
-  for (var t = 0; t < model.trailing.length; t++) {
-    var piece = model.trailing[t];
-    // Heredoc bodies render under their own stage's endpoint; only stray
-    // non-whitespace gap text (e.g. a trailing comment) renders here.
-    if (piece.kind === "gap" && piece.text.trim() !== "") {
-      tail.push(<div className="tool-render-diagram-lead">{piece.text}</div>);
-    }
-  }
-  return (
-    <div className="tool-render-diagram">
-      {head}
-      <div className="tool-render-diagram-flow" data-stages={model.stages.length}>{flow}</div>
-      {tail}
-    </div>
-  );
-}
-// ---- #160: one verbatim statement group inside a sequence. A statement v1
-// would refuse (subshell, &&-chain, compound, ...) keeps its exact source
-// slice — the sequence never lies by omission — and an `&&`/`||` chain gains
-// a conditional badge so "ran only if ..." cannot be misread as "ran next".
-function BashSequenceTextGroup(props) {
-  var group = props.group;
-  // #162 criterion 2 + the owner's amendment: verbatim blocks carry NO
-  // conditional chip — the slice already shows the `&&`/`||` that is inside
-  // it, and a group-level badge said something false about the chain's base
-  // statement anyway (2b). Chrome goes to zero; the drawn chains carry the
-  // prominent per-row markers instead.
-  return (
-    <div className="tool-render-diagram-text">
-      <div className="tool-render-diagram-words">
-        <code
-          className="hljs"
-          data-highlighted="yes"
-          dangerouslySetInnerHTML={{ __html: highlightCode(group.slice, "bash") }}
-        />
-      </div>
-    </div>
-  );
-}
-// ---- #160, amended by #162 and #167: the boundary between two sequence
-// members. Deliberately NOT a pipe arrow — no operator glyph of any kind.
-// v2 drew a vertical `↓` and the literal word "then" here; v3 removed both,
-// because labelling every boundary meant the one boundary that needed
-// explaining (a conditional) looked like just another chip; #167 then
-// removed v3's rail as well, because a connector between independent
-// statements implies a dependency that does not exist. The boundary is
-// genuinely nothing — whitespace between stacked blocks — and the condition
-// is stated on the dependent row's own panel.
-// The verbatim separator (`;`, newline, or a chain's ` && `) is pure order or
-// pure condition and needs no display; a comment riding in the separator is
-// content, so it renders VERBATIM alongside — never with the operator snipped
-// out of it, which would splice two disjoint slices into text that never
-// appeared in the command.
-function BashSequenceSeparator(props) {
-  var separator = props.text;
-  // #162 criterion 2, as narrowed by #167 criterion 1: an unconditional
-  // boundary (`;`/newline) carries NO word, no glyph, and no rail — the
-  // separator div paints nothing. A comment riding the separator is content:
-  // muted text beside nothing, rendered verbatim.
-  //
-  // A CHAIN separator passes its operator here (#162 review): `" && "` is not
-  // content, it is the condition — already stated as a chip on the
-  // dependent row below. Left in, it rendered as muted `&&` debris between
-  // every chain row, which is the chrome 2b exists to remove. Note what is
-  // NOT done: the operator is never SNIPPED out of a separator that also
-  // carries a comment. Rendering `sep.replace(op, "")` would concatenate two
-  // disjoint slices into text that never existed in the command, which is
-  // exactly the fabrication the slice invariant forbids. So the separator is
-  // shown VERBATIM or not at all.
-  var residue = separator.replace(/[;\s]/g, "");
-  if (typeof props.operator === "string" && residue === props.operator) residue = "";
-  var carriesContent = residue !== "";
-  // #165: inside a chain panel the boundary is the card stack itself — the
-  // rail would be a second connector saying the same thing, so a contentless
-  // in-panel separator renders NOTHING (null, not an empty rail div whose
-  // border still paints). Sequence-level separators keep the rail: #162 chose
-  // it deliberately and this ticket does not re-litigate that boundary.
-  if (carriesContent !== true && props.hideWhenEmpty === true) return null;
-  return (
-    <div className="tool-render-diagram-seq-sep">
-      {carriesContent ? (
-        <code
-          className="hljs tool-render-diagram-seq-sep-text"
-          data-highlighted="yes"
-          dangerouslySetInnerHTML={{ __html: highlightCode(separator, "bash") }}
-        />
-      ) : null}
-    </div>
-  );
-}
-// ---- #165: one `&&`/`||` chain as ONE panel, rows as cards inside it. ----
-// The owner overruled #162's per-row panels (option a) for the merge (option
-// b): a command and everything chained to it with && / || is one script line,
-// so it draws as one cohesive panel. #162's objection becomes the constraint:
-// per-row identity and the exit-code attachment points survive INSIDE the
-// panel — the conditional marker still leads only the dependent part's own
-// card (never the base's, never panel-wide), and each part's stages keep
-// their own exit pill. The model is untouched by the regrouping: this panel
-// reads chainPanelRows(chain) — one builder, never an inline literal — the
-// same seam discipline as sequenceUnitDiagramModel and resolveBashTab.
-//
-// AXIS CONTRACT (#160/#162, criterion 3): parts stack VERTICALLY at content
-// width (time passes, like sequence members) and never sit side by side, so
-// they cannot read as pipe stages; a pipe row keeps its horizontal nowrap
-// band with `|`/`→` glyphs and its own scroll. The in-panel separator passes
-// hideWhenEmpty, so the card stack itself is the only boundary: no rail, no
-// operator debris, and never a snipped operator (slice invariant).
-function BashChainPanel(props) {
-  var chain = props.chain;
-  var parts = chainPanelRows(chain);
-  var children = [];
-  if (chain.leadingGap.trim() !== "") {
-    children.push(<div className="tool-render-diagram-lead">{chain.leadingGap}</div>);
-  }
-  for (var r = 0; r < parts.length; r++) {
-    if (r > 0) {
-      // The chain's own separators (space + the &&/|| + space) are pure
-      // condition chrome: the chip on the part below says the
-      // condition, so a contentless separator renders nothing at all — while
-      // a comment riding one still shows VERBATIM (same contract as ever).
-      children.push(
-        <BashSequenceSeparator
-          text={chain.separators[r - 1]}
-          operator={chain.operators[r - 1]}
-          hideWhenEmpty={true}
-        />,
-      );
-    }
-    // The part model comes from chainPanelRows, NOT inline: an inline literal
-    // here is what dropped `conditional` and made the marker model-true and
-    // screen-false (#162 review, twice).
-    children.push(
-      <div className="tool-render-diagram-part">
-        <BashCommandDiagram model={parts[r]} />
-      </div>,
-    );
-  }
-  return <div className="tool-render-diagram-chainpanel">{children}</div>;
-}
-// ---- #160: a multi-statement script as a vertical sequence. Each drawable
-// member reuses BashCommandDiagram (same blocks, arrows, heredoc
-// disclosures and exit pills as v1); other members render verbatim with
-// their conditional badge. Exit codes, if any, sit only on the final member
-// (attributeSequenceStages enforces that); earlier members never show them.
-function BashSequenceDiagram(props) {
-  var model = props.model;
-  var children = [];
-  if (model.leadingGap.trim() !== "") {
-    children.push(<div className="tool-render-diagram-lead">{model.leadingGap}</div>);
-  }
-  for (var i = 0; i < model.statements.length; i++) {
-    if (i > 0) {
-      children.push(<BashSequenceSeparator text={model.separators[i - 1]} />);
-    }
-    var group = model.statements[i];
-    if (group.kind === "diagram") {
-      // Same seam as the chain branch below: one builder, never an inline
-      // literal. This branch kept its own copy after the first fix, which is
-      // how the re-review showed the defect CLASS had survived (#162).
-      children.push(<BashCommandDiagram model={sequenceUnitDiagramModel(group.unit)} />);
-    } else if (group.kind === "chain") {
-      // #165: the whole chain is ONE panel (BashChainPanel); its rows are
-      // cards inside it, built through chainPanelRows — never inline, never
-      // one BashCommandDiagram per row straight off the sequence.
-      var chain = group.chain;
-      children.push(<BashChainPanel chain={chain} />);
-    } else {
-      children.push(<BashSequenceTextGroup group={group} />);
-    }
-  }
-  for (var t = 0; t < model.trailing.length; t++) {
-    var piece = model.trailing[t];
-    // Heredoc bodies render under their own stage's endpoint; only stray
-    // non-whitespace gap text (e.g. a trailing comment) renders here.
-    if (piece.kind === "gap" && piece.text.trim() !== "") {
-      children.push(<div className="tool-render-diagram-lead">{piece.text}</div>);
-    }
-  }
-  return <div className="tool-render-diagram tool-render-diagram-seq">{children}</div>;
-}
+// ---- #173 stage two: the old diagram components lived here (BashCommandDiagram, BashChainPanel, BashSequenceDiagram and their helpers). They mounted nowhere after stage one wired the Graph tab to BashGraphPanels above. Deleted with bash-diagram.ts. The strip below and BashRow are untouched.
 // ---- #164: Graph / Command tabs on the expanded bash row. ----
 // The strip is stateless on purpose: the selection lives in BashRow's own
 // useState (one per row, so two bash cards switch independently), and this
@@ -2066,18 +1635,25 @@ function BashRow(props) {
       // surface a reader falls back to when they distrust the graph cannot
       // drift from what ran.
       var rewrittenPair = guardRewrite !== null && guardRewrite.ran !== command;
-      var tabs = resolveBashTab(command, rewrittenPair);
+      // #173 stage two: the tab seam without the old module. commandText is
+      // the input string itself, never a re-serialisation. The rewrite pair
+      // (two texts on show) keeps no tabs, exactly as before. Otherwise the
+      // fair copy decides below and replaces this base object wholesale.
+      var tabs = {
+        drawable: false,
+        showTabs: false,
+        defaultTab: "command",
+        commandText: command,
+      };
       var diagramMeta =
         block.meta !== null && typeof block.meta === "object" && !Array.isArray(block.meta)
           ? block.meta
           : null;
-      // #173: the drawable verdict now comes from the fair copy, not from
-      // the old getters. resolveBashTab still owns the rewrite branch (the
-      // only guard-state pin in the suite) and the commandText, but its
-      // drawable/showTabs/defaultTab derive from the dying predicate, so
-      // they are overridden here whenever a single command text is on show.
-      // The predicate is panelsHTML.length > 0: blank commands render no
-      // panels and keep the old no-tabs behaviour. Exit-code stages ride the
+      // #173 stage two: the drawable verdict comes from the fair copy. The
+      // base object above already owns the rewrite branch (the only
+      // guard-state pin in the suite: two texts on show means no tabs) and
+      // the commandText. The predicate below is panelsHTML.length > 0:
+      // blank commands render no panels and keep the no-tabs behaviour. Exit-code stages ride the
       // same call (length is identical with or without them: attribution
       // never adds or removes a panel), so one cached render feeds both the
       // verdict and the body below.

@@ -14929,6 +14929,450 @@ function isBashGuardReason(reason) {
   return isLegacyGuardReasonRecord(record);
 }
 
+// plugins/tool-render/src/bash-graph/constants.ts
+var SCALE = [
+  { key: "xs", max: 12, w: 112 },
+  { key: "s", max: 28, w: 168 },
+  { key: "m", max: 56, w: 232 },
+  { key: "l", max: 96, w: 312 },
+  { key: "xl", max: 150, w: 400 }
+];
+function sizeFor(len) {
+  for (const s of SCALE) if (len <= s.max) return s;
+  return null;
+}
+function stepFor(nat) {
+  for (const s of SCALE) if (nat <= s.w) return s.key;
+  return "xl";
+}
+var NODE_M = 10;
+var OP_W = 36;
+var PILL_MAX_PX = 220;
+var PIPE_GAP = 80;
+var GAP = 22;
+var ROWGAP = 22;
+var IND = 32;
+var SHORT_T = 16;
+var ARG_T = 80;
+var CARD_AVAIL = 716;
+function cardAvail() {
+  try {
+    const g = globalThis;
+    const col = g.document ? g.document.querySelector("#col") : null;
+    const w = col && col.clientWidth ? col.clientWidth : 748;
+    return Math.max(200, w - 32);
+  } catch {
+    return CARD_AVAIL;
+  }
+}
+
+// plugins/tool-render/src/bash-graph/measure.ts
+function activeDocument() {
+  const g = globalThis;
+  if (!g.document) throw new Error("bash-graph: no document for measurement");
+  return g.document;
+}
+function naturalWidth(html, sk) {
+  if (sk === "op") return OP_W + NODE_M * 2;
+  try {
+    const meas = activeDocument().querySelector("#measure");
+    if (!meas) return 120;
+    meas.innerHTML = `<div style="width:max-content;white-space:nowrap">${html}</div>`;
+    const nodeEl = meas.firstChild && meas.firstChild.firstChild;
+    if (nodeEl && nodeEl.style) nodeEl.style.width = "auto";
+    const sw = nodeEl ? nodeEl.scrollWidth || 0 : 0;
+    const ow = nodeEl ? nodeEl.offsetWidth || 0 : 0;
+    meas.innerHTML = "";
+    if (sw > 0) return Math.ceil(sw) + 2 + NODE_M * 2;
+    if (ow > 0) return Math.ceil(ow) + NODE_M * 2;
+  } catch {
+  }
+  return 120;
+}
+function measureH(html, w) {
+  const meas = activeDocument().querySelector("#measure");
+  if (!meas) return 30;
+  meas.innerHTML = `<div class="fobjwrap" style="width:${w}px">${html}</div>`;
+  const inner = meas.firstChild;
+  const node = inner && inner.firstChild ? inner.firstChild : null;
+  if (node && node.style && node.classList && node.classList.contains("prim-node") && !node.classList.contains("op")) {
+    node.style.width = Math.max(0, w - NODE_M * 2) + "px";
+    node.style.maxWidth = Math.max(0, w - NODE_M * 2) + "px";
+  }
+  let h = inner ? inner.offsetHeight : 0;
+  try {
+    if (inner && inner.getBoundingClientRect) {
+      const bb = inner.getBoundingClientRect();
+      if (bb.height > h) h = bb.height;
+    }
+  } catch {
+  }
+  meas.innerHTML = "";
+  return Math.max(30, Math.ceil(h));
+}
+function setNodeWidth(s, step) {
+  if (s.sk === "op") return;
+  if (s.html.includes('class="prim-node has-chip"'))
+    s.html = s.html.replace(
+      'class="prim-node has-chip"',
+      `class="prim-node has-chip" style="width:${Math.max(0, s.w - NODE_M * 2)}px"`
+    );
+  else
+    s.html = s.html.replace(
+      'class="prim-node"',
+      `class="prim-node" style="width:${Math.max(0, s.w - NODE_M * 2)}px"`
+    );
+  s.html = s.html.replace(/data-size="[a-z]+"/, `data-size="${step}"`);
+}
+function fitWidth(html, wMax, minw, Hw) {
+  void html;
+  const lo0 = minw || 0;
+  if (!(wMax > lo0)) return wMax;
+  const hMax = Hw(wMax);
+  if (Hw(lo0) <= hMax) return lo0;
+  let lo = lo0;
+  let hi = wMax;
+  while (hi - lo > 4) {
+    const mid = (lo + hi) / 2;
+    if (Hw(mid) <= hMax) hi = mid;
+    else lo = mid;
+  }
+  const w = Math.ceil(hi);
+  return Hw(w) <= hMax ? w : wMax;
+}
+function fillLevel(nats, budget) {
+  const s = [...nats].sort((a, b) => a - b);
+  let prev = 0;
+  let rem = budget;
+  for (let i = 0; i < s.length; i++) {
+    const need = (s[i] - prev) * (s.length - i);
+    if (rem >= need) {
+      rem -= need;
+      prev = s[i];
+    } else return prev + rem / (s.length - i);
+  }
+  return prev;
+}
+function unescapeEntities(s) {
+  return s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+}
+function specMinW(html) {
+  const tx = unescapeEntities;
+  const hasIcon = html.includes("data-lucide");
+  const chipR = chipReserve(html, tx);
+  const chrome = 16 + 2 + (hasIcon ? 20 : 0) + NODE_M * 2 + chipR;
+  let mx = 0;
+  let m;
+  const reSeg = /<span class="seg">(.*?)<\/span>/g;
+  while (m = reSeg.exec(html)) mx = Math.max(mx, tx(m[1]).length * 7.2);
+  const rePill = /<button class="prim-badge"[^>]*>([\s\S]*?)<\/button>/g;
+  while (m = rePill.exec(html)) {
+    const pl = tx(m[1].replace(/<[^>]*>/g, ""));
+    mx = Math.max(mx, Math.min(pl.length * 7.2, PILL_MAX_PX + (m[0].includes("data-hd") ? 18 : 14)));
+  }
+  return mx > 0 ? Math.ceil(mx + chrome) : 0;
+}
+function chipReserve(html, tx) {
+  const cm = /<span class="op-chip"[^>]*>([\s\S]*?)<\/span>/.exec(html);
+  if (!cm) return 0;
+  return Math.min(tx(cm[1]).length * 7.2, 200) + 30;
+}
+
+// plugins/tool-render/src/bash-graph/layout.ts
+function layoutRow(items) {
+  let x = 10;
+  const H = Math.max(...items.map((it) => it.h)) + 6;
+  const pos = /* @__PURE__ */ new Map();
+  for (const it of items) {
+    pos.set(it.id, { x: x + it.w / 2, y: H / 2 });
+    x += it.w + 22;
+  }
+  let W = x - 22 + 10;
+  const engine = "fallback-chain";
+  let minL = Infinity;
+  let maxR = -Infinity;
+  for (const it of items) {
+    const q = pos.get(it.id);
+    if (!q) continue;
+    minL = Math.min(minL, q.x - it.w / 2);
+    maxR = Math.max(maxR, q.x + it.w / 2);
+  }
+  const sh = -minL;
+  if (sh !== 0)
+    for (const it of items) {
+      const q = pos.get(it.id);
+      if (q) q.x += sh;
+    }
+  W = maxR + sh + NODE_M;
+  return { W, H, pos, engine };
+}
+function enforceGaps(lay, items, gap = GAP) {
+  let acc = 0;
+  for (let i = 0; i < items.length; i++) {
+    const p = lay.pos.get(items[i].id);
+    if (!p) continue;
+    p.x += acc;
+    if (i + 1 < items.length) {
+      const req = items[i].gapAfter != null ? items[i].gapAfter : gap;
+      const nx = (lay.pos.get(items[i + 1].id)?.x ?? 0) + acc;
+      const need = p.x + items[i].w / 2 + req + items[i + 1].w / 2;
+      if (need > nx + 1e-9) acc += need - nx;
+    }
+  }
+  lay.W += acc;
+  return acc;
+}
+function planRows(items, avail, ind = IND, gap = GAP, rowGap = ROWGAP, H) {
+  const n = items.length;
+  if (!n) return { rows: [], totalH: 0 };
+  const hcache = /* @__PURE__ */ new Map();
+  const Hc = (it, w) => {
+    const k = it.id + "@" + w;
+    let v = hcache.get(k);
+    if (v === void 0) {
+      v = H(it, w);
+      hcache.set(k, v);
+    }
+    return v;
+  };
+  function rowCost(js, ie, first) {
+    const g = items.slice(js, ie + 1);
+    const aw = avail - (first ? 0 : ind);
+    const gaps = g.slice(0, -1).reduce((a, s) => a + (s.gapAfter != null ? s.gapAfter : gap), 0) + 20;
+    const natSum = g.reduce((a, s) => a + s.nat, 0);
+    const widths = /* @__PURE__ */ new Map();
+    if (natSum + gaps <= aw) {
+      let h2 = 0;
+      for (const s of g) {
+        widths.set(s.id, s.nat);
+        h2 = Math.max(h2, Hc(s, s.nat));
+      }
+      return { h: h2 + (first ? 6 : 0), widths, scroll: false, left: aw - natSum - (gaps - 20) };
+    }
+    const inflex = g.filter((s) => !s.flex);
+    const flex = g.filter((s) => s.flex);
+    const iSum = inflex.reduce((a, s) => a + s.nat, 0);
+    const budget = aw - gaps - iSum;
+    const L = budget >= 0 && flex.length ? fillLevel(flex.map((s) => s.nat), budget) : -1;
+    if (L < 0 || flex.some((s) => Math.min(s.nat, L) < (s.minw || 0))) {
+      let h2 = 0;
+      for (const s of g) {
+        widths.set(s.id, s.nat);
+        h2 = Math.max(h2, Hc(s, s.nat));
+      }
+      const hidden = Math.max(0, natSum + gaps - aw);
+      return { h: h2 + (first ? 6 : 0) + hidden, widths, scroll: true, left: 0 };
+    }
+    let h = 0;
+    const rawW = /* @__PURE__ */ new Map();
+    for (const s of g) {
+      const w = s.flex ? Math.ceil(Math.min(s.nat, L)) : s.nat;
+      rawW.set(s.id, w);
+      h = Math.max(h, Hc(s, w));
+    }
+    for (const s of g) {
+      widths.set(
+        s.id,
+        s.flex ? fitWidth(s.html ?? "", rawW.get(s.id) ?? 0, s.minw || 0, (w) => Hc(s, w)) : s.nat
+      );
+    }
+    let used = 0;
+    for (const s of g) used += widths.get(s.id) ?? 0;
+    return { h: h + (first ? 6 : 0), widths, scroll: false, left: aw - used - (gaps - 20) };
+  }
+  const INF = 1e15;
+  const dp = new Array(n + 1).fill(INF);
+  const par = new Array(n + 1).fill(-1);
+  const rc = new Array(
+    n + 1
+  ).fill(null);
+  dp[0] = 0;
+  for (let i2 = 1; i2 <= n; i2++) {
+    for (let j = 0; j < i2; j++) {
+      const c2 = rowCost(j, i2 - 1, j === 0);
+      const tot = dp[j] + c2.h + (j > 0 ? rowGap : 0);
+      if (tot < dp[i2] || tot === dp[i2] && j > par[i2]) {
+        dp[i2] = tot;
+        par[i2] = j;
+        rc[i2] = c2;
+      }
+    }
+  }
+  const rows = [];
+  let i = n;
+  while (i > 0) {
+    const j = par[i];
+    const c2 = rc[i];
+    if (!c2 || j < 0) break;
+    const ids = [];
+    for (let k = j; k < i; k++) ids.push(items[k].id);
+    rows.unshift({
+      ids,
+      widths: ids.map((id) => c2.widths.get(id) ?? 0),
+      left: Math.max(0, Math.round(c2.left)),
+      first: j === 0,
+      scroll: c2.scroll
+    });
+    i = j;
+  }
+  return { rows, totalH: dp[n] };
+}
+
+// plugins/tool-render/src/bash-graph/text.ts
+function esc(s) {
+  return String(s).replace(
+    /[&<>"']/g,
+    (c2) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c2]
+  );
+}
+function SL(src, a, b) {
+  return src.slice(a, b);
+}
+function segHTML(raw) {
+  return String(raw).split("/").map((p) => `<span class="seg">${esc(p)}</span>`).join("/<wbr>");
+}
+function wbrHTML(s) {
+  return esc(s).replace(/\//g, "/<wbr>");
+}
+function xRunHTML(s, isName) {
+  let named = !isName;
+  return String(s).split(/(\s+)/g).map((p) => {
+    if (p === "" || /^\s+$/.test(p)) return esc(p);
+    const inner = segHTML(p);
+    if (!named) {
+      named = true;
+      return `<span class="node-name">${inner}</span>`;
+    }
+    return inner;
+  }).join("");
+}
+function hlCmd(src, ta, tb, isFirst) {
+  const raw = SL(src, ta, tb);
+  const toks = [];
+  let m;
+  const re = /("[^"]*"|'[^']*'|\$[\w{}()#]+|--?[A-Za-z0-9_][\w.-]*|\/[^\s'"`|&;()]*|\b\d[\d.]*\b)/g;
+  let last = 0;
+  while (m = re.exec(raw)) {
+    if (m.index > last) toks.push({ t: "x", s: raw.slice(last, m.index) });
+    const s = m[0];
+    let cls = "x";
+    if (/^['"]/.test(s)) cls = "hl-str";
+    else if (/^\$/.test(s)) cls = "hl-var";
+    else if (/^-/.test(s)) cls = "hl-flag";
+    else if (/^\//.test(s)) cls = "hl-path";
+    toks.push({ t: cls, s });
+    last = m.index + s.length;
+  }
+  if (last < raw.length) toks.push({ t: "x", s: raw.slice(last) });
+  const first = /^\s*\S+/.exec(raw);
+  const nameEnd = first ? first[0].length : 0;
+  let html = "";
+  let pos = 0;
+  for (const tk of toks) {
+    const end = pos + tk.s.length;
+    if (tk.t === "x") html += xRunHTML(tk.s, pos < nameEnd && isFirst !== false);
+    else if (tk.t === "hl-path") html += `<span class="hl-path">${segHTML(tk.s)}</span>`;
+    else html += `<span class="${tk.t}">${wbrHTML(tk.s)}</span>`;
+    pos = end;
+  }
+  const nm = (first ? first[0] : "").trim();
+  return { html, name: nm };
+}
+function hlBody(text) {
+  return esc(text).replace(
+    /(&quot;.*?&quot;|&#39;.*?&#39;|(?<!&)#[^\n]*)/g,
+    (s) => s.startsWith("#") ? `<span class="hl-var">${s}</span>` : `<span class="hl-str">${s}</span>`
+  );
+}
+function hlArgBody(text) {
+  return `<span class="hl-str">${esc(text)}</span>`;
+}
+function cmdNameOf(src, t) {
+  const raw = SL(src, t.ta, t.tb);
+  const words = raw.match(/[^\s'"]+|'[^']*'|"[^"]*"/g) || [];
+  for (const w0 of words) {
+    const w = w0.trim();
+    if (!w) continue;
+    if (/^[A-Za-z_]\w*=/.test(w)) continue;
+    return w;
+  }
+  return "?";
+}
+
+// plugins/tool-render/src/bash-graph/primitives.ts
+var OP_MEANING = {
+  "|": "pipe: passes the previous step's output as input to the next step",
+  "&&": "and: runs only if the previous step succeeded",
+  "||": "or: runs only if the previous step failed",
+  ">": "redirect: writes the previous step's output into a file (truncate)",
+  ">>": "redirect: appends the previous step's output to a file",
+  "2>&1": "merge: folds error output into standard output",
+  "2>&1 |": "merge then pipe: folds error output into standard output and passes it on as input to the next step",
+  "<<": "heredoc: feeds the collapsed lines below as input \u2014 activate the node to expand",
+  // Ticket #181: the model degrades any segment carrying a bare & to
+  // verbatim, so no & op node should ever render; the meaning stands as the
+  // fallback so a direct caller still reads honestly.
+  "&": "background: runs the previous step in the background while the next step starts"
+};
+var OP_ICON = {
+  "|": "pipe-glyph",
+  "&&": "check",
+  "||": "circle-plus",
+  ">": "file-output",
+  ">>": "file-output",
+  "2>&1": "merge",
+  "2>&1 |": "merge",
+  "<<": "scroll-text"
+};
+var CMD_ICON = {
+  git: "git-branch",
+  npm: "package",
+  node: "hexagon",
+  deno: "shell",
+  python: "file-code",
+  python3: "file-code",
+  rg: "search",
+  sed: "scissors",
+  cd: "folder",
+  echo: "megaphone",
+  cat: "file-text",
+  ls: "list",
+  head: "chevrons-up",
+  tail: "chevrons-down",
+  wc: "hash",
+  sort: "arrow-down-wide-narrow",
+  uniq: "list-checks",
+  export: "upload",
+  timeout: "timer"
+};
+var PIPE_GLYPH_SYMBOL = `<symbol id="pipe-glyph" viewBox="0 0 512 512"><g transform="rotate(-90 256 256)"><path d="m 488.727,232.727 h -93.091 c -12.853,0 -23.273,10.42 -23.273,23.273 v 23.273 H 232.727 V 139.636 H 256 c 12.853,0 23.273,-10.42 23.273,-23.273 V 23.273 C 279.273,10.42 268.853,0 256,0 H 23.273 C 10.42,0 0,10.42 0,23.273 v 93.091 c 0,12.853 10.42,23.273 23.273,23.273 h 23.273 v 219.415 c 0,58.77 47.633,106.403 106.403,106.403 h 219.415 v 23.273 c 0,12.853 10.42,23.273 23.273,23.273 h 93.091 C 501.58,512 512,501.58 512,488.727 V 256 c 0,-12.853 -10.42,-23.273 -23.273,-23.273 z M 46.545,46.545 H 232.727 V 93.09 H 209.454 69.818 46.545 Z m 106.403,372.364 c -33.064,0 -59.857,-26.794 -59.857,-59.857 V 139.636 h 93.091 v 162.909 c 0,12.853 10.42,23.273 23.273,23.273 h 162.909 v 93.091 z m 312.507,46.546 H 418.91 V 442.182 302.545 279.272 h 46.545 z" fill="currentColor"/></g></symbol>`;
+function PipeGlyph() {
+  return `<span class="prim-icon"><svg aria-hidden="true"><use href="#pipe-glyph"></use></svg></span>`;
+}
+function Icon(name2, fb, cls) {
+  if (name2 === "pipe-glyph") return PipeGlyph();
+  return `<span class="prim-icon${cls ? " " + cls : ""}"><i data-lucide="${esc(name2)}" data-fb="${esc(fb || "\u2022")}"></i></span>`;
+}
+function Badge(text, tone) {
+  return `<span class="prim-badge"${tone ? ` data-tone="${tone}"` : ""}>${esc(text)}</span>`;
+}
+function chipHTML(sym, meaning) {
+  const body = sym === "||" ? Icon(OP_ICON["||"], "||") : segHTML(sym);
+  return `<span class="op-chip" title="${esc(meaning)}">${body}</span>`;
+}
+function pipeTagHTML(kind, mx, y) {
+  const cfg = kind === "pipe" ? { icon: "pipe-glyph", fb: "|", spin: null, meaning: OP_MEANING["|"] } : { icon: "merge", fb: "2>&1 |", spin: "rot90", meaning: OP_MEANING["2>&1 |"] };
+  return `<span class="pipe-tag" data-pipe="${kind}" title="${esc(cfg.meaning)}" style="left:${mx.toFixed(1)}px;top:${y.toFixed(1)}px">${Icon(cfg.icon, cfg.fb, cfg.spin ?? void 0)}</span>`;
+}
+function Node(o) {
+  if (o.op)
+    return `<div class="prim-node op" data-size="op" title="${esc(o.meaning ?? "")}">${Icon(o.icon ?? "", o.sym ?? "", o.spin ?? void 0)}<span class="op-sym">${esc(o.sym ?? "")}</span></div>`;
+  const main = (o.icon ? Icon(o.icon, o.iconFb ?? "") : "") + `<span class="node-text"><code>${o.bodyHTML ?? ""}</code></span>` + (o.dockHTML ? `<div class="hdock">${o.dockHTML}</div>` : "");
+  if (o.chip)
+    return `<div class="prim-node has-chip" data-size="${o.size}"${o.name ? ` data-cmd="${esc(o.name)}"` : ""}>` + chipHTML(o.chip.sym, o.chip.meaning) + `<span class="node-main">${main}</span></div>`;
+  return `<div class="prim-node" data-size="${o.size}"${o.name ? ` data-cmd="${esc(o.name)}"` : ""}${o.meaning ? ` title="${esc(o.meaning)}"` : ""}>` + main + `</div>`;
+}
+
 // node_modules/.pnpm/unbash@4.0.10/node_modules/unbash/dist/ansi-c.js
 function isOctal(code) {
   return code >= 48 && code <= 55;
@@ -20426,1081 +20870,6 @@ var Parser2 = class {
   }
 };
 
-// plugins/tool-render/src/bash-diagram.ts
-var BASH_DIAGRAM_MAX_COMMAND = 2e4;
-var BASH_DIAGRAM_CACHE_LIMIT = 200;
-function isHeredocOperator(op) {
-  return op === "<<" || op === "<<-";
-}
-function countNewlines(text) {
-  let n = 0;
-  for (let i = 0; i < text.length; i++) {
-    if (text.charCodeAt(i) === 10) n++;
-  }
-  return n;
-}
-function carveHeredocs(command, statementEnd, heredocs) {
-  const firstNewline = command.indexOf("\n", statementEnd);
-  if (firstNewline === -1) return null;
-  let cursor = firstNewline + 1;
-  const carved = [];
-  for (const h of heredocs) {
-    if (typeof h.delimiter !== "string") return null;
-    const bodyStart = cursor;
-    let found = false;
-    while (cursor <= command.length) {
-      const eol = command.indexOf("\n", cursor);
-      const lineEnd = eol === -1 ? command.length : eol;
-      let line = command.slice(cursor, lineEnd);
-      if (line.endsWith("\r")) line = line.slice(0, -1);
-      const compared = h.operator === "<<-" ? line.replace(/^\t+/, "") : line;
-      if (compared === h.delimiter) {
-        carved.push({
-          body: command.slice(bodyStart, cursor),
-          delimiterLine: command.slice(cursor, lineEnd),
-          newline: eol === -1 ? "" : "\n"
-        });
-        cursor = eol === -1 ? command.length : eol + 1;
-        found = true;
-        break;
-      }
-      if (eol === -1) break;
-      cursor = eol + 1;
-    }
-    if (!found) return null;
-  }
-  return carved;
-}
-function classifyInner(inner) {
-  if (inner === null || typeof inner !== "object") return null;
-  if (inner.type === "Pipeline") {
-    if (!Array.isArray(inner.commands) || inner.commands.length === 0) return null;
-    if (inner.commands.length === 1) {
-      const only = inner.commands[0];
-      if (only === null || typeof only !== "object" || only.type !== "Command") return null;
-      return {
-        kind: "command",
-        negated: inner.negated === true,
-        timed: inner.time === true,
-        rawStages: [only],
-        operators: []
-      };
-    }
-    if (!inner.commands.every((s) => s !== null && typeof s === "object" && s.type === "Command")) {
-      return null;
-    }
-    const rawStages = inner.commands;
-    const operators = Array.isArray(inner.operators) ? inner.operators : [];
-    if (operators.length !== rawStages.length - 1) return null;
-    for (const op of operators) {
-      if (op !== "|" && op !== "|&") return null;
-    }
-    return {
-      kind: "pipeline",
-      negated: inner.negated === true,
-      timed: inner.time === true,
-      rawStages,
-      operators
-    };
-  }
-  if (inner.type === "Command") {
-    return { kind: "command", negated: false, timed: false, rawStages: [inner], operators: [] };
-  }
-  return null;
-}
-function redirectSpanKey(r) {
-  if (r === null || typeof r !== "object") return null;
-  if (typeof r.pos !== "number" || typeof r.end !== "number") return null;
-  return r.pos + ":" + r.end;
-}
-function pushRedirectOnce(target, r) {
-  if (target.includes(r)) return;
-  const key = redirectSpanKey(r);
-  if (key !== null) {
-    for (const existing of target) {
-      if (redirectSpanKey(existing) === key) return;
-    }
-  }
-  target.push(r);
-}
-function attributeStatementRedirects(statement, rawStages) {
-  const statementRedirects = Array.isArray(statement.redirects) ? statement.redirects : [];
-  const lists = rawStages.map((s) => Array.isArray(s.redirects) ? s.redirects.slice() : []);
-  for (const r of statementRedirects) {
-    pushRedirectOnce(lists[lists.length - 1], r);
-  }
-  return lists;
-}
-function collectHeredocSpecs(stageRedirectLists) {
-  const specs = [];
-  let usable = true;
-  stageRedirectLists.forEach((list, stage) => {
-    list.forEach((r, index) => {
-      if (r === null || typeof r !== "object" || typeof r.operator !== "string") return;
-      if (!isHeredocOperator(r.operator)) return;
-      if (r.target === null || typeof r.target !== "object" || typeof r.target.value !== "string") {
-        usable = false;
-        return;
-      }
-      specs.push({
-        operator: r.operator,
-        delimiter: r.target.value,
-        redirectPos: typeof r.pos === "number" ? r.pos : null,
-        stage,
-        index
-      });
-    });
-  });
-  if (!usable) return { specs: [], usable: false };
-  specs.sort((a, b) => (a.redirectPos ?? 0) - (b.redirectPos ?? 0));
-  return { specs, usable: true };
-}
-function buildTrailing(command, statementEnd, specs) {
-  const trailing = [];
-  if (specs.length > 0) {
-    const carved = carveHeredocs(
-      command,
-      statementEnd,
-      specs.map((h) => ({ operator: h.operator, delimiter: h.delimiter }))
-    );
-    if (carved === null || carved.length !== specs.length) return null;
-    const firstNewline = command.indexOf("\n", statementEnd);
-    let cursor = firstNewline + 1;
-    trailing.push({ kind: "gap", text: command.slice(statementEnd, cursor) });
-    for (const c2 of carved) {
-      trailing.push({ kind: "heredoc", body: c2.body, delimiterLine: c2.delimiterLine, newline: c2.newline });
-      cursor += c2.body.length + c2.delimiterLine.length + c2.newline.length;
-    }
-    trailing.push({ kind: "gap", text: command.slice(cursor) });
-    return { trailing, carves: carved };
-  }
-  trailing.push({ kind: "gap", text: command.slice(statementEnd) });
-  return { trailing, carves: [] };
-}
-function buildStageModels(command, rawStages, stageRedirectLists, heredocByKey) {
-  return rawStages.map((s, stageIdx) => {
-    const list = stageRedirectLists[stageIdx];
-    const spans = [];
-    for (const r of list) {
-      if (r === null || typeof r !== "object") continue;
-      if (typeof r.pos !== "number" || typeof r.end !== "number") continue;
-      const start = Math.max(s.pos, Math.min(r.pos, s.end));
-      const end = Math.max(s.pos, Math.min(r.end, s.end));
-      if (end > start) spans.push({ start, end });
-    }
-    spans.sort((a, b) => a.start - b.start);
-    let words = "";
-    let cursor = s.pos;
-    for (const span of spans) {
-      if (span.start > cursor) words += command.slice(cursor, span.start) + " ";
-      cursor = Math.max(cursor, span.end);
-    }
-    if (s.end > cursor) words += command.slice(cursor, s.end);
-    words = words.split(/\s+/).filter((w) => w.length > 0).join(" ");
-    const redirects = list.map((r, index) => {
-      const slice = r !== null && typeof r === "object" && typeof r.pos === "number" && typeof r.end === "number" && r.pos >= 0 && r.end <= command.length && r.end >= r.pos ? command.slice(r.pos, r.end) : "";
-      const operator = r !== null && typeof r === "object" && typeof r.operator === "string" ? r.operator : "";
-      const carve = heredocByKey.get(stageIdx + ":" + index);
-      return {
-        slice,
-        operator,
-        heredoc: carve === void 0 ? null : {
-          body: carve.body,
-          delimiter: carve.delimiterLine,
-          lines: countNewlines(carve.body)
-        }
-      };
-    });
-    return {
-      slice: command.slice(s.pos, s.end),
-      words,
-      redirects,
-      exitCode: void 0,
-      args: parseStageArgs(command, s)
-    };
-  });
-}
-function buildDiagram(command) {
-  if (typeof command !== "string" || command === "") return null;
-  if (command.length > BASH_DIAGRAM_MAX_COMMAND) return null;
-  let script;
-  try {
-    script = parse2(command);
-  } catch {
-    return null;
-  }
-  if (script === null || typeof script !== "object") return null;
-  if (Array.isArray(script.errors) && script.errors.length > 0) return null;
-  if (!Array.isArray(script.commands) || script.commands.length !== 1) return null;
-  const statement = script.commands[0];
-  if (statement === null || typeof statement !== "object") return null;
-  if (statement.background === true) return null;
-  const classified = classifyInner(statement.command);
-  if (classified === null) {
-    return null;
-  }
-  const { kind, negated, timed, rawStages, operators } = classified;
-  const stageRedirectLists = attributeStatementRedirects(statement, rawStages);
-  if (kind === "command") {
-    const hasRedirects = stageRedirectLists[0].length > 0;
-    if (!hasRedirects) return null;
-  }
-  for (const s of rawStages) {
-    if (typeof s.pos !== "number" || typeof s.end !== "number" || s.pos < 0 || s.end > command.length || s.pos > s.end) {
-      return null;
-    }
-  }
-  for (let i = 0; i + 1 < rawStages.length; i++) {
-    if (rawStages[i].end > rawStages[i + 1].pos) return null;
-  }
-  if (typeof statement.end !== "number" || statement.end < rawStages[rawStages.length - 1].end) {
-    return null;
-  }
-  const statementEnd = Math.min(statement.end, command.length);
-  const leadingGap = command.slice(0, rawStages[0].pos);
-  const arrows = [];
-  for (let i = 0; i + 1 < rawStages.length; i++) {
-    arrows.push({
-      operator: operators[i],
-      gap: command.slice(rawStages[i].end, rawStages[i + 1].pos)
-    });
-  }
-  const { specs: heredocSpecs, usable: heredocsUsable } = collectHeredocSpecs(stageRedirectLists);
-  if (!heredocsUsable) return null;
-  const trailed = buildTrailing(command, statementEnd, heredocSpecs);
-  if (trailed === null) return null;
-  const trailing = trailed.trailing;
-  const heredocByKey = /* @__PURE__ */ new Map();
-  heredocSpecs.forEach((h, i) => {
-    heredocByKey.set(h.stage + ":" + h.index, trailed.carves[i]);
-  });
-  const stages = buildStageModels(command, rawStages, stageRedirectLists, heredocByKey);
-  return { kind, negated, timed, leadingGap, stages, arrows, trailing };
-}
-var diagramCache = /* @__PURE__ */ new Map();
-function getBashDiagram(command) {
-  if (diagramCache.has(command)) return diagramCache.get(command) ?? null;
-  const built = buildDiagram(command);
-  if (diagramCache.size >= BASH_DIAGRAM_CACHE_LIMIT) {
-    const oldest = diagramCache.keys().next();
-    if (!oldest.done) diagramCache.delete(oldest.value);
-  }
-  diagramCache.set(command, built);
-  return built;
-}
-function subtreeHasHeredoc(node) {
-  if (node === null || typeof node !== "object") return false;
-  if (Array.isArray(node)) {
-    for (const el of node) {
-      if (subtreeHasHeredoc(el)) return true;
-    }
-    return false;
-  }
-  if ((node.operator === "<<" || node.operator === "<<-") && "target" in node) return true;
-  for (const key of Object.keys(node)) {
-    if (subtreeHasHeredoc(node[key])) return true;
-  }
-  return false;
-}
-function conditionalOf(inner) {
-  if (inner === null || typeof inner !== "object" || inner.type !== "AndOr") return null;
-  const seen = /* @__PURE__ */ new Set();
-  const ops = Array.isArray(inner.operators) ? inner.operators : [];
-  for (const op of ops) {
-    if (op === "&&" || op === "||") seen.add(op);
-    else seen.add("other");
-  }
-  if (seen.size === 1) {
-    if (seen.has("&&")) return "&&";
-    if (seen.has("||")) return "||";
-  }
-  return "mixed";
-}
-var ARG_PROFILES = {
-  rg: { valueFlags: ["-e", "-C", "-A", "-B", "--context", "--after-context", "--before-context", "-m", "--max-count", "--type", "--replace", "--max-filesize", "--glob", "-g"] },
-  ls: { valueFlags: ["-w", "--block-size", "--width", "--context", "--sort", "--format"] },
-  node: { valueFlags: ["-e", "-p", "--eval", "--print", "--max-old-space-size", "--stack-size", "--input-type"] },
-  git: {
-    valueFlags: ["-C", "-c", "--git-dir", "--work-tree", "--exec-path", "--namespace"],
-    subcommands: {
-      commit: { valueFlags: ["-m", "-F", "--author", "--date", "-C", "--message"] },
-      merge: { valueFlags: ["-m", "-F", "-X"] },
-      log: { valueFlags: ["-n", "--since", "--until", "--before", "--after", "--format", "--pretty", "-L", "-S", "-G", "-C", "--grep", "--author", "--max-count"] }
-    }
-  }
-};
-var ARG_SUBCOMMANDS = {
-  git: /* @__PURE__ */ new Set([
-    "add",
-    "am",
-    "archive",
-    "bisect",
-    "blame",
-    "branch",
-    "bundle",
-    "checkout",
-    "cherry-pick",
-    "clean",
-    "clone",
-    "commit",
-    "config",
-    "describe",
-    "diff",
-    "fetch",
-    "format-patch",
-    "gc",
-    "grep",
-    "init",
-    "log",
-    "ls-files",
-    "merge",
-    "mv",
-    "notes",
-    "pull",
-    "push",
-    "rebase",
-    "remote",
-    "reset",
-    "restore",
-    "revert",
-    "rm",
-    "show",
-    "stash",
-    "status",
-    "submodule",
-    "switch",
-    "tag",
-    "worktree"
-  ])
-};
-function parseStageArgs(command, stageNode) {
-  if (stageNode === null || typeof stageNode !== "object" || stageNode.type !== "Command") return void 0;
-  const stagePos = stageNode.pos;
-  const stageEnd = stageNode.end;
-  if (typeof stagePos !== "number" || typeof stageEnd !== "number") return void 0;
-  const name2 = stageNode.name;
-  if (name2 === null || typeof name2 !== "object" || typeof name2.value !== "string" || typeof name2.pos !== "number" || typeof name2.end !== "number") return void 0;
-  if (name2.value === "" || name2.value.startsWith("-")) return void 0;
-  if (Array.isArray(stageNode.prefix) && stageNode.prefix.length > 0) return void 0;
-  const suffix = Array.isArray(stageNode.suffix) ? stageNode.suffix : [];
-  const words = [{ value: name2.value, pos: name2.pos, end: name2.end }];
-  for (const w of suffix) {
-    if (w === null || typeof w !== "object") return void 0;
-    if (typeof w.value !== "string" || typeof w.pos !== "number" || typeof w.end !== "number" || w.pos < 0 || w.end > command.length || w.end < w.pos) {
-      return void 0;
-    }
-    words.push({ value: w.value, pos: w.pos, end: w.end });
-  }
-  const profile = ARG_PROFILES[name2.value];
-  const subTbl = ARG_SUBCOMMANDS[name2.value];
-  const baseFlags = new Set(profile?.valueFlags ?? []);
-  const bound = /* @__PURE__ */ new Map();
-  function bind(effective2) {
-    for (let i = 1; i < words.length; i++) {
-      const v = words[i].value;
-      if (!v.startsWith("-") || v === "-" || v === "--") continue;
-      if (v.startsWith("--") && v.includes("=")) continue;
-      if (effective2.has(v) && i + 1 < words.length && !bound.has(i + 1) && words[i + 1].value !== "" && !words[i + 1].value.startsWith("-")) {
-        bound.set(i + 1, i);
-        i++;
-      }
-    }
-  }
-  function findSubcommand() {
-    for (let i = 1; i < words.length; i++) {
-      if (bound.has(i)) continue;
-      const v = words[i].value;
-      if (v === "" || v.startsWith("-")) continue;
-      if (subTbl !== void 0 && subTbl.has(v)) return i;
-    }
-    return -1;
-  }
-  bind(baseFlags);
-  let subIndex = findSubcommand();
-  if (subIndex >= 0) {
-    const subFlags = profile?.subcommands?.[words[subIndex].value]?.valueFlags ?? [];
-    bound.clear();
-    bind(/* @__PURE__ */ new Set([...baseFlags, ...subFlags]));
-    subIndex = findSubcommand();
-  }
-  const effective = new Set(baseFlags);
-  if (subIndex >= 0) {
-    for (const f of profile?.subcommands?.[words[subIndex].value]?.valueFlags ?? []) effective.add(f);
-  }
-  const args = [];
-  args.push({ slice: command.slice(words[0].pos, words[0].end), role: "flag" });
-  for (let i = 1; i < words.length; i++) {
-    const w = words[i];
-    const v = w.value;
-    const slice = command.slice(w.pos, w.end);
-    if (v.startsWith("-") && v !== "-" && v !== "--") {
-      if (v.startsWith("--") && v.includes("=")) {
-        args.push({ slice, role: "flag" });
-        continue;
-      }
-      if (bound.get(i + 1) === i) {
-        args.push({ slice, role: "flag" });
-        args.push({ slice: command.slice(words[i + 1].pos, words[i + 1].end), role: "value" });
-        i++;
-        continue;
-      }
-      args.push({ slice, role: "flag" });
-      continue;
-    }
-    if (bound.has(i)) continue;
-    if (i === subIndex) {
-      args.push({ slice, role: "subcommand" });
-      continue;
-    }
-    args.push({ slice, role: "positional" });
-  }
-  return { stageSlice: command.slice(stagePos, stageEnd), args };
-}
-function prepareStatementUnit(command, st, classified) {
-  const { kind, negated, timed, rawStages, operators } = classified;
-  for (const s of rawStages) {
-    if (typeof s.pos !== "number" || typeof s.end !== "number" || s.pos < 0 || s.end > command.length || s.pos > s.end) {
-      return null;
-    }
-  }
-  for (let i = 0; i + 1 < rawStages.length; i++) {
-    if (rawStages[i].end > rawStages[i + 1].pos) return null;
-  }
-  if (rawStages[0].pos < st.pos || rawStages[rawStages.length - 1].end > st.end) return null;
-  const stmtEnd = Math.min(st.end, command.length);
-  const lists = attributeStatementRedirects(st, rawStages);
-  const unit = {
-    kind,
-    negated,
-    timed,
-    leadingGap: command.slice(st.pos, rawStages[0].pos),
-    stages: [],
-    arrows: [],
-    groupGap: command.slice(rawStages[rawStages.length - 1].end, stmtEnd),
-    conditional: null
-  };
-  for (let i = 0; i + 1 < rawStages.length; i++) {
-    unit.arrows.push({
-      operator: operators[i],
-      gap: command.slice(rawStages[i].end, rawStages[i + 1].pos)
-    });
-  }
-  const { specs, usable } = collectHeredocSpecs(lists);
-  if (!usable) return null;
-  return { owner: "", unit, rawStages, lists, specs };
-}
-function buildChainGroup(command, st) {
-  const inner = st.command;
-  if (inner === null || typeof inner !== "object" || inner.type !== "AndOr") return null;
-  const opsIn = Array.isArray(inner.operators) ? inner.operators : [];
-  const cmdsIn = Array.isArray(inner.commands) ? inner.commands : [];
-  if (cmdsIn.length < 2 || opsIn.length !== cmdsIn.length - 1) return null;
-  for (const op of opsIn) {
-    if (op !== "&&" && op !== "||") return null;
-  }
-  if (typeof st.pos !== "number" || typeof st.end !== "number") return null;
-  const stmtEnd = Math.min(st.end, command.length);
-  const rows = [];
-  const pends = [];
-  for (let oi = 0; oi < cmdsIn.length; oi++) {
-    const op = cmdsIn[oi];
-    if (op === null || typeof op !== "object") return null;
-    const classified = classifyInner(op);
-    if (classified === null) return null;
-    const pen = prepareStatementUnit(command, op, classified);
-    if (pen === null) return null;
-    pen.unit.conditional = oi > 0 ? opsIn[oi - 1] : null;
-    pen.owner = `_chain_${oi}`;
-    rows.push(pen.unit);
-    pends.push(pen);
-  }
-  for (const pen of pends) {
-    if (pen.specs.length > 0) return null;
-  }
-  const statementRedirects = Array.isArray(st.redirects) ? st.redirects : [];
-  const lastLists = pends[pends.length - 1].lists;
-  for (const r of statementRedirects) pushRedirectOnce(lastLists[lastLists.length - 1], r);
-  for (let i = 0; i < cmdsIn.length; i++) {
-    const op = cmdsIn[i];
-    if (typeof op.pos !== "number" || typeof op.end !== "number" || op.pos < 0 || op.end > command.length) return null;
-    if (i > 0 && cmdsIn[i - 1].end > op.pos) return null;
-  }
-  if (cmdsIn[0].pos < st.pos || cmdsIn[cmdsIn.length - 1].end > st.end) return null;
-  const lastPen = pends[pends.length - 1];
-  const lastStageEnd = lastPen.rawStages[lastPen.rawStages.length - 1].end;
-  lastPen.unit.groupGap = command.slice(lastStageEnd, stmtEnd);
-  const chain = {
-    kind: "chain",
-    leadingGap: command.slice(st.pos, cmdsIn[0].pos),
-    rows,
-    operators: opsIn,
-    separators: []
-  };
-  for (let i = 0; i + 1 < cmdsIn.length; i++) {
-    chain.separators.push(command.slice(cmdsIn[i].end, cmdsIn[i + 1].pos));
-  }
-  return { chain, rows: pends };
-}
-function buildSequenceDiagram(command) {
-  if (typeof command !== "string" || command === "") return null;
-  if (command.length > BASH_DIAGRAM_MAX_COMMAND) return null;
-  let script;
-  try {
-    script = parse2(command);
-  } catch {
-    return null;
-  }
-  if (script === null || typeof script !== "object") return null;
-  if (Array.isArray(script.errors) && script.errors.length > 0) return null;
-  if (!Array.isArray(script.commands) || script.commands.length < 2) return null;
-  const statements = script.commands;
-  for (const st of statements) {
-    if (st === null || typeof st !== "object") return null;
-    if (st.background === true) return null;
-  }
-  for (let i = 0; i < statements.length; i++) {
-    const st = statements[i];
-    if (typeof st.pos !== "number" || typeof st.end !== "number" || st.pos < 0 || st.end > command.length || st.pos > st.end) {
-      return null;
-    }
-    if (i > 0 && statements[i - 1].end > st.pos) return null;
-  }
-  const lastEnd = Math.min(statements[statements.length - 1].end, command.length);
-  const separators = [];
-  for (let i = 0; i + 1 < statements.length; i++) {
-    const sep = command.slice(statements[i].end, statements[i + 1].pos);
-    if (sep.includes("&")) return null;
-    separators.push(sep);
-  }
-  const groups = [];
-  const pending = [];
-  const allSpecs = [];
-  let textGroupHeredocs = false;
-  for (let si = 0; si < statements.length; si++) {
-    const st = statements[si];
-    const innerIsAndOr = st.command !== null && typeof st.command === "object" && st.command.type === "AndOr";
-    let chained = null;
-    if (innerIsAndOr) {
-      chained = buildChainGroup(command, st);
-      if (chained !== null) {
-        for (const r of chained.rows) {
-          for (const spec of r.specs) allSpecs.push({ ...spec, owner: `${si}:${r.owner}` });
-          r.owner = `${si}:${r.owner}`;
-          pending.push(r);
-        }
-        groups.push({ kind: "chain", chain: chained.chain });
-        continue;
-      }
-    }
-    const classified = classifyInner(st.command);
-    if (classified !== null) {
-      const pen = prepareStatementUnit(command, st, classified);
-      if (pen === null) return null;
-      pen.owner = String(si);
-      for (const spec of pen.specs) allSpecs.push({ ...spec, owner: pen.owner });
-      pending.push(pen);
-      groups.push({ kind: "diagram", unit: pen.unit });
-    } else {
-      if (subtreeHasHeredoc(st)) textGroupHeredocs = true;
-      groups.push({
-        kind: "text",
-        slice: command.slice(st.pos, Math.min(st.end, command.length)),
-        conditional: conditionalOf(st.command)
-      });
-    }
-  }
-  if (allSpecs.length > 0 && textGroupHeredocs) return null;
-  for (const spec of allSpecs) {
-    if (spec.redirectPos === null) return null;
-    if (command.slice(spec.redirectPos, lastEnd).includes("\n")) return null;
-  }
-  allSpecs.sort((a, b) => (a.redirectPos ?? 0) - (b.redirectPos ?? 0));
-  const trailed = buildTrailing(command, lastEnd, allSpecs);
-  if (trailed === null) return null;
-  const carveByOwner = /* @__PURE__ */ new Map();
-  allSpecs.forEach((h, i) => {
-    carveByOwner.set(h.owner + ":" + h.stage + ":" + h.index, trailed.carves[i]);
-  });
-  for (const p of pending) {
-    const sub = /* @__PURE__ */ new Map();
-    for (const s of p.specs) {
-      const carve = carveByOwner.get(p.owner + ":" + s.stage + ":" + s.index);
-      if (carve !== void 0) sub.set(s.stage + ":" + s.index, carve);
-    }
-    p.unit.stages = buildStageModels(command, p.rawStages, p.lists, sub);
-  }
-  return {
-    kind: "sequence",
-    leadingGap: command.slice(0, statements[0].pos),
-    statements: groups,
-    separators,
-    trailing: trailed.trailing
-  };
-}
-var sequenceCache = /* @__PURE__ */ new Map();
-function getBashSequenceDiagram(command) {
-  if (sequenceCache.has(command)) return sequenceCache.get(command) ?? null;
-  const built = buildSequenceDiagram(command);
-  if (sequenceCache.size >= BASH_DIAGRAM_CACHE_LIMIT) {
-    const oldest = sequenceCache.keys().next();
-    if (!oldest.done) sequenceCache.delete(oldest.value);
-  }
-  sequenceCache.set(command, built);
-  return built;
-}
-function resolveBashTab(command, rewritten) {
-  const commandText = typeof command === "string" ? command : null;
-  if (commandText === null || rewritten === true) {
-    return { drawable: false, showTabs: false, defaultTab: "command", commandText };
-  }
-  const drawable = getBashDiagram(commandText) !== null || getBashSequenceDiagram(commandText) !== null;
-  return drawable ? { drawable: true, showTabs: true, defaultTab: "graph", commandText } : { drawable: false, showTabs: false, defaultTab: "command", commandText };
-}
-
-// plugins/tool-render/src/bash-graph/constants.ts
-var SCALE = [
-  { key: "xs", max: 12, w: 112 },
-  { key: "s", max: 28, w: 168 },
-  { key: "m", max: 56, w: 232 },
-  { key: "l", max: 96, w: 312 },
-  { key: "xl", max: 150, w: 400 }
-];
-function sizeFor(len) {
-  for (const s of SCALE) if (len <= s.max) return s;
-  return null;
-}
-function stepFor(nat) {
-  for (const s of SCALE) if (nat <= s.w) return s.key;
-  return "xl";
-}
-var NODE_M = 10;
-var OP_W = 36;
-var PILL_MAX_PX = 220;
-var PIPE_GAP = 80;
-var GAP = 22;
-var ROWGAP = 22;
-var IND = 32;
-var SHORT_T = 16;
-var ARG_T = 80;
-var CARD_AVAIL = 716;
-function cardAvail() {
-  try {
-    const g = globalThis;
-    const col = g.document ? g.document.querySelector("#col") : null;
-    const w = col && col.clientWidth ? col.clientWidth : 748;
-    return Math.max(200, w - 32);
-  } catch {
-    return CARD_AVAIL;
-  }
-}
-
-// plugins/tool-render/src/bash-graph/measure.ts
-function activeDocument() {
-  const g = globalThis;
-  if (!g.document) throw new Error("bash-graph: no document for measurement");
-  return g.document;
-}
-function naturalWidth(html, sk) {
-  if (sk === "op") return OP_W + NODE_M * 2;
-  try {
-    const meas = activeDocument().querySelector("#measure");
-    if (!meas) return 120;
-    meas.innerHTML = `<div style="width:max-content;white-space:nowrap">${html}</div>`;
-    const nodeEl = meas.firstChild && meas.firstChild.firstChild;
-    if (nodeEl && nodeEl.style) nodeEl.style.width = "auto";
-    const sw = nodeEl ? nodeEl.scrollWidth || 0 : 0;
-    const ow = nodeEl ? nodeEl.offsetWidth || 0 : 0;
-    meas.innerHTML = "";
-    if (sw > 0) return Math.ceil(sw) + 2 + NODE_M * 2;
-    if (ow > 0) return Math.ceil(ow) + NODE_M * 2;
-  } catch {
-  }
-  return 120;
-}
-function measureH(html, w) {
-  const meas = activeDocument().querySelector("#measure");
-  if (!meas) return 30;
-  meas.innerHTML = `<div class="fobjwrap" style="width:${w}px">${html}</div>`;
-  const inner = meas.firstChild;
-  const node = inner && inner.firstChild ? inner.firstChild : null;
-  if (node && node.style && node.classList && node.classList.contains("prim-node") && !node.classList.contains("op")) {
-    node.style.width = Math.max(0, w - NODE_M * 2) + "px";
-    node.style.maxWidth = Math.max(0, w - NODE_M * 2) + "px";
-  }
-  let h = inner ? inner.offsetHeight : 0;
-  try {
-    if (inner && inner.getBoundingClientRect) {
-      const bb = inner.getBoundingClientRect();
-      if (bb.height > h) h = bb.height;
-    }
-  } catch {
-  }
-  meas.innerHTML = "";
-  return Math.max(30, Math.ceil(h));
-}
-function setNodeWidth(s, step) {
-  if (s.sk === "op") return;
-  if (s.html.includes('class="prim-node has-chip"'))
-    s.html = s.html.replace(
-      'class="prim-node has-chip"',
-      `class="prim-node has-chip" style="width:${Math.max(0, s.w - NODE_M * 2)}px"`
-    );
-  else
-    s.html = s.html.replace(
-      'class="prim-node"',
-      `class="prim-node" style="width:${Math.max(0, s.w - NODE_M * 2)}px"`
-    );
-  s.html = s.html.replace(/data-size="[a-z]+"/, `data-size="${step}"`);
-}
-function fitWidth(html, wMax, minw, Hw) {
-  void html;
-  const lo0 = minw || 0;
-  if (!(wMax > lo0)) return wMax;
-  const hMax = Hw(wMax);
-  if (Hw(lo0) <= hMax) return lo0;
-  let lo = lo0;
-  let hi = wMax;
-  while (hi - lo > 4) {
-    const mid = (lo + hi) / 2;
-    if (Hw(mid) <= hMax) hi = mid;
-    else lo = mid;
-  }
-  const w = Math.ceil(hi);
-  return Hw(w) <= hMax ? w : wMax;
-}
-function fillLevel(nats, budget) {
-  const s = [...nats].sort((a, b) => a - b);
-  let prev = 0;
-  let rem = budget;
-  for (let i = 0; i < s.length; i++) {
-    const need = (s[i] - prev) * (s.length - i);
-    if (rem >= need) {
-      rem -= need;
-      prev = s[i];
-    } else return prev + rem / (s.length - i);
-  }
-  return prev;
-}
-function unescapeEntities(s) {
-  return s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
-}
-function specMinW(html) {
-  const tx = unescapeEntities;
-  const hasIcon = html.includes("data-lucide");
-  const chipR = chipReserve(html, tx);
-  const chrome = 16 + 2 + (hasIcon ? 20 : 0) + NODE_M * 2 + chipR;
-  let mx = 0;
-  let m;
-  const reSeg = /<span class="seg">(.*?)<\/span>/g;
-  while (m = reSeg.exec(html)) mx = Math.max(mx, tx(m[1]).length * 7.2);
-  const rePill = /<button class="prim-badge"[^>]*>([\s\S]*?)<\/button>/g;
-  while (m = rePill.exec(html)) {
-    const pl = tx(m[1].replace(/<[^>]*>/g, ""));
-    mx = Math.max(mx, Math.min(pl.length * 7.2, PILL_MAX_PX + (m[0].includes("data-hd") ? 18 : 14)));
-  }
-  return mx > 0 ? Math.ceil(mx + chrome) : 0;
-}
-function chipReserve(html, tx) {
-  const cm = /<span class="op-chip"[^>]*>([\s\S]*?)<\/span>/.exec(html);
-  if (!cm) return 0;
-  return Math.min(tx(cm[1]).length * 7.2, 200) + 30;
-}
-
-// plugins/tool-render/src/bash-graph/layout.ts
-function layoutRow(items) {
-  let x = 10;
-  const H = Math.max(...items.map((it) => it.h)) + 6;
-  const pos = /* @__PURE__ */ new Map();
-  for (const it of items) {
-    pos.set(it.id, { x: x + it.w / 2, y: H / 2 });
-    x += it.w + 22;
-  }
-  let W = x - 22 + 10;
-  const engine = "fallback-chain";
-  let minL = Infinity;
-  let maxR = -Infinity;
-  for (const it of items) {
-    const q = pos.get(it.id);
-    if (!q) continue;
-    minL = Math.min(minL, q.x - it.w / 2);
-    maxR = Math.max(maxR, q.x + it.w / 2);
-  }
-  const sh = -minL;
-  if (sh !== 0)
-    for (const it of items) {
-      const q = pos.get(it.id);
-      if (q) q.x += sh;
-    }
-  W = maxR + sh + NODE_M;
-  return { W, H, pos, engine };
-}
-function enforceGaps(lay, items, gap = GAP) {
-  let acc = 0;
-  for (let i = 0; i < items.length; i++) {
-    const p = lay.pos.get(items[i].id);
-    if (!p) continue;
-    p.x += acc;
-    if (i + 1 < items.length) {
-      const req = items[i].gapAfter != null ? items[i].gapAfter : gap;
-      const nx = (lay.pos.get(items[i + 1].id)?.x ?? 0) + acc;
-      const need = p.x + items[i].w / 2 + req + items[i + 1].w / 2;
-      if (need > nx + 1e-9) acc += need - nx;
-    }
-  }
-  lay.W += acc;
-  return acc;
-}
-function planRows(items, avail, ind = IND, gap = GAP, rowGap = ROWGAP, H) {
-  const n = items.length;
-  if (!n) return { rows: [], totalH: 0 };
-  const hcache = /* @__PURE__ */ new Map();
-  const Hc = (it, w) => {
-    const k = it.id + "@" + w;
-    let v = hcache.get(k);
-    if (v === void 0) {
-      v = H(it, w);
-      hcache.set(k, v);
-    }
-    return v;
-  };
-  function rowCost(js, ie, first) {
-    const g = items.slice(js, ie + 1);
-    const aw = avail - (first ? 0 : ind);
-    const gaps = g.slice(0, -1).reduce((a, s) => a + (s.gapAfter != null ? s.gapAfter : gap), 0) + 20;
-    const natSum = g.reduce((a, s) => a + s.nat, 0);
-    const widths = /* @__PURE__ */ new Map();
-    if (natSum + gaps <= aw) {
-      let h2 = 0;
-      for (const s of g) {
-        widths.set(s.id, s.nat);
-        h2 = Math.max(h2, Hc(s, s.nat));
-      }
-      return { h: h2 + (first ? 6 : 0), widths, scroll: false, left: aw - natSum - (gaps - 20) };
-    }
-    const inflex = g.filter((s) => !s.flex);
-    const flex = g.filter((s) => s.flex);
-    const iSum = inflex.reduce((a, s) => a + s.nat, 0);
-    const budget = aw - gaps - iSum;
-    const L = budget >= 0 && flex.length ? fillLevel(flex.map((s) => s.nat), budget) : -1;
-    if (L < 0 || flex.some((s) => Math.min(s.nat, L) < (s.minw || 0))) {
-      let h2 = 0;
-      for (const s of g) {
-        widths.set(s.id, s.nat);
-        h2 = Math.max(h2, Hc(s, s.nat));
-      }
-      const hidden = Math.max(0, natSum + gaps - aw);
-      return { h: h2 + (first ? 6 : 0) + hidden, widths, scroll: true, left: 0 };
-    }
-    let h = 0;
-    const rawW = /* @__PURE__ */ new Map();
-    for (const s of g) {
-      const w = s.flex ? Math.ceil(Math.min(s.nat, L)) : s.nat;
-      rawW.set(s.id, w);
-      h = Math.max(h, Hc(s, w));
-    }
-    for (const s of g) {
-      widths.set(
-        s.id,
-        s.flex ? fitWidth(s.html ?? "", rawW.get(s.id) ?? 0, s.minw || 0, (w) => Hc(s, w)) : s.nat
-      );
-    }
-    let used = 0;
-    for (const s of g) used += widths.get(s.id) ?? 0;
-    return { h: h + (first ? 6 : 0), widths, scroll: false, left: aw - used - (gaps - 20) };
-  }
-  const INF = 1e15;
-  const dp = new Array(n + 1).fill(INF);
-  const par = new Array(n + 1).fill(-1);
-  const rc = new Array(
-    n + 1
-  ).fill(null);
-  dp[0] = 0;
-  for (let i2 = 1; i2 <= n; i2++) {
-    for (let j = 0; j < i2; j++) {
-      const c2 = rowCost(j, i2 - 1, j === 0);
-      const tot = dp[j] + c2.h + (j > 0 ? rowGap : 0);
-      if (tot < dp[i2] || tot === dp[i2] && j > par[i2]) {
-        dp[i2] = tot;
-        par[i2] = j;
-        rc[i2] = c2;
-      }
-    }
-  }
-  const rows = [];
-  let i = n;
-  while (i > 0) {
-    const j = par[i];
-    const c2 = rc[i];
-    if (!c2 || j < 0) break;
-    const ids = [];
-    for (let k = j; k < i; k++) ids.push(items[k].id);
-    rows.unshift({
-      ids,
-      widths: ids.map((id) => c2.widths.get(id) ?? 0),
-      left: Math.max(0, Math.round(c2.left)),
-      first: j === 0,
-      scroll: c2.scroll
-    });
-    i = j;
-  }
-  return { rows, totalH: dp[n] };
-}
-
-// plugins/tool-render/src/bash-graph/text.ts
-function esc(s) {
-  return String(s).replace(
-    /[&<>"']/g,
-    (c2) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c2]
-  );
-}
-function SL(src, a, b) {
-  return src.slice(a, b);
-}
-function segHTML(raw) {
-  return String(raw).split("/").map((p) => `<span class="seg">${esc(p)}</span>`).join("/<wbr>");
-}
-function wbrHTML(s) {
-  return esc(s).replace(/\//g, "/<wbr>");
-}
-function xRunHTML(s, isName) {
-  let named = !isName;
-  return String(s).split(/(\s+)/g).map((p) => {
-    if (p === "" || /^\s+$/.test(p)) return esc(p);
-    const inner = segHTML(p);
-    if (!named) {
-      named = true;
-      return `<span class="node-name">${inner}</span>`;
-    }
-    return inner;
-  }).join("");
-}
-function hlCmd(src, ta, tb, isFirst) {
-  const raw = SL(src, ta, tb);
-  const toks = [];
-  let m;
-  const re = /("[^"]*"|'[^']*'|\$[\w{}()#]+|--?[A-Za-z0-9_][\w.-]*|\/[^\s'"`|&;()]*|\b\d[\d.]*\b)/g;
-  let last = 0;
-  while (m = re.exec(raw)) {
-    if (m.index > last) toks.push({ t: "x", s: raw.slice(last, m.index) });
-    const s = m[0];
-    let cls = "x";
-    if (/^['"]/.test(s)) cls = "hl-str";
-    else if (/^\$/.test(s)) cls = "hl-var";
-    else if (/^-/.test(s)) cls = "hl-flag";
-    else if (/^\//.test(s)) cls = "hl-path";
-    toks.push({ t: cls, s });
-    last = m.index + s.length;
-  }
-  if (last < raw.length) toks.push({ t: "x", s: raw.slice(last) });
-  const first = /^\s*\S+/.exec(raw);
-  const nameEnd = first ? first[0].length : 0;
-  let html = "";
-  let pos = 0;
-  for (const tk of toks) {
-    const end = pos + tk.s.length;
-    if (tk.t === "x") html += xRunHTML(tk.s, pos < nameEnd && isFirst !== false);
-    else if (tk.t === "hl-path") html += `<span class="hl-path">${segHTML(tk.s)}</span>`;
-    else html += `<span class="${tk.t}">${wbrHTML(tk.s)}</span>`;
-    pos = end;
-  }
-  const nm = (first ? first[0] : "").trim();
-  return { html, name: nm };
-}
-function hlBody(text) {
-  return esc(text).replace(
-    /(&quot;.*?&quot;|&#39;.*?&#39;|(?<!&)#[^\n]*)/g,
-    (s) => s.startsWith("#") ? `<span class="hl-var">${s}</span>` : `<span class="hl-str">${s}</span>`
-  );
-}
-function hlArgBody(text) {
-  return `<span class="hl-str">${esc(text)}</span>`;
-}
-function cmdNameOf(src, t) {
-  const raw = SL(src, t.ta, t.tb);
-  const words = raw.match(/[^\s'"]+|'[^']*'|"[^"]*"/g) || [];
-  for (const w0 of words) {
-    const w = w0.trim();
-    if (!w) continue;
-    if (/^[A-Za-z_]\w*=/.test(w)) continue;
-    return w;
-  }
-  return "?";
-}
-
-// plugins/tool-render/src/bash-graph/primitives.ts
-var OP_MEANING = {
-  "|": "pipe: passes the previous step's output as input to the next step",
-  "&&": "and: runs only if the previous step succeeded",
-  "||": "or: runs only if the previous step failed",
-  ">": "redirect: writes the previous step's output into a file (truncate)",
-  ">>": "redirect: appends the previous step's output to a file",
-  "2>&1": "merge: folds error output into standard output",
-  "2>&1 |": "merge then pipe: folds error output into standard output and passes it on as input to the next step",
-  "<<": "heredoc: feeds the collapsed lines below as input \u2014 activate the node to expand",
-  // Ticket #181: the model degrades any segment carrying a bare & to
-  // verbatim, so no & op node should ever render; the meaning stands as the
-  // fallback so a direct caller still reads honestly.
-  "&": "background: runs the previous step in the background while the next step starts"
-};
-var OP_ICON = {
-  "|": "pipe-glyph",
-  "&&": "check",
-  "||": "circle-plus",
-  ">": "file-output",
-  ">>": "file-output",
-  "2>&1": "merge",
-  "2>&1 |": "merge",
-  "<<": "scroll-text"
-};
-var CMD_ICON = {
-  git: "git-branch",
-  npm: "package",
-  node: "hexagon",
-  deno: "shell",
-  python: "file-code",
-  python3: "file-code",
-  rg: "search",
-  sed: "scissors",
-  cd: "folder",
-  echo: "megaphone",
-  cat: "file-text",
-  ls: "list",
-  head: "chevrons-up",
-  tail: "chevrons-down",
-  wc: "hash",
-  sort: "arrow-down-wide-narrow",
-  uniq: "list-checks",
-  export: "upload",
-  timeout: "timer"
-};
-var PIPE_GLYPH_SYMBOL = `<symbol id="pipe-glyph" viewBox="0 0 512 512"><g transform="rotate(-90 256 256)"><path d="m 488.727,232.727 h -93.091 c -12.853,0 -23.273,10.42 -23.273,23.273 v 23.273 H 232.727 V 139.636 H 256 c 12.853,0 23.273,-10.42 23.273,-23.273 V 23.273 C 279.273,10.42 268.853,0 256,0 H 23.273 C 10.42,0 0,10.42 0,23.273 v 93.091 c 0,12.853 10.42,23.273 23.273,23.273 h 23.273 v 219.415 c 0,58.77 47.633,106.403 106.403,106.403 h 219.415 v 23.273 c 0,12.853 10.42,23.273 23.273,23.273 h 93.091 C 501.58,512 512,501.58 512,488.727 V 256 c 0,-12.853 -10.42,-23.273 -23.273,-23.273 z M 46.545,46.545 H 232.727 V 93.09 H 209.454 69.818 46.545 Z m 106.403,372.364 c -33.064,0 -59.857,-26.794 -59.857,-59.857 V 139.636 h 93.091 v 162.909 c 0,12.853 10.42,23.273 23.273,23.273 h 162.909 v 93.091 z m 312.507,46.546 H 418.91 V 442.182 302.545 279.272 h 46.545 z" fill="currentColor"/></g></symbol>`;
-function PipeGlyph() {
-  return `<span class="prim-icon"><svg aria-hidden="true"><use href="#pipe-glyph"></use></svg></span>`;
-}
-function Icon(name2, fb, cls) {
-  if (name2 === "pipe-glyph") return PipeGlyph();
-  return `<span class="prim-icon${cls ? " " + cls : ""}"><i data-lucide="${esc(name2)}" data-fb="${esc(fb || "\u2022")}"></i></span>`;
-}
-function Badge(text, tone) {
-  return `<span class="prim-badge"${tone ? ` data-tone="${tone}"` : ""}>${esc(text)}</span>`;
-}
-function chipHTML(sym, meaning) {
-  const body = sym === "||" ? Icon(OP_ICON["||"], "||") : segHTML(sym);
-  return `<span class="op-chip" title="${esc(meaning)}">${body}</span>`;
-}
-function pipeTagHTML(kind, mx, y) {
-  const cfg = kind === "pipe" ? { icon: "pipe-glyph", fb: "|", spin: null, meaning: OP_MEANING["|"] } : { icon: "merge", fb: "2>&1 |", spin: "rot90", meaning: OP_MEANING["2>&1 |"] };
-  return `<span class="pipe-tag" data-pipe="${kind}" title="${esc(cfg.meaning)}" style="left:${mx.toFixed(1)}px;top:${y.toFixed(1)}px">${Icon(cfg.icon, cfg.fb, cfg.spin ?? void 0)}</span>`;
-}
-function Node(o) {
-  if (o.op)
-    return `<div class="prim-node op" data-size="op" title="${esc(o.meaning ?? "")}">${Icon(o.icon ?? "", o.sym ?? "", o.spin ?? void 0)}<span class="op-sym">${esc(o.sym ?? "")}</span></div>`;
-  const main = (o.icon ? Icon(o.icon, o.iconFb ?? "") : "") + `<span class="node-text"><code>${o.bodyHTML ?? ""}</code></span>` + (o.dockHTML ? `<div class="hdock">${o.dockHTML}</div>` : "");
-  if (o.chip)
-    return `<div class="prim-node has-chip" data-size="${o.size}"${o.name ? ` data-cmd="${esc(o.name)}"` : ""}>` + chipHTML(o.chip.sym, o.chip.meaning) + `<span class="node-main">${main}</span></div>`;
-  return `<div class="prim-node" data-size="${o.size}"${o.name ? ` data-cmd="${esc(o.name)}"` : ""}${o.meaning ? ` title="${esc(o.meaning)}"` : ""}>` + main + `</div>`;
-}
-
 // plugins/tool-render/src/bash-graph/parse.ts
 function countLines(txt) {
   return txt === "" ? 0 : txt.split("\n").length - (txt.endsWith("\n") ? 1 : 0);
@@ -24642,7 +24011,12 @@ function BashRow(props) {
         return parts;
       };
       var rewrittenPair = guardRewrite !== null && guardRewrite.ran !== command;
-      var tabs = resolveBashTab(command, rewrittenPair);
+      var tabs = {
+        drawable: false,
+        showTabs: false,
+        defaultTab: "command",
+        commandText: command
+      };
       var diagramMeta = block.meta !== null && typeof block.meta === "object" && !Array.isArray(block.meta) ? block.meta : null;
       if (!rewrittenPair) {
         var graphStages = diagramMeta !== null ? diagramMeta.pipeStages : void 0;
