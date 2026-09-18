@@ -392,6 +392,41 @@ export interface PageThroughResult {
 }
 
 /**
+ * Find a pagination cursor anywhere in a response (#189).
+ *
+ * WHY A SEARCH RATHER THAN A PATH. Blinkit's first history request is a bare
+ * POST with no query string while every later one is fully parameterised, so
+ * the two responses are not guaranteed to carry pagination in the same place.
+ * The caller read one fixed path for both, found nothing on the first, and
+ * stopped after a single page of ten orders WHILE REPORTING SUCCESS.
+ *
+ * A caller should try its own known path FIRST, so a correctly shaped response
+ * costs nothing and keeps its exact meaning. This is the fallback for the shape
+ * we do not know. Depth is capped so a large response cannot make it expensive,
+ * and only cursor-shaped keys are accepted so an unrelated string cannot be
+ * mistaken for one.
+ *
+ * IT LIVES HERE, BESIDE pageThrough, RATHER THAN IN THE GATHERER, and the
+ * reason is worth keeping: scripts/gatherer.ts is an ENTRY POINT. It runs at
+ * import and calls Deno.exit(1) without a mode flag, so nothing inside it can
+ * be unit tested at all. That is the structural reason Blinkit's hand-rolled
+ * loop had no pins while Zepto's pageThrough loop did.
+ */
+export function findCursor(node: unknown, depth = 0): string | null {
+  if (depth > 6 || node === null || typeof node !== "object") return null;
+  const rec = node as Record<string, unknown>;
+  for (const key of ["cursor", "next_cursor", "nextCursor"]) {
+    const value = rec[key];
+    if (typeof value === "string" && value.length > 0) return value;
+  }
+  for (const value of Object.values(rec)) {
+    const hit = findCursor(value, depth + 1);
+    if (hit !== null) return hit;
+  }
+  return null;
+}
+
+/**
  * Run one paging loop and return why it stopped, never a bare list.
  * The trap it closes is a loop that ends calmly with no reason said.
  */

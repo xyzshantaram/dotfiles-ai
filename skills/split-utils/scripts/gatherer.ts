@@ -15,6 +15,7 @@ import { loadSettings } from "../src/settings.ts";
 import { createRunLog, type RunLog } from "../src/log.ts";
 import { detectDrift, driftMessage, type FailureEvent } from "../src/drift.ts";
 import {
+  findCursor,
   isBlockedStatus,
   openSession,
   pageFetch,
@@ -962,6 +963,9 @@ async function gatherBlinkit(
   let cursor: string | null = null;
   let pageIndex = 0;
   let pageNo = 0;
+  // True once an order older than the window is seen. Reaching the cutoff is
+  // the ONLY honest reason to stop early, so every other exit reports itself.
+  let reachedCutoff = false;
   try {
     outer: while (true) {
       const url = cursor === null
@@ -1011,7 +1015,10 @@ async function gatherBlinkit(
         const cartId = deeplink.match(/cart_id=(\d+)/)?.[1] ?? "";
         const dateText = hdata["subtitle"]?.["text"] ?? "";
         const date = parseBlinkitDate(dateText);
-        if (date && date.getTime() < cutoff) break outer;
+        if (date && date.getTime() < cutoff) {
+          reachedCutoff = true;
+          break outer;
+        }
         listed.push({
           orderId,
           cartId,
@@ -1019,10 +1026,39 @@ async function gatherBlinkit(
           date: date?.toISOString() ?? "",
         });
       }
-      cursor = data.response?.pagination?.cursor ?? null;
-      if (!cursor) break;
+      // The FIRST request is a bare POST with no query string, while every
+      // later one is fully parameterised (see the url built above). The two
+      // responses therefore need not carry pagination in the same place, and
+      // reading ONE fixed path made this loop stop after a single page of ten
+      // and report success (#189). Prefer the known path, then search.
+      cursor = data.response?.pagination?.cursor ?? findCursor(data.response);
+      if (!cursor) {
+        // A stop before the date cutoff means orders are missing. Say so.
+        // Zepto's loop already does this through pageThrough, whose docstring
+        // names the trap: "Run one paging loop and return why it stopped,
+        // never a bare list."
+        if (!reachedCutoff) {
+          failures.push({
+            platform: "blinkit",
+            kind: "parse",
+            detail: "history paging stopped after page " + pageNo +
+              " with no cursor found, before reaching the date cutoff. Orders older than the " +
+              listed.length + " collected are missing.",
+          });
+        }
+        break;
+      }
       pageIndex += 1;
-      if (pageIndex > 30) break;
+      if (pageIndex > 30) {
+        if (!reachedCutoff) {
+          failures.push({
+            platform: "blinkit",
+            kind: "http",
+            detail: "history paging stopped at the page cap of 30 before reaching the date cutoff.",
+          });
+        }
+        break;
+      }
     }
   } catch (e) {
     failures.push({
