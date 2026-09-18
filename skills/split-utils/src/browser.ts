@@ -38,6 +38,47 @@ export function binaryOrder(
   return ["bundled"];
 }
 
+/**
+ * The binary-selection half of the launch options, merged BEFORE any caller
+ * override. Pure, so the chain can be tested and not only the order.
+ *
+ * Only set executablePath when the caller named one: omitting the key is what
+ * selects the bundled build. The old code passed a fallback constant here,
+ * which silently overrode a resolver that had correctly answered "not found".
+ *
+ * THIS IS SEPARATE FROM binaryOrder ON PURPOSE. binaryOrder says what WILL be
+ * tried. This says what one attempt actually CARRIES. A review found the two
+ * disagreeing: the order promised "channel, then bundled" while the chain sent
+ * the channel twice, because the bundled retry passed an empty override and
+ * these base options survived it. Keeping both pure lets a test hold them
+ * against each other instead of trusting that they agree.
+ */
+export function binaryOptions(
+  opts: Pick<SessionOptions, "executablePath" | "channel">,
+): Record<string, unknown> {
+  if (opts.executablePath !== undefined) {
+    return { executablePath: opts.executablePath };
+  }
+  if (opts.channel !== undefined) return { channel: opts.channel };
+  return {};
+}
+
+/**
+ * The override the BUNDLED attempt must send. Both keys are present and both
+ * are undefined, which removes them from the merged options: `extra` spreads
+ * LAST inside the launch helper, so an EMPTY override leaves the base options
+ * intact and a branded channel survives into the retry.
+ *
+ * It is a function rather than a literal at the call site so a test can hold
+ * the chain to it. A behavioural test cannot see this defect: the wrong
+ * override still merges to a valid object, and the difference appears only
+ * against a real browser on a machine without the branded channel. So the pin
+ * is that the chain CALLS THIS, checked in the source.
+ */
+export function bundledOptions(): Record<string, unknown> {
+  return { channel: undefined, executablePath: undefined };
+}
+
 export interface SessionOptions {
   profileDir: string;
   headless?: boolean;
@@ -112,16 +153,7 @@ export async function openSession(opts: SessionOptions): Promise<Session> {
           deviceScaleFactor: opts.deviceScaleFactor ?? 2.625,
         }
         : {}),
-      // Only set executablePath when the caller actually named one. Omitting
-      // the key is what selects the bundled build; passing undefined would be
-      // the same, but the old code passed a fallback constant here, which
-      // silently overrode a resolver that had correctly answered "not found".
-      ...(opts.executablePath !== undefined
-        ? { executablePath: opts.executablePath }
-        : {}),
-      ...(opts.executablePath === undefined && opts.channel !== undefined
-        ? { channel: opts.channel }
-        : {}),
+      ...binaryOptions(opts),
       ...(opts.geolocation
         ? {
           permissions: opts.permissions ?? ["geolocation"],
@@ -139,7 +171,18 @@ export async function openSession(opts: SessionOptions): Promise<Session> {
   // branch that can work on a machine nobody configured.
   const bundled = async () => {
     try {
-      return await launch({});
+      // BOTH KEYS MUST BE CLEARED HERE, and the first version of this fix did
+      // not clear them. `extra` spreads LAST inside launch(), so an empty
+      // object leaves the base options intact, and the base sets `channel`
+      // whenever opts.channel is present. `launch({})` therefore retried the
+      // same missing branded browser and never reached the bundled build, on
+      // exactly the Windows-without-Chrome path this function exists to save.
+      // The order function said "channel, then bundled" while the chain did
+      // "channel, then channel" -- prose promising what the code did not do,
+      // which is the defect this whole ticket was about, reproduced inside its
+      // own fix. Passing undefined removes the key, which is what selects
+      // Playwright's own download.
+      return await launch(bundledOptions());
     } catch (err) {
       // Criterion 5: say what was tried and what to install. The old failure
       // named a path the user had never heard of, on a machine that could

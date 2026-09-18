@@ -11,7 +11,7 @@
 // So the rule is a pure function now, and these are its pins. They assert the
 // ORDER and the guarantee, not the spelling of a path.
 import { assertEquals, assertStringIncludes } from "@std/assert";
-import { binaryOrder } from "@app/src/browser.ts";
+import { binaryOptions, binaryOrder, bundledOptions } from "@app/src/browser.ts";
 
 Deno.test("an explicit path is used alone", () => {
   assertEquals(binaryOrder({ executablePath: "/opt/chrome" }), ["explicit"]);
@@ -61,4 +61,80 @@ Deno.test("no developer machine path survives in the shipped source", () => {
   // one back. Pin the EXPLANATION, not its wording: the fallback must be
   // named as Playwright's bundled build somewhere in this file.
   assertStringIncludes(src, "bundled build");
+});
+
+// ---- the CHAIN, not only the order (found by review of 0734b2a) ----
+//
+// The first fix pinned binaryOrder and nothing else. A review traced the
+// launch chain and found it disagreed with its own order function: the
+// bundled retry passed an empty override, `extra` spreads LAST inside
+// launch(), so the base options still carried `channel` and the retry asked
+// for the same missing branded browser a second time. The order said
+// "channel, then bundled". The chain did "channel, then channel". Every test
+// stayed green, because none of them touched the chain.
+//
+// These hold the two halves against each other.
+
+Deno.test("an explicit path carries only that path", () => {
+  assertEquals(binaryOptions({ executablePath: "/opt/chrome" }), {
+    executablePath: "/opt/chrome",
+  });
+});
+
+Deno.test("a channel carries only the channel", () => {
+  assertEquals(binaryOptions({ channel: "chrome" }), { channel: "chrome" });
+});
+
+Deno.test("the bundled build carries NEITHER key", () => {
+  // This is the whole bug. Selecting Playwright's own download means sending
+  // no executablePath AND no channel. Either key surviving sends the attempt
+  // somewhere else.
+  assertEquals(binaryOptions({}), {});
+});
+
+Deno.test("the bundled attempt clears a channel the base options set", () => {
+  // The exact defect: opts carries channel "chrome", the base options carry it
+  // too, and the bundled retry must override it away rather than inherit it.
+  const opts = { channel: "chrome" };
+  const base = binaryOptions(opts);
+  const bundledOverride = { channel: undefined, executablePath: undefined };
+  const merged = { ...base, ...bundledOverride };
+  assertEquals(merged.channel, undefined, "a channel survived into the bundled attempt");
+  assertEquals(merged.executablePath, undefined, "a path survived into the bundled attempt");
+});
+
+Deno.test("order and options agree about the last step", () => {
+  // Hold the two halves against each other rather than trusting they match.
+  // Wherever binaryOrder ends at "bundled", the options for that final attempt
+  // must be empty of both keys.
+  for (const opts of [{}, { channel: "chrome" }, { channel: "msedge" }] as const) {
+    const order = binaryOrder(opts);
+    if (order[order.length - 1] !== "bundled") continue;
+    const merged = { ...binaryOptions(opts), channel: undefined, executablePath: undefined };
+    assertEquals(merged.channel, undefined, JSON.stringify(opts));
+    assertEquals(merged.executablePath, undefined, JSON.stringify(opts));
+  }
+});
+
+Deno.test("the bundled override removes both keys", () => {
+  const merged = { ...binaryOptions({ channel: "chrome" }), ...bundledOptions() };
+  assertEquals(merged.channel, undefined);
+  assertEquals(merged.executablePath, undefined);
+});
+
+Deno.test("the launch chain uses the bundled override, not an empty object", () => {
+  // THE PIN THAT ACTUALLY CATCHES THE BUG. The behavioural tests above cannot:
+  // an empty override still merges to a valid object, and the difference shows
+  // only against a real browser on a machine without the branded channel.
+  // Mutating the call site back to an empty override reddens THIS and nothing
+  // else, which is precisely the defect a review found in the first fix.
+  const src = Deno.readTextFileSync(
+    new URL("../../skills/split-utils/src/browser.ts", import.meta.url),
+  );
+  assertStringIncludes(src, "return await launch(bundledOptions());");
+  assertEquals(
+    src.includes("return await launch({});"),
+    false,
+    "the empty-override retry is back",
+  );
 });

@@ -10,11 +10,23 @@ import { shareDir, zomatoConfigPath } from "./paths.ts";
 export const BASE = "https://api.zomato.com";
 export const ACCOUNTS = "https://accounts.zomato.com";
 
-// Static app constants, harvested from Zomato's own public web client by
-// scripts/dev/zomato-consts.ts, which scans the site's served JavaScript for
-// them. They are the same values every visitor's browser receives. They are
-// not credentials, nothing is issued to a user, and they identify the client
-// rather than the account.
+// Static app constants, extracted from the Zomato ANDROID APK by
+// scripts/dev/zomato-consts.ts: it decodes the apk with apktool and reads
+// `const-string` literals out of the .smali files near the X-Zomato-API-Key
+// and X-Zomato-Client-Id headers.
+//
+// SAY WHAT THEY ARE, because an earlier version of this comment said they were
+// harvested from Zomato's served JavaScript, which is not true and would give
+// a future auditor the wrong picture. They are embedded in every copy of the
+// shipped app, so they identify the CLIENT rather than any account, and
+// nothing here is issued to a user. They are not secret in the sense that
+// anyone can pull them from the apk. They are also not published by Zomato,
+// and the extraction script writes its own output file with mode 0o600, so do
+// not treat this as a public value with no history.
+//
+// SHIPPING THEM IS THE OWNER'S DECISION, taken 2026-09-18, on the grounds that
+// nothing here profits from Zomato and the alternative is that the tool cannot
+// work for anyone else at all.
 //
 // THEY SHIP AS DEFAULTS so a fresh checkout works with no setup. Two of these
 // four were already filled in here while the other two were left empty, so the
@@ -24,8 +36,7 @@ export const ACCOUNTS = "https://accounts.zomato.com";
 //
 // The config file at state/share/config/zomato.json still OVERRIDES any of
 // them, so when Zomato rotates a value the constants wizard writes the new one
-// and no source change is needed. That was the original intent; only the empty
-// defaults were wrong.
+// and no source change is needed.
 export const DEFAULT_API_KEY = "7749b19667964b87a3efc739e254ada2";
 export const DEFAULT_CLIENT_ID = "5276d7f1-910b-4243-92ea-d27e758ad02b";
 export const DEFAULT_APP_VERSION = "986";
