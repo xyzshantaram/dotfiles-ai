@@ -15,7 +15,7 @@ import { loadSettings } from "../src/settings.ts";
 import { createRunLog, type RunLog } from "../src/log.ts";
 import { detectDrift, driftMessage, type FailureEvent } from "../src/drift.ts";
 import {
-  findCursor,
+  readNextUrl,
   isBlockedStatus,
   openSession,
   pageFetch,
@@ -960,22 +960,23 @@ async function gatherBlinkit(
     dateText: string;
     date: string;
   }> = [];
-  let cursor: string | null = null;
-  let pageIndex = 0;
+  let nextUrl: string | null = null;
   let pageNo = 0;
   // True once an order older than the window is seen. Reaching the cutoff is
   // the ONLY honest reason to stop early, so every other exit reports itself.
   let reachedCutoff = false;
   try {
     outer: while (true) {
-      const url = cursor === null
+      // FOLLOW THE SERVER'S OWN next_url. Blinkit answers each history page
+      // with response.pagination.next_url, a ready-made relative URL carrying
+      // the cursor, the limit, the page index and the running entity count.
+      // This loop used to REBUILD that URL by hand with a hardcoded limit=10
+      // and its own page arithmetic, and it read the continuation from
+      // `response.pagination.cursor`, a key Blinkit does not send. So the
+      // first page was the only page, and the run reported success (#189).
+      const url = nextUrl === null
         ? "https://blinkit.com/v1/layout/order_history"
-        : "https://blinkit.com/v1/layout/order_history?offset=0&limit=10&cursor=" +
-          cursor +
-          "&get_failed_carts_history=false&last_snippet_type=order_history_container_vr&last_widget_type=order+history+widget&page_index=" +
-          pageIndex +
-          "&total_entities_processed=" +
-          (pageIndex + 1);
+        : new URL(nextUrl, "https://blinkit.com").toString();
       const res = await pageFetch(page, url, { method: "POST", headers });
       logInfo("blinkit history page answers " + res.status);
       if (res.status !== 200) {
@@ -1026,37 +1027,35 @@ async function gatherBlinkit(
           date: date?.toISOString() ?? "",
         });
       }
-      // The FIRST request is a bare POST with no query string, while every
-      // later one is fully parameterised (see the url built above). The two
-      // responses therefore need not carry pagination in the same place, and
-      // reading ONE fixed path made this loop stop after a single page of ten
-      // and report success (#189). Prefer the known path, then search.
-      cursor = data.response?.pagination?.cursor ?? findCursor(data.response);
-      if (!cursor) {
-        // A stop before the date cutoff means orders are missing. Say so.
-        // Zepto's loop already does this through pageThrough, whose docstring
-        // names the trap: "Run one paging loop and return why it stopped,
-        // never a bare list."
+      nextUrl = readNextUrl(data.response);
+      if (nextUrl === null) {
+        // A stop before the date cutoff means older orders exist and were not
+        // collected. SAY IT ON THE CONSOLE, not only into `failures`: that
+        // list surfaces through reportZeroBills and drift-signature matching,
+        // so a truncation matching no known signature is dropped and the run
+        // still reads as a success. That silence is what let this ship.
         if (!reachedCutoff) {
+          say(
+            "Blinkit stopped after " + pageNo + " page(s) with " + listed.length +
+              " orders: the history gave no next page while the window was not exhausted. Older orders are missing.",
+          );
           failures.push({
             platform: "blinkit",
             kind: "parse",
             detail: "history paging stopped after page " + pageNo +
-              " with no cursor found, before reaching the date cutoff. Orders older than the " +
+              " with no next_url, before reaching the date cutoff. Orders older than the " +
               listed.length + " collected are missing.",
           });
         }
         break;
       }
-      pageIndex += 1;
-      if (pageIndex > 30) {
-        if (!reachedCutoff) {
-          failures.push({
-            platform: "blinkit",
-            kind: "http",
-            detail: "history paging stopped at the page cap of 30 before reaching the date cutoff.",
-          });
-        }
+      if (pageNo > 200) {
+        say("Blinkit hit the page guard at " + pageNo + " pages. Older orders may be missing.");
+        failures.push({
+          platform: "blinkit",
+          kind: "http",
+          detail: "history paging stopped at the page guard of 200 before reaching the date cutoff.",
+        });
         break;
       }
     }

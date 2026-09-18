@@ -435,36 +435,33 @@ export interface PageThroughResult {
 }
 
 /**
- * Find a pagination cursor anywhere in a response (#189).
+ * Read the next history page URL a Blinkit-style layout response offers (#189).
  *
- * WHY A SEARCH RATHER THAN A PATH. Blinkit's first history request is a bare
- * POST with no query string while every later one is fully parameterised, so
- * the two responses are not guaranteed to carry pagination in the same place.
- * The caller read one fixed path for both, found nothing on the first, and
- * stopped after a single page of ten orders WHILE REPORTING SUCCESS.
+ * The server answers each page with `response.pagination.next_url`: a ready
+ * made RELATIVE url carrying the cursor, the limit, the page index and the
+ * running entity count. Following it is strictly better than rebuilding the
+ * query by hand, which is what the caller used to do with a hardcoded limit
+ * and its own page arithmetic while reading a `cursor` key the server never
+ * sends. The result was one page of ten orders reported as a complete run.
  *
- * A caller should try its own known path FIRST, so a correctly shaped response
- * costs nothing and keeps its exact meaning. This is the fallback for the shape
- * we do not know. Depth is capped so a large response cannot make it expensive,
- * and only cursor-shaped keys are accepted so an unrelated string cannot be
- * mistaken for one.
+ * Returns null when no next page is offered, which is the honest end of a
+ * history. The CALLER decides whether that end is expected: reaching the date
+ * cutoff is a normal stop, and running out of pages before the cutoff means
+ * orders are missing and must be reported.
  *
- * IT LIVES HERE, BESIDE pageThrough, RATHER THAN IN THE GATHERER, and the
- * reason is worth keeping: scripts/gatherer.ts is an ENTRY POINT. It runs at
- * import and calls Deno.exit(1) without a mode flag, so nothing inside it can
- * be unit tested at all. That is the structural reason Blinkit's hand-rolled
- * loop had no pins while Zepto's pageThrough loop did.
+ * IT LIVES HERE, BESIDE pageThrough, RATHER THAN IN THE GATHERER, because
+ * scripts/gatherer.ts is an ENTRY POINT: it runs at import and calls
+ * Deno.exit(1) without a mode flag, so nothing inside it can be unit tested.
+ * That is the structural reason Blinkit's hand-rolled loop had no pins while
+ * Zepto's pageThrough loop did.
  */
-export function findCursor(node: unknown, depth = 0): string | null {
-  if (depth > 6 || node === null || typeof node !== "object") return null;
-  const rec = node as Record<string, unknown>;
-  for (const key of ["cursor", "next_cursor", "nextCursor"]) {
-    const value = rec[key];
+export function readNextUrl(response: unknown): string | null {
+  if (response === null || typeof response !== "object") return null;
+  const pagination = (response as Record<string, unknown>)["pagination"];
+  if (pagination === null || typeof pagination !== "object") return null;
+  for (const key of ["next_url", "nextUrl"]) {
+    const value = (pagination as Record<string, unknown>)[key];
     if (typeof value === "string" && value.length > 0) return value;
-  }
-  for (const value of Object.values(rec)) {
-    const hit = findCursor(value, depth + 1);
-    if (hit !== null) return hit;
   }
   return null;
 }

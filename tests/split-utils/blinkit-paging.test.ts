@@ -1,67 +1,76 @@
 // Blinkit history paging (#189).
 //
-// THE DEFECT. The loop read the cursor from ONE fixed path,
-// `response.pagination.cursor`, for both the bare first request and the fully
-// parameterised later ones. The first response did not carry it there, so the
-// loop broke after a single page of ten orders AND REPORTED SUCCESS. The owner
-// only noticed because they knew they had more than ten orders.
+// THE DEFECT, AND THE TWO WRONG GUESSES BEFORE THE ANSWER.
 //
-// The same file already contained the correct pattern: Zepto pages through the
-// shared `pageThrough` helper, stops on the DATE rather than a count, and
-// pushes a failure for every abnormal stop. `pageThrough`'s own docstring names
-// the trap Blinkit fell into: "Run one paging loop and return why it stopped,
-// never a bare list. The trap it closes is a loop that ends calmly with no
-// reason said."
+// A 200-day gather returned ten Blinkit orders spanning ten days. Ten is the
+// page size, so the loop was fetching one page and stopping.
 //
-// These pins need no network: they exercise the cursor lookup directly with
-// real response shapes.
+// The loop read `response.pagination.cursor` and rebuilt the next URL by hand,
+// with a hardcoded `limit=10` and its own page arithmetic. The first fix
+// searched the response for any cursor-shaped key. It STILL returned ten
+// orders, because Blinkit does not send a `cursor` key at all. A probe of the
+// real response settled it:
+//
+//   "pagination": { "next_url": "/v1/layout/order_history?offset=0&limit=10&
+//                                cursor=cD0yNjI4NTEzOTI3&...&page_index=0" }
+//
+// The server hands over the complete next URL, with the cursor inside it,
+// which is why a key search never found it. Following next_url replaces the
+// hand-built query entirely, including the hardcoded limit.
+//
+// These pins need no network: they exercise the lookup with the real shape.
 import { assertEquals } from "@std/assert";
-// From src/browser.ts, beside pageThrough, NOT from scripts/gatherer.ts: that
-// file is an entry point which calls Deno.exit(1) at import time, so importing
-// it from a test kills the isolate. That is also the structural reason the loop
-// it fixes had no pins in the first place.
-import { findCursor } from "@app/src/browser.ts";
+import { readNextUrl } from "@app/src/browser.ts";
 
-Deno.test("the known path is found", () => {
-  const res = { pagination: { cursor: "abc123" }, snippets: [] };
-  assertEquals(findCursor(res), "abc123");
+Deno.test("the real Blinkit shape is read", () => {
+  // Copied from a live response, trimmed. This exact shape returned null under
+  // both the original code and the cursor-search fix.
+  const response = {
+    snippets: [],
+    pagination: {
+      next_url:
+        "/v1/layout/order_history?offset=0&limit=10&cursor=cD0yNjI4NTEzOTI3&get_failed_carts_history=false&page_index=0&total_entities_processed=1",
+    },
+  };
+  assertEquals(
+    readNextUrl(response),
+    "/v1/layout/order_history?offset=0&limit=10&cursor=cD0yNjI4NTEzOTI3&get_failed_carts_history=false&page_index=0&total_entities_processed=1",
+  );
 });
 
-Deno.test("a cursor nested elsewhere is still found", () => {
-  // The shape this bug was about: the first response puts it somewhere the
-  // fixed path never looked. Any of these would previously have ended the run.
-  assertEquals(findCursor({ page_info: { cursor: "deep1" } }), "deep1");
-  assertEquals(findCursor({ data: { paging: { next_cursor: "deep2" } } }), "deep2");
-  assertEquals(findCursor({ a: { b: { c: { nextCursor: "deep3" } } } }), "deep3");
+Deno.test("a camel case variant is read", () => {
+  assertEquals(readNextUrl({ pagination: { nextUrl: "/page/2" } }), "/page/2");
 });
 
-Deno.test("a cursor inside a list is found", () => {
-  assertEquals(findCursor({ blocks: [{ noop: 1 }, { cursor: "inlist" }] }), "inlist");
+Deno.test("no next page is null, which is the honest end", () => {
+  // The caller decides whether that end is expected: reaching the date cutoff
+  // is normal, and running out before it means orders are missing.
+  assertEquals(readNextUrl({ pagination: {} }), null);
+  assertEquals(readNextUrl({ snippets: [] }), null);
+  assertEquals(readNextUrl({}), null);
 });
 
-Deno.test("no cursor means no cursor", () => {
-  // The honest end of a run. This must stay distinguishable from a shape we
-  // failed to read, which is why the caller reports one and not the other.
-  assertEquals(findCursor({ pagination: {} }), null);
-  assertEquals(findCursor({ snippets: [{ widget_type: "order_history_container_vr" }] }), null);
-  assertEquals(findCursor(null), null);
-  assertEquals(findCursor("a string"), null);
+Deno.test("an empty url is not a url", () => {
+  // An empty string would refetch the same page forever.
+  assertEquals(readNextUrl({ pagination: { next_url: "" } }), null);
 });
 
-Deno.test("an empty cursor is not a cursor", () => {
-  // An empty string would page forever against the same URL.
-  assertEquals(findCursor({ pagination: { cursor: "" } }), null);
+Deno.test("junk is null, never a throw", () => {
+  // This runs against a live server's JSON, so every branch must survive a
+  // shape nobody expected rather than ending the gather with a stack trace.
+  assertEquals(readNextUrl(null), null);
+  assertEquals(readNextUrl("a string"), null);
+  assertEquals(readNextUrl(42), null);
+  assertEquals(readNextUrl({ pagination: "not an object" }), null);
+  assertEquals(readNextUrl({ pagination: { next_url: 7 } }), null);
 });
 
-Deno.test("only cursor-shaped keys count", () => {
-  // A search must not promote any passing string to a cursor. `id` and `token`
-  // are the kind of neighbours that would make this silently wrong.
-  assertEquals(findCursor({ id: "not-a-cursor", token: "also-not" }), null);
-});
-
-Deno.test("the search is depth capped", () => {
-  // Guards the cost on a large response. Seven levels is past the cap.
-  let deep: Record<string, unknown> = { cursor: "too-deep" };
-  for (let i = 0; i < 8; i++) deep = { nest: deep };
-  assertEquals(findCursor(deep), null);
+Deno.test("a relative url resolves against the site origin", () => {
+  // The loop joins it with new URL(nextUrl, origin). Pinned here because the
+  // server sends a path while the fetch needs an absolute url.
+  const next = readNextUrl({ pagination: { next_url: "/v1/layout/order_history?cursor=abc" } });
+  assertEquals(
+    new URL(next as string, "https://blinkit.com").toString(),
+    "https://blinkit.com/v1/layout/order_history?cursor=abc",
+  );
 });
