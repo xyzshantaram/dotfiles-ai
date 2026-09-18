@@ -14,6 +14,15 @@ own usage or error text.
 orders and writes a run dir. `--login=<platform>` signs in to zepto, blinkit, or swiggy. The
 `--zomato-login-start`, `--zomato-login-finish`, and `--zomato-city` flags handle Zomato sign in.
 
+Two flags narrow a run. `--platforms` takes a comma separated list from `zepto`, `blinkit`,
+`zomato`, `swiggy` and `manual`, and it defaults to every platform. `--days` takes a day count and
+defaults to 30. Use both to keep a run short: a gather of every platform over a long window opens
+several browsers and can take many minutes.
+
+```sh
+deno run --no-lock -A scripts/cli.ts gather --emit --platforms blinkit --days 200
+```
+
 ```sh
 deno run --no-lock -A scripts/cli.ts gather
 ```
