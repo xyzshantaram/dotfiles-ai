@@ -1,0 +1,287 @@
+/* bash-graph styles: fair copy of the prototype diagram rules.
+ *
+ * PORT NOTE (criterion 4): this file transcribes the prototype <style>
+ * rules for everything render.ts emits. Page chrome is dropped (body,
+ * .page-head, .controls, #col, .colmeta, .foot, legend/coverage helpers,
+ * pre.orig show-original, .cmd card frame): the prototype NOTES list those
+ * as incidental scaffolding, and this module stops at the panelsHTML
+ * boundary. Rule order and values are otherwise verbatim, including the
+ * round comments that record which bug each rule exists for (criterion 6).
+ *
+ * THEME NOTE for ticket #173 (the swap): the :root token VALUES below are
+ * prototype stand-ins; only the token NAMES are real. The swap must
+ * reconcile these with the production theme instead of shipping the
+ * stand-in values as global overrides. The --proto-* highlight colours
+ * likewise need a production home.
+ */
+
+/* ---- real repo token NAMES, plausible values per theme ---- */
+:root, :root[data-theme="dark"], html[data-theme="dark"]{
+  --dsw-alias-bg-base:#16161a;
+  --dsw-alias-bg-layer-1:#232329;
+  --dsw-alias-border-l1:#2e2e37;
+  --dsw-alias-border-l2:#41414d;
+  --dsw-alias-border-l3:#5b5b68;
+  --dsw-alias-label-primary:#ececf1;
+  --dsw-alias-label-secondary:#b9b9c6;
+  --dsw-alias-label-tertiary:#8e8e9a;
+  --dsw-alias-label-caption:#6d6d78;
+  --dsw-alias-markdown-code-block:#0f0f13;
+  --dsw-alias-state-error-primary:#f2555a;
+  --dsw-alias-state-business-primary:#5b9bff;
+  --dsw-alias-interactive-bg-hover:#33333d;
+  --ds-font-family-code:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --proto-str:#9ece6a; --proto-path:#e0af68; --proto-flag:#7aa2f7; --proto-var:#bb9af7;
+}
+html[data-theme="light"]{
+  --dsw-alias-bg-base:#f3f3f5;
+  --dsw-alias-bg-layer-1:#ffffff;
+  --dsw-alias-border-l1:#e3e3e8;
+  --dsw-alias-border-l2:#d2d2da;
+  --dsw-alias-border-l3:#a8a8b5;
+  --dsw-alias-label-primary:#191920;
+  --dsw-alias-label-secondary:#41414c;
+  --dsw-alias-label-tertiary:#71717e;
+  --dsw-alias-label-caption:#a0a0ab;
+  --dsw-alias-markdown-code-block:#e9e9ed;
+  --dsw-alias-state-error-primary:#c81e1e;
+  --dsw-alias-state-business-primary:#0b5cff;
+  --dsw-alias-interactive-bg-hover:#e4e4ea;
+  --ds-font-family-code:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --proto-str:#2c7a2c; --proto-path:#9a5b00; --proto-flag:#1d4fd7; --proto-var:#6d28d9;
+}
+/* ---- the six primitives ---- */
+.prim-panel{box-sizing:border-box;border:none;
+  border-radius:.75rem;background:var(--dsw-alias-bg-base);
+  margin-top:.125rem;margin-bottom:.125rem;padding:.25rem .375rem;}
+.prim-panel-head{display:flex;flex-wrap:wrap;gap:.375rem;align-items:baseline;
+  font-size:.75rem;color:var(--dsw-alias-label-secondary);margin-bottom:.25rem;}
+.prim-panel-head .idx{font-family:var(--ds-font-family-code);color:var(--dsw-alias-label-primary);font-weight:600;}
+.prim-node{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l3);
+  border-radius:.5rem;background:var(--dsw-alias-bg-layer-1);
+  padding:.375rem .5rem;font-family:var(--ds-font-family-code);
+  font-size:.75rem;line-height:1.25rem;color:var(--dsw-alias-label-primary);}
+/* R10.1: length steps are MAX-WIDTH ceilings, never assigned widths. JS assigns
+   inline widths at or below natural (which never exceeds the step recorded for
+   it — stepFor(nat) >= nat by definition), so the ceiling is a no-op safety
+   net, not a sizer; the top step is open (a >400px natural must never clip).
+   Lone rows keep width:auto/max-width:100% (a node alone is never capped). */
+.prim-node[data-size="xs"]{max-width:112px;} .prim-node[data-size="s"]{max-width:168px;}
+.prim-node[data-size="m"]{max-width:232px;} .prim-node[data-size="l"]{max-width:312px;}
+.prim-node[data-size="xl"]{max-width:none;} .prim-node[data-size="op"]{width:36px;text-align:center;}
+.prim-node[data-size="breakout"]{width:100%;}
+.prim-node[data-size="lone"]{width:auto;max-width:100%;}
+button.prim-node[data-size="lone"]{width:max-content;min-width:max-content;max-width:none;}
+.prim-node.op{background:transparent;border-style:solid;border-color:var(--dsw-alias-border-l3);
+  padding:.25rem .125rem;}
+.prim-node .node-text{overflow-wrap:anywhere;word-break:normal;}
+/* D3: .seg is the token-aware part (paths break ONLY after "/"; everywhere
+   else the breaker prefers spaces and fires anywhere solely on genuine
+   overflow of one token). anywhere stays as the last resort so an over-long
+   slash-less word wraps visibly instead of spilling out of the foreignObject
+   with no indication. */
+.seg{white-space:nowrap;}
+/* R10.2/R11.2: the heredoc chip summary (<<'DELIM' [n:lines]) is unbreakable
+   by rule — heredoc nodes are inflexible (keep natural width), so this guard
+   can never clip: it only forbids a wrap the layout already priced out.
+   R11.2: nowrap alone was NOT unbreakable. overflow-wrap is inherited, so
+   .prim-node .node-text{overflow-wrap:anywhere} reached straight through the
+   guard and broke the label mid-token on any overflow (the node inline width
+   derives from scrollWidth, which excludes the 1px borders — the content
+   area is systematically ~2px short of natural, i.e. it always overflows).
+   The guard must cover the overflow-wrap axis too (word-break is already
+   normal by inheritance; stated here so the contract survives later edits). */
+.hd-label{white-space:nowrap;overflow-wrap:normal;word-break:normal;}
+/* R12.2: the icon and the label are one atomic pair. The R11.2 guard covers
+   text INSIDE the label but says nothing about the icon/label boundary, and
+   the owner saw them separate across lines (any overflow + anywhere can split
+   two inline boxes with no whitespace between them). The wrapper carries the
+   full guard on both axes, so the pair cannot separate whatever overflows;
+   it stays an inline span (no box change), and there is no whitespace inside
+   the markup to offer a break. */
+.hd-pair{white-space:nowrap;overflow-wrap:normal;word-break:normal;}
+/* R13.1 SUPERSEDED BY THE OWNER, same day, after seeing both in the browser.
+   The four declarations tried here (padding-left, padding-right,
+   display:inline-block on the pair, transform:translateX(-0.75rem)) are GONE.
+   The replacement below is better for a reason beyond taste: translateX moves
+   PAINT ONLY, so every measured width, DP decision and edge coordinate would
+   have kept describing the un-shifted box, and the -12px answered to no
+   declared constant. margin-left on an inline-block CHILD is real layout: the
+   measurer sees it, so the model and the browser keep agreeing (the round-8
+   rule). No compensating constant survives into the port. */
+.hd-pair .node-text{display:inline-block;margin-left:0.3rem;}
+.prim-node .node-text code{font:inherit;background:none;padding:0;}
+/* R13.3: generated test words are prose, not source. The operand stays
+   code-styled (verbatim slice); the surrounding words render in the system
+   sans at secondary color, so no reader mistakes a claim for a quote. (The
+   prototype page has no UI-sans token - everything is --ds-font-family-code -
+   so the stack is explicit; the production host should use its UI font.) */
+.test-word{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--dsw-alias-label-secondary);}
+.prim-node .hdock{margin-top:.375rem;}
+.prim-chip{display:inline;font-family:var(--ds-font-family-code);font-size:.6875rem;
+  line-height:1rem;border:1px solid var(--dsw-alias-border-l3);border-radius:.25rem;
+  padding:0 .25rem;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);
+  overflow-wrap:anywhere;-webkit-box-decoration-break:clone;box-decoration-break:clone;}
+.prim-badge{display:inline-flex;align-items:center;gap:.25rem;border:1px solid var(--dsw-alias-border-l3);
+  background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary);
+  border-radius:999px;padding:.0625rem .375rem;font-size:.6875rem;line-height:1rem;
+  white-space:nowrap;cursor:default;}
+button.prim-badge{cursor:pointer;font:inherit;max-width:100%;}
+/* R12.3: pills can never exceed their node. The button cap alone is not
+   enough: as a flex item the label's min-width:auto (its full nowrap text)
+   would refuse to shrink and spill past the capped box. min-width:0 lets it
+   shrink into its existing ellipsis instead — truncation with … (the full
+   text stays one click away), never a spill past the foreignObject edge. */
+button.prim-badge:hover{color:var(--dsw-alias-label-primary);}
+.prim-badge[data-tone="error"]{color:var(--dsw-alias-state-error-primary);}
+/* R7.2: arg pills are compact badges, not banners. The label is already a
+   truncated front slice with an explicit … + counts (full text expands below
+   the panel), so capping the visual width loses nothing. */
+.prim-badge[data-hd]{padding-right:.625rem;}
+/* R12.5: heredoc chips breathe on the right edge (.375rem -> .625rem,
+   right-only). Padding, not a width bump and not a margin: the heredoc pill
+   is one of the measured elements this round's borders fix touched, so the
+   extra 4px rides INSIDE its measured width everywhere the width is priced —
+   naturalWidth reads the rendered scrollWidth, and specMinW charges the
+   18px-wide data-hd chrome (6px left + 10px right + 2 borders) instead of
+   the 14px blanket. Arg pills stay symmetric. */
+
+.prim-badge .pill-label{display:block;min-width:0;max-width:220px;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;}
+.prim-icon{display:inline-flex;vertical-align:-2px;margin-right:.375rem;
+  color:var(--dsw-alias-label-tertiary);}
+.prim-icon svg{width:14px;height:14px;}
+.prim-node.op .prim-icon{margin-right:0;color:var(--dsw-alias-label-secondary);}
+.prim-node.op .prim-icon svg{width:16px;height:16px;}
+/* R7.5: the merge-then-pipe node reuses the merge glyph rotated to point
+   RIGHT (the glyph as drawn points up: chevron apex at the top). Rotation
+   is in place on the square icon box, so measurement is unaffected. */
+.prim-icon.rot90 svg{transform:rotate(90deg);}
+/* R8.1: nodes rendered inside SVG foreignObjects carry NO vertical margin.
+   The 10px .prim-node margins are load-bearing ONLY on the horizontal axis
+   (10px gutters inside the foreignObject; nodes are x-positioned). On the
+   vertical axis the foreignObject height IS the row pitch, so any vertical
+   margin is either phantom (collapses through the wrapper div and renders
+   as dead space below the node) or a clip risk (if it does not collapse).
+   Zeroing it in BOTH the measurer and the render (same .fobjwrap wrapper
+   class) makes collapse behaviour irrelevant: measurer and render agree by
+   construction, and the foreignObject fits the border-box exactly. Lone
+   HTML-flow nodes keep their margins (BFC container, real breathing room). */
+.fobjwrap>.prim-node{margin-top:0;margin-bottom:0;}
+/* R8.3: operator symbols never wrap mid-label (the fused 2>&1 | stays one
+   line even on its degenerate standalone-node fallback path). */
+.prim-node.op .op-sym{white-space:nowrap;}
+/* R8.4: CONDITIONALS ride as prefix chips on the dependent card — one split
+   card, chip one colour and body the other, sharing one outline. The chip is
+   a full-height bar on the left edge (flex stretch); the body keeps normal
+   inline flow inside .node-main, so icon-inline and token wrapping behave
+   exactly as on unchipped nodes. Chip text is the verbatim operator slice
+   (seg-wrapped: unbreakable, counted in the unbreakable-run minimum). */
+.prim-node.has-chip{display:flex;align-items:stretch;padding-top:0;padding-bottom:0;padding-left:0;}
+.prim-node.has-chip .op-chip{flex:none;display:flex;align-items:center;
+  background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary);
+  border-right:1px solid var(--dsw-alias-border-l3);
+  border-radius:calc(.5rem - 1px) 0 0 calc(.5rem - 1px);
+  padding:.375rem .5rem;margin-right:.5rem;white-space:nowrap;font-weight:700;}
+.prim-node.has-chip .node-main{min-width:0;padding-top:.375rem;padding-bottom:.375rem;}
+/* R13.2: a glyph-only || chip carries no text after its icon, so the
+   .prim-icon trailing margin would be dead space inside the bar - zeroed,
+   mirroring the pipe-tag precedent (.pipe-tag .prim-icon{margin-right:0}). */
+.prim-node.has-chip .op-chip .prim-icon{margin-right:0;}
+/* R8.4: PIPES are split arrows — one continuous edge with the glyph inline.
+   R9.3/R10.3: the tag is a SQUARE overlay centred on the edge line —
+   explicit 26px border-box with a .25rem (chip-step) radius, square by
+   construction (the round-9 999px radius rendered a circle, which is why the
+   badge read as "not square"). The 18px glyph is the largest with >=3px
+   clearance per side ((26-2-18)/2); overflow:hidden keeps the box square
+   even on the no-lucide fallback path, where the text glyph would otherwise
+   spill past the box. R9.5: tags live inside .edgewrap (the padding-free
+   positioned wrapper around each svg), so svg-space left/top resolve
+   against the svg origin whatever padding .panel-scroll carries. The
+   single marker-end arrowhead underneath keeps direction unambiguous; the
+   tooltip carries the meaning the old operator node used to hold. */
+.edgewrap{position:relative;}
+.pipe-tag{position:absolute;transform:translate(-50%,-50%);
+  display:inline-flex;align-items:center;justify-content:center;
+  box-sizing:border-box;width:26px;height:26px;padding:0;overflow:hidden;
+  background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l3);
+  border-radius:.25rem;line-height:1;white-space:nowrap;}
+.pipe-tag .prim-icon{margin-right:0;vertical-align:0;color:var(--dsw-alias-label-secondary);}
+.pipe-tag .prim-icon svg{width:18px;height:18px;}
+button.prim-node{cursor:pointer;text-align:left;}
+button.prim-node:hover{border-color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover);}
+button.prim-node:active{transform:translateY(1px);}
+button.prim-node:focus-visible{outline:.125rem solid var(--dsw-alias-state-business-primary);outline-offset:2px;}
+button.prim-node[aria-expanded="true"]{border-color:var(--dsw-alias-label-secondary);}
+/* R10.7: arrowheads are stroked outline chevrons (production primitive
+   IconChevronDownOutline14 — outline, stroked, not filled), not solid
+   triangles. The marker keeps the old viewBox/refX/size/orient and the tip
+   stays at (10,5): the tip lands exactly where the triangle tip landed, so
+   no edge endpoint moves and heads neither float short nor overlap into
+   cards. Only the path changed (fill -> 2-unit round stroke). */
+.prim-edge{fill:none;stroke:var(--dsw-alias-label-tertiary);stroke-width:1.5;}
+/* ---- diagram-only helpers (candidate one-offs, see NOTES.md) ---- */
+.panel-scroll{overflow-x:scroll;scrollbar-width:thin;
+  scrollbar-color:var(--dsw-alias-border-l3) var(--dsw-alias-border-l2);}
+/* R9B/R10.8 (owner decision: option 2 — always visible, styled). The
+   horizontal track is permanently present (~8px: thin in Firefox, 8px in
+   WebKit) so a row never changes height when its content starts or stops
+   overflowing — layout stability worth 8px per scroll container. R10.8:
+   the track token moved border-l1 -> border-l2 because a DISABLED
+   (nothing-to-scroll) bar paints track-only, and l1 on bg-base is near
+   invisible in both themes — the page paid the gutter everywhere while
+   showing a track nowhere. l2 stays a border token, readable against the
+   panel field in both themes and distinct from the l3 thumb. The old
+   unconditional padding-bottom:.25rem is gone (4px x every container for
+   nothing): with a permanent gutter the track itself is the separation.
+   All colours are existing theme tokens, so light and dark follow with no
+   hardcoded grey; radii reuse the .25rem chip step. Firefox (the owner's
+   browser) is styled by the base rule above — scrollbar-width/color — NOT
+   by the WebKit pseudos below; the two APIs do not overlap, so neither
+   engine is an afterthought. Vertical overflow stays auto: content always
+   fits by construction, so no vertical bar appears and no vertical slack
+   is introduced by this rule. */
+.panel-scroll::-webkit-scrollbar{height:8px;}
+.panel-scroll::-webkit-scrollbar-track{background:var(--dsw-alias-border-l2);border-radius:.25rem;}
+.panel-scroll::-webkit-scrollbar-thumb{background:var(--dsw-alias-border-l3);border-radius:.25rem;}
+.panel-scroll::-webkit-scrollbar-thumb:hover{background:var(--dsw-alias-label-secondary);}
+/* R9.5/R9A: breathing room above diagram svgs — scoped as a CHILD of the
+   statement region, not a descendant of any panel. A bare
+   `.panel-scroll:has(svg)` (or `.prim-panel .panel-scroll`) would also match
+   a scroll nested DEEPER inside a panel (expanded bodies, future nested
+   diagrams); the child combinator pins the rule to exactly the outer,
+   statement-level scroll, so no second rule ever has to fight it. Lone
+   panels (no svg) keep no top padding. Safe ONLY because pipe tags resolve
+   against .edgewrap (the svg's own origin): container padding shifts the
+   svg and its tags together, so nothing offsets. */
+.prim-panel.stmt > .panel-scroll:has(svg){padding-top:10px;}
+.panel-scroll svg{display:block;}
+.op-sym{display:block;font-size:.6875rem;color:var(--dsw-alias-label-caption);line-height:1rem;}
+.node-name{font-weight:700;}
+.hl-flag{color:var(--proto-flag);} .hl-str{color:var(--proto-str);}
+.hl-path{color:var(--proto-path);} .hl-var{color:var(--proto-var);}
+.hd-body{margin:.25rem 0 .125rem .25rem;}
+.hd-body pre{background:transparent;border:none;margin:.125rem 0 0;padding:0 0 0 .5rem;
+  font-family:var(--ds-font-family-code);font-size:.75rem;line-height:1.25rem;
+  color:var(--dsw-alias-label-secondary);white-space:pre-wrap;overflow-wrap:anywhere;}
+.hd-cap{font-size:.6875rem;color:var(--dsw-alias-label-caption);}
+#measure{position:absolute;left:-9999px;top:0;visibility:hidden;pointer-events:none;}
+/* D1: reserve the icon's rendered size while measuring. Node HTML is measured
+   with empty <i data-lucide> placeholders; after the lucide swap they become
+   14px (16px on op discs) SVGs plus the .prim-icon margin. Without this the
+   measured width is ~20px short, text wraps one row deeper than measured, and
+   the fixed-height foreignObject clips the last line. */
+#measure i[data-lucide]{display:inline-block;width:14px;height:14px;}
+#measure .prim-node.op i[data-lucide]{width:16px;height:16px;}
+/* R7.3, owner's exact CSS (R10.4: px, not rem — the margin IS NODE_M, the
+   same 10px the layout normalises every svg row origin to, so HTML lone
+   nodes and svg rows share a left edge by construction, not by coincidence.
+   Heights/widths measured in JS add the margin back — see NODE_M — since
+   offsetHeight/scrollWidth exclude margins.) */
+.prim-panel{margin:0;padding:0;}
+.prim-node{margin:10px;}
+/* R10.5: lone (plain-HTML) rows carry no dagre pitch and no hooks — their
+   only vertical cost is this margin plus the scroll container. 6px keeps
+   breathing room while halving the 24px stacked gap (10+4+10) the owner
+   flagged. Horizontal margins stay 10px (the shared left-edge origin). */
+.prim-panel.stmt>.panel-scroll>.prim-node[data-size="lone"]{margin-top:6px;margin-bottom:6px;}
