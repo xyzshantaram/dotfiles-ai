@@ -1022,3 +1022,23 @@ Deno.test("confirm order radio arrives on Skip when only the payer owes", async 
   assert(pickOf("order-o2") === "Push", "a shared order arrives on Push");
   assert(pickOf("order-o3") === "Skip", "a payer only order arrives on Skip");
 });
+
+// The save built a file URL from the path by hand. A path holding a
+// "#" made the rest read as a URL fragment, so the parent dir was
+// created in the wrong place and the write failed.
+Deno.test("the pushed file saves under a path holding a hash mark", async () => {
+  const saved = Deno.env.get("SPLIT_UTILS_STATE");
+  const base = await Deno.makeTempDir({ prefix: "pushed-hash-" });
+  const root = base + "/od#d";
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    const { savePushed } = await import("../src/splitwise.ts");
+    await savePushed({ "fp-one": 4242 });
+    const back = JSON.parse(await Deno.readTextFile(root + "/config/splitwise_pushed.json"));
+    if (back.pushed["fp-one"] !== 4242) throw new Error("the fingerprint did not save");
+  } finally {
+    if (saved === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
+    else Deno.env.set("SPLIT_UTILS_STATE", saved);
+    await Deno.remove(base, { recursive: true }).catch(() => {});
+  }
+});

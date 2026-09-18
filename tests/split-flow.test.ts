@@ -34,6 +34,7 @@ import {
 import type { Node } from "jsr:@xyzshantaram/wizardkit@^0.1.0";
 import type { Order } from "../src/common.ts";
 import {
+  confirmLastPush,
   daysSincePush,
   type LastPush,
   lastPushLabel,
@@ -1494,11 +1495,11 @@ Deno.test("range step offers the last push above the number entry", async () => 
       0,
     );
     assertEquals(plain.nodes.map((node) => fieldOf(node, "kind")), ["number"]);
-    // With a record a range mode radio leads the number entry.
+    // With a record a line names it, then a range mode radio leads the number entry.
     await writeLastPush("splitwise", new Date("2026-09-15T08:00:00Z"));
     const found = rangeStep(new Map());
-    assertEquals(found.nodes.map((node) => fieldOf(node, "kind")), ["radio", "number"]);
-    const radioNode = found.nodes[0];
+    assertEquals(found.nodes.map((node) => fieldOf(node, "kind")), ["markdown", "radio", "number"]);
+    const radioNode = found.nodes[1];
     assertEquals(fieldOf(radioNode, "name"), "range-mode");
     assertEquals(fieldOf(radioNode, "picked"), "last");
     const options = fieldOf(radioNode, "options") as Array<Record<string, unknown>>;
@@ -1507,7 +1508,7 @@ Deno.test("range step offers the last push above the number entry", async () => 
     assert(String(options[0]["label"] ?? "").startsWith("Since your last push ("));
     // A posted custom pick survives the next render.
     const kept = rangeStep(new Map([["range-mode", ["custom"]]]));
-    assertEquals(fieldOf(kept.nodes[0], "picked"), "custom");
+    assertEquals(fieldOf(kept.nodes[1], "picked"), "custom");
   } finally {
     Deno.env.delete("SPLIT_UTILS_STATE");
   }
@@ -1537,4 +1538,166 @@ Deno.test("the last push label says one day, not one days", () => {
   const label = lastPushLabel(entry, now);
   assertEquals(label.includes("1 day)"), true, "singular day, got: " + label);
   assertEquals(label.includes("1 days"), false, "no plural on one, got: " + label);
+});
+
+Deno.test("confirmLastPush marks an unconfirmed aggregate done and keeps its day", async () => {
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    // A summary waits on hand entry, so it starts unconfirmed.
+    await writeLastPush("aggregate", new Date("2026-09-15T08:00:00Z"));
+    const before = readLastPushSync();
+    assert(before !== null && before.confirmed === false);
+    assertEquals(await confirmLastPush(), true);
+    const after = readLastPushSync();
+    assert(after !== null);
+    // The flag flips, but the day and the path stay byte for byte.
+    assertEquals(after.confirmed, true);
+    assertEquals(after.at, before.at);
+    assertEquals(after.kind, before.kind);
+    assertEquals(after.at, "2026-09-15T08:00:00.000Z");
+    assertEquals(after.kind, "aggregate");
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+  }
+});
+
+Deno.test("confirmLastPush returns false when no record exists", async () => {
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    // No file means no record, so nothing confirms.
+    assertEquals(readLastPushSync(), null);
+    assertEquals(await confirmLastPush(), false);
+    assertEquals(readLastPushSync(), null);
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+  }
+});
+
+Deno.test("confirmLastPush returns false when the record is already confirmed", async () => {
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    // A live push counts as confirmed from the start.
+    await writeLastPush("splitwise", new Date("2026-09-15T08:00:00Z"));
+    const text = Deno.readTextFileSync(root + "/config/last-push.json");
+    assertEquals(await confirmLastPush(), false);
+    // No rewrite happened, so the file and the date stay untouched.
+    assertEquals(Deno.readTextFileSync(root + "/config/last-push.json"), text);
+    assertEquals(readLastPushSync()?.at, "2026-09-15T08:00:00.000Z");
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+  }
+});
+
+// Values and hints of the menu task radio, in order.
+function menuChoices(step: { nodes: Node[] }): Array<{ value: string; hint: string }> {
+  for (const node of step.nodes) {
+    const rec = node as unknown as Record<string, unknown>;
+    if (rec["kind"] === "radio" && rec["name"] === "task") {
+      const out: Array<{ value: string; hint: string }> = [];
+      for (const option of (rec["options"] as unknown[]) ?? []) {
+        if (typeof option === "string") out.push({ value: option, hint: "" });
+        else {
+          const or = option as Record<string, unknown>;
+          out.push({ value: String(or["value"] ?? ""), hint: String(or["hint"] ?? "") });
+        }
+      }
+      return out;
+    }
+  }
+  throw new Error("no task radio");
+}
+
+Deno.test("menu shows Review pushes only while a push waits", async () => {
+  const { menuStep } = await import("../app/expense-split.ts");
+  const root = await Deno.makeTempDir();
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  try {
+    // No record means no entry.
+    assertEquals(menuChoices(menuStep()).some((entry) => entry.value === "Review pushes"), false);
+    // An unconfirmed summary shows the entry with its hint.
+    await writeLastPush("aggregate", new Date("2026-09-15T08:00:00Z"));
+    const waiting = menuChoices(menuStep()).find((entry) => entry.value === "Review pushes");
+    assert(waiting !== undefined);
+    assertEquals(waiting.hint, "1 unconfirmed push");
+    // A confirmed record hides the entry again.
+    assertEquals(await confirmLastPush(), true);
+    assertEquals(menuChoices(menuStep()).some((entry) => entry.value === "Review pushes"), false);
+  } finally {
+    Deno.env.delete("SPLIT_UTILS_STATE");
+  }
+});
+
+// Validator subprocess path for the direct flag tests below.
+const VALIDATOR = new URL("../scripts/validate.ts", import.meta.url).pathname;
+
+// Run the validator as a subprocess and capture the result.
+async function runValidator(
+  args: string[],
+): Promise<{ code: number; out: string; err: string }> {
+  // Point state at a fresh temp dir so runs never touch real files.
+  const root = await Deno.makeTempDir();
+  const cmd = new Deno.Command(Deno.execPath(), {
+    args: ["run", "--no-lock", "--allow-read", VALIDATOR, ...args],
+    env: {
+      ...Deno.env.toObject(),
+      SPLIT_UTILS_STATE: root,
+      NO_COLOR: "1",
+    },
+    stdout: "piped",
+    stderr: "piped",
+  });
+  const { code, stdout, stderr } = await cmd.output();
+  return {
+    code,
+    out: new TextDecoder().decode(stdout),
+    err: new TextDecoder().decode(stderr),
+  };
+}
+
+// One passing output doc with one order group.
+function passingOutput(): Record<string, unknown> {
+  return {
+    split_at: "2026-09-01T10:00:00Z",
+    people: ["Ann", "Bob"],
+    splits: [{
+      item: "Pizza",
+      platform: "swiggy",
+      order_id: "o1",
+      date: "2026-09-01 10:00 AM",
+      price: 10,
+      split_type: "equal",
+      assignments: { Ann: 5, Bob: 5 },
+    }],
+    totals: { Ann: 5, Bob: 5 },
+    settlements: [{ from: "Bob", to: "Ann", amount: 5 }],
+  };
+}
+
+// Validator with matching orders passes and prints PASS.
+Deno.test("validator with matching orders passes", async () => {
+  const root = await Deno.makeTempDir();
+  const outPath = root + "/output.json";
+  Deno.writeTextFileSync(outPath, JSON.stringify(passingOutput()) + "\n");
+  const ordersPath = root + "/orders.json";
+  Deno.writeTextFileSync(ordersPath, JSON.stringify(ORDERS) + "\n");
+  const res = await runValidator([outPath, "--orders", ordersPath]);
+  // Assert the run exits with code 0.
+  assertEquals(res.code, 0, "matching orders exit 0");
+  // Assert stdout holds the pass line.
+  assertStringIncludes(res.out, "PASS");
+});
+
+// Validator with a bad flag exits 2 and names the flag.
+Deno.test("validator with a bad flag names the flag", async () => {
+  const root = await Deno.makeTempDir();
+  const outPath = root + "/output.json";
+  Deno.writeTextFileSync(outPath, JSON.stringify(passingOutput()) + "\n");
+  const res = await runValidator([outPath, "--bogus"]);
+  // Assert the run exits with code 2.
+  assertEquals(res.code, 2, "bad flag exits 2");
+  // Assert stderr names the bad flag.
+  assertStringIncludes(res.err, "Unknown option: --bogus");
 });

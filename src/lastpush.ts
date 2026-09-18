@@ -54,15 +54,31 @@ export function readLastPushSync(): LastPush | null {
   return { at, kind, confirmed: confirmed === true };
 }
 
+// Write one record straight to disk. Both writers share this path,
+// so a confirm keeps the same day and path.
+async function saveLastPush(record: LastPush): Promise<void> {
+  const path = lastPushFilePath();
+  const parent = path.slice(0, path.lastIndexOf("/"));
+  await Deno.mkdir(parent, { recursive: true });
+  await Deno.writeTextFile(path, JSON.stringify(record, null, 2) + "\n");
+}
+
 // Write one last push record. Only a live Splitwise push counts as
 // confirmed. A summary waits on hand entry, and a link waits on the
 // friend. The now value pins the time in tests.
 export async function writeLastPush(kind: PushKind, now: Date = new Date()): Promise<void> {
-  const path = lastPushFilePath();
-  const parent = path.slice(0, path.lastIndexOf("/"));
-  await Deno.mkdir(parent, { recursive: true });
-  const record: LastPush = { at: now.toISOString(), kind, confirmed: kind === "splitwise" };
-  await Deno.writeTextFile(path, JSON.stringify(record, null, 2) + "\n");
+  await saveLastPush({ at: now.toISOString(), kind, confirmed: kind === "splitwise" });
+}
+
+// Mark the waiting push done. False when no record exists, and false
+// when the record is already confirmed. True writes the same day and
+// path back with the flag set, so the next gather still reaches back
+// over the window the user worked through.
+export async function confirmLastPush(): Promise<boolean> {
+  const found = readLastPushSync();
+  if (found === null || found.confirmed) return false;
+  await saveLastPush({ at: found.at, kind: found.kind, confirmed: true });
+  return true;
 }
 
 // Whole days from one ISO date to now. Rounds up, never drops below
@@ -75,21 +91,30 @@ export function daysSincePush(at: string, now: Date): number {
   return Math.max(1, Math.ceil(diff / DAY_MS));
 }
 
+// Day and month for one record, as "15 Sep", in local time. The record
+// holds UTC, and a push made late in the evening east of Greenwich
+// falls on the day before in UTC. Reading UTC named a day the user
+// never pushed on. Every screen that shows this date calls this, so the
+// three of them cannot drift apart.
+export function formatPushDay(at: string): string {
+  const date = new Date(at);
+  if (Number.isNaN(date.getTime())) return at;
+  return date.getDate() + " " + (MONTHS[date.getMonth()] ?? "");
+}
+
+// Name the path that wrote one record, for prose that reads plainly.
+export function pushNoun(kind: PushKind): string {
+  if (kind === "aggregate") return "summary";
+  if (kind === "share") return "share";
+  return "push";
+}
+
 // Radio label for one record. A summary or share names its own path,
 // so the choice reads plainly.
 export function lastPushLabel(entry: LastPush, now: Date): string {
-  // Read the date in local time. The record holds UTC, and a push made
-  // late in the evening east of Greenwich falls on the day before in
-  // UTC. The label named a day the user never pushed on.
-  const date = new Date(entry.at);
-  const day = date.getDate();
-  const month = MONTHS[date.getMonth()] ?? "";
   const days = daysSincePush(entry.at, now);
-  let noun = "push";
-  if (entry.kind === "aggregate") noun = "summary";
-  if (entry.kind === "share") noun = "share";
-  return "Since your last " + noun + " (" + day + " " + month + ", " + days +
-    (days === 1 ? " day)" : " days)");
+  return "Since your last " + pushNoun(entry.kind) + " (" + formatPushDay(entry.at) + ", " +
+    days + (days === 1 ? " day)" : " days)");
 }
 
 // Day count for one posted gather range. The last push wins when the

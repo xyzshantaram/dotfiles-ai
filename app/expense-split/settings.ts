@@ -17,6 +17,7 @@ import { sessionStore, sidOf } from "../../src/sessionstore.ts";
 import { field } from "../../src/answers.ts";
 import { aiSetupMessage } from "../../src/ai-setup.ts";
 import {
+  COMMON_CURRENCIES,
   loadSettings,
   loadSettingsSync,
   saveSettings,
@@ -25,20 +26,6 @@ import {
 } from "../../src/settings.ts";
 import { factoryReset } from "../../src/reset.ts";
 import { configDir, splitwiseEnvPath } from "../../src/paths.ts";
-
-// Fixed currency codes mirror COMMON_CURRENCIES in src/settings.ts.
-const CURRENCIES = [
-  "INR",
-  "USD",
-  "EUR",
-  "GBP",
-  "AED",
-  "SGD",
-  "AUD",
-  "CAD",
-  "JPY",
-  "CHF",
-];
 
 // Setup copy mirrors src/splitwise-setup.ts: the Splitwise apps page
 // (secure.splitwise.com/apps) shows one API key, and the key is free.
@@ -193,7 +180,7 @@ function settingsStep(answers: Map<string, string[]>): Step {
             label: "Currency",
             nodes: [
               radio("Money code", "currency", [
-                ...CURRENCIES,
+                ...COMMON_CURRENCIES,
                 { value: "__custom__", label: "Type a different code" },
               ], "INR"),
               textEntry(

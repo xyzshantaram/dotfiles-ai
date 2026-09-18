@@ -2,7 +2,7 @@
 // one, reruns clean, and leaves neighbours beside the root alone.
 
 import { factoryReset, resetTargets } from "../src/reset.ts";
-import { pushedFilePath, stateRoot, tokenFilePath } from "../src/paths.ts";
+import { profileDir, pushedFilePath, stateRoot, tokenFilePath } from "../src/paths.ts";
 
 // Fail the test when a condition misses.
 function assert(cond: boolean, msg: string): void {
@@ -71,4 +71,12 @@ Deno.test("reset targets all sit inside the state root", async () => {
   for (const path of targets) {
     assert(path === live || path.startsWith(live + "/"), "target sits inside root: " + path);
   }
+});
+
+// profileDir names the site dir under the live state root.
+Deno.test("profileDir builds the site path under the state root", async () => {
+  const base = await Deno.makeTempDir({ dir: "/tmp", prefix: "paths-profile-" });
+  const root = base + "/state";
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  assert(profileDir("swiggy") === root + "/share/profiles/swiggy", "profile path matches");
 });

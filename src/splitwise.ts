@@ -106,6 +106,10 @@ export async function loadPushed(): Promise<Record<string, number>> {
 }
 
 export async function savePushed(pushed: Record<string, number>): Promise<void> {
-  await Deno.mkdir(new URL(".", `file://${pushedFilePath()}`), { recursive: true });
-  await Deno.writeTextFile(pushedFilePath(), JSON.stringify({ pushed }, null, 2));
+  const path = pushedFilePath();
+  // Take the parent as plain text. Building a file URL by hand broke on
+  // a path holding a "#", because the rest of the path read as a URL
+  // fragment and the dir was created in the wrong place.
+  await Deno.mkdir(path.slice(0, path.lastIndexOf("/")), { recursive: true });
+  await Deno.writeTextFile(path, JSON.stringify({ pushed }, null, 2));
 }

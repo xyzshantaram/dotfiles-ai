@@ -20,7 +20,7 @@
 //   added — matching the existing "Zepto fees baked into item prices"
 //   convention.
 
-import { formatISTDate } from "./common.ts";
+import { formatISTDate, type Order, round2 } from "./common.ts";
 
 export interface ZeptoRawProduct {
   id: string;
@@ -44,21 +44,6 @@ export interface ZeptoRawOrder {
   placedTime: string; // ISO UTC
   products: ZeptoRawProduct[];
   billFees?: ZeptoBillFee[];
-}
-
-export interface ZeptoSchemaOrder {
-  id: string;
-  platform: "zepto";
-  date: string;
-  paid: number;
-  items: Array<{
-    name: string;
-    price: number; // UNIT price in rupees (splitter expands quantity)
-    quantity: number;
-    estimated: boolean;
-    source: string;
-  }>;
-  fees: { delivery: number; packaging: number };
 }
 
 /** Pick ALL products out of a captured ORDER_DETAILS response.
@@ -125,7 +110,7 @@ export function extractFees(detail: {
 export function mapOrder(
   raw: ZeptoRawOrder,
   billFees: ZeptoBillFee[] = [],
-): ZeptoSchemaOrder {
+): Order {
   const items = raw.products.map((p) => {
     const pack = p.storeProduct.productVariant.formattedPacksize?.trim();
     const name = pack ? `${p.storeProduct.product.name} (${pack})` : p.storeProduct.product.name;
@@ -133,7 +118,7 @@ export function mapOrder(
     // Line total carries the fees; unit price = line / qty.
     return {
       name,
-      price: Math.round((p.totalFinalSellingPrice / 100 / qty) * 100) / 100,
+      price: round2(p.totalFinalSellingPrice / 100 / qty),
       quantity: qty,
       estimated: false,
       source: "zepto-api",
@@ -142,9 +127,9 @@ export function mapOrder(
 
   // Reconcile: only fees NOT already baked into product lines may be added.
   const productsSum = raw.products.reduce((s, p) => s + p.totalFinalSellingPrice, 0) / 100;
-  const diff = Math.round((raw.grandTotalAmount / 100 - productsSum) * 100) / 100;
+  const diff = round2(raw.grandTotalAmount / 100 - productsSum);
   if (Math.abs(diff) >= 0.005) {
-    const feesSum = Math.round(billFees.reduce((s, f) => s + f.amount, 0) * 100) / 100;
+    const feesSum = round2(billFees.reduce((s, f) => s + f.amount, 0));
     if (Math.abs(feesSum - diff) < 0.005) {
       for (const f of billFees) {
         items.push({
@@ -178,7 +163,7 @@ export function mapOrder(
 }
 
 /** Balance check: items must sum to paid (fees are baked in). */
-export function checkBalance(mapped: ZeptoSchemaOrder): boolean {
+export function checkBalance(mapped: Order): boolean {
   const itemsSum = mapped.items.reduce((s, i) => s + i.price * i.quantity, 0);
   return Math.abs(itemsSum - mapped.paid) < 0.01;
 }

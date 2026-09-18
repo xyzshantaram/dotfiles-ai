@@ -69,6 +69,12 @@ export function runsDir(): string {
   return stateRoot() + "/share/runs";
 }
 
+// Read the browser profile dir for one site under the state root.
+export function profileDir(site: string): string {
+  // Join the root and the site profile path.
+  return stateRoot() + "/share/profiles/" + site;
+}
+
 // Read the Splitwise token file under the config dir.
 export function tokenFilePath(): string {
   // Join the config dir and the fixed file name.

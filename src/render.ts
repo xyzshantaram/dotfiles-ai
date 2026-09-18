@@ -1,7 +1,7 @@
 // TS port of the push formatting surface. Byte-compatible with the Python
 // ground truth (tests/run.sh diffs against tests/expected/).
 //
-// CLI: deno run --allow-read --allow-write src/render.ts <orders.json> <outdir>
+// CLI: deno run --allow-read --allow-write scripts/render-fixtures.ts <orders.json> <outdir>
 
 import {
   compact,
@@ -329,43 +329,4 @@ export function buildAggregateSummary(
   lines.push("Paste the itemized part as a comment. Title the expense anything you");
   lines.push("like. No Splitwise account or API is needed.");
   return lines.join("\n");
-}
-
-// CLI entry: mirror tests/render.py outputs byte-for-byte.
-if (import.meta.main) {
-  const [inputPath, outdirArg] = Deno.args;
-  if (!inputPath || !outdirArg) {
-    console.error("usage: deno run src/render.ts <orders.json> <outdir>");
-    Deno.exit(2);
-  }
-  const data = JSON.parse(await Deno.readTextFile(inputPath));
-  const people: string[] = data.people;
-  const orders = groupOrders(data.splits);
-  const settlements: { to: string }[] = data.settlements ?? [];
-
-  const outdir = outdirArg;
-  await Deno.mkdir(outdir, { recursive: true });
-  const fingerprints: string[] = [];
-  for (let i = 0; i < orders.length; i++) {
-    const payer = inferPayer(orders[i], settlements);
-    await Deno.writeTextFile(
-      `${outdir}/order-${String(i).padStart(2, "0")}-table.txt`,
-      summariseOrder(orders[i], people, payer, i, orders.length) + "\n",
-    );
-    await Deno.writeTextFile(
-      `${outdir}/order-${String(i).padStart(2, "0")}-comment.txt`,
-      buildItemizedComment(orders[i], people) + "\n",
-    );
-    await Deno.writeTextFile(
-      `${outdir}/order-${String(i).padStart(2, "0")}-title.txt`,
-      formatTitle(orders[i]) + "\n",
-    );
-    fingerprints.push(
-      `${String(i).padStart(2, "0")} ${orderFingerprint(orders[i])} payer=${payer} n_items=${
-        orders[i].length
-      }`,
-    );
-  }
-  await Deno.writeTextFile(`${outdir}/fingerprints.txt`, fingerprints.join("\n") + "\n");
-  console.log(`wrote ${orders.length * 3 + 1} files to ${outdirArg}`);
 }

@@ -41,8 +41,15 @@ export interface OutputDoc {
 }
 
 /** True when the whole item name is one bracketed token, e.g. "[Handling]". */
+// Split math uses this strict test. It rejects padding and nested brackets.
+// isLedgerRow allows both for display filtering.
 export function isFeeItem(name: string): boolean {
   return name.startsWith("[") && name.endsWith("]") && !name.slice(1, -1).includes("]");
+}
+
+/** Round to 2 decimals. Every money figure in this app passes here. */
+export function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 /** Format a rupee amount with 2 decimals. */
@@ -102,6 +109,8 @@ export function formatISTDate(isoUtc: string): string {
 
 // Treat [Fees], [Rounding] and [Screenshot only] as ledger rows.
 // Drop them before the pick line shows items.
+// Display filtering uses this loose test. It trims ends and accepts any bracket wrap.
+// isFeeItem stays strict for split math.
 export function isLedgerRow(name: string): boolean {
   const trimmed = name.trim();
   return trimmed.startsWith("[") && trimmed.endsWith("]");

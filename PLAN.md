@@ -124,17 +124,6 @@ which carries no config to set the policy in.
 - [x] W6 the wizard skill ships one file that imports the JSR package. Eval: the template runs from
       a directory holding nothing else.
 
-### Final gate, after every ticket above is closed
-
-- [ ] Z9 full code review plus slop audit of the whole repo. Look for dead code, unused imports,
-      duplicated logic across modules, near copies that differ by one argument, duplicated type
-      definitions, and hand rolled code that a small well scoped dependency would replace. Review
-      the wizards, the toolkit, and src together, not module by module. Eval: every finding lands as
-      its own ticket here, or as a written reason to leave it alone. One finding from the pre commit
-      diff read is still open and starts the pass: app/expense-split/gather.ts defines its own
-      `LEGACY_TOKENS_FILE`, duplicating the one in src/zomato.ts, and repeats that module's read
-      chain of current path, then old path, then older path. The chain belongs in one place.
-
 ### Deferred: wizardkit footguns found by the C-series audit
 
 These are toolkit gaps, not app bugs. Each one invited a bug we then fixed inside split-utils. Do
@@ -190,6 +179,20 @@ later, and the next app does not pay the same cost.
   and no entry point, which is why `scripts/validate.ts` runs under `--allow-read` alone with no
   toolkit. Dependencies point one way, `app` to `src`, and nothing enforces that beyond review. The
   old `wizards/` dir also held two programs that were not wizards, which is what prompted the split.
+  The "no entry point" half of that claim was false when it was first written here. `src/render.ts`
+  carried a main block until the Z9 audit found it on 2026-09-18. It moved to
+  `scripts/render-fixtures.ts`, and `tests/run.sh` now calls that path. The claim holds now, and a
+  reviewer can check it with one search for `import.meta.main` under `src/`.
+- The Z9 audit ran on 2026-09-18 and found 32 items. These were judged correct and must not be
+  "fixed" by a later reader. `src/runstate.ts` keeps a sync twin of the run lister because wizard
+  step builders are synchronous. `src/splitwise.ts` reads one env key by hand, because a dotenv
+  dependency buys nothing on a single read. `src/lastpush.ts` lists twelve month names by hand,
+  because a date library buys nothing for one label. `src/pushcore.ts` hides raw error text, but it
+  stops the loop and leaves the order unsent, so the silence costs no money. `src/paths.ts` joins
+  with slashes rather than taking a path dependency. `scripts/cli.ts`, `app/expense-split/split.ts`
+  and `app/expense-split/board-routes.ts` all resolve siblings through the module URL on purpose,
+  because a raw GitHub run needs that base to survive. Resolving a module is not building a state
+  path, and only the second one is banned.
 - State paths all resolve through src/paths.ts and honour `SPLIT_UTILS_STATE`. With no override the
   root is `<data>/split-utils`, where `<data>` comes from `@cross/dir`. That is the only portable
   answer: hand-rolling `~/.local/share` would have been Linux only, as the user pointed out on
@@ -306,14 +309,6 @@ Every entry here names work that is code complete and green. It counts as done o
 drives the real screen. Restart the server first. A fix cannot reach a process that started before
 it.
 
-- [ ] KEY hand-drive: paste a real Splitwise API key on the Settings Splitwise tab and press Save
-      key and connect. The screen must name the account. This is the one step I cannot prove, since
-      I hold no valid key. I proved the failing half live: a wrong key reaches Splitwise and the
-      screen reports `It answered 401`.
-- [ ] PUSH hand-drive: walk a real push to the confirm screen. Each order must name its goods beside
-      Push and Skip, the summary must sit in a monospace box with no giant headings, and no second
-      table may appear. Check the expense in Splitwise afterwards: the title must name the goods and
-      end with the platform, and the comment must open with the platform and the time.
 - [ ] NAV hand-drive (your smoke test): the user confirmed on 2026-09-17 that the bar stays at the
       foot of the window while a long screen scrolls. What is left to drive by hand: Select all and
       Select none tick and untick without leaving the screen, Next refuses an empty pick list with
@@ -333,9 +328,6 @@ it.
       flow. Change one tick, press Next, and confirm the split opens on that run with the change.
 - [ ] R3 push source hand-drive: the source screen lists your assigned runs, newest first, and
       starts on the newest. A run id typed into Other run still wins.
-- [ ] G31 pick list hand-drive: finish a gather. The last screen lists every order with a tick box,
-      none ticked. Select all ticks every row and Select none clears them. Next with nothing ticked
-      refuses. Tick two, and the split walks only those two lines.
 - [ ] G30 sign in hand-drive (your bug): press Sign in to Zepto. A browser window opens for the sign
       in. The panel shows one sentence when it lands. No banner, no "Ready to start?", and no line
       about opening a main menu.
@@ -359,11 +351,6 @@ it.
       and the day range instead of drawing an empty Gather heading.
 - [ ] P2 People hand-drive: the People list is one repeating block with real rows. A seeded name can
       be edited and removed. A rename keeps every saved assignment.
-- [ ] P1 panel hand-drive: press Fetch on the gather review step. Output appears under the button,
-      the heading and the buttons stay, and the page never turns into a bare output page. Found by a
-      real browser probe: the poll fragment inherited hx-target from the step form.
-- [ ] Z1 Zepto fetch hand-drive: press Fetch for Zepto over 30 days. No sign in window opens, the
-      count passes eight, and each order prints one line that ends in Done.
 - [ ] N1 navigation hand-drive: on the People step type two names and press Next with no roles
       picked. The error shows, the typed names survive, the radios render. Press Back from People
       and from each settings step. Back never blocks and never validates.
@@ -403,8 +390,6 @@ it.
       hides it; usage step leads into the settings chain; every menu item opens its module
 - [ ] W8 split hand-drive: serve `app/expense-split.ts` on a real run dir, split every line, press
       Finish, confirm output.json plus the stamped copy land in the run dir
-- [ ] W3 gather hand-drive: serve `app/expense-split.ts`, walk Platforms through Review, confirm
-      Back/Next on every step
 - [ ] WA restyle: restart the window (old bundle keeps serving stale pages), confirm tabs switch,
       dark mode follows the system, form posts record answers
 - [ ] W1 template hand-drive: copy the `wizard/` trio to a fresh dir, run `deno task start`, and

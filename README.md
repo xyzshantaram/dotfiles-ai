@@ -71,7 +71,7 @@ deno run --no-lock -A --min-dep-age=0 app/expense-split.ts
 
 ### Use the command line
 
-The entry point is `scripts/cli.ts`. It carries six verbs.
+The entry point is `scripts/cli.ts`. It carries seven verbs.
 
 ```sh
 deno run --no-lock -A scripts/cli.ts <verb>
@@ -82,6 +82,7 @@ deno run --no-lock -A scripts/cli.ts <verb>
 - `push`: sends a split file to Splitwise. A run is a dry run unless you pass `--yes`.
 - `aggregate`: prints the hand-entry summary. It needs no account.
 - `share`: makes a share link for a split file.
+- `last-push`: shows the last push record. Pass `--confirm` to mark the waiting push done.
 - `wizard`: starts the browser app. It fails until the package ages. Use the start command above
   until then.
 

@@ -10,7 +10,7 @@
 // Site-specific knowledge (auth header names, API paths) stays in each
 // site module; only the mechanics live here.
 
-import { type BrowserContext, chromium, type Page, type Response } from "npm:playwright@1.57.0";
+import { type BrowserContext, chromium, type Page } from "npm:playwright@1.57.0";
 
 /** Resolved by the wizard per-OS in production; fixed path for prototyping. */
 export const DEFAULT_CHROMIUM =
@@ -262,44 +262,6 @@ export interface Recorder {
   count(): number;
 }
 
-const DEFAULT_SKIP =
-  /partytown|google-analytics|doubleclick|segment\.io|sentry|hotjar|clevertap|branch\.io|facebook|braze/;
-
-/** Save every JSON response body to <outDir>/NNN-slug.json as it arrives. */
-export function recordJson(page: Page, opts: RecorderOptions): Recorder {
-  let n = 0;
-  page.on(
-    "response" as never,
-    (async (res: Response) => {
-      try {
-        const url = res.url();
-        const skip = opts.skipFilter ?? DEFAULT_SKIP;
-        if (skip.test(url)) return;
-        if (opts.urlFilter && !opts.urlFilter.test(url)) return;
-        const ct = res.headers()["content-type"] ?? "";
-        if (!ct.includes("json")) return;
-        const body = await res.text();
-        n += 1;
-        const slug = url
-          .replace(/^https?:\/\/[^\/]+\//, "")
-          .replace(/[^\w-]/g, "_")
-          .slice(0, 80) || "root";
-        await Deno.mkdir(opts.outDir, { recursive: true });
-        await Deno.writeTextFile(
-          `${opts.outDir}/${String(n).padStart(3, "0")}-${slug}.json`,
-          body,
-        );
-        if (!opts.logFilter || opts.logFilter.test(url)) {
-          console.log(`[net] ${res.status()} ${url} (${body.length}b)`);
-        }
-      } catch {
-        // response body gone (navigation); skip
-      }
-    }) as never,
-  );
-  return { count: () => n };
-}
-
 export interface PageFetchResult {
   status: number;
   text: string;
@@ -344,67 +306,6 @@ export async function pageFetchJson(
 export interface StorageDump {
   localStorage: Record<string, string>;
   cookieNames: string[];
-}
-
-/** Snapshot localStorage (values truncated) + cookie names from the page. */
-export async function dumpStorage(
-  page: Page,
-  valueCap = 60,
-): Promise<StorageDump> {
-  const ls = await page.evaluate((cap) => {
-    const out: Record<string, string> = {};
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i) ?? `idx-${i}`;
-      const v = localStorage.getItem(k) ?? "";
-      out[k] = v.length > cap ? v.slice(0, cap) + `…(${v.length})` : v;
-    }
-    return out;
-  }, valueCap);
-  const cookies = await page.context().cookies();
-  return { localStorage: ls, cookieNames: cookies.map((c) => c.name) };
-}
-
-/** Resolves when the user (or the site) closes the browser window. */
-export function untilClosed(ctx: BrowserContext): Promise<void> {
-  return new Promise((resolve) => {
-    ctx.on("close" as never, (() => resolve()) as never);
-  });
-}
-
-/**
- * Capture the exact header set the site's own JS sends for a URL pattern.
- * Attach a one-shot request listener, run the trigger (usually a goto or
- * click that makes the site fire the request), return the headers.
- * Gateways with custom auth (Zepto's request-signature family) accept
- * replays of their own header set.
- */
-export async function captureRequestHeaders(
-  page: Page,
-  pattern: RegExp,
-  trigger: () => Promise<void>,
-  timeoutMs = 15_000,
-): Promise<Record<string, string>> {
-  let headers: Record<string, string> | null = null;
-  const listener = (req: {
-    url(): string;
-    headers(): Record<string, string>;
-  }) => {
-    if (headers === null && pattern.test(req.url())) {
-      headers = req.headers();
-    }
-  };
-  page.on("request" as never, listener as never);
-  try {
-    await trigger();
-    const deadline = Date.now() + timeoutMs;
-    while (headers === null && Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, 300));
-    }
-  } finally {
-    page.off("request" as never, listener as never);
-  }
-  if (headers === null) throw new Error(`no request matched ${pattern}`);
-  return headers;
 }
 
 // A refused answer with the request URL. Callers use it to report blocks.

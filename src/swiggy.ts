@@ -20,9 +20,7 @@
 // - Everything else split like an item via "[Label]" pseudo-items.
 // - paid = Σ(items incl. pseudo) + fees.delivery + fees.packaging.
 
-import { formatISTDate } from "./common.ts";
-
-export { formatISTDate };
+import { formatISTDate, type Order, type OrderItem, round2 } from "./common.ts";
 
 // ---------- raw shapes ----------
 
@@ -93,23 +91,6 @@ export interface SwiggyDashGroup {
   };
 }
 
-// ---------- schema order ----------
-
-export interface SwiggySchemaOrder {
-  id: string;
-  platform: "swiggy";
-  date: string;
-  paid: number;
-  items: Array<{
-    name: string;
-    price: number; // UNIT price in rupees
-    quantity: number;
-    estimated: boolean;
-    source: string;
-  }>;
-  fees: { delivery: number; packaging: number };
-}
-
 const n = (v: string | number | undefined | null): number => {
   if (v === undefined || v === null) return 0;
   return typeof v === "number" ? v : parseFloat(v) || 0;
@@ -125,14 +106,14 @@ export function parseFoodTime(raw: string): Date {
 
 // ---------- food mapper ----------
 
-export function mapFoodOrder(raw: SwiggyFoodOrder): SwiggySchemaOrder {
-  const items: SwiggySchemaOrder["items"] = [];
+export function mapFoodOrder(raw: SwiggyFoodOrder): Order {
+  const items: OrderItem[] = [];
   for (const it of raw.order_items) {
     const line = n(it.total ?? it.final_price);
     const qty = Math.max(1, Math.round(n(it.quantity)));
     items.push({
       name: it.name,
-      price: Math.round((line / qty) * 100) / 100,
+      price: round2(line / qty),
       quantity: qty,
       estimated: false,
       source: "swiggy-api",
@@ -179,7 +160,7 @@ export function mapFoodOrder(raw: SwiggyFoodOrder): SwiggySchemaOrder {
   // on 246842400117346). Absorb the residue as [Rounding], matching
   // the receipt convention.
   const sum = items.reduce((s, i) => s + i.price * i.quantity, 0) + fees.delivery + fees.packaging;
-  const gap = Math.round((n(raw.order_total ?? raw.net_total) - sum) * 100) / 100;
+  const gap = round2(n(raw.order_total ?? raw.net_total) - sum);
   if (Math.abs(gap) >= 0.005 && Math.abs(gap) <= 0.5) pseudo("Rounding", gap);
 
   return {
@@ -226,16 +207,16 @@ export function extractDashFees(detail: SwiggyDashDetail): DashFee[] {
 export function mapDashOrder(
   group: SwiggyDashGroup,
   detail: SwiggyDashDetail,
-): SwiggySchemaOrder {
+): Order {
   const fees = { delivery: 0, packaging: 0 };
-  const items: SwiggySchemaOrder["items"] = [];
+  const items: OrderItem[] = [];
   for (const ship of detail.data?.shipmentDetails ?? []) {
     for (const it of ship.items ?? []) {
       if (it.removed) continue;
       const qty = Math.max(1, Math.round(parseFloat(it.quantity) || 1));
       items.push({
         name: it.description,
-        price: Math.round((it.finalPrice / qty) * 100) / 100,
+        price: round2(it.finalPrice / qty),
         quantity: qty,
         estimated: false,
         source: "swiggy-api",
@@ -262,7 +243,7 @@ export function mapDashOrder(
   const paid = total ? (total.units ?? 0) + (total.nanos ?? 0) / 1e9 : n(detail.data?.totalBill);
   // Same rupee-level rounding as food: absorb sub-half-rupee residue.
   const sum = items.reduce((s, i) => s + i.price * i.quantity, 0) + fees.delivery + fees.packaging;
-  const gap = Math.round((paid - sum) * 100) / 100;
+  const gap = round2(paid - sum);
   if (Math.abs(gap) >= 0.005 && Math.abs(gap) < 0.5) {
     items.push({
       name: "[Rounding]",
@@ -283,7 +264,7 @@ export function mapDashOrder(
 }
 
 /** Balance check: items + fees must equal paid. */
-export function checkBalance(mapped: SwiggySchemaOrder): boolean {
+export function checkBalance(mapped: Order): boolean {
   const itemsSum = mapped.items.reduce((s, i) => s + i.price * i.quantity, 0);
   const feesSum = mapped.fees.delivery + mapped.fees.packaging;
   return Math.abs(itemsSum + feesSum - mapped.paid) < 0.01;

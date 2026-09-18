@@ -1,12 +1,7 @@
 // Pure split engine for ticket W2a. No side effects, no I/O.
 // Rounding uses two decimals. The gap lands on the last person.
 
-import type { ItemAssignment } from "./splitstate.ts";
-
-// Round rupees to two decimals.
-export function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
+import { round2 } from "./common.ts";
 
 // Split the price evenly. The rounding gap lands on the last person.
 export function equalShare(
@@ -148,6 +143,3 @@ export function buildOutput(
     settlements,
   };
 }
-
-// Keep the shared type in scope for callers of the engine.
-export type { ItemAssignment };

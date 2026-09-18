@@ -4,7 +4,7 @@
 // Auth steps follow public notes and are not run here.
 // Bill paths stay open until one live capture pins them.
 
-import { formatISTDate, type Order } from "./common.ts";
+import { formatISTDate, type Order, round2 } from "./common.ts";
 import { shareDir, zomatoConfigPath } from "./paths.ts";
 
 export const BASE = "https://api.zomato.com";
@@ -776,7 +776,7 @@ export function parseBill(detailJson: unknown): Array<ZomatoBillLine> {
       }
       if (dishFinal !== null) {
         const itemsSum = lines.reduce((sum, l) => sum + l.price, 0);
-        const gap = Math.round((dishFinal - itemsSum) * 100) / 100;
+        const gap = round2(dishFinal - itemsSum);
         if (Math.abs(gap) >= 0.005) {
           lines.push({ name: "Item discount", price: gap, quantity: 1 });
         }

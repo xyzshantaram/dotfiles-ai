@@ -1,8 +1,8 @@
 #!/usr/bin/env -S deno run --no-lock -A
 // One command line entry over the push core. An agent or a person runs
 // the whole job with no browser: gather, validate, push, aggregate,
-// share, or wizard. gather, validate and wizard dispatch to a
-// subprocess. push, aggregate and share run in process. The dispatch
+// share, last-push, or wizard. gather, validate and wizard dispatch to a
+// subprocess. push, aggregate, share and last-push run in process. The dispatch
 // targets resolve through import.meta.url, so this file also runs
 // straight from a raw GitHub URL. This module never imports the wizard
 // engine, which drags in the browser session stores.
@@ -14,10 +14,10 @@ import { buildNameMap, type PushApi, runPush } from "../src/pushcore.ts";
 import { buildAggregateSummary, groupOrders, inferPayer } from "../src/render.ts";
 import { loadSettings } from "../src/settings.ts";
 import { createShareLink } from "../src/share.ts";
-import { writeLastPush } from "../src/lastpush.ts";
+import { confirmLastPush, readLastPushSync, writeLastPush } from "../src/lastpush.ts";
 import { loadCredentials, loadPushed, savePushed, SplitwiseAPI } from "../src/splitwise.ts";
 
-// Short usage block naming all six verbs.
+// Short usage block naming all seven verbs.
 export function usageText(): string {
   return [
     "Usage: cli.ts <verb> [options]",
@@ -29,6 +29,7 @@ export function usageText(): string {
     "  aggregate  print the hand-entry summary, no account needed",
     "  share      make a share link for a split file",
     "  wizard     serve the browser app",
+    "  last-push  show the last push record, or mark it done with --confirm",
   ].join("\n");
 }
 
@@ -348,6 +349,32 @@ async function runShareVerb(args: string[]): Promise<void> {
   }
 }
 
+// The last-push verb: print the record as strict JSON, or mark the
+// waiting push done with --confirm. An agent parses stdout, so the
+// plain path prints one JSON line and nothing else.
+async function runLastPushVerb(args: string[]): Promise<void> {
+  const parsed = parseArgs(args, {
+    boolean: ["confirm"],
+    unknown: (arg) => {
+      // A bare word is not a flag, so reject options alone.
+      if (arg.startsWith("-")) fail('Unknown last-push flag "' + arg + '".');
+      return false;
+    },
+  });
+  const extra = parsed._ ?? [];
+  if (extra.length > 0) fail('Unknown last-push argument "' + String(extra[0]) + '".');
+  if (parsed.confirm) {
+    console.log(await confirmLastPush() ? "Confirmed." : "Nothing to confirm.");
+    return;
+  }
+  const record = readLastPushSync();
+  if (record === null) {
+    console.log(JSON.stringify({ record: null }));
+    return;
+  }
+  console.log(JSON.stringify(record));
+}
+
 // Route one verb. No verb or an unknown verb prints usage and exits
 // non zero. Dispatch verbs run in a subprocess; the rest run here.
 async function main(args: string[]): Promise<void> {
@@ -358,6 +385,7 @@ async function main(args: string[]): Promise<void> {
   else if (verb === "push") await runPushVerb(rest);
   else if (verb === "aggregate") await runAggregateVerb(rest);
   else if (verb === "share") await runShareVerb(rest);
+  else if (verb === "last-push") await runLastPushVerb(rest);
   else {
     console.error(usageText());
     Deno.exit(2);

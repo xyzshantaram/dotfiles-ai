@@ -7,7 +7,7 @@ split file per job. It sends that file to Splitwise, or it prints a summary for 
 
 ## Commands
 
-The entry point is `scripts/cli.ts`. It carries six verbs. Run a verb with no arguments to see its
+The entry point is `scripts/cli.ts`. It carries seven verbs. Run a verb with no arguments to see its
 own usage or error text.
 
 `gather` collects orders through the gatherer. It takes one mode flag per run. `--emit` collects
@@ -53,6 +53,14 @@ browser. Follow the steps on screen.
 
 ```sh
 deno run --no-lock -A scripts/cli.ts wizard
+```
+
+`last-push` shows the last push record. With no flags it prints the record as one JSON line. With
+`--confirm` it marks the waiting push done and prints `Confirmed.` or `Nothing to confirm.`.
+
+```sh
+deno run --no-lock -A scripts/cli.ts last-push
+deno run --no-lock -A scripts/cli.ts last-push --confirm
 ```
 
 ## Run a whole job

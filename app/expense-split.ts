@@ -6,13 +6,14 @@
 import {
   createWizard,
   type DraftEntry,
+  markdown,
   type NavHandler,
   radio,
   type Step,
   step,
   type StepFn,
 } from "jsr:@xyzshantaram/wizardkit@^0.1.0";
-import { gatherSteps, setResumedRun } from "./expense-split/gather.ts";
+import { confirmPushAction, gatherSteps, setResumedRun } from "./expense-split/gather.ts";
 import { handleBoardRoute } from "./expense-split/board-routes.ts";
 import { resumeStep, routeStatus, splitRunId, splitSteps } from "./expense-split/split.ts";
 import { pushSteps, sourceStep } from "./expense-split/push.ts";
@@ -25,6 +26,7 @@ interface MenuItem {
   hint: string;
   target: string;
   firstRunOnly?: boolean;
+  unconfirmedOnly?: boolean;
 }
 
 const MENU: MenuItem[] = [
@@ -33,6 +35,12 @@ const MENU: MenuItem[] = [
     hint: "Answer three quick questions, then you are ready.",
     target: "start-usage",
     firstRunOnly: true,
+  },
+  {
+    title: "Review pushes",
+    hint: "1 unconfirmed push",
+    target: "review-pushes",
+    unconfirmedOnly: true,
   },
   {
     title: "Split and push recent orders",
@@ -70,6 +78,7 @@ const MENU: MenuItem[] = [
 ];
 
 import { loadSettings, saveSettings, USAGE_MODES } from "../src/settings.ts";
+import { formatPushDay, pushNoun, readLastPushSync } from "../src/lastpush.ts";
 import { listRunsSync, readRun, runHint, stateRoot } from "../src/runstate.ts";
 import { sidOf } from "../src/sessionstore.ts";
 import type { WizardCtx } from "jsr:@xyzshantaram/wizardkit@^0.1.0";
@@ -147,6 +156,7 @@ const tail: Array<Step | StepFn> = [
   ...splitTail,
   ...pushTail,
   startUsageStep(),
+  reviewPushesStep,
   ...settingsSteps(),
 ];
 
@@ -158,6 +168,51 @@ function firstRun(): boolean {
   } catch {
     return true;
   }
+}
+
+// True when a push record waits on the user. The menu shows Review
+// pushes only then, the same way firstRun gates Start here.
+function hasUnconfirmedPush(): boolean {
+  const last = readLastPushSync();
+  return last !== null && !last.confirmed;
+}
+
+// Review step for a waiting push. It names the path and the day in
+// plain prose, then tells the reader what to do. The confirm control
+// marks the push done and re-renders, so the screen then states the
+// push is confirmed. With nothing waiting it says so in one line.
+function reviewPushesStep(_m: Map<string, string[]>, _ctx?: WizardCtx): Step {
+  const last = readLastPushSync();
+  if (last === null) {
+    return {
+      ...step("review-pushes", "Review pushes", [
+        markdown("Nothing waits. No push needs a review."),
+      ]),
+      nav: { back: true, goto: { step: "menu", label: "Back to menu" } },
+    };
+  }
+  if (last.confirmed) {
+    return {
+      ...step("review-pushes", "Review pushes", [
+        markdown("Push confirmed. Nothing waits now."),
+      ]),
+      nav: { back: true, goto: { step: "menu", label: "Back to menu" } },
+    };
+  }
+  return {
+    ...step("review-pushes", "Review pushes", [
+      markdown(
+        "Your " + pushNoun(last.kind) + " from " + formatPushDay(last.at) +
+          " is not confirmed.",
+      ),
+      markdown("Enter it in Splitwise, then mark it done here."),
+    ]),
+    nav: {
+      back: true,
+      actions: [{ id: "confirm-push", label: "Confirm push", run: confirmPushAction }],
+      goto: { step: "menu", label: "Back to menu" },
+    },
+  };
 }
 
 // Onboarding flow from meta.ts startHere: usage first, then the
@@ -192,8 +247,10 @@ function startUsageStep(): Step {
   };
 }
 
-function menuStep(): Step {
-  const items = MENU.filter((item) => !item.firstRunOnly || firstRun());
+export function menuStep(): Step {
+  const items = MENU.filter(
+    (item) => (!item.firstRunOnly || firstRun()) && (!item.unconfirmedOnly || hasUnconfirmedPush()),
+  );
   const guiding = firstRun();
   return {
     ...step(
@@ -217,7 +274,9 @@ function menuStep(): Step {
 // so no confirmation screen sits between the pick and the task.
 function menuTarget(picked: string): string {
   const item = MENU.find(
-    (entry) => entry.title === picked && (!entry.firstRunOnly || firstRun()),
+    (entry) =>
+      entry.title === picked && (!entry.firstRunOnly || firstRun()) &&
+      (!entry.unconfirmedOnly || hasUnconfirmedPush()),
   ) ?? MENU[0];
   return item.target;
 }

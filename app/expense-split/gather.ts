@@ -17,19 +17,27 @@ import {
 import {
   isDryMap,
   listRunsSync,
+  mintRunId,
   readRunMetaSync,
   readRunOrders,
   runsDir,
   setRunPicked,
-  stateRoot,
 } from "../../src/runstate.ts";
 import { answer, answerList } from "../../src/answers.ts";
-import { lastPushLabel, readLastPushSync, resolveRangeDays } from "../../src/lastpush.ts";
+import {
+  confirmLastPush,
+  formatPushDay,
+  lastPushLabel,
+  readLastPushSync,
+  resolveRangeDays,
+} from "../../src/lastpush.ts";
 import { sessionStore, sidOf } from "../../src/sessionstore.ts";
 import { setSplitRun } from "./split.ts";
 import type { WizardCtx } from "jsr:@xyzshantaram/wizardkit@^0.1.0";
 import { dryBox, dryNote } from "./dry.ts";
 import { fmtRs, formatDayISO, isLedgerRow, itemSummary, parseDate } from "../../src/common.ts";
+import { profileDir } from "../../src/paths.ts";
+import { round2 } from "../../src/common.ts";
 import { DEFAULT_LOCATION, hasTokensSync } from "../../src/zomato.ts";
 import type { Order } from "../../src/common.ts";
 
@@ -40,11 +48,6 @@ export type PlatformId = (typeof PLATFORMS)[number];
 // Title-case name for one platform id.
 function platformName(id: PlatformId): string {
   return id.charAt(0).toUpperCase() + id.slice(1);
-}
-
-// Profile dir for one browser platform under the active state root.
-function profileDir(id: string): string {
-  return stateRoot() + "/share/profiles/" + id;
 }
 
 // True when a platform holds cached credentials, the same way the
@@ -219,6 +222,16 @@ function accountsStep(answerMap: Map<string, string[]>): Step {
   };
 }
 
+// Mark the waiting push done, then show this screen again. A void
+// return re-renders the same step, so the fresh line names the change.
+export async function confirmPushAction(
+  _answers: Map<string, string[]>,
+  _fields: Record<string, string[]>,
+  _ctx: WizardCtx,
+): Promise<void> {
+  await confirmLastPush();
+}
+
 // Day range step. A remembered push adds a fast choice above the
 // number entry. With no record the screen keeps its old shape.
 function rangeStep(answerMap: Map<string, string[]>): Step {
@@ -226,6 +239,12 @@ function rangeStep(answerMap: Map<string, string[]>): Step {
   const last = readLastPushSync();
   if (last !== null) {
     const picked = answerMap.get("range-mode")?.[0] ?? "last";
+    // Name the record above the choice. An unconfirmed record adds its
+    // state, so the user sees the wait before they pick a range.
+    const line = last.confirmed
+      ? "Last recorded push at: " + formatPushDay(last.at) + "."
+      : "Last recorded push at: " + formatPushDay(last.at) + ". Unconfirmed.";
+    nodes.push(markdown(line));
     nodes.push(
       radio("Range", "range-mode", [
         { value: "last", label: lastPushLabel(last, new Date()) },
@@ -234,6 +253,15 @@ function rangeStep(answerMap: Map<string, string[]>): Step {
     );
   }
   nodes.push(numberEntry("Days back", "range", 30));
+  // An unconfirmed record adds a confirm control. It marks the push
+  // done and re-renders this screen, so the line above turns confirmed.
+  const nav = last !== null && !last.confirmed
+    ? {
+      back: true,
+      actions: [{ id: "confirm-push", label: "Confirm push", run: confirmPushAction }],
+      next: "Next",
+    }
+    : { back: true, next: "Next" };
   return {
     ...step(
       "gather-range",
@@ -241,7 +269,7 @@ function rangeStep(answerMap: Map<string, string[]>): Step {
       nodes,
       "Gather collects orders from the last days you type here.",
     ),
-    nav: { back: true, next: "Next" },
+    nav,
   };
 }
 
@@ -310,7 +338,7 @@ export function manualRowProblems(m: Map<string, string[]>): string[] {
     if (store === "" && raw === "") continue;
     const n = i + 1;
     if (store === "") problems.push("Row " + n + " needs a store name.");
-    const amount = Math.round(Number(raw) * 100) / 100;
+    const amount = round2(Number(raw));
     if (!Number.isFinite(amount) || amount <= 0) {
       problems.push("Row " + n + " needs an amount above zero.");
     }
@@ -331,7 +359,7 @@ export function manualRows(m: Map<string, string[]>): ManualRow[] {
     const raw = (amounts[i] ?? "").trim();
     // Skip spare rows: nothing typed at all.
     if (store === "" && raw === "") continue;
-    const amount = Math.round(Number(raw) * 100) / 100;
+    const amount = round2(Number(raw));
     // Drop rows with no usable amount. manualRowProblems reports the fault to the user.
     if (!Number.isFinite(amount) || amount <= 0) continue;
     const today = new Date().toISOString().slice(0, 10);
@@ -355,13 +383,13 @@ export function manualRows(m: Map<string, string[]>): ManualRow[] {
 // gathered, then orders.json beside it. Sync writes keep the submit
 // hook able to write before the review step renders.
 function writeManualRunSync(rows: ManualRow[], days: number): string {
-  const unix = Math.floor(Date.now() / 1000);
-  let id = unix + "-manual";
+  const base = mintRunId("manual");
+  let id = base;
   let n = 2;
   while (true) {
     try {
       Deno.statSync(runsDir() + "/" + id);
-      id = unix + "-manual-" + n;
+      id = base + "-" + n;
       n += 1;
     } catch {
       break;
@@ -669,7 +697,7 @@ const gatherRuns = sessionStore((): { id: string | null } => ({ id: null }));
 function gatherRunId(sessionId: string): string {
   const slot = gatherRuns.for(sidOf({ sessionId }));
   if (slot.id === null || slot.id.length === 0) {
-    slot.id = String(Math.floor(Date.now() / 1000)) + "-multi";
+    slot.id = mintRunId("multi");
   }
   return slot.id;
 }

@@ -7,6 +7,7 @@
 
 /// <reference lib="dom" />
 
+import { parseArgs } from "jsr:@std/cli@^1.0.32/parse-args";
 import type { Page, Response as PWResponse } from "npm:playwright@1.57.0";
 import { dot, lineEnd, lineStart, say, step, wizardExit } from "../src/term.ts";
 import { createRun, ensureRun, stateRoot } from "../src/runstate.ts";
@@ -127,21 +128,32 @@ function logError(line: string): void {
   if (LOG) LOG.write("error", line);
 }
 
-// Read one flag value from --name=x or --name x form.
-function flagValue(name: string): string | null {
-  const args = Deno.args;
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === "--" + name && i + 1 < args.length) return args[i + 1];
-    if (arg.startsWith("--" + name + "=")) return arg.slice(name.length + 3);
-  }
-  return null;
-}
-
-// True when the named bare flag is present.
-function hasFlag(name: string): boolean {
-  return Deno.args.includes("--" + name);
-}
+// Parsed command line. A bare string flag reads as an empty
+// string, so a bare --emit never eats the next flag as its value.
+// An unknown flag exits here instead of passing through silently.
+const cliArgs = parseArgs(Deno.args, {
+  boolean: ["zomato-login-start", "zomato-login-finish", "zomato-city"],
+  string: [
+    "emit",
+    "platforms",
+    "days",
+    "into",
+    "login",
+    "phone",
+    "otp",
+    "code",
+    "name",
+    "lat",
+    "lon",
+  ],
+  unknown: (arg) => {
+    if (arg.startsWith("-")) {
+      console.error("Unknown option: " + arg);
+      wizardExit(1);
+    }
+    return false;
+  },
+});
 
 // Parse the --platforms flag to a clean id list.
 function parsePlatforms(
@@ -1979,15 +1991,15 @@ async function assignmentPrompt(dir: string): Promise<string> {
 
 // Emit mode: no prompts, one JSON block plus the assignment prompt.
 async function runEmit(): Promise<void> {
-  const platforms = parsePlatforms(flagValue("platforms"), [
+  const platforms = parsePlatforms(cliArgs.platforms ?? null, [
     "zepto",
     "blinkit",
     "zomato",
     "swiggy",
     "manual",
   ]);
-  const days = parseDays(flagValue("days"), 30);
-  const intoId = flagValue("into");
+  const days = parseDays(cliArgs.days ?? null, 30);
+  const intoId = cliArgs.into ?? null;
   LOG = createRunLog("gather");
   logInfo(
     "emit prompt starts for " + platforms.join(",") + " over " + days + " days",
@@ -2050,7 +2062,7 @@ async function runEmit(): Promise<void> {
 // Reads --phone, sends the one time code, then exits. Each path
 // prints one human sentence on stdout for the action panel.
 async function runZomatoLoginStart(): Promise<void> {
-  const phone = (flagValue("phone") ?? "").trim();
+  const phone = (cliArgs.phone ?? "").trim();
   if (phone.replace(/\D/g, "").length < 10) {
     logError("zomato machine login start missed the phone");
     console.log(
@@ -2077,7 +2089,7 @@ async function runZomatoLoginStart(): Promise<void> {
 // Reads --phone and --otp, saves the tokens, then exits. Each path
 // prints one human sentence on stdout for the action panel.
 async function runZomatoLoginFinish(): Promise<void> {
-  const otp = (flagValue("otp") ?? "").trim();
+  const otp = (cliArgs.otp ?? "").trim();
   if (!otp) {
     logError("zomato machine login finish missed the code");
     console.log(
@@ -2085,7 +2097,7 @@ async function runZomatoLoginFinish(): Promise<void> {
     );
     Deno.exit(1);
   }
-  const phone = (flagValue("phone") ?? "").trim();
+  const phone = (cliArgs.phone ?? "").trim();
   if (phone.replace(/\D/g, "").length < 10) {
     logError("zomato machine login finish missed the phone");
     console.log(
@@ -2123,10 +2135,10 @@ async function runZomatoLoginFinish(): Promise<void> {
 // Reads --code, --name, --lat, and --lon, then exits. Each path
 // prints one human sentence on stdout for the action panel.
 async function runZomatoCity(): Promise<void> {
-  const code = (flagValue("code") ?? "").trim();
-  const name = (flagValue("name") ?? "").trim();
-  const lat = (flagValue("lat") ?? "").trim();
-  const lon = (flagValue("lon") ?? "").trim();
+  const code = (cliArgs.code ?? "").trim();
+  const name = (cliArgs.name ?? "").trim();
+  const lat = (cliArgs.lat ?? "").trim();
+  const lon = (cliArgs.lon ?? "").trim();
   if (!code || !name || !lat || !lon) {
     logError("zomato machine city missed a value");
     console.log(
@@ -2163,20 +2175,6 @@ async function runZomatoCity(): Promise<void> {
 // Machine mode: sign in to one browser platform without prompts.
 // Reads --login, opens the sign in window, waits, saves the profile,
 // then exits. Each path prints one human sentence on stdout.
-function loginFlag(): string | undefined {
-  const args = Deno.args;
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg.startsWith("--login=")) return arg.slice("--login=".length);
-    if (arg === "--login") {
-      const next = args[i + 1];
-      if (next === undefined || next.startsWith("--")) return "";
-      return next;
-    }
-  }
-  return undefined;
-}
-
 async function runBrowserLogin(raw: string): Promise<void> {
   const id = raw.trim().toLowerCase();
   if (id !== "zepto" && id !== "blinkit" && id !== "swiggy") {
@@ -2231,18 +2229,13 @@ function summary(id: string, days: number): void {
   for (const note of bag.notes) say(note);
 }
 
-// Read the emit mode without eating the next flag: bare --emit means
-// prompt, --emit=x names a mode. flagValue would mistake the arg after
-// a bare --emit for its value.
-function emitMode(): string | null {
-  for (const arg of Deno.args) {
-    if (arg === "--emit") return "prompt";
-    if (arg.startsWith("--emit=")) return arg.slice("--emit=".length);
-  }
-  return null;
+// Read the emit mode: bare --emit means prompt, --emit=x names
+// a mode. The parser holds an empty string for a bare string flag,
+// so the flag after a bare --emit never reads as its value.
+let emit: string | null = null;
+if (cliArgs.emit !== undefined) {
+  emit = cliArgs.emit === "" ? "prompt" : cliArgs.emit;
 }
-
-const emit = emitMode();
 if (emit !== null) {
   if (emit !== "prompt") {
     console.error("Unknown emit mode: " + emit);
@@ -2252,19 +2245,19 @@ if (emit !== null) {
   wizardExit(0);
 }
 
-if (hasFlag("zomato-login-start")) {
+if (cliArgs["zomato-login-start"]) {
   await runZomatoLoginStart();
 }
 
-if (hasFlag("zomato-login-finish")) {
+if (cliArgs["zomato-login-finish"]) {
   await runZomatoLoginFinish();
 }
 
-if (hasFlag("zomato-city")) {
+if (cliArgs["zomato-city"]) {
   await runZomatoCity();
 }
 
-const login = loginFlag();
+const login = cliArgs.login;
 if (login !== undefined) {
   await runBrowserLogin(login);
 }

@@ -2,7 +2,7 @@
 // The wizard drives the UI. This module holds the logic heads can test.
 
 import { isFeeItem, type Order, type OutputDoc, parseDate } from "./common.ts";
-import { round2 } from "./splitengine.ts";
+import { round2 } from "./common.ts";
 import type { RunMeta } from "./runstate.ts";
 
 // One flat line the wizard shows. Quantity copies become separate lines.

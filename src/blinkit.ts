@@ -33,23 +33,6 @@ export interface BlinkitRawOrder {
   billTotal: number;
 }
 
-export interface SchemaItem {
-  name: string;
-  price: number; // unit price; the dashboard expands `quantity` copies
-  quantity: number;
-  estimated: boolean;
-  source: string;
-}
-
-export interface SchemaOrder {
-  id: string;
-  platform: "blinkit";
-  date: string; // "YYYY-MM-DD h:mm AM/PM" local time
-  paid: number;
-  items: SchemaItem[];
-  fees: { delivery: number; packaging: number };
-}
-
 /** "700 g x 1" / "3 x 200 ml x 1" / "1 pc x 2" -> pack text + qty. */
 export function parseQtyText(qtyText: string): { pack: string; qty: number } {
   const m = qtyText.trim().match(/^(.*?)\s*x\s+(\d+)$/);
@@ -66,13 +49,13 @@ const SKIP_LABELS = new Set([
   "To pay",
 ]);
 
-export function mapOrder(raw: BlinkitRawOrder): SchemaOrder {
-  const items: SchemaItem[] = raw.items.map((it) => {
+export function mapOrder(raw: BlinkitRawOrder): Order {
+  const items: OrderItem[] = raw.items.map((it) => {
     const { pack, qty } = parseQtyText(it.qtyText);
     const name = pack && pack !== "1" ? `${it.name} (${pack})` : it.name;
     return {
       name,
-      price: Math.round((it.unitPrice / qty) * 100) / 100,
+      price: round2(it.unitPrice / qty),
       quantity: qty,
       estimated: false,
       source: "blinkit-api",
@@ -108,12 +91,10 @@ export function mapOrder(raw: BlinkitRawOrder): SchemaOrder {
   };
 }
 
-import { formatISTDate } from "./common.ts";
-
-export { formatISTDate };
+import { formatISTDate, type Order, type OrderItem, round2 } from "./common.ts";
 
 /** Balance check: items + fees must equal paid. */
-export function checkBalance(mapped: SchemaOrder): boolean {
+export function checkBalance(mapped: Order): boolean {
   const itemsSum = mapped.items.reduce((s, i) => s + i.price * i.quantity, 0);
   const feesSum = mapped.fees.delivery + mapped.fees.packaging;
   return Math.abs(itemsSum + feesSum - mapped.paid) < 0.01;

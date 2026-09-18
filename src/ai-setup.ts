@@ -14,10 +14,3 @@ export const AI_SETUP_LINES = [
 export function aiSetupMessage(): string {
   return AI_SETUP_LINES.join("\n");
 }
-
-export function printAiSetup(say: (line: string) => void): void {
-  say("Copy the lines between the --- marks into your AI tool, then follow what it says.");
-  say("---");
-  for (const line of AI_SETUP_LINES) say(line);
-  say("---");
-}

@@ -2,7 +2,8 @@
 // See docs/schema.md for the full contract.
 // Usage: deno run --no-lock --allow-read scripts/validate.ts <output.json> [--orders <orders.json>]
 
-import type { Order, OutputDoc, SplitEntry } from "../src/common.ts";
+import { parseArgs } from "jsr:@std/cli@^1.0.32/parse-args";
+import { fmtRs, type Order, type OutputDoc, type SplitEntry } from "../src/common.ts";
 
 // Tolerance for one line balance check, in rupees.
 const ITEM_TOL = 0.01;
@@ -19,11 +20,6 @@ const failures: string[] = [];
 // Add one failure line with the FAIL prefix.
 function fail(msg: string): void {
   failures.push(`FAIL: ${msg}`);
-}
-
-// Format a rupee amount with two decimals.
-function rs(n: number): string {
-  return n.toFixed(2);
 }
 
 // True for finite numbers only. Rejects NaN and Infinity.
@@ -174,7 +170,7 @@ function checkBalance(splits: SplitEntry[]): void {
   for (const s of splits) {
     const sum = Object.values(s.assignments).reduce((a, b) => a + b, 0);
     if (Math.abs(sum - s.price) > ITEM_TOL) {
-      fail(`split "${s.item}" sums to ${rs(sum)} but price is ${rs(s.price)}`);
+      fail(`split "${s.item}" sums to ${fmtRs(sum)} but price is ${fmtRs(s.price)}`);
     }
   }
 }
@@ -193,7 +189,7 @@ function checkTotals(checked: Checked): void {
     let got = 0;
     for (const s of checked.splits) got += s.assignments[name] ?? 0;
     if (Math.abs(got - want) > TOTALS_TOL) {
-      fail(`total for "${name}" sums to ${rs(got)} but "totals" says ${rs(want)}`);
+      fail(`total for "${name}" sums to ${fmtRs(got)} but "totals" says ${fmtRs(want)}`);
     }
   }
 }
@@ -226,7 +222,9 @@ function checkSettlements(checked: Checked): void {
   const paid = checked.settlements.reduce((a, e) => a + e.amount, 0);
   if (Math.abs(paid - owed) > SETTLE_TOL) {
     fail(
-      `settlements sum to ${rs(paid)} but non-payer totals sum to ${rs(owed)} (payer "${payer}")`,
+      `settlements sum to ${fmtRs(paid)} but non-payer totals sum to ${
+        fmtRs(owed)
+      } (payer "${payer}")`,
     );
   }
 }
@@ -285,7 +283,7 @@ function checkOrders(splits: SplitEntry[], ordersPath: string): void {
     }
     const expected = matches.reduce((a, o) => a + o.paid, 0);
     if (Math.abs(g.sum - expected) > ORDER_TOL) {
-      fail(`order group ${label} sums to ${rs(g.sum)} but source paid is ${rs(expected)}`);
+      fail(`order group ${label} sums to ${fmtRs(g.sum)} but source paid is ${fmtRs(expected)}`);
     }
   }
 }
@@ -304,26 +302,30 @@ function usage(): void {
 }
 
 // Parse Deno.args. Returns null on usage errors.
-function parseArgs(args: string[]): Args | null {
-  let outputPath: string | null = null;
-  let ordersPath: string | null = null;
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i];
-    if (a === "--orders") {
-      if (i + 1 >= args.length) {
-        usage();
-        return null;
+function parseCliArgs(args: string[]): Args | null {
+  let badOption: string | null = null;
+  const parsed = parseArgs(args, {
+    string: ["orders"],
+    unknown: (arg) => {
+      if (arg.startsWith("-")) {
+        if (badOption === null) badOption = arg;
+        return false;
       }
-      i++;
-      ordersPath = args[i];
-    } else if (a.startsWith("--")) {
-      console.error(`Unknown option: ${a}`);
-      usage();
-      return null;
-    } else if (outputPath === null) {
-      outputPath = a;
+      return true;
+    },
+  });
+  if (badOption !== null) {
+    console.error(`Unknown option: ${badOption}`);
+    usage();
+    return null;
+  }
+  let outputPath: string | null = null;
+  for (const item of parsed._ ?? []) {
+    const word = String(item);
+    if (outputPath === null) {
+      outputPath = word;
     } else {
-      console.error(`Unexpected argument: ${a}`);
+      console.error(`Unexpected argument: ${word}`);
       usage();
       return null;
     }
@@ -332,7 +334,11 @@ function parseArgs(args: string[]): Args | null {
     usage();
     return null;
   }
-  return { outputPath, ordersPath };
+  if (parsed.orders !== undefined && parsed.orders === "") {
+    usage();
+    return null;
+  }
+  return { outputPath, ordersPath: parsed.orders ?? null };
 }
 
 // Print every failure line to stdout.
@@ -342,7 +348,7 @@ function printFailures(): void {
 
 // Run every check and print the result. Returns the exit code.
 function main(): number {
-  const args = parseArgs(Deno.args);
+  const args = parseCliArgs(Deno.args);
   if (args === null) return 2;
   const doc = readJson(args.outputPath);
   if (doc === undefined) {
@@ -361,7 +367,7 @@ function main(): number {
   const total = checked.splits.reduce((a, s) => a + s.price, 0);
   console.log("PASS");
   console.log(
-    `${checked.splits.length} splits, ${checked.people.length} people, total ₹${rs(total)}`,
+    `${checked.splits.length} splits, ${checked.people.length} people, total ₹${fmtRs(total)}`,
   );
   return 0;
 }

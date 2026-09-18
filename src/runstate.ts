@@ -202,6 +202,11 @@ export async function ensureRun(
   await writeJson(metaPath(dir), meta);
   return { dir, existed: true };
 }
+// Mint a run id from unix time and a label.
+export function mintRunId(label: string): string {
+  // Join unix seconds and the label.
+  return String(Math.floor(Date.now() / 1000)) + "-" + label;
+}
 export async function createRun(
   label: string,
   platforms: string[],
@@ -211,8 +216,7 @@ export async function createRun(
   // Reject labels that escape the runs dir.
   if (isUnsafe(label)) throw new Error("bad label " + label);
   // Mint the base id from unix time and label.
-  const unix = Math.floor(Date.now() / 1000);
-  const base = unix + "-" + label;
+  const base = mintRunId(label);
   // Append a counter when the dir already exists.
   let id = base;
   let n = 2;
