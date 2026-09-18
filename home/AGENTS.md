@@ -101,13 +101,16 @@
 * NEVER invent a backwards compatibility requirement. A migration path, a deprecation shim, a
   legacy code path, a dual-read fallback, a version flag: each one is real code with real bug
   surface, and each one is worthless when nobody holds the old state. Do not add compatibility
-  work because it feels professional. Decide first whether any old state exists, and say which
+  work only because it feels professional. Decide first whether any old state exists. Say which
   evidence you used. ASK THE USER when the answer is not obvious. When you must judge alone, read
   the repo: its age (`git log --reverse --date=short --format=%ad | head -1`), the number of
-  distinct authors (`git shortlog -sne | wc -l`), whether it was ever tagged or published, and
-  whether anything else in this workspace reads the format you are changing. A repo that is days
-  old, has one author, and has shipped to nobody holds no old state: rename the field, change the
-  format, delete the old path. Write the migration only when you can NAME the holder of the old
+  distinct authors (`git shortlog -sne HEAD | wc -l` — the `HEAD` is load-bearing, because with
+  no revision `git shortlog` reads the log from STDIN and a bare pipe reports zero authors),
+  whether it was ever tagged or published, and whether anything else in this workspace reads the
+  format you are changing. Check also whether anyone outside this workspace holds the format: a
+  published package can have no reader here and many readers elsewhere. A repo that is days old,
+  has one author, and has shipped to nobody holds no old state. Rename the field. Change the
+  format. Delete the old path. Write the migration only when you can NAME the holder of the old
   data. State the call in your report, so the user can correct it cheaply.
 * If the user asks for a change or review and you find pre-existing issues, ALWAYS surface them.
   Do not fix without asking. Do not dismiss them as pre-existing either. A lot of the time they
