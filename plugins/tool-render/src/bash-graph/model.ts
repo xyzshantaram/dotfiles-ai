@@ -64,6 +64,15 @@ interface CmdNode {
   test?: number;
   chip?: ModelChip;
   incoming?: string;
+  /**
+   * Per-stage exit code, ticket #180 seam. Set ONLY by attributePipeStages
+   * (through attributeFinalSegment / attributeSequenceStages), never at
+   * build: the code arrives from the tool result after the command runs, so
+   * no corpus of source text can supply it. Undefined renders exactly as
+   * before (the dock string is unchanged), which is what keeps the
+   * equivalence proof byte-identical.
+   */
+  exitCode?: number;
 }
 
 interface RedirNode {
@@ -396,6 +405,116 @@ function consumeOperators(
 }
 
 /**
+ * Exit-code pill for one command card, ticket #180 seam. The treatment
+ * ports client.tsx:1441-1471 verbatim in meaning: the text is always
+ * "exit N", the failed title carries "(failed)", the ok title names code 0.
+ * The classes are the fair copy's own badge vocabulary (prim-badge, with
+ * the existing data-tone="error" rule for the failed state), because the
+ * old tool-render-diagram-exit classes do not exist in styles.css. The pill
+ * is a span, never a button: it expands nothing.
+ */
+export function exitBadgeHTML(code: number): string {
+  const failed = code !== 0;
+  const tip = failed ? "stage exit code " + code + " (failed)" : "stage exit code 0";
+  return (
+    `<span class="prim-badge"${failed ? ` data-tone="error"` : ""} title="${esc(tip)}">` +
+    `exit ${code}</span>`
+  );
+}
+
+/**
+ * Port of attributePipeStages from bash-diagram.ts (ticket #180): decide
+ * which stage a code belongs to, and refuse to attribute on any doubt.
+ *
+ * THE RULE, carried across unchanged: codes land positionally on the drawn
+ * stages, and ONLY when pipeStages is an array whose length matches the
+ * drawn stage count AND every entry is a non-null object carrying a
+ * non-empty string `name` and an integer `exitCode`. Name absence is the
+ * #142 disqualification signal (bash-guard emits bare {exitCode} entries
+ * when it cannot attribute), and a backgrounded call carries no pipeStages
+ * key at all. Any doubt leaves every code undefined rather than inventing
+ * an attribution: a plausible-but-wrong code is worse than none.
+ *
+ * DEVIATION, forced by the new node model and stated plainly: the old
+ * function counts STAGES (redirects ride inside their stage); here the
+ * drawn stages of one segment are its CMD NODES (redirect, heredoc, op,
+ * and stray nodes are not stages), so the length gate counts cmd nodes.
+ * The function also does NOT string-compare entry names against drawn
+ * command names: the old function never did either (it checks non-empty
+ * only), because host-side naming (finalPipelineNaming) guarantees order
+ * and alignment. Adding a comparison here would be a new rule, not a port.
+ *
+ * The input array is never mutated: the returned nodes are shallow copies,
+ * like the old function's copied stages. Non-cmd nodes pass through as
+ * copies without a code place.
+ */
+export function attributePipeStages(nodes: ModelNode[], pipeStages: unknown): ModelNode[] {
+  const out: ModelNode[] = nodes.map((n) => ({ ...n }));
+  const cmds = out.filter((n): n is CmdNode => n.kind === "cmd");
+  for (const c of cmds) c.exitCode = undefined;
+  if (Array.isArray(pipeStages) && pipeStages.length === cmds.length) {
+    let ok = true;
+    const codes: number[] = [];
+    for (const entry of pipeStages) {
+      if (
+        entry === null ||
+        typeof entry !== "object" ||
+        typeof (entry as { name?: unknown }).name !== "string" ||
+        ((entry as { name?: unknown }).name as string).length === 0 ||
+        !Number.isInteger((entry as { exitCode?: unknown }).exitCode)
+      ) {
+        ok = false;
+        break;
+      }
+      codes.push((entry as { exitCode: number }).exitCode);
+    }
+    if (ok) {
+      for (let i = 0; i < cmds.length; i++) cmds[i].exitCode = codes[i];
+    }
+  }
+  return out;
+}
+
+/**
+ * The sequence gate for ONE segment, and the single expression of the
+ * sequence rule: render.ts calls this for its current panel, and
+ * attributeSequenceStages below maps it over caller-built segment lists,
+ * so the rule lives in exactly one place. Codes reach only the FINAL
+ * segment (PIPESTATUS holds the last pipeline only; earlier lines were
+ * never captured), and never a segment carrying a conditional chip: in the
+ * old model a conditional anywhere makes the final group a chain or a
+ * text group, both uncoded, and naming is disqualified host-side for
+ * conditional scripts. Here `&&`/`||` survive as prefix chips on the
+ * dependent card, so any chip on any node of the final segment is that
+ * disqualification in new-model terms.
+ */
+export function attributeFinalSegment(
+  nodes: ModelNode[],
+  pipeStages: unknown,
+  isLast: boolean,
+): ModelNode[] {
+  if (!isLast) return nodes.map((n) => ({ ...n }));
+  if (nodes.some((n) => n.chip)) return nodes.map((n) => ({ ...n }));
+  return attributePipeStages(nodes, pipeStages);
+}
+
+/**
+ * Port of attributeSequenceStages from bash-diagram.ts (ticket #180):
+ * attribute per-stage exit codes onto a copy of a segment list. Only the
+ * final segment can receive codes, through attributeFinalSegment above;
+ * every earlier segment, and any final segment disqualified there, keeps
+ * every code undefined. `segments` is one entry per rendered panel, in
+ * render order; the inputs are never mutated.
+ */
+export function attributeSequenceStages(
+  segments: ModelNode[][],
+  pipeStages: unknown,
+): ModelNode[][] {
+  return segments.map((nodes, i) =>
+    attributeFinalSegment(nodes, pipeStages, i === segments.length - 1),
+  );
+}
+/**
  * Build layout specs from model nodes. Widths are initial stylesheet widths;
  * the render stage fills nat/minw, assigns gapAfter from segLinks, and plans
  * rows. Short commands (raw slice at most SHORT_T) are inflexible: nowrap at
@@ -417,7 +536,8 @@ export function buildSpecs(src: string, nodes: ModelNode[], ctx: BuildContext): 
           .join("") +
         (nd.grp
           ? Badge(nd.grp.kind === "kw" ? "starts a " + (nd.grp as { kw: string }).kw : nd.grp.kind, "")
-          : "");
+          : "") +
+        (nd.exitCode !== undefined ? exitBadgeHTML(nd.exitCode) : "");
       const sizeKey = nd.sz ? nd.sz.key : "breakout";
       const w = nd.sz ? nd.sz.w : 680;
       return {

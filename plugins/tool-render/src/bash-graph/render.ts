@@ -20,6 +20,7 @@ import { CARD_AVAIL, GAP, IND, PIPE_GAP, ROWGAP, stepFor } from "./constants.js"
 import { layoutRow, planRows, enforceGaps, type PlanItem } from "./layout.js";
 import { measureH, naturalWidth, setNodeWidth, specMinW } from "./measure.js";
 import {
+  attributeFinalSegment,
   buildNodes,
   buildSpecs,
   makeBuildContext,
@@ -310,12 +311,38 @@ export interface CardResult {
  * become nodes, nodes become measured specs, the DP splits rows, and rows
  * become lone HTML, one svg, or a hooked statement. Heredoc and extracted
  * arg bodies append as collapsed blocks below their panel.
+ *
+ * The optional pipeStages is the ticket #180 seam: block.meta.pipeStages,
+ * attributed under the ported rule (attributeFinalSegment: final panel
+ * only, never a chipped segment, never on doubt). Omitted or undefined
+ * renders exactly as before: every node keeps exitCode undefined, so the
+ * equivalence proof (which never passes results) cannot see this param.
  */
-export function renderOne(idx: number, src: string, ub: UnbashScan, engines: EngineFlags): CardResult {
+export function renderOne(
+  idx: number,
+  src: string,
+  ub: UnbashScan,
+  engines: EngineFlags,
+  pipeStages?: unknown,
+): CardResult {
   const lines = splitLines(src);
   const ctx = makeBuildContext(idx);
   const panelsHTML: string[] = [];
   let nPanels = 0;
+  // The last panel is the only one that can carry codes (PIPESTATUS holds
+  // the last pipeline only). Precomputed with pure string scans, and only
+  // when a result is attached at all, so result-less renders run the exact
+  // old path. Empty segments render no panel and are skipped here as in
+  // the loop below.
+  let lastKey: string | null = null;
+  if (pipeStages !== undefined) {
+    lines.forEach((ln, li) => {
+      const segs = splitSemis(src, ln.a, ln.b);
+      segs.forEach((sg, si) => {
+        if (tokenizeParts(src, sg.a, sg.b).length > 0) lastKey = li + "_" + si;
+      });
+    });
+  }
   lines.forEach((ln, li) => {
     const segs = splitSemis(src, ln.a, ln.b);
     segs.forEach((sg, si) => {
@@ -328,7 +355,13 @@ export function renderOne(idx: number, src: string, ub: UnbashScan, engines: Eng
       const adoptedBefore = ctx.adopted.n;
       const { nodes, segLinks, hdItems } = buildNodes(src, items, ln, { li, si }, ub, ctx);
       engines.adopted += ctx.adopted.n - adoptedBefore;
-      const specs = buildSpecs(src, nodes, ctx);
+      // The seam: only the last panel can carry codes, under the ported
+      // rule. Any other panel passes its nodes through untouched.
+      const attrNodes =
+        lastKey !== null && li + "_" + si === lastKey
+          ? attributeFinalSegment(nodes, pipeStages, true)
+          : nodes;
+      const specs = buildSpecs(src, attrNodes, ctx);
       specs.forEach((s) => {
         s.nat = naturalWidth(s.html, s.sk);
       });
@@ -339,8 +372,8 @@ export function renderOne(idx: number, src: string, ub: UnbashScan, engines: Eng
       // arrow runs as long as the two arrows plus op node it replaced (round
       // 9.4); everything else keeps GAP.
       specs.forEach((s, k) => {
-        const nx = nodes[k + 1];
-        const lk = nx ? segLinks.get(nodes[k].key + ">" + nx.key) : null;
+        const nx = attrNodes[k + 1];
+        const lk = nx ? segLinks.get(attrNodes[k].key + ">" + nx.key) : null;
         s.gapAfter = lk === "pipe" || lk === "pipe-fused" ? PIPE_GAP : GAP;
       });
       const avail = engines.avail || CARD_AVAIL;
