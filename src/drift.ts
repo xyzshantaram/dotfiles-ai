@@ -66,7 +66,7 @@ export function driftMessage(
     " The log file is already safe to share.";
   // Point devs at the constants wizard.
   const dev = "Drift signature: " + sig + "." +
-    " Run wizards/dev-zomato-consts.ts to refresh the constants." +
+    " Run scripts/dev/zomato-consts.ts to refresh the constants." +
     " Then rerun the failed step. Full log: " + logPath + ".";
   return { user, dev };
 }

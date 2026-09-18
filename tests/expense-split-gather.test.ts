@@ -14,10 +14,10 @@ import {
   pickNext,
   pickNone,
   reviewNext,
-} from "../wizards/expense-split/gather.ts";
+} from "../app/expense-split/gather.ts";
 import { isLedgerRow, itemSummary, tidyProductName } from "../src/common.ts";
 import { DEFAULT_LOCATION } from "../src/zomato.ts";
-import { routeStatus, splitSteps } from "../wizards/expense-split/split.ts";
+import { routeStatus, splitSteps } from "../app/expense-split/split.ts";
 import { runsDir } from "../src/runstate.ts";
 
 // Fail the test when a condition misses.
@@ -182,7 +182,7 @@ Deno.test("manual expenses become a run and split end to end", async () => {
   // the patch endpoint like the browser component does.
   await post(handle, { step: "split-item", action: "next" });
   const { handleBoardRoute } = await import(
-    "../wizards/expense-split/board-routes.ts"
+    "../app/expense-split/board-routes.ts"
   );
   const patch = await handleBoardRoute(
     new Request("http://x/app/split-patch", {

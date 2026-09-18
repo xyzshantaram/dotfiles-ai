@@ -88,7 +88,7 @@ The browser app owns every user flow. One script still runs from the command lin
 shells out to it as a child process:
 
 ```
-deno run -A --no-lock wizards/gatherer.ts <mode>
+deno run -A --no-lock scripts/gatherer.ts <mode>
 ```
 
 - The modes are `--emit`, `--login=<zepto|blinkit|swiggy>`, `--zomato-login-start`,
@@ -101,9 +101,9 @@ deno run -A --no-lock wizards/gatherer.ts <mode>
 
 | file                  | kind   | reads                    | writes            |
 | --------------------- | ------ | ------------------------ | ----------------- |
-| `wizards/gatherer.ts` | gather | platform logins in state | run `orders.json` |
+| `scripts/gatherer.ts` | gather | platform logins in state | run `orders.json` |
 
-`wizards/dev-zomato-consts.ts` is the one other script, and the Maintenance section below covers it.
+`scripts/dev/zomato-consts.ts` is the one other script, and the Maintenance section below covers it.
 
 ## Child contract
 
@@ -153,5 +153,5 @@ Imported files land in `share/imports/<unix>-import.json`.
 
 ## Maintenance (dev-only)
 
-`wizards/dev-zomato-consts.ts` refreshes `share/config/zomato.json` from a dropped APK. Never listed
+`scripts/dev/zomato-consts.ts` refreshes `share/config/zomato.json` from a dropped APK. Never listed
 in the user menu; the drift messages in `src/drift.ts` point developers at it.

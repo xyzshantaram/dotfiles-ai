@@ -17,9 +17,9 @@ import {
   setSplitRun,
   shareDoneStep,
   summaryStep,
-} from "../wizards/expense-split/split.ts";
+} from "../app/expense-split/split.ts";
 import { freshState, type SplitStateDoc, writeSplitState } from "../src/splitstate.ts";
-import { handleBoardRoute } from "../wizards/expense-split/board-routes.ts";
+import { handleBoardRoute } from "../app/expense-split/board-routes.ts";
 import {
   buildPatch,
   personForDigit,
@@ -29,7 +29,7 @@ import {
   shareEqual,
   sharePercent,
   shareSingle,
-} from "../wizards/expense-split/split-board.js";
+} from "../app/expense-split/split-board.js";
 import type { Node } from "jsr:@xyzshantaram/wizardkit@^0.1.0";
 import type { Order } from "../src/common.ts";
 
@@ -264,7 +264,7 @@ function otherRunValue(step: { id: string; nodes: Node[] }): string {
 
 Deno.test("export handoff lands on push-source with the run preloaded", async () => {
   const { pushSourceStep } = await import(
-    "../wizards/expense-split.ts"
+    "../app/expense-split.ts"
   );
   const root = await Deno.makeTempDir();
   Deno.env.set("SPLIT_UTILS_STATE", root);
@@ -301,9 +301,9 @@ Deno.test("export handoff lands on push-source with the run preloaded", async ()
 
 Deno.test("push source prefers the typed other run over the radio pick", async () => {
   // The source step owns this rule now, through its own nav handler.
-  const { pushSourceNext } = await import("../wizards/expense-split/push.ts");
+  const { pushSourceNext } = await import("../app/expense-split/push.ts");
   const { pushSessionFor, resetPush } = await import(
-    "../wizards/expense-split/push-engine.ts"
+    "../app/expense-split/push-engine.ts"
   );
   const root = await Deno.makeTempDir();
   Deno.env.set("SPLIT_UTILS_STATE", root);
@@ -581,7 +581,7 @@ Deno.test("empty run branch asks nothing", async () => {
   const root = await Deno.makeTempDir();
   Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
-    const { splitSteps } = await import("../wizards/expense-split/split.ts");
+    const { splitSteps } = await import("../app/expense-split/split.ts");
     const entry = splitSteps()[0];
     const found = typeof entry === "function" ? entry(new Map()) : entry;
     assertEquals(found.id, "split-run");

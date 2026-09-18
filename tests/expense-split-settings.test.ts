@@ -2,8 +2,8 @@
 // "Type a different code" choice reads the custom field, uppercases it,
 // and accepts real ISO 4217 codes only.
 
-import { startUsageNext } from "../wizards/expense-split.ts";
-import { settingsNext, settingsReset, settingsSteps } from "../wizards/expense-split/settings.ts";
+import { startUsageNext } from "../app/expense-split.ts";
+import { settingsNext, settingsReset, settingsSteps } from "../app/expense-split/settings.ts";
 import { loadSettings, saveSettings } from "../src/settings.ts";
 
 // Fail the test when a condition misses.

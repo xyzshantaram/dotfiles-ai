@@ -332,9 +332,9 @@ async function runShareVerb(args: string[]): Promise<void> {
 // non zero. Dispatch verbs run in a subprocess; the rest run here.
 async function main(args: string[]): Promise<void> {
   const [verb, ...rest] = args;
-  if (verb === "gather") await dispatch("../wizards/gatherer.ts", rest);
+  if (verb === "gather") await dispatch("./gatherer.ts", rest);
   else if (verb === "validate") await dispatch("./validate.ts", rest);
-  else if (verb === "wizard") await dispatch("../wizards/expense-split.ts", rest);
+  else if (verb === "wizard") await dispatch("../app/expense-split.ts", rest);
   else if (verb === "push") await runPushVerb(rest);
   else if (verb === "aggregate") await runAggregateVerb(rest);
   else if (verb === "share") await runShareVerb(rest);

@@ -1,5 +1,5 @@
 // Real push logic behind the browser push steps. Ported from
-// wizards/pusher.ts: env discovery, cached-token auth, name mapping,
+// the deleted wizards/pusher.ts: env discovery, cached-token auth, name mapping,
 // cutoff filtering, per-order push with fingerprint dedup, the
 // failPush path, the aggregate fallback, and archiveRun. The module
 // holds one push session in memory between renders, like connect.ts
@@ -240,7 +240,7 @@ export async function prepareSource(
 }
 
 // Fetch a friend's share link, save the import under the state root,
-// and stage it for the push flow. Ported from wizards/meta.ts
+// and stage it for the push flow. Ported from the deleted wizards/meta.ts
 // pushTheirs, minus the log lines: the link, the key fragment, and the
 // plaintext never reach any log. `fetchFn` stands in for fetchShareLink
 // in tests so no network call happens.

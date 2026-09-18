@@ -7,7 +7,8 @@
     "@std/assert": "jsr:@std/assert@^1.0.19"
   },
   "tasks": {
-    "check": "deno check --no-lock scripts/*.ts src/*.ts wizards/*.ts wizards/expense-split/*.ts",
+    "start": "deno run --no-lock -A app/expense-split.ts",
+    "check": "deno check --no-lock scripts/*.ts scripts/dev/*.ts src/*.ts app/*.ts app/expense-split/*.ts",
     "test": "deno test --no-lock --allow-read --allow-write --allow-env --allow-sys --allow-run tests/",
     "test:fixtures": "bash tests/run.sh",
     "dev": "deno run --no-lock -A"

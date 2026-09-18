@@ -1,5 +1,5 @@
 // Pure push loop with no session store and no file writes. The wizard
-// adapter in wizards/expense-split/push-engine.ts reads the session,
+// adapter in app/expense-split/push-engine.ts reads the session,
 // calls runPush, then performs the I/O: saving fingerprints, writing
 // the aggregate file, archiving the run, and storing the outcome.
 import { fmtRs, formatMoney, type SplitEntry } from "./common.ts";

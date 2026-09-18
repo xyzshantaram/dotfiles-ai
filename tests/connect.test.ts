@@ -1,11 +1,7 @@
 // Tests for the browser wizard Splitwise key check. A fake IdentityApi
 // stands in for SplitwiseAPI, so no network call happens. Each test uses
 // a fresh session id, so sign-in state never leaks across tests.
-import {
-  currentSignedInAs,
-  type IdentityApi,
-  verifyKey,
-} from "../wizards/expense-split/connect.ts";
+import { currentSignedInAs, type IdentityApi, verifyKey } from "../app/expense-split/connect.ts";
 import { fullName } from "../src/splitwise.ts";
 
 // Fail the test when a condition misses.

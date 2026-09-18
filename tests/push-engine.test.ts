@@ -10,10 +10,10 @@ import {
   pushSessionFor,
   resetPush,
   resolveNamePicks,
-} from "../wizards/expense-split/push-engine.ts";
+} from "../app/expense-split/push-engine.ts";
 import { loadPushed } from "../src/splitwise.ts";
 import { pushedFilePath, splitwiseEnvPath } from "../src/paths.ts";
-import { pushSteps, sourceStep } from "../wizards/expense-split/push.ts";
+import { pushSteps, sourceStep } from "../app/expense-split/push.ts";
 
 // Fail the test when a condition misses.
 function assert(cond: boolean, msg: string): void {
@@ -693,7 +693,7 @@ Deno.test("the push session prepared under A does not serve B", async () => {
     fileB,
     JSON.stringify(doc(["Cara", "Dev"])),
   );
-  const { pushSessionFor } = await import("../wizards/expense-split/push-engine.ts");
+  const { pushSessionFor } = await import("../app/expense-split/push-engine.ts");
   const srcA = await prepareSource("iso-push-A", "Split JSON file", "", fileA);
   assert(srcA.ok, "A source loads");
   const srcB = await prepareSource("iso-push-B", "Split JSON file", "", fileB);

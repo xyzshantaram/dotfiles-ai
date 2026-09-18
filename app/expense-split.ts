@@ -1,6 +1,6 @@
 #!/usr/bin/env -S deno run --no-lock -A
 // Expense split wizard entry. One script, modular steps, meta menu on top.
-// Run it with: deno run --no-lock -A wizards/expense-split.ts
+// Run it with: deno run --no-lock -A app/expense-split.ts
 // Then open http://localhost:8471 in a browser.
 
 import {
@@ -18,7 +18,8 @@ import { resumeStep, routeStatus, splitRunId, splitSteps } from "./expense-split
 import { pushSteps, sourceStep } from "./expense-split/push.ts";
 import { beginOnboarding, settingsSteps } from "./expense-split/settings.ts";
 
-// Menu copy mirrors wizards/meta.ts: titles plus descriptions, same order.
+// Menu copy mirrors the deleted wizards/meta.ts: titles plus
+// descriptions, same order.
 interface MenuItem {
   title: string;
   hint: string;

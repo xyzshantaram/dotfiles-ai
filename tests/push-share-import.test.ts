@@ -7,7 +7,7 @@ import {
   prepareSource,
   pushSessionFor,
   resetPush,
-} from "../wizards/expense-split/push-engine.ts";
+} from "../app/expense-split/push-engine.ts";
 import { stateRoot } from "../src/runstate.ts";
 
 // Fail the test when a condition misses.

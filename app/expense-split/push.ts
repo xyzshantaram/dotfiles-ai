@@ -1,6 +1,6 @@
 // Push wizard steps for the expense-split flow.
 // Source choice, cutoff handling, and the per-order Push/Skip
-// shape come from wizards/pusher.ts. The real push logic lives in
+// shape come from the deleted wizards/pusher.ts. The real push logic lives in
 // push-engine.ts; these steps only show its state and collect choices.
 
 import {

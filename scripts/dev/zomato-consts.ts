@@ -5,8 +5,8 @@
 // Write the config file only with the write flag.
 
 import { $ } from "npm:zx@8.8.5";
-import { stateRoot, zomatoConfigPath } from "../src/paths.ts";
-import { say } from "../src/term.ts";
+import { stateRoot, zomatoConfigPath } from "../../src/paths.ts";
+import { say } from "../../src/term.ts";
 
 // zx escape hatch: use $`cmd args` for shell, e.g. await $`gh auth status`.
 
@@ -247,7 +247,7 @@ if (SELFTEST) {
   // Show usage when the package path is missing.
   if (!packagePath) {
     console.log("Refresh the Zomato constants from an APK.");
-    console.log("Usage: dev-zomato-consts.ts <file.apk|file.xapk> [--write]");
+    console.log("Usage: scripts/dev/zomato-consts.ts <file.apk|file.xapk> [--write]");
     console.log("Download the latest Zomato Android APK from apkmirror.com or apkpure.com.");
     console.log("Without --write the script prints the new values and writes nothing.");
     Deno.exit(1);
