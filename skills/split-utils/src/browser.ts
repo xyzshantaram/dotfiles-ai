@@ -12,9 +12,31 @@
 
 import { type BrowserContext, chromium, type Page } from "npm:playwright@1.57.0";
 
-/** Resolved by the wizard per-OS in production; fixed path for prototyping. */
-export const DEFAULT_CHROMIUM =
-  "/home/sid/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome";
+// THERE IS NO DEFAULT BINARY PATH, deliberately. This module used to export
+// DEFAULT_CHROMIUM, a hardcoded "/home/sid/.cache/ms-playwright/..." path
+// whose own comment called it "fixed path for prototyping". It shipped, and a
+// user on Windows met it as a launch failure naming a stranger's home
+// directory. Any constant naming one machine's filesystem is wrong for every
+// other machine, so the fallback is Playwright's own bundled build, which is
+// reached by passing NO executablePath at all.
+
+/**
+ * The binary strategies this session will try, in order. Pure, so the rule can
+ * be tested without launching a browser: the defect this replaced shipped past
+ * a 334-test suite precisely because the decision lived inside a launch call
+ * that no test could reach.
+ *
+ * "bundled" means Playwright's own download, selected by passing no
+ * executablePath. It is ALWAYS last and always present, because it is the only
+ * strategy that needs nothing configured on the machine.
+ */
+export function binaryOrder(
+  opts: Pick<SessionOptions, "executablePath" | "channel">,
+): ("explicit" | "channel" | "bundled")[] {
+  if (opts.executablePath !== undefined) return ["explicit"];
+  if (opts.channel !== undefined) return ["channel", "bundled"];
+  return ["bundled"];
+}
 
 export interface SessionOptions {
   profileDir: string;
@@ -90,7 +112,13 @@ export async function openSession(opts: SessionOptions): Promise<Session> {
           deviceScaleFactor: opts.deviceScaleFactor ?? 2.625,
         }
         : {}),
-      executablePath: opts.executablePath ?? DEFAULT_CHROMIUM,
+      // Only set executablePath when the caller actually named one. Omitting
+      // the key is what selects the bundled build; passing undefined would be
+      // the same, but the old code passed a fallback constant here, which
+      // silently overrode a resolver that had correctly answered "not found".
+      ...(opts.executablePath !== undefined
+        ? { executablePath: opts.executablePath }
+        : {}),
       ...(opts.executablePath === undefined && opts.channel !== undefined
         ? { channel: opts.channel }
         : {}),
@@ -102,9 +130,28 @@ export async function openSession(opts: SessionOptions): Promise<Session> {
         : {}),
       ...extra,
     });
-  // Binary order: explicit path first, branded channel next, bundled
-  // build last. A missing channel install falls back instead of
-  // failing, so Windows and macOS without Chrome keep working.
+  // Binary order: explicit path first, branded channel next, bundled build
+  // last. The comment said exactly this before, and the code did not do it:
+  // both "fallback" branches launched a hardcoded Linux path instead of the
+  // bundled build, so the promise that "Windows and macOS without Chrome keep
+  // working" was false for the one case it named. Launching with NO
+  // executablePath is what uses Playwright's own download, and it is the only
+  // branch that can work on a machine nobody configured.
+  const bundled = async () => {
+    try {
+      return await launch({});
+    } catch (err) {
+      // Criterion 5: say what was tried and what to install. The old failure
+      // named a path the user had never heard of, on a machine that could
+      // never have had it.
+      const tried = binaryOrder(opts).join(", then ");
+      throw new Error(
+        `No usable Chromium. Tried: ${tried}. The last step uses Playwright's ` +
+          `own browser, which is installed with \`deno run -A npm:playwright install chromium\`. ` +
+          `Original error: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  };
   let ctx;
   if (opts.executablePath !== undefined) {
     ctx = await launch({ executablePath: opts.executablePath });
@@ -112,10 +159,10 @@ export async function openSession(opts: SessionOptions): Promise<Session> {
     try {
       ctx = await launch({ channel: opts.channel });
     } catch {
-      ctx = await launch({ executablePath: DEFAULT_CHROMIUM });
+      ctx = await bundled();
     }
   } else {
-    ctx = await launch({ executablePath: DEFAULT_CHROMIUM });
+    ctx = await bundled();
   }
   if (opts.maskWebdriver !== false) {
     // Playwright leaves navigator.webdriver === true; every bot
