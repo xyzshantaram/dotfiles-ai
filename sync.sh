@@ -182,14 +182,13 @@ step_write_web_patch() {
       name: $HERE/plugins/profiles.js
     - id: resume-command
       name: $HERE/plugins/resume.js
-    # ast_grep and ast_edit: structural search and rewrite over the packaged
-    # ast-grep engine. The row id matches the plugin's own cordis.patch.yml,
-    # so the upstream docs apply to this deployment unchanged. Ungated on
-    # purpose: ast_edit previews by default and writes through the same ctx.fs
-    # waterfall as every other write tool, so the observation watermark,
-    # version guard and sandbox policy already govern it.
-    - id: hy-sde-ast-tool-ast
-      name: '@hy-sde-org/dsh-tool-ast'
+    # NO ROW FOR ast_grep / ast_edit, deliberately. @hy-sde-org/dsh-tool-ast
+    # declares dsh.bundle.patch, so installing it self-mounts the row
+    # hy-sde-ast-tool-ast. An insert row here would carry the SAME id and boot
+    # would throw "duplicate loader entry id" -- the failure this file already
+    # records four times (command-compact, remote, ui-user-questions, tools).
+    # If caps ever need changing, use a top-level OVERRIDE row by id, the way
+    # the remote row does. Never an insert row.
     # The cordis_* tools, gated behind the two cordis skills via context-guard.
     - id: tool-cordis
       name: '@deepseek-ai/dsh-tool-cordis'
