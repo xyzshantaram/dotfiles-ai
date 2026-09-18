@@ -467,6 +467,31 @@ export function readNextUrl(response: unknown): string | null {
 }
 
 /**
+ * Wait times for a rate-limited retry, in milliseconds (#189).
+ *
+ * A history listing is one request per page, but a DETAIL pass is one request
+ * per order, so a long window sends hundreds in a burst. Blinkit answered 135
+ * of 162 with HTTP 429 and the run still printed "Saved 27 orders". Zepto
+ * already treats 429 as a stop condition with its own message; Blinkit had no
+ * handling at all, which is the same asymmetry that produced the paging bug.
+ *
+ * Pure so the policy can be read and tested without waiting. Growing waits
+ * because a fixed short retry against a throttle is just more throttling, and
+ * a cap because a human is watching the run.
+ */
+export function retryDelays(): number[] {
+  return [2_000, 5_000, 15_000];
+}
+
+/**
+ * True when a status means "you are going too fast" rather than "this failed".
+ * A throttle is worth waiting out. A 404 is not.
+ */
+export function isThrottled(status: number): boolean {
+  return status === 429 || status === 503;
+}
+
+/**
  * Run one paging loop and return why it stopped, never a bare list.
  * The trap it closes is a loop that ends calmly with no reason said.
  */

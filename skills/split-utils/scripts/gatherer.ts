@@ -15,7 +15,9 @@ import { loadSettings } from "../src/settings.ts";
 import { createRunLog, type RunLog } from "../src/log.ts";
 import { detectDrift, driftMessage, type FailureEvent } from "../src/drift.ts";
 import {
+  isThrottled,
   readNextUrl,
+  retryDelays,
   isBlockedStatus,
   openSession,
   pageFetch,
@@ -25,6 +27,7 @@ import {
   waitFor,
 } from "../src/browser.ts";
 import type { Order } from "../src/common.ts";
+import { readCachedDetail, writeCachedDetail } from "../src/ordercache.ts";
 import { renderTree } from "../src/render.ts";
 import {
   checkBalance as checkZepto,
@@ -1069,18 +1072,38 @@ async function gatherBlinkit(
   logInfo("blinkit list holds " + listed.length + " orders");
   // Fetch each bill and map it to the shared schema.
   let n = 0;
+  // Counted so a partial run SAYS it is partial. The failures list alone does
+  // not: it surfaces only through reportZeroBills and drift matching (#189).
+  let dropped = 0;
+  let fromCache = 0;
+  let throttled = 0;
+  let consecutiveThrottled = 0;
   for (const o of listed) {
     n += 1;
     lineStart("Blinkit order " + n + " of " + listed.length + ": " + o.orderId);
     try {
-      const res = await pageFetch(
-        page,
-        "https://blinkit.com/v1/layout/order_details/" +
-          o.orderId +
-          "?cart_id=" +
-          o.cartId,
-        { method: "POST", headers },
-      );
+      const detailUrl = "https://blinkit.com/v1/layout/order_details/" +
+        o.orderId + "?cart_id=" + o.cartId;
+      // DO NOT REFETCH WHAT WE ALREADY HAVE. A delivered order's bill does not
+      // change, so a second gather over the same window sends no detail
+      // requests at all, and a run cut short by a throttle RESUMES instead of
+      // starting over. That is what turns a rate limit from a wall into a
+      // delay, and it is better than backing off alone, which only makes one
+      // run slower while leaving the next one just as expensive (#189).
+      const cached = readCachedDetail("blinkit", o.orderId);
+      let res = cached !== null
+        ? { status: 200, text: cached }
+        : await pageFetch(page, detailUrl, { method: "POST", headers });
+      if (cached !== null) fromCache += 1;
+      for (const waitMs of retryDelays()) {
+        if (cached !== null || !isThrottled(res.status)) break;
+        throttled += 1;
+        if (throttled === 1) {
+          say("Blinkit is rate limiting us. Slowing down and retrying.");
+        }
+        await page.waitForTimeout(waitMs);
+        res = await pageFetch(page, detailUrl, { method: "POST", headers });
+      }
       logInfo("blinkit detail " + o.orderId + " answers " + res.status);
       if (res.status !== 200) {
         failures.push({
@@ -1090,8 +1113,30 @@ async function gatherBlinkit(
           detail: "detail failed for " + o.orderId,
         });
         lineEnd("failed.");
+        dropped += 1;
+        if (isThrottled(res.status)) {
+          consecutiveThrottled += 1;
+          // Stop rather than hammer. Continuing past a persistent throttle
+          // makes it last longer and fails every remaining order anyway.
+          if (consecutiveThrottled >= 5) {
+            say(
+              "Blinkit kept rate limiting after retries. Stopping with " +
+                (listed.length - n) + " orders unfetched. Wait a while, then gather again.",
+            );
+            failures.push({
+              platform: "blinkit",
+              kind: "http",
+              status: res.status,
+              detail: "stopped after 5 consecutive throttled details; " +
+                (listed.length - n) + " orders unfetched",
+            });
+            break;
+          }
+        }
         continue;
       }
+      consecutiveThrottled = 0;
+      if (cached === null) writeCachedDetail("blinkit", o.orderId, res.text);
       const data = JSON.parse(res.text) as {
         response?: { snippets?: Array<Record<string, unknown>> };
       };
@@ -1191,7 +1236,20 @@ async function gatherBlinkit(
   ) {
     notes.push(reportZeroBills("blinkit", failures));
   }
-  step("Blinkit done: " + orders.length + " orders.");
+  // A partial run must SAY it is partial. "Blinkit done: 27 orders" was
+  // printed for a run that dropped 135 to rate limiting (#189).
+  if (dropped > 0) {
+    say(
+      "Blinkit fetched " + orders.length + " of " + listed.length +
+        " listed orders. " + dropped + " could not be fetched" +
+        (throttled > 0 ? " (rate limited)" : "") +
+        ". Run gather again to pick up the rest: the ones already fetched are cached.",
+    );
+  }
+  step(
+    "Blinkit done: " + orders.length + " orders" +
+      (fromCache > 0 ? " (" + fromCache + " from cache)" : "") + ".",
+  );
   return { orders, shots, notes };
 }
 
