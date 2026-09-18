@@ -522,3 +522,97 @@ Deno.test("f6 drafts resume on gathered run primes the pick screen", async () =>
     restoreEnv(saved);
   }
 });
+
+// One order with five 10.00 items and no fees.
+const FIVE_ITEM_ORDERS = [{
+  id: "o5",
+  platform: "swiggy",
+  date: "2026-09-01 10:00 AM",
+  paid: 50,
+  items: [
+    { name: "Pizza", price: 10, quantity: 1 },
+    { name: "Pasta", price: 10, quantity: 1 },
+    { name: "Salad", price: 10, quantity: 1 },
+    { name: "Juice", price: 10, quantity: 1 },
+    { name: "Cake", price: 10, quantity: 1 },
+  ],
+  fees: { delivery: 0, packaging: 0 },
+}];
+
+// Build a run dir holding the five item order plus a split state.
+function fiveItemRun(
+  prefix: string,
+  assignments: Record<string, unknown>,
+  skipped: Record<string, boolean>,
+): string {
+  const root = Deno.makeTempDirSync({ prefix });
+  const dir = root + "/run";
+  Deno.mkdirSync(dir, { recursive: true });
+  Deno.writeTextFileSync(dir + "/orders.json", JSON.stringify(FIVE_ITEM_ORDERS) + "\n");
+  Deno.writeTextFileSync(
+    dir + "/split-state.json",
+    JSON.stringify({ people: ["Ann", "Ben"], payer: "Ann", assignments, skipped }) + "\n",
+  );
+  Deno.writeTextFileSync(dir + "/meta.json", JSON.stringify({ status: "gathered" }) + "\n");
+  return dir;
+}
+
+// One equal assignment across both people.
+function equalPair(): Record<string, unknown> {
+  return { splitType: "equal", people: ["Ann", "Ben"], amounts: { Ann: 5, Ben: 5 } };
+}
+
+// The export gate counted the lines after the first open one, not the
+// open ones. Four of five assigned with the gap at index 0 reported all
+// five as waiting.
+Deno.test("export names the real number of open lines, not the tail after the first gap", () => {
+  const saved = saveEnv();
+  try {
+    const dir = fiveItemRun("f6-open-count-", {
+      "1": equalPair(),
+      "2": equalPair(),
+      "3": equalPair(),
+      "4": equalPair(),
+    }, {});
+    const m = new Map<string, string[]>([
+      ["run", [dir]],
+      ["resume", ["Continue where you left off?"]],
+    ]);
+    // itemStep opens the split session that exportStep reads.
+    itemStep(m, { sessionId: "t-open-count" });
+    const out = exportStep(m, { sessionId: "t-open-count" });
+    assert(out.id === "split-export", "export step found");
+    const body = stepText(out);
+    assert(body.includes("still waits"), "holds the screen, got: " + body);
+    assert(body.includes("1 item still waits."), "names one open line, got: " + body);
+    assert(!body.includes("5 items"), "does not count the settled lines as waiting");
+  } finally {
+    restoreEnv(saved);
+  }
+});
+
+// A skipped line is settled. With the only gap skipped, the export must
+// run rather than hold the screen.
+Deno.test("export treats a skipped line as settled", () => {
+  const saved = saveEnv();
+  try {
+    const dir = fiveItemRun("f6-skip-settles-", {
+      "1": equalPair(),
+      "2": equalPair(),
+      "3": equalPair(),
+      "4": equalPair(),
+    }, { "0": true });
+    const m = new Map<string, string[]>([
+      ["run", [dir]],
+      ["resume", ["Continue where you left off?"]],
+      ["dry", ["dry"]],
+    ]);
+    itemStep(m, { sessionId: "t-skip-settles" });
+    const out = exportStep(m, { sessionId: "t-skip-settles" });
+    const body = stepText(out);
+    assert(body.includes("Split dry run"), "the export ran, got: " + body);
+    assert(!body.includes("still wait"), "no waiting message, got: " + body);
+  } finally {
+    restoreEnv(saved);
+  }
+});

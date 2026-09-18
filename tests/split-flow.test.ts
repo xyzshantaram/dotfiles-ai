@@ -29,6 +29,7 @@ import {
   shareEqual,
   sharePercent,
   shareSingle,
+  skipSettles,
 } from "../app/expense-split/split-board.js";
 import type { Node } from "jsr:@xyzshantaram/wizardkit@^0.1.0";
 import type { Order } from "../src/common.ts";
@@ -1327,4 +1328,20 @@ Deno.test("resume question names progress and keeps both choices", async () => {
     typeof option === "string" ? option : (option as Record<string, unknown>)["value"]
   );
   assertEquals(options, ["Continue where you left off?", "Start over"]);
+});
+
+// A skipped line carries no people, so the board used to refuse to save
+// it and refused to advance. Enter looked dead and the skip looked lost.
+Deno.test("a skipped line with nobody ticked needs no assignment", () => {
+  assertEquals(skipSettles({ "3": true }, 3, 0), true, "skipped and untouched settles");
+});
+
+Deno.test("ticking a person on a skipped line still saves", () => {
+  assertEquals(skipSettles({ "3": true }, 3, 1), false, "a ticked person wins over the skip");
+});
+
+Deno.test("an unskipped line still needs an assignment", () => {
+  assertEquals(skipSettles({}, 3, 0), false, "no skip means no free pass");
+  assertEquals(skipSettles({ "3": false }, 3, 0), false, "a cleared skip means no free pass");
+  assertEquals(skipSettles({ "4": true }, 3, 0), false, "another line's skip does not count");
 });

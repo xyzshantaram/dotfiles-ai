@@ -182,6 +182,23 @@ function evenPercents(ticked) {
   return out;
 }
 
+// True when a line needs no assignment because the reader skipped it.
+// A skip is a decision, so leaving the line and pressing Enter must both
+// accept it. Without this the board asked for people on a skipped line,
+// which refused to advance and left the skip looking broken.
+// Ticking a person on a skipped line means the reader changed their
+// mind, so that case saves as usual and the save clears the skip.
+/**
+ * @param {Record<string, unknown>} skipped
+ * @param {number} index
+ * @param {number} tickedCount
+ * @returns {boolean}
+ */
+export function skipSettles(skipped, index, tickedCount) {
+  if (skipped === null || typeof skipped !== "object") return false;
+  return skipped[String(index)] === true && tickedCount === 0;
+}
+
 // Repeat one saved assignment onto a new price. Drop unknown names first.
 // Fall back to saved names when none survive. Return null when nobody remains.
 // Recompute amounts with the share helpers.
@@ -500,6 +517,11 @@ function boot(host, data) {
   // A saved line leaves the skip map, so the server drops the skip.
   // A successful save clears the notice line.
   function saveCurrent() {
+    // A skipped line is already settled, so it needs no people.
+    if (skipSettles(skipped, current, draftFor(current).ticked.length)) {
+      noticeLine.textContent = "";
+      return true;
+    }
     const made = draftAssignment();
     if (made === null) return false;
     const key = String(current);

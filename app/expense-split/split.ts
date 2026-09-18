@@ -880,15 +880,19 @@ export function exportStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
     s.doc.skipped,
   );
   if (!s.exported && done < s.flat.length) {
+    // Count the open lines. `done` is the index of the first open line,
+    // not a count of settled ones, so subtracting it from the total
+    // reported every later line as waiting whenever an early line was
+    // still open.
+    const left = countSplitProgress(s.flat.length, s.doc).waiting;
     return {
       ...step(
         "split-export",
         "Export",
         [
           markdown(
-            "Finish the split items first. " +
-              (s.flat.length - done) +
-              " items still wait.",
+            "Finish the split items first. " + left + " " + itemWord(left) +
+              (left === 1 ? " still waits." : " still wait."),
           ),
         ],
         "Go back and split every remaining item, then return here.",
