@@ -1,3 +1,10 @@
+/// <reference lib="dom" />
+// The reference above is needed because a few helpers below pass a
+// callback to page.evaluate. That callback runs inside the browser, so
+// it reads document and the window globals. This file used to type
+// check only by luck: another module in the same run happened to pull
+// the DOM types in, and the moment it was checked on its own it failed.
+//
 // Shared, stateless browser helpers for the delivery-site gatherers.
 // Every function takes the page/context it operates on; no module state.
 // Site-specific knowledge (auth header names, API paths) stays in each

@@ -119,7 +119,22 @@ from pinned CDN URLs, and the push work is a callable core in `src/pushcore.ts`.
 - [ ] W13 rework the split-utils readme. An AI harness user pastes one prompt and is set up; a
       reader without a harness gets plain instructions for running the app alone. The Windows path
       says how to open a terminal, for a reader who has never opened one. Eval: a reader with no
-      prior context reaches a working run by either route.
+      prior context reaches a working run by either route. wizardkit 0.1.0 is published at
+      https://jsr.io/@xyzshantaram/wizardkit. split-utils imports it from JSR with no local mapping
+      left. Three facts came out of publishing, and W9 must carry all three.
+
+`deno publish --dry-run` is not proof. It passed three times while the real publish failed twice.
+The global types check and the module graph build both run on the server only.
+
+A published package may not augment another module's types, and a `@jsxImportSource` pragma must
+name a specifier that resolves on its own, because JSR does not apply the package import map when it
+resolves one. Element names Preact does not know now live in `src/elements.ts` as typed bindings,
+which needs neither.
+
+Deno refuses a JSR version younger than 24 hours by default. Right after a wizardkit release, a
+consumer needs `--min-dep-age=0` until the version ages. This bites a raw URL run of split-utils,
+which carries no config to set the policy in.
+
 - [ ] W6 the wizard skill ships one file that imports the JSR package. Eval: the template runs from
       a directory holding nothing else.
 - [ ] W7 the split-utils skill, as a thin router, with the three push paths, the safety contract and
