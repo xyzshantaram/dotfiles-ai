@@ -190,6 +190,7 @@ import { resolveBashTab, chainPanelRows, sequenceUnitDiagramModel } from "./bash
 // component, which stays mounted nowhere but stays compiling until stage
 // two deletes it with the module.
 import { renderOne } from "./bash-graph/render";
+import { swapIcons } from "./bash-graph/icons";
 import { cardAvail } from "./bash-graph/constants";
 import { PIPE_GLYPH_SYMBOL } from "./bash-graph/primitives";
 import bashGraphCss from "./bash-graph/styles.css";
@@ -1293,10 +1294,10 @@ function escalationBanner(detail, settled) {
 // mounts the pipe-glyph symbol once (the <use href="#pipe-glyph"> tags
 // resolve against it) plus one div per panel, and delegates clicks: any
 // [data-hd] or [data-arg] button toggles its matching hidden block below
-// the panel. Icons otherwise degrade to their text fallbacks: no lucide
-// swap pass exists yet (the old diagram had no icons at all), and the
-// measurer already reserves the icon space structurally, so a later swap
-// cannot move text.
+// the panel. The lucide swap pass (swapIcons, #184) fills every known
+// <i data-lucide> placeholder with its real svg AFTER measurement, so the
+// structurally reserved icon space is what renders and no row reflows; the
+// pipe <use> art carries no data-lucide and passes through untouched.
 var BASH_GRAPH_MAX_COMMAND = 20000;
 var BASH_GRAPH_CACHE_LIMIT = 200;
 var bashGraphCache = new Map();
@@ -1358,12 +1359,16 @@ export function getBashGraphPanels(command, pipeStages) {
   var idx = bashGraphNextIdx;
   var result = renderOne(idx, command, scan, engines, pipeStages);
   bashGraphNextIdx = idx + 1;
+  // #184: fill the lucide placeholders after measurement (swapIcons keeps
+  // data-lucide on the svg, so any re-read still charges the icon reserve).
+  // The swapped strings are what the cache stores, so every mount agrees.
+  var panelsHTML = result.panelsHTML.map(function (html) { return swapIcons(html); });
   if (bashGraphCache.size >= BASH_GRAPH_CACHE_LIMIT) {
     var oldest = bashGraphCache.keys().next();
     if (!oldest.done) bashGraphCache.delete(oldest.value);
   }
-  bashGraphCache.set(key, result.panelsHTML);
-  return result.panelsHTML;
+  bashGraphCache.set(key, panelsHTML);
+  return panelsHTML;
 }
 
 /** Toggle one heredoc/arg expand block from its button. Exported for the wiring test. */

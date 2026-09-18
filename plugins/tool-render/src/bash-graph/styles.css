@@ -221,26 +221,26 @@ button.prim-node[aria-expanded="true"]{border-color:var(--dsw-alias-label-second
    cards. Only the path changed (fill -> 2-unit round stroke). */
 .prim-edge{fill:none;stroke:var(--dsw-alias-label-tertiary);stroke-width:1.5;}
 /* ---- diagram-only helpers (candidate one-offs, see NOTES.md) ---- */
-.panel-scroll{overflow-x:scroll;scrollbar-width:thin;
+.panel-scroll{overflow-x:auto;scrollbar-gutter:stable;scrollbar-width:thin;
   scrollbar-color:var(--dsw-alias-border-l3) var(--dsw-alias-border-l2);}
-/* R9B/R10.8 (owner decision: option 2 — always visible, styled). The
-   horizontal track is permanently present (~8px: thin in Firefox, 8px in
-   WebKit) so a row never changes height when its content starts or stops
-   overflowing — layout stability worth 8px per scroll container. R10.8:
-   the track token moved border-l1 -> border-l2 because a DISABLED
-   (nothing-to-scroll) bar paints track-only, and l1 on bg-base is near
-   invisible in both themes — the page paid the gutter everywhere while
-   showing a track nowhere. l2 stays a border token, readable against the
-   panel field in both themes and distinct from the l3 thumb. The old
-   unconditional padding-bottom:.25rem is gone (4px x every container for
-   nothing): with a permanent gutter the track itself is the separation.
-   All colours are existing theme tokens, so light and dark follow with no
-   hardcoded grey; radii reuse the .25rem chip step. Firefox (the owner's
+/* R9B/R10.8 REVERSED BY THE OWNER (#184, seen in production): the permanent
+   track read as noise, so bars now appear only while content overflows
+   (overflow-x:auto) instead of always (overflow-x:scroll). The earlier
+   tradeoff has NOT gone away: when a bar appears the row needs ~8px of
+   track height (thin in Firefox, 8px in WebKit), so without a counter the
+   layout would jump as content starts and stops overflowing. The counter is
+   scrollbar-gutter:stable: the gutter space stays reserved whether or not
+   the bar paints, so row height is constant and only paint comes and goes.
+   Support is broad (Firefox 97+, Chromium 94+, Safari 18.2+); an engine
+   without it falls back to plain auto behaviour, i.e. the row grows ~8px
+   while overflowing and shrinks back after. The R10.8 token reasoning
+   stands: the track paints border-l2 (readable against the panel field in
+   both themes, distinct from the l3 thumb), never l1. Firefox (the owner's
    browser) is styled by the base rule above — scrollbar-width/color — NOT
-   by the WebKit pseudos below; the two APIs do not overlap, so neither
-   engine is an afterthought. Vertical overflow stays auto: content always
-   fits by construction, so no vertical bar appears and no vertical slack
-   is introduced by this rule. */
+   by the WebKit pseudos below; the two APIs do not overlap, so styling only
+   the WebKit side would change nothing for them. Vertical overflow stays
+   auto: content always fits by construction, so no vertical bar appears and
+   no vertical slack is introduced by this rule. */
 .panel-scroll::-webkit-scrollbar{height:8px;}
 .panel-scroll::-webkit-scrollbar-track{background:var(--dsw-alias-border-l2);border-radius:.25rem;}
 .panel-scroll::-webkit-scrollbar-thumb{background:var(--dsw-alias-border-l3);border-radius:.25rem;}
