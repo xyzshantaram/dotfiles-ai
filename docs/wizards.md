@@ -34,9 +34,13 @@ files without usage read fine, and unknown usage values fall back to absent.
 
 ## State layout
 
-Root: `<repo>/state` resolved from each module's own `import.meta.url`. The env var
-`SPLIT_UTILS_STATE=<dir>` overrides the whole root for tests and for the shipped OS-data-dir layout
-(T13).
+Root: the per-user data dir, `<data>/split-utils`. `@cross/dir` resolves `<data>` per platform:
+`~/.local/share` on Linux, `~/Library/Application Support` on macOS, `%APPDATA%` on Windows. The env
+var `SPLIT_UTILS_STATE=<dir>` overrides the whole root, which is what the tests use and what a
+checkout uses to keep its data separate.
+
+The root must never come from `import.meta.url`. A module loaded from a URL has no directory of its
+own, so that resolved to `/` and left the raw-URL run with nowhere to write.
 
 - `share/runs/<runId>/` — one gather-to-push cycle.
   - `meta.json` — the run record (shape below).

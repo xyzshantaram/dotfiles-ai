@@ -753,7 +753,10 @@ export function itemStep(m: Map<string, string[]>, ctx?: WizardCtx): Step {
 // Run the output validator over a written output.json. Mirrors the old
 // flow: a failure is a bug, so the export step shows it and blocks.
 function runValidatorSync(outPath: string): { ok: boolean; output: string } {
-  const script = new URL("../../scripts/validate.ts", import.meta.url).pathname;
+  // Keep href, not pathname. deno run takes a URL, and href holds the
+  // remote base when this module itself came from a URL. pathname drops
+  // it and names a local file that is not there.
+  const script = new URL("../../scripts/validate.ts", import.meta.url).href;
   try {
     const res = new Deno.Command(Deno.execPath(), {
       args: ["run", "--no-lock", "--allow-read", script, outPath],

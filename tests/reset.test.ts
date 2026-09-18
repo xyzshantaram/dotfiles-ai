@@ -72,38 +72,3 @@ Deno.test("reset targets all sit inside the state root", async () => {
     assert(path === live || path.startsWith(live + "/"), "target sits inside root: " + path);
   }
 });
-
-// A reset must clear the old cache copies too. The move forward copies
-// whichever one survives back into the state root on the next read, so
-// a reset that spares them undoes itself and the user stays signed in.
-Deno.test("factory reset clears the legacy credential files", async () => {
-  const base = await Deno.makeTempDir({ dir: "/tmp", prefix: "reset-legacy-" });
-  const home = base + "/home";
-  const root = base + "/state";
-  await Deno.mkdir(home + "/.cache/ordersplit", { recursive: true });
-  await Deno.mkdir(root + "/config", { recursive: true });
-  const oldToken = home + "/.cache/ordersplit/splitwise_token.json";
-  await Deno.writeTextFile(oldToken, '{"oauth_token":"t","oauth_token_secret":"s"}');
-  const priorHome = Deno.env.get("HOME");
-  Deno.env.set("HOME", home);
-  Deno.env.set("SPLIT_UTILS_STATE", root);
-  try {
-    const { factoryReset } = await import("../src/reset.ts");
-    const removed = await factoryReset();
-    if (!removed.includes(oldToken)) {
-      throw new Error("the removed list does not name the legacy token file");
-    }
-    let stillThere = true;
-    try {
-      await Deno.stat(oldToken);
-    } catch {
-      stillThere = false;
-    }
-    if (stillThere) throw new Error("the legacy token file survived the reset");
-    // A second run must stay quiet rather than throw on the missing file.
-    await factoryReset();
-  } finally {
-    if (priorHome !== undefined) Deno.env.set("HOME", priorHome);
-    await Deno.remove(base, { recursive: true }).catch(() => {});
-  }
-});

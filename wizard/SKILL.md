@@ -125,6 +125,7 @@ Scripts read their port from `WIZARD_PORT` with a plain fallback:
 const port = Number(Deno.env.get("WIZARD_PORT") ?? 8471);
 ```
 
-The package's `install` entry point automates all three (`--app`, `--version`, `--scope`, `--dest`,
-`--dry`). Its `install.sh` ensures Deno, then runs the installer from JSR. Updates mean reinstalling
-the same command. Icons ride `assets/icon.png` by convention.
+The package's `install` entry point automates all three (`--app`, `--version`, `--scope`, `--dry`).
+Set `DENO_INSTALL_ROOT` to install somewhere else. Its `install.sh` ensures Deno, then runs the
+installer from JSR. Updates mean reinstalling the same command. Icons ride `assets/icon.png` by
+convention.

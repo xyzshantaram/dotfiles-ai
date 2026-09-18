@@ -206,8 +206,23 @@ later, and the next app does not pay the same cost.
 - The terminal era is over. One script still runs from a shell, `wizards/gatherer.ts`, and it takes
   machine modes only. `wizards/dev-zomato-consts.ts` is a dev tool that takes an APK path. mepcli,
   exotui, crayon and cliffy are gone, and zx stays because wizard authors run bash through it.
-- State paths all resolve through src/paths.ts and honour `SPLIT_UTILS_STATE`. Token and login state
-  reads keep two fixed repo paths on purpose, as the later entries of a migration chain.
+- State paths all resolve through src/paths.ts and honour `SPLIT_UTILS_STATE`. With no override the
+  root is `<data>/split-utils`, where `<data>` comes from `@cross/dir`. That is the only portable
+  answer: hand-rolling `~/.local/share` would have been Linux only, as the user pointed out on
+  2026-09-18.
+- No path may derive from `import.meta.url`. A module loaded from a URL has no directory of its own,
+  so `new URL("../state/", import.meta.url).pathname` resolved to `/state` and the headline raw-URL
+  run had nowhere to write. Proven by importing src/paths.ts over http on 2026-09-18. The same fault
+  hid in `src/log.ts` (logs dir), `src/zomato.ts` (two login-state fallbacks) and
+  `wizards/expense-split/split.ts` (the validator path, which took `.pathname` where `.href` is
+  correct). Use `.href` when the target is a module to run or fetch, and paths.ts when it is data.
+- `@cross/dir` is async, and the path accessors cannot be: call sites include `Deno.statSync`,
+  `Deno.readDirSync` and `Deno.readTextFileSync`, and `loadConfig` in src/zomato.ts is sync. So
+  src/paths.ts resolves the data dir once with a top level await and keeps every accessor sync. That
+  avoids an init step a caller could forget.
+- All migration code is gone as of 2026-09-18, by the user's call: the repo is days old and has no
+  installed base to carry. `migrateIfMissing`, the three `legacy*Path` helpers, the old cache reads
+  and their two tests were deleted rather than retargeted.
 - Splitwise facts (verified Sep 2026): app registration at secure.splitwise.com/apps is free and
   yields a personal API key. Free accounts cap at a few expenses a day, so a full push needs Pro on
   one group account.

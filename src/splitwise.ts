@@ -1,8 +1,8 @@
 // Splitwise API v3.0 client on a personal API key, ported from the Python
-// push_to_splitwise.py. Shares its cache locations so existing
-// pushed-tracking work from either implementation.
+// push_to_splitwise.py. Its files live under the state root, like every
+// other file this app writes. The Python tool kept its own copies.
 
-import { legacyPushedFilePath, migrateIfMissing, pushedFilePath, tokenFilePath } from "./paths.ts";
+import { pushedFilePath, tokenFilePath } from "./paths.ts";
 
 export { pushedFilePath, tokenFilePath };
 
@@ -98,7 +98,6 @@ export class SplitwiseAPI {
 
 export async function loadPushed(): Promise<Record<string, number>> {
   try {
-    await migrateIfMissing(pushedFilePath(), legacyPushedFilePath(), true);
     const data = JSON.parse(await Deno.readTextFile(pushedFilePath()));
     return data.pushed ?? {};
   } catch {
@@ -107,7 +106,6 @@ export async function loadPushed(): Promise<Record<string, number>> {
 }
 
 export async function savePushed(pushed: Record<string, number>): Promise<void> {
-  await migrateIfMissing(pushedFilePath(), legacyPushedFilePath(), true);
   await Deno.mkdir(new URL(".", `file://${pushedFilePath()}`), { recursive: true });
   await Deno.writeTextFile(pushedFilePath(), JSON.stringify({ pushed }, null, 2));
 }

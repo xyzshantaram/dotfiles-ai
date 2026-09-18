@@ -2,8 +2,8 @@
 
 This file defines the two JSON files around the splitter. `orders.json` is the gatherer output and
 the splitter input. `output.json` is the splitter output and the AI-agent contract. The TypeScript
-models live in `src/common.ts`. The Tk dashboard in dotfiles-ai is the reference writer of
-`output.json`.
+models live in `src/common.ts`. `buildOutput` in `src/splitengine.ts` is the reference writer of
+`output.json`, and `scripts/validate.ts` is the reference reader.
 
 ## orders.json
 
@@ -16,7 +16,7 @@ models live in `src/common.ts`. The Tk dashboard in dotfiles-ai is the reference
 - `paid`: number. Rupees the buyer paid for the whole order.
 - `items`: array of order items. Each item has `name` (string), `price` (number, the UNIT price in
   rupees), and `quantity` (number). Price can stay zero for free items and can go negative for
-  discounts. The consumer expands quantity into per-unit lines. The dashboard shows one line per
+  discounts. The consumer expands quantity into per-unit lines. The splitter shows one line per
   unit.
 - `fees`: object with `delivery` (number) and `packaging` (number). These fields exist on every
   order. The splitter ignores them. It reads fees from bracketed pseudo-items instead (see below).
@@ -32,10 +32,11 @@ fees into item prices instead of listing them.
 
 ## output.json
 
-`output.json` holds one object with five keys. The dashboard builds it in `_finish_and_export`.
+`output.json` holds one object with five keys. `buildOutput` in `src/splitengine.ts` assembles it.
 
-- `split_at`: string. ISO-8601 UTC timestamp of the export. Sample:
-  `"2026-09-09T11:05:58.278969+00:00"`.
+- `split_at`: string. Timestamp of the export. The writer uses `new Date().toISOString()`. Sample:
+  `"2026-09-09T11:05:58.278Z"`. The validator checks only that it is a string, so another ISO-8601
+  form passes.
 - `people`: non-empty string array. It names every person who shares the cost.
 - `splits`: array of split entries. It holds one entry per assigned item.
 - `totals`: object. Person name maps to rupees assigned across all splits, rounded to 2 decimals.
@@ -49,10 +50,10 @@ Each entry has these keys.
 - `platform`: string. Copied from the source item.
 - `order_id`: string, optional. Platform order id without prefix. It is `""` for legacy rows that
   lack one.
-- `date`: string. Display form `"YYYY-MM-DD h:mm AM/PM"`. The dashboard writes it with
-  `format_date_output`. The month and day keep zero padding. The hour uses 12-hour time without a
-  leading zero. Sample: `"2026-09-09 12:45 AM"`. When the source date does not parse, the dashboard
-  keeps the raw string.
+- `date`: string. Display form `"YYYY-MM-DD h:mm AM/PM"`. `formatOutputDate` in `src/splitstate.ts`
+  writes it. The month and day keep zero padding. The hour uses 12-hour time without a leading zero.
+  Sample: `"2026-09-09 12:45 AM"`. When the source date does not parse, the writer keeps the raw
+  string. The validator checks only that it is a string.
 - `price`: number. Rupees for this line.
 - `split_type`: string. One of `equal`, `single`, `percentage`, `custom`.
   - `equal`: the price splits evenly across the named people. The rounding gap goes to the last

@@ -1,22 +1,48 @@
-// Single path owner for split-utils. This module alone reads an
-// environment variable for a path. Every other module imports it.
-// Each function resolves lazily on every call. Tests set
-// SPLIT_UTILS_STATE inside the test body, so no read happens once
-// at module load.
+// Single path owner for split-utils. This module alone decides where
+// app data lives. Every other module imports it. The accessors stay
+// synchronous because call sites include Deno.statSync and
+// Deno.readTextFileSync.
 
-// Read the state root from the env or the repo layout.
-export function stateRoot(): string {
-  // Prefer the env override for tests and installs.
-  const override = Deno.env.get("SPLIT_UTILS_STATE");
-  // Use the override when it holds a value.
-  if (override !== undefined && override.length > 0) {
-    // Strip trailing slashes for stable joins.
-    return override.replace(/\/+$/, "") || "/";
-  }
-  // Fall back to repo state beside src.
-  const path = decodeURIComponent(new URL("../state/", import.meta.url).pathname);
-  // Strip trailing slashes for stable joins.
+import { dir } from "jsr:@cross/dir@^1.1.1";
+
+// Resolve the per-platform data dir once, when this module loads.
+// @cross/dir is async and the accessors below are not, so a top level
+// await buys both: every importer waits for this, and no caller needs
+// an init step it could forget. A failure here is not fatal on its
+// own, because SPLIT_UTILS_STATE still overrides it, so hold the
+// failure and let stateRoot raise it only when it actually matters.
+let dataDir: string | null = null;
+try {
+  dataDir = await dir("data");
+} catch {
+  // Left null on purpose. stateRoot reports it.
+}
+
+// Strip trailing slashes so joins never double them.
+function trim(path: string): string {
   return path.replace(/\/+$/, "") || "/";
+}
+
+// Read the state root. SPLIT_UTILS_STATE wins, which is how the tests
+// and a checkout keep their data out of the real one. Everything else
+// sits in the platform data dir: ~/.local/share on Linux, Application
+// Support on macOS, AppData on Windows. The root must never derive
+// from the module URL. A module loaded from a URL has no directory of
+// its own, so that resolved to "/" and left the one command run with
+// nowhere to write.
+export function stateRoot(): string {
+  // Prefer the env override for tests and development.
+  const override = Deno.env.get("SPLIT_UTILS_STATE");
+  if (override !== undefined && override.length > 0) return trim(override);
+  // Fail loudly rather than write to a path nobody meant.
+  if (dataDir === null) {
+    throw new Error(
+      "No place for app data. This system exposes no user data dir. " +
+        "Set SPLIT_UTILS_STATE to pick one.",
+    );
+  }
+  // Keep the app dir under the platform data dir.
+  return trim(dataDir) + "/split-utils";
 }
 
 // Read the config dir under the state root.
@@ -35,12 +61,6 @@ export function shareDir(): string {
 export function zomatoConfigPath(): string {
   // Join the share dir and the fixed file name.
   return shareDir() + "/config/zomato.json";
-}
-
-// Read the old Zomato constants file under the config dir.
-export function legacyZomatoConfigPath(): string {
-  // Join the config dir and the fixed file name.
-  return configDir() + "/zomato.json";
 }
 
 // Read the live runs dir under the state root.
@@ -65,70 +85,4 @@ export function pushedFilePath(): string {
 export function splitwiseEnvPath(): string {
   // Join the config dir and the fixed file name.
   return configDir() + "/splitwise.env";
-}
-
-// Old token file location under the user cache. Returns null when
-// HOME misses, so callers skip the move on odd installs.
-export function legacyTokenFilePath(): string | null {
-  // Read HOME lazily on every call.
-  const home = Deno.env.get("HOME");
-  // Skip the move when HOME holds nothing.
-  if (home === undefined || home.length === 0) return null;
-  // Join the old cache dir and the fixed file name.
-  return home.replace(/\/+$/, "") + "/.cache/ordersplit/splitwise_token.json";
-}
-
-// Old fingerprint file location under the user cache. Returns null
-// when HOME misses, so callers skip the move on odd installs.
-export function legacyPushedFilePath(): string | null {
-  // Read HOME lazily on every call.
-  const home = Deno.env.get("HOME");
-  // Skip the move when HOME holds nothing.
-  if (home === undefined || home.length === 0) return null;
-  // Join the old cache dir and the fixed file name.
-  return home.replace(/\/+$/, "") + "/.cache/ordersplit/splitwise_pushed.json";
-}
-
-// Copy the old file to the new path when the new path holds nothing
-// and the old path holds a file. Never delete the old copy. Keep the
-// new copy owner only.
-export async function migrateIfMissing(
-  newPath: string,
-  oldPath: string | null,
-  ownerOnly: boolean,
-): Promise<void> {
-  // Skip when the old path misses.
-  if (oldPath === null || oldPath.length === 0) return;
-  // Skip when both paths name the same file.
-  if (oldPath === newPath) return;
-  // Return when the new path already holds a file.
-  try {
-    const info = await Deno.stat(newPath);
-    if (info.isFile) return;
-  } catch {
-    // Fall through to the old path check.
-  }
-  // Return when the old path holds nothing.
-  let bytes: Uint8Array;
-  try {
-    bytes = await Deno.readFile(oldPath);
-  } catch {
-    return;
-  }
-  // Make the new parent dirs.
-  await Deno.mkdir(newPath.slice(0, newPath.lastIndexOf("/")), { recursive: true });
-  // Copy the bytes to the new path.
-  if (ownerOnly) {
-    await Deno.writeFile(newPath, bytes, { mode: 0o600 });
-  } else {
-    await Deno.writeFile(newPath, bytes);
-  }
-  // Fix the mode again for existing files.
-  if (ownerOnly) {
-    try {
-      await Deno.chmod(newPath, 0o600);
-    } catch {
-      // Ignore chmod errors on non posix disks.
-    }
-  }
 }

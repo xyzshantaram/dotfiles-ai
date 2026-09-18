@@ -92,8 +92,12 @@ result. It checks the file with the validator before it pushes.
 
 ## Troubleshooting
 
-Find logs in `state/cache/logs/`. Each run writes one log file there. Attach the log file when you
-report a problem. The log file holds no secrets and is safe to share.
+The app keeps its data in the per-user data dir: `~/.local/share/split-utils` on Linux,
+`~/Library/Application Support/split-utils` on macOS, and `%APPDATA%\split-utils` on Windows. Set
+`SPLIT_UTILS_STATE` to put it somewhere else.
+
+Find logs in `<data>/split-utils/cache/logs/`. Each run writes one log file there. Attach the log
+file when you report a problem. The log file holds no secrets and is safe to share.
 
 Report problems at https://github.com/YOURUSER/split-utils/issues. Replace `YOURUSER` with the real
 GitHub name before you publish this repo.
@@ -134,3 +138,10 @@ and `docs/playbook-swiggy.md`. The output format contract lives in `docs/schema.
 Test fixtures are synthetic. `tests/fixtures/orders.json` holds invented people, items, and prices.
 `tests/expected/` holds frozen ground truth. Never add real names, real merchants, or real amounts
 to these files. The `state/` dir and `tests/actual/` stay out of git by design.
+
+A checkout writes to the same per-user data dir as an install. To keep development data separate,
+set `SPLIT_UTILS_STATE` to a dir inside the checkout:
+
+```sh
+export SPLIT_UTILS_STATE="$PWD/state"
+```

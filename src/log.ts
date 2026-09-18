@@ -1,6 +1,8 @@
 // Run logs with redaction for split-utils. Logs stay safe to share.
 // Redact phones and tokens before they reach the file.
 
+import { stateRoot } from "./paths.ts";
+
 // Mask a secret value and keep edge chars only.
 function maskSecret(value: string): string {
   // Replace short values with one mark.
@@ -74,10 +76,10 @@ export function createRunLog(kind: string, dir?: URL | string): RunLog {
     // Decode the file URL path for use on disk.
     dirPath = decodeURIComponent(dir.pathname);
   } else {
-    // Default to the repo state cache logs dir.
-    dirPath = decodeURIComponent(
-      new URL("../state/cache/logs/", import.meta.url).pathname,
-    );
+    // Default to the logs dir under the active state root. This must
+    // not derive from import.meta.url: a module loaded from a URL has
+    // no directory of its own, and that resolved to "/state".
+    dirPath = stateRoot() + "/cache/logs/";
   }
   // Create the dir and ignore errors here.
   try {

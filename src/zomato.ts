@@ -5,7 +5,7 @@
 // Bill paths stay open until one live capture pins them.
 
 import { formatISTDate, type Order } from "./common.ts";
-import { legacyZomatoConfigPath, shareDir, zomatoConfigPath } from "./paths.ts";
+import { shareDir, zomatoConfigPath } from "./paths.ts";
 
 export const BASE = "https://api.zomato.com";
 export const ACCOUNTS = "https://accounts.zomato.com";
@@ -42,11 +42,8 @@ function readJsonFile(path: string): Partial<ZomatoConfig> {
 // to the defaults field by field. Missing keys fail loudly.
 export function loadConfig(): ZomatoConfig {
   if (cachedConfig) return cachedConfig;
-  // Read the old path first. Let the new path win.
-  const file: Partial<ZomatoConfig> = {
-    ...readJsonFile(legacyZomatoConfigPath()),
-    ...readJsonFile(zomatoConfigPath()),
-  };
+  // Read the config file, if one exists.
+  const file: Partial<ZomatoConfig> = readJsonFile(zomatoConfigPath());
   const apiKey = typeof file.apiKey === "string" && file.apiKey ? file.apiKey : DEFAULT_API_KEY;
   const clientId = typeof file.clientId === "string" && file.clientId
     ? file.clientId
@@ -54,7 +51,8 @@ export function loadConfig(): ZomatoConfig {
   // Fail with setup help when live keys miss.
   if (!apiKey || !clientId) {
     throw new Error(
-      "Zomato api key or client id is missing. Run the constants wizard first (dev tool) or place the config file by hand at state/share/config/zomato.json.",
+      "Zomato api key or client id is missing. Run the constants wizard first (dev tool) or place the config file by hand at " +
+        zomatoConfigPath() + ".",
     );
   }
   cachedConfig = {
@@ -253,13 +251,6 @@ export interface LoginState {
   device: Record<string, string>;
 }
 
-const LOGIN_STATE_FILE = decodeURIComponent(
-  new URL("../state/share/zomato-login-state.json", import.meta.url).pathname,
-);
-const LEGACY_LOGIN_STATE_FILE = decodeURIComponent(
-  new URL("../state/zomato-login-state.json", import.meta.url).pathname,
-);
-
 // Resolve the login state path under the active state root.
 function loginStatePath(): string {
   return shareDir() + "/zomato-login-state.json";
@@ -276,15 +267,12 @@ async function saveLoginState(state: LoginState): Promise<void> {
 }
 
 export async function loadLoginState(): Promise<LoginState | null> {
-  // Try the share path first, then the old path.
-  for (const path of [loginStatePath(), LOGIN_STATE_FILE, LEGACY_LOGIN_STATE_FILE]) {
-    try {
-      return JSON.parse(await Deno.readTextFile(path)) as LoginState;
-    } catch {
-      // Try the next path.
-    }
+  try {
+    return JSON.parse(await Deno.readTextFile(loginStatePath())) as LoginState;
+  } catch {
+    // No saved login state, or an unreadable one.
+    return null;
   }
-  return null;
 }
 
 const cookieHeader = (cookies: Record<string, string>) =>

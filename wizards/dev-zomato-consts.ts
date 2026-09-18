@@ -5,7 +5,7 @@
 // Write the config file only with the write flag.
 
 import { $ } from "npm:zx@8.8.5";
-import { legacyZomatoConfigPath, stateRoot, zomatoConfigPath } from "../src/paths.ts";
+import { stateRoot, zomatoConfigPath } from "../src/paths.ts";
 import { say } from "../src/term.ts";
 
 // zx escape hatch: use $`cmd args` for shell, e.g. await $`gh auth status`.
@@ -333,11 +333,8 @@ if (SELFTEST) {
   };
   // Compare fresh values with the stored config.
   const configPath = zomatoConfigPath();
-  // Old installs keep values under state/config. Read that path
-  // as a fallback so they migrate on first write.
-  const legacyPath = legacyZomatoConfigPath();
   // Read old values from the config file only.
-  const old = await readOldConfig(configPath) ?? await readOldConfig(legacyPath);
+  const old = await readOldConfig(configPath);
   const rows: Array<{ key: string; was: string; next: string }> = [
     { key: "apiKey", was: old?.apiKey ?? "", next: fresh.apiKey },
     { key: "clientId", was: old?.clientId ?? "", next: fresh.clientId },
