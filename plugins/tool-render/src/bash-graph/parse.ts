@@ -253,6 +253,10 @@ export function splitSemis(src: string, a: number, b: number): SemiPart[] {
 
 /** Operators, longest first so 2>&1 and <<- win over their prefixes. */
 export const OPS = ["2>&1", "1>&2", "&>", "<<-", "<<", ">>", "&&", "||", ">", "<", "|"];
+// NOTE (ticket #181): a bare & (background) is deliberately NOT in OPS. It is
+// recognised below as its own op token so the model stage can see it, and the
+// model stage degrades the whole segment to verbatim: drawing a backgrounded
+// statement as an ordered chain would assert something false about execution.
 
 export type TokenItem =
   | { t: "cmd"; a: number; b: number; ta: number; tb: number }
@@ -396,6 +400,15 @@ export function tokenizeParts(src: string, a: number, b: number): TokenItem[] {
       }
       items.push({ t: "op", op: o, a: i, b: i + o.length });
       i += o.length;
+      continue;
+    }
+    // A bare & at depth 0 outside quotes is the background operator (ticket
+    // #181). &&, 2>&1, 1>&2 and &> already matched above via OPS, so what
+    // reaches here is exactly one &: backgrounding, never sequencing.
+    if (!q_.q && q_.depth === 0 && c === "&" && src[i + 1] !== "&" && src[i - 1] !== "&") {
+      closeCmd(i);
+      items.push({ t: "op", op: "&", a: i, b: i + 1 });
+      i++;
       continue;
     }
     if (cur === null) cur = i;
@@ -705,6 +718,34 @@ export async function unbashScan(src: string): Promise<UnbashScan> {
 export interface AdoptableSpan {
   ta: number;
   tb: number;
+}
+
+/**
+ * The criterion-1 guard (ticket #181): TRUE when the adopted span (a1, b1)
+ * covers less non-whitespace text than the scanner span (a0, b0), meaning the
+ * adoption dropped source text the picture would then silently deny. Adoption
+ * may only ever trim whitespace (the tokenizer already trims, so on the
+ * proven corpus this never fires); narrowing past a paren, a pipe, an
+ * operand or a heredoc opener is the bug, and it is detectable here in
+ * general rather than per shape. The caller keeps the scanner span on TRUE.
+ *
+ * adoptSpans itself stays a byte-exact port of the prototype (the
+ * equivalence proof pins it): the enforcement lives in the model stage,
+ * which snapshots each span, adopts, and restores on TRUE.
+ */
+export function adoptionLosesText(
+  src: string,
+  a0: number,
+  b0: number,
+  a1: number,
+  b1: number,
+): boolean {
+  const nonWs = (a: number, b: number): number => {
+    let n = 0;
+    for (let i = a; i < b; i++) if (!/\s/.test(src[i])) n++;
+    return n;
+  };
+  return nonWs(a1, b1) < nonWs(a0, b0);
 }
 
 /**

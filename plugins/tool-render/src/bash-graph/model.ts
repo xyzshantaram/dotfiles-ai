@@ -30,6 +30,7 @@ import { NODE_M, OP_W, SHORT_T } from "./constants.js";
 import { Badge, CMD_ICON, OP_ICON, OP_MEANING, Node, chipHTML, Icon } from "./primitives.js";
 import {
   adoptSpans,
+  adoptionLosesText,
   detectGroup,
   extractArgs,
   parseTest,
@@ -181,28 +182,91 @@ export function buildNodes(
   segKeys: { li: number; si: number },
   ub: UnbashScan,
   ctx: BuildContext,
+  delimBase = 0,
 ): { nodes: ModelNode[]; segLinks: Map<string, SegLinkKind>; hdItems: DelimItem[] } {
   const { idx, counts, maxSeg } = ctx;
   const { li, si } = segKeys;
   const cmds = items.filter((t): t is TokenItem & AdoptableSpan => t.t === "cmd");
+  const before = cmds.map((c) => ({ c, ta: c.ta, tb: c.tb }));
   const r = adoptSpans(src, cmds, ub);
-  ctx.adopted.n += r.adopted;
+  // Ticket #181, the rule that matters: an adoption that narrows past dropped
+  // non-whitespace text is restored to the scanner span, so the real-scan
+  // path renders what the stub path renders (full text plus group badge)
+  // instead of a confident picture of a different command. Telemetry counts
+  // kept adoptions: the prototype count minus the restorations.
+  let restored = 0;
+  for (const s of before) {
+    if (adoptionLosesText(src, s.ta, s.tb, s.c.ta, s.c.tb)) {
+      s.c.ta = s.ta;
+      s.c.tb = s.tb;
+      restored++;
+    }
+  }
+  ctx.adopted.n += r.adopted - restored;
   const hdItems: DelimItem[] = items
     .filter((t) => t.t === "delim")
     .map((d) => {
       if (d.t !== "delim") return { item: d, hd: null };
-      const hb = line.heredocs[hdItemsCount(items, d)];
+      // Ticket #181: delims are indexed across the whole LINE (delimBase
+      // counts this line's earlier segments), never per segment: per-segment
+      // indexing attached one command's heredoc body to another command.
+      // The name check below is the backstop: on any scanner/model
+      // disagreement the body stays unattached (stray chip plus its
+      // expandable block, all text shown) rather than misattributed.
+      const hb = line.heredocs[delimBase + hdItemsCount(items, d)];
       if (hb) {
-        const owned: OwnedHeredoc = {
-          ...hb,
-          n: ++ctx.hdN.n,
-          raw: SL(src, d.ta, d.tb),
-        };
-        (d as { hd?: OwnedHeredoc }).hd = owned;
-        return { item: d, hd: owned };
+        const raw = SL(src, d.ta, d.tb);
+        const bare =
+          raw.length >= 2 &&
+          ((raw[0] === "'" && raw[raw.length - 1] === "'") ||
+            (raw[0] === '"' && raw[raw.length - 1] === '"'))
+            ? raw.slice(1, -1)
+            : raw;
+        if (bare === hb.delim) {
+          const owned: OwnedHeredoc = {
+            ...hb,
+            n: ++ctx.hdN.n,
+            raw,
+          };
+          (d as { hd?: OwnedHeredoc }).hd = owned;
+          return { item: d, hd: owned };
+        }
       }
       return { item: d, hd: null };
     });
+  // Ticket #181: backgrounding is concurrency, never sequence. A segment
+  // carrying a bare & degrades to one verbatim node over the full span: all
+  // text shown, no edge drawn, no order claimed. Heredoc bodies still ride
+  // along below the panel through hdItems, so nothing is hidden either.
+  if (items.some((t) => t.t === "op" && t.op === "&")) {
+    let ta = items[0].a;
+    let tb = items[items.length - 1].b;
+    while (ta < tb && /\s/.test(src[ta])) ta++;
+    while (tb > ta && /\s/.test(src[tb - 1])) tb--;
+    const ex = extractArgs(src, ta, tb, idx, ctx.argSeq, ctx.argBodies);
+    counts.nArg += ex.count;
+    const len = tb - ta;
+    if (len > maxSeg.n) maxSeg.n = len;
+    counts.nCmd++;
+    const key = "n" + idx + "_" + li + "_" + si + "_verb";
+    return {
+      nodes: [
+        {
+          kind: "cmd",
+          key,
+          hl: ex.html,
+          len,
+          sz: sizeFor(len),
+          name: cmdNameOf(src, { ta, tb }),
+          grp: detectGroup(src, ta, tb),
+          hd: [],
+          test: 0,
+        },
+      ],
+      segLinks: new Map(),
+      hdItems,
+    };
+  }
   const nodes: ModelNode[] = [];
   const skip = new Set<number>();
   items.forEach((t, k) => {

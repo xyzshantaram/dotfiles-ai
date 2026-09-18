@@ -345,6 +345,11 @@ export function renderOne(
   }
   lines.forEach((ln, li) => {
     const segs = splitSemis(src, ln.a, ln.b);
+    // Ticket #181: heredoc bodies belong to the LINE, but delims are found
+    // per segment. delimBase counts this line's earlier segments' delims so
+    // each segment indexes the line's bodies from the right offset; without
+    // it one command's input renders under another command.
+    let delimBase = 0;
     segs.forEach((sg, si) => {
       const items = tokenizeParts(src, sg.a, sg.b);
       if (!items.length) return;
@@ -353,7 +358,8 @@ export function renderOne(
       // count, but the prototype also writes it back, and a caller reading
       // engines after a render must see the same number in both.
       const adoptedBefore = ctx.adopted.n;
-      const { nodes, segLinks, hdItems } = buildNodes(src, items, ln, { li, si }, ub, ctx);
+      const { nodes, segLinks, hdItems } = buildNodes(src, items, ln, { li, si }, ub, ctx, delimBase);
+      delimBase += items.filter((t) => t.t === "delim").length;
       engines.adopted += ctx.adopted.n - adoptedBefore;
       // The seam: only the last panel can carry codes, under the ported
       // rule. Any other panel passes its nodes through untouched.

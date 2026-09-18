@@ -39,6 +39,10 @@ export const OP_MEANING: Record<string, string> = {
   "2>&1 |":
     "merge then pipe: folds error output into standard output and passes it on as input to the next step",
   "<<": "heredoc: feeds the collapsed lines below as input — activate the node to expand",
+  // Ticket #181: the model degrades any segment carrying a bare & to
+  // verbatim, so no & op node should ever render; the meaning stands as the
+  // fallback so a direct caller still reads honestly.
+  "&": "background: runs the previous step in the background while the next step starts",
 };
 
 /** Lucide names per operator. "pipe-glyph" is the inline owner symbol. */
