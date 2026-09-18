@@ -276,7 +276,11 @@ var inject = ["slots"];
  */
 function apply(ctx) {
   injectStyle(PLUGIN_NAME, "user-bubble", localCss);
-  for (var key of CHAT_NODE_KEYS) {
+  // `const`, not `var`: the generator below runs LATER, when the slot system
+  // reconciles. A function-scoped `var` would leave every generator closed
+  // over ONE binding holding the LAST key, so both would register "steering"
+  // and "user" would never register at all (#176). Pinned by slots.test.ts.
+  for (const key of CHAT_NODE_KEYS) {
     ctx.slots.inject(SLOT, function* () {
       yield ctx.slots.register(
         {

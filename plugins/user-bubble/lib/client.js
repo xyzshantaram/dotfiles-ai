@@ -387,7 +387,7 @@ var name = PLUGIN_NAME;
 var inject = ["slots"];
 function apply(ctx) {
   injectStyle(PLUGIN_NAME, "user-bubble", client_default);
-  for (var key of CHAT_NODE_KEYS) {
+  for (const key of CHAT_NODE_KEYS) {
     ctx.slots.inject(SLOT, function* () {
       yield ctx.slots.register(
         {
