@@ -36,6 +36,11 @@ export interface PushOutcome {
   // nothing is wrong. Each carries the reason Splitwise gave, because
   // the reason is the only part the reader can act on.
   failures: { order: string; reason: string }[];
+  // One entry per order whose expense LANDED but whose bookkeeping or
+  // decoration did not. Kept apart from failures on purpose: a warning
+  // must never invite a retry, because the expense is already on
+  // Splitwise and a retry would send it twice.
+  warnings: { order: string; reason: string }[];
 }
 
 // One person the auto name map could not settle. Empty candidates
@@ -178,7 +183,13 @@ async function createOneExpense(
   const result = await api.createExpense(data);
   const eid = result.expenses?.[0]?.id;
   if (eid === undefined || eid === null) return null;
-  await api.createComment(eid, buildItemizedComment(order, people));
+  // THE COMMENT USED TO BE SENT HERE, and that was a double-send. The
+  // expense EXISTS the moment createExpense returns an id. A throw after
+  // that point travelled out of this function as if the whole order had
+  // failed, so the caller recorded a failure, saved no fingerprint, and
+  // the next run created the SAME expense a second time. The comment is
+  // now the caller's job, sent after the fingerprint is earned, where a
+  // failure to attach it cannot un-land the expense.
   return String(eid);
 }
 
@@ -220,6 +231,7 @@ export async function runPush(input: {
       archived: false,
       note: "",
       failures: [],
+      warnings: [],
     };
     for (const order of groups) {
       const fingerprint = orderFingerprint(order);
@@ -259,6 +271,7 @@ export async function runPush(input: {
       note:
         "No Splitwise access, so a summary file took the place of a push. Enter the amounts in Splitwise by hand.",
       failures: [],
+      warnings: [],
     };
     return { outcome, pushed: { ...input.pushed } };
   }
@@ -275,6 +288,7 @@ export async function runPush(input: {
     archived: false,
     note: "",
     failures: [],
+    warnings: [],
   };
   for (const order of groups) {
     const fingerprint = orderFingerprint(order);
@@ -314,12 +328,47 @@ export async function runPush(input: {
         });
         continue;
       }
+      // THE EXPENSE EXISTS FROM HERE ON, so nothing below may throw its
+      // way into the catch and turn a landed expense back into a
+      // retryable failure. Everything after this line is bookkeeping and
+      // decoration, and each piece carries its own guard.
+      //
       // loadPushed returns numeric ids, so store the id as a number.
       next[fingerprint] = Number(eid);
-      // Persist before the next send, so a crash never re-sends this one.
-      await input.onExpense?.(fingerprint, Number(eid));
       outcome.pushed += 1;
       outcome.totalRs += orderTotal(order);
+      // Persist before the next send, so a crash never re-sends this one.
+      // A saver that fails is a WARNING, not a failure: the expense is on
+      // Splitwise either way, and calling it failed would send it twice.
+      // It is still serious — an unpersisted fingerprint is exactly what
+      // a later crash would need to double-send — so it is said out loud.
+      try {
+        await input.onExpense?.(fingerprint, Number(eid));
+      } catch (err) {
+        outcome.warnings.push({
+          order: oid,
+          reason: "The expense landed, but recording it as sent failed: " +
+            (err instanceof Error ? err.message : String(err)) +
+            ". Do not push this order again without checking Splitwise.",
+        });
+      }
+      // The itemised comment is decoration on an expense that already
+      // exists. This call used to sit inside createOneExpense, BEFORE the
+      // fingerprint was earned, so a comment that would not attach threw
+      // out as a whole-order failure and the next run created the expense
+      // a second time.
+      try {
+        await api.createComment(
+          Number(eid),
+          buildItemizedComment(order, input.people),
+        );
+      } catch (err) {
+        outcome.warnings.push({
+          order: oid,
+          reason: "The expense landed, but its itemised comment did not attach: " +
+            (err instanceof Error ? err.message : String(err)),
+        });
+      }
     } catch (err) {
       // KEEP THE MESSAGE. This catch used to replace it with a generic
       // sentence, on a rule borrowed from the SHARE path, where the link,
@@ -334,10 +383,13 @@ export async function runPush(input: {
         reason: err instanceof Error ? err.message : String(err),
       });
       // CARRY ON. This used to return, so one bad order ended the run and
-      // every later order went unattempted. What stops a double send is
-      // the fingerprint staying unsaved for THIS order, which has already
-      // happened; the next order is a different expense and cannot be
-      // double sent by trying it.
+      // every later order went unattempted. Reaching this catch means no
+      // expense was created for this order — every step that runs AFTER
+      // creation guards itself above — so the unsaved fingerprint is
+      // correct and a rerun will offer this order again. That is the
+      // whole of the guarantee: it says nothing about the run surviving a
+      // crash between the create and the save, which is what the warning
+      // above exists to report.
       continue;
     }
   }

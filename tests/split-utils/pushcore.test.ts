@@ -200,3 +200,83 @@ Deno.test("pushcore: each expense is reported before the next one is sent", asyn
   assert(seen[0].expenseId === 101, "first report carries the expense id");
   assert(pushed[seen[1].fingerprint] === 102, "the returned map agrees with the reports");
 });
+
+// THE DOUBLE-SEND. createExpense lands the expense; createComment then
+// throws. This used to travel out as a whole-order failure: no
+// fingerprint saved, so the next run created the SAME expense again.
+// Found by review, not by the suite, because no fake had ever refused a
+// comment. The pin is exactly-once ACROSS A RERUN, not merely a counter.
+Deno.test("pushcore: a refused comment never re-sends the expense", async () => {
+  const base = fakeApi();
+  let created = 0;
+  const api: PushApi = {
+    ...base.api,
+    createExpense: (_data) => {
+      created += 1;
+      return Promise.resolve({ expenses: [{ id: 500 + created }] });
+    },
+    createComment: () => {
+      throw new Error("comment rejected");
+    },
+  };
+  const first = await runPush(baseInput({ api }));
+  assert(first.outcome.pushed === 2, "both expenses count as pushed");
+  assert(first.outcome.failures.length === 0, "a landed expense is not a failure");
+  assert(first.outcome.warnings.length === 2, "each carries a warning instead");
+  assert(
+    first.outcome.warnings.every((w) => w.reason.includes("comment rejected")),
+    "the warning keeps the reason",
+  );
+  assert(Object.keys(first.pushed).length === 2, "both fingerprints are saved");
+  // The rerun is the real proof: with those fingerprints in hand, the
+  // same orders must not reach the API a second time.
+  const second = await runPush(baseInput({ api, pushed: first.pushed }));
+  assert(created === 2, "the expense was created exactly once, got " + created);
+  assert(second.outcome.skippedDupes === 2, "the rerun skips both as duplicates");
+});
+
+// The saver persists the fingerprint. If it fails, the expense is still
+// on Splitwise, so calling the order failed would invite a retry that
+// sends it twice. It is a warning, and the fingerprint stays.
+Deno.test("pushcore: a failing saver warns and still marks the order sent", async () => {
+  const { api } = fakeApi();
+  const { outcome, pushed } = await runPush(baseInput({
+    api,
+    onExpense: () => {
+      throw new Error("disk full");
+    },
+  }));
+  assert(outcome.pushed === 2, "the expenses landed and count as pushed");
+  assert(outcome.failures.length === 0, "a landed expense is not a failure");
+  assert(outcome.warnings.length === 2, "each order warns");
+  assert(
+    outcome.warnings.every((w) => w.reason.includes("disk full")),
+    "the warning keeps the reason",
+  );
+  assert(Object.keys(pushed).length === 2, "the fingerprints survive the saver");
+});
+
+// A 200 whose expenses array is empty AND whose errors are empty: the
+// API said nothing at all. This branch had no coverage, so deleting its
+// failure record kept the suite green while a silently dropped order
+// looked like a success.
+Deno.test("pushcore: an id-less response is recorded and the run goes on", async () => {
+  const base = fakeApi();
+  let calls = 0;
+  const api: PushApi = {
+    ...base.api,
+    createExpense: (_data) => {
+      calls += 1;
+      return Promise.resolve({ expenses: [] });
+    },
+  };
+  const { outcome, pushed } = await runPush(baseInput({ api }));
+  assert(calls === 2, "every order was attempted");
+  assert(outcome.pushed === 0, "nothing counted as pushed");
+  assert(outcome.failures.length === 2, "each id-less answer is a failure");
+  assert(
+    outcome.failures.every((f) => f.reason.includes("no expense id")),
+    "the reason says the API gave nothing, got " + JSON.stringify(outcome.failures),
+  );
+  assert(Object.keys(pushed).length === 0, "no fingerprint saved");
+});

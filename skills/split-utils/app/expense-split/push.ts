@@ -546,6 +546,19 @@ function reportStep(_m?: Map<string, string[]>, ctx?: WizardCtx): Step {
         lines.push("- Order " + failure.order + ": " + failure.reason);
       }
     }
+    // A WARNING IS NOT A FAILURE, and the difference decides what the
+    // reader should do. These expenses ARE on Splitwise; only their
+    // bookkeeping or their itemised comment fell short. Pushing one again
+    // would create it twice, so the wording must never read as a retry.
+    if (outcome.warnings.length > 0) {
+      lines.push(
+        "Landed with a problem: " + outcome.warnings.length +
+          " order(s). These are on Splitwise — do not push them again.",
+      );
+      for (const warning of outcome.warnings) {
+        lines.push("- Order " + warning.order + ": " + warning.reason);
+      }
+    }
     lines.push(
       (outcome.dry ? "Total that would push: " : "Total pushed amount: ") +
         formatMoney(outcome.totalRs, live.currency) + ".",
