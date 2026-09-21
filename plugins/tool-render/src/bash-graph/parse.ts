@@ -77,6 +77,11 @@ export function parseHeredocOpen(src: string, i: number): HeredocOpen | null {
  * Split at depth-0 newlines. Heredoc bodies are consumed into the owning
  * line: each line carries its bodies plus endExt (the offset past them), so
  * later stages never re-scan body text as structure.
+ *
+ * Ticket #187: newlines inside a compound (for/if/while/case open,
+ * done/fi/esac close) never split. A multiline loop is one construct, not
+ * one statement per line, and splitting it draws the terminator line as a
+ * command panel.
  */
 export function splitLines(src: string): SourceLine[] {
   const N = src.length;
@@ -86,6 +91,7 @@ export function splitLines(src: string): SourceLine[] {
   let q: string | null = null;
   let depth = 0;
   let esc2 = false;
+  const cs = compoundState();
   let pending: HeredocOpen[] = [];
   const flushLine = (nlPos: number | null, _isEOF: boolean): void => {
     const bodyStart = nlPos != null ? nlPos + 1 : N;
@@ -131,51 +137,84 @@ export function splitLines(src: string): SourceLine[] {
     }
     if (q) {
       if (c === "\\" && q !== "'") esc2 = true;
-      else if (c === q) q = null;
+      else if (c === q) {
+        q = null;
+        compoundMark(cs, c);
+      }
       i++;
       continue;
     }
     if (c === "\\") {
+      compoundMark(cs, c);
       esc2 = true;
       i++;
       continue;
     }
     if (c === "'" || c === '"' || c === "`") {
+      compoundMark(cs, c);
       q = c;
       i++;
       continue;
     }
     if (c === "$" && (src[i + 1] === "(" || src[i + 1] === "{")) {
+      compoundMark(cs, c);
+      compoundMark(cs, src[i + 1]);
       depth++;
       i += 2;
       continue;
     }
     if (c === "(" || c === "{") {
+      compoundMark(cs, c);
       depth++;
       i++;
       continue;
     }
     if ((c === ")" || c === "}") && depth > 0) {
+      compoundMark(cs, c);
       depth--;
+      i++;
+      continue;
+    }
+    // A stray closer at depth 0 (case arms: `a)`) binds no nesting, but it
+    // still bounds a word and, for `)`, a command may follow it.
+    if (c === ")" || c === "}") {
+      compoundMark(cs, c);
       i++;
       continue;
     }
     if (depth === 0 && c === "<" && src[i + 1] === "<") {
       const h = parseHeredocOpen(src, i);
       if (h) {
+        // The opener through its delimiter is skipped unread: delimiter
+        // words never reach the tracker, so a delimiter named like a
+        // keyword (<<done) stays data whatever position it sits in.
         pending.push(h);
         i = h.end;
+        continue;
+      }
+      compoundMark(cs, c);
+      i++;
+      continue;
+    }
+    if (/[A-Za-z0-9_]/.test(c)) {
+      if (depth === 0) compoundPush(cs, c);
+      i++;
+      continue;
+    }
+    compoundMark(cs, c);
+    if (depth === 0 && c === "\n") {
+      // A comment ends where its line does, even an unflushed one.
+      cs.comment = false;
+      if (cs.depth === 0) {
+        flushLine(i, false);
         continue;
       }
       i++;
       continue;
     }
-    if (depth === 0 && c === "\n") {
-      flushLine(i, false);
-      continue;
-    }
     i++;
   }
+  compoundFlush(cs);
   flushLine(null, true);
   return lines;
 }
@@ -185,7 +224,87 @@ export interface SemiPart {
   b: number;
 }
 
-/** Split a line at depth-0 semicolons. Empty parts are dropped. */
+/**
+ * Compound tracking, ticket #187. for/if/while/case open a construct that
+ * only done/fi/esac close; the semicolons and newlines inside are body
+ * punctuation, not statement separators. Splitting on them tears the
+ * construct into sibling statements, so the terminator renders as its own
+ * command panel and body operators draw top-level edges between statements
+ * that are not siblings.
+ *
+ * Only words at COMMAND position count: the range start, or right after a
+ * separator (;, &, |, (, {, newline, !, )) or an interior keyword
+ * (do/then/else/elif/in, plus the time prefix the renderer keeps as
+ * verbatim text). Any other word clears the expectation, so `echo done`
+ * never closes anything and `[[ $x == case* ]]` never opens anything.
+ * Redirect/test brackets (>, <, [) always clear it, so a heredoc delimiter
+ * or test operand named like a keyword stays data. Quoted, escaped, and
+ * paren-nested text never forms words at all. A # at command position opens
+ * a comment to the end of the line (splitLines) or range (splitSemis), so a
+ * comment mentioning a keyword cannot open or close anything either.
+ */
+const COMPOUND_OPEN = new Set(["for", "while", "until", "select", "if", "case"]);
+const COMPOUND_CLOSE = new Set(["done", "fi", "esac"]);
+const COMPOUND_CONT = new Set(["do", "then", "else", "elif", "in", "time"]);
+
+interface CompoundState {
+  depth: number;
+  expectCmd: boolean;
+  word: string;
+  comment: boolean;
+}
+
+function compoundState(): CompoundState {
+  return { depth: 0, expectCmd: true, word: "", comment: false };
+}
+
+/** Close the pending word: openers deepen, closers shallow (floored at 0). */
+function compoundFlush(cs: CompoundState): void {
+  const w = cs.word;
+  cs.word = "";
+  if (w === "" || cs.comment) return;
+  if (cs.expectCmd) {
+    if (COMPOUND_OPEN.has(w)) cs.depth++;
+    else if (COMPOUND_CLOSE.has(w)) cs.depth = Math.max(0, cs.depth - 1);
+  }
+  cs.expectCmd = COMPOUND_CONT.has(w);
+}
+
+/**
+ * One non-word char: close the pending word, then update the command
+ * expectation. Spaces and most punctuation leave it untouched (a command
+ * word is still coming); only separators set it and only brackets clear it.
+ */
+function compoundMark(cs: CompoundState, c: string): void {
+  compoundFlush(cs);
+  if (
+    c === ";" ||
+    c === "&" ||
+    c === "|" ||
+    c === "(" ||
+    c === "{" ||
+    c === "\n" ||
+    c === "!" ||
+    c === ")"
+  )
+    cs.expectCmd = true;
+  else if (c === "<" || c === ">" || c === "[") cs.expectCmd = false;
+  // A # anywhere else is literal (a#b, quoted text never reaches here, an
+  // escaped # is consumed as data): only command position comments.
+  else if (c === "#" && cs.expectCmd) cs.comment = true;
+}
+
+/** One word char in active (unquoted, depth-0, uncommented) text. */
+function compoundPush(cs: CompoundState, c: string): void {
+  if (!cs.comment) cs.word += c;
+}
+
+/** Split a line at depth-0 semicolons. Empty parts are dropped.
+ *
+ * Ticket #187: semicolons inside a compound never split. `for f in a b;
+ * do echo $f; done` is one construct; cutting it at each `;` tears it into
+ * three sibling statements and draws `done` as a command.
+ */
 export function splitSemis(src: string, a: number, b: number): SemiPart[] {
   const parts: SemiPart[] = [];
   let i = a;
@@ -193,6 +312,7 @@ export function splitSemis(src: string, a: number, b: number): SemiPart[] {
   let q: string | null = null;
   let depth = 0;
   let esc2 = false;
+  const cs = compoundState();
   const push = (e: number): void => {
     if (src.slice(start, e).trim() !== "") parts.push({ a: start, b: e });
     start = e + 1;
@@ -206,47 +326,65 @@ export function splitSemis(src: string, a: number, b: number): SemiPart[] {
     }
     if (q) {
       if (c === "\\" && q !== "'") esc2 = true;
-      else if (c === q) q = null;
+      else if (c === q) {
+        q = null;
+        compoundMark(cs, c);
+      }
       i++;
       continue;
     }
-    if (c === "\\" && q !== null) {
-      esc2 = true;
-      i++;
-      continue;
-    }
-    if (c === "\\" && q === null) {
+    if (c === "\\") {
+      compoundMark(cs, c);
       esc2 = true;
       i++;
       continue;
     }
     if (c === "'" || c === '"' || c === "`") {
+      compoundMark(cs, c);
       q = c;
       i++;
       continue;
     }
     if (c === "$" && (src[i + 1] === "(" || src[i + 1] === "{")) {
+      compoundMark(cs, c);
+      compoundMark(cs, src[i + 1]);
       depth++;
       i += 2;
       continue;
     }
     if (c === "(" || c === "{") {
+      compoundMark(cs, c);
       depth++;
       i++;
       continue;
     }
     if ((c === ")" || c === "}") && depth > 0) {
+      compoundMark(cs, c);
       depth--;
       i++;
       continue;
     }
+    // A stray closer at depth 0 (case arms: `a)`) binds no nesting, but it
+    // still bounds a word and, for `)`, a command may follow it.
+    if (c === ")" || c === "}") {
+      compoundMark(cs, c);
+      i++;
+      continue;
+    }
+    if (/[A-Za-z0-9_]/.test(c)) {
+      if (depth === 0) compoundPush(cs, c);
+      i++;
+      continue;
+    }
+    compoundMark(cs, c);
     if (depth === 0 && c === ";") {
-      push(i);
+      if (cs.depth === 0) push(i);
       i++;
       continue;
     }
     i++;
   }
+  compoundFlush(cs);
   if (src.slice(start, b).trim() !== "") parts.push({ a: start, b });
   return parts;
 }

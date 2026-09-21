@@ -183,8 +183,104 @@ describe("the guard does not over-degrade", () => {
   });
 });
 
-describe("criterion 1 over further shapes", () => {
-  it("loses no word on the real path for every listed shape", async () => {
+describe("compounds degrade to one verbatim node (ticket #187)", () => {
+  const edgeCount = (html: string): number => (html.match(/prim-edge/g) || []).length;
+
+  it("draws a for loop as one panel, never three", async () => {
+    // REJECTS today's tear: splitSemis cut the semicolons inside the
+    // construct, so `for f in a b`, `do echo $f` and `done` rendered as
+    // three sibling command panels and the picture claimed `done` ran.
+    const src = "for f in a b; do echo $f; done";
+    const { r, html } = await renderReal(src, 30);
+    expect(r.panelsHTML.length).toBe(1);
+    expect(shown(r)).toContain("for f in a b; do echo $f; done");
+    expect(edgeCount(html)).toBe(0);
+    assertWordsSurvive(src, r);
+  });
+
+  it("draws an if as one panel, with its test words intact", async () => {
+    // REJECTS the same tear for conditionals: `if [ -f x ]`, `then cat x`
+    // and `fi` were three panels.
+    const src = "if [ -f x ]; then cat x; fi";
+    const { r, html } = await renderReal(src, 31);
+    expect(r.panelsHTML.length).toBe(1);
+    expect(shown(r)).toContain("if [ -f x ]; then cat x; fi");
+    expect(edgeCount(html)).toBe(0);
+    assertWordsSurvive(src, r);
+  });
+
+  it("draws a while with its redirect as one panel", async () => {
+    // REJECTS the redirect landing on a panel reading `done < in.txt`: the
+    // trailing redirect belongs to the loop, not to a command named done.
+    const src = "while read l; do echo $l; done < in.txt";
+    const { r, html } = await renderReal(src, 32);
+    expect(r.panelsHTML.length).toBe(1);
+    expect(shown(r)).toContain("while read l; do echo $l; done < in.txt");
+    expect(shown(r)).toContain("in.txt");
+    expect(edgeCount(html)).toBe(0);
+    assertWordsSurvive(src, r);
+  });
+
+  it("draws a case as one panel, never two", async () => {
+    // REJECTS today's two panels (`case $x in a) echo one` plus `esac`):
+    // the `;;` arm terminator is body punctuation, not a statement split.
+    const src = "case $x in a) echo one;; esac";
+    const { r, html } = await renderReal(src, 33);
+    expect(r.panelsHTML.length).toBe(1);
+    expect(shown(r)).toContain("case $x in a) echo one;; esac");
+    expect(edgeCount(html)).toBe(0);
+    assertWordsSurvive(src, r);
+  });
+
+  it("draws no edge for a conditional inside a loop body", async () => {
+    // REJECTS the invented top-level chain: the body's `||` was consumed
+    // into a chip and drawn as dataflow between two panels. An ordering
+    // claim is drawn, not written, so this counts EDGES: zero, not text.
+    const src = "for f in *.ts; do deno check $f || exit 1; done";
+    const { r, html } = await renderReal(src, 34);
+    expect(r.panelsHTML.length).toBe(1);
+    expect(edgeCount(html)).toBe(0);
+    expect(html).not.toContain("data-pipe");
+    expect(shown(r)).toContain("exit 1");
+    assertWordsSurvive(src, r);
+  });
+
+  it("draws no pipe for a pipe inside a loop body", async () => {
+    // REJECTS the same invention from the pipe side: the body's `|` drew a
+    // tagged link between panels that are not siblings.
+    const src = "for f in *.ts; do cat $f | head -1; done";
+    const { r, html } = await renderReal(src, 35);
+    expect(r.panelsHTML.length).toBe(1);
+    expect(edgeCount(html)).toBe(0);
+    expect(html).not.toContain("data-pipe");
+    assertWordsSurvive(src, r);
+  });
+
+  it("keeps a multiline loop in one panel", async () => {
+    // REJECTS the line-split twin of the semicolon tear: one statement per
+    // line would draw `done` alone on its own panel.
+    const src = "for f in a b\ndo\necho $f\ndone";
+    const { r, html } = await renderReal(src, 36);
+    expect(r.panelsHTML.length).toBe(1);
+    expect(edgeCount(html)).toBe(0);
+    assertWordsSurvive(src, r);
+  });
+
+  it("still splits plain semicolon siblings after a closed compound", async () => {
+    // REJECTS the over-degrade: refusing every split past an opener would
+    // fuse the compound with whatever follows it. The neighbours stay
+    // neighbours; only the construct itself goes verbatim.
+    const src = "echo before; for f in a b; do echo $f; done; echo after";
+    const { r, html } = await renderReal(src, 37);
+    expect(r.panelsHTML.length).toBe(3);
+    expect(shown(r)).toContain("echo before");
+    expect(shown(r)).toContain("for f in a b; do echo $f; done");
+    expect(shown(r)).toContain("echo after");
+    assertWordsSurvive(src, r);
+  });
+});
+
+describe("criterion 1 over further shapes", () => {  it("loses no word on the real path for every listed shape", async () => {
     // The general rule as a net: any fifth shape that narrows past dropped
     // text fails here without needing its own named test first.
     const shapes = [

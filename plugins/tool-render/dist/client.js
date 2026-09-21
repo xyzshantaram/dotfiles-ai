@@ -22590,6 +22590,7 @@ function splitLines2(src) {
   let q = null;
   let depth = 0;
   let esc2 = false;
+  const cs = compoundState();
   let pending = [];
   const flushLine = (nlPos, _isEOF) => {
     const bodyStart = nlPos != null ? nlPos + 1 : N;
@@ -22635,32 +22636,46 @@ function splitLines2(src) {
     }
     if (q) {
       if (c2 === "\\" && q !== "'") esc2 = true;
-      else if (c2 === q) q = null;
+      else if (c2 === q) {
+        q = null;
+        compoundMark(cs, c2);
+      }
       i++;
       continue;
     }
     if (c2 === "\\") {
+      compoundMark(cs, c2);
       esc2 = true;
       i++;
       continue;
     }
     if (c2 === "'" || c2 === '"' || c2 === "`") {
+      compoundMark(cs, c2);
       q = c2;
       i++;
       continue;
     }
     if (c2 === "$" && (src[i + 1] === "(" || src[i + 1] === "{")) {
+      compoundMark(cs, c2);
+      compoundMark(cs, src[i + 1]);
       depth++;
       i += 2;
       continue;
     }
     if (c2 === "(" || c2 === "{") {
+      compoundMark(cs, c2);
       depth++;
       i++;
       continue;
     }
     if ((c2 === ")" || c2 === "}") && depth > 0) {
+      compoundMark(cs, c2);
       depth--;
+      i++;
+      continue;
+    }
+    if (c2 === ")" || c2 === "}") {
+      compoundMark(cs, c2);
       i++;
       continue;
     }
@@ -22671,17 +22686,56 @@ function splitLines2(src) {
         i = h.end;
         continue;
       }
+      compoundMark(cs, c2);
       i++;
       continue;
     }
+    if (/[A-Za-z0-9_]/.test(c2)) {
+      if (depth === 0) compoundPush(cs, c2);
+      i++;
+      continue;
+    }
+    compoundMark(cs, c2);
     if (depth === 0 && c2 === "\n") {
-      flushLine(i, false);
+      cs.comment = false;
+      if (cs.depth === 0) {
+        flushLine(i, false);
+        continue;
+      }
+      i++;
       continue;
     }
     i++;
   }
+  compoundFlush(cs);
   flushLine(null, true);
   return lines;
+}
+var COMPOUND_OPEN = /* @__PURE__ */ new Set(["for", "while", "until", "select", "if", "case"]);
+var COMPOUND_CLOSE = /* @__PURE__ */ new Set(["done", "fi", "esac"]);
+var COMPOUND_CONT = /* @__PURE__ */ new Set(["do", "then", "else", "elif", "in", "time"]);
+function compoundState() {
+  return { depth: 0, expectCmd: true, word: "", comment: false };
+}
+function compoundFlush(cs) {
+  const w = cs.word;
+  cs.word = "";
+  if (w === "" || cs.comment) return;
+  if (cs.expectCmd) {
+    if (COMPOUND_OPEN.has(w)) cs.depth++;
+    else if (COMPOUND_CLOSE.has(w)) cs.depth = Math.max(0, cs.depth - 1);
+  }
+  cs.expectCmd = COMPOUND_CONT.has(w);
+}
+function compoundMark(cs, c2) {
+  compoundFlush(cs);
+  if (c2 === ";" || c2 === "&" || c2 === "|" || c2 === "(" || c2 === "{" || c2 === "\n" || c2 === "!" || c2 === ")")
+    cs.expectCmd = true;
+  else if (c2 === "<" || c2 === ">" || c2 === "[") cs.expectCmd = false;
+  else if (c2 === "#" && cs.expectCmd) cs.comment = true;
+}
+function compoundPush(cs, c2) {
+  if (!cs.comment) cs.word += c2;
 }
 function splitSemis(src, a, b) {
   const parts = [];
@@ -22690,6 +22744,7 @@ function splitSemis(src, a, b) {
   let q = null;
   let depth = 0;
   let esc2 = false;
+  const cs = compoundState();
   const push = (e) => {
     if (src.slice(start, e).trim() !== "") parts.push({ a: start, b: e });
     start = e + 1;
@@ -22703,47 +22758,63 @@ function splitSemis(src, a, b) {
     }
     if (q) {
       if (c2 === "\\" && q !== "'") esc2 = true;
-      else if (c2 === q) q = null;
+      else if (c2 === q) {
+        q = null;
+        compoundMark(cs, c2);
+      }
       i++;
       continue;
     }
-    if (c2 === "\\" && q !== null) {
-      esc2 = true;
-      i++;
-      continue;
-    }
-    if (c2 === "\\" && q === null) {
+    if (c2 === "\\") {
+      compoundMark(cs, c2);
       esc2 = true;
       i++;
       continue;
     }
     if (c2 === "'" || c2 === '"' || c2 === "`") {
+      compoundMark(cs, c2);
       q = c2;
       i++;
       continue;
     }
     if (c2 === "$" && (src[i + 1] === "(" || src[i + 1] === "{")) {
+      compoundMark(cs, c2);
+      compoundMark(cs, src[i + 1]);
       depth++;
       i += 2;
       continue;
     }
     if (c2 === "(" || c2 === "{") {
+      compoundMark(cs, c2);
       depth++;
       i++;
       continue;
     }
     if ((c2 === ")" || c2 === "}") && depth > 0) {
+      compoundMark(cs, c2);
       depth--;
       i++;
       continue;
     }
+    if (c2 === ")" || c2 === "}") {
+      compoundMark(cs, c2);
+      i++;
+      continue;
+    }
+    if (/[A-Za-z0-9_]/.test(c2)) {
+      if (depth === 0) compoundPush(cs, c2);
+      i++;
+      continue;
+    }
+    compoundMark(cs, c2);
     if (depth === 0 && c2 === ";") {
-      push(i);
+      if (cs.depth === 0) push(i);
       i++;
       continue;
     }
     i++;
   }
+  compoundFlush(cs);
   if (src.slice(start, b).trim() !== "") parts.push({ a: start, b });
   return parts;
 }
@@ -23098,6 +23169,11 @@ function makeBuildContext(idx) {
     maxSeg: { n: 0 }
   };
 }
+function compoundHead(src, ta, tb) {
+  const m = /^(?:!\s*|time\s+)+/.exec(SL(src, ta, tb));
+  const off = m ? m[0].length : 0;
+  return detectGroup(src, ta + off, tb);
+}
 function buildNodes(src, items, line, segKeys, ub, ctx, delimBase = 0) {
   const { idx, counts, maxSeg } = ctx;
   const { li, si } = segKeys;
@@ -23159,6 +23235,39 @@ function buildNodes(src, items, line, segKeys, ub, ctx, delimBase = 0) {
       segLinks: /* @__PURE__ */ new Map(),
       hdItems
     };
+  }
+  const firstCmd = items.find((t) => t.t === "cmd");
+  if (firstCmd && firstCmd.t === "cmd") {
+    const grp0 = compoundHead(src, firstCmd.ta, firstCmd.tb);
+    if (grp0 && grp0.kind === "kw") {
+      let ta = items[0].a;
+      let tb = items[items.length - 1].b;
+      while (ta < tb && /\s/.test(src[ta])) ta++;
+      while (tb > ta && /\s/.test(src[tb - 1])) tb--;
+      const ex = extractArgs(src, ta, tb, idx, ctx.argSeq, ctx.argBodies);
+      counts.nArg += ex.count;
+      const len = tb - ta;
+      if (len > maxSeg.n) maxSeg.n = len;
+      counts.nCmd++;
+      const key = "n" + idx + "_" + li + "_" + si + "_verb";
+      return {
+        nodes: [
+          {
+            kind: "cmd",
+            key,
+            hl: ex.html,
+            len,
+            sz: sizeFor(len),
+            name: cmdNameOf(src, { ta, tb }),
+            grp: grp0,
+            hd: [],
+            test: 0
+          }
+        ],
+        segLinks: /* @__PURE__ */ new Map(),
+        hdItems
+      };
+    }
   }
   const nodes = [];
   const skip = /* @__PURE__ */ new Set();

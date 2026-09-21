@@ -167,6 +167,19 @@ export interface DelimItem {
 }
 
 /**
+ * The head of a segment for the compound rule (ticket #187): the first
+ * command token, seen through the negation and time prefixes the renderer
+ * keeps as verbatim text, so `! if ...; fi` degrades like `if ...; fi`.
+ * Anything else (a mid-segment compound after &&) keeps the normal path:
+ * its terminator rides inside one command slice, never as its own node.
+ */
+function compoundHead(src: string, ta: number, tb: number): GroupTag | null {
+  const m = /^(?:!\s*|time\s+)+/.exec(SL(src, ta, tb));
+  const off = m ? m[0].length : 0;
+  return detectGroup(src, ta + off, tb);
+}
+
+/**
  * Build model nodes for one semicolon segment. Attaches heredoc bodies to
  * their delimiters, merges redirect targets and heredoc delimiters into
  * their operators, reorders inputs after their command, fuses 2>&1 |
@@ -266,6 +279,50 @@ export function buildNodes(
       segLinks: new Map(),
       hdItems,
     };
+  }
+  // Ticket #187: a compound command degrades to one verbatim node over the
+  // full segment span, the same choice #181 made for backgrounding, for the
+  // same reason. The splitter keeps the construct in one segment, so a
+  // leading opener means the whole construct arrived intact: drawing its
+  // body operators as chips or pipe links would invent dataflow between
+  // statements that are not siblings, and drawing the terminator as a
+  // command claims the user typed a command they never typed. All text is
+  // shown, no edge is drawn, no order is claimed. Heredoc bodies still ride
+  // along below the panel through hdItems, so nothing is hidden either.
+  // The group badge survives: the renderer knew it was looking at a
+  // compound, and saying so is true.
+  const firstCmd = items.find((t) => t.t === "cmd");
+  if (firstCmd && firstCmd.t === "cmd") {
+    const grp0 = compoundHead(src, firstCmd.ta, firstCmd.tb);
+    if (grp0 && grp0.kind === "kw") {
+      let ta = items[0].a;
+      let tb = items[items.length - 1].b;
+      while (ta < tb && /\s/.test(src[ta])) ta++;
+      while (tb > ta && /\s/.test(src[tb - 1])) tb--;
+      const ex = extractArgs(src, ta, tb, idx, ctx.argSeq, ctx.argBodies);
+      counts.nArg += ex.count;
+      const len = tb - ta;
+      if (len > maxSeg.n) maxSeg.n = len;
+      counts.nCmd++;
+      const key = "n" + idx + "_" + li + "_" + si + "_verb";
+      return {
+        nodes: [
+          {
+            kind: "cmd",
+            key,
+            hl: ex.html,
+            len,
+            sz: sizeFor(len),
+            name: cmdNameOf(src, { ta, tb }),
+            grp: grp0,
+            hd: [],
+            test: 0,
+          },
+        ],
+        segLinks: new Map(),
+        hdItems,
+      };
+    }
   }
   const nodes: ModelNode[] = [];
   const skip = new Set<number>();
