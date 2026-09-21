@@ -3,6 +3,7 @@
 
 import { isFeeItem, type Order, type OutputDoc, parseDate } from "./common.ts";
 import { round2 } from "./common.ts";
+import { settleRemainder, shareEqual } from "../app/expense-split/split-math.js";
 import type { RunMeta } from "./runstate.ts";
 
 // One flat line the wizard shows. Quantity copies become separate lines.
@@ -100,18 +101,17 @@ export function flattenOrders(orders: Order[]): FlatItem[] {
   return flat;
 }
 
-// Split the price evenly. The rounding gap lands on the last person.
+// Split the price evenly. The rounding remainder lands on the FIRST
+// person, by the remainder rule in app/expense-split/split-math.js —
+// this calls that shared helper, so the engine and the browser board
+// (whose checkpointed amounts the server stores unchecked) agree.
 export function equalAmounts(
   price: number,
   people: string[],
 ): Record<string, number> {
   const out: Record<string, number> = {};
   if (people.length === 0) return out;
-  const share = round2(price / people.length);
-  for (const name of people) out[name] = share;
-  const gap = round2(price - share * people.length);
-  out[people[people.length - 1]] = round2(share + gap);
-  return out;
+  return shareEqual(price, people);
 }
 
 // Give the whole price to one person.
@@ -178,11 +178,13 @@ export function repeatAmounts(
   for (const name of selected) {
     amounts[name] = round2((prev.amounts[name] ?? 0) * ratio);
   }
-  const gap = round2(price - Object.values(amounts).reduce((a, b) => a + b, 0));
-  amounts[selected[selected.length - 1]] = round2(
-    amounts[selected[selected.length - 1]] + gap,
-  );
-  return { splitType: prev.splitType, people: selected, amounts };
+  // The scaled rounding gap lands on the first person, by the remainder
+  // rule in app/expense-split/split-math.js — same as every other path.
+  return {
+    splitType: prev.splitType,
+    people: selected,
+    amounts: settleRemainder(price, selected, amounts),
+  };
 }
 
 // Sum every assignment into per person totals, rounded to two decimals.

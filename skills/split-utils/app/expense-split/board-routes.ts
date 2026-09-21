@@ -9,9 +9,15 @@ import {
 } from "../../src/splitstate.ts";
 import { readRunMetaSync, runsDir } from "../../src/runstate.ts";
 
-// Component file beside this module. The component lands in a later
-// ticket, so this path misses until then.
+// Component file beside this module, plus the sibling plain-JS math
+// module it imports. The board loads as a module script, so its relative
+// import of ./split-math.js arrives here as /app/split-math.js. Both stay
+// plain files with no build step; this route serves each one statically.
 const BOARD_URL = new URL("./split-board.js", import.meta.url);
+const BOARD_FILES = new Map([
+  ["/app/split-board.js", BOARD_URL],
+  ["/app/split-math.js", new URL("./split-math.js", import.meta.url)],
+]);
 
 // True for a plain record value.
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -33,11 +39,11 @@ function plain(status: number, text: string): Response {
   });
 }
 
-// Serve the browser component file. Answer 404 while it misses.
-async function serveBoardFile(): Promise<Response> {
+// Serve one plain browser file by its module URL. Answer 404 while it misses.
+async function serveBoardFile(url: URL): Promise<Response> {
   let text: string;
   try {
-    text = await Deno.readTextFile(BOARD_URL);
+    text = await Deno.readTextFile(url);
   } catch {
     return plain(404, "The split board file is not ready yet.");
   }
@@ -77,6 +83,10 @@ async function applyPatch(req: Request): Promise<Response> {
   }
   const assignments = body["assignments"];
   if (isRecord(assignments)) {
+    // Amounts arrive computed by the board's share helpers and are stored
+    // verbatim; the export copies them into output.json untouched. So the
+    // board's numbers are what gets pushed — both sides share the
+    // remainder rule in ./split-math.js to keep them identical.
     for (const [key, value] of Object.entries(assignments)) {
       if (isRecord(value)) {
         doc.assignments[key] = value as unknown as ItemAssignment;
@@ -110,8 +120,9 @@ export async function handleBoardRoute(
   req: Request,
 ): Promise<Response | null> {
   const path = new URL(req.url).pathname;
-  if (req.method === "GET" && path === "/app/split-board.js") {
-    return await serveBoardFile();
+  const boardFile = BOARD_FILES.get(path);
+  if (req.method === "GET" && boardFile !== undefined) {
+    return await serveBoardFile(boardFile);
   }
   if (req.method === "POST" && path === "/app/split-patch") {
     return await applyPatch(req);

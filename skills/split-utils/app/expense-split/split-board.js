@@ -1,74 +1,12 @@
 // Split board browser component. It owns one run in the page and
-// checkpoints changed lines to the server. It imports nothing and
-// needs no build step. The pure arithmetic below stays testable
-// from Deno. Browser work starts only through start at the foot.
+// checkpoints changed lines to the server. The pure arithmetic lives in
+// the sibling split-math.js, which the Deno engine imports too, so the
+// rounding remainder lands on the same person on both sides (see the
+// remainder rule there). This file imports only that sibling and needs
+// no build step. Browser work starts only through start at the foot.
+import { round2, shareEqual, sharePercent, shareSingle } from "./split-math.js";
 
-/**
- * Round money to two decimal places.
- * @param {number} n
- * @returns {number}
- */
-export function round2(n) {
-  return Math.round(n * 100) / 100;
-}
-
-// Split a price evenly across people. The parts add up to the price
-// exactly. Any remainder lands on the first person.
-/**
- * @param {number} price
- * @param {string[]} people
- * @returns {Record<string, number>}
- */
-export function shareEqual(price, people) {
-  const names = [...people];
-  if (names.length === 0) {
-    throw new Error("an equal split needs one person");
-  }
-  const part = round2(price / names.length);
-  const out = {};
-  for (const name of names) {
-    out[name] = part;
-  }
-  out[names[0]] = round2(price - part * (names.length - 1));
-  return out;
-}
-
-// Turn percents into money for one price. The parts add up to the
-// price exactly. Any remainder lands on the first person.
-/**
- * @param {number} price
- * @param {Record<string, number>} percents
- * @returns {Record<string, number>}
- */
-export function sharePercent(price, percents) {
-  const names = Object.keys(percents);
-  if (names.length === 0) {
-    throw new Error("a percent split needs one person");
-  }
-  const out = {};
-  for (const name of names) {
-    out[name] = round2((price * percents[name]) / 100);
-  }
-  let rest = 0;
-  for (const name of names.slice(1)) {
-    rest += out[name];
-  }
-  out[names[0]] = round2(price - rest);
-  return out;
-}
-
-// Put a whole price on one person.
-/**
- * @param {number} price
- * @param {string} person
- * @returns {Record<string, number>}
- */
-export function shareSingle(price, person) {
-  if (person === undefined || person === null || person === "") {
-    throw new Error("a single split needs one person");
-  }
-  return { [person]: round2(price) };
-}
+export { round2, shareEqual, sharePercent, shareSingle };
 
 // Build a patch carrying only the changed lines. Dirty holds item
 // indexes changed since the last post. Assignments and skipped stay

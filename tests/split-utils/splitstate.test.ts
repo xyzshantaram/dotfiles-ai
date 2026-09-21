@@ -84,11 +84,12 @@ Deno.test("flatten keeps combo names real", () => {
   assertEquals(flat[0].isFee, false, "combo is real");
 });
 
-// equalAmounts splits evenly and parks the rounding gap on the last person.
-Deno.test("equal split parks rounding on last", () => {
+// equalAmounts splits evenly and parks the rounding gap on the first person,
+// by the shared remainder rule in app/expense-split/split-math.js.
+Deno.test("equal split parks rounding on first", () => {
   // Split 100 across three people.
   const out = equalAmounts(100, ["Asha", "Ben", "Cara"]);
-  assertEquals(out, { Asha: 33.33, Ben: 33.33, Cara: 33.34 }, "shares");
+  assertEquals(out, { Asha: 33.34, Ben: 33.33, Cara: 33.33 }, "shares");
   // Check the shares sum back to the price.
   const sum = Object.values(out).reduce((a, b) => a + b, 0);
   assert(Math.abs(sum - 100) < 0.001, "shares sum to price");
