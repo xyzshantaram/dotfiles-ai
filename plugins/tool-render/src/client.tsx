@@ -1487,7 +1487,14 @@ function BashTabStrip(props) {
     </div>
   );
 }
-function BashRow(props) {
+// Exported for tests ONLY. #173 criterion 3 names live/streaming output and
+// approval state as production concerns the prototype never carried, and the
+// suite pinned both by regex over this file's source text — bash-tabs.test.ts
+// says so in as many words ("needs a render harness to observe"). A substring
+// pin passes against code that merely MENTIONS the right identifier, so the
+// export exists to let bash-live-approval.test.ts call this row and read the
+// options object it actually computes. Nothing imports BashRow at runtime.
+export function BashRow(props) {
   var expandedState = useState(false);
   var expanded = expandedState[0];
   var setExpanded = expandedState[1];
