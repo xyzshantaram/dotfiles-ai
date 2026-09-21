@@ -1,5 +1,5 @@
 // plugins/tmp-dsh-shared.ts
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { dshHomePath } from "@deepseek-ai/dsh-home-paths";
@@ -27,19 +27,10 @@ function bindDurableTmp(confined, hostTmpDsh, hostAidosScratch, logger) {
   const next = [...argv.slice(0, idx + 2), ...binds, ...argv.slice(idx + 2)];
   return { ...confined, argv: next };
 }
-function markApplied(hostTmpDsh) {
-  try {
-    mkdirSync(hostTmpDsh, { recursive: true });
-    writeFileSync(join(hostTmpDsh, ".applied"), `${process.pid} ${Date.now()}`);
-  } catch {
-  }
-}
 function apply(ctx) {
   const sandbox = ctx.sandbox;
   const hostTmpDsh = join(tmpdir(), "dsh");
   const hostAidosScratch = dshHomePath("aidos", "scratch");
-  markApplied(hostAidosScratch);
-  markApplied(hostTmpDsh);
   const original = sandbox.confine.bind(sandbox);
   sandbox.confine = (argv, policy) => {
     const confined = original(argv, policy);

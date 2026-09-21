@@ -116,14 +116,23 @@ describe("bash wiring: the measurer element", () => {
 });
 
 describe("bash wiring: the stylesheet", () => {
-  it("strips both :root value blocks and keeps the rules", () => {
+  it("ships no :root value blocks, and the strip still guards the injection", () => {
+    // The prototype :root stand-ins were deleted from the source (#336: the
+    // page never saw them — the strip dropped them at runtime). The strip
+    // stays as a guard, pinned against a synthetic fixture rather than the
+    // file, so a future :root addition cannot leak page-wide token values.
+    // (Comment-aware: the file's own history note names the selector.)
     const css = readFileSync(new URL("./bash-graph/styles.css", import.meta.url), "utf8");
-    expect(css).toContain(":root");
+    const rules = css.replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(rules).not.toContain(":root");
     const stripped = stripBashGraphRoot(css);
-    expect(stripped).not.toContain(":root");
-    expect(stripped).not.toContain("data-theme");
     expect(stripped).toContain(".prim-node");
     expect(stripped).toContain("#measure");
+    const fixture = ':root{--x:1;}html[data-theme="light"]{--y:2;}.prim-node{color:red;}';
+    const cleaned = stripBashGraphRoot(fixture);
+    expect(cleaned).not.toContain(":root");
+    expect(cleaned).not.toContain("data-theme");
+    expect(cleaned).toContain(".prim-node");
   });
 });
 

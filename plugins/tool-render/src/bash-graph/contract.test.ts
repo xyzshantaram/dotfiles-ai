@@ -378,7 +378,6 @@ describe("ship-clean (criterion 7)", () => {
       "measure.ts",
       "layout.ts",
       "render.ts",
-      "index.ts",
     ];
     for (const f of modules) {
       const src = readFileSync(`${DIR}/${f}`, "utf8");

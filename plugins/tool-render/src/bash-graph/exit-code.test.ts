@@ -12,7 +12,6 @@ import { splitLines, splitSemis, tokenizeParts, type UnbashScan } from "./parse.
 import {
   attributeFinalSegment,
   attributePipeStages,
-  attributeSequenceStages,
   buildNodes,
   buildSpecs,
   exitBadgeHTML,
@@ -32,21 +31,6 @@ function segNodes(src: string, li: number, si: number): ModelNode[] {
   const items = tokenizeParts(src, sg.a, sg.b);
   const ctx = makeBuildContext(0);
   return buildNodes(src, items, ln, { li, si }, UB, ctx).nodes;
-}
-
-/** Node lists of every rendered panel of a command, in render order. */
-function allSegments(src: string): ModelNode[][] {
-  const lines = splitLines(src);
-  const out: ModelNode[][] = [];
-  lines.forEach((ln, li) => {
-    splitSemis(src, ln.a, ln.b).forEach((sg, si) => {
-      const items = tokenizeParts(src, sg.a, sg.b);
-      if (!items.length) return;
-      const ctx = makeBuildContext(0);
-      out.push(buildNodes(src, items, ln, { li, si }, UB, ctx).nodes);
-    });
-  });
-  return out;
 }
 
 /** Per-cmd exit codes of one segment, in node order. */
@@ -148,62 +132,7 @@ describe("attributePipeStages: the ported rule", () => {
   });
 });
 
-describe("attributeSequenceStages: final group only, never a guess", () => {
-  it("re-points bash-sequence L453: codes reach the final segment only", () => {
-    // REJECTS coding earlier segments: PIPESTATUS holds the last pipeline.
-    const coded = attributeSequenceStages(allSegments("a | b; c | d"), [
-      { name: "c", exitCode: 1 },
-      { name: "d", exitCode: 0 },
-    ]);
-    expect(coded.map(cmdCodes)).toEqual([
-      [undefined, undefined],
-      [1, 0],
-    ]);
-  });
-
-  it("re-points bash-sequence L466: bare, mismatched, absent, or text-final", () => {
-    // REJECTS dropped gates and chip-blindness, one assert at a time. The
-    // final text group is "c && d | e": its && chip disqualifies it, the
-    // same way the old model made it a text group instead of a diagram.
-    const named = [
-      { name: "c", exitCode: 1 },
-      { name: "d", exitCode: 0 },
-    ];
-    expect(
-      attributeSequenceStages(allSegments("a | b; c | d"), [{ exitCode: 1 }, { exitCode: 0 }]).map(
-        cmdCodes,
-      ),
-    ).toEqual([
-      [undefined, undefined],
-      [undefined, undefined],
-    ]);
-    expect(
-      attributeSequenceStages(allSegments("a | b; c | d"), [...named, { name: "e", exitCode: 0 }]).map(
-        cmdCodes,
-      ),
-    ).toEqual([
-      [undefined, undefined],
-      [undefined, undefined],
-    ]);
-    expect(attributeSequenceStages(allSegments("a | b; c | d"), undefined).map(cmdCodes)).toEqual([
-      [undefined, undefined],
-      [undefined, undefined],
-    ]);
-    expect(attributeSequenceStages(allSegments("a | b; c && d | e"), named).map(cmdCodes)).toEqual([
-      [undefined, undefined],
-      [undefined, undefined, undefined],
-    ]);
-  });
-
-  it("re-points bash-sequence L586: a final chain group never shows codes", () => {
-    // REJECTS coding chained finals: a conditional script disqualifies
-    // naming host-side, so there is nothing to attribute without guessing.
-    const coded = attributeSequenceStages(allSegments("a && b; c && d"), [
-      { name: "d", exitCode: 0 },
-    ]);
-    expect(coded.map(cmdCodes)).toEqual([[undefined, undefined], [undefined, undefined]]);
-  });
-
+describe("per-command code places", () => {
   it("re-points bash-chain-panel L72: every part has its own code place", () => {
     // REJECTS a shared or single code field: hand-setting the middle
     // command's code reaches exactly that card and leaks nowhere.

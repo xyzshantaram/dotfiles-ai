@@ -1,12 +1,12 @@
 /**
- * Regression tests for normalizeErrorClass and failoverNoticeText in plugins/profiles.ts.
+ * Regression tests for normalizeErrorClass in plugins/profiles.ts.
  *
  * The classifier order matters: the no-credits message test runs before the
  * code table, so a QUOTA code paired with an insufficient-credits message
  * stays no-credits instead of collapsing to rate-limit.
  */
 import { describe, expect, it } from "vitest";
-import { normalizeErrorClass, failoverNoticeText } from "./profiles";
+import { normalizeErrorClass } from "./profiles";
 
 describe("normalizeErrorClass", () => {
   it("keeps no-credits when a QUOTA code meets a billing message", () => {
@@ -64,51 +64,5 @@ describe("normalizeErrorClass", () => {
 
   it("keeps no-credits when QUOTA code meets billing message", () => {
     expect(normalizeErrorClass("QUOTA", "insufficient credits")).toBe("no-credits");
-  });
-});
-
-describe("failoverNoticeText", () => {
-  it("formats the header with exact shape", () => {
-    const result = failoverNoticeText("openai", "gpt-4", "anthropic", "claude-3", "RATE_LIMIT", "");
-    expect(result).toMatch(/^LLM failover openai\/gpt-4 -> anthropic\/claude-3 \(RATE_LIMIT\)/);
-  });
-
-  it("uses UNKNOWN when code is undefined", () => {
-    const result = failoverNoticeText("openai", "gpt-4", "anthropic", "claude-3", undefined, "");
-    expect(result).toMatch(/^LLM failover openai\/gpt-4 -> anthropic\/claude-3 \(UNKNOWN\)/);
-  });
-
-  it("includes blank line between header and detail", () => {
-    const result = failoverNoticeText(
-      "openai",
-      "gpt-4",
-      "anthropic",
-      "claude-3",
-      "AUTH",
-      "Invalid API key",
-    );
-    expect(result).toContain("\n\n");
-    const parts = result.split("\n\n");
-    expect(parts[0]).toMatch(/^LLM failover/);
-    expect(parts[1]).toBe("Invalid API key");
-  });
-
-  it("trims message to 500 chars", () => {
-    const longMessage = "x".repeat(600);
-    const result = failoverNoticeText("a", "b", "c", "d", "E", longMessage);
-    const lines = result.split("\n\n");
-    expect(lines[1].length).toBe(500);
-  });
-
-  it("trims excess whitespace from message", () => {
-    const result = failoverNoticeText("a", "b", "c", "d", "E", "  message  \n  ");
-    expect(result).toContain("message");
-    expect(result).not.toContain("  message  ");
-  });
-
-  it("handles empty message", () => {
-    const result = failoverNoticeText("a", "b", "c", "d", "E", "");
-    const lines = result.split("\n\n");
-    expect(lines[1]).toBe("");
   });
 });

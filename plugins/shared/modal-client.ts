@@ -83,11 +83,6 @@ function api(): ModalApi | null {
   return candidate as ModalApi;
 }
 
-/** Whether a modal opened right now would actually render. */
-export function modalAvailable(): boolean {
-  return api() !== null;
-}
-
 /**
  * Guarded cross-bundle open. NEVER throws; REPORTS instead (see the
  * load-bearing rule above). A caller that gets `opened: false` must handle

@@ -34,7 +34,6 @@ async function readBody(req, maxBytes = DEFAULT_MAX_BODY_BYTES) {
 // plugins/restart-pause/src/quiesce.ts
 var QuiesceTracker = class {
   running = /* @__PURE__ */ new Map();
-  quiescing = false;
   /** Apply one `agent/status` event. */
   observe(agent, status, label) {
     if (status === "running") {
@@ -43,24 +42,15 @@ var QuiesceTracker = class {
     }
     this.running.delete(agent);
   }
-  /** Apply one `agent/disposed` event, so a vanished agent cannot hold the latch. */
+  /** Apply one `agent/disposed` event, so a vanished agent is not tracked forever. */
   forget(agent) {
     this.running.delete(agent);
-  }
-  /** A restart has been asked for; we are now waiting for quiet. */
-  beginQuiesce() {
-    this.quiescing = true;
-  }
-  /** The user cancelled, or the restart finished and this process is still alive. */
-  cancelQuiesce() {
-    this.quiescing = false;
   }
   snapshot() {
     const labels = [...this.running.values()].sort();
     return {
       running: labels.length,
       runningLabels: labels,
-      quiescing: this.quiescing,
       quiet: labels.length === 0
     };
   }

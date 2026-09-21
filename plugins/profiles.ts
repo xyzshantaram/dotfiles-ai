@@ -400,26 +400,6 @@ export function normalizeErrorClass(
 }
 
 /**
- * Format a failover notice for injection as a chat row. Returns plain text with
- * no markdown. First line has the exact shape `LLM failover FROMPROV/FROMMODEL
- * -> TOPROV/TOMODEL (CODE)`, then a blank line, then the message trimmed to
- * 500 chars.
- */
-export function failoverNoticeText(
-  fromProvider: string,
-  fromModel: string,
-  toProvider: string,
-  toModel: string,
-  code: string | undefined,
-  message: string,
-): string {
-  const header = `LLM failover ${fromProvider}/${fromModel} -> ${toProvider}/${toModel} (${code ?? "UNKNOWN"})`;
-  const detail = String(message ?? "").trim();
-  const trimmed = detail.length > 500 ? detail.slice(0, 500) : detail;
-  return `${header}\n\n${trimmed}`;
-}
-
-/**
  * Mark one level down under its error class. Every failure is recorded:
  * failures that classify land under their class, and unclassified failures
  * (transport blips, bodyless 500s, dropped streams) fall back to the short

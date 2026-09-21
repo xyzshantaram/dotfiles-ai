@@ -27,5 +27,8 @@
       ]
     }
   },
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "snappyjs": "^0.7.0"
+  }
 }

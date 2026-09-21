@@ -8,48 +8,13 @@
  * boundary. Rule order and values are otherwise verbatim, including the
  * round comments that record which bug each rule exists for (criterion 6).
  *
- * THEME NOTE for ticket #173 (the swap): the :root token VALUES below are
- * prototype stand-ins; only the token NAMES are real. The swap must
- * reconcile these with the production theme instead of shipping the
- * stand-in values as global overrides. The --proto-* highlight colours
- * likewise need a production home.
+ * THEME NOTE: the prototype's :root token VALUE blocks used to live below
+ * and were deleted (ticket #336): stripBashGraphRoot dropped them at runtime
+ * so the page never saw them, and only the token NAMES are real — the host
+ * theme owns their values. The --proto-* highlight colours likewise need a
+ * production home: they resolve from the scoped block in client.module.css.
  */
 
-/* ---- real repo token NAMES, plausible values per theme ---- */
-:root, :root[data-theme="dark"], html[data-theme="dark"]{
-  --dsw-alias-bg-base:#16161a;
-  --dsw-alias-bg-layer-1:#232329;
-  --dsw-alias-border-l1:#2e2e37;
-  --dsw-alias-border-l2:#41414d;
-  --dsw-alias-border-l3:#5b5b68;
-  --dsw-alias-label-primary:#ececf1;
-  --dsw-alias-label-secondary:#b9b9c6;
-  --dsw-alias-label-tertiary:#8e8e9a;
-  --dsw-alias-label-caption:#6d6d78;
-  --dsw-alias-markdown-code-block:#0f0f13;
-  --dsw-alias-state-error-primary:#f2555a;
-  --dsw-alias-state-business-primary:#5b9bff;
-  --dsw-alias-interactive-bg-hover:#33333d;
-  --ds-font-family-code:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  --proto-str:#9ece6a; --proto-path:#e0af68; --proto-flag:#7aa2f7; --proto-var:#bb9af7;
-}
-html[data-theme="light"]{
-  --dsw-alias-bg-base:#f3f3f5;
-  --dsw-alias-bg-layer-1:#ffffff;
-  --dsw-alias-border-l1:#e3e3e8;
-  --dsw-alias-border-l2:#d2d2da;
-  --dsw-alias-border-l3:#a8a8b5;
-  --dsw-alias-label-primary:#191920;
-  --dsw-alias-label-secondary:#41414c;
-  --dsw-alias-label-tertiary:#71717e;
-  --dsw-alias-label-caption:#a0a0ab;
-  --dsw-alias-markdown-code-block:#e9e9ed;
-  --dsw-alias-state-error-primary:#c81e1e;
-  --dsw-alias-state-business-primary:#0b5cff;
-  --dsw-alias-interactive-bg-hover:#e4e4ea;
-  --ds-font-family-code:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  --proto-str:#2c7a2c; --proto-path:#9a5b00; --proto-flag:#1d4fd7; --proto-var:#6d28d9;
-}
 /* ---- the six primitives ---- */
 /* R14.1 (owner, 2026-09-18): panels stack flush, so the RUN reads as one
    surface rather than a column of separate lozenges — only the outer two
@@ -70,9 +35,6 @@ html[data-theme="light"]{
   border-top-left-radius:0;border-top-right-radius:0;}
 .prim-panel-wrap:has(~ .prim-panel-wrap) > .prim-panel{
   border-bottom-left-radius:0;border-bottom-right-radius:0;}
-.prim-panel-head{display:flex;flex-wrap:wrap;gap:.375rem;align-items:baseline;
-  font-size:.75rem;color:var(--dsw-alias-label-secondary);margin-bottom:.25rem;}
-.prim-panel-head .idx{font-family:var(--ds-font-family-code);color:var(--dsw-alias-label-primary);font-weight:600;}
 .prim-node{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l3);
   border-radius:.5rem;background:var(--dsw-alias-bg-layer-1);
   padding:.375rem .5rem;font-family:var(--ds-font-family-code);

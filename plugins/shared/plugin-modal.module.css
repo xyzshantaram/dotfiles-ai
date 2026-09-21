@@ -113,8 +113,7 @@
   overflow-x: hidden;
 }
 
-.plugin-modal-actions,
-.plugin-modal-footer {
+.plugin-modal-actions {
   /* Action buttons are ALWAYS right-aligned. The shared component wraps
      whatever the caller passes as `actions` in this row, so the alignment is
      structural: no caller has to ask for it and no caller can opt out of it.

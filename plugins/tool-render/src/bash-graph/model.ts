@@ -67,7 +67,7 @@ interface CmdNode {
   incoming?: string;
   /**
    * Per-stage exit code, ticket #180 seam. Set ONLY by attributePipeStages
-   * (through attributeFinalSegment / attributeSequenceStages), never at
+   * (through attributeFinalSegment), never at
    * build: the code arrives from the tool result after the command runs, so
    * no corpus of source text can supply it. Undefined renders exactly as
    * before (the dock string is unchanged), which is what keeps the
@@ -541,9 +541,8 @@ export function attributePipeStages(nodes: ModelNode[], pipeStages: unknown): Mo
 
 /**
  * The sequence gate for ONE segment, and the single expression of the
- * sequence rule: render.ts calls this for its current panel, and
- * attributeSequenceStages below maps it over caller-built segment lists,
- * so the rule lives in exactly one place. Codes reach only the FINAL
+ * sequence rule: render.ts calls this for its current panel with isLast set
+ * for the final one, so the rule lives in exactly one place. Codes reach only the FINAL
  * segment (PIPESTATUS holds the last pipeline only; earlier lines were
  * never captured), and never a segment carrying a conditional chip: in the
  * old model a conditional anywhere makes the final group a chain or a
@@ -560,23 +559,6 @@ export function attributeFinalSegment(
   if (!isLast) return nodes.map((n) => ({ ...n }));
   if (nodes.some((n) => n.chip)) return nodes.map((n) => ({ ...n }));
   return attributePipeStages(nodes, pipeStages);
-}
-
-/**
- * Port of attributeSequenceStages from bash-diagram.ts (ticket #180):
- * attribute per-stage exit codes onto a copy of a segment list. Only the
- * final segment can receive codes, through attributeFinalSegment above;
- * every earlier segment, and any final segment disqualified there, keeps
- * every code undefined. `segments` is one entry per rendered panel, in
- * render order; the inputs are never mutated.
- */
-export function attributeSequenceStages(
-  segments: ModelNode[][],
-  pipeStages: unknown,
-): ModelNode[][] {
-  return segments.map((nodes, i) =>
-    attributeFinalSegment(nodes, pipeStages, i === segments.length - 1),
-  );
 }
 /**
  * Build layout specs from model nodes. Widths are initial stylesheet widths;

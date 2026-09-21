@@ -23,7 +23,6 @@ import {
   ehIsPlausibleTokenChars,
   ehJwtIsExpired,
   ehJwtSecondsLeft,
-  ehMaskKey,
   ehParseRefreshBody,
   ehParseRefreshSuccessor,
   ehParseSessionFlexCredits,
@@ -202,18 +201,6 @@ describe("JWT decode + expiry (fail-closed)", () => {
     ["non-numeric exp is expired (fail-closed)", { exp: "later" }, true],
   ])("%s", (_name, claims, expired) => {
     expect(ehJwtIsExpired(claims, NOW)).toBe(expired);
-  });
-});
-
-describe("masking", () => {
-  it("masks dashboard-style: first 6 + •••• + last 4", () => {
-    expect(ehMaskKey("ek-dev-abcdefghijklmnopqrst")).toBe("ek-dev••••qrst");
-  });
-
-  it("masks short and empty values fully", () => {
-    expect(ehMaskKey("short")).toBe("••••");
-    expect(ehMaskKey("")).toBe("••••");
-    expect(ehMaskKey(null)).toBe("••••");
   });
 });
 

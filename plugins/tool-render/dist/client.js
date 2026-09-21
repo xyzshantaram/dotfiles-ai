@@ -2791,9 +2791,6 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
   max-height: 25rem;
   overflow-y: auto;
 }
-.tool-render-line-same {
-  color: var(--dsw-alias-label-primary);
-}
 .tool-render-diff-row.tool-render-line-del,
 .tool-render-diff-cell.tool-render-line-del {
   background: rgba(255, 166, 87, 0.16);
@@ -3931,8 +3928,9 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
 }
 /* #173: production home for the fair-copy highlight colours. The module
    references --proto-str/path/flag/var, whose only definitions lived in the
-   prototype :root blocks; those blocks do not ship (stripBashGraphRoot drops
-   them: global token values would leak across the page). The names resolve
+   prototype :root blocks (deleted, ticket #336: they never shipped \u2014
+   stripBashGraphRoot dropped them before injection, since global token
+   values would leak across the page). The names resolve
    here instead, scoped to the graph panel, in both themes. The values are
    the prototype's per-theme stand-ins, kept because they were tuned against
    this palette; the host --dsw-* tokens they sit beside resolve from the
@@ -24360,48 +24358,13 @@ var styles_default = `/* bash-graph styles: fair copy of the prototype diagram r
  * boundary. Rule order and values are otherwise verbatim, including the
  * round comments that record which bug each rule exists for (criterion 6).
  *
- * THEME NOTE for ticket #173 (the swap): the :root token VALUES below are
- * prototype stand-ins; only the token NAMES are real. The swap must
- * reconcile these with the production theme instead of shipping the
- * stand-in values as global overrides. The --proto-* highlight colours
- * likewise need a production home.
+ * THEME NOTE: the prototype's :root token VALUE blocks used to live below
+ * and were deleted (ticket #336): stripBashGraphRoot dropped them at runtime
+ * so the page never saw them, and only the token NAMES are real \u2014 the host
+ * theme owns their values. The --proto-* highlight colours likewise need a
+ * production home: they resolve from the scoped block in client.module.css.
  */
 
-/* ---- real repo token NAMES, plausible values per theme ---- */
-:root, :root[data-theme="dark"], html[data-theme="dark"]{
-  --dsw-alias-bg-base:#16161a;
-  --dsw-alias-bg-layer-1:#232329;
-  --dsw-alias-border-l1:#2e2e37;
-  --dsw-alias-border-l2:#41414d;
-  --dsw-alias-border-l3:#5b5b68;
-  --dsw-alias-label-primary:#ececf1;
-  --dsw-alias-label-secondary:#b9b9c6;
-  --dsw-alias-label-tertiary:#8e8e9a;
-  --dsw-alias-label-caption:#6d6d78;
-  --dsw-alias-markdown-code-block:#0f0f13;
-  --dsw-alias-state-error-primary:#f2555a;
-  --dsw-alias-state-business-primary:#5b9bff;
-  --dsw-alias-interactive-bg-hover:#33333d;
-  --ds-font-family-code:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  --proto-str:#9ece6a; --proto-path:#e0af68; --proto-flag:#7aa2f7; --proto-var:#bb9af7;
-}
-html[data-theme="light"]{
-  --dsw-alias-bg-base:#f3f3f5;
-  --dsw-alias-bg-layer-1:#ffffff;
-  --dsw-alias-border-l1:#e3e3e8;
-  --dsw-alias-border-l2:#d2d2da;
-  --dsw-alias-border-l3:#a8a8b5;
-  --dsw-alias-label-primary:#191920;
-  --dsw-alias-label-secondary:#41414c;
-  --dsw-alias-label-tertiary:#71717e;
-  --dsw-alias-label-caption:#a0a0ab;
-  --dsw-alias-markdown-code-block:#e9e9ed;
-  --dsw-alias-state-error-primary:#c81e1e;
-  --dsw-alias-state-business-primary:#0b5cff;
-  --dsw-alias-interactive-bg-hover:#e4e4ea;
-  --ds-font-family-code:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  --proto-str:#2c7a2c; --proto-path:#9a5b00; --proto-flag:#1d4fd7; --proto-var:#6d28d9;
-}
 /* ---- the six primitives ---- */
 /* R14.1 (owner, 2026-09-18): panels stack flush, so the RUN reads as one
    surface rather than a column of separate lozenges \u2014 only the outer two
@@ -24422,9 +24385,6 @@ html[data-theme="light"]{
   border-top-left-radius:0;border-top-right-radius:0;}
 .prim-panel-wrap:has(~ .prim-panel-wrap) > .prim-panel{
   border-bottom-left-radius:0;border-bottom-right-radius:0;}
-.prim-panel-head{display:flex;flex-wrap:wrap;gap:.375rem;align-items:baseline;
-  font-size:.75rem;color:var(--dsw-alias-label-secondary);margin-bottom:.25rem;}
-.prim-panel-head .idx{font-family:var(--ds-font-family-code);color:var(--dsw-alias-label-primary);font-weight:600;}
 .prim-node{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l3);
   border-radius:.5rem;background:var(--dsw-alias-bg-layer-1);
   padding:.375rem .5rem;font-family:var(--ds-font-family-code);
@@ -25170,7 +25130,6 @@ function renderToolRenderCard(options, approvalOpen) {
       summary
     ),
     open === true ? /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-body" }, options.body !== null && options.body !== void 0 ? options.body : options.state === "error" && options.errorText !== null && options.errorText !== void 0 && options.errorText !== "" ? /* @__PURE__ */ import_react4.default.createElement("pre", { className: "tool-render-output", "tool-render-error": true }, options.errorText) : null, options.inspect !== void 0 ? /* @__PURE__ */ import_react4.default.createElement("button", { type: "button", className: "tool-render-inspect", onClick: options.inspect }, /* @__PURE__ */ import_react4.default.createElement(IconInspectOutline122, null), " Inspect") : null) : null,
-    options.below !== null && options.below !== void 0 ? options.below : null,
     options.callId !== void 0 && options.callId !== null && typeof options.useSession === "function" ? /* @__PURE__ */ import_react4.default.createElement(
       ToolRenderApprovalBar,
       {
@@ -25482,7 +25441,7 @@ function ReadRow(props) {
   });
 }
 function escalationBanner(detail, settled) {
-  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-escalation" }, /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-cmd-label" }, escalationLabel(settled), /* @__PURE__ */ import_react4.default.createElement(
+  return /* @__PURE__ */ import_react4.default.createElement("div", null, /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-cmd-label" }, escalationLabel(settled), /* @__PURE__ */ import_react4.default.createElement(
     "code",
     {
       className: "tool-render-escalation-mode",
@@ -25565,7 +25524,7 @@ function BashGraphPanels(props) {
     if (root === null || typeof document === "undefined") return;
     toggleBashGraphBlock(document, root);
   };
-  return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-bash-graph", onClick: onPanelsClick }, /* @__PURE__ */ import_react4.default.createElement("div", { dangerouslySetInnerHTML: { __html: '<svg aria-hidden="true" style="display:none">' + PIPE_GLYPH_SYMBOL + "</svg>" } }), panels.map(function(html, i) {
+  return /* @__PURE__ */ import_react4.default.createElement("div", { onClick: onPanelsClick }, /* @__PURE__ */ import_react4.default.createElement("div", { dangerouslySetInnerHTML: { __html: '<svg aria-hidden="true" style="display:none">' + PIPE_GLYPH_SYMBOL + "</svg>" } }), panels.map(function(html, i) {
     return /* @__PURE__ */ import_react4.default.createElement("div", { key: i, className: "prim-panel-wrap", dangerouslySetInnerHTML: { __html: html } });
   }));
 }
@@ -26055,7 +26014,6 @@ function resolveEffectiveCwd(props) {
 }
 function editBadgeLabel(rawName, toolTitle) {
   if (rawName === "edit") return "Edit file";
-  if (rawName === "undo_edit") return "Undo edit";
   if (rawName === "undo_last_edit") return "Undo last edit";
   return toolTitle;
 }
@@ -26120,7 +26078,7 @@ function makeEditRow(toolTitle) {
       callId: props.callId,
       useSession: props.useSession,
       useProjection: props.useProjection,
-      // One component serves the `edit`, `undo_edit`, and `undo_last_edit`
+      // One component serves the `edit` and `undo_last_edit`
       // registrations. The block carries the real call name, so the badge
       // shows the right human-readable label for the exact call being rendered.
       toolName: editBadgeLabel(callNameOf(block), toolTitle),
@@ -27644,7 +27602,6 @@ function RunCodeRow(props) {
     state,
     expandable: false,
     body: null,
-    below: null,
     runCode: true,
     errorSummary,
     errorText,
@@ -27846,14 +27803,6 @@ function apply(ctx) {
         priority: -100
       },
       WriteRow
-    );
-    yield ctx.slots.register(
-      {
-        name: "tool.call.toolview",
-        key: "undo_edit",
-        priority: -100
-      },
-      UndoEditRow
     );
     yield ctx.slots.register(
       {

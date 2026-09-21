@@ -236,19 +236,6 @@ function buildRows(defs, windows, labelOf?) {
   return rows;
 }
 
-/** One DeepSeek balance line from `balance_infos[0]`. */
-function renderDsBalance(info) {
-  var total = parseFloat(info.total_balance);
-  var granted = parseFloat(info.granted_balance);
-  var topped = parseFloat(info.topped_up_balance);
-  var currency = info.currency || "USD";
-  var parts = [];
-  if (Number.isFinite(total)) parts.push("$" + total.toFixed(2) + " " + currency + " balance");
-  if (Number.isFinite(topped)) parts.push("top-up $" + topped.toFixed(2));
-  if (Number.isFinite(granted)) parts.push("granted $" + granted.toFixed(2));
-  return parts.join(" · ");
-}
-
 /** DeepSeek dashboard: big balance + monthly cost + token breakdown. */
 function renderDsDashboard(bal, amount, cost) {
   var balObj = bal && typeof bal === "object" ? bal : {};

@@ -294,14 +294,6 @@ function normalizeErrorClass(code, message) {
   }
   return void 0;
 }
-function failoverNoticeText(fromProvider, fromModel, toProvider, toModel, code, message) {
-  const header = `LLM failover ${fromProvider}/${fromModel} -> ${toProvider}/${toModel} (${code ?? "UNKNOWN"})`;
-  const detail = String(message ?? "").trim();
-  const trimmed = detail.length > 500 ? detail.slice(0, 500) : detail;
-  return `${header}
-
-${trimmed}`;
-}
 function markDown(level, code, message) {
   const cls = normalizeErrorClass(code, message) ?? "transient";
   const key = errorKey(level, cls);
@@ -976,7 +968,6 @@ export {
   clearDownCache,
   clearFailoverEvents,
   effectiveTtlMs,
-  failoverNoticeText,
   inject,
   isCachedDown,
   isSequenceFailed,

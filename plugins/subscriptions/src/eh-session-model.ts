@@ -296,18 +296,6 @@ export function ehJwtIsExpired(claims, nowSec) {
   return left <= 0;
 }
 
-/**
- * Dashboard-style masking for the one displayable key shape
- * (`ek-dev••••••••••••••••tKci` -> `ek-dev••••tKci`): first 6 + •••• + last
- * 4. Short values mask fully. JWTs are NEVER displayable — there is no
- * helper that renders one.
- */
-export function ehMaskKey(value) {
-  if (typeof value !== "string" || value === "") return "••••";
-  if (value.length <= 10) return "••••";
-  return value.slice(0, 6) + "••••" + value.slice(-4);
-}
-
 // ── Session surface parsers: field names match the captured shapes ────────
 
 function ehNum(value) {

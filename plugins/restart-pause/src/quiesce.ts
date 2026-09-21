@@ -21,8 +21,6 @@ export interface QuiesceSnapshot {
   readonly running: number;
   /** Stable labels for what is running, so the UI can name them rather than counting. */
   readonly runningLabels: readonly string[];
-  /** True once a restart has been requested and we are waiting for quiet. */
-  readonly quiescing: boolean;
   /** True when nothing is running: the only state in which a restart is clean. */
   readonly quiet: boolean;
 }
@@ -36,7 +34,6 @@ export interface QuiesceSnapshot {
  */
 export class QuiesceTracker {
   private readonly running = new Map<object, string>();
-  private quiescing = false;
 
   /** Apply one `agent/status` event. */
   observe(agent: object, status: AgentStatus, label: string): void {
@@ -47,19 +44,9 @@ export class QuiesceTracker {
     this.running.delete(agent);
   }
 
-  /** Apply one `agent/disposed` event, so a vanished agent cannot hold the latch. */
+  /** Apply one `agent/disposed` event, so a vanished agent is not tracked forever. */
   forget(agent: object): void {
     this.running.delete(agent);
-  }
-
-  /** A restart has been asked for; we are now waiting for quiet. */
-  beginQuiesce(): void {
-    this.quiescing = true;
-  }
-
-  /** The user cancelled, or the restart finished and this process is still alive. */
-  cancelQuiesce(): void {
-    this.quiescing = false;
   }
 
   snapshot(): QuiesceSnapshot {
@@ -67,7 +54,6 @@ export class QuiesceTracker {
     return {
       running: labels.length,
       runningLabels: labels,
-      quiescing: this.quiescing,
       quiet: labels.length === 0,
     };
   }

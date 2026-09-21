@@ -39,8 +39,6 @@ export interface PluginModalProps {
    * so pass the buttons themselves and never a row wrapper of your own.
    */
   actions?: any;
-  /** Older name for `actions`. Renders into the same right-aligned row. */
-  footer?: any;
   /** One of the two standard sizes. Defaults to "full". */
   size?: PluginModalSize;
 }

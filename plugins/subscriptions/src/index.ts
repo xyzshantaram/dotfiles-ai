@@ -575,10 +575,6 @@ import {
   ehSessionCookieHeader,
 } from "./eh-session-model";
 
-// Re-exported for compatibility with the pre-#141 layout (these were local
-// exports of this module; the implementations moved to the fold module).
-export { parseElectronHubModels, parseElectronHubUsage };
-
 export function apply(ctx, config) {
   const credentials = ctx.get("credentials");
 

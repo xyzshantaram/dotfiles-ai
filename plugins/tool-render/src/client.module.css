@@ -520,9 +520,6 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
   max-height: 25rem;
   overflow-y: auto;
 }
-.tool-render-line-same {
-  color: var(--dsw-alias-label-primary);
-}
 .tool-render-diff-row.tool-render-line-del,
 .tool-render-diff-cell.tool-render-line-del {
   background: rgba(255, 166, 87, 0.16);
@@ -1660,8 +1657,9 @@ div[data-chat-call-id]:has(> [data-slot="tool.call.toolview"] > .tool-render-car
 }
 /* #173: production home for the fair-copy highlight colours. The module
    references --proto-str/path/flag/var, whose only definitions lived in the
-   prototype :root blocks; those blocks do not ship (stripBashGraphRoot drops
-   them: global token values would leak across the page). The names resolve
+   prototype :root blocks (deleted, ticket #336: they never shipped —
+   stripBashGraphRoot dropped them before injection, since global token
+   values would leak across the page). The names resolve
    here instead, scoped to the graph panel, in both themes. The values are
    the prototype's per-theme stand-ins, kept because they were tuned against
    this palette; the host --dsw-* tokens they sit beside resolve from the

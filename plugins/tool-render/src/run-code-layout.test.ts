@@ -5,9 +5,9 @@
  * repo, so nothing here renders anything: these are assertions about source
  * text. They cannot tell you the card LOOKS right. What they can do is catch
  * the regressions that would otherwise be invisible in review, because the
- * card still renders perfectly well when it is wrong: moving a section back
- * INSIDE the card via toolRenderRow's `below` option (output stranded above
- * every nested call, the exact layout the owner rejected), collapsing the
+ * card still renders perfectly well when it is wrong: nesting a section back
+ * INSIDE the card (output stranded above every nested call, the exact layout
+ * the owner rejected), collapsing the
  * order values so nested calls land outside the TOOL CALLS label, showing an
  * empty TOOL CALLS heading on a card with no nested calls, or rendering an
  * OUT section for empty output — all with no error, no test failure, and no
@@ -32,10 +32,13 @@ function runCodeRowBody(): string {
 }
 
 describe("run_code sections are SIBLINGS of the card, not its footer", () => {
-  it("passes below: null, so nothing is nested inside the card", () => {
-    // The whole layout depends on this. `below: <jsx>` would render the
-    // section inside the card, above the nested calls.
-    expect(runCodeRowBody()).toContain("below: null");
+  it("passes no below footer, so nothing is nested inside the card", () => {
+    // The whole layout depends on this. toolRenderRow has no `below` option
+    // at all (deleted: it was unused since Part C), so a section can only
+    // ever be a sibling — but if one comes back, RunCodeRow must not feed it.
+    expect(runCodeRowBody()).not.toContain("below:");
+    expect(runCodeRowBody()).not.toContain("options.below");
+    expect(tsx).not.toContain("options.below");
   });
 
   it("returns the head and all three sections as siblings", () => {

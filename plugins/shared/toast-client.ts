@@ -38,11 +38,6 @@ function api(): ToastApi | null {
   return candidate as ToastApi;
 }
 
-/** Whether a toast raised right now would actually be shown. */
-export function toastAvailable(): boolean {
-  return api() !== null;
-}
-
 /**
  * Raise one toast.
  * @returns its id, or null when no toast stack is loaded or the call threw.
@@ -56,17 +51,5 @@ export function toast(text: string, kind: ToastKind = "info", durationMs?: numbe
     // A broken toast stack must not take down its caller.
     console.error("[toast-client] show threw:", error);
     return null;
-  }
-}
-
-/** Dismiss a toast early. Accepts null so a caller can pass `toast()`'s result straight back. */
-export function dismissToast(id: string | null): void {
-  if (id === null) return;
-  const found = api();
-  if (found === null) return;
-  try {
-    found.dismiss(id);
-  } catch (error) {
-    console.error("[toast-client] dismiss threw:", error);
   }
 }

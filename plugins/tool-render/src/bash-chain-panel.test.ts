@@ -206,15 +206,19 @@ describe("the new stylesheet voice (hole 10)", () => {
   it("defines the syntax hues in both themes", () => {
     // The eight fair-copy hexes arrive in dark and light pairs. Syntax
     // colour is content language, and no host token expresses "this span
-    // is a string". Both pairs are pinned, not just the dark one.
+    // is a string". Both pairs are pinned, not just the dark one. They live
+    // in the scoped .tool-render-bash-panel block in client.module.css —
+    // the prototype :root stand-ins in styles.css were deleted (#336: the
+    // page never saw them), so this is the production home, not a copy.
+    const scoped = readFileSync(new URL("./client.module.css", import.meta.url), "utf8");
     for (const [dark, light] of [
       ["#9ece6a", "#2c7a2c"],
       ["#e0af68", "#9a5b00"],
       ["#7aa2f7", "#1d4fd7"],
       ["#bb9af7", "#6d28d9"],
     ]) {
-      expect(css, dark).toContain(dark);
-      expect(css, light).toContain(light);
+      expect(scoped, dark).toContain(dark);
+      expect(scoped, light).toContain(light);
     }
   });
 

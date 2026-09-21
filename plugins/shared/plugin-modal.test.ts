@@ -88,14 +88,14 @@ describe("shared modal: two standard sizes", () => {
 
 describe("shared modal: action buttons are right-aligned structurally", () => {
   it("the actions row aligns to the end in the shared stylesheet", () => {
-    const actions = ruleBlock(css, ".plugin-modal-actions,");
+    const actions = ruleBlock(css, ".plugin-modal-actions {");
     expect(actions).toContain("justify-content: flex-end;");
   });
 
   it("the component owns the row, so callers pass buttons only", () => {
     expect(tsx).toContain('<div className="plugin-modal-actions">{actions}</div>');
-    // `footer` stays accepted, and lands in the same right-aligned row.
-    expect(tsx).toContain("props.footer");
+    // No `footer` alias: no caller passes it, so the component takes `actions` only.
+    expect(code(tsx)).not.toContain("footer");
   });
 
   it("no caller re-aligns or re-sizes the shared modal from its own sheet", () => {
@@ -178,7 +178,7 @@ describe("shared modal: callers and their built bundles", () => {
   it("the type definitions stay in step with the component", () => {
     expect(dts).toContain('export type PluginModalSize = "full" | "compact" | "default";');
     expect(dts).toContain("actions?: any;");
-    expect(dts).toContain("footer?: any;");
+    expect(dts).not.toContain("footer");
     expect(dts).toContain("size?: PluginModalSize;");
   });
 });

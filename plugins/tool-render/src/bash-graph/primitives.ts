@@ -15,19 +15,6 @@
 
 import { esc, segHTML } from "./text.js";
 
-/** Text fallback per operator for the no-lucide path. */
-export const GLYPH_FB: Record<string, string> = {
-  "|": "|",
-  "&&": "&&",
-  "||": "||",
-  ">": ">",
-  ">>": ">>",
-  "2>&1": "2>&1",
-  "<<": "<<",
-  ";": ";",
-  "&": "&",
-};
-
 /** Tooltip meanings. Tooltips carry the meaning the old nodes used to hold. */
 export const OP_MEANING: Record<string, string> = {
   "|": "pipe: passes the previous step's output as input to the next step",

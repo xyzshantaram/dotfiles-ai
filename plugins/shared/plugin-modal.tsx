@@ -27,7 +27,7 @@
  * a caller cannot get the alignment wrong -- it never states it.
  *
  * Props: title (string or node), onClose (callback), children (body),
- * actions (optional button row; `footer` is the older name for it), size.
+ * actions (optional button row), size.
  *
  * Features:
  * - Header with title and close affordance (X button).
@@ -111,8 +111,6 @@ export interface PluginModalProps {
    * pass the buttons themselves, never a row wrapper of your own.
    */
   actions?: any;
-  /** Older name for `actions`. Same right-aligned row; kept for callers. */
-  footer?: any;
   /** One of the two standard sizes. Defaults to "full". */
   size?: PluginModalSize;
 }
@@ -123,9 +121,8 @@ export interface PluginModalProps {
  */
 export function PluginModal(props: PluginModalProps) {
   var size = standardSize(props.size);
-  // `actions` is the current name; `footer` is the older one. Both land in
-  // the same row, so both are right-aligned by construction.
-  var actions = props.actions !== undefined && props.actions !== null ? props.actions : props.footer;
+  // `actions` lands in the shared row, right-aligned by construction.
+  var actions = props.actions;
 
   // Close on Escape key.
   React.useEffect(

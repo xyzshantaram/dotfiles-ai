@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { closeModal, modalAvailable, openModal } from "./modal-client";
+import { closeModal, openModal } from "./modal-client";
 
 const g = globalThis as { __dshModal__?: unknown };
 
@@ -22,7 +22,6 @@ afterEach(() => {
 
 describe("modal-client", () => {
   it("reports unavailable and never throws when the host is not loaded", () => {
-    expect(modalAvailable()).toBe(false);
     expect(openModal({ title: "t", body: "b" })).toEqual({
       opened: false,
       id: null,
@@ -41,30 +40,28 @@ describe("modal-client", () => {
   });
 
   it("re-reads the global on every call, so a late host is seen", () => {
-    expect(modalAvailable()).toBe(false);
+    expect(openModal({ title: "t", body: "b" }).opened).toBe(false);
     install(makeApi());
     // Same module state, no cache: the host appeared between calls.
-    expect(modalAvailable()).toBe(true);
     expect(openModal({ title: "t", body: "b" }).opened).toBe(true);
     delete g.__dshModal__;
-    expect(modalAvailable()).toBe(false);
+    expect(openModal({ title: "t", body: "b" }).opened).toBe(false);
   });
 
   it("refuses an api whose version it does not know", () => {
     install(makeApi({ version: 2 }));
-    expect(modalAvailable()).toBe(false);
     expect(openModal({ title: "t", body: "b" }).opened).toBe(false);
   });
 
   it("refuses a global that is the wrong shape", () => {
     install(makeApi({ subscribe: undefined }));
-    expect(modalAvailable()).toBe(false);
+    expect(openModal({ title: "t", body: "b" }).opened).toBe(false);
     install(makeApi({ open: "not a function" }));
-    expect(modalAvailable()).toBe(false);
+    expect(openModal({ title: "t", body: "b" }).opened).toBe(false);
     install("nonsense");
-    expect(modalAvailable()).toBe(false);
+    expect(openModal({ title: "t", body: "b" }).opened).toBe(false);
     install(null);
-    expect(modalAvailable()).toBe(false);
+    expect(openModal({ title: "t", body: "b" }).opened).toBe(false);
   });
 
   it("reports a throwing open instead of throwing, so a broken host cannot break its caller", () => {

@@ -2250,8 +2250,6 @@ export {
   name,
   parseCommandCodeCredits,
   parseCommandCodeUsage,
-  parseElectronHubModels,
-  parseElectronHubUsage,
   parseZaiQuota,
   parseZaiUsage
 };

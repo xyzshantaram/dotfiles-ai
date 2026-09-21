@@ -15,15 +15,18 @@
  * SlotCore.register() throws when a second entry declares the same child
  * slot name (`slot "tool.call.toolview" is already declared`, verified by
  * running the shipped SlotCore). So this bundle shadows the per-tool ROWS:
- * it registers the `read`, `bash`, `edit`, `write`, `undo_edit`,
+ * it registers the `read`, `bash`, `edit`, `write`,
  * `undo_last_edit`, `todo_write`, `ask_user_question`, and `run_code` keys of
  * `tool.call.toolview` at priority -100. Keyed slots sort ascending by
  * priority and the lowest live entry renders (dsh-client-ui-slots SlotCore:
  * entries sort by `options.priority ?? 0`; `entriesOfSlot` keeps the first
  * entry per key); a same key at a different priority never throws; there is
  * no origin privilege for shipped entries. `batch_edit` rows stopped being
- * rendered here when dsh-better-edit 0.6.0 removed the tool; historical
- * batch_edit blocks fall through to the generic JSON card.
+ * rendered here when dsh-better-edit 0.6.0 removed the tool, and no
+ * `undo_edit` key is registered because no installed tool produces it
+ * (dsh-better-edit ships only `undo_last_edit`); historical batch_edit
+ * blocks fall through to the generic JSON card, as an `undo_edit` block
+ * would too.
  * todo_write and ask_user_question shadow shipped rows (dsh-client-ui-tool
  * client.js: todoToolview key "todo_write", askQuestionToolview key
  * "ask_user_question", both priority 0) whose expanded card is the generic
@@ -246,9 +249,9 @@ injectStyle(PLUGIN_NAME, STYLE_TAG_ID, mergeCss(localCss, HLJS_BOX_CSS));
 // ---- #173: the fair-copy stylesheet ships through the same mechanism: the
 // css-text build plugin inlines the file as a string, and a second tag id
 // keeps it removable apart from the module CSS above. stripBashGraphRoot
-// drops the prototype :root value blocks before injection (they would
-// overwrite the host theme page-wide); the --proto-* highlight names it
-// leaves dangling resolve from the scoped block in client.module.css.
+// guards the injection against :root value blocks (a prototype stand-in
+// block would overwrite the host theme page-wide); the --proto-* highlight
+// names resolve from the scoped block in client.module.css.
 injectStyle(PLUGIN_NAME, "tool-render/bash-graph.css", stripBashGraphRoot(bashGraphCss));
 /** Shared highlight.js token colors. The shared tag id dedupes with any other injector of the same tokens, so only one tag exists. */
 injectStyle(PLUGIN_NAME, "dsh-hljs-theme", HLJS_THEME_CSS);
@@ -745,11 +748,6 @@ function renderToolRenderCard(options, approvalOpen) {
           ) : null}
         </div>
       ) : null}
-      {/* A permanent footer BELOW the collapsible body, never gated on `open`.
-          Unused today — the run_code shadow carried its result here in Part B
-          but renders its IN/OUT sections as call-row siblings since Part C —
-          kept as generic card capability. */}
-      {options.below !== null && options.below !== undefined ? options.below : null}
       {/* The answer bar sits at the BOTTOM of the card, under the body: the
           decision is the last thing in reading order, after the command and
           output it is a judgement about. It lives ONLY while the decision is
@@ -1233,7 +1231,7 @@ function ReadRow(props) {
 // collapsed-row verdict badge, the error outline); this quiets the ask.
 function escalationBanner(detail, settled) {
   return (
-    <div className="tool-render-escalation">
+    <div>
       <div className="tool-render-cmd-label">
         {escalationLabel(settled)}
         <code
@@ -1314,11 +1312,11 @@ export function ensureBashGraphMeasure() {
 }
 
 /**
- * Drop the prototype :root value blocks from the fair-copy stylesheet. The
- * token NAMES are real (the host theme owns their values); the VALUES are
- * stand-ins that would overwrite the theme page-wide. Both blocks are
- * single-brace rules, and the wiring test fails if any :root selector or
- * light-theme html selector survives.
+ * Drop :root value blocks from the fair-copy stylesheet before injection. The
+ * token NAMES are real (the host theme owns their values); a VALUES block
+ * would overwrite the theme page-wide. The source carries no such blocks
+ * (deleted, ticket #336) — this stays as a guard, pinned by the wiring test
+ * against a synthetic fixture. Both patterns are single-brace rules.
  */
 export function stripBashGraphRoot(cssText) {
   return String(cssText)
@@ -1396,7 +1394,7 @@ function BashGraphPanels(props) {
     toggleBashGraphBlock(document, root);
   };
   return (
-    <div className="tool-render-bash-graph" onClick={onPanelsClick}>
+    <div onClick={onPanelsClick}>
       <div dangerouslySetInnerHTML={{ __html: '<svg aria-hidden="true" style="display:none">' + PIPE_GLYPH_SYMBOL + "</svg>" }} />
       {panels.map(function (html, i) {
         // The class is load-bearing, not decoration: styles.css rounds only
@@ -2125,7 +2123,6 @@ function resolveEffectiveCwd(props) {
  * missing name. */
 function editBadgeLabel(rawName, toolTitle) {
   if (rawName === "edit") return "Edit file";
-  if (rawName === "undo_edit") return "Undo edit";
   if (rawName === "undo_last_edit") return "Undo last edit";
   return toolTitle;
 }
@@ -2196,7 +2193,7 @@ function makeEditRow(toolTitle) {
     return toolRenderRow({
       callId: props.callId,
       useSession: props.useSession, useProjection: props.useProjection,
-      // One component serves the `edit`, `undo_edit`, and `undo_last_edit`
+      // One component serves the `edit` and `undo_last_edit`
       // registrations. The block carries the real call name, so the badge
       // shows the right human-readable label for the exact call being rendered.
       toolName: editBadgeLabel(callNameOf(block), toolTitle),
@@ -4327,7 +4324,6 @@ function RunCodeRow(props) {
     state: state,
     expandable: false,
     body: null,
-    below: null,
     runCode: true,
     errorSummary: errorSummary,
     errorText: errorText,
@@ -4691,14 +4687,6 @@ function apply(ctx) {
         priority: -100,
       },
       WriteRow,
-    );
-    yield ctx.slots.register(
-      {
-        name: "tool.call.toolview",
-        key: "undo_edit",
-        priority: -100,
-      },
-      UndoEditRow,
     );
     yield ctx.slots.register(
       {

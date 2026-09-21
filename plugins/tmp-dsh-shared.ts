@@ -30,7 +30,7 @@
  * wrapper behind.
  */
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { dshHomePath } from "@deepseek-ai/dsh-home-paths";
@@ -97,16 +97,6 @@ export function bindDurableTmp(
   return { ...confined, argv: next };
 }
 
-/** Apply-time marker so a restart can prove this plugin ran at all. */
-function markApplied(hostTmpDsh: string): void {
-  try {
-    mkdirSync(hostTmpDsh, { recursive: true });
-    writeFileSync(join(hostTmpDsh, ".applied"), `${process.pid} ${Date.now()}`);
-  } catch {
-    // fail open: the marker is diagnostic only
-  }
-}
-
 export function apply(ctx: Context): void {
   const sandbox = ctx.sandbox as unknown as {
     confine(argv: readonly string[], policy: unknown): ConfinedArgvLike;
@@ -116,8 +106,6 @@ export function apply(ctx: Context): void {
   // The aidos durable scratch root, bound at its own absolute path so bash can
   // reach the same path aidos reports.
   const hostAidosScratch = dshHomePath("aidos", "scratch");
-  markApplied(hostAidosScratch);
-  markApplied(hostTmpDsh);
 
   // Patch the concrete instance first (the shared root-singleton path).
   const original = sandbox.confine.bind(sandbox);

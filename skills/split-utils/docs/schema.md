@@ -2,7 +2,7 @@
 
 This file defines the two JSON files around the splitter. `orders.json` is the gatherer output and
 the splitter input. `output.json` is the splitter output and the AI-agent contract. The TypeScript
-models live in `src/common.ts`. `buildOutput` in `src/splitengine.ts` is the reference writer of
+models live in `src/common.ts`. `buildOutputDoc` in `src/splitstate.ts` is the reference writer of
 `output.json`, and `scripts/validate.ts` is the reference reader.
 
 ## orders.json
@@ -32,7 +32,7 @@ fees into item prices instead of listing them.
 
 ## output.json
 
-`output.json` holds one object with five keys. `buildOutput` in `src/splitengine.ts` assembles it.
+`output.json` holds one object with five keys. `buildOutputDoc` in `src/splitstate.ts` assembles it.
 
 - `split_at`: string. Timestamp of the export. The writer uses `new Date().toISOString()`. Sample:
   `"2026-09-09T11:05:58.278Z"`. The validator checks only that it is a string, so another ISO-8601
