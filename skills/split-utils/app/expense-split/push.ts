@@ -368,7 +368,10 @@ function groupStep(_m?: Map<string, string[]>, ctx?: WizardCtx): Step {
             hint: group.name + " (id " + group.id + ")",
           })),
         ],
-        "0",
+        // SHOW THE PICK THAT SURVIVED (#192 review). This was a hard "0", so
+        // walking Back to this screen claimed "No group" however the owner had
+        // answered it, and Next then re-submitted that lie.
+        String(live.groupId),
       ),
     );
   }

@@ -309,7 +309,9 @@ function signInCheckError(value: unknown): string {
 // group is picked, otherwise undefined so buildNameMap falls back to friends
 // (#192). A group member need not be a Splitwise friend, which is why
 // matching friends alone left real people with no candidate at all.
-function matchPool(live: { groupId: number; groupChoices: { id: number; members: Record<string, unknown>[] }[] }): Record<string, unknown>[] | undefined {
+function matchPool(
+  live: { groupId: number; groupChoices: { id: number; members: Record<string, unknown>[] }[] },
+): Record<string, unknown>[] | undefined {
   if (!live.groupId) return undefined;
   const group = live.groupChoices.find((g) => g.id === live.groupId);
   return group !== undefined && group.members.length > 0 ? group.members : undefined;
@@ -364,9 +366,7 @@ export async function prepareSplitwise(
         // KEEP THE MEMBERS (#192). get_groups already returns them and this
         // mapping used to discard them, so the name step had nothing to offer
         // and fell back to a hand-typed id.
-        members: Array.isArray(group.members)
-          ? (group.members as Record<string, unknown>[])
-          : [],
+        members: Array.isArray(group.members) ? (group.members as Record<string, unknown>[]) : [],
       }));
     } catch {
       choices = [];
@@ -377,7 +377,14 @@ export async function prepareSplitwise(
       nameMap: mapped.map,
       namePicks: [],
       signedInAs: name,
-      groupId: 0,
+      // KEEP THE PICK (#192 review). This used to be a flat `groupId: 0`, and
+      // prepareSplitwise runs AGAIN after the group screen — so the group was
+      // wiped moments after it was chosen, the member offer below found no
+      // group, and executePush sent group_id "0": a plain expense, not the
+      // group the owner picked. A pick the refreshed list no longer offers
+      // still falls back to 0, because pushing into a group that is gone is
+      // worse than pushing into none.
+      groupId: choices.some((g) => g.id === live.groupId) ? live.groupId : 0,
       groupChoices: choices,
     });
     return { ok: true };
@@ -428,9 +435,7 @@ export async function prepareSplitwise(
     choices = (await api.getGroups()).map((group) => ({
       id: Number(group.id),
       name: String(group.name ?? "group"),
-      members: Array.isArray(group.members)
-        ? (group.members as Record<string, unknown>[])
-        : [],
+      members: Array.isArray(group.members) ? (group.members as Record<string, unknown>[]) : [],
     }));
   } catch {
     choices = [];
@@ -440,7 +445,14 @@ export async function prepareSplitwise(
     api,
     nameMap: mapped.map,
     namePicks: [],
-    groupId: 0,
+    // KEEP THE PICK (#192 review). This used to be a flat `groupId: 0`, and
+    // prepareSplitwise runs AGAIN after the group screen — so the group was
+    // wiped moments after it was chosen, the member offer below found no
+    // group, and executePush sent group_id "0": a plain expense, not the
+    // group the owner picked. A pick the refreshed list no longer offers
+    // still falls back to 0, because pushing into a group that is gone is
+    // worse than pushing into none.
+    groupId: choices.some((g) => g.id === live.groupId) ? live.groupId : 0,
     groupChoices: choices,
   });
   return { ok: true };

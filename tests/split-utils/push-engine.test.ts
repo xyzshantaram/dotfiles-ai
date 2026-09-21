@@ -63,11 +63,15 @@ function fakeApi(options?: { failExpense?: boolean }) {
   const comments: string[] = [];
   let nextId = 101;
   const api: PushApi = {
-    getCurrentUser: () => Promise.resolve({ first_name: "Ann", last_name: "", id: 1 }),
-    getFriends: () => Promise.resolve([{ first_name: "Bob", last_name: "", id: 2 }]),
+    getCurrentUser: () =>
+      Promise.resolve({ first_name: "Ann", last_name: "", id: 1 }),
+    getFriends: () =>
+      Promise.resolve([{ first_name: "Bob", last_name: "", id: 2 }]),
     getGroups: () => Promise.resolve([{ name: "Trip", id: 7 }]),
     createExpense: (data) => {
-      if (options?.failExpense) throw new Error("splitwise 500 secret=hushhush");
+      if (options?.failExpense) {
+        throw new Error("splitwise 500 secret=hushhush");
+      }
       expenses.push({ ...data });
       return Promise.resolve({ expenses: [{ id: nextId++ }] });
     },
@@ -100,7 +104,12 @@ async function fresh(...sids: string[]): Promise<void> {
 
 Deno.test("push flow: cutoff filters, choices push and skip, fingerprint lands", async () => {
   await fresh("t-push-1");
-  const src = await prepareSource("t-push-1", "Split JSON file", "", SPLIT_FILE);
+  const src = await prepareSource(
+    "t-push-1",
+    "Split JSON file",
+    "",
+    SPLIT_FILE,
+  );
   assert(src.ok, "source loads");
   const { api, expenses, comments } = fakeApi();
   const sw = await prepareSplitwise("t-push-1", api);
@@ -108,13 +117,22 @@ Deno.test("push flow: cutoff filters, choices push and skip, fingerprint lands",
   assert(pushSessionFor("t-push-1").mode === "live", "live mode");
   assert(pushSessionFor("t-push-1").signedInAs === "Ann", "signed in as Ann");
   assert(pushSessionFor("t-push-1").nameMap.get("Ann") === 1, "Ann mapped");
-  assert(pushSessionFor("t-push-1").nameMap.get("Bob") === 2, "Bob mapped by first name");
+  assert(
+    pushSessionFor("t-push-1").nameMap.get("Bob") === 2,
+    "Bob mapped by first name",
+  );
 
   const cut = applyCutoff("t-push-1", "2026-01-02");
   assert(cut.ok, "cutoff valid");
-  assert(pushSessionFor("t-push-1").droppedByCutoff === 1, "o3 dropped by cutoff");
+  assert(
+    pushSessionFor("t-push-1").droppedByCutoff === 1,
+    "o3 dropped by cutoff",
+  );
   assert(pushSessionFor("t-push-1").groups.length === 2, "two orders kept");
-  assert(pushSessionFor("t-push-1").groups.every((o) => o[0].order_id !== "o3"), "o3 excluded");
+  assert(
+    pushSessionFor("t-push-1").groups.every((o) => o[0].order_id !== "o3"),
+    "o3 excluded",
+  );
 
   pushSessionFor("t-push-1").groupId = 7;
   const done = await executePush("t-push-1", { o1: "Push", o2: "Skip" });
@@ -130,10 +148,16 @@ Deno.test("push flow: cutoff filters, choices push and skip, fingerprint lands",
   assert(expenses[0]["users__0__user_id"] === "1", "payer user id");
   assert(expenses[0]["users__0__paid_share"] === "100.00", "payer paid total");
   assert(expenses[0]["users__1__owed_share"] === "40.00", "Bob owed share");
-  assert(comments.length === 1 && comments[0].includes("Milk (100)"), "itemized comment");
+  assert(
+    comments.length === 1 && comments[0].includes("Milk (100)"),
+    "itemized comment",
+  );
   const pushedMap = await loadPushed();
   const fps = Object.keys(pushedMap);
-  assert(fps.length === 1 && pushedMap[fps[0]] === 101, "fingerprint saved with expense id");
+  assert(
+    fps.length === 1 && pushedMap[fps[0]] === 101,
+    "fingerprint saved with expense id",
+  );
 });
 
 Deno.test("rerun skips the already-sent order by fingerprint", async () => {
@@ -279,7 +303,10 @@ Deno.test("full push through a run id archives the run", async () => {
   applyCutoff("t-push-6", "2026-01-06");
   const skipRun = await executePush("t-push-6", { o1: "Skip" });
   assert(skipRun.ok, "skipped run ok");
-  assert(pushSessionFor("t-push-6").outcome!.archived === true, "skip archives the run");
+  assert(
+    pushSessionFor("t-push-6").outcome!.archived === true,
+    "skip archives the run",
+  );
   let liveGone2 = false;
   try {
     await Deno.stat(runDir2);
@@ -292,7 +319,8 @@ Deno.test("full push through a run id archives the run", async () => {
 // Fake API where two members share the first name Bob.
 function dupApi() {
   const api: PushApi = {
-    getCurrentUser: () => Promise.resolve({ first_name: "Ann", last_name: "", id: 1 }),
+    getCurrentUser: () =>
+      Promise.resolve({ first_name: "Ann", last_name: "", id: 1 }),
     getFriends: () =>
       Promise.resolve([
         { first_name: "Bob", last_name: "One", id: 2 },
@@ -309,11 +337,22 @@ Deno.test("ambiguous name shows candidates and the radio pick resolves it", asyn
   await fresh("t-push-7");
   await prepareSource("t-push-7", "Split JSON file", "", SPLIT_FILE);
   const sw = await prepareSplitwise("t-push-7", dupApi());
-  assert(!sw.ok && sw.needsNamePick === true, "setup routes to the name picker");
-  assert(pushSessionFor("t-push-7").namePicks.length === 1, "one pending person");
-  assert(pushSessionFor("t-push-7").namePicks[0].person === "Bob", "Bob is the pending person");
   assert(
-    JSON.stringify(pushSessionFor("t-push-7").namePicks[0].candidates.map((m) => m.id)) === "[2,3]",
+    !sw.ok && sw.needsNamePick === true,
+    "setup routes to the name picker",
+  );
+  assert(
+    pushSessionFor("t-push-7").namePicks.length === 1,
+    "one pending person",
+  );
+  assert(
+    pushSessionFor("t-push-7").namePicks[0].person === "Bob",
+    "Bob is the pending person",
+  );
+  assert(
+    JSON.stringify(
+      pushSessionFor("t-push-7").namePicks[0].candidates.map((m) => m.id),
+    ) === "[2,3]",
     "both Bobs listed as candidates",
   );
   // A missing pick is an error, not a silent skip.
@@ -324,7 +363,10 @@ Deno.test("ambiguous name shows candidates and the radio pick resolves it", asyn
   assert(picked.ok, "radio pick accepted");
   const sw2 = await prepareSplitwise("t-push-7", dupApi());
   assert(sw2.ok, "setup finishes after the pick");
-  assert(pushSessionFor("t-push-7").nameMap.get("Bob") === 3, "Bob maps to the picked id 3");
+  assert(
+    pushSessionFor("t-push-7").nameMap.get("Bob") === 3,
+    "Bob maps to the picked id 3",
+  );
   applyCutoff("t-push-7", "2026-01-02");
   pushSessionFor("t-push-7").groupId = 7;
   const done = await executePush("t-push-7", { o1: "Push" });
@@ -339,10 +381,22 @@ Deno.test("unmatched person accepts a hand-typed id", async () => {
   await Deno.writeTextFile(caraFile, JSON.stringify(doc(["Ann", "Cara"])));
   await prepareSource("t-push-8", "Split JSON file", "", caraFile);
   const sw = await prepareSplitwise("t-push-8", fakeApi().api);
-  assert(!sw.ok && sw.needsNamePick === true, "setup routes to the name picker");
-  assert(pushSessionFor("t-push-8").namePicks.length === 1, "one pending person");
-  assert(pushSessionFor("t-push-8").namePicks[0].person === "Cara", "Cara is the pending person");
-  assert(pushSessionFor("t-push-8").namePicks[0].candidates.length === 0, "no candidates for Cara");
+  assert(
+    !sw.ok && sw.needsNamePick === true,
+    "setup routes to the name picker",
+  );
+  assert(
+    pushSessionFor("t-push-8").namePicks.length === 1,
+    "one pending person",
+  );
+  assert(
+    pushSessionFor("t-push-8").namePicks[0].person === "Cara",
+    "Cara is the pending person",
+  );
+  assert(
+    pushSessionFor("t-push-8").namePicks[0].candidates.length === 0,
+    "no candidates for Cara",
+  );
   // A bad hand-typed id errors before anything is stashed.
   const bad = resolveNamePicks("t-push-8", { "manual:Cara": ["abc"] });
   assert(!bad.ok, "bad id errors out");
@@ -350,7 +404,10 @@ Deno.test("unmatched person accepts a hand-typed id", async () => {
   assert(good.ok, "manual id accepted");
   const sw2 = await prepareSplitwise("t-push-8", fakeApi().api);
   assert(sw2.ok, "setup finishes after the manual id");
-  assert(pushSessionFor("t-push-8").nameMap.get("Cara") === 9, "Cara maps to id 9");
+  assert(
+    pushSessionFor("t-push-8").nameMap.get("Cara") === 9,
+    "Cara maps to id 9",
+  );
   applyCutoff("t-push-8", "2026-01-02");
   pushSessionFor("t-push-8").groupId = 7;
   const done = await executePush("t-push-8", { o1: "Push" });
@@ -364,16 +421,24 @@ Deno.test("unique first name maps straight away with no pick", async () => {
   await prepareSource("t-push-9", "Split JSON file", "", SPLIT_FILE);
   // Full names carry last names here, so only the first names match.
   const api: PushApi = {
-    getCurrentUser: () => Promise.resolve({ first_name: "Ann", last_name: "Jones", id: 1 }),
-    getFriends: () => Promise.resolve([{ first_name: "Bob", last_name: "Smith", id: 2 }]),
+    getCurrentUser: () =>
+      Promise.resolve({ first_name: "Ann", last_name: "Jones", id: 1 }),
+    getFriends: () =>
+      Promise.resolve([{ first_name: "Bob", last_name: "Smith", id: 2 }]),
     getGroups: () => Promise.resolve([{ name: "Trip", id: 7 }]),
     createExpense: () => Promise.resolve({ expenses: [{ id: 101 }] }),
     createComment: () => Promise.resolve(),
   };
   const sw = await prepareSplitwise("t-push-9", api);
   assert(sw.ok, "setup finishes with no name pick");
-  assert(pushSessionFor("t-push-9").nameMap.get("Ann") === 1, "Ann maps by unique first name");
-  assert(pushSessionFor("t-push-9").nameMap.get("Bob") === 2, "Bob maps by unique first name");
+  assert(
+    pushSessionFor("t-push-9").nameMap.get("Ann") === 1,
+    "Ann maps by unique first name",
+  );
+  assert(
+    pushSessionFor("t-push-9").nameMap.get("Bob") === 2,
+    "Bob maps by unique first name",
+  );
   assert(
     pushSessionFor("t-push-9").signedInAs === "Ann Jones",
     "signed in name keeps the last name",
@@ -407,14 +472,22 @@ Deno.test("source step renders EVERY value entry, whatever is picked (#191)", as
   try {
     // Every name pushSourceNext can read, for any pick.
     const readable = ["run-id-other", "split-file", "share-link"];
-    for (const pick of [null, "Assigned run", "Split JSON file", "Share link from a friend"]) {
+    for (
+      const pick of [
+        null,
+        "Assigned run",
+        "Split JSON file",
+        "Share link from a friend",
+      ]
+    ) {
       const m = pick === null ? new Map() : new Map([["source", [pick]]]);
       const step = sourceStep(m as Map<string, string[]>, "r9");
       const names = textNodes(step).map((t) => t.name);
       for (const name of readable) {
         assert(
           names.includes(name),
-          "pick " + String(pick) + " must render " + name + ", which the handler can read",
+          "pick " + String(pick) + " must render " + name +
+            ", which the handler can read",
         );
       }
     }
@@ -424,9 +497,14 @@ Deno.test("source step renders EVERY value entry, whatever is picked (#191)", as
     const initialRadio = initial.nodes.find((n) => n.kind === "radio") as {
       picked?: string;
     };
-    assert(initialRadio.picked === "Assigned run", "first choice picked by default");
+    assert(
+      initialRadio.picked === "Assigned run",
+      "first choice picked by default",
+    );
     const picked = new Map([["source", ["Split JSON file"]]]);
-    const radioNode = sourceStep(picked, "r9").nodes.find((n) => n.kind === "radio") as {
+    const radioNode = sourceStep(picked, "r9").nodes.find((n) =>
+      n.kind === "radio"
+    ) as {
       picked?: string;
     };
     assert(radioNode.picked === "Split JSON file", "radio shows the pick");
@@ -466,7 +544,9 @@ function radioByName(step: { nodes: { kind: string }[] }, name: string) {
   return step.nodes.find((n) => {
     const rec = n as unknown as Record<string, unknown>;
     return rec["kind"] === "radio" && rec["name"] === name;
-  }) as unknown as { name: string; picked?: string; options: unknown[] } | undefined;
+  }) as unknown as
+    | { name: string; picked?: string; options: unknown[] }
+    | undefined;
 }
 
 function markdownTexts(step: { nodes: { kind: string }[] }): string[] {
@@ -488,7 +568,10 @@ Deno.test("source step lists two assigned runs and starts on the newest", async 
     const values = (radio!.options as Array<Record<string, unknown>>).map((o) =>
       String(o["value"] ?? o)
     );
-    assert(JSON.stringify(values) === JSON.stringify(["r-new", "r-old"]), "newest first");
+    assert(
+      JSON.stringify(values) === JSON.stringify(["r-new", "r-old"]),
+      "newest first",
+    );
     assert(radio!.picked === "r-new", "starts on the newest run");
     const texts = textNodes(found);
     const other = texts.find((t) => t.name === "run-id-other");
@@ -550,14 +633,26 @@ Deno.test("source step with no assigned run shows the line and no run radio", as
     const found = sourceStep(new Map(), "");
     assert(radioByName(found, "run-id") === undefined, "no empty radio");
     const body = markdownTexts(found).join("\n");
-    assert(body.includes("No assigned run exists yet"), "line names the empty list");
-    assert(body.includes("split stage creates one"), "line names the split stage");
+    assert(
+      body.includes("No assigned run exists yet"),
+      "line names the empty list",
+    );
+    assert(
+      body.includes("split stage creates one"),
+      "line names the split stage",
+    );
     const names = textNodes(found).map((t) => t.name);
     for (const name of ["run-id-other", "split-file", "share-link"]) {
-      assert(names.includes(name), name + " must render even with no assigned run");
+      assert(
+        names.includes(name),
+        name + " must render even with no assigned run",
+      );
     }
     const other = textNodes(found).find((t) => t.name === "run-id-other");
-    assert(other !== undefined && other.value === "", "free text entry starts empty");
+    assert(
+      other !== undefined && other.value === "",
+      "free text entry starts empty",
+    );
   } finally {
     if (saved === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
     else Deno.env.set("SPLIT_UTILS_STATE", saved);
@@ -575,10 +670,20 @@ Deno.test("empty cutoff keeps every order and pushes the oldest", async () => {
   assert(pushSessionFor("t-push-10").droppedByCutoff === 0, "nothing dropped");
   assert(pushSessionFor("t-push-10").groups.length === 3, "all orders kept");
   pushSessionFor("t-push-10").groupId = 7;
-  const done = await executePush("t-push-10", { o1: "Push", o2: "Skip", o3: "Skip" });
+  const done = await executePush("t-push-10", {
+    o1: "Push",
+    o2: "Skip",
+    o3: "Skip",
+  });
   assert(done.ok, "push ok");
-  assert(pushSessionFor("t-push-10").outcome!.pushed === 1, "oldest order pushed");
-  assert(pushSessionFor("t-push-10").outcome!.totalRs === 100, "total is the oldest order");
+  assert(
+    pushSessionFor("t-push-10").outcome!.pushed === 1,
+    "oldest order pushed",
+  );
+  assert(
+    pushSessionFor("t-push-10").outcome!.totalRs === 100,
+    "total is the oldest order",
+  );
   assert(expenses.length === 1, "one expense sent");
 });
 
@@ -600,7 +705,10 @@ Deno.test("bad cutoff date still reports the error", async () => {
   const cut = applyCutoff("t-push-12", "not-a-date");
   assert(!cut.ok, "bad date rejected");
   if (!cut.ok) {
-    assert(cut.error === "Use the form YYYY-MM-DD for the cutoff date.", "message kept");
+    assert(
+      cut.error === "Use the form YYYY-MM-DD for the cutoff date.",
+      "message kept",
+    );
   }
 });
 
@@ -616,7 +724,10 @@ Deno.test("throwing sign in check falls back to aggregate with setupError", asyn
   assert(sw.ok, "fallback prepares");
   assert(pushSessionFor("t-push-13").mode === "aggregate", "aggregate mode");
   assert(pushSessionFor("t-push-13").setupError !== null, "setupError set");
-  assert(pushSessionFor("t-push-13").setupError!.includes("boom-token-expired"), "reason named");
+  assert(
+    pushSessionFor("t-push-13").setupError!.includes("boom-token-expired"),
+    "reason named",
+  );
 });
 
 Deno.test("missing keys leave setupError null", async () => {
@@ -625,7 +736,10 @@ Deno.test("missing keys leave setupError null", async () => {
   const sw = await prepareSplitwise("t-push-14");
   assert(sw.ok, "fallback prepares");
   assert(pushSessionFor("t-push-14").mode === "aggregate", "aggregate mode");
-  assert(pushSessionFor("t-push-14").setupError === null, "no setupError without access");
+  assert(
+    pushSessionFor("t-push-14").setupError === null,
+    "no setupError without access",
+  );
 });
 
 Deno.test("second prepare clears an earlier setupError", async () => {
@@ -638,7 +752,10 @@ Deno.test("second prepare clears an earlier setupError", async () => {
   };
   const first = await prepareSplitwise("t-push-15", bad);
   assert(first.ok, "first fallback prepares");
-  assert(pushSessionFor("t-push-15").setupError !== null, "first run sets setupError");
+  assert(
+    pushSessionFor("t-push-15").setupError !== null,
+    "first run sets setupError",
+  );
   const second = await prepareSplitwise("t-push-15", fakeApi().api);
   assert(second.ok, "second run prepares");
   assert(pushSessionFor("t-push-15").mode === "live", "live mode again");
@@ -658,12 +775,17 @@ Deno.test("very long reason stays within its limit", async () => {
   assert(sw.ok, "fallback prepares");
   assert(pushSessionFor("t-push-16").setupError !== null, "setupError set");
   const prefix = "Splitwise access is set up, but the sign in check failed: ";
-  const suffix = ". The push writes a summary file instead. Try again in a moment.";
+  const suffix =
+    ". The push writes a summary file instead. Try again in a moment.";
   assert(
-    pushSessionFor("t-push-16").setupError!.length <= prefix.length + 120 + suffix.length,
+    pushSessionFor("t-push-16").setupError!.length <=
+      prefix.length + 120 + suffix.length,
     "reason cut keeps the text within its limit",
   );
-  assert(!pushSessionFor("t-push-16").setupError!.includes("x".repeat(121)), "long body cut");
+  assert(
+    !pushSessionFor("t-push-16").setupError!.includes("x".repeat(121)),
+    "long body cut",
+  );
 });
 
 Deno.test("cutoff step prefills the newest order date and keeps typed values", async () => {
@@ -673,7 +795,10 @@ Deno.test("cutoff step prefills the newest order date and keeps typed values", a
   const cutoff = entries
     .map((
       entry,
-    ) => (typeof entry === "function" ? entry(new Map(), { sessionId: "t-push-17" }) : entry))
+    ) => (typeof entry === "function"
+      ? entry(new Map(), { sessionId: "t-push-17" })
+      : entry)
+    )
     .find((s) => s.id === "push-cutoff");
   assert(cutoff !== undefined, "cutoff step exists in pushSteps");
   const texts = textNodes(cutoff!);
@@ -683,15 +808,22 @@ Deno.test("cutoff step prefills the newest order date and keeps typed values", a
   const cutoff2 = entries
     .map((entry) =>
       typeof entry === "function"
-        ? entry(new Map([["cutoff", ["2026-01-02"]]]), { sessionId: "t-push-17" })
+        ? entry(new Map([["cutoff", ["2026-01-02"]]]), {
+          sessionId: "t-push-17",
+        })
         : entry
     )
     .find((s) => s.id === "push-cutoff");
   const texts2 = textNodes(cutoff2!);
-  assert(texts2[0].value === "2026-01-02", "typed cutoff wins over the prefill");
+  assert(
+    texts2[0].value === "2026-01-02",
+    "typed cutoff wins over the prefill",
+  );
   // The step order matches the forward path.
   const ids = entries.map((entry) =>
-    typeof entry === "function" ? entry(new Map(), { sessionId: "t-push-17" }).id : entry.id
+    typeof entry === "function"
+      ? entry(new Map(), { sessionId: "t-push-17" }).id
+      : entry.id
   );
   assert(
     JSON.stringify(ids) ===
@@ -717,15 +849,23 @@ Deno.test("the push session prepared under A does not serve B", async () => {
     fileB,
     JSON.stringify(doc(["Cara", "Dev"])),
   );
-  const { pushSessionFor } = await import("@app/app/expense-split/push-engine.ts");
+  const { pushSessionFor } = await import(
+    "@app/app/expense-split/push-engine.ts"
+  );
   const srcA = await prepareSource("iso-push-A", "Split JSON file", "", fileA);
   assert(srcA.ok, "A source loads");
   const srcB = await prepareSource("iso-push-B", "Split JSON file", "", fileB);
   assert(srcB.ok, "B source loads");
   const liveA = pushSessionFor("iso-push-A");
   const liveB = pushSessionFor("iso-push-B");
-  assert(JSON.stringify(liveA.people) === '["Ann","Bob"]', "A keeps its people");
-  assert(JSON.stringify(liveB.people) === '["Cara","Dev"]', "B keeps its people");
+  assert(
+    JSON.stringify(liveA.people) === '["Ann","Bob"]',
+    "A keeps its people",
+  );
+  assert(
+    JSON.stringify(liveB.people) === '["Cara","Dev"]',
+    "B keeps its people",
+  );
   assert(liveA.file === fileA, "A keeps its file");
   assert(liveB.file === fileB, "B keeps its file");
   assert(liveA.file !== liveB.file, "the two sessions stage apart");
@@ -753,15 +893,23 @@ Deno.test("confirm screen shows the summary text when orders are staged", async 
   const entries = pushSteps();
   const found = entries
     .map((entry) =>
-      typeof entry === "function" ? entry(new Map(), { sessionId: "t-push-confirm-1" }) : entry
+      typeof entry === "function"
+        ? entry(new Map(), { sessionId: "t-push-confirm-1" })
+        : entry
     )
     .find((s) => s.id === "push-confirm");
   assert(found !== undefined, "confirm step exists in pushSteps");
   const body = markdownTexts(found!).join("\n");
-  assert(body.includes("Read this summary before you push."), "heading names the summary");
+  assert(
+    body.includes("Read this summary before you push."),
+    "heading names the summary",
+  );
   const boxes = copyableNodes(found!);
   assert(boxes.length === 1, "one copyable summary shows");
-  assert(boxes[0].text.includes("Summary expense"), "summary text shows in the copyable box");
+  assert(
+    boxes[0].text.includes("Summary expense"),
+    "summary text shows in the copyable box",
+  );
 });
 
 // Prove the confirm screen hides the summary when no orders arrive.
@@ -770,13 +918,18 @@ Deno.test("confirm screen hides the summary when no orders arrive", async () => 
   const entries = pushSteps();
   const found = entries
     .map((entry) =>
-      typeof entry === "function" ? entry(new Map(), { sessionId: "t-push-confirm-2" }) : entry
+      typeof entry === "function"
+        ? entry(new Map(), { sessionId: "t-push-confirm-2" })
+        : entry
     )
     .find((s) => s.id === "push-confirm");
   assert(found !== undefined, "confirm step exists in pushSteps");
   const body = markdownTexts(found!).join("\n");
   assert(body.includes("No orders reached this step."), "empty note shows");
-  assert(!body.includes("Read this summary before you push."), "no summary heading shows");
+  assert(
+    !body.includes("Read this summary before you push."),
+    "no summary heading shows",
+  );
   assert(!body.includes("Summary expense"), "no summary text shows");
 });
 
@@ -807,7 +960,9 @@ async function confirmStepFor(sid: string, cutoff: string) {
   applyCutoff(sid, cutoff);
   const entries = pushSteps();
   const found = entries
-    .map((entry) => typeof entry === "function" ? entry(new Map(), { sessionId: sid }) : entry)
+    .map((entry) =>
+      typeof entry === "function" ? entry(new Map(), { sessionId: sid }) : entry
+    )
     .find((s) => s.id === "push-confirm");
   assert(found !== undefined, "confirm step exists in pushSteps");
   return found!;
@@ -819,12 +974,18 @@ Deno.test("confirm screen holds the summary in a copyable node", async () => {
   const found = await confirmStepFor("t-push-confirm-4", "2026-01-02");
   assert(tableNodes(found).length === 0, "no expense table shows");
   const body = markdownTexts(found).join("\n");
-  assert(body.includes("Read this summary before you push."), "line names the summary");
+  assert(
+    body.includes("Read this summary before you push."),
+    "line names the summary",
+  );
   const boxes = copyableNodes(found);
   assert(boxes.length === 1, "one copyable summary shows");
   assert(boxes[0].label === "Summary", "box names the summary");
   assert(boxes[0].name === "push-summary", "box uses the push-summary field");
-  assert(boxes[0].text.includes("Summary expense"), "box holds the summary text");
+  assert(
+    boxes[0].text.includes("Summary expense"),
+    "box holds the summary text",
+  );
 });
 
 // Prove a radio label names the goods and the total.
@@ -833,7 +994,9 @@ Deno.test("confirm radio label names the goods and the total", async () => {
   const found = await confirmStepFor("t-push-confirm-7", "2026-01-02");
   const first = radioByName(found, "order-o1");
   assert(first !== undefined, "first order radio shows");
-  const label = String((first as unknown as Record<string, unknown>)["label"] ?? "");
+  const label = String(
+    (first as unknown as Record<string, unknown>)["label"] ?? "",
+  );
   assert(label.includes("Milk"), "label names the goods");
   assert(label.includes("INR 100.00"), "label names the total");
 });
@@ -847,7 +1010,9 @@ Deno.test("confirm radio falls back to the order id for fee rows alone", async (
     JSON.stringify({
       split_at: "2026-01-06T09:00:00Z",
       people: ["Ann", "Bob"],
-      splits: [line("[Delivery fee]", "ofee", "2026-01-01T10:00:00", 30, 15, 15)],
+      splits: [
+        line("[Delivery fee]", "ofee", "2026-01-01T10:00:00", 30, 15, 15),
+      ],
       totals: { Ann: 15, Bob: 15 },
       settlements: [{ from: "Bob", to: "Ann", amount: 15 }],
     }),
@@ -857,14 +1022,21 @@ Deno.test("confirm radio falls back to the order id for fee rows alone", async (
   const entries = pushSteps();
   const found = entries
     .map((entry) =>
-      typeof entry === "function" ? entry(new Map(), { sessionId: "t-push-confirm-8" }) : entry
+      typeof entry === "function"
+        ? entry(new Map(), { sessionId: "t-push-confirm-8" })
+        : entry
     )
     .find((s) => s.id === "push-confirm");
   assert(found !== undefined, "confirm step exists in pushSteps");
   const feeRadio = radioByName(found!, "order-ofee");
   assert(feeRadio !== undefined, "fee order radio shows");
-  const label = String((feeRadio as unknown as Record<string, unknown>)["label"] ?? "");
-  assert(label === "Order ofee — INR 30.00", "fee order falls back to the order id and total");
+  const label = String(
+    (feeRadio as unknown as Record<string, unknown>)["label"] ?? "",
+  );
+  assert(
+    label === "Order ofee — INR 30.00",
+    "fee order falls back to the order id and total",
+  );
 });
 
 // Prove each order radio offers Push and Skip alone.
@@ -874,16 +1046,22 @@ Deno.test("confirm radio offers Push and Skip alone", async () => {
   const radios = found.nodes.filter((n) => n.kind === "radio");
   assert(radios.length === 2, "one radio per kept order");
   for (const node of radios) {
-    const values = ((node as unknown as Record<string, unknown>)["options"] as Array<
-      Record<string, unknown>
-    >).map((o) => String(o["value"] ?? o));
+    const values =
+      ((node as unknown as Record<string, unknown>)["options"] as Array<
+        Record<string, unknown>
+      >).map((o) => String(o["value"] ?? o));
     assert(
       JSON.stringify(values) === JSON.stringify(["Push", "Skip"]),
       "radio offers Push and Skip alone",
     );
   }
-  const note = String((found as unknown as Record<string, unknown>)["note"] ?? "");
-  assert(note.includes("Push") && note.includes("Skip"), "note names Push and Skip");
+  const note = String(
+    (found as unknown as Record<string, unknown>)["note"] ?? "",
+  );
+  assert(
+    note.includes("Push") && note.includes("Skip"),
+    "note names Push and Skip",
+  );
   assert(!note.includes("Stop"), "note drops Stop");
 });
 
@@ -893,7 +1071,9 @@ Deno.test("confirm screen with no orders shows no table", async () => {
   const entries = pushSteps();
   const found = entries
     .map((entry) =>
-      typeof entry === "function" ? entry(new Map(), { sessionId: "t-push-confirm-6" }) : entry
+      typeof entry === "function"
+        ? entry(new Map(), { sessionId: "t-push-confirm-6" })
+        : entry
     )
     .find((s) => s.id === "push-confirm");
   assert(found !== undefined, "confirm step exists in pushSteps");
@@ -919,15 +1099,23 @@ Deno.test("confirm screen writes no file beside the source", async () => {
   const entries = pushSteps();
   const found = entries
     .map((entry) =>
-      typeof entry === "function" ? entry(new Map(), { sessionId: "t-push-confirm-3" }) : entry
+      typeof entry === "function"
+        ? entry(new Map(), { sessionId: "t-push-confirm-3" })
+        : entry
     )
     .find((s) => s.id === "push-confirm");
   assert(found !== undefined, "confirm step exists in pushSteps");
   const boxes = copyableNodes(found!);
   assert(boxes.length === 1, "one copyable summary shows");
-  assert(boxes[0].text.includes("Summary expense"), "summary renders in the copyable box");
+  assert(
+    boxes[0].text.includes("Summary expense"),
+    "summary renders in the copyable box",
+  );
   const after = await listNames(root);
-  assert(JSON.stringify(after) === JSON.stringify(before), "no new file appears");
+  assert(
+    JSON.stringify(after) === JSON.stringify(before),
+    "no new file appears",
+  );
 });
 
 // A valid key file reaches live mode with no api override. The stub
@@ -936,35 +1124,53 @@ Deno.test("valid key file reaches live mode without an override", async () => {
   await fresh("t-push-key");
   await prepareSource("t-push-key", "Split JSON file", "", SPLIT_FILE);
   const envPath = splitwiseEnvPath();
-  await Deno.mkdir(envPath.slice(0, envPath.lastIndexOf("/")), { recursive: true });
+  await Deno.mkdir(envPath.slice(0, envPath.lastIndexOf("/")), {
+    recursive: true,
+  });
   await Deno.writeTextFile(envPath, "API_KEY=test-key-123\n");
   const realFetch = globalThis.fetch;
   globalThis.fetch = ((url: string | URL | Request) => {
     const text = String(url);
     if (text.includes("get_current_user")) {
       return Promise.resolve(
-        new Response(JSON.stringify({ user: { first_name: "Ann", last_name: "", id: 1 } }), {
-          status: 200,
-        }),
+        new Response(
+          JSON.stringify({ user: { first_name: "Ann", last_name: "", id: 1 } }),
+          {
+            status: 200,
+          },
+        ),
       );
     }
     if (text.includes("get_friends")) {
       return Promise.resolve(
-        new Response(JSON.stringify({ friends: [{ first_name: "Bob", last_name: "", id: 2 }] }), {
-          status: 200,
-        }),
+        new Response(
+          JSON.stringify({
+            friends: [{ first_name: "Bob", last_name: "", id: 2 }],
+          }),
+          {
+            status: 200,
+          },
+        ),
       );
     }
     return Promise.resolve(
-      new Response(JSON.stringify({ groups: [{ name: "Trip", id: 7 }] }), { status: 200 }),
+      new Response(JSON.stringify({ groups: [{ name: "Trip", id: 7 }] }), {
+        status: 200,
+      }),
     );
   }) as typeof fetch;
   try {
     const sw = await prepareSplitwise("t-push-key");
     assert(sw.ok, "key file prepares");
     assert(pushSessionFor("t-push-key").mode === "live", "live mode");
-    assert(pushSessionFor("t-push-key").signedInAs === "Ann", "signed in as Ann");
-    assert(pushSessionFor("t-push-key").nameMap.get("Bob") === 2, "Bob mapped by first name");
+    assert(
+      pushSessionFor("t-push-key").signedInAs === "Ann",
+      "signed in as Ann",
+    );
+    assert(
+      pushSessionFor("t-push-key").nameMap.get("Bob") === 2,
+      "Bob mapped by first name",
+    );
   } finally {
     globalThis.fetch = realFetch;
     await Deno.remove(envPath);
@@ -978,7 +1184,9 @@ Deno.test("confirm order radios arrive picked as Push", async () => {
   const radios = found.nodes.filter((n) => n.kind === "radio");
   assert(radios.length === 2, "one radio per kept order");
   for (const node of radios) {
-    const picked = String((node as unknown as Record<string, unknown>)["picked"] ?? "");
+    const picked = String(
+      (node as unknown as Record<string, unknown>)["picked"] ?? "",
+    );
     assert(picked === "Push", "radio arrives picked as Push");
   }
 });
@@ -986,20 +1194,30 @@ Deno.test("confirm order radios arrive picked as Push", async () => {
 // Prove a prior posted Skip survives a re-render.
 Deno.test("confirm order radio keeps a prior Skip choice", async () => {
   await fresh("t-push-confirm-prior");
-  await prepareSource("t-push-confirm-prior", "Split JSON file", "", SPLIT_FILE);
+  await prepareSource(
+    "t-push-confirm-prior",
+    "Split JSON file",
+    "",
+    SPLIT_FILE,
+  );
   await prepareSplitwise("t-push-confirm-prior", fakeApi().api);
   applyCutoff("t-push-confirm-prior", "2026-01-02");
   const prior = new Map([["order-o1", ["Skip"]]]);
   const entries = pushSteps();
   const found = entries
     .map((entry) =>
-      typeof entry === "function" ? entry(prior, { sessionId: "t-push-confirm-prior" }) : entry
+      typeof entry === "function"
+        ? entry(prior, { sessionId: "t-push-confirm-prior" })
+        : entry
     )
     .find((s) => s.id === "push-confirm");
   assert(found !== undefined, "confirm step exists in pushSteps");
   const first = radioByName(found!, "order-o1");
   assert(first !== undefined, "first order radio shows");
-  assert((first as unknown as Record<string, unknown>)["picked"] === "Skip", "prior Skip survives");
+  assert(
+    (first as unknown as Record<string, unknown>)["picked"] === "Skip",
+    "prior Skip survives",
+  );
   const second = radioByName(found!, "order-o2");
   assert(
     (second as unknown as Record<string, unknown>)["picked"] === "Push",
@@ -1016,16 +1234,24 @@ Deno.test("confirm order radio hint names each person and amount", async () => {
   const entries = pushSteps();
   const found = entries
     .map((entry) =>
-      typeof entry === "function" ? entry(new Map(), { sessionId: "t-push-confirm-hint" }) : entry
+      typeof entry === "function"
+        ? entry(new Map(), { sessionId: "t-push-confirm-hint" })
+        : entry
     )
     .find((s) => s.id === "push-confirm");
   assert(found !== undefined, "confirm step exists in pushSteps");
-  const first = radioByName(found!, "order-o1") as unknown as Record<string, unknown>;
+  const first = radioByName(found!, "order-o1") as unknown as Record<
+    string,
+    unknown
+  >;
   assert(first !== undefined, "first order radio shows");
   const hint = String(first["hint"] ?? "");
   assert(hint.includes("Ann 60.00"), "hint names Ann and her amount");
   assert(hint.includes("Bob 40.00"), "hint names Bob and his amount");
-  const third = radioByName(found!, "order-o3") as unknown as Record<string, unknown>;
+  const third = radioByName(found!, "order-o3") as unknown as Record<
+    string,
+    unknown
+  >;
   assert(third !== undefined, "third order radio shows");
   const zeroHint = String(third["hint"] ?? "");
   assert(zeroHint.includes("Bob 0.00"), "hint names a person who owes nothing");
@@ -1058,8 +1284,12 @@ Deno.test("the pushed file saves under a path holding a hash mark", async () => 
   try {
     const { savePushed } = await import("@app/src/splitwise.ts");
     await savePushed({ "fp-one": 4242 });
-    const back = JSON.parse(await Deno.readTextFile(root + "/config/splitwise_pushed.json"));
-    if (back.pushed["fp-one"] !== 4242) throw new Error("the fingerprint did not save");
+    const back = JSON.parse(
+      await Deno.readTextFile(root + "/config/splitwise_pushed.json"),
+    );
+    if (back.pushed["fp-one"] !== 4242) {
+      throw new Error("the fingerprint did not save");
+    }
   } finally {
     if (saved === undefined) Deno.env.delete("SPLIT_UTILS_STATE");
     else Deno.env.set("SPLIT_UTILS_STATE", saved);
@@ -1081,9 +1311,11 @@ Deno.test("the pushed file saves under a path holding a hash mark", async () => 
 
 function groupApi(): PushApi {
   return {
-    getCurrentUser: () => Promise.resolve({ first_name: "Ann", last_name: "", id: 1 }),
+    getCurrentUser: () =>
+      Promise.resolve({ first_name: "Ann", last_name: "", id: 1 }),
     // Bob is the only friend. Hemang is NOT a friend.
-    getFriends: () => Promise.resolve([{ first_name: "Bob", last_name: "", id: 2 }]),
+    getFriends: () =>
+      Promise.resolve([{ first_name: "Bob", last_name: "", id: 2 }]),
     getGroups: () =>
       Promise.resolve([{
         name: "Flat",
@@ -1106,16 +1338,27 @@ Deno.test("a group member who is not a friend is matched (#192)", async () => {
 
   // First pass: sign in and list groups, mapping nothing. Friends alone could
   // never settle "hemang", which is exactly why it must not be asked yet.
-  const first = await prepareSplitwise("t-group-1", groupApi(), { skipNames: true });
+  const first = await prepareSplitwise("t-group-1", groupApi(), {
+    skipNames: true,
+  });
   assert(first.ok, "the first pass sets up access without asking about names");
-  assert(live.groupChoices.length === 1, "the group list is available for the pick");
-  assert(live.groupChoices[0].members.length === 2, "group members are kept, not discarded");
+  assert(
+    live.groupChoices.length === 1,
+    "the group list is available for the pick",
+  );
+  assert(
+    live.groupChoices[0].members.length === 2,
+    "group members are kept, not discarded",
+  );
 
   // The user picks the group, then names are matched against its members.
   live.groupId = 9;
   const second = await prepareSplitwise("t-group-1", groupApi());
   assert(second.ok, "the group settles the name that friends could not");
-  assert(live.nameMap.get("hemang") === 55, "hemang maps to the group member id");
+  assert(
+    live.nameMap.get("hemang") === 55,
+    "hemang maps to the group member id",
+  );
 });
 
 Deno.test("with no group picked, matching still falls back to friends (#192)", async () => {
@@ -1130,4 +1373,165 @@ Deno.test("with no group picked, matching still falls back to friends (#192)", a
   const done = await prepareSplitwise("t-group-2", groupApi());
   assert(done.ok, "a friend still matches with no group chosen");
   assert(live.nameMap.get("Bob") === 2, "Bob maps to the friend id");
+});
+
+// THE PINS BELOW EXIST BECAUSE THE TWO ABOVE MISSED A REAL DEFECT (#192 review).
+// Both set `live.groupId` by hand and then read `nameMap`, so neither ever
+// observed what happens to the PICK once mapping succeeds: the assign at the
+// end of prepareSplitwise reset groupId to 0, and prepareSplitwise runs again
+// after the group screen. The group was wiped moments after it was chosen and
+// every expense went to "no group". A pin that asserts the mapping and stops
+// is a pin watching the wrong half of the function.
+
+// A capturing twin of groupApi: here the sent payload is the point.
+function groupApiCapturing(): {
+  api: PushApi;
+  expenses: Record<string, string>[];
+} {
+  const expenses: Record<string, string>[] = [];
+  const api = {
+    getCurrentUser: () =>
+      Promise.resolve({ first_name: "Ann", last_name: "", id: 1 }),
+    getFriends: () =>
+      Promise.resolve([{ first_name: "Bob", last_name: "", id: 2 }]),
+    getGroups: () =>
+      Promise.resolve([{
+        name: "Flat",
+        id: 9,
+        members: [
+          { first_name: "Ann", last_name: "", id: 1 },
+          { first_name: "hemang", last_name: "", id: 55 },
+        ],
+      }]),
+    createExpense: (data: Record<string, string>) => {
+      expenses.push(data);
+      return Promise.resolve({ expenses: [{ id: 1 }] });
+    },
+    createComment: () => Promise.resolve(),
+  } as unknown as PushApi;
+  return { api, expenses };
+}
+
+Deno.test("the chosen group survives the mapping pass that follows it (#192 review)", async () => {
+  await fresh("t-group-3");
+  await prepareSource("t-group-3", "Split JSON file", "", SPLIT_FILE);
+  const live = pushSessionFor("t-group-3");
+  live.people = ["hemang"];
+  await prepareSplitwise("t-group-3", groupApi(), { skipNames: true });
+
+  // The order the real flow uses: pushGroupNext stores the pick, then calls
+  // prepareSplitwise to map names against that group's members.
+  live.groupId = 9;
+  const second = await prepareSplitwise("t-group-3", groupApi());
+  assert(second.ok, "the second pass settles the name");
+  assert(live.groupId === 9, "the pick survives the pass that consumed it");
+});
+
+Deno.test("a pick the refreshed group list no longer offers falls back to no group", async () => {
+  await fresh("t-group-4");
+  await prepareSource("t-group-4", "Split JSON file", "", SPLIT_FILE);
+  const live = pushSessionFor("t-group-4");
+  // Bob is a friend, so the mapping SETTLES and the pass runs to its end. With
+  // an unsettled person prepareSplitwise returns early on needsNamePick and
+  // never reaches the assign this pin is about — the first draft of this test
+  // got that wrong and failed for a reason that had nothing to do with groups.
+  live.people = ["Bob"];
+  await prepareSplitwise("t-group-4", groupApi(), { skipNames: true });
+
+  // Keeping the pick must not mean keeping a pick that has gone away: pushing
+  // into a group the account no longer lists is worse than pushing into none.
+  live.groupId = 404;
+  const done = await prepareSplitwise("t-group-4", groupApi());
+  assert(done.ok, "the pass completes, so the assign at its end is reached");
+  assert(live.groupId === 0, "a vanished group resets rather than persisting");
+});
+
+Deno.test("the expense lands in the chosen group, not in no-group (#192 review)", async () => {
+  await fresh("t-group-5");
+  await prepareSource("t-group-5", "Split JSON file", "", SPLIT_FILE);
+  const live = pushSessionFor("t-group-5");
+  live.people = ["hemang"];
+  const { api, expenses } = groupApiCapturing();
+  await prepareSplitwise("t-group-5", api, { skipNames: true });
+
+  // Pick, then map, then push. The older group_id pin in this file sets
+  // groupId AFTER its last prepareSplitwise, so it could never catch a reset
+  // that happens inside one.
+  live.groupId = 9;
+  const second = await prepareSplitwise("t-group-5", api);
+  assert(second.ok, "names settle against the group");
+  const done = await executePush("t-group-5", { o1: "Push", o2: "Skip" });
+  assert(done.ok, "the push runs");
+  assert(expenses.length === 1, "one expense created");
+  assert(
+    expenses[0]["group_id"] === "9",
+    'the expense carries the chosen group, not "' + expenses[0]["group_id"] +
+      '"',
+  );
+});
+
+Deno.test("the name screen offers the group's members, and the group step shows the pick", async () => {
+  await fresh("t-group-6");
+  await prepareSource("t-group-6", "Split JSON file", "", SPLIT_FILE);
+  const live = pushSessionFor("t-group-6");
+  // puneet is in neither the friends list nor the group, so he stays unsettled
+  // and reaches the screen this ticket exists to improve.
+  live.people = ["puneet"];
+  await prepareSplitwise("t-group-6", groupApi(), { skipNames: true });
+  live.groupId = 9;
+  const second = await prepareSplitwise("t-group-6", groupApi());
+  assert(!second.ok && second.needsNamePick === true, "puneet needs a pick");
+
+  const entries = pushSteps();
+  const built = entries.map((entry) =>
+    typeof entry === "function"
+      ? entry(new Map(), { sessionId: "t-group-6" })
+      : entry
+  );
+  const names = built.find((s) => s.id === "push-names");
+  assert(names !== undefined, "the name step is reachable");
+  const radios = names!.nodes.filter((n) => n.kind === "radio") as unknown as {
+    name: string;
+    options: { value: string; hint: string }[];
+  }[];
+  const pick = radios.find((r) => r.name === "pick:puneet");
+  assert(
+    pick !== undefined,
+    "the unsettled person is offered the group's members",
+  );
+  assert(
+    pick!.options.some((o) => o.value === "55" && o.hint.includes("hemang")),
+    "a member who is not a friend appears as a choice",
+  );
+});
+
+Deno.test("walking back to the group step shows the pick, not a hard default", async () => {
+  await fresh("t-group-7");
+  await prepareSource("t-group-7", "Split JSON file", "", SPLIT_FILE);
+  const live = pushSessionFor("t-group-7");
+  // A settled session, because an unsettled one sets mode to "idle" and the
+  // group step then renders "Splitwise is not connected" with no radio at all.
+  live.people = ["hemang"];
+  await prepareSplitwise("t-group-7", groupApi(), { skipNames: true });
+  live.groupId = 9;
+  const second = await prepareSplitwise("t-group-7", groupApi());
+  assert(second.ok, "the session is settled and live");
+
+  const group = pushSteps()
+    .map((entry) =>
+      typeof entry === "function"
+        ? entry(new Map(), { sessionId: "t-group-7" })
+        : entry
+    )
+    .find((s) => s.id === "push-group");
+  const groupRadio = group!.nodes.find((n) =>
+    n.kind === "radio"
+  ) as unknown as {
+    picked?: string;
+  };
+  assert(groupRadio !== undefined, "a live session offers the group radio");
+  assert(
+    groupRadio.picked === "9",
+    "the radio shows the pick rather than a hard 0",
+  );
 });
