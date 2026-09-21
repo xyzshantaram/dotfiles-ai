@@ -251,6 +251,26 @@ function sendJson(res, status, body) {
   res.setHeader("cache-control", "no-store");
   res.end(JSON.stringify(body));
 }
+async function readBody(req, maxBytes = DEFAULT_MAX_BODY_BYTES) {
+  const declared = req.headers["content-length"];
+  if (declared !== void 0 && Number(declared) > maxBytes) {
+    throw new Error("request body too large");
+  }
+  const chunks = [];
+  let received = 0;
+  for await (const chunk of req) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    received += buffer.byteLength;
+    if (received > maxBytes) throw new Error("request body too large");
+    chunks.push(buffer);
+  }
+  const text = Buffer.concat(chunks).toString("utf8");
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error("body is not valid JSON");
+  }
+}
 
 // plugins/job-viewer/src/public-job.ts
 function toPublicSnapshot(snapshot) {
@@ -269,20 +289,6 @@ function statusLine(snapshot) {
 }
 
 // plugins/job-viewer/src/route.ts
-function readJsonBody(req) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    req.on("data", (chunk) => chunks.push(chunk));
-    req.on("end", () => {
-      try {
-        resolve(JSON.parse(Buffer.concat(chunks).toString("utf8") || "null"));
-      } catch (err) {
-        reject(err);
-      }
-    });
-    req.on("error", reject);
-  });
-}
 function toToolOutcome(outcome) {
   return outcome === "already-finished" ? "already-finished" : "cancellation-requested";
 }
@@ -321,7 +327,7 @@ function makeKillHandler(jobs, store) {
   return async (req, res) => {
     let body;
     try {
-      body = await readJsonBody(req);
+      body = await readBody(req);
     } catch (err) {
       sendJson(res, 200, { ok: false, error: err instanceof Error ? err.message : String(err) });
       return;

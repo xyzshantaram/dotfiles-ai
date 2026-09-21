@@ -39,6 +39,7 @@ import { exec, spawn } from "node:child_process";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Context } from "@deepseek-ai/cordis";
 import z from "@deepseek-ai/schemastery";
+import { readBody, sendJson } from "../../shared/http";
 import { QuiesceTracker, waitForQuiet, type AgentStatus } from "./quiesce";
 
 export const name = "restart-pause";
@@ -96,25 +97,29 @@ interface CheckResult {
   output: string;
 }
 
-function sendJson(res: ServerResponse, status: number, body: unknown): void {
-  const text = JSON.stringify(body);
-  res.writeHead(status, {
-    "content-type": "application/json; charset=utf-8",
-    "cache-control": "no-store",
-  });
-  res.end(text);
-}
-
+/**
+ * Tolerant JSON body reader — DELIBERATE DIVERGENCE from shared/readBody,
+ * kept knowingly (#338).
+ *
+ * The shared readBody THROWS on a malformed (or oversized) body. This one
+ * returns {} instead: /restart-pause/arm and /restart-pause/restart treat a
+ * missing or malformed body as "no options" (armed=false, force=false)
+ * rather than failing the request, so a stray empty POST from the browser
+ * disarms instead of 400ing. A non-object JSON value (array, string,
+ * number) likewise reads as {} for the same reason.
+ *
+ * The size cap is NOT diverged: the body still goes through the shared
+ * readBody under its default 64 KiB cap, so no route here reads uncapped.
+ * Only the error mode differs — throw becomes {}.
+ */
 async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of req) chunks.push(chunk as Buffer);
-  if (chunks.length === 0) return {};
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-    return parsed !== null && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+    parsed = await readBody(req);
   } catch {
     return {};
   }
+  return parsed !== null && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
 }
 
 /** One check, resolved rather than rejected: a failure is data, not an exception. */

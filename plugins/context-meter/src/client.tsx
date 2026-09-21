@@ -1,5 +1,4 @@
 import * as React from "react";
-import { useDismissable } from "../../shared/client-react";
 import { fetchJson, injectStyle, shippedClass } from "../../shared/client-util";
 import {
   buildTipText,
@@ -12,6 +11,45 @@ import {
   unwrapRoutePrices,
 } from "./cost";
 import localCss from "./client.module.css";
+
+/**
+ * Close a popover when the user points outside it or presses Escape.
+ *
+ * Folded in from plugins/shared/client-react.ts (#338): this panel was its
+ * only importer, so the shared module was indirection without sharing. It
+ * stays out of client-util.ts on purpose — that module is framework-free
+ * with a vitest suite running in plain node where `react` does not resolve.
+ *
+ * Use `pointerdown`, not `mousedown`: it fires for pen and touch too, and it
+ * lands before focus moves.
+ *
+ * @param open - whether the popover is currently open.
+ * @param rootRef - ref to the element that counts as inside.
+ * @param onClose - called when the user dismisses.
+ */
+function useDismissable(
+  open: boolean,
+  rootRef: { current: unknown },
+  onClose: () => void,
+): void {
+  React.useEffect(() => {
+    if (!open || typeof document === "undefined") return;
+    const onPointerDown = (event: any) => {
+      const root = rootRef.current as Node | null;
+      if (root !== null && event.target instanceof Node && root.contains(event.target)) return;
+      onClose();
+    };
+    const onKeyDown = (event: any) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open, onClose]);
+}
 
 const PLUGIN_NAME = "context-meter";
 const RADIUS = 7;

@@ -205,6 +205,12 @@ function entryHead(entry, chains, ctx) {
   return head;
 }
 
+// plugins/shared/settings-panel.tsx
+var import_react = __toESM(require("react"));
+function SettingsSection(props) {
+  return /* @__PURE__ */ import_react.default.createElement("div", { className: "dsp-root" }, /* @__PURE__ */ import_react.default.createElement("div", { className: "dsp-head" }, /* @__PURE__ */ import_react.default.createElement("h3", { className: "dsp-title" }, props.title), props.onRefresh ? /* @__PURE__ */ import_react.default.createElement("button", { className: "dsp-refresh", onClick: props.onRefresh }, props.refreshLabel === void 0 ? "Refresh" : props.refreshLabel) : null), props.children);
+}
+
 // css-text:/home/sid/repos/dotfiles-ai/plugins/shared/settings.css
 var settings_default = "/* Shared settings-page vocabulary, normalized from the session-archive,\n * subscriptions, and profiles settings panels. One rule set in one file so\n * the three panels cannot drift. Radius and padding disagreements are\n * normalized to the session-archive (or median) value; the var(--dsw-...)\n * aliases the current rules use are kept as-is. */\n\n/* Page-level container:airy vertical rhythm, no own box. */\n.dsp-root {\n  box-sizing: border-box;\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n  padding: 0;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Header row (title + refresh). */\n.dsp-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 0.75rem;\n}\n\n.dsp-title {\n  font-size: 1.5rem;\n  font-weight: 650;\n  margin: 0;\n  line-height: 1.2;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Refresh:session-archive/profiles form (no box, color shift only).\n * subscriptions pads and rounds the hit area; normalized away. */\n.dsp-refresh {\n  cursor: pointer;\n  border: none;\n  background: none;\n  padding: 0;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n}\n.dsp-refresh:hover {\n  color: var(--dsw-alias-label-primary);\n}\n\n.dsp-err {\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-state-error-primary);\n}\n\n/* Large setting card. Padding is the median of 16/20/24 (session-archive\n * 20px); the radius is the two-agreeing 20px, not profiles' 12px. */\n.dsp-section {\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.875rem;\n  padding: 1.25rem;\n  background: var(--dsw-alias-bg-tertiary);\n}\n\n/* Card title:subscriptions' 1.5rem/700 matches the page-title vocabulary;\n * profiles' smaller 16px/600 card title normalized up. */\n.dsp-section-title {\n  font-size: 1.125rem;\n  font-weight: 600;\n  margin: 0;\n  line-height: 1.2;\n  color: var(--dsw-alias-label-primary);\n}\n\n/* Setting row:horizontal in session-archive and profiles (subscriptions\n * stacks its label and meta vertically; normalized to the horizontal form). */\n.dsp-row {\n  display: flex;\n  align-items: center;\n  gap: 0.75rem;\n  min-width: 0;\n}\n\n/* Row label:only subscriptions defines one; ported verbatim, with its\n * emphasized <b> children. */\n.dsp-row-label {\n  display: flex;\n  align-items: baseline;\n  gap: 0.625rem;\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.dsp-row-label b {\n  font-weight: 600;\n  color: var(--dsw-alias-label-primary);\n  font-size: 0.9375rem;\n}\n.dsp-row-label b:last-child {\n  margin-left: auto;\n}\n";
 
@@ -212,19 +218,19 @@ var settings_default = "/* Shared settings-page vocabulary, normalized from the 
 var client_default = ".profiles-client-root {\n  display: inline-block;\n  min-width: 0;\n  position: relative;\n}\n.profiles-client-trigger {\n  min-width: 0;\n  max-width: min(22.5rem, 45cqw);\n  height: 1.75rem;\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  background: 0 0;\n  border: none;\n  border-radius: 0.75rem;\n  outline: none;\n  align-items: center;\n  gap: 0.3125rem;\n  padding: 0 0.4375rem;\n  font-size: 0.8125rem;\n  font-weight: 500;\n  line-height: 1.25rem;\n  display: flex;\n}\n.profiles-client-trigger:hover:not(:disabled) {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.profiles-client-trigger:focus-visible {\n  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);\n}\n.profiles-client-trigger:disabled {\n  color: var(--dsw-alias-label-dimmed);\n  cursor: default;\n}\n.profiles-client-badge {\n  box-sizing: border-box;\n  display: inline-flex;\n  align-items: stretch;\n  flex: 1;\n  min-width: 0;\n  height: 1.5rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.375rem;\n  overflow: hidden;\n}\n.profiles-client-badge-segment {\n  display: inline-flex;\n  align-items: center;\n  gap: 0.25rem;\n  padding: 0 0.375rem;\n  min-width: 0;\n  white-space: nowrap;\n}\n.profiles-client-badge-segment + .profiles-client-badge-segment {\n  border-left: 1px solid var(--dsw-alias-border-l2);\n}\n.profiles-client-badge-model {\n  flex: 1;\n  min-width: 0;\n  overflow: hidden;\n}\n.profiles-client-badge-segment svg {\n  flex: none;\n  width: 14px;\n  height: 14px;\n  color: var(--dsw-alias-label-caption);\n}\n.profiles-client-profile-name {\n  flex: none;\n  white-space: nowrap;\n  color: #fff;\n  font-size: 0.75rem;\n  font-weight: 700;\n  line-height: 1rem;\n  text-transform: uppercase;\n}\n.profiles-client-pill-dot {\n  flex: none;\n  width: 0.375rem;\n  height: 0.375rem;\n  border-radius: 50%;\n}\n.profiles-client-pill-dot.profiles-client-pill-dot-matched {\n  background: var(--dsw-alias-state-info-primary, #3b82f6);\n}\n.profiles-client-pill-dot.profiles-client-pill-dot-changed {\n  background: #f59e0b;\n}\n.profiles-client-model-name {\n  flex: 1;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  color: #fff;\n  font-size: 0.75rem;\n  line-height: 1rem;\n}\n.profiles-client-model-provider {\n  flex: none;\n  min-width: 0;\n  max-width: 7rem;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  color: rgba(255, 255, 255, 0.75);\n  font-size: 0.6875rem;\n  line-height: 1rem;\n  /* Optical nudge: 11px glyphs center a hair high next to 12px model text. */\n  transform: translateY(1px);\n}\n.profiles-client-badge-failover {\n  cursor: pointer;\n}\n.profiles-client-failover-rung {\n  flex: none;\n  white-space: nowrap;\n  color: #fff;\n  font-size: 0.75rem;\n  font-weight: 500;\n  line-height: 1rem;\n}\n.profiles-client-chevron {\n  color: var(--dsw-alias-label-caption);\n  flex: none;\n  transform: rotate(0deg);\n  transition: transform 0.12s;\n}\n.profiles-client-chevron-open {\n  transform: rotate(180deg);\n}\n.profiles-client-menu {\n  z-index: 20;\n  border: 1px solid var(--dsw-alias-border-inverted);\n  background: var(--dsw-specific-menu);\n  width: max-content;\n  min-width: 13.75rem;\n  max-width: min(26.25rem, 100vw - 2rem);\n  max-height: min(25rem, 100vh - 6rem);\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-primary);\n  border-radius: 0.5rem;\n  flex-direction: column;\n  padding: 0.1875rem;\n  display: flex;\n  position: absolute;\n  bottom: calc(100% + 0.5rem);\n  left: 0;\n  right: 0;\n  width: max-content;\n  margin-left: auto;\n  margin-right: auto;\n  overflow-x: hidden;\n  overflow-y: auto;\n}\n.profiles-client-option {\n  box-sizing: border-box;\n  width: auto;\n  min-width: 100%;\n  min-height: 2.125rem;\n  color: inherit;\n  text-align: left;\n  cursor: pointer;\n  background: 0 0;\n  border: none;\n  border-radius: 0.5rem;\n  outline: none;\n  align-items: center;\n  gap: 0.5rem;\n  padding: 0.25rem 0.4375rem;\n  display: flex;\n}\n.profiles-client-option:hover:not(:disabled) {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.profiles-client-option-copy {\n  flex-direction: column;\n  flex: 1;\n  min-width: 0;\n  display: flex;\n}\n.profiles-client-option-copy-model {\n  flex-direction: row;\n  align-items: baseline;\n  gap: 0.5rem;\n}\n.profiles-client-option-copy-model .profiles-client-option-name {\n  flex: 1;\n  min-width: 0;\n}\n.profiles-client-option-copy-model .profiles-client-option-detail {\n  flex: none;\n  flex-shrink: 0;\n}\n.profiles-client-option-name {\n  color: inherit;\n  flex: 1;\n  min-width: 0;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 0.8125rem;\n  font-weight: 500;\n  line-height: 1.25rem;\n  overflow: hidden;\n}\n.profiles-client-option-profile {\n  font-weight: 700;\n  text-transform: uppercase;\n}\n.profiles-client-option-model {\n  font-size: 0.75rem;\n  font-weight: 700;\n}\n.profiles-client-option-detail {\n  color: var(--dsw-alias-label-tertiary);\n  flex: none;\n  flex-shrink: 0;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  font-size: 0.75rem;\n  line-height: 1rem;\n  overflow: hidden;\n}\n.profiles-client-check {\n  color: var(--dsw-alias-label-primary);\n  flex: 0 0 0.875rem;\n}\n.profiles-client-effort-row {\n  display: flex;\n  flex-direction: column;\n  align-items: stretch;\n  gap: 0.375rem;\n  box-sizing: border-box;\n  width: 100%;\n  min-width: 0;\n  padding: 0.25rem 0.4375rem;\n}\n.profiles-client-effort-title {\n  font-size: 0.75rem;\n  line-height: 1rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.profiles-client-error-row {\n  display: flex;\n  align-items: center;\n  gap: 0.5rem;\n  min-width: 0;\n  padding: 0.25rem 0.4375rem;\n  font-size: 0.75rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.profiles-client-error-count {\n  flex: 1;\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n.profiles-client-error-reset {\n  flex: none;\n  flex-shrink: 0;\n  cursor: pointer;\n  border: none;\n  background: none;\n  padding: 0;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 0.75rem;\n  line-height: 1rem;\n}\n.profiles-client-error-reset:hover {\n  color: var(--dsw-alias-label-primary);\n}\n.profiles-client-effort {\n  box-sizing: border-box;\n  width: calc(100% - 1rem);\n  min-width: 0;\n  margin-left: 0.5rem;\n  height: 1.5rem;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  padding: 0 0.375rem;\n  font-size: 0.6875rem;\n  line-height: 1rem;\n}\n.profiles-client-effort-row .profiles-client-effort {\n  flex: 1;\n  width: auto;\n  margin-left: 0;\n}\n.profiles-client-effort-slider {\n  width: 100%;\n  min-width: 0;\n  height: 1.5rem;\n  margin: 0;\n  background: transparent;\n  cursor: pointer;\n  appearance: none;\n  -webkit-appearance: none;\n}\n.profiles-client-effort-slider::-webkit-slider-runnable-track {\n  height: 0.5rem;\n  background: linear-gradient(90deg, #0a5cff 0%, #ff8400 100%);\n  border-radius: 0.25rem;\n}\n.profiles-client-effort-slider::-webkit-slider-thumb {\n  width: 0.875rem;\n  height: 0.875rem;\n  margin-top: -0.1875rem;\n  background: #fff;\n  border: none;\n  border-radius: 50%;\n  appearance: none;\n  -webkit-appearance: none;\n  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);\n}\n.profiles-client-effort-slider::-moz-range-track {\n  height: 0.5rem;\n  background: linear-gradient(90deg, #0a5cff 0%, #ff8400 100%);\n  border-radius: 0.25rem;\n}\n.profiles-client-effort-slider::-moz-range-progress {\n  height: 0.5rem;\n  background: transparent;\n  border-radius: 0.25rem;\n}\n.profiles-client-effort-slider::-moz-range-thumb {\n  width: 0.875rem;\n  height: 0.875rem;\n  background: #fff;\n  border: none;\n  border-radius: 50%;\n  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);\n}\n.profiles-client-effort-slider-wrap {\n  position: relative;\n  width: 100%;\n}\n.profiles-client-effort-tick {\n  position: absolute;\n  top: calc(50% - 0.25rem);\n  transform: translate(-50%, -50%);\n  width: 2px;\n  height: 0.625rem;\n  background: #fff;\n  pointer-events: none;\n}\n.profiles-client-effort-labels {\n  position: relative;\n  width: 100%;\n  height: 1rem;\n}\n.profiles-client-effort-stop {\n  position: absolute;\n  top: 0;\n  transform: translateX(-50%);\n  text-transform: uppercase;\n  font-size: 0.625rem;\n  line-height: 1rem;\n  white-space: nowrap;\n  color: var(--dsw-alias-label-secondary);\n}\n.profiles-client-effort-stop-active {\n  color: var(--dsw-alias-label-primary);\n}\n.profiles-client-effort-chevron {\n  flex: none;\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 1rem;\n  line-height: 1;\n}\n.profiles-client-effort-popover {\n  position: fixed;\n  z-index: 30;\n  box-sizing: border-box;\n  width: 15rem;\n  background: var(--dsw-specific-menu);\n  border: 1px solid var(--dsw-alias-border-inverted);\n  border-radius: 0.5rem;\n  box-shadow: var(--dsw-shadow-lv3);\n  padding: 0.5rem;\n  color: var(--dsw-alias-label-primary);\n}\n.profiles-client-search {\n  box-sizing: border-box;\n  width: 100%;\n  height: 2rem;\n  margin: 0.25rem 0 0.5rem;\n  padding: 0 0.625rem;\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  outline: none;\n}\n.profiles-client-search::placeholder {\n  color: var(--dsw-alias-label-tertiary);\n}\n.profiles-client-search:focus-visible {\n  border-color: var(--dsw-alias-border-l3);\n  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);\n}\n.profiles-client-strip {\n  color: var(--dsw-alias-label-tertiary);\n  padding: 0.625rem;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n}\n\n.pf-panel-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 0.75rem;\n}\n.pf-panel-active {\n  display: flex;\n  gap: 0.75rem;\n  flex-wrap: wrap;\n}\n.pf-panel-active-btn {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  padding: 0.3125rem 0.625rem;\n  min-height: 2.375rem;\n  cursor: pointer;\n}\n.pf-panel-active-btn-on {\n  color: var(--dsw-alias-label-primary);\n  border-color: var(--dsw-alias-border-l3);\n}\n.pf-panel-entry {\n  display: flex;\n  flex-direction: column;\n  gap: 0.625rem;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.625rem;\n  padding: 0.875rem;\n  background: var(--dsw-alias-bg-tertiary);\n}\n.pf-panel-entry-title {\n  font-size: 0.9375rem;\n  font-weight: 600;\n  margin: 0;\n  color: var(--dsw-alias-label-primary);\n}\n.pf-panel-chain {\n  display: flex;\n  flex-direction: column;\n  gap: 0.75rem;\n}\n.pf-panel-chain-title {\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  color: var(--dsw-alias-label-secondary);\n  margin: 0;\n}\n.pf-panel-row {\n  display: flex;\n  gap: 0.75rem;\n  align-items: center;\n  min-width: 0;\n}\n.pf-panel-input {\n  box-sizing: border-box;\n  flex: 1;\n  min-width: 0;\n  height: 2.5rem;\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  padding: 0 0.5rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n}\n.pf-panel-input:focus-visible {\n  outline: 2px solid var(--dsw-alias-state-business-primary);\n  outline-offset: -0.125rem;\n}\n.pf-panel-del {\n  flex: none;\n  cursor: pointer;\n  border: none;\n  background: none;\n  padding: 0 0.25rem;\n  color: var(--dsw-alias-label-secondary);\n  font-size: 1rem;\n  line-height: 1.25rem;\n}\n/* Drag handle on each chain rung. Only the handle starts a drag, so the\n * row's selects and buttons keep working; touch-action lets pointer drags\n * begin on touch, and the focus ring marks the keyboard-reorder target. */\n.pf-panel-grip {\n  flex: none;\n  cursor: grab;\n  border: none;\n  background: none;\n  padding: 0 0.25rem;\n  color: var(--dsw-alias-label-tertiary);\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  touch-action: none;\n}\n.pf-panel-grip:active {\n  cursor: grabbing;\n}\n.pf-panel-grip:focus-visible {\n  outline: 2px solid var(--dsw-alias-state-business-primary);\n  outline-offset: -0.125rem;\n}\n/* A `chain:<name>` reference rung: visually distinct from provider/model\n * rungs, and reordering moves the reference itself, never its expansion. */\n.pf-panel-chainref {\n  border-left: 2px solid var(--dsw-alias-state-business-primary);\n  padding-left: 0.5rem;\n}\n.pf-panel-add {\n  align-self: flex-start;\n  color: var(--dsw-alias-label-secondary);\n  background: none;\n  border: 1px dashed var(--dsw-alias-border-l2);\n  border-radius: 0.4375rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n  padding: 0.1875rem 0.6875rem;\n  cursor: pointer;\n}\n.pf-panel-add:hover {\n  color: var(--dsw-alias-label-primary);\n}\n.pf-panel-meta {\n  font-size: 0.875rem;\n  line-height: 1.375rem;\n  color: var(--dsw-alias-label-secondary);\n}\n.pf-panel-ref {\n  flex: none;\n  color: var(--dsw-alias-label-tertiary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border-radius: 0.4375rem;\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  padding: 0.0625rem 0.5rem;\n}\n.pf-panel-actions {\n  display: flex;\n  align-items: center;\n  gap: 0.75rem;\n}\n.pf-panel-save {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l3);\n  border-radius: 0.5rem;\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  padding: 0.3125rem 0.625rem;\n  min-height: 2.375rem;\n  cursor: pointer;\n}\n.pf-panel-save:disabled {\n  opacity: 0.5;\n  cursor: default;\n}\n.pf-panel-status {\n  font-size: 0.9375rem;\n  line-height: 1.375rem;\n}\n.pf-panel-ok {\n  color: var(--dsw-alias-state-success-primary);\n}\n.pf-panel-bad {\n  color: var(--dsw-alias-state-error-primary);\n}\n.pf-panel-select {\n  box-sizing: border-box;\n  flex: 1;\n  min-width: 0;\n  height: 2.5rem;\n  color: var(--dsw-alias-label-primary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  padding: 0 0.5rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n  cursor: pointer;\n}\n.pf-panel-select:focus-visible {\n  outline: 2px solid var(--dsw-alias-state-business-primary);\n  outline-offset: -0.125rem;\n}\n.pf-panel-effort {\n  box-sizing: border-box;\n  flex: 0 0 auto;\n  min-width: 0;\n  margin-left: 0.5rem;\n  height: 2.5rem;\n  color: var(--dsw-alias-label-secondary);\n  background: var(--dsw-alias-interactive-bg-hover);\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 0.5rem;\n  padding: 0 0.5rem;\n  font-size: 0.9375rem;\n  line-height: 1.25rem;\n  cursor: pointer;\n}\n.pf-panel-select option,\n.pf-panel-effort option {\n  background: var(--dsw-alias-bg-layer-1);\n  color: var(--dsw-alias-label-primary);\n}\n/* Dropdown group headings invert \u2014 black on white \u2014 so they never render\n   white-on-white against the dropdown surface in the dark theme. */\n.pf-panel-select optgroup,\n.pf-panel-effort optgroup {\n  color: #000;\n  background: #fff;\n  font-weight: 700;\n}\n.pf-panel-model-row {\n  display: flex;\n  flex-direction: column;\n  gap: 0.125rem;\n}\n.pf-panel-add-select {\n  align-self: flex-start;\n  border-style: dashed;\n}\n.profiles-client-menu .dsp-section-title {\n  font-size: 0.8125rem;\n  line-height: 1.25rem;\n  font-weight: 700;\n  text-transform: uppercase;\n  color: var(--dsw-alias-label-tertiary);\n  margin: 0.25rem 0 0;\n  padding: 0.25rem 0.4375rem;\n}\n";
 
 // plugins/profiles-client/src/client.tsx
-var React4 = __toESM(require("react"), 1);
+var React5 = __toESM(require("react"), 1);
 
 // plugins/profiles-client/node_modules/@dnd-kit/core/dist/core.esm.js
-var import_react3 = __toESM(require("react"));
+var import_react4 = __toESM(require("react"));
 var import_react_dom = require("react-dom");
 
 // plugins/profiles-client/node_modules/@dnd-kit/utilities/dist/utilities.esm.js
-var import_react = require("react");
+var import_react2 = require("react");
 function useCombinedRefs() {
   for (var _len = arguments.length, refs = new Array(_len), _key = 0; _key < _len; _key++) {
     refs[_key] = arguments[_key];
   }
-  return (0, import_react.useMemo)(
+  return (0, import_react2.useMemo)(
     () => (node) => {
       refs.forEach((ref) => ref(node));
     },
@@ -287,13 +293,13 @@ function getOwnerDocument(target) {
   }
   return document;
 }
-var useIsomorphicLayoutEffect = canUseDOM ? import_react.useLayoutEffect : import_react.useEffect;
+var useIsomorphicLayoutEffect = canUseDOM ? import_react2.useLayoutEffect : import_react2.useEffect;
 function useEvent(handler) {
-  const handlerRef = (0, import_react.useRef)(handler);
+  const handlerRef = (0, import_react2.useRef)(handler);
   useIsomorphicLayoutEffect(() => {
     handlerRef.current = handler;
   });
-  return (0, import_react.useCallback)(function() {
+  return (0, import_react2.useCallback)(function() {
     for (var _len = arguments.length, args = new Array(_len), _key = 0; _key < _len; _key++) {
       args[_key] = arguments[_key];
     }
@@ -301,11 +307,11 @@ function useEvent(handler) {
   }, []);
 }
 function useInterval() {
-  const intervalRef = (0, import_react.useRef)(null);
-  const set = (0, import_react.useCallback)((listener, duration) => {
+  const intervalRef = (0, import_react2.useRef)(null);
+  const set = (0, import_react2.useCallback)((listener, duration) => {
     intervalRef.current = setInterval(listener, duration);
   }, []);
-  const clear = (0, import_react.useCallback)(() => {
+  const clear = (0, import_react2.useCallback)(() => {
     if (intervalRef.current !== null) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
@@ -317,7 +323,7 @@ function useLatestValue(value, dependencies) {
   if (dependencies === void 0) {
     dependencies = [value];
   }
-  const valueRef = (0, import_react.useRef)(value);
+  const valueRef = (0, import_react2.useRef)(value);
   useIsomorphicLayoutEffect(() => {
     if (valueRef.current !== value) {
       valueRef.current = value;
@@ -326,8 +332,8 @@ function useLatestValue(value, dependencies) {
   return valueRef;
 }
 function useLazyMemo(callback, dependencies) {
-  const valueRef = (0, import_react.useRef)();
-  return (0, import_react.useMemo)(
+  const valueRef = (0, import_react2.useRef)();
+  return (0, import_react2.useMemo)(
     () => {
       const newValue = callback(valueRef.current);
       valueRef.current = newValue;
@@ -339,8 +345,8 @@ function useLazyMemo(callback, dependencies) {
 }
 function useNodeRef(onChange) {
   const onChangeHandler = useEvent(onChange);
-  const node = (0, import_react.useRef)(null);
-  const setNodeRef = (0, import_react.useCallback)(
+  const node = (0, import_react2.useRef)(null);
+  const setNodeRef = (0, import_react2.useCallback)(
     (element) => {
       if (element !== node.current) {
         onChangeHandler == null ? void 0 : onChangeHandler(element, node.current);
@@ -353,15 +359,15 @@ function useNodeRef(onChange) {
   return [node, setNodeRef];
 }
 function usePrevious(value) {
-  const ref = (0, import_react.useRef)();
-  (0, import_react.useEffect)(() => {
+  const ref = (0, import_react2.useRef)();
+  (0, import_react2.useEffect)(() => {
     ref.current = value;
   }, [value]);
   return ref.current;
 }
 var ids = {};
 function useUniqueId(prefix, value) {
-  return (0, import_react.useMemo)(() => {
+  return (0, import_react2.useMemo)(() => {
     if (value) {
       return value;
     }
@@ -495,7 +501,7 @@ function findFirstFocusableNode(element) {
 }
 
 // plugins/profiles-client/node_modules/@dnd-kit/accessibility/dist/accessibility.esm.js
-var import_react2 = __toESM(require("react"));
+var import_react3 = __toESM(require("react"));
 var hiddenStyles = {
   display: "none"
 };
@@ -504,7 +510,7 @@ function HiddenText(_ref) {
     id,
     value
   } = _ref;
-  return import_react2.default.createElement("div", {
+  return import_react3.default.createElement("div", {
     id,
     style: hiddenStyles
   }, value);
@@ -529,7 +535,7 @@ function LiveRegion(_ref) {
     clipPath: "inset(100%)",
     whiteSpace: "nowrap"
   };
-  return import_react2.default.createElement("div", {
+  return import_react3.default.createElement("div", {
     id,
     style: visuallyHidden,
     role: "status",
@@ -538,8 +544,8 @@ function LiveRegion(_ref) {
   }, announcement);
 }
 function useAnnouncement() {
-  const [announcement, setAnnouncement] = (0, import_react2.useState)("");
-  const announce = (0, import_react2.useCallback)((value) => {
+  const [announcement, setAnnouncement] = (0, import_react3.useState)("");
+  const announce = (0, import_react3.useCallback)((value) => {
     if (value != null) {
       setAnnouncement(value);
     }
@@ -551,10 +557,10 @@ function useAnnouncement() {
 }
 
 // plugins/profiles-client/node_modules/@dnd-kit/core/dist/core.esm.js
-var DndMonitorContext = /* @__PURE__ */ (0, import_react3.createContext)(null);
+var DndMonitorContext = /* @__PURE__ */ (0, import_react4.createContext)(null);
 function useDndMonitor(listener) {
-  const registerListener = (0, import_react3.useContext)(DndMonitorContext);
-  (0, import_react3.useEffect)(() => {
+  const registerListener = (0, import_react4.useContext)(DndMonitorContext);
+  (0, import_react4.useEffect)(() => {
     if (!registerListener) {
       throw new Error("useDndMonitor must be used within a children of <DndContext>");
     }
@@ -563,12 +569,12 @@ function useDndMonitor(listener) {
   }, [listener, registerListener]);
 }
 function useDndMonitorProvider() {
-  const [listeners] = (0, import_react3.useState)(() => /* @__PURE__ */ new Set());
-  const registerListener = (0, import_react3.useCallback)((listener) => {
+  const [listeners] = (0, import_react4.useState)(() => /* @__PURE__ */ new Set());
+  const registerListener = (0, import_react4.useCallback)((listener) => {
     listeners.add(listener);
     return () => listeners.delete(listener);
   }, [listeners]);
-  const dispatch = (0, import_react3.useCallback)((_ref) => {
+  const dispatch = (0, import_react4.useCallback)((_ref) => {
     let {
       type,
       event
@@ -629,11 +635,11 @@ function Accessibility(_ref) {
     announcement
   } = useAnnouncement();
   const liveRegionId = useUniqueId("DndLiveRegion");
-  const [mounted, setMounted] = (0, import_react3.useState)(false);
-  (0, import_react3.useEffect)(() => {
+  const [mounted, setMounted] = (0, import_react4.useState)(false);
+  (0, import_react4.useEffect)(() => {
     setMounted(true);
   }, []);
-  useDndMonitor((0, import_react3.useMemo)(() => ({
+  useDndMonitor((0, import_react4.useMemo)(() => ({
     onDragStart(_ref2) {
       let {
         active
@@ -688,10 +694,10 @@ function Accessibility(_ref) {
   if (!mounted) {
     return null;
   }
-  const markup = import_react3.default.createElement(import_react3.default.Fragment, null, import_react3.default.createElement(HiddenText, {
+  const markup = import_react4.default.createElement(import_react4.default.Fragment, null, import_react4.default.createElement(HiddenText, {
     id: hiddenTextDescribedById,
     value: screenReaderInstructions.draggable
-  }), import_react3.default.createElement(LiveRegion, {
+  }), import_react4.default.createElement(LiveRegion, {
     id: liveRegionId,
     announcement
   }));
@@ -711,7 +717,7 @@ var Action;
 function noop() {
 }
 function useSensor(sensor, options) {
-  return (0, import_react3.useMemo)(
+  return (0, import_react4.useMemo)(
     () => ({
       sensor,
       options: options != null ? options : {}
@@ -724,7 +730,7 @@ function useSensors() {
   for (var _len = arguments.length, sensors = new Array(_len), _key = 0; _key < _len; _key++) {
     sensors[_key] = arguments[_key];
   }
-  return (0, import_react3.useMemo)(
+  return (0, import_react4.useMemo)(
     () => [...sensors].filter((sensor) => sensor != null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [...sensors]
@@ -1966,15 +1972,15 @@ function useAutoScroller(_ref) {
     disabled: !enabled
   });
   const [setAutoScrollInterval, clearAutoScrollInterval] = useInterval();
-  const scrollSpeed = (0, import_react3.useRef)({
+  const scrollSpeed = (0, import_react4.useRef)({
     x: 0,
     y: 0
   });
-  const scrollDirection = (0, import_react3.useRef)({
+  const scrollDirection = (0, import_react4.useRef)({
     x: 0,
     y: 0
   });
-  const rect = (0, import_react3.useMemo)(() => {
+  const rect = (0, import_react4.useMemo)(() => {
     switch (activator) {
       case AutoScrollActivator.Pointer:
         return pointerCoordinates ? {
@@ -1987,8 +1993,8 @@ function useAutoScroller(_ref) {
         return draggingRect;
     }
   }, [activator, draggingRect, pointerCoordinates]);
-  const scrollContainerRef = (0, import_react3.useRef)(null);
-  const autoScroll = (0, import_react3.useCallback)(() => {
+  const scrollContainerRef = (0, import_react4.useRef)(null);
+  const autoScroll = (0, import_react4.useCallback)(() => {
     const scrollContainer = scrollContainerRef.current;
     if (!scrollContainer) {
       return;
@@ -1997,8 +2003,8 @@ function useAutoScroller(_ref) {
     const scrollTop = scrollSpeed.current.y * scrollDirection.current.y;
     scrollContainer.scrollBy(scrollLeft, scrollTop);
   }, []);
-  const sortedScrollableAncestors = (0, import_react3.useMemo)(() => order === TraversalOrder.TreeOrder ? [...scrollableAncestors].reverse() : scrollableAncestors, [order, scrollableAncestors]);
-  (0, import_react3.useEffect)(
+  const sortedScrollableAncestors = (0, import_react4.useMemo)(() => order === TraversalOrder.TreeOrder ? [...scrollableAncestors].reverse() : scrollableAncestors, [order, scrollableAncestors]);
+  (0, import_react4.useEffect)(
     () => {
       if (!enabled || !scrollableAncestors.length || !rect) {
         clearAutoScrollInterval();
@@ -2111,7 +2117,7 @@ function useCachedNode(draggableNodes, id) {
   }, [node, id]);
 }
 function useCombineActivators(sensors, getSyntheticHandler) {
-  return (0, import_react3.useMemo)(() => sensors.reduce((accumulator, sensor) => {
+  return (0, import_react4.useMemo)(() => sensors.reduce((accumulator, sensor) => {
     const {
       sensor: Sensor
     } = sensor;
@@ -2139,16 +2145,16 @@ function useDroppableMeasuring(containers, _ref) {
     dependencies,
     config
   } = _ref;
-  const [queue, setQueue] = (0, import_react3.useState)(null);
+  const [queue, setQueue] = (0, import_react4.useState)(null);
   const {
     frequency,
     measure,
     strategy
   } = config;
-  const containersRef = (0, import_react3.useRef)(containers);
+  const containersRef = (0, import_react4.useRef)(containers);
   const disabled = isDisabled();
   const disabledRef = useLatestValue(disabled);
-  const measureDroppableContainers = (0, import_react3.useCallback)(function(ids2) {
+  const measureDroppableContainers = (0, import_react4.useCallback)(function(ids2) {
     if (ids2 === void 0) {
       ids2 = [];
     }
@@ -2162,7 +2168,7 @@ function useDroppableMeasuring(containers, _ref) {
       return value.concat(ids2.filter((id) => !value.includes(id)));
     });
   }, [disabledRef]);
-  const timeoutId = (0, import_react3.useRef)(null);
+  const timeoutId = (0, import_react4.useRef)(null);
   const droppableRects = useLazyMemo((previousValue) => {
     if (disabled && !dragging) {
       return defaultValue;
@@ -2188,10 +2194,10 @@ function useDroppableMeasuring(containers, _ref) {
     }
     return previousValue;
   }, [containers, queue, dragging, disabled, measure]);
-  (0, import_react3.useEffect)(() => {
+  (0, import_react4.useEffect)(() => {
     containersRef.current = containers;
   }, [containers]);
-  (0, import_react3.useEffect)(
+  (0, import_react4.useEffect)(
     () => {
       if (disabled) {
         return;
@@ -2201,7 +2207,7 @@ function useDroppableMeasuring(containers, _ref) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [dragging, disabled]
   );
-  (0, import_react3.useEffect)(
+  (0, import_react4.useEffect)(
     () => {
       if (queue && queue.length > 0) {
         setQueue(null);
@@ -2210,7 +2216,7 @@ function useDroppableMeasuring(containers, _ref) {
     //eslint-disable-next-line react-hooks/exhaustive-deps
     [JSON.stringify(queue)]
   );
-  (0, import_react3.useEffect)(
+  (0, import_react4.useEffect)(
     () => {
       if (disabled || typeof frequency !== "number" || timeoutId.current !== null) {
         return;
@@ -2259,7 +2265,7 @@ function useMutationObserver(_ref) {
     disabled
   } = _ref;
   const handleMutations = useEvent(callback);
-  const mutationObserver = (0, import_react3.useMemo)(() => {
+  const mutationObserver = (0, import_react4.useMemo)(() => {
     if (disabled || typeof window === "undefined" || typeof window.MutationObserver === "undefined") {
       return void 0;
     }
@@ -2268,7 +2274,7 @@ function useMutationObserver(_ref) {
     } = window;
     return new MutationObserver2(handleMutations);
   }, [handleMutations, disabled]);
-  (0, import_react3.useEffect)(() => {
+  (0, import_react4.useEffect)(() => {
     return () => mutationObserver == null ? void 0 : mutationObserver.disconnect();
   }, [mutationObserver]);
   return mutationObserver;
@@ -2279,7 +2285,7 @@ function useResizeObserver(_ref) {
     disabled
   } = _ref;
   const handleResize = useEvent(callback);
-  const resizeObserver = (0, import_react3.useMemo)(
+  const resizeObserver = (0, import_react4.useMemo)(
     () => {
       if (disabled || typeof window === "undefined" || typeof window.ResizeObserver === "undefined") {
         return void 0;
@@ -2292,7 +2298,7 @@ function useResizeObserver(_ref) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [disabled]
   );
-  (0, import_react3.useEffect)(() => {
+  (0, import_react4.useEffect)(() => {
     return () => resizeObserver == null ? void 0 : resizeObserver.disconnect();
   }, [resizeObserver]);
   return resizeObserver;
@@ -2304,7 +2310,7 @@ function useRect(element, measure, fallbackRect) {
   if (measure === void 0) {
     measure = defaultMeasure;
   }
-  const [rect, setRect] = (0, import_react3.useState)(null);
+  const [rect, setRect] = (0, import_react4.useState)(null);
   function measureRect() {
     setRect((currentRect) => {
       if (!element) {
@@ -2362,7 +2368,7 @@ function useRectDelta(rect) {
 }
 var defaultValue$1 = [];
 function useScrollableAncestors(node) {
-  const previousNode = (0, import_react3.useRef)(node);
+  const previousNode = (0, import_react4.useRef)(node);
   const ancestors = useLazyMemo((previousValue) => {
     if (!node) {
       return defaultValue$1;
@@ -2372,15 +2378,15 @@ function useScrollableAncestors(node) {
     }
     return getScrollableAncestors(node);
   }, [node]);
-  (0, import_react3.useEffect)(() => {
+  (0, import_react4.useEffect)(() => {
     previousNode.current = node;
   }, [node]);
   return ancestors;
 }
 function useScrollOffsets(elements) {
-  const [scrollCoordinates, setScrollCoordinates] = (0, import_react3.useState)(null);
-  const prevElements = (0, import_react3.useRef)(elements);
-  const handleScroll = (0, import_react3.useCallback)((event) => {
+  const [scrollCoordinates, setScrollCoordinates] = (0, import_react4.useState)(null);
+  const prevElements = (0, import_react4.useRef)(elements);
+  const handleScroll = (0, import_react4.useCallback)((event) => {
     const scrollingElement = getScrollableElement(event.target);
     if (!scrollingElement) {
       return;
@@ -2393,7 +2399,7 @@ function useScrollOffsets(elements) {
       return new Map(scrollCoordinates2);
     });
   }, []);
-  (0, import_react3.useEffect)(() => {
+  (0, import_react4.useEffect)(() => {
     const previousElements = prevElements.current;
     if (elements !== previousElements) {
       cleanup(previousElements);
@@ -2421,7 +2427,7 @@ function useScrollOffsets(elements) {
       });
     }
   }, [handleScroll, elements]);
-  return (0, import_react3.useMemo)(() => {
+  return (0, import_react4.useMemo)(() => {
     if (elements.length) {
       return scrollCoordinates ? Array.from(scrollCoordinates.values()).reduce((acc, coordinates) => add(acc, coordinates), defaultCoordinates) : getScrollOffsets(elements);
     }
@@ -2432,15 +2438,15 @@ function useScrollOffsetsDelta(scrollOffsets, dependencies) {
   if (dependencies === void 0) {
     dependencies = [];
   }
-  const initialScrollOffsets = (0, import_react3.useRef)(null);
-  (0, import_react3.useEffect)(
+  const initialScrollOffsets = (0, import_react4.useRef)(null);
+  (0, import_react4.useEffect)(
     () => {
       initialScrollOffsets.current = null;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     dependencies
   );
-  (0, import_react3.useEffect)(() => {
+  (0, import_react4.useEffect)(() => {
     const hasScrollOffsets = scrollOffsets !== defaultCoordinates;
     if (hasScrollOffsets && !initialScrollOffsets.current) {
       initialScrollOffsets.current = scrollOffsets;
@@ -2452,7 +2458,7 @@ function useScrollOffsetsDelta(scrollOffsets, dependencies) {
   return initialScrollOffsets.current ? subtract(scrollOffsets, initialScrollOffsets.current) : defaultCoordinates;
 }
 function useSensorSetup(sensors) {
-  (0, import_react3.useEffect)(
+  (0, import_react4.useEffect)(
     () => {
       if (!canUseDOM) {
         return;
@@ -2480,7 +2486,7 @@ function useSensorSetup(sensors) {
   );
 }
 function useSyntheticListeners(listeners, id) {
-  return (0, import_react3.useMemo)(() => {
+  return (0, import_react4.useMemo)(() => {
     return listeners.reduce((acc, _ref) => {
       let {
         eventName,
@@ -2494,7 +2500,7 @@ function useSyntheticListeners(listeners, id) {
   }, [listeners, id]);
 }
 function useWindowRect(element) {
-  return (0, import_react3.useMemo)(() => element ? getWindowClientRect(element) : null, [element]);
+  return (0, import_react4.useMemo)(() => element ? getWindowClientRect(element) : null, [element]);
 }
 var defaultValue$2 = [];
 function useRects(elements, measure) {
@@ -2503,7 +2509,7 @@ function useRects(elements, measure) {
   }
   const [firstElement] = elements;
   const windowRect = useWindowRect(firstElement ? getWindow(firstElement) : null);
-  const [rects, setRects] = (0, import_react3.useState)(defaultValue$2);
+  const [rects, setRects] = (0, import_react4.useState)(defaultValue$2);
   function measureRects() {
     setRects(() => {
       if (!elements.length) {
@@ -2536,8 +2542,8 @@ function useDragOverlayMeasuring(_ref) {
   let {
     measure
   } = _ref;
-  const [rect, setRect] = (0, import_react3.useState)(null);
-  const handleResize = (0, import_react3.useCallback)((entries) => {
+  const [rect, setRect] = (0, import_react4.useState)(null);
+  const handleResize = (0, import_react4.useCallback)((entries) => {
     for (const {
       target
     } of entries) {
@@ -2557,7 +2563,7 @@ function useDragOverlayMeasuring(_ref) {
   const resizeObserver = useResizeObserver({
     callback: handleResize
   });
-  const handleNodeChange = (0, import_react3.useCallback)((element) => {
+  const handleNodeChange = (0, import_react4.useCallback)((element) => {
     const node = getMeasurableNode(element);
     resizeObserver == null ? void 0 : resizeObserver.disconnect();
     if (node) {
@@ -2566,7 +2572,7 @@ function useDragOverlayMeasuring(_ref) {
     setRect(node ? measure(node) : null);
   }, [measure, resizeObserver]);
   const [nodeRef, setRef] = useNodeRef(handleNodeChange);
-  return (0, import_react3.useMemo)(() => ({
+  return (0, import_react4.useMemo)(() => ({
     nodeRef,
     rect,
     setRef
@@ -2654,8 +2660,8 @@ var defaultInternalContext = {
   over: null,
   measureDroppableContainers: noop
 };
-var InternalContext = /* @__PURE__ */ (0, import_react3.createContext)(defaultInternalContext);
-var PublicContext = /* @__PURE__ */ (0, import_react3.createContext)(defaultPublicContext);
+var InternalContext = /* @__PURE__ */ (0, import_react4.createContext)(defaultInternalContext);
+var PublicContext = /* @__PURE__ */ (0, import_react4.createContext)(defaultPublicContext);
 function getInitialState() {
   return {
     draggable: {
@@ -2789,10 +2795,10 @@ function RestoreFocus(_ref) {
     active,
     activatorEvent,
     draggableNodes
-  } = (0, import_react3.useContext)(InternalContext);
+  } = (0, import_react4.useContext)(InternalContext);
   const previousActivatorEvent = usePrevious(activatorEvent);
   const previousActiveId = usePrevious(active == null ? void 0 : active.id);
-  (0, import_react3.useEffect)(() => {
+  (0, import_react4.useEffect)(() => {
     if (disabled) {
       return;
     }
@@ -2843,7 +2849,7 @@ function applyModifiers(modifiers, _ref) {
   }, transform) : transform;
 }
 function useMeasuringConfiguration(config) {
-  return (0, import_react3.useMemo)(
+  return (0, import_react4.useMemo)(
     () => ({
       draggable: {
         ...defaultMeasuringConfiguration.draggable,
@@ -2869,7 +2875,7 @@ function useLayoutShiftScrollCompensation(_ref) {
     initialRect,
     config = true
   } = _ref;
-  const initialized = (0, import_react3.useRef)(false);
+  const initialized = (0, import_react4.useRef)(false);
   const {
     x,
     y
@@ -2910,7 +2916,7 @@ function useLayoutShiftScrollCompensation(_ref) {
     }
   }, [activeNode, x, y, initialRect, measure]);
 }
-var ActiveDraggableContext = /* @__PURE__ */ (0, import_react3.createContext)({
+var ActiveDraggableContext = /* @__PURE__ */ (0, import_react4.createContext)({
   ...defaultCoordinates,
   scaleX: 1,
   scaleY: 1
@@ -2921,7 +2927,7 @@ var Status;
   Status2[Status2["Initializing"] = 1] = "Initializing";
   Status2[Status2["Initialized"] = 2] = "Initialized";
 })(Status || (Status = {}));
-var DndContext = /* @__PURE__ */ (0, import_react3.memo)(function DndContext2(_ref) {
+var DndContext = /* @__PURE__ */ (0, import_react4.memo)(function DndContext2(_ref) {
   var _sensorContext$curren, _dragOverlay$nodeRef$, _dragOverlay$rect, _over$rect;
   let {
     id,
@@ -2934,10 +2940,10 @@ var DndContext = /* @__PURE__ */ (0, import_react3.memo)(function DndContext2(_r
     modifiers,
     ...props
   } = _ref;
-  const store = (0, import_react3.useReducer)(reducer, void 0, getInitialState);
+  const store = (0, import_react4.useReducer)(reducer, void 0, getInitialState);
   const [state, dispatch] = store;
   const [dispatchMonitorEvent, registerMonitorListener] = useDndMonitorProvider();
-  const [status, setStatus] = (0, import_react3.useState)(Status.Uninitialized);
+  const [status, setStatus] = (0, import_react4.useState)(Status.Uninitialized);
   const isInitialized = status === Status.Initialized;
   const {
     draggable: {
@@ -2950,11 +2956,11 @@ var DndContext = /* @__PURE__ */ (0, import_react3.memo)(function DndContext2(_r
     }
   } = state;
   const node = activeId != null ? draggableNodes.get(activeId) : null;
-  const activeRects = (0, import_react3.useRef)({
+  const activeRects = (0, import_react4.useRef)({
     initial: null,
     translated: null
   });
-  const active = (0, import_react3.useMemo)(() => {
+  const active = (0, import_react4.useMemo)(() => {
     var _node$data;
     return activeId != null ? {
       id: activeId,
@@ -2963,12 +2969,12 @@ var DndContext = /* @__PURE__ */ (0, import_react3.memo)(function DndContext2(_r
       rect: activeRects
     } : null;
   }, [activeId, node]);
-  const activeRef = (0, import_react3.useRef)(null);
-  const [activeSensor, setActiveSensor] = (0, import_react3.useState)(null);
-  const [activatorEvent, setActivatorEvent] = (0, import_react3.useState)(null);
+  const activeRef = (0, import_react4.useRef)(null);
+  const [activeSensor, setActiveSensor] = (0, import_react4.useState)(null);
+  const [activatorEvent, setActivatorEvent] = (0, import_react4.useState)(null);
   const latestProps = useLatestValue(props, Object.values(props));
   const draggableDescribedById = useUniqueId("DndDescribedBy", id);
-  const enabledDroppableContainers = (0, import_react3.useMemo)(() => droppableContainers.getEnabled(), [droppableContainers]);
+  const enabledDroppableContainers = (0, import_react4.useMemo)(() => droppableContainers.getEnabled(), [droppableContainers]);
   const measuringConfiguration = useMeasuringConfiguration(measuring);
   const {
     droppableRects,
@@ -2980,7 +2986,7 @@ var DndContext = /* @__PURE__ */ (0, import_react3.memo)(function DndContext2(_r
     config: measuringConfiguration.droppable
   });
   const activeNode = useCachedNode(draggableNodes, activeId);
-  const activationCoordinates = (0, import_react3.useMemo)(() => activatorEvent ? getEventCoordinates(activatorEvent) : null, [activatorEvent]);
+  const activationCoordinates = (0, import_react4.useMemo)(() => activatorEvent ? getEventCoordinates(activatorEvent) : null, [activatorEvent]);
   const autoScrollOptions = getAutoScrollerOptions();
   const initialActiveNodeRect = useInitialRect(activeNode, measuringConfiguration.draggable.measure);
   useLayoutShiftScrollCompensation({
@@ -2991,7 +2997,7 @@ var DndContext = /* @__PURE__ */ (0, import_react3.memo)(function DndContext2(_r
   });
   const activeNodeRect = useRect(activeNode, measuringConfiguration.draggable.measure, initialActiveNodeRect);
   const containerNodeRect = useRect(activeNode ? activeNode.parentElement : null);
-  const sensorContext = (0, import_react3.useRef)({
+  const sensorContext = (0, import_react4.useRef)({
     activatorEvent: null,
     active: null,
     activeNode,
@@ -3049,11 +3055,11 @@ var DndContext = /* @__PURE__ */ (0, import_react3.memo)(function DndContext2(_r
     pointerCoordinates
   }) : null;
   const overId = getFirstCollision(collisions, "id");
-  const [over, setOver] = (0, import_react3.useState)(null);
+  const [over, setOver] = (0, import_react4.useState)(null);
   const appliedTranslate = usesDragOverlay ? modifiedTranslate : add(modifiedTranslate, activeNodeScrollDelta);
   const transform = adjustScale(appliedTranslate, (_over$rect = over == null ? void 0 : over.rect) != null ? _over$rect : null, activeNodeRect);
-  const activeSensorRef = (0, import_react3.useRef)(null);
-  const instantiateSensor = (0, import_react3.useCallback)(
+  const activeSensorRef = (0, import_react4.useRef)(null);
+  const instantiateSensor = (0, import_react4.useCallback)(
     (event, _ref2) => {
       let {
         sensor: Sensor,
@@ -3211,7 +3217,7 @@ var DndContext = /* @__PURE__ */ (0, import_react3.memo)(function DndContext2(_r
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [draggableNodes]
   );
-  const bindActivatorToSensorInstantiator = (0, import_react3.useCallback)((handler, sensor) => {
+  const bindActivatorToSensorInstantiator = (0, import_react4.useCallback)((handler, sensor) => {
     return (event, active2) => {
       const nativeEvent = event.nativeEvent;
       const activeDraggableNode = draggableNodes.get(active2);
@@ -3243,7 +3249,7 @@ var DndContext = /* @__PURE__ */ (0, import_react3.memo)(function DndContext2(_r
       setStatus(Status.Initialized);
     }
   }, [activeNodeRect, status]);
-  (0, import_react3.useEffect)(
+  (0, import_react4.useEffect)(
     () => {
       const {
         onDragMove
@@ -3278,7 +3284,7 @@ var DndContext = /* @__PURE__ */ (0, import_react3.memo)(function DndContext2(_r
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [scrollAdjustedTranslate.x, scrollAdjustedTranslate.y]
   );
-  (0, import_react3.useEffect)(
+  (0, import_react4.useEffect)(
     () => {
       const {
         active: active2,
@@ -3351,7 +3357,7 @@ var DndContext = /* @__PURE__ */ (0, import_react3.memo)(function DndContext2(_r
     scrollableAncestors,
     scrollableAncestorRects
   });
-  const publicContext = (0, import_react3.useMemo)(() => {
+  const publicContext = (0, import_react4.useMemo)(() => {
     const context = {
       active,
       activeNode,
@@ -3373,7 +3379,7 @@ var DndContext = /* @__PURE__ */ (0, import_react3.memo)(function DndContext2(_r
     };
     return context;
   }, [active, activeNode, activeNodeRect, activatorEvent, collisions, containerNodeRect, dragOverlay, draggableNodes, droppableContainers, droppableRects, over, measureDroppableContainers, scrollableAncestors, scrollableAncestorRects, measuringConfiguration, measuringScheduled, windowRect]);
-  const internalContext = (0, import_react3.useMemo)(() => {
+  const internalContext = (0, import_react4.useMemo)(() => {
     const context = {
       activatorEvent,
       activators,
@@ -3389,17 +3395,17 @@ var DndContext = /* @__PURE__ */ (0, import_react3.memo)(function DndContext2(_r
     };
     return context;
   }, [activatorEvent, activators, active, activeNodeRect, dispatch, draggableDescribedById, draggableNodes, over, measureDroppableContainers]);
-  return import_react3.default.createElement(DndMonitorContext.Provider, {
+  return import_react4.default.createElement(DndMonitorContext.Provider, {
     value: registerMonitorListener
-  }, import_react3.default.createElement(InternalContext.Provider, {
+  }, import_react4.default.createElement(InternalContext.Provider, {
     value: internalContext
-  }, import_react3.default.createElement(PublicContext.Provider, {
+  }, import_react4.default.createElement(PublicContext.Provider, {
     value: publicContext
-  }, import_react3.default.createElement(ActiveDraggableContext.Provider, {
+  }, import_react4.default.createElement(ActiveDraggableContext.Provider, {
     value: transform
-  }, children)), import_react3.default.createElement(RestoreFocus, {
+  }, children)), import_react4.default.createElement(RestoreFocus, {
     disabled: (accessibility == null ? void 0 : accessibility.restoreFocus) === false
-  })), import_react3.default.createElement(Accessibility, {
+  })), import_react4.default.createElement(Accessibility, {
     ...accessibility,
     hiddenTextDescribedById: draggableDescribedById
   }));
@@ -3418,7 +3424,7 @@ var DndContext = /* @__PURE__ */ (0, import_react3.memo)(function DndContext2(_r
     };
   }
 });
-var NullContext = /* @__PURE__ */ (0, import_react3.createContext)(null);
+var NullContext = /* @__PURE__ */ (0, import_react4.createContext)(null);
 var defaultRole = "button";
 var ID_PREFIX = "Draggable";
 function useDraggable(_ref) {
@@ -3437,14 +3443,14 @@ function useDraggable(_ref) {
     ariaDescribedById,
     draggableNodes,
     over
-  } = (0, import_react3.useContext)(InternalContext);
+  } = (0, import_react4.useContext)(InternalContext);
   const {
     role = defaultRole,
     roleDescription = "draggable",
     tabIndex = 0
   } = attributes != null ? attributes : {};
   const isDragging = (active == null ? void 0 : active.id) === id;
-  const transform = (0, import_react3.useContext)(isDragging ? ActiveDraggableContext : NullContext);
+  const transform = (0, import_react4.useContext)(isDragging ? ActiveDraggableContext : NullContext);
   const [node, setNodeRef] = useNodeRef();
   const [activatorNode, setActivatorNodeRef] = useNodeRef();
   const listeners = useSyntheticListeners(activators, id);
@@ -3468,7 +3474,7 @@ function useDraggable(_ref) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [draggableNodes, id]
   );
-  const memoizedAttributes = (0, import_react3.useMemo)(() => ({
+  const memoizedAttributes = (0, import_react4.useMemo)(() => ({
     role,
     tabIndex,
     "aria-disabled": disabled,
@@ -3491,7 +3497,7 @@ function useDraggable(_ref) {
   };
 }
 function useDndContext() {
-  return (0, import_react3.useContext)(PublicContext);
+  return (0, import_react4.useContext)(PublicContext);
 }
 var ID_PREFIX$1 = "Droppable";
 var defaultResizeObserverConfig = {
@@ -3510,13 +3516,13 @@ function useDroppable(_ref) {
     dispatch,
     over,
     measureDroppableContainers
-  } = (0, import_react3.useContext)(InternalContext);
-  const previous = (0, import_react3.useRef)({
+  } = (0, import_react4.useContext)(InternalContext);
+  const previous = (0, import_react4.useRef)({
     disabled
   });
-  const resizeObserverConnected = (0, import_react3.useRef)(false);
-  const rect = (0, import_react3.useRef)(null);
-  const callbackId = (0, import_react3.useRef)(null);
+  const resizeObserverConnected = (0, import_react4.useRef)(false);
+  const rect = (0, import_react4.useRef)(null);
+  const callbackId = (0, import_react4.useRef)(null);
   const {
     disabled: resizeObserverDisabled,
     updateMeasurementsFor,
@@ -3526,7 +3532,7 @@ function useDroppable(_ref) {
     ...resizeObserverConfig
   };
   const ids2 = useLatestValue(updateMeasurementsFor != null ? updateMeasurementsFor : id);
-  const handleResize = (0, import_react3.useCallback)(
+  const handleResize = (0, import_react4.useCallback)(
     () => {
       if (!resizeObserverConnected.current) {
         resizeObserverConnected.current = true;
@@ -3547,7 +3553,7 @@ function useDroppable(_ref) {
     callback: handleResize,
     disabled: resizeObserverDisabled || !active
   });
-  const handleNodeChange = (0, import_react3.useCallback)((newElement, previousElement) => {
+  const handleNodeChange = (0, import_react4.useCallback)((newElement, previousElement) => {
     if (!resizeObserver) {
       return;
     }
@@ -3561,7 +3567,7 @@ function useDroppable(_ref) {
   }, [resizeObserver]);
   const [nodeRef, setNodeRef] = useNodeRef(handleNodeChange);
   const dataRef = useLatestValue(data);
-  (0, import_react3.useEffect)(() => {
+  (0, import_react4.useEffect)(() => {
     if (!resizeObserver || !nodeRef.current) {
       return;
     }
@@ -3569,7 +3575,7 @@ function useDroppable(_ref) {
     resizeObserverConnected.current = false;
     resizeObserver.observe(nodeRef.current);
   }, [nodeRef, resizeObserver]);
-  (0, import_react3.useEffect)(
+  (0, import_react4.useEffect)(
     () => {
       dispatch({
         type: Action.RegisterDroppable,
@@ -3591,7 +3597,7 @@ function useDroppable(_ref) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [id]
   );
-  (0, import_react3.useEffect)(() => {
+  (0, import_react4.useEffect)(() => {
     if (disabled !== previous.current.disabled) {
       dispatch({
         type: Action.SetDroppableDisabled,
@@ -3613,7 +3619,7 @@ function useDroppable(_ref) {
 }
 
 // plugins/profiles-client/node_modules/@dnd-kit/sortable/dist/sortable.esm.js
-var import_react4 = __toESM(require("react"));
+var import_react5 = __toESM(require("react"));
 function arrayMove(array, from, to) {
   const newArray = array.slice();
   newArray.splice(to < 0 ? newArray.length + to : to, 0, newArray.splice(from, 1)[0]);
@@ -3736,7 +3742,7 @@ function getItemGap$1(clientRects, index, activeIndex) {
   return nextRect ? nextRect.top - (currentRect.top + currentRect.height) : previousRect ? currentRect.top - (previousRect.top + previousRect.height) : 0;
 }
 var ID_PREFIX2 = "Sortable";
-var Context = /* @__PURE__ */ import_react4.default.createContext({
+var Context = /* @__PURE__ */ import_react5.default.createContext({
   activeIndex: -1,
   containerId: ID_PREFIX2,
   disableTransforms: false,
@@ -3767,11 +3773,11 @@ function SortableContext(_ref) {
   } = useDndContext();
   const containerId = useUniqueId(ID_PREFIX2, id);
   const useDragOverlay = Boolean(dragOverlay.rect !== null);
-  const items = (0, import_react4.useMemo)(() => userDefinedItems.map((item) => typeof item === "object" && "id" in item ? item.id : item), [userDefinedItems]);
+  const items = (0, import_react5.useMemo)(() => userDefinedItems.map((item) => typeof item === "object" && "id" in item ? item.id : item), [userDefinedItems]);
   const isDragging = active != null;
   const activeIndex = active ? items.indexOf(active.id) : -1;
   const overIndex = over ? items.indexOf(over.id) : -1;
-  const previousItemsRef = (0, import_react4.useRef)(items);
+  const previousItemsRef = (0, import_react5.useRef)(items);
   const itemsHaveChanged = !itemsEqual(items, previousItemsRef.current);
   const disableTransforms = overIndex !== -1 && activeIndex === -1 || itemsHaveChanged;
   const disabled = normalizeDisabled(disabledProp);
@@ -3780,10 +3786,10 @@ function SortableContext(_ref) {
       measureDroppableContainers(items);
     }
   }, [itemsHaveChanged, items, isDragging, measureDroppableContainers]);
-  (0, import_react4.useEffect)(() => {
+  (0, import_react5.useEffect)(() => {
     previousItemsRef.current = items;
   }, [items]);
-  const contextValue = (0, import_react4.useMemo)(
+  const contextValue = (0, import_react5.useMemo)(
     () => ({
       activeIndex,
       containerId,
@@ -3798,7 +3804,7 @@ function SortableContext(_ref) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [activeIndex, containerId, disabled.draggable, disabled.droppable, disableTransforms, items, overIndex, droppableRects, useDragOverlay, strategy]
   );
-  return import_react4.default.createElement(Context.Provider, {
+  return import_react5.default.createElement(Context.Provider, {
     value: contextValue
   }, children);
 }
@@ -3854,8 +3860,8 @@ function useDerivedTransform(_ref) {
     node,
     rect
   } = _ref;
-  const [derivedTransform, setDerivedtransform] = (0, import_react4.useState)(null);
-  const previousIndex = (0, import_react4.useRef)(index);
+  const [derivedTransform, setDerivedtransform] = (0, import_react5.useState)(null);
+  const previousIndex = (0, import_react5.useRef)(index);
   useIsomorphicLayoutEffect(() => {
     if (!disabled && index !== previousIndex.current && node.current) {
       const initial = rect.current;
@@ -3878,7 +3884,7 @@ function useDerivedTransform(_ref) {
       previousIndex.current = index;
     }
   }, [disabled, index, node, rect]);
-  (0, import_react4.useEffect)(() => {
+  (0, import_react5.useEffect)(() => {
     if (derivedTransform) {
       setDerivedtransform(null);
     }
@@ -3907,10 +3913,10 @@ function useSortable(_ref) {
     overIndex,
     useDragOverlay,
     strategy: globalStrategy
-  } = (0, import_react4.useContext)(Context);
+  } = (0, import_react5.useContext)(Context);
   const disabled = normalizeLocalDisabled(localDisabled, globalDisabled);
   const index = items.indexOf(id);
-  const data = (0, import_react4.useMemo)(() => ({
+  const data = (0, import_react5.useMemo)(() => ({
     sortable: {
       containerId,
       index,
@@ -3918,7 +3924,7 @@ function useSortable(_ref) {
     },
     ...customData
   }), [containerId, customData, index, items]);
-  const itemsAfterCurrentSortable = (0, import_react4.useMemo)(() => items.slice(items.indexOf(id)), [items, id]);
+  const itemsAfterCurrentSortable = (0, import_react5.useMemo)(() => items.slice(items.indexOf(id)), [items, id]);
   const {
     rect,
     node,
@@ -3973,7 +3979,7 @@ function useSortable(_ref) {
     overIndex
   }) : index;
   const activeId = active == null ? void 0 : active.id;
-  const previous = (0, import_react4.useRef)({
+  const previous = (0, import_react5.useRef)({
     activeId,
     items,
     newIndex,
@@ -4000,7 +4006,7 @@ function useSortable(_ref) {
     node,
     rect
   });
-  (0, import_react4.useEffect)(() => {
+  (0, import_react5.useEffect)(() => {
     if (isSorting && previous.current.newIndex !== newIndex) {
       previous.current.newIndex = newIndex;
     }
@@ -4011,7 +4017,7 @@ function useSortable(_ref) {
       previous.current.items = items;
     }
   }, [isSorting, newIndex, containerId, items]);
-  (0, import_react4.useEffect)(() => {
+  (0, import_react5.useEffect)(() => {
     if (activeId === previous.current.activeId) {
       return;
     }
@@ -4200,7 +4206,7 @@ var primitivesModule = __toESM(require("@deepseek-ai/dsh-client-ui-primitives"),
 var IconChevronDownOutline142 = primitivesModule.IconChevronDownOutline14;
 var SortableCtx = SortableContext;
 function BrainIcon14() {
-  return /* @__PURE__ */ React4.createElement("svg", { width: 14, height: 14, viewBox: "0 0 480 480", fill: "none", "aria-hidden": true }, /* @__PURE__ */ React4.createElement("g", { transform: "matrix(2.6933 0 0 2.808 -33.019 -25.795)" }, /* @__PURE__ */ React4.createElement(
+  return /* @__PURE__ */ React5.createElement("svg", { width: 14, height: 14, viewBox: "0 0 480 480", fill: "none", "aria-hidden": true }, /* @__PURE__ */ React5.createElement("g", { transform: "matrix(2.6933 0 0 2.808 -33.019 -25.795)" }, /* @__PURE__ */ React5.createElement(
     "g",
     {
       transform: "rotate(90,100,100)",
@@ -4210,19 +4216,19 @@ function BrainIcon14() {
       strokeLinejoin: "round",
       strokeWidth: 14
     },
-    /* @__PURE__ */ React4.createElement("path", { d: "m96 166v-132c0-12-12-20-23-16-9 3-15 10-16 19-12-5-25 3-27 16-1 8 2 14 6 18-14 6-21 20-18 33 3 14 15 23 28 21-8 11-6 25 4 32 6 4 14 5 21 2 5 11 15 17 25 7z" }),
-    /* @__PURE__ */ React4.createElement("path", { d: "m102 100h50" }),
-    /* @__PURE__ */ React4.createElement("path", { d: "m102 72h28l25-25" }),
-    /* @__PURE__ */ React4.createElement("path", { d: "m102 128h28l25 25" }),
-    /* @__PURE__ */ React4.createElement("circle", { cx: "161", cy: "100", r: "9" }),
-    /* @__PURE__ */ React4.createElement("circle", { cx: "161", cy: "41", r: "9" }),
-    /* @__PURE__ */ React4.createElement("circle", { cx: "161", cy: "159", r: "9" }),
-    /* @__PURE__ */ React4.createElement("circle", { cx: "122", cy: "30", r: "9" }),
-    /* @__PURE__ */ React4.createElement("circle", { cx: "122", cy: "170", r: "9" })
+    /* @__PURE__ */ React5.createElement("path", { d: "m96 166v-132c0-12-12-20-23-16-9 3-15 10-16 19-12-5-25 3-27 16-1 8 2 14 6 18-14 6-21 20-18 33 3 14 15 23 28 21-8 11-6 25 4 32 6 4 14 5 21 2 5 11 15 17 25 7z" }),
+    /* @__PURE__ */ React5.createElement("path", { d: "m102 100h50" }),
+    /* @__PURE__ */ React5.createElement("path", { d: "m102 72h28l25-25" }),
+    /* @__PURE__ */ React5.createElement("path", { d: "m102 128h28l25 25" }),
+    /* @__PURE__ */ React5.createElement("circle", { cx: "161", cy: "100", r: "9" }),
+    /* @__PURE__ */ React5.createElement("circle", { cx: "161", cy: "41", r: "9" }),
+    /* @__PURE__ */ React5.createElement("circle", { cx: "161", cy: "159", r: "9" }),
+    /* @__PURE__ */ React5.createElement("circle", { cx: "122", cy: "30", r: "9" }),
+    /* @__PURE__ */ React5.createElement("circle", { cx: "122", cy: "170", r: "9" })
   )));
 }
 function NetworkIcon14() {
-  return /* @__PURE__ */ React4.createElement(
+  return /* @__PURE__ */ React5.createElement(
     "svg",
     {
       width: 14,
@@ -4235,18 +4241,18 @@ function NetworkIcon14() {
       strokeLinejoin: "round",
       "aria-hidden": true
     },
-    /* @__PURE__ */ React4.createElement("rect", { x: "16", y: "16", width: "6", height: "6", rx: "1" }),
-    /* @__PURE__ */ React4.createElement("rect", { x: "2", y: "16", width: "6", height: "6", rx: "1" }),
-    /* @__PURE__ */ React4.createElement("rect", { x: "9", y: "2", width: "6", height: "6", rx: "1" }),
-    /* @__PURE__ */ React4.createElement("path", { d: "M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" }),
-    /* @__PURE__ */ React4.createElement("path", { d: "M12 12V8" })
+    /* @__PURE__ */ React5.createElement("rect", { x: "16", y: "16", width: "6", height: "6", rx: "1" }),
+    /* @__PURE__ */ React5.createElement("rect", { x: "2", y: "16", width: "6", height: "6", rx: "1" }),
+    /* @__PURE__ */ React5.createElement("rect", { x: "9", y: "2", width: "6", height: "6", rx: "1" }),
+    /* @__PURE__ */ React5.createElement("path", { d: "M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" }),
+    /* @__PURE__ */ React5.createElement("path", { d: "M12 12V8" })
   );
 }
-var useSyncExternalStore2 = React4.useSyncExternalStore;
-var useCallback5 = React4.useCallback;
-var useState5 = React4.useState;
-var useEffect5 = React4.useEffect;
-var useRef5 = React4.useRef;
+var useSyncExternalStore2 = React5.useSyncExternalStore;
+var useCallback5 = React5.useCallback;
+var useState5 = React5.useState;
+var useEffect5 = React5.useEffect;
+var useRef5 = React5.useRef;
 var PLUGIN_NAME = "profiles-client";
 var LOCALE_NS = "profiles-client";
 function emptySubscribe() {
@@ -4661,7 +4667,7 @@ function makeModelSeat(profileScope) {
     var onMenuScroll = function() {
       if (effortOpen) closeEffort();
     };
-    return /* @__PURE__ */ React4.createElement("div", { className: "profiles-client-root", ref: rootRef, onKeyDown }, /* @__PURE__ */ React4.createElement(
+    return /* @__PURE__ */ React5.createElement("div", { className: "profiles-client-root", ref: rootRef, onKeyDown }, /* @__PURE__ */ React5.createElement(
       "button",
       {
         type: "button",
@@ -4677,40 +4683,40 @@ function makeModelSeat(profileScope) {
           load();
         }
       },
-      /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-badge" }, hasProfile ? /* @__PURE__ */ React4.createElement(
+      /* @__PURE__ */ React5.createElement("span", { className: "profiles-client-badge" }, hasProfile ? /* @__PURE__ */ React5.createElement(
         "span",
         {
           className: "profiles-client-badge-segment",
           title: "profile " + face.active + (matched ? "" : " (off profile head)"),
           "data-dsh-tip": ""
         },
-        /* @__PURE__ */ React4.createElement(
+        /* @__PURE__ */ React5.createElement(
           "span",
           {
             className: "profiles-client-pill-dot" + (matched ? " profiles-client-pill-dot-matched" : " profiles-client-pill-dot-changed"),
             "aria-hidden": true
           }
         ),
-        /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-profile-name" }, face.active)
-      ) : null, triggerProviderText !== null ? /* @__PURE__ */ React4.createElement(
+        /* @__PURE__ */ React5.createElement("span", { className: "profiles-client-profile-name" }, face.active)
+      ) : null, triggerProviderText !== null ? /* @__PURE__ */ React5.createElement(
         "span",
         {
           className: "profiles-client-badge-segment",
           title: "provider " + triggerProviderRaw,
           "data-dsh-tip": ""
         },
-        /* @__PURE__ */ React4.createElement(NetworkIcon14, null),
-        /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-model-provider" }, triggerProviderText)
-      ) : null, /* @__PURE__ */ React4.createElement(
+        /* @__PURE__ */ React5.createElement(NetworkIcon14, null),
+        /* @__PURE__ */ React5.createElement("span", { className: "profiles-client-model-provider" }, triggerProviderText)
+      ) : null, /* @__PURE__ */ React5.createElement(
         "span",
         {
           className: "profiles-client-badge-segment profiles-client-badge-model",
           title: "model " + triggerModelRaw,
           "data-dsh-tip": ""
         },
-        /* @__PURE__ */ React4.createElement(BrainIcon14, null),
-        /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-model-name" }, triggerModelText)
-      ), !matched && current !== void 0 && current !== null ? /* @__PURE__ */ React4.createElement(
+        /* @__PURE__ */ React5.createElement(BrainIcon14, null),
+        /* @__PURE__ */ React5.createElement("span", { className: "profiles-client-model-name" }, triggerModelText)
+      ), !matched && current !== void 0 && current !== null ? /* @__PURE__ */ React5.createElement(
         "span",
         {
           className: "profiles-client-badge-segment",
@@ -4724,16 +4730,16 @@ function makeModelSeat(profileScope) {
             }
           }
         },
-        /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-model-name" }, "~")
+        /* @__PURE__ */ React5.createElement("span", { className: "profiles-client-model-name" }, "~")
       ) : null),
-      /* @__PURE__ */ React4.createElement(
+      /* @__PURE__ */ React5.createElement(
         IconChevronDownOutline142,
         {
           className: open ? "profiles-client-chevron profiles-client-chevron-open" : "profiles-client-chevron",
           "aria-hidden": true
         }
       )
-    ), open ? /* @__PURE__ */ React4.createElement(
+    ), open ? /* @__PURE__ */ React5.createElement(
       "div",
       {
         className: "profiles-client-menu",
@@ -4741,7 +4747,7 @@ function makeModelSeat(profileScope) {
         ref: menuRef,
         onScroll: onMenuScroll
       },
-      seatEffortList.length > 0 && current !== void 0 && current !== null ? /* @__PURE__ */ React4.createElement("div", null, /* @__PURE__ */ React4.createElement(
+      seatEffortList.length > 0 && current !== void 0 && current !== null ? /* @__PURE__ */ React5.createElement("div", null, /* @__PURE__ */ React5.createElement(
         "button",
         {
           type: "button",
@@ -4751,9 +4757,9 @@ function makeModelSeat(profileScope) {
           "aria-haspopup": "dialog",
           onClick: toggleEffort
         },
-        /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-option-copy" }, /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-option-name" }, "Reasoning"), /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-option-detail" }, seatEffortName)),
-        /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-effort-chevron", "aria-hidden": true }, "\u203A")
-      ), effortOpen ? /* @__PURE__ */ React4.createElement(
+        /* @__PURE__ */ React5.createElement("span", { className: "profiles-client-option-copy" }, /* @__PURE__ */ React5.createElement("span", { className: "profiles-client-option-name" }, "Reasoning"), /* @__PURE__ */ React5.createElement("span", { className: "profiles-client-option-detail" }, seatEffortName)),
+        /* @__PURE__ */ React5.createElement("span", { className: "profiles-client-effort-chevron", "aria-hidden": true }, "\u203A")
+      ), effortOpen ? /* @__PURE__ */ React5.createElement(
         "div",
         {
           className: "profiles-client-effort-popover",
@@ -4765,7 +4771,7 @@ function makeModelSeat(profileScope) {
             left: effortPos !== null ? effortPos.left : 0
           }
         },
-        /* @__PURE__ */ React4.createElement("div", { className: "profiles-client-effort-row" }, /* @__PURE__ */ React4.createElement("div", { className: "profiles-client-effort-slider-wrap" }, /* @__PURE__ */ React4.createElement(
+        /* @__PURE__ */ React5.createElement("div", { className: "profiles-client-effort-row" }, /* @__PURE__ */ React5.createElement("div", { className: "profiles-client-effort-slider-wrap" }, /* @__PURE__ */ React5.createElement(
           "input",
           {
             type: "range",
@@ -4786,7 +4792,7 @@ function makeModelSeat(profileScope) {
             }
           }
         ), seatEffortStops.map(function(stop, tickIndex) {
-          return /* @__PURE__ */ React4.createElement(
+          return /* @__PURE__ */ React5.createElement(
             "span",
             {
               key: stop.id !== "" ? stop.id : "default",
@@ -4795,8 +4801,8 @@ function makeModelSeat(profileScope) {
               style: { left: stopLeftOf(tickIndex) }
             }
           );
-        })), /* @__PURE__ */ React4.createElement("div", { className: "profiles-client-effort-labels" }, seatEffortStops.map(function(stop, labelIndex) {
-          return /* @__PURE__ */ React4.createElement(
+        })), /* @__PURE__ */ React5.createElement("div", { className: "profiles-client-effort-labels" }, seatEffortStops.map(function(stop, labelIndex) {
+          return /* @__PURE__ */ React5.createElement(
             "span",
             {
               key: stop.id !== "" ? stop.id : "default",
@@ -4807,10 +4813,10 @@ function makeModelSeat(profileScope) {
           );
         })))
       ) : null) : null,
-      profileRows.length > 0 ? /* @__PURE__ */ React4.createElement("div", null, /* @__PURE__ */ React4.createElement("div", { className: "dsp-section-title" }, t("menu.profiles")), profileRows.map(function(row) {
+      profileRows.length > 0 ? /* @__PURE__ */ React5.createElement("div", null, /* @__PURE__ */ React5.createElement("div", { className: "dsp-section-title" }, t("menu.profiles")), profileRows.map(function(row) {
         var isActive = row.key === face.active;
         var headPretty = prettyOf(row.head.provider, row.head.model);
-        return /* @__PURE__ */ React4.createElement(
+        return /* @__PURE__ */ React5.createElement(
           "button",
           {
             key: row.key,
@@ -4829,11 +4835,11 @@ function makeModelSeat(profileScope) {
               );
             }
           },
-          /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-option-copy" }, /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-option-name profiles-client-option-profile" }, row.key + (isActive ? " \xB7" : "")), /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-option-detail" }, headPretty.provider + "/" + headPretty.model)),
-          isActive ? /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-check", "aria-hidden": true }, "\u2713") : null
+          /* @__PURE__ */ React5.createElement("span", { className: "profiles-client-option-copy" }, /* @__PURE__ */ React5.createElement("span", { className: "profiles-client-option-name profiles-client-option-profile" }, row.key + (isActive ? " \xB7" : "")), /* @__PURE__ */ React5.createElement("span", { className: "profiles-client-option-detail" }, headPretty.provider + "/" + headPretty.model)),
+          isActive ? /* @__PURE__ */ React5.createElement("span", { className: "profiles-client-check", "aria-hidden": true }, "\u2713") : null
         );
       })) : null,
-      /* @__PURE__ */ React4.createElement("div", null, /* @__PURE__ */ React4.createElement("div", { className: "dsp-section-title" }, t("menu.models")), /* @__PURE__ */ React4.createElement(
+      /* @__PURE__ */ React5.createElement("div", null, /* @__PURE__ */ React5.createElement("div", { className: "dsp-section-title" }, t("menu.models")), /* @__PURE__ */ React5.createElement(
         "button",
         {
           type: "button",
@@ -4842,8 +4848,8 @@ function makeModelSeat(profileScope) {
             if (face.head !== void 0) pick(face.head);
           }
         },
-        /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-option-copy" }, /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-option-name profiles-client-option-profile" }, t("menu.default")), /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-option-detail" }, face.head !== void 0 ? prettyOf(face.head.provider, face.head.model).provider + "/" + prettyOf(face.head.provider, face.head.model).model : ""))
-      ), /* @__PURE__ */ React4.createElement(
+        /* @__PURE__ */ React5.createElement("span", { className: "profiles-client-option-copy" }, /* @__PURE__ */ React5.createElement("span", { className: "profiles-client-option-name profiles-client-option-profile" }, t("menu.default")), /* @__PURE__ */ React5.createElement("span", { className: "profiles-client-option-detail" }, face.head !== void 0 ? prettyOf(face.head.provider, face.head.model).provider + "/" + prettyOf(face.head.provider, face.head.model).model : ""))
+      ), /* @__PURE__ */ React5.createElement(
         "input",
         {
           ref: searchInputRef,
@@ -4862,10 +4868,10 @@ function makeModelSeat(profileScope) {
             event.stopPropagation();
           }
         }
-      ), state.status === "error" && state.error ? /* @__PURE__ */ React4.createElement("div", { className: "profiles-client-strip" }, state.error) : null, modelGroups.length === 0 && trimmedQuery !== "" ? /* @__PURE__ */ React4.createElement("div", { className: "profiles-client-strip" }, t("menu.noResults")) : modelGroups.map(function(grp) {
-        return /* @__PURE__ */ React4.createElement("div", { key: grp.id }, /* @__PURE__ */ React4.createElement("div", { className: "dsp-section-title" }, grp.label), grp.models.map(function(row) {
+      ), state.status === "error" && state.error ? /* @__PURE__ */ React5.createElement("div", { className: "profiles-client-strip" }, state.error) : null, modelGroups.length === 0 && trimmedQuery !== "" ? /* @__PURE__ */ React5.createElement("div", { className: "profiles-client-strip" }, t("menu.noResults")) : modelGroups.map(function(grp) {
+        return /* @__PURE__ */ React5.createElement("div", { key: grp.id }, /* @__PURE__ */ React5.createElement("div", { className: "dsp-section-title" }, grp.label), grp.models.map(function(row) {
           var isActive = current !== void 0 && current !== null && current.provider === grp.id && current.model === row.id;
-          return /* @__PURE__ */ React4.createElement(
+          return /* @__PURE__ */ React5.createElement(
             "button",
             {
               key: grp.id + "/" + row.id,
@@ -4875,12 +4881,12 @@ function makeModelSeat(profileScope) {
                 pick({ provider: grp.id, model: row.id });
               }
             },
-            /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-option-copy profiles-client-option-copy-model" }, /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-option-name profiles-client-option-model" }, row.name), /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-option-detail" }, grp.label)),
-            isActive ? /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-check", "aria-hidden": true }, "\u2713") : null
+            /* @__PURE__ */ React5.createElement("span", { className: "profiles-client-option-copy profiles-client-option-copy-model" }, /* @__PURE__ */ React5.createElement("span", { className: "profiles-client-option-name profiles-client-option-model" }, row.name), /* @__PURE__ */ React5.createElement("span", { className: "profiles-client-option-detail" }, grp.label)),
+            isActive ? /* @__PURE__ */ React5.createElement("span", { className: "profiles-client-check", "aria-hidden": true }, "\u2713") : null
           );
         }));
       })),
-      errorDown.length > 0 ? /* @__PURE__ */ React4.createElement("div", { className: "profiles-client-error-row" }, /* @__PURE__ */ React4.createElement("span", { className: "profiles-client-error-count" }, errorDown.length + " cached down"), /* @__PURE__ */ React4.createElement(
+      errorDown.length > 0 ? /* @__PURE__ */ React5.createElement("div", { className: "profiles-client-error-row" }, /* @__PURE__ */ React5.createElement("span", { className: "profiles-client-error-count" }, errorDown.length + " cached down"), /* @__PURE__ */ React5.createElement(
         "button",
         {
           type: "button",
@@ -4895,9 +4901,6 @@ function makeModelSeat(profileScope) {
   }
   return ProfileModelSeat;
 }
-function SettingsSection(props) {
-  return /* @__PURE__ */ React4.createElement("div", { className: "dsp-root" }, /* @__PURE__ */ React4.createElement("div", { className: "dsp-head" }, /* @__PURE__ */ React4.createElement("h3", { className: "dsp-title" }, props.title), props.onRefresh ? /* @__PURE__ */ React4.createElement("button", { className: "dsp-refresh", onClick: props.onRefresh }, props.refreshLabel === void 0 ? "Refresh" : props.refreshLabel) : null), props.children);
-}
 function SortableRung(props) {
   var sort = useSortable({ id: props.id });
   var style = {
@@ -4909,7 +4912,7 @@ function SortableRung(props) {
   if (sort.isDragging) {
     style.opacity = 0.4;
   }
-  return /* @__PURE__ */ React4.createElement("div", { ref: sort.setNodeRef, style, className: props.className }, props.children({ attributes: sort.attributes, listeners: sort.listeners }));
+  return /* @__PURE__ */ React5.createElement("div", { ref: sort.setNodeRef, style, className: props.className }, props.children({ attributes: sort.attributes, listeners: sort.listeners }));
 }
 function cloneConfig(config) {
   function cloneRoutes(routes) {
@@ -5200,10 +5203,10 @@ function makeProfilesPanel(models, sessions) {
       fetchConfig();
     }, []);
     if (load === null) {
-      return /* @__PURE__ */ React4.createElement(SettingsSection, { title: "Profiles", onRefresh: fetchConfig, refreshLabel: "Refresh" });
+      return /* @__PURE__ */ React5.createElement(SettingsSection, { title: "Profiles", onRefresh: fetchConfig, refreshLabel: "Refresh" });
     }
     if (load.error) {
-      return /* @__PURE__ */ React4.createElement(SettingsSection, { title: "Profiles", onRefresh: fetchConfig, refreshLabel: "Refresh" }, /* @__PURE__ */ React4.createElement("div", { className: "dsp-err" }, "Profiles: " + load.error));
+      return /* @__PURE__ */ React5.createElement(SettingsSection, { title: "Profiles", onRefresh: fetchConfig, refreshLabel: "Refresh" }, /* @__PURE__ */ React5.createElement("div", { className: "dsp-err" }, "Profiles: " + load.error));
     }
     var config = draft;
     var errorCache = load.errorCache || {};
@@ -5311,7 +5314,7 @@ function makeProfilesPanel(models, sessions) {
     }
     function staleStepOption(value) {
       if (value === "" || value === void 0 || stepIsKnown(value)) return null;
-      return /* @__PURE__ */ React4.createElement("option", { value }, value + " (not in catalog)");
+      return /* @__PURE__ */ React5.createElement("option", { value }, value + " (not in catalog)");
     }
     function entryRefIsKnown(ref) {
       if (ref === void 0) return true;
@@ -5321,8 +5324,8 @@ function makeProfilesPanel(models, sessions) {
       var groups = [];
       if (includeChains && chainKeys.length > 0) {
         groups.push(
-          /* @__PURE__ */ React4.createElement("optgroup", { key: "chains", label: "Chains" }, chainKeys.map(function(key) {
-            return /* @__PURE__ */ React4.createElement("option", { key: "chain:" + key, value: "chain:" + key }, "chain:" + key);
+          /* @__PURE__ */ React5.createElement("optgroup", { key: "chains", label: "Chains" }, chainKeys.map(function(key) {
+            return /* @__PURE__ */ React5.createElement("option", { key: "chain:" + key, value: "chain:" + key }, "chain:" + key);
           }))
         );
       }
@@ -5330,8 +5333,8 @@ function makeProfilesPanel(models, sessions) {
         var group = catalogGroups[g];
         if (group.models === void 0 || group.models.length === 0) continue;
         groups.push(
-          /* @__PURE__ */ React4.createElement("optgroup", { key: group.id, label: group.name || group.id }, group.models.map(function(m) {
-            return /* @__PURE__ */ React4.createElement("option", { key: group.id + "/" + m.id, value: group.id + "/" + m.id }, (group.name || group.id) + " / " + m.name);
+          /* @__PURE__ */ React5.createElement("optgroup", { key: group.id, label: group.name || group.id }, group.models.map(function(m) {
+            return /* @__PURE__ */ React5.createElement("option", { key: group.id + "/" + m.id, value: group.id + "/" + m.id }, (group.name || group.id) + " / " + m.name);
           }))
         );
       }
@@ -5350,8 +5353,8 @@ function makeProfilesPanel(models, sessions) {
     }
     var currentEffortList = currentCat !== null ? effortsOf(currentCat.reasoning) : [];
     var currentEffortValue = currentModel !== void 0 && currentModel !== null && typeof currentModel.reasoningEffort === "string" && currentModel.reasoningEffort !== "" ? currentModel.reasoningEffort : currentCat !== null && currentCat.reasoning !== void 0 && currentCat.reasoning !== null && typeof currentCat.reasoning.defaultEffort === "string" ? currentCat.reasoning.defaultEffort : "";
-    return /* @__PURE__ */ React4.createElement(SettingsSection, { title: "Profiles", onRefresh: fetchConfig, refreshLabel: "Refresh" }, /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-active" }, entries.map(function(name2) {
-      return /* @__PURE__ */ React4.createElement(
+    return /* @__PURE__ */ React5.createElement(SettingsSection, { title: "Profiles", onRefresh: fetchConfig, refreshLabel: "Refresh" }, /* @__PURE__ */ React5.createElement("div", { className: "pf-panel-active" }, entries.map(function(name2) {
+      return /* @__PURE__ */ React5.createElement(
         "button",
         {
           key: name2,
@@ -5363,7 +5366,7 @@ function makeProfilesPanel(models, sessions) {
         },
         name2
       );
-    })), currentEffortList.length > 0 && currentModel !== void 0 && currentModel !== null ? /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-model-row" }, /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ React4.createElement("span", { className: "pf-panel-ref", title: "Current model", "data-dsh-tip": "" }, currentCat !== null ? currentCat.label : currentModel.provider + "/" + currentModel.model), /* @__PURE__ */ React4.createElement(
+    })), currentEffortList.length > 0 && currentModel !== void 0 && currentModel !== null ? /* @__PURE__ */ React5.createElement("div", { className: "pf-panel-model-row" }, /* @__PURE__ */ React5.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ React5.createElement("span", { className: "pf-panel-ref", title: "Current model", "data-dsh-tip": "" }, currentCat !== null ? currentCat.label : currentModel.provider + "/" + currentModel.model), /* @__PURE__ */ React5.createElement(
       "select",
       {
         className: "pf-panel-effort",
@@ -5378,9 +5381,9 @@ function makeProfilesPanel(models, sessions) {
           });
         }
       },
-      /* @__PURE__ */ React4.createElement("option", { value: "" }, "Default"),
+      /* @__PURE__ */ React5.createElement("option", { value: "" }, "Default"),
       currentEffortList.map(function(eff) {
-        return /* @__PURE__ */ React4.createElement(
+        return /* @__PURE__ */ React5.createElement(
           "option",
           {
             key: eff.id,
@@ -5392,7 +5395,7 @@ function makeProfilesPanel(models, sessions) {
       })
     ))) : null, entries.map(function(name2) {
       var entry = config[name2];
-      return /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-entry", key: name2 }, /* @__PURE__ */ React4.createElement("h4", { className: "pf-panel-entry-title" }, name2 === "work" ? "Work" : "Personal"), ["orchestrator", "subagent"].map(function(chainKey) {
+      return /* @__PURE__ */ React5.createElement("div", { className: "pf-panel-entry", key: name2 }, /* @__PURE__ */ React5.createElement("h4", { className: "pf-panel-entry-title" }, name2 === "work" ? "Work" : "Personal"), ["orchestrator", "subagent"].map(function(chainKey) {
         var field = entry[chainKey];
         var label = chainKey === "orchestrator" ? "orchestrator" : "subagent";
         var currentRef = refNameOf(field);
@@ -5403,7 +5406,7 @@ function makeProfilesPanel(models, sessions) {
             isInline = true;
         }
         var selectValue = currentRef !== void 0 ? currentRef : isInline ? "__inline__" : "__detach__";
-        return /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-chain", key: chainKey }, /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ React4.createElement("h5", { className: "pf-panel-chain-title" }, label), /* @__PURE__ */ React4.createElement(
+        return /* @__PURE__ */ React5.createElement("div", { className: "pf-panel-chain", key: chainKey }, /* @__PURE__ */ React5.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ React5.createElement("h5", { className: "pf-panel-chain-title" }, label), /* @__PURE__ */ React5.createElement(
           "select",
           {
             className: "pf-panel-select",
@@ -5419,13 +5422,13 @@ function makeProfilesPanel(models, sessions) {
               }
             }
           },
-          /* @__PURE__ */ React4.createElement("option", { value: "__detach__" }, "\u2014 none \u2014"),
+          /* @__PURE__ */ React5.createElement("option", { value: "__detach__" }, "\u2014 none \u2014"),
           chainKeys.map(function(key) {
-            return /* @__PURE__ */ React4.createElement("option", { key, value: key }, key);
+            return /* @__PURE__ */ React5.createElement("option", { key, value: key }, key);
           }),
-          currentRef !== void 0 && !entryRefIsKnown(currentRef) ? /* @__PURE__ */ React4.createElement("option", { value: currentRef }, currentRef + " (not in catalog)") : null,
-          isInline ? /* @__PURE__ */ React4.createElement("option", { value: "__inline__" }, fieldSummary(field, config.chains)) : null
-        ), /* @__PURE__ */ React4.createElement(
+          currentRef !== void 0 && !entryRefIsKnown(currentRef) ? /* @__PURE__ */ React5.createElement("option", { value: currentRef }, currentRef + " (not in catalog)") : null,
+          isInline ? /* @__PURE__ */ React5.createElement("option", { value: "__inline__" }, fieldSummary(field, config.chains)) : null
+        ), /* @__PURE__ */ React5.createElement(
           "button",
           {
             type: "button",
@@ -5439,7 +5442,7 @@ function makeProfilesPanel(models, sessions) {
           "\xD7"
         )));
       }));
-    }), /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-entry" }, /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-head" }, /* @__PURE__ */ React4.createElement("h4", { className: "pf-panel-entry-title" }, "Chains"), addingChain ? null : /* @__PURE__ */ React4.createElement(
+    }), /* @__PURE__ */ React5.createElement("div", { className: "pf-panel-entry" }, /* @__PURE__ */ React5.createElement("div", { className: "pf-panel-head" }, /* @__PURE__ */ React5.createElement("h4", { className: "pf-panel-entry-title" }, "Chains"), addingChain ? null : /* @__PURE__ */ React5.createElement(
       "button",
       {
         type: "button",
@@ -5449,7 +5452,7 @@ function makeProfilesPanel(models, sessions) {
         }
       },
       "+ Add"
-    )), addingChain ? /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ React4.createElement(
+    )), addingChain ? /* @__PURE__ */ React5.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ React5.createElement(
       "input",
       {
         className: "pf-panel-input",
@@ -5467,14 +5470,14 @@ function makeProfilesPanel(models, sessions) {
           }
         }
       }
-    ), /* @__PURE__ */ React4.createElement("button", { type: "button", className: "pf-panel-save", onClick: commitChain }, "Add")) : null, Object.keys(config.chains).length === 0 && !addingChain ? /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-meta" }, "None") : Object.keys(config.chains).map(function(chainName) {
+    ), /* @__PURE__ */ React5.createElement("button", { type: "button", className: "pf-panel-save", onClick: commitChain }, "Add")) : null, Object.keys(config.chains).length === 0 && !addingChain ? /* @__PURE__ */ React5.createElement("div", { className: "pf-panel-meta" }, "None") : Object.keys(config.chains).map(function(chainName) {
       var chain = config.chains[chainName];
       var isComposition = isCompositionChain(chain);
       var resolved = normalizeEntry(chain, config.chains);
       var steps = isComposition ? chain.map(function(step) {
         return { step };
       }) : chain !== void 0 && Array.isArray(chain.routes) ? chain.routes : [];
-      return /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-chain", key: chainName }, /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ React4.createElement("h5", { className: "pf-panel-chain-title" }, chainName), /* @__PURE__ */ React4.createElement(
+      return /* @__PURE__ */ React5.createElement("div", { className: "pf-panel-chain", key: chainName }, /* @__PURE__ */ React5.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ React5.createElement("h5", { className: "pf-panel-chain-title" }, chainName), /* @__PURE__ */ React5.createElement(
         "button",
         {
           type: "button",
@@ -5486,7 +5489,7 @@ function makeProfilesPanel(models, sessions) {
           }
         },
         "\xD7"
-      )), /* @__PURE__ */ React4.createElement(
+      )), /* @__PURE__ */ React5.createElement(
         DndContext,
         {
           sensors,
@@ -5498,7 +5501,7 @@ function makeProfilesPanel(models, sessions) {
             if (from !== to) moveChainRung(chainName, from, to);
           }
         },
-        /* @__PURE__ */ React4.createElement(
+        /* @__PURE__ */ React5.createElement(
           SortableCtx,
           {
             items: steps.map(function(_, i) {
@@ -5534,7 +5537,7 @@ function makeProfilesPanel(models, sessions) {
             var efforts = catModel !== null ? effortsOf(catModel.reasoning) : [];
             var currentEffort = isPair && typeof step.reasoningEffort === "string" ? step.reasoningEffort : "";
             var isChainRef = typeof stepValue === "string" && stepValue.indexOf("chain:") === 0;
-            return /* @__PURE__ */ React4.createElement(
+            return /* @__PURE__ */ React5.createElement(
               SortableRung,
               {
                 id: String(index),
@@ -5542,7 +5545,7 @@ function makeProfilesPanel(models, sessions) {
                 className: "pf-panel-row" + (isChainRef ? " pf-panel-chainref" : "")
               },
               function(handle) {
-                return /* @__PURE__ */ React4.createElement(React4.Fragment, null, /* @__PURE__ */ React4.createElement(
+                return /* @__PURE__ */ React5.createElement(React5.Fragment, null, /* @__PURE__ */ React5.createElement(
                   "button",
                   {
                     type: "button",
@@ -5553,7 +5556,7 @@ function makeProfilesPanel(models, sessions) {
                     ...handle.listeners
                   },
                   "\u283F"
-                ), /* @__PURE__ */ React4.createElement(
+                ), /* @__PURE__ */ React5.createElement(
                   "select",
                   {
                     className: "pf-panel-select",
@@ -5562,10 +5565,10 @@ function makeProfilesPanel(models, sessions) {
                       setChainStepModel(chainName, index, event.target.value);
                     }
                   },
-                  /* @__PURE__ */ React4.createElement("option", { value: "" }, "Select\u2026"),
+                  /* @__PURE__ */ React5.createElement("option", { value: "" }, "Select\u2026"),
                   modelChainOptions(true),
                   staleStepOption(stepValue)
-                ), efforts.length > 0 ? /* @__PURE__ */ React4.createElement(
+                ), efforts.length > 0 ? /* @__PURE__ */ React5.createElement(
                   "select",
                   {
                     className: "pf-panel-effort",
@@ -5574,9 +5577,9 @@ function makeProfilesPanel(models, sessions) {
                       setChainRungEffort(chainName, index, event.target.value);
                     }
                   },
-                  /* @__PURE__ */ React4.createElement("option", { value: "" }, "Default"),
+                  /* @__PURE__ */ React5.createElement("option", { value: "" }, "Default"),
                   efforts.map(function(eff) {
-                    return /* @__PURE__ */ React4.createElement(
+                    return /* @__PURE__ */ React5.createElement(
                       "option",
                       {
                         key: eff.id,
@@ -5586,7 +5589,7 @@ function makeProfilesPanel(models, sessions) {
                       eff.name
                     );
                   })
-                ) : null, /* @__PURE__ */ React4.createElement(
+                ) : null, /* @__PURE__ */ React5.createElement(
                   "button",
                   {
                     type: "button",
@@ -5614,7 +5617,7 @@ function makeProfilesPanel(models, sessions) {
             var efforts = catModel !== null ? effortsOf(catModel.reasoning) : [];
             var currentEffort = typeof rung.reasoningEffort === "string" ? rung.reasoningEffort : "";
             var rungStale = rungSelectValue !== "" && !catalogHasRoute(rungSelectValue);
-            return /* @__PURE__ */ React4.createElement(
+            return /* @__PURE__ */ React5.createElement(
               SortableRung,
               {
                 id: String(index),
@@ -5622,7 +5625,7 @@ function makeProfilesPanel(models, sessions) {
                 className: "pf-panel-model-row"
               },
               function(handle) {
-                return /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ React4.createElement(
+                return /* @__PURE__ */ React5.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ React5.createElement(
                   "button",
                   {
                     type: "button",
@@ -5633,7 +5636,7 @@ function makeProfilesPanel(models, sessions) {
                     ...handle.listeners
                   },
                   "\u283F"
-                ), /* @__PURE__ */ React4.createElement(
+                ), /* @__PURE__ */ React5.createElement(
                   "select",
                   {
                     className: "pf-panel-select",
@@ -5642,10 +5645,10 @@ function makeProfilesPanel(models, sessions) {
                       setChainRungModel(chainName, index, event.target.value);
                     }
                   },
-                  /* @__PURE__ */ React4.createElement("option", { value: "" }, "Select\u2026"),
+                  /* @__PURE__ */ React5.createElement("option", { value: "" }, "Select\u2026"),
                   modelChainOptions(false),
-                  rungStale ? /* @__PURE__ */ React4.createElement("option", { value: rungSelectValue }, rungSelectValue + " (not in catalog)") : null
-                ), efforts.length > 0 ? /* @__PURE__ */ React4.createElement(
+                  rungStale ? /* @__PURE__ */ React5.createElement("option", { value: rungSelectValue }, rungSelectValue + " (not in catalog)") : null
+                ), efforts.length > 0 ? /* @__PURE__ */ React5.createElement(
                   "select",
                   {
                     className: "pf-panel-effort",
@@ -5654,9 +5657,9 @@ function makeProfilesPanel(models, sessions) {
                       setChainRungEffort(chainName, index, event.target.value);
                     }
                   },
-                  /* @__PURE__ */ React4.createElement("option", { value: "" }, "Default"),
+                  /* @__PURE__ */ React5.createElement("option", { value: "" }, "Default"),
                   efforts.map(function(eff) {
-                    return /* @__PURE__ */ React4.createElement(
+                    return /* @__PURE__ */ React5.createElement(
                       "option",
                       {
                         key: eff.id,
@@ -5666,7 +5669,7 @@ function makeProfilesPanel(models, sessions) {
                       eff.name
                     );
                   })
-                ) : null, /* @__PURE__ */ React4.createElement(
+                ) : null, /* @__PURE__ */ React5.createElement(
                   "button",
                   {
                     type: "button",
@@ -5683,7 +5686,7 @@ function makeProfilesPanel(models, sessions) {
             );
           })
         )
-      ), /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ React4.createElement(
+      ), /* @__PURE__ */ React5.createElement("div", { className: "pf-panel-row" }, /* @__PURE__ */ React5.createElement(
         "select",
         {
           className: "pf-panel-select pf-panel-add-select",
@@ -5694,10 +5697,10 @@ function makeProfilesPanel(models, sessions) {
             event.target.value = "";
           }
         },
-        /* @__PURE__ */ React4.createElement("option", { value: "" }, "+ Add \u25BE"),
+        /* @__PURE__ */ React5.createElement("option", { value: "" }, "+ Add \u25BE"),
         isComposition ? modelChainOptions(true) : modelChainOptions(false)
-      )), resolved.length > 0 ? /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-meta" }, "\u2192 " + resolved[0].provider + "/" + resolved[0].model + (resolved.length > 1 ? " +" + (resolved.length - 1) : "")) : null);
-    })), /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-meta" }, downRungs > 0 ? /* @__PURE__ */ React4.createElement("span", null, downRungs + " down ", /* @__PURE__ */ React4.createElement(
+      )), resolved.length > 0 ? /* @__PURE__ */ React5.createElement("div", { className: "pf-panel-meta" }, "\u2192 " + resolved[0].provider + "/" + resolved[0].model + (resolved.length > 1 ? " +" + (resolved.length - 1) : "")) : null);
+    })), /* @__PURE__ */ React5.createElement("div", { className: "pf-panel-meta" }, downRungs > 0 ? /* @__PURE__ */ React5.createElement("span", null, downRungs + " down ", /* @__PURE__ */ React5.createElement(
       "button",
       {
         type: "button",
@@ -5709,7 +5712,7 @@ function makeProfilesPanel(models, sessions) {
         }
       },
       "Reset"
-    )) : null), /* @__PURE__ */ React4.createElement("div", { className: "pf-panel-actions" }, /* @__PURE__ */ React4.createElement(
+    )) : null), /* @__PURE__ */ React5.createElement("div", { className: "pf-panel-actions" }, /* @__PURE__ */ React5.createElement(
       "button",
       {
         type: "button",
@@ -5718,7 +5721,7 @@ function makeProfilesPanel(models, sessions) {
         onClick: saveConfig
       },
       save.busy === true ? "Saving\u2026" : "Save"
-    ), save.note ? /* @__PURE__ */ React4.createElement("span", { className: "pf-panel-status " + (save.ok ? "pf-panel-ok" : "pf-panel-bad") }, save.note) : null));
+    ), save.note ? /* @__PURE__ */ React5.createElement("span", { className: "pf-panel-status " + (save.ok ? "pf-panel-ok" : "pf-panel-bad") }, save.note) : null));
   }
   return ProfilesPanel;
 }
@@ -5776,7 +5779,7 @@ function apply(ctx) {
       return ctx.slots.register(
         { name: "settings.section", id: PLUGIN_NAME, order: 27, label: "Profiles" },
         function() {
-          return /* @__PURE__ */ React4.createElement(Panel, null);
+          return /* @__PURE__ */ React5.createElement(Panel, null);
         }
       );
     });

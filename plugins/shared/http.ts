@@ -9,7 +9,11 @@
  * One source implementation per helper, so host plugins cannot drift.
  * Historical inline copies lived in plugins/profiles.ts,
  * plugins/session-archive/src/index.ts, and plugins/subscriptions/src/index.ts
- * (rewired in the build-drift batch).
+ * (rewired in the build-drift batch), plus plugins/job-viewer/src/route.ts,
+ * plugins/composer-menu/src/index.ts, plugins/user-bubble/src/index.ts, and
+ * plugins/restart-pause/src/index.ts (rewired in #338; restart-pause keeps a
+ * local tolerant-{} reader documented at its site, capped through this
+ * readBody, because the shared one throws where that route needs {}).
  *
  * `readBody` keeps both historical behaviors: it honors the Content-Length
  * pre-check (profiles and session-archive) and rejects oversized bodies while

@@ -1,3 +1,32 @@
+// plugins/shared/http.ts
+var DEFAULT_MAX_BODY_BYTES = 64 * 1024;
+function sendJson(res, status, body) {
+  res.statusCode = status;
+  res.setHeader("content-type", "application/json; charset=utf-8");
+  res.setHeader("cache-control", "no-store");
+  res.end(JSON.stringify(body));
+}
+async function readBody(req, maxBytes = DEFAULT_MAX_BODY_BYTES) {
+  const declared = req.headers["content-length"];
+  if (declared !== void 0 && Number(declared) > maxBytes) {
+    throw new Error("request body too large");
+  }
+  const chunks = [];
+  let received = 0;
+  for await (const chunk of req) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    received += buffer.byteLength;
+    if (received > maxBytes) throw new Error("request body too large");
+    chunks.push(buffer);
+  }
+  const text = Buffer.concat(chunks).toString("utf8");
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error("body is not valid JSON");
+  }
+}
+
 // plugins/composer-menu/src/index.ts
 var webOff = /* @__PURE__ */ new Map();
 var name = "composer-menu";
@@ -13,17 +42,6 @@ function isSameOriginPost(originHeader, hostHeader) {
   }
   if (originHost === "") return false;
   return originHost.toLowerCase() === hostHeader.trim().toLowerCase();
-}
-function readBody(req) {
-  return new Promise((resolve, reject) => {
-    let text = "";
-    req.setEncoding("utf8");
-    req.on("data", (chunk) => {
-      text += chunk;
-    });
-    req.on("end", () => resolve(text));
-    req.on("error", reject);
-  });
 }
 function apply(ctx) {
   const isOff = (agent) => {
@@ -58,10 +76,7 @@ function apply(ctx) {
     kind: "prefix",
     path: "/composer-menu",
     async handler(req, res) {
-      const reply = (status, body) => {
-        res.writeHead(status, { "content-type": "application/json" });
-        res.end(JSON.stringify(body));
-      };
+      const reply = (status, body) => sendJson(res, status, body);
       const url = new URL(req.url ?? "/", "http://" + (req.headers.host ?? "127.0.0.1"));
       if (req.method !== "POST") return reply(404, { error: "not found" });
       const readGuardedBody = async () => {
@@ -71,7 +86,7 @@ function apply(ctx) {
         }
         let body;
         try {
-          body = JSON.parse(await readBody(req));
+          body = await readBody(req);
         } catch {
           reply(400, { error: "the request body must be JSON" });
           return null;

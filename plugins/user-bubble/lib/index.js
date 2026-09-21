@@ -1,10 +1,15 @@
+// plugins/shared/http.ts
+var DEFAULT_MAX_BODY_BYTES = 64 * 1024;
+function sendJson(res, status, body) {
+  res.statusCode = status;
+  res.setHeader("content-type", "application/json; charset=utf-8");
+  res.setHeader("cache-control", "no-store");
+  res.end(JSON.stringify(body));
+}
+
 // plugins/user-bubble/src/index.ts
 var name = "user-bubble";
 var inject = [];
-function sendJson(res, status, body) {
-  res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" });
-  res.end(JSON.stringify(body));
-}
 async function skillNames(ctx, sessionId) {
   const skills = ctx.get("skills");
   if (skills === void 0) return [];

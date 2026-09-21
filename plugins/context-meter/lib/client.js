@@ -40,29 +40,7 @@ __export(client_exports, {
   name: () => name
 });
 module.exports = __toCommonJS(client_exports);
-var React2 = __toESM(require("react"), 1);
-
-// plugins/shared/client-react.ts
-var React = __toESM(require("react"));
-function useDismissable(open, rootRef, onClose) {
-  React.useEffect(() => {
-    if (!open || typeof document === "undefined") return;
-    const onPointerDown = (event) => {
-      const root = rootRef.current;
-      if (root !== null && event.target instanceof Node && root.contains(event.target)) return;
-      onClose();
-    };
-    const onKeyDown = (event) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open, onClose]);
-}
+var React = __toESM(require("react"), 1);
 
 // plugins/shared/client-util.ts
 function injectStyle(pluginName, styleId, cssText) {
@@ -282,6 +260,25 @@ function buildTipText(reading, costText, costBranch, rangeLabel) {
 var client_default = ".ctx-meter-root {\n  display: inline-flex;\n  position: relative;\n}\n.ctx-meter-trigger {\n  width: 30px;\n  height: 30px;\n  color: var(--dsw-alias-label-secondary);\n  cursor: pointer;\n  background: 0 0;\n  border: none;\n  border-radius: 999px;\n  flex: none;\n  place-items: center;\n  display: grid;\n  padding: 0;\n}\n.ctx-meter-trigger:hover {\n  background: var(--dsw-alias-interactive-bg-hover);\n}\n.ctx-meter-track {\n  fill: none;\n  stroke: var(--dsw-alias-border-l2);\n  stroke-width: 2.5px;\n}\n.ctx-meter-fill {\n  fill: none;\n  stroke: var(--dsw-alias-label-primary);\n  stroke-width: 2.5px;\n  stroke-linecap: round;\n}\n.ctx-meter-tip {\n  z-index: 100;\n  pointer-events: none;\n  white-space: nowrap;\n  border: 1px solid var(--dsw-alias-border-inverted);\n  background: var(--dsw-specific-menu);\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-secondary);\n  border-radius: 8px;\n  padding: 4px 8px;\n  font-size: 12px;\n  line-height: 18px;\n  font-variant-numeric: tabular-nums;\n  position: absolute;\n  bottom: calc(100% + 8px);\n  right: 0;\n}\n.ctx-meter-panel {\n  z-index: 100;\n  box-sizing: border-box;\n  border: 1px solid var(--dsw-alias-border-inverted);\n  background: var(--dsw-specific-menu);\n  width: 296px;\n  box-shadow: var(--dsw-shadow-lv3);\n  color: var(--dsw-alias-label-secondary);\n  cursor: default;\n  border-radius: 12px;\n  padding: 12px;\n  font-size: 12px;\n  line-height: 20px;\n  position: absolute;\n  bottom: calc(100% + 8px);\n  right: 0;\n}\n.ctx-meter-title {\n  color: var(--dsw-alias-label-primary);\n  font-weight: 500;\n}\n.ctx-meter-half + .ctx-meter-half {\n  margin-top: 12px;\n  padding-top: 10px;\n  border-top: 1px solid var(--dsw-alias-border-l3);\n}\n.ctx-meter-head {\n  align-items: baseline;\n  gap: 6px;\n  display: flex;\n}\n.ctx-meter-figures {\n  font-variant-numeric: tabular-nums;\n  color: var(--dsw-alias-label-primary);\n  margin-left: auto;\n  font-weight: 500;\n}\n.ctx-meter-bar {\n  background: var(--dsw-alias-interactive-bg-hover);\n  border-radius: 999px;\n  gap: 1px;\n  height: 4px;\n  margin: 8px 0 6px;\n  display: flex;\n  overflow: hidden;\n}\n.ctx-meter-segment {\n  background: var(--meter-tint, var(--dsw-alias-label-tertiary));\n  border-radius: 1px;\n  flex: none;\n  min-width: 2px;\n  height: 100%;\n}\n.ctx-meter-swatch {\n  background: var(--meter-tint);\n  vertical-align: baseline;\n  border-radius: 2px;\n  width: 8px;\n  height: 8px;\n  margin-right: 6px;\n  display: inline-block;\n}\n.ctx-meter-color-system {\n  --meter-tint: var(--dsw-static-neutral-bluish-400);\n}\n.ctx-meter-color-tools {\n  --meter-tint: #a78bfa;\n}\n.ctx-meter-color-messages {\n  --meter-tint: var(--dsw-static-blue-450);\n}\n.ctx-meter-rows {\n  margin: 4px 0 0;\n}\n.ctx-meter-row {\n  justify-content: space-between;\n  align-items: center;\n  gap: 12px;\n  padding: 2px 0;\n  display: flex;\n}\n.ctx-meter-row dt {\n  color: var(--dsw-alias-label-secondary);\n}\n.ctx-meter-row dd {\n  font-variant-numeric: tabular-nums;\n  color: var(--dsw-alias-label-primary);\n  margin: 0;\n}\n.ctx-meter-sub dt {\n  padding-left: 14px;\n  color: var(--dsw-alias-label-tertiary);\n}\n.ctx-meter-group {\n  color: var(--dsw-alias-label-tertiary);\n  margin-top: 8px;\n}\n.ctx-meter-note {\n  color: var(--dsw-alias-label-tertiary);\n  margin-top: 6px;\n}\n";
 
 // plugins/context-meter/src/client.tsx
+function useDismissable(open, rootRef, onClose) {
+  React.useEffect(() => {
+    if (!open || typeof document === "undefined") return;
+    const onPointerDown = (event) => {
+      const root = rootRef.current;
+      if (root !== null && event.target instanceof Node && root.contains(event.target)) return;
+      onClose();
+    };
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open, onClose]);
+}
 var PLUGIN_NAME = "context-meter";
 var RADIUS = 7;
 var CIRCUMFERENCE = 2 * Math.PI * RADIUS;
@@ -304,12 +301,12 @@ var TRUE_ROWS = [
   }
 ];
 function row(key, label, value, sub, title) {
-  return React2.createElement(
+  return React.createElement(
     "div",
     { key, className: sub ? "ctx-meter-row ctx-meter-sub" : "ctx-meter-row" },
     [
-      React2.createElement("dt", { key: "dt" }, label),
-      React2.createElement(
+      React.createElement("dt", { key: "dt" }, label),
+      React.createElement(
         "dd",
         title === void 0 || title === null ? { key: "dd" } : { key: "dd", title },
         value
@@ -346,7 +343,7 @@ function apply(ctx) {
   ctx.slots.inject("conversation.input.right", function* () {
     yield ctx.slots.register(
       { name: "conversation.input.right", id: "true-context-meter", order: 50 },
-      (props) => React2.createElement(Meter, {
+      (props) => React.createElement(Meter, {
         useProjection: props.useProjection,
         sessionId: props.sessionId,
         pricesScope,
@@ -408,20 +405,20 @@ function apply(ctx) {
     const breakdown = useProjection("contextBreakdown");
     const pressure = useProjection("contextPressure");
     const usage = useProjection("tokenUsage");
-    const [open, setOpen] = React2.useState(false);
-    const [hovering, setHovering] = React2.useState(false);
-    const rootRef = React2.useRef(null);
+    const [open, setOpen] = React.useState(false);
+    const [hovering, setHovering] = React.useState(false);
+    const rootRef = React.useRef(null);
     const pricesScope2 = props.pricesScope;
-    const pricesSubscribe = React2.useCallback(
+    const pricesSubscribe = React.useCallback(
       (callback) => pricesScope2.store.subscribe(callback),
       [pricesScope2]
     );
-    const pricesSnap = React2.useSyncExternalStore(
+    const pricesSnap = React.useSyncExternalStore(
       pricesSubscribe,
       () => pricesScope2.store.getSnapshot()
     );
     const box = props.servicesBox;
-    const boxSubscribe = React2.useCallback(
+    const boxSubscribe = React.useCallback(
       (callback) => {
         box.listeners.add(callback);
         return () => {
@@ -430,10 +427,10 @@ function apply(ctx) {
       },
       [box]
     );
-    const servicesVersion = React2.useSyncExternalStore(boxSubscribe, () => box.version);
+    const servicesVersion = React.useSyncExternalStore(boxSubscribe, () => box.version);
     const sessionId = props.sessionId;
-    const [directory, setDirectory] = React2.useState(null);
-    React2.useEffect(() => {
+    const [directory, setDirectory] = React.useState(null);
+    React.useEffect(() => {
       if (box === void 0 || box.models === void 0) {
         setDirectory(null);
         return;
@@ -459,12 +456,12 @@ function apply(ctx) {
         }
       }
     }, [box, sessionId, servicesVersion]);
-    const dirSubscribe = React2.useCallback(
+    const dirSubscribe = React.useCallback(
       (callback) => directory === null ? () => {
       } : directory.store.subscribe(callback),
       [directory]
     );
-    const dirSnap = React2.useSyncExternalStore(
+    const dirSnap = React.useSyncExternalStore(
       dirSubscribe,
       () => directory === null ? null : directory.store.getSnapshot()
     );
@@ -472,8 +469,8 @@ function apply(ctx) {
     const provider = current !== void 0 && current !== null && typeof current.provider === "string" ? current.provider : null;
     const model = current !== void 0 && current !== null && typeof current.model === "string" ? current.model : null;
     const pricesDoc = pricesSnap !== null && pricesSnap !== void 0 ? pricesSnap.value : void 0;
-    const [routeDoc, setRouteDoc] = React2.useState(null);
-    React2.useEffect(() => {
+    const [routeDoc, setRouteDoc] = React.useState(null);
+    React.useEffect(() => {
       if (pricesDoc !== void 0) return;
       let cancelled = false;
       fetchJson("/context-meter/prices").then(function(result) {
@@ -515,11 +512,11 @@ function apply(ctx) {
         costDetail = missing.detail;
       }
     }
-    React2.useEffect(() => {
+    React.useEffect(() => {
       ensureShippedHidden();
       placeAfterModelSelect(rootRef.current);
     });
-    const close = React2.useCallback(() => setOpen(false), []);
+    const close = React.useCallback(() => setOpen(false), []);
     useDismissable(open, rootRef, close);
     const contextWindow = pressure === void 0 ? void 0 : pressure.contextWindow;
     if (breakdown === void 0 || contextWindow === void 0) return null;
@@ -533,7 +530,7 @@ function apply(ctx) {
       color: part.color,
       width: trueTotal === 0 ? 0 : percent * breakdown[part.key] / trueTotal
     })).filter((part) => part.width > 0);
-    const trigger = React2.createElement(
+    const trigger = React.createElement(
       "button",
       {
         type: "button",
@@ -542,18 +539,18 @@ function apply(ctx) {
         "aria-expanded": open,
         onClick: () => setOpen(!open)
       },
-      React2.createElement(
+      React.createElement(
         "svg",
         { width: 18, height: 18, viewBox: "0 0 18 18", "aria-hidden": true },
         [
-          React2.createElement("circle", {
+          React.createElement("circle", {
             key: "track",
             className: "ctx-meter-track",
             cx: 9,
             cy: 9,
             r: RADIUS
           }),
-          React2.createElement("circle", {
+          React.createElement("circle", {
             key: "fill",
             className: "ctx-meter-fill",
             cx: 9,
@@ -565,50 +562,50 @@ function apply(ctx) {
         ]
       )
     );
-    const trueHalf = React2.createElement("div", { className: "ctx-meter-half" }, [
-      React2.createElement("div", { key: "head", className: "ctx-meter-head" }, [
-        React2.createElement(
+    const trueHalf = React.createElement("div", { className: "ctx-meter-half" }, [
+      React.createElement("div", { key: "head", className: "ctx-meter-head" }, [
+        React.createElement(
           "span",
           { key: "t", className: "ctx-meter-title" },
           "Prompt, as measured"
         ),
-        React2.createElement(
+        React.createElement(
           "span",
           { key: "f", className: "ctx-meter-figures" },
           formatTokens(trueTotal) + " / " + formatTokens(contextWindow) + "  " + percent + "%"
         )
       ]),
-      React2.createElement(
+      React.createElement(
         "div",
         { key: "bar", className: "ctx-meter-bar" },
         segments.map(
-          (part) => React2.createElement("span", {
+          (part) => React.createElement("span", {
             key: part.key,
             className: "ctx-meter-segment " + part.color,
             style: { width: part.width + "%" }
           })
         )
       ),
-      React2.createElement(
+      React.createElement(
         "dl",
         { key: "rows", className: "ctx-meter-rows" },
         TRUE_ROWS.map(
-          (part) => React2.createElement("div", { key: part.key, className: "ctx-meter-row" }, [
-            React2.createElement("dt", { key: "dt" }, [
-              React2.createElement("span", {
+          (part) => React.createElement("div", { key: part.key, className: "ctx-meter-row" }, [
+            React.createElement("dt", { key: "dt" }, [
+              React.createElement("span", {
                 key: "s",
                 className: "ctx-meter-swatch " + part.color
               }),
               part.label
             ]),
-            React2.createElement("dd", { key: "dd" }, formatTokens(breakdown[part.key]))
+            React.createElement("dd", { key: "dd" }, formatTokens(breakdown[part.key]))
           ])
         )
       )
     ]);
     let providerBody;
     if (usage === void 0) {
-      providerBody = React2.createElement(
+      providerBody = React.createElement(
         "div",
         { className: "ctx-meter-note" },
         "No usage reported yet."
@@ -616,26 +613,26 @@ function apply(ctx) {
     } else {
       const billed = usage.uncachedInputTokens + usage.cacheReadTokens + usage.cacheWriteTokens;
       providerBody = [
-        React2.createElement("dl", { key: "last", className: "ctx-meter-rows" }, [
+        React.createElement("dl", { key: "last", className: "ctx-meter-rows" }, [
           row("claim", "Prompt it says it read", formatTokens(pressure.pressureTokens))
         ]),
-        React2.createElement(
+        React.createElement(
           "div",
           { key: "g", className: "ctx-meter-group" },
           "Session totals, every call summed"
         ),
-        React2.createElement("dl", { key: "totals", className: "ctx-meter-rows" }, [
+        React.createElement("dl", { key: "totals", className: "ctx-meter-rows" }, [
           row("in", "Prompt, billed", formatTokens(billed)),
           row("cr", "of which cache read", formatTokens(usage.cacheReadTokens), true),
           row("cw", "of which cache write", formatTokens(usage.cacheWriteTokens), true),
           row("out", "Output", formatTokens(usage.outputTokens))
         ]),
-        React2.createElement(
+        React.createElement(
           "div",
           { key: "cg", className: "ctx-meter-group" },
           "Session cost, approximate"
         ),
-        React2.createElement("dl", { key: "cost", className: "ctx-meter-rows" }, [
+        React.createElement("dl", { key: "cost", className: "ctx-meter-rows" }, [
           // The label is now specific (prices unavailable / prices not
           // received / no model reported / unpriced model) and the sentence
           // a reader can act on rides in the title, so the panel explains
@@ -645,23 +642,23 @@ function apply(ctx) {
           ...rateLabel !== null ? [row("rate", "Priced at", rateLabel, true)] : [],
           ...rangeLabel !== null ? [row("range", "Est. range", rangeLabel, true, costDetail)] : []
         ]),
-        React2.createElement(
+        React.createElement(
           "div",
           { key: "cn", className: "ctx-meter-note" },
           "Per-model cache rates from models.dev. The runtime exposes no subagent or since-compaction split, so the panel shows the whole-session total only."
         )
       ];
     }
-    const providerHalf = React2.createElement("div", { className: "ctx-meter-half" }, [
-      React2.createElement("div", { key: "head", className: "ctx-meter-head" }, [
-        React2.createElement(
+    const providerHalf = React.createElement("div", { className: "ctx-meter-half" }, [
+      React.createElement("div", { key: "head", className: "ctx-meter-head" }, [
+        React.createElement(
           "span",
           { key: "t", className: "ctx-meter-title" },
           "Provider claims, last call"
         )
       ]),
-      React2.createElement("div", { key: "body" }, providerBody),
-      React2.createElement(
+      React.createElement("div", { key: "body" }, providerBody),
+      React.createElement(
         "div",
         { key: "note", className: "ctx-meter-note" },
         "Reported by the provider, not measured here. Some providers report these as running totals, which makes them larger than the prompt above."
@@ -670,16 +667,16 @@ function apply(ctx) {
     const children = [trigger];
     if (open)
       children.push(
-        React2.createElement("div", { key: "panel", className: "ctx-meter-panel" }, [
+        React.createElement("div", { key: "panel", className: "ctx-meter-panel" }, [
           trueHalf,
           providerHalf
         ])
       );
     else if (hovering)
       children.push(
-        React2.createElement("div", { key: "tip", className: "ctx-meter-tip" }, tipText)
+        React.createElement("div", { key: "tip", className: "ctx-meter-tip" }, tipText)
       );
-    return React2.createElement(
+    return React.createElement(
       "span",
       {
         ref: rootRef,

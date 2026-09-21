@@ -233,20 +233,37 @@ export async function deleteArchivedSession(ctx: Context, id: string): Promise<D
   }
 }
 
+/**
+ * Read a delete-route body under the 16 KiB cap, answering the 400 here on
+ * failure so the single and batch delete handlers share one preamble
+ * instead of two copies of it.
+ *
+ * Returns the parsed body, or null once it has already replied. `route`
+ * names the handler in the warn log ("delete" / "batch delete").
+ */
+async function readDeleteBody(
+  ctx: Context,
+  req: IncomingMessage,
+  res: ServerResponse,
+  route: string,
+): Promise<unknown | null> {
+  try {
+    return await readBody(req, 16 * 1024);
+  } catch (error) {
+    sendJson(res, 400, {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    ctx.logger.warn(`${route} refused: invalid request body`);
+    return null;
+  }
+}
+
 /** The single archived session deletion handler. */
 function makeDeleteHandler(ctx: Context) {
   return async (req: IncomingMessage, res: ServerResponse) => {
-    let body: unknown;
-    try {
-      body = await readBody(req, 16 * 1024);
-    } catch (error) {
-      sendJson(res, 400, {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      ctx.logger.warn("delete refused: invalid request body");
-      return;
-    }
+    const body = await readDeleteBody(ctx, req, res, "delete");
+    if (body === null) return;
     const id =
       isPlainObject(body) && typeof (body as { id?: unknown }).id === "string"
         ? (body as { id: string }).id
@@ -266,17 +283,8 @@ function makeDeleteHandler(ctx: Context) {
 /** The batch archived session deletion handler. */
 export function makeBatchDeleteHandler(ctx: Context) {
   return async (req: IncomingMessage, res: ServerResponse) => {
-    let body: unknown;
-    try {
-      body = await readBody(req, 16 * 1024);
-    } catch (error) {
-      sendJson(res, 400, {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      ctx.logger.warn("batch delete refused: invalid request body");
-      return;
-    }
+    const body = await readDeleteBody(ctx, req, res, "batch delete");
+    if (body === null) return;
     const ids =
       isPlainObject(body) &&
       Array.isArray(body.ids) &&

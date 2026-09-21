@@ -120,14 +120,12 @@ function chainOf(entry, chainName, chains, ctx) {
   return resolved;
 }
 
-// plugins/shared/output-text.ts
+// plugins/see.ts
 function outputText(output) {
   return output.filter(
     (value) => typeof value === "object" && value !== null && value.type === "text" && typeof value.text === "string"
   ).map((value) => value.text).join("");
 }
-
-// plugins/see.ts
 var name = "see";
 var inject = ["tools", "subagents", "systemPrompt"];
 var Config = z.object({});

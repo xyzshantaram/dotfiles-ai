@@ -3,6 +3,7 @@
 // The menu itself lives in the browser. This half owns one small route the
 // menu calls to set the sandbox permission preset for a session.
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { readBody, sendJson } from "../../shared/http";
 
 // Minimal structural view of the DSH web server service, so this file does
 // not depend on the cordis Context type exposing it.
@@ -71,19 +72,6 @@ export function isSameOriginPost(originHeader: unknown, hostHeader: unknown): bo
   return originHost.toLowerCase() === hostHeader.trim().toLowerCase();
 }
 
-/** Read the whole request body as a UTF-8 string. */
-function readBody(req: IncomingMessage): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let text = "";
-    req.setEncoding("utf8");
-    req.on("data", (chunk: string) => {
-      text += chunk;
-    });
-    req.on("end", () => resolve(text));
-    req.on("error", reject);
-  });
-}
-
 function apply(ctx: HostContext): () => void {
   // isOff checks both keys because the browser sends the session id and the
   // gate sees the agent id. Those are expected to be the same value.
@@ -121,10 +109,9 @@ function apply(ctx: HostContext): () => void {
     kind: "prefix",
     path: "/composer-menu",
     async handler(req, res) {
-      const reply = (status: number, body: unknown) => {
-        res.writeHead(status, { "content-type": "application/json" });
-        res.end(JSON.stringify(body));
-      };
+      // Shared sendJson, so these routes carry the same content-type charset
+      // and no-store caching as every other host route.
+      const reply = (status: number, body: unknown) => sendJson(res, status, body);
 
       const url = new URL(req.url ?? "/", "http://" + (req.headers.host ?? "127.0.0.1"));
       if (req.method !== "POST") return reply(404, { error: "not found" });
@@ -144,7 +131,9 @@ function apply(ctx: HostContext): () => void {
         }
         let body: unknown;
         try {
-          body = JSON.parse(await readBody(req));
+          // Shared readBody: parsed JSON under the 64 KiB cap every other
+          // host route enforces, instead of the old uncapped string read.
+          body = await readBody(req);
         } catch {
           reply(400, { error: "the request body must be JSON" });
           return null;

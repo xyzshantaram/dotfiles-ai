@@ -36,8 +36,28 @@ import { defineTool } from "@deepseek-ai/dsh-tools";
 import { installSettingsSection, settingsNamespace } from "@deepseek-ai/dsh-settings";
 import { scopeOf } from "@deepseek-ai/dsh-scope";
 import type { SubagentStartRequest } from "@deepseek-ai/dsh-subagent";
+import type { ContentBlock } from "@deepseek-ai/dsh-llm";
 import { chainOf } from "./profile-routes";
-import { outputText } from "./shared/output-text";
+
+/**
+ * Join the text blocks of a child result into one string.
+ *
+ * Folded in from plugins/shared/output-text.ts (#338): see.ts was its only
+ * importer — the header's claimed second consumer (plugins/profiles.ts)
+ * never imported it — so the indirection bought nothing.
+ */
+function outputText(output: ContentBlock[]): string {
+  return output
+    .filter(
+      (value): value is { type: "text"; text: string } =>
+        typeof value === "object" &&
+        value !== null &&
+        (value as { type?: unknown }).type === "text" &&
+        typeof (value as { text?: unknown }).text === "string",
+    )
+    .map((value) => value.text)
+    .join("");
+}
 export const name = "see";
 
 export const inject = ["tools", "subagents", "systemPrompt"] as const;

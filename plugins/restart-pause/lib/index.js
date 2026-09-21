@@ -2,6 +2,35 @@
 import { exec, spawn } from "node:child_process";
 import z from "@deepseek-ai/schemastery";
 
+// plugins/shared/http.ts
+var DEFAULT_MAX_BODY_BYTES = 64 * 1024;
+function sendJson(res, status, body) {
+  res.statusCode = status;
+  res.setHeader("content-type", "application/json; charset=utf-8");
+  res.setHeader("cache-control", "no-store");
+  res.end(JSON.stringify(body));
+}
+async function readBody(req, maxBytes = DEFAULT_MAX_BODY_BYTES) {
+  const declared = req.headers["content-length"];
+  if (declared !== void 0 && Number(declared) > maxBytes) {
+    throw new Error("request body too large");
+  }
+  const chunks = [];
+  let received = 0;
+  for await (const chunk of req) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    received += buffer.byteLength;
+    if (received > maxBytes) throw new Error("request body too large");
+    chunks.push(buffer);
+  }
+  const text = Buffer.concat(chunks).toString("utf8");
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error("body is not valid JSON");
+  }
+}
+
 // plugins/restart-pause/src/quiesce.ts
 var QuiesceTracker = class {
   running = /* @__PURE__ */ new Map();
@@ -87,24 +116,14 @@ var Config = z.object({
    */
   armSettleMs: z.number().default(5e3)
 });
-function sendJson(res, status, body) {
-  const text = JSON.stringify(body);
-  res.writeHead(status, {
-    "content-type": "application/json; charset=utf-8",
-    "cache-control": "no-store"
-  });
-  res.end(text);
-}
 async function readJsonBody(req) {
-  const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
-  if (chunks.length === 0) return {};
+  let parsed;
   try {
-    const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-    return parsed !== null && typeof parsed === "object" ? parsed : {};
+    parsed = await readBody(req);
   } catch {
     return {};
   }
+  return parsed !== null && typeof parsed === "object" ? parsed : {};
 }
 function runCheck(command, timeoutMs) {
   return new Promise((resolve) => {

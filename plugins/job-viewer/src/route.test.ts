@@ -161,7 +161,7 @@ function makeFakeJobs(overrides: Partial<JobsKillServiceLike> = {}) {
   return { jobs, calls };
 }
 
-/** Fake IncomingMessage that replays one body chunk, then ends. */
+/** Fake IncomingMessage that replays one body chunk through async iteration. */
 async function callKill(
   body: string,
   jobs: JobsKillServiceLike,
@@ -171,16 +171,14 @@ async function callKill(
   seed?.(store);
   const handler = makeKillHandler(jobs, store);
   const res = makeRes();
-  const cbs: Record<string, (chunk?: unknown) => void> = {};
+  const chunk = Buffer.from(body, "utf8");
   const req = {
-    on: (event: string, cb: (chunk?: unknown) => void) => {
-      cbs[event] = cb;
+    headers: { "content-length": String(chunk.byteLength) },
+    async *[Symbol.asyncIterator]() {
+      yield chunk;
     },
   };
-  const done = handler(req as any, res as any);
-  if (cbs.data) cbs.data(Buffer.from(body, "utf8"));
-  if (cbs.end) cbs.end();
-  await done;
+  await handler(req as any, res as any);
   return { res, store, parsed: res.body !== undefined ? JSON.parse(res.body) : undefined };
 }
 
@@ -238,6 +236,15 @@ describe("makeKillHandler", () => {
     const { parsed } = await callKill("{not json", jobs);
     expect(parsed.ok).toBe(false);
     expect(typeof parsed.error).toBe("string");
+    expect(calls.kill).toEqual([]);
+  });
+
+  it("rejects a body over the 64 KiB cap and never kills", async () => {
+    const { jobs, calls } = makeFakeJobs();
+    const big = JSON.stringify({ job_id: "j1", pad: "x".repeat(70 * 1024) });
+    expect(Buffer.byteLength(big)).toBeGreaterThan(64 * 1024);
+    const { parsed } = await callKill(big, jobs, (store) => store.setOwner("j1", { id: "a1" }));
+    expect(parsed).toEqual({ ok: false, error: "request body too large" });
     expect(calls.kill).toEqual([]);
   });
 });

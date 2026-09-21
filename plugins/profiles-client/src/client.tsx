@@ -46,6 +46,7 @@ import {
   registerLocale,
 } from "../../shared/client-util";
 import { entryHead, normalizeEntry, chainNameForRoutes } from "../../profile-routes";
+import { SettingsSection } from "../../shared/settings-panel";
 import settingsCss from "../../shared/settings.css";
 import localCss from "./client.module.css";
 
@@ -1020,27 +1021,6 @@ function makeModelSeat(profileScope) {
     );
   }
   return ProfileModelSeat;
-}
-
-/**
- * Local stand-in for the shared SettingsSection (../../shared/settings-panel.tsx):
- * kept local so this panel renders the same dsp-* structure settings.css
- * provides without pulling in that module's own dependency closure.
- */
-function SettingsSection(props) {
-  return (
-    <div className="dsp-root">
-      <div className="dsp-head">
-        <h3 className="dsp-title">{props.title}</h3>
-        {props.onRefresh ? (
-          <button className="dsp-refresh" onClick={props.onRefresh}>
-            {props.refreshLabel === undefined ? "Refresh" : props.refreshLabel}
-          </button>
-        ) : null}
-      </div>
-      {props.children}
-    </div>
-  );
 }
 
 /**

@@ -15,6 +15,7 @@
  * name is listed. Unknown names stay plain text (the safe direction).
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { sendJson } from "../../shared/http";
 
 // Minimal structural views of the DSH services, so this file does not
 // depend on the host Context type exposing them (the tool-render precedent).
@@ -60,10 +61,10 @@ interface HostContext {
 const name = "user-bubble";
 const inject: string[] = [];
 
-function sendJson(res: ServerResponse, status: number, body: unknown): void {
-  res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" });
-  res.end(JSON.stringify(body));
-}
+// NOTE: responses go through the shared sendJson (../../shared/http), not a
+// local copy. The local one drifted: it was missing the charset on
+// content-type and used writeHead where the shared helper sets statusCode.
+// Converging here must keep the shared headers, not the drifted ones.
 
 /**
  * Collect the GLOBAL skill names, preferring the session's working

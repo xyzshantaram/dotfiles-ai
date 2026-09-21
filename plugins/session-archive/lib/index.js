@@ -144,19 +144,22 @@ async function deleteArchivedSession(ctx, id) {
     return { id, ok: false, error: message };
   }
 }
+async function readDeleteBody(ctx, req, res, route) {
+  try {
+    return await readBody(req, 16 * 1024);
+  } catch (error) {
+    sendJson(res, 400, {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error)
+    });
+    ctx.logger.warn(`${route} refused: invalid request body`);
+    return null;
+  }
+}
 function makeDeleteHandler(ctx) {
   return async (req, res) => {
-    let body;
-    try {
-      body = await readBody(req, 16 * 1024);
-    } catch (error) {
-      sendJson(res, 400, {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error)
-      });
-      ctx.logger.warn("delete refused: invalid request body");
-      return;
-    }
+    const body = await readDeleteBody(ctx, req, res, "delete");
+    if (body === null) return;
     const id = isPlainObject(body) && typeof body.id === "string" ? body.id : null;
     if (id === null) {
       sendJson(res, 400, { ok: false, error: "missing id" });
@@ -171,17 +174,8 @@ function makeDeleteHandler(ctx) {
 }
 function makeBatchDeleteHandler(ctx) {
   return async (req, res) => {
-    let body;
-    try {
-      body = await readBody(req, 16 * 1024);
-    } catch (error) {
-      sendJson(res, 400, {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error)
-      });
-      ctx.logger.warn("batch delete refused: invalid request body");
-      return;
-    }
+    const body = await readDeleteBody(ctx, req, res, "batch delete");
+    if (body === null) return;
     const ids = isPlainObject(body) && Array.isArray(body.ids) && body.ids.length > 0 && body.ids.every((entry) => typeof entry === "string") ? body.ids : null;
     if (ids === null) {
       sendJson(res, 400, { ok: false, error: "missing ids" });
