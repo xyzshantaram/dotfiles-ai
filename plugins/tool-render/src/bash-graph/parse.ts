@@ -176,8 +176,15 @@ export function splitLines(src: string): SourceLine[] {
       continue;
     }
     // A stray closer at depth 0 (case arms: `a)`) binds no nesting, but it
-    // still bounds a word and, for `)`, a command may follow it.
-    if (c === ")" || c === "}") {
+    // still bounds a word and, for `)`, a command may follow it. The `)`
+    // goes through the pattern rule (the word before it was a case label);
+    // `}` keeps the plain mark.
+    if (c === ")") {
+      compoundStrayParen(cs);
+      i++;
+      continue;
+    }
+    if (c === "}") {
       compoundMark(cs, c);
       i++;
       continue;
@@ -236,7 +243,12 @@ export interface SemiPart {
  * separator (;, &, |, (, {, newline, !, )) or an interior keyword
  * (do/then/else/elif/in, plus the time prefix the renderer keeps as
  * verbatim text). Any other word clears the expectation, so `echo done`
- * never closes anything and `[[ $x == case* ]]` never opens anything.
+ * never closes anything and `[[ $x == case* ]]` never opens anything. The
+ * interior-keyword re-arm itself fires only from command position: an
+ * argument that spells like one (`echo then for`, `echo in`) steers
+ * nothing. And a word before a depth-0 `)` that opened no paren is a case
+ * pattern, not a command, so a keyword-named arm (`for)`, `esac)`) undoes
+ * whatever open or close it just caused.
  * Redirect/test brackets (>, <, [) always clear it, so a heredoc delimiter
  * or test operand named like a keyword stays data. Quoted, escaped, and
  * paren-nested text never forms words at all. A # at command position opens
@@ -258,16 +270,36 @@ function compoundState(): CompoundState {
   return { depth: 0, expectCmd: true, word: "", comment: false };
 }
 
-/** Close the pending word: openers deepen, closers shallow (floored at 0). */
-function compoundFlush(cs: CompoundState): void {
+/** Close the pending word: openers deepen, closers shallow (floored at 0).
+ *
+ * Two rules keep keyword-shaped ARGUMENTS from steering the tracker
+ * (review of 407bc9b, ticket #187):
+ * - The CONT re-arm fires only when the word was ITSELF at command
+ *   position. `echo then for`, `echo else done` and `echo in` leave `then`,
+ *   `else`, `done`, `in` as arguments, so the next word stays an argument
+ *   too instead of being promoted to command position and opening (or
+ *   closing) a compound.
+ * - The return carries the depth effect, so a depth-0 `)` can undo it (see
+ *   compoundStrayParen): a word before a `)` that opened no paren is a case
+ *   pattern, never a command.
+ */
+function compoundFlush(cs: CompoundState): { delta: number } {
   const w = cs.word;
   cs.word = "";
-  if (w === "" || cs.comment) return;
-  if (cs.expectCmd) {
-    if (COMPOUND_OPEN.has(w)) cs.depth++;
-    else if (COMPOUND_CLOSE.has(w)) cs.depth = Math.max(0, cs.depth - 1);
+  if (w === "" || cs.comment) return { delta: 0 };
+  const wasCmd = cs.expectCmd;
+  let delta = 0;
+  if (wasCmd) {
+    if (COMPOUND_OPEN.has(w)) {
+      cs.depth++;
+      delta = 1;
+    } else if (COMPOUND_CLOSE.has(w) && cs.depth > 0) {
+      cs.depth--;
+      delta = -1;
+    }
   }
-  cs.expectCmd = COMPOUND_CONT.has(w);
+  cs.expectCmd = wasCmd && COMPOUND_CONT.has(w);
+  return { delta };
 }
 
 /**
@@ -292,6 +324,23 @@ function compoundMark(cs: CompoundState, c: string): void {
   // A # anywhere else is literal (a#b, quoted text never reaches here, an
   // escaped # is consumed as data): only command position comments.
   else if (c === "#" && cs.expectCmd) cs.comment = true;
+}
+
+/**
+ * A depth-0 `)` that closed no paren the tracker opened (ticket #187
+ * review). In valid bash that paren is a case-arm terminator, so the word
+ * before it is a PATTERN, not a command — even when it spells like one. A
+ * keyword-named arm (`case $x in a) ..;; for) ..;; esac`: the second label
+ * genuinely sits at command position after `;;`) must not open a compound
+ * the single `esac` cannot close, and a closer-named arm (`esac) ..`) must
+ * not close one early: either depth effect is undone. `)` still bounds the
+ * word and a command (the arm body) still follows it. `{`/`}` need no twin:
+ * no valid construct puts a compound keyword directly before a depth-0 `}`.
+ */
+function compoundStrayParen(cs: CompoundState): void {
+  const { delta } = compoundFlush(cs);
+  cs.depth -= delta;
+  cs.expectCmd = true;
 }
 
 /** One word char in active (unquoted, depth-0, uncommented) text. */
@@ -365,8 +414,15 @@ export function splitSemis(src: string, a: number, b: number): SemiPart[] {
       continue;
     }
     // A stray closer at depth 0 (case arms: `a)`) binds no nesting, but it
-    // still bounds a word and, for `)`, a command may follow it.
-    if (c === ")" || c === "}") {
+    // still bounds a word and, for `)`, a command may follow it. The `)`
+    // goes through the pattern rule (the word before it was a case label);
+    // `}` keeps the plain mark.
+    if (c === ")") {
+      compoundStrayParen(cs);
+      i++;
+      continue;
+    }
+    if (c === "}") {
       compoundMark(cs, c);
       i++;
       continue;

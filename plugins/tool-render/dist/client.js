@@ -22674,7 +22674,12 @@ function splitLines2(src) {
       i++;
       continue;
     }
-    if (c2 === ")" || c2 === "}") {
+    if (c2 === ")") {
+      compoundStrayParen(cs);
+      i++;
+      continue;
+    }
+    if (c2 === "}") {
       compoundMark(cs, c2);
       i++;
       continue;
@@ -22720,12 +22725,20 @@ function compoundState() {
 function compoundFlush(cs) {
   const w = cs.word;
   cs.word = "";
-  if (w === "" || cs.comment) return;
-  if (cs.expectCmd) {
-    if (COMPOUND_OPEN.has(w)) cs.depth++;
-    else if (COMPOUND_CLOSE.has(w)) cs.depth = Math.max(0, cs.depth - 1);
+  if (w === "" || cs.comment) return { delta: 0 };
+  const wasCmd = cs.expectCmd;
+  let delta = 0;
+  if (wasCmd) {
+    if (COMPOUND_OPEN.has(w)) {
+      cs.depth++;
+      delta = 1;
+    } else if (COMPOUND_CLOSE.has(w) && cs.depth > 0) {
+      cs.depth--;
+      delta = -1;
+    }
   }
-  cs.expectCmd = COMPOUND_CONT.has(w);
+  cs.expectCmd = wasCmd && COMPOUND_CONT.has(w);
+  return { delta };
 }
 function compoundMark(cs, c2) {
   compoundFlush(cs);
@@ -22733,6 +22746,11 @@ function compoundMark(cs, c2) {
     cs.expectCmd = true;
   else if (c2 === "<" || c2 === ">" || c2 === "[") cs.expectCmd = false;
   else if (c2 === "#" && cs.expectCmd) cs.comment = true;
+}
+function compoundStrayParen(cs) {
+  const { delta } = compoundFlush(cs);
+  cs.depth -= delta;
+  cs.expectCmd = true;
 }
 function compoundPush(cs, c2) {
   if (!cs.comment) cs.word += c2;
@@ -22796,7 +22814,12 @@ function splitSemis(src, a, b) {
       i++;
       continue;
     }
-    if (c2 === ")" || c2 === "}") {
+    if (c2 === ")") {
+      compoundStrayParen(cs);
+      i++;
+      continue;
+    }
+    if (c2 === "}") {
       compoundMark(cs, c2);
       i++;
       continue;

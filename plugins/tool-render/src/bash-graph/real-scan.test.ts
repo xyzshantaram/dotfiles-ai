@@ -280,6 +280,82 @@ describe("compounds degrade to one verbatim node (ticket #187)", () => {
   });
 });
 
+describe("review pins: keyword arguments must not steer the tracker (ticket #187)", () => {
+  const edgeCount = (html: string): number => (html.match(/prim-edge/g) || []).length;
+
+  it("does not draw `done` for a loop whose body echoes an argument named done", async () => {
+    // REJECTS the precise lie this ticket exists to kill, back on valid
+    // input: the body argument `done` in `echo else done` re-armed command
+    // position, so the body's `done` closed the loop early and the real
+    // terminator rendered as its own panel. Three panels with panel[1]
+    // exactly `done`; the fix keeps the construct whole (2 panels).
+    const src = "for f in a; do echo else done; done; echo after";
+    const { r, html } = await renderReal(src, 40);
+    expect(r.panelsHTML.length).toBe(2);
+    expect(edgeCount(html)).toBe(0);
+    const panels = r.panelsHTML.map((p) => unesc(p.replace(/<[^>]*>/g, "")).replace(/\s+/g, " ").trim());
+    expect(panels.some((p) => p === "done")).toBe(false);
+    expect(shown(r)).toContain("for f in a; do echo else done; done");
+    expect(shown(r)).toContain("echo after");
+    assertWordsSurvive(src, r);
+  });
+
+  it("does not fuse the sibling past a keyword-named case arm", async () => {
+    // REJECTS the swallow: the arm label `for` in `for)` sat at command
+    // position (it follows `in`), opened a second compound, and the single
+    // `esac` could not close both, so `echo after` fused into the case node
+    // (1 panel). The label is a pattern, not a command: 2 panels.
+    const src = "case $x in for) echo hi;; esac; echo after";
+    const { r, html } = await renderReal(src, 41);
+    expect(r.panelsHTML.length).toBe(2);
+    expect(edgeCount(html)).toBe(0);
+    expect(shown(r)).toContain("case $x in for) echo hi;; esac");
+    expect(shown(r)).toContain("echo after");
+    assertWordsSurvive(src, r);
+  });
+
+  it("does not swallow the sibling when the body echoes `then for`", async () => {
+    // REJECTS the same re-arm from `then`: the body argument `then` in
+    // `echo then for` promoted `for` to command position, opening a compound
+    // the single `done` could not close (1 panel). Two panels after.
+    const src = "for f in a b; do echo then for; done; echo after";
+    const { r, html } = await renderReal(src, 42);
+    expect(r.panelsHTML.length).toBe(2);
+    expect(edgeCount(html)).toBe(0);
+    expect(shown(r)).toContain("for f in a b; do echo then for; done");
+    expect(shown(r)).toContain("echo after");
+    assertWordsSurvive(src, r);
+  });
+
+  it("still splits two plain siblings with no compound present", async () => {
+    // REJECTS the fusion with NO compound at all: `then` as an argument of
+    // `echo` re-armed command position and `for` opened a compound, fusing
+    // two plain siblings into 1 panel. The property, not one shape: an
+    // argument that spells like a keyword steers nothing.
+    const src = "echo then for; echo after";
+    const { r, html } = await renderReal(src, 43);
+    expect(r.panelsHTML.length).toBe(2);
+    expect(edgeCount(html)).toBe(0);
+    expect(shown(r)).toContain("echo then for");
+    expect(shown(r)).toContain("echo after");
+    assertWordsSurvive(src, r);
+  });
+
+  it("does not open for a keyword-named second arm either", async () => {
+    // REJECTS the second-arm twin: after a genuine `;;` separator the label
+    // `for` IS at command position, so gating the re-arm is not enough; the
+    // word before a depth-0 `)` is a pattern whatever follows the separator.
+    // Without the pattern rule this fuses to 1 panel like the first arm did.
+    const src = "case $x in a) echo one;; for) echo two;; esac; echo after";
+    const { r, html } = await renderReal(src, 44);
+    expect(r.panelsHTML.length).toBe(2);
+    expect(edgeCount(html)).toBe(0);
+    expect(shown(r)).toContain("case $x in a) echo one;; for) echo two;; esac");
+    expect(shown(r)).toContain("echo after");
+    assertWordsSurvive(src, r);
+  });
+});
+
 describe("criterion 1 over further shapes", () => {  it("loses no word on the real path for every listed shape", async () => {
     // The general rule as a net: any fifth shape that narrows past dropped
     // text fails here without needing its own named test first.

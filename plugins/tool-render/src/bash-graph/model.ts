@@ -170,8 +170,18 @@ export interface DelimItem {
  * The head of a segment for the compound rule (ticket #187): the first
  * command token, seen through the negation and time prefixes the renderer
  * keeps as verbatim text, so `! if ...; fi` degrades like `if ...; fi`.
- * Anything else (a mid-segment compound after &&) keeps the normal path:
- * its terminator rides inside one command slice, never as its own node.
+ * Anything else keeps the normal path. On VALID input that path never
+ * strands a terminator: a mid-segment compound (`echo a && if x; then y;
+ * fi`) opens the tracker, so its terminator rides inside one command slice.
+ * Two shapes that look like exceptions are not, verified 2026-09-22:
+ * brace and function groups (`{ a; b; }`, multiline braces, `f() {
+ * echo hi; }; echo after`, `if x; then { echo a; }; fi`) fuse harmlessly
+ * through the paren-depth gate with no lone-`}` panel — they were never
+ * torn. And `FOO=1 if x; then y; fi` DOES draw a lone `fi` panel, but
+ * `bash -n` rejects that input (an assignment prefix cannot precede a
+ * keyword), so that panel is malformed-input behaviour on the pre-existing
+ * split path, not a criterion-1 violation: the opener is not at command
+ * position there, so the compound never opens.
  */
 function compoundHead(src: string, ta: number, tb: number): GroupTag | null {
   const m = /^(?:!\s*|time\s+)+/.exec(SL(src, ta, tb));
@@ -291,6 +301,18 @@ export function buildNodes(
   // along below the panel through hdItems, so nothing is hidden either.
   // The group badge survives: the renderer knew it was looking at a
   // compound, and saying so is true.
+  //
+  // LONGER TERM (criterion 8 — recorded, not answered): real structure for
+  // control flow would be this renderer's FIRST NESTING construct. Every
+  // layout rule today assumes a flat row of nodes: measure assigns each
+  // node a stylesheet width, layout splits one sequence into rows, and
+  // render draws sibling panels left to right. A loop or conditional with
+  // a drawn body needs what none of that provides: a body-owning node
+  // type, recursive measure and layout INSIDE a panel (the body's own
+  // pipes and conditionals drawn within the parent's box), and the
+  // terminator as chrome rather than text (a frame or badge, never a
+  // slice). That is a design conversation with the owner first, its own
+  // ticket second, code third.
   const firstCmd = items.find((t) => t.t === "cmd");
   if (firstCmd && firstCmd.t === "cmd") {
     const grp0 = compoundHead(src, firstCmd.ta, firstCmd.tb);
