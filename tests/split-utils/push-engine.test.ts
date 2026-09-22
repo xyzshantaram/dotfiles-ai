@@ -14,11 +14,8 @@ import {
 import { loadPushed } from "@app/src/splitwise.ts";
 import { pushedFilePath, splitwiseEnvPath } from "@app/src/paths.ts";
 import { pushSteps, sourceStep } from "@app/app/expense-split/push.ts";
-
-// Fail the test when a condition misses.
-function assert(cond: boolean, msg: string): void {
-  if (!cond) throw new Error("assert failed: " + msg);
-}
+import { assert } from "@std/assert";
+import { fakeApi } from "./fake-push-api.ts";
 
 // One split line.
 function line(
@@ -54,33 +51,6 @@ function doc(people?: string[]) {
     totals: { Ann: 115, Bob: 65 },
     settlements: [{ from: "Bob", to: "Ann", amount: 65 }],
   };
-}
-
-// Fake API with scripted calls. Records createExpense payloads and
-// comments, and hands out expense ids in sequence.
-function fakeApi(options?: { failExpense?: boolean }) {
-  const expenses: Record<string, string>[] = [];
-  const comments: string[] = [];
-  let nextId = 101;
-  const api: PushApi = {
-    getCurrentUser: () =>
-      Promise.resolve({ first_name: "Ann", last_name: "", id: 1 }),
-    getFriends: () =>
-      Promise.resolve([{ first_name: "Bob", last_name: "", id: 2 }]),
-    getGroups: () => Promise.resolve([{ name: "Trip", id: 7 }]),
-    createExpense: (data) => {
-      if (options?.failExpense) {
-        throw new Error("splitwise 500 secret=hushhush");
-      }
-      expenses.push({ ...data });
-      return Promise.resolve({ expenses: [{ id: nextId++ }] });
-    },
-    createComment: (_eid, content) => {
-      comments.push(content);
-      return Promise.resolve();
-    },
-  };
-  return { api, expenses, comments };
 }
 
 // Per-test scratch dirs and env, set once for this file.

@@ -20,7 +20,6 @@ import type { Step } from "jsr:@xyzshantaram/wizardkit@^0.1.1";
 import type { StepFn } from "jsr:@xyzshantaram/wizardkit@^0.1.1";
 import { assert } from "@std/assert";
 import { fakeApi } from "./fake-push-api.ts";
-import { freshRoot } from "./test-state.ts";
 
 // Text of one node plus nested option, item, row, and button text.
 function texts(node: unknown): string[] {
@@ -69,6 +68,14 @@ function restoreEnv(saved: Map<string, string | undefined>): void {
     if (value === undefined) Deno.env.delete(key);
     else Deno.env.set(key, value);
   }
+}
+
+// Fresh state root plus an empty pushed map. Returns the root.
+async function freshRoot(prefix: string, sid: string): Promise<string> {
+  const root = await Deno.makeTempDir({ prefix });
+  Deno.env.set("SPLIT_UTILS_STATE", root);
+  resetPush(sid);
+  return root;
 }
 
 // One split line for the push doc.
