@@ -432,9 +432,28 @@ function errorTextOf(block) {
   return null;
 }
 
+// The per-row open/closed state every expandable card uses: one useState
+// toggled by inversion. Previously a 3-line pair written 20 times, with its
+// toggle written 21 more.
+function useExpanded() {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  return [expanded, function () {
+    expandedState[1](!expandedState[0]);
+  }];
+}
+
 function firstLine(text) {
   var at = text.indexOf("\n");
   return at === -1 ? text : text.slice(0, at);
+}
+
+// First line of an error block's text, for the summary slot on an errored
+// row. The guard keeps callers from having to repeat the state check.
+function errorSummaryOf(state, errorText) {
+  return state === "error" && errorText !== null && errorText !== ""
+    ? firstLineOfError(errorText)
+    : undefined;
 }
 
 function relativizeToCwd(text, cwd) {
@@ -1159,9 +1178,9 @@ function ToolRenderApprovalBar(props) {
 
 // ---- Read row (R2): path chrome + highlighted file content. ----
 function ReadRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+    var expanded = expandedPair[0];
+    var toggleExpanded = expandedPair[1];
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs(argsRawOf(block));
@@ -1169,11 +1188,7 @@ function ReadRow(props) {
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary =
-    state === "error" && errorText !== null && errorText !== ""
-      ? firstLineOfError(errorText)
-      : undefined;
-  var summary = path !== undefined ? relativizeToCwd(firstLine(path), props.cwd) : "Read";
+  var errorSummary = errorSummaryOf(state, errorText);  var summary = path !== undefined ? relativizeToCwd(firstLine(path), props.cwd) : "Read";
   var body = null;
   if (output !== null && output !== "") {
     if (state === "error") {
@@ -1201,9 +1216,7 @@ function ReadRow(props) {
     state: state,
     expandable: body !== null,
     expanded: expanded,
-    onToggle: function () {
-      setExpanded(!expanded);
-    },
+onToggle: toggleExpanded,
     body: body,
     errorSummary: errorSummary,
     errorText: errorText,
@@ -1493,9 +1506,9 @@ function BashTabStrip(props) {
 // export exists to let bash-live-approval.test.ts call this row and read the
 // options object it actually computes. Nothing imports BashRow at runtime.
 export function BashRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+    var expanded = expandedPair[0];
+    var toggleExpanded = expandedPair[1];
   // #164: the per-row tab selection. One useState per BashRow instance, so
   // two bash cards on screen switch independently and switching one never
   // moves the other. null means "the user has not clicked yet" and the seam's
@@ -1518,11 +1531,7 @@ export function BashRow(props) {
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = bashErrorState(rowStateOf(block), output, block.meta);
-  var errorSummary =
-    state === "error" && errorText !== null && errorText !== ""
-      ? firstLineOfError(errorText)
-      : undefined;
-  var summary =
+  var errorSummary = errorSummaryOf(state, errorText);  var summary =
     description !== undefined && description !== ""
       ? firstLine(description)
       : command !== undefined
@@ -1764,9 +1773,7 @@ export function BashRow(props) {
     state: state,
     expandable: body !== null,
     expanded: expanded,
-    onToggle: function () {
-      setExpanded(!expanded);
-    },
+onToggle: toggleExpanded,
     body: body,
     errorSummary: errorSummary,
     errorText: errorText,
@@ -2129,9 +2136,9 @@ function editBadgeLabel(rawName, toolTitle) {
 
 function makeEditRow(toolTitle) {
   return function EditToolRow(props) {
-    var expandedState = useState(false);
-    var expanded = expandedState[0];
-    var setExpanded = expandedState[1];
+    var expandedPair = useExpanded();
+    var expanded = expandedPair[0];
+    var toggleExpanded = expandedPair[1];
     var block = props.block;
     if (block === null || typeof block !== "object") {
       return toolRenderRow({
@@ -2169,11 +2176,7 @@ function makeEditRow(toolTitle) {
     var output = done ? resultTextOf(block) : null;
     var errorText = done ? errorTextOf(block) : null;
     var state = rowStateOf(block);
-    var errorSummary =
-      state === "error" && errorText !== null && errorText !== ""
-        ? firstLineOfError(errorText)
-        : undefined;
-    var summaryPath = pickString(argsObject, ["path", "file_path"]);
+    var errorSummary = errorSummaryOf(state, errorText);    var summaryPath = pickString(argsObject, ["path", "file_path"]);
     var summary =
       summaryPath !== undefined ? relativizeToCwd(firstLine(summaryPath), effectiveCwd) : toolTitle;
     var body = null;
@@ -2206,9 +2209,7 @@ function makeEditRow(toolTitle) {
       state: state,
       expandable: body !== null,
       expanded: expanded,
-      onToggle: function () {
-        setExpanded(!expanded);
-      },
+onToggle: toggleExpanded,
       body: body,
       errorSummary: errorSummary,
       errorText: errorText,
@@ -2500,9 +2501,9 @@ function writeBody(path, before, newText) {
 }
 
 function WriteRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+    var expanded = expandedPair[0];
+    var toggleExpanded = expandedPair[1];
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs(argsRawOf(block));
@@ -2513,11 +2514,7 @@ function WriteRow(props) {
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary =
-    state === "error" && errorText !== null && errorText !== ""
-      ? firstLineOfError(errorText)
-      : undefined;
-  var summary = path !== undefined ? relativizeToCwd(firstLine(path), effectiveCwd) : "Write";
+  var errorSummary = errorSummaryOf(state, errorText);  var summary = path !== undefined ? relativizeToCwd(firstLine(path), effectiveCwd) : "Write";
   var before = null;
   if (path !== undefined && props.useSession !== undefined) {
     before = props.useSession(function (snapshot) {
@@ -2547,9 +2544,7 @@ function WriteRow(props) {
     state: state,
     expandable: body !== null,
     expanded: expanded,
-    onToggle: function () {
-      setExpanded(!expanded);
-    },
+onToggle: toggleExpanded,
     body: body,
     errorSummary: errorSummary,
     errorText: errorText,
@@ -2608,9 +2603,9 @@ function planBody(todos) {
 }
 
 function TodoRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+    var expanded = expandedPair[0];
+    var toggleExpanded = expandedPair[1];
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs(argsRawOf(block));
@@ -2618,11 +2613,7 @@ function TodoRow(props) {
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary =
-    state === "error" && errorText !== null && errorText !== ""
-      ? firstLineOfError(errorText)
-      : undefined;
-  var counts = todos !== null ? planSummary(todos) : null;
+  var errorSummary = errorSummaryOf(state, errorText);  var counts = todos !== null ? planSummary(todos) : null;
   var summary;
   if (counts !== null && (done === false || state !== "error")) {
     var head = counts.done + "/" + counts.total + " completed";
@@ -2651,9 +2642,7 @@ function TodoRow(props) {
     state: state,
     expandable: body !== null,
     expanded: expanded,
-    onToggle: function () {
-      setExpanded(!expanded);
-    },
+onToggle: toggleExpanded,
     body: body,
     errorSummary: errorSummary,
     errorText: errorText,
@@ -3113,9 +3102,9 @@ function AskAnswerForm(props) {
 }
 
 function AskRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+    var expanded = expandedPair[0];
+    var toggleExpanded = expandedPair[1];
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs(argsRawOf(block));
@@ -3124,11 +3113,7 @@ function AskRow(props) {
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary =
-    state === "error" && errorText !== null && errorText !== ""
-      ? firstLineOfError(errorText)
-      : undefined;
-  var summary;
+  var errorSummary = errorSummaryOf(state, errorText);  var summary;
   if (state === "error") {
     summary = "Ask user";
   } else if (!done) {
@@ -3185,9 +3170,7 @@ function AskRow(props) {
     questionState: questionState,
     expandable: body !== null,
     expanded: expanded,
-    onToggle: function () {
-      setExpanded(!expanded);
-    },
+onToggle: toggleExpanded,
     body: body,
     errorSummary: errorSummary,
     errorText: errorText,
@@ -3207,9 +3190,9 @@ function subagentPrompt(args) {
 }
 
 function SubagentRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+    var expanded = expandedPair[0];
+    var toggleExpanded = expandedPair[1];
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs(argsRawOf(block));
@@ -3218,11 +3201,7 @@ function SubagentRow(props) {
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary =
-    state === "error" && errorText !== null && errorText !== ""
-      ? firstLineOfError(errorText)
-      : undefined;
-  var background = args !== null && args.run_in_background === true;
+  var errorSummary = errorSummaryOf(state, errorText);  var background = args !== null && args.run_in_background === true;
   var title = background ? "Background subagent" : "Subagent";
   var summary =
     description !== undefined ? firstLine(relativizeToCwd(description, props.cwd)) : title;
@@ -3244,9 +3223,7 @@ function SubagentRow(props) {
     state: state,
     expandable: body !== null,
     expanded: expanded,
-    onToggle: function () {
-      setExpanded(!expanded);
-    },
+onToggle: toggleExpanded,
     body: body,
     errorSummary: errorSummary,
     errorText: errorText,
@@ -3273,9 +3250,9 @@ function sendMessageArgs(args) {
 const JOB_STATUS_RE = /\[status: ([a-z]+)\]\s*$/;
 
 function JobOutputRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+    var expanded = expandedPair[0];
+    var toggleExpanded = expandedPair[1];
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs(argsRawOf(block));
@@ -3283,11 +3260,7 @@ function JobOutputRow(props) {
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary =
-    state === "error" && errorText !== null && errorText !== ""
-      ? firstLineOfError(errorText)
-      : undefined;
-  var statusMatch = output !== null ? JOB_STATUS_RE.exec(output) : null;
+  var errorSummary = errorSummaryOf(state, errorText);  var statusMatch = output !== null ? JOB_STATUS_RE.exec(output) : null;
   var summary = statusMatch !== null ? "status: " + statusMatch[1] : "Job output";
   var body =
     state !== "error" && output !== null && output !== "" ? (
@@ -3304,9 +3277,7 @@ function JobOutputRow(props) {
     state: state,
     expandable: body !== null,
     expanded: expanded,
-    onToggle: function () {
-      setExpanded(!expanded);
-    },
+onToggle: toggleExpanded,
     body: body,
     errorSummary: errorSummary,
     errorText: errorText,
@@ -3329,9 +3300,9 @@ function packageActionTitle(action) {
 }
 
 function PackageRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+    var expanded = expandedPair[0];
+    var toggleExpanded = expandedPair[1];
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs(argsRawOf(block));
@@ -3341,11 +3312,7 @@ function PackageRow(props) {
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary =
-    state === "error" && errorText !== null && errorText !== ""
-      ? firstLineOfError(errorText)
-      : undefined;
-  var title = packageActionTitle(action);
+  var errorSummary = errorSummaryOf(state, errorText);  var title = packageActionTitle(action);
   var summary = target !== undefined && target !== "" ? target : title;
   var body =
     state !== "error" && output !== null && output !== "" ? (
@@ -3362,9 +3329,7 @@ function PackageRow(props) {
     state: state,
     expandable: body !== null,
     expanded: expanded,
-    onToggle: function () {
-      setExpanded(!expanded);
-    },
+onToggle: toggleExpanded,
     body: body,
     errorSummary: errorSummary,
     errorText: errorText,
@@ -3373,19 +3338,15 @@ function PackageRow(props) {
 }
 
 function SendMessageRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+    var expanded = expandedPair[0];
+    var toggleExpanded = expandedPair[1];
   var block = props.block;
   var done = doneOf(block);
   var args = sendMessageArgs(parseArgs(argsRawOf(block)));
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary =
-    state === "error" && errorText !== null && errorText !== ""
-      ? firstLineOfError(errorText)
-      : undefined;
-  var body =
+  var errorSummary = errorSummaryOf(state, errorText);  var body =
     state !== "error" && args !== null ? (
       <div className="tool-render-markdown-body">
         <MarkdownText text={args.message} />
@@ -3402,9 +3363,7 @@ function SendMessageRow(props) {
     state: state,
     expandable: body !== null,
     expanded: expanded,
-    onToggle: function () {
-      setExpanded(!expanded);
-    },
+onToggle: toggleExpanded,
     body: body,
     errorSummary: errorSummary,
     errorText: errorText,
@@ -3425,11 +3384,7 @@ function InterruptAgentRow(props) {
   var agentId = args !== null ? pickString(args, ["agent_id"]) : undefined;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary =
-    state === "error" && errorText !== null && errorText !== ""
-      ? firstLineOfError(errorText)
-      : undefined;
-  return toolRenderRow({
+  var errorSummary = errorSummaryOf(state, errorText);  return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession, useProjection: props.useProjection,
     toolName: "Interrupt agent",
@@ -3466,19 +3421,15 @@ function agentsSummaryText(entries) {
 }
 
 function ListAgentsRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+    var expanded = expandedPair[0];
+    var toggleExpanded = expandedPair[1];
   var block = props.block;
   var done = doneOf(block);
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary =
-    state === "error" && errorText !== null && errorText !== ""
-      ? firstLineOfError(errorText)
-      : undefined;
-  var entries = state === "error" || output === null ? [] : parseAgentLines(output);
+  var errorSummary = errorSummaryOf(state, errorText);  var entries = state === "error" || output === null ? [] : parseAgentLines(output);
   var body =
     entries.length > 0 ? (
       <div className="tool-render-agents">
@@ -3515,9 +3466,7 @@ function ListAgentsRow(props) {
     state: state,
     expandable: body !== null,
     expanded: expanded,
-    onToggle: function () {
-      setExpanded(!expanded);
-    },
+onToggle: toggleExpanded,
     body: body,
     errorSummary: errorSummary,
     errorText: errorText,
@@ -3564,9 +3513,9 @@ function contextText(content) {
 var FAILOVER_LINE_RE = /^LLM failover (\S+)\/(\S+) -> (\S+)\/(\S+) \(([^)]+)\)$/;
 
 function FailoverRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+    var expanded = expandedPair[0];
+    var toggleExpanded = expandedPair[1];
   var text = contextText(props.content);
   var lines = text.split("\n");
   // Named headerLine, NOT firstLine: a local `firstLine` here would shadow
@@ -3608,9 +3557,7 @@ function FailoverRow(props) {
     state: "error",
     expandable: errorText !== undefined,
     expanded: expanded,
-    onToggle: function () {
-      setExpanded(!expanded);
-    },
+onToggle: toggleExpanded,
     errorSummary: errorSummary,
     errorText: errorText,
     body:
@@ -3663,9 +3610,9 @@ function markdownWithReminders(text) {
 // fields, stripped before a skill loads -- so the table shows only what
 // this format actually carries: the name and the resource-resolution hint.
 function SkillContentCard(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+    var expanded = expandedPair[0];
+    var toggleExpanded = expandedPair[1];
   var body = (
     <div className="tool-render-markdown-body">
       <table className="tool-render-skill-table">
@@ -3693,9 +3640,7 @@ function SkillContentCard(props) {
     summary: props.name,
     expandable: true,
     expanded: expanded,
-    onToggle: function () {
-      setExpanded(!expanded);
-    },
+onToggle: toggleExpanded,
     body: body,
   });
 }
@@ -3706,9 +3651,9 @@ function SkillContentCard(props) {
 // no plugin source, so it is recognized here rather than through the
 // plugin-shadow path.
 function GenericContextCard(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+    var expanded = expandedPair[0];
+    var toggleExpanded = expandedPair[1];
   var provenance = props.provenance;
   var text = contextText(props.content);
   var skill = parseSkillContent(text);
@@ -3744,9 +3689,7 @@ function GenericContextCard(props) {
     summary: text !== "" ? firstLine(text) : title,
     expandable: body !== null,
     expanded: expanded,
-    onToggle: function () {
-      setExpanded(!expanded);
-    },
+onToggle: toggleExpanded,
     body: body,
   });
 }
@@ -3787,18 +3730,14 @@ function SkillRow(props) {
   // SkillContentCard branch on one render and the toolRenderRow branch on
   // another (state settles from "running" to "done" between them), and React
   // requires the same hooks in the same order every render.
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+    var expanded = expandedPair[0];
+    var toggleExpanded = expandedPair[1];
   var block = props.block;
   var done = doneOf(block);
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary =
-    state === "error" && errorText !== null && errorText !== ""
-      ? firstLineOfError(errorText)
-      : undefined;
-  var skill = state !== "error" && done ? parseSkillContent(resultTextOf(block)) : null;
+  var errorSummary = errorSummaryOf(state, errorText);  var skill = state !== "error" && done ? parseSkillContent(resultTextOf(block)) : null;
   if (skill !== null) {
     return (
       <SkillContentCard
@@ -3820,9 +3759,7 @@ function SkillRow(props) {
     state: state,
     expandable: false,
     expanded: expanded,
-    onToggle: function () {
-      setExpanded(!expanded);
-    },
+onToggle: toggleExpanded,
     errorSummary: errorSummary,
     errorText: errorText,
     inspect: props.inspect,
@@ -3913,9 +3850,9 @@ function parseReadImageResult(text) {
 // size once the call settles, and falls back to the bare path while it
 // runs. The expanded body embeds the picture.
 function ReadImageRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+    var expanded = expandedPair[0];
+    var toggleExpanded = expandedPair[1];
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs(argsRawOf(block));
@@ -3923,11 +3860,7 @@ function ReadImageRow(props) {
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary =
-    state === "error" && errorText !== null && errorText !== ""
-      ? firstLineOfError(errorText)
-      : undefined;
-  var meta = done && state !== "error" ? parseReadImageResult(output) : null;
+  var errorSummary = errorSummaryOf(state, errorText);  var meta = done && state !== "error" ? parseReadImageResult(output) : null;
   var summary =
     meta !== null
       ? basenameOf(meta.path) +
@@ -3971,9 +3904,7 @@ function ReadImageRow(props) {
     state: state,
     expandable: body !== null,
     expanded: expanded,
-    onToggle: function () {
-      setExpanded(!expanded);
-    },
+onToggle: toggleExpanded,
     body: body,
     errorSummary: errorSummary,
     errorText: errorText,
@@ -3986,9 +3917,9 @@ function ReadImageRow(props) {
 // resultTextOf returns the description verbatim with no envelope. The
 // collapsed row shows the question, not the path.
 function SeeRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+    var expanded = expandedPair[0];
+    var toggleExpanded = expandedPair[1];
   // The description clamp is separate per-row state, nested inside the row's
   // own expand state. The row must be open before the clamp exists.
   var showMoreState = useState(false);
@@ -4002,11 +3933,7 @@ function SeeRow(props) {
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary =
-    state === "error" && errorText !== null && errorText !== ""
-      ? firstLineOfError(errorText)
-      : undefined;
-  var description = done && state !== "error" ? output : null;
+  var errorSummary = errorSummaryOf(state, errorText);  var description = done && state !== "error" ? output : null;
   var summary = question !== undefined ? firstLine(question) : "See";
   // The toggle shows only when the description plausibly overflows the 8rem
   // clamp. Measuring the true rendered height needs a ref-based effect. A
@@ -4056,9 +3983,7 @@ function SeeRow(props) {
     state: state,
     expandable: body !== null,
     expanded: expanded,
-    onToggle: function () {
-      setExpanded(!expanded);
-    },
+onToggle: toggleExpanded,
     body: body,
     errorSummary: errorSummary,
     errorText: errorText,
@@ -4093,9 +4018,9 @@ function searchSummary(queries, state, output) {
 }
 
 function WebSearchRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+    var expanded = expandedPair[0];
+    var toggleExpanded = expandedPair[1];
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs(argsRawOf(block));
@@ -4103,11 +4028,7 @@ function WebSearchRow(props) {
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary =
-    state === "error" && errorText !== null && errorText !== ""
-      ? firstLineOfError(errorText)
-      : undefined;
-  var summary = searchSummary(queries, state, output);
+  var errorSummary = errorSummaryOf(state, errorText);  var summary = searchSummary(queries, state, output);
   var body =
     state !== "error" && output !== null && output !== "" ? (
       <div className="tool-render-markdown-body">
@@ -4124,9 +4045,7 @@ function WebSearchRow(props) {
     state: state,
     expandable: body !== null,
     expanded: expanded,
-    onToggle: function () {
-      setExpanded(!expanded);
-    },
+onToggle: toggleExpanded,
     body: body,
     errorSummary: errorSummary,
     errorText: errorText,
@@ -4141,9 +4060,9 @@ function WebSearchRow(props) {
 // a simple heuristic on purpose. Everything else renders as markdown inside
 // one bounded, interior-scrolling container.
 function WebFetchRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+    var expanded = expandedPair[0];
+    var toggleExpanded = expandedPair[1];
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs(argsRawOf(block));
@@ -4151,11 +4070,7 @@ function WebFetchRow(props) {
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary =
-    state === "error" && errorText !== null && errorText !== ""
-      ? firstLineOfError(errorText)
-      : undefined;
-  var summary = url !== undefined ? firstLine(url) : "Web fetch";
+  var errorSummary = errorSummaryOf(state, errorText);  var summary = url !== undefined ? firstLine(url) : "Web fetch";
   var body = null;
   if (state !== "error" && output !== null && output !== "") {
     body = looksLikeRawHtml(output) ? (
@@ -4176,9 +4091,7 @@ function WebFetchRow(props) {
     state: state,
     expandable: body !== null,
     expanded: expanded,
-    onToggle: function () {
-      setExpanded(!expanded);
-    },
+onToggle: toggleExpanded,
     body: body,
     errorSummary: errorSummary,
     errorText: errorText,
@@ -4248,11 +4161,7 @@ function RunCodeRow(props) {
   var output = done ? runCodeOutputText(content, isError, error) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary =
-    state === "error" && errorText !== null && errorText !== ""
-      ? firstLineOfError(errorText)
-      : undefined;
-  // A failed run whose content carried no text must still show its error in
+  var errorSummary = errorSummaryOf(state, errorText);  // A failed run whose content carried no text must still show its error in
   // OUT — otherwise the section gate below renders nothing and the failure
   // reads only as a head-row first line. Blank-only and sentinel text stay
   // suppressed: this promotes only a non-blank structured error message.
@@ -4539,9 +4448,9 @@ function compactionBody(view, rows) {
 }
 
 function CompactionRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+    var expanded = expandedPair[0];
+    var toggleExpanded = expandedPair[1];
   // This row sits on conversation.chat.node, so ChatNodeSeat hands it
   // props.node, the chat node. Two keys reach it and their data differ:
   //
@@ -4608,9 +4517,7 @@ function CompactionRow(props) {
       state: commandError !== null ? "error" : undefined,
       expandable: fallbackBody !== null || commandError !== null,
       expanded: expanded,
-      onToggle: function () {
-        setExpanded(!expanded);
-      },
+onToggle: toggleExpanded,
       body: fallbackBody,
       errorSummary: errorSummary,
       errorText: commandError,
@@ -4626,9 +4533,7 @@ function CompactionRow(props) {
     summary: compactionSummaryText(rows, pretty.span),
     expandable: true,
     expanded: expanded,
-    onToggle: function () {
-      setExpanded(!expanded);
-    },
+onToggle: toggleExpanded,
     body: compactionBody(pretty, rows),
   });
 }
