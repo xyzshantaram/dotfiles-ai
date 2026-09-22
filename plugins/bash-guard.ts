@@ -1274,40 +1274,99 @@ export interface PipeCapturePlan {
   needsWrap: boolean;
 }
 
+/**
+ * One shared descent for the four statement-level scans below
+ * (containsPipeline, hasBackgroundStatement, hasInvisibleStatement,
+ * hasChainConditional). The descent is the UNION of what the four used to
+ * walk: sequences, &&/|| chains, if/while/for/select bodies, brace groups,
+ * subshells, functions, coprocs, and case arms. Word interiors ($( ... ),
+ * <( ... )) are never descended into by any scan — a pipeline, `&`, or
+ * chain hidden there keeps the legacy behavior instead of a wrong one —
+ * and lone words, tests, and arithmetic commands end every scan.
+ *
+ * Each scan keeps its own refusal point in its leaf verdict: `true` claims
+ * the node and short-circuits, `false` refuses the whole subtree (it is
+ * not entered), and `"descend"` walks the node's statement children with
+ * the shared descent. A scan that used to stop at a node type refuses it
+ * here, so the union descent cannot widen what any scan matches: e.g.
+ * hasBackgroundStatement refuses Subshell/Function/Coproc (a `&` inside
+ * never reaches the trap), hasInvisibleStatement claims Subshell/Coproc
+ * at once, and hasChainConditional claims AndOr at once.
+ */
+type TreeVerdict = true | false | "descend";
+
+function matchInTree(
+  root: UnbashScript | UnbashNode,
+  decide: (node: UnbashScript | UnbashNode) => TreeVerdict,
+): boolean {
+  const walk = (node: UnbashScript | UnbashNode): boolean => {
+    const verdict = decide(node);
+    if (verdict !== "descend") return verdict;
+    switch (node.type) {
+      case "Script":
+      case "CompoundList":
+        return node.commands.some((s) => walk(s));
+      case "Statement":
+        return walk(node.command);
+      case "AndOr":
+        return node.commands.some((c) => walk(c));
+      case "If":
+        return (
+          walk(node.clause) ||
+          walk(node.then) ||
+          (node.else !== undefined && walk(node.else))
+        );
+      case "While":
+        return walk(node.clause) || walk(node.body);
+      case "For":
+      case "Select":
+      case "ArithmeticFor":
+        return walk(node.body);
+      case "Subshell":
+      case "BraceGroup":
+        return walk(node.body);
+      case "Function":
+      case "Coproc":
+        return walk(node.body);
+      case "Case":
+        return node.items.some((item) => walk(item.body));
+      default:
+        return false;
+    }
+  };
+  return walk(root);
+}
+
 /** Whether a statement-level tree contains a Pipeline node. Word interiors
  * ($( ... ), <( ... )) are not descended into: a pipeline hidden there keeps
  * the legacy behavior instead of a wrong one. */
 function containsPipeline(node: UnbashScript | UnbashNode): boolean {
+  return matchInTree(node, containsPipelineVerdict);
+}
+
+/** Leaf verdict for containsPipeline: only a Pipeline claims; a Command or
+ * anything unrecognized (tests, arithmetic, negation wrappers) refuses. */
+function containsPipelineVerdict(node: UnbashScript | UnbashNode): TreeVerdict {
   switch (node.type) {
     case "Pipeline":
       return true;
+    case "Command":
+      return false;
     case "Script":
     case "CompoundList":
-      return node.commands.some((s) => containsPipeline(s));
     case "Statement":
-      return containsPipeline(node.command);
     case "AndOr":
-      return node.commands.some((c) => containsPipeline(c));
     case "If":
-      return (
-        containsPipeline(node.clause) ||
-        containsPipeline(node.then) ||
-        (node.else !== undefined && containsPipeline(node.else))
-      );
     case "While":
-      return containsPipeline(node.clause) || containsPipeline(node.body);
     case "For":
     case "Select":
     case "ArithmeticFor":
-      return containsPipeline(node.body);
     case "Subshell":
     case "BraceGroup":
-      return containsPipeline(node.body);
     case "Function":
     case "Coproc":
-      return containsPipeline(node.body);
     case "Case":
-      return node.items.some((item) => containsPipeline(item.body));
+      return "descend";
     default:
       return false;
   }
@@ -1412,42 +1471,32 @@ function finalPipelineNaming(
  * never trips this scan.
  */
 function hasBackgroundStatement(script: UnbashScript): boolean {
-  const walk = (node: UnbashScript | UnbashNode): boolean => {
+  return matchInTree(script, (node) => {
     switch (node.type) {
-      case "Script":
-      case "CompoundList":
-        return node.commands.some((s) => walk(s));
       case "Statement":
-        return node.background === true || walk(node.command);
+        // A backgrounded statement claims at once; otherwise descend into
+        // its command. Subshell, Function, Coproc, TestCommand,
+        // ArithmeticCommand and anything unrecognized refuse: their
+        // interiors never reach the trap, so a `&` inside cannot poison it.
+        return node.background === true ? true : "descend";
       case "Pipeline":
-        return false;
       case "Command":
         return false;
+      case "Script":
+      case "CompoundList":
       case "AndOr":
-        return node.commands.some((c) => walk(c));
       case "If":
-        return (
-          walk(node.clause) ||
-          walk(node.then) ||
-          (node.else !== undefined && walk(node.else))
-        );
       case "While":
-        return walk(node.clause) || walk(node.body);
       case "For":
       case "Select":
       case "ArithmeticFor":
-        return walk(node.body);
       case "BraceGroup":
-        return walk(node.body);
       case "Case":
-        return node.items.some((item) => walk(item.body));
+        return "descend";
       default:
-        // Subshell, Function, Coproc, TestCommand, ArithmeticCommand: their
-        // interiors never reach the trap, so a `&` inside cannot poison it.
         return false;
     }
-  };
-  return walk(script);
+  });
 }
 
 /**
@@ -1464,45 +1513,33 @@ function hasBackgroundStatement(script: UnbashScript): boolean {
  * the enclosing statement's own record stays factual.
  */
 function hasInvisibleStatement(script: UnbashScript): boolean {
-  const walk = (node: UnbashScript | UnbashNode): boolean => {
+  return matchInTree(script, (node) => {
     switch (node.type) {
-      case "Script":
-      case "CompoundList":
-        return node.commands.some((s) => walk(s));
-      case "Statement":
-        return walk(node.command);
       case "Subshell":
       case "Coproc":
         return true;
       case "Pipeline":
-        return false;
       case "Command":
         return false;
+      case "Script":
+      case "CompoundList":
+      case "Statement":
       case "AndOr":
-        return node.commands.some((c) => walk(c));
       case "If":
-        return (
-          walk(node.clause) ||
-          walk(node.then) ||
-          (node.else !== undefined && walk(node.else))
-        );
       case "While":
-        return walk(node.clause) || walk(node.body);
       case "For":
       case "Select":
       case "ArithmeticFor":
-        return walk(node.body);
       case "BraceGroup":
-        return walk(node.body);
       case "Function":
-        return walk(node.body);
       case "Case":
-        return node.items.some((item) => walk(item.body));
+        // Function bodies ARE descended into: a call records one summary
+        // line, but a subshell inside the body would still be invisible.
+        return "descend";
       default:
         return false;
     }
-  };
-  return walk(script);
+  });
 }
 
 /**
@@ -1511,40 +1548,31 @@ function hasInvisibleStatement(script: UnbashScript): boolean {
  * in `$( ... )` cannot short-circuit the top-level stream and is ignored.
  */
 function hasChainConditional(script: UnbashScript): boolean {
-  const walk = (node: UnbashScript | UnbashNode): boolean => {
+  return matchInTree(script, (node) => {
     switch (node.type) {
-      case "Script":
-      case "CompoundList":
-        return node.commands.some((s) => walk(s));
-      case "Statement":
-        return walk(node.command);
       case "AndOr":
         return true;
       case "Pipeline":
-        return false;
       case "Command":
         return false;
+      case "Script":
+      case "CompoundList":
+      case "Statement":
       case "If":
-        return (
-          walk(node.clause) ||
-          walk(node.then) ||
-          (node.else !== undefined && walk(node.else))
-        );
       case "While":
-        return walk(node.clause) || walk(node.body);
       case "For":
       case "Select":
       case "ArithmeticFor":
-        return walk(node.body);
       case "BraceGroup":
-        return walk(node.body);
       case "Case":
-        return node.items.some((item) => walk(item.body));
+        // Subshell, Function, Coproc and anything unrecognized refuse:
+        // word interiors never fire the trap, so a chain hidden in
+        // `$( ... )` cannot short-circuit the top-level stream.
+        return "descend";
       default:
         return false;
     }
-  };
-  return walk(script);
+  });
 }
 
 /**
