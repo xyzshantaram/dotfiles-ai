@@ -1,26 +1,8 @@
 /**
- * profiles — per-role subagent routing AND profile-driven LLM failover, on
- * the host plane. One plugin because both halves serve one feature: the
- * model route is a property of the active profile, not of any preset.
- *
- * The problem. Delegation tools are agent-plane rows, so per-role model
- * routing would normally mean forking a preset composition. That bakes one
- * route into one preset. The requirement is the opposite: every agent preset
- * gets the role tools, and the work/personal model choice stays a runtime
- * setting, not composition text.
- *
- * ── Half 1: role delegation tools ──────────────────────────────────────
- *
- * Registers three thin delegation tools — `coder`, `tester`, `researcher` —
- * over the same `ctx.subagents` seam the shipped `subagent` tool uses. Each
- * tool starts a leaf child (maxDepth 1) whose route HEAD resolves AT CALL
- * TIME: a per-role pin from Config, else the active `profile` entry's head,
- * else no agentOptions (the child inherits agent-default-model).
- *
- * Personas deliberately stay OUT of this plugin: the coder/tester/researcher
- * skills are the one source of truth; the dispatch prompt names the skill.
- *
- * ── Half 2: LLM failover along the active chain ─────────────────────────
+ * profiles — profile-driven LLM failover, on the host plane. The model
+ * route is a property of the active profile, not of any preset: flipping
+ * `profile.active` swaps heads, chains, and failover order for every
+ * future request with no restart.
  *
  * Hooks `agent/request` and `agent/request-error` (design stolen MIT from
  * CanGeng/llm-fallback; dormancy idea from @visol-456/dsh-llm-fallback) so
@@ -107,10 +89,7 @@
  *   - id: profiles
  *     name: /path/to/plugins/profiles.js
  *     # config:
- *     #   provider: spawn        # subagents provider, defaults to spawn
  *     #   alwaysMaxRetries: 2
- *     #   roles:
- *     #     coder: { provider: opencode-zen, model: big-pickle }   # head pin
  */
 
 import type { Context } from "@deepseek-ai/cordis";
@@ -123,17 +102,14 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { sendJson, readBody, isPlainObject } from "./shared/http";
 export const name = "profiles";
 
-export const inject = ["tools", "subagents", "systemPrompt"] as const;
+export const inject = ["systemPrompt"] as const;
 
 export const Config = z.object({
-  /** The subagents provider to start children on. The standard preset uses spawn. */
-  provider: z.string().default("spawn"),
   /** Same-provider retry cap for retryPolicy.mode="always" adapters. */
   alwaysMaxRetries: z.number().step(1).min(1).default(2),
 });
 
 type ProfilesConfig = {
-  provider?: string;
   alwaysMaxRetries?: number;
 };
 
