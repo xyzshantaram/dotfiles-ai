@@ -22588,7 +22588,8 @@ function splitLines2(src) {
   let i = 0;
   let start = 0;
   let q = null;
-  let depth = 0;
+  const paren = [];
+  let opaque = 0;
   let esc2 = false;
   const cs = compoundState();
   let pending = [];
@@ -22658,19 +22659,28 @@ function splitLines2(src) {
     if (c2 === "$" && (src[i + 1] === "(" || src[i + 1] === "{")) {
       compoundMark(cs, c2);
       compoundMark(cs, src[i + 1]);
-      depth++;
+      paren.push(src[i + 1] === "(" ? "t" : "o");
+      if (paren[paren.length - 1] === "o") opaque++;
       i += 2;
       continue;
     }
     if (c2 === "(" || c2 === "{") {
       compoundMark(cs, c2);
-      depth++;
+      const k = c2 === "(" && !parenIsOpaque(src, i) ? "t" : "o";
+      paren.push(k);
+      if (k === "o") opaque++;
       i++;
       continue;
     }
-    if ((c2 === ")" || c2 === "}") && depth > 0) {
+    if (c2 === ")" && paren.length > 0) {
+      if (compoundParenClose(cs, src, i, paren) === "o") opaque--;
+      i++;
+      continue;
+    }
+    if (c2 === "}" && paren.length > 0) {
       compoundMark(cs, c2);
-      depth--;
+      if (paren.pop() === "o") opaque--;
+      cs.testDepth = 0;
       i++;
       continue;
     }
@@ -22684,7 +22694,19 @@ function splitLines2(src) {
       i++;
       continue;
     }
-    if (depth === 0 && c2 === "<" && src[i + 1] === "<") {
+    if (c2 === "[") {
+      compoundMark(cs, c2);
+      cs.testDepth++;
+      i++;
+      continue;
+    }
+    if (c2 === "]" && cs.testDepth > 0) {
+      compoundMark(cs, c2);
+      cs.testDepth--;
+      i++;
+      continue;
+    }
+    if (paren.length === 0 && c2 === "<" && src[i + 1] === "<") {
       const h = parseHeredocOpen(src, i);
       if (h) {
         pending.push(h);
@@ -22696,13 +22718,15 @@ function splitLines2(src) {
       continue;
     }
     if (/[A-Za-z0-9_]/.test(c2)) {
-      if (depth === 0) compoundPush(cs, c2);
+      compoundPushGated(cs, c2, opaque);
       i++;
       continue;
     }
     compoundMark(cs, c2);
-    if (depth === 0 && c2 === "\n") {
+    if (c2 === ";" || c2 === "&") cs.testDepth = 0;
+    if (paren.length === 0 && c2 === "\n") {
       cs.comment = false;
+      cs.testDepth = 0;
       if (cs.depth === 0) {
         flushLine(i, false);
         continue;
@@ -22720,7 +22744,7 @@ var COMPOUND_OPEN = /* @__PURE__ */ new Set(["for", "while", "until", "select", 
 var COMPOUND_CLOSE = /* @__PURE__ */ new Set(["done", "fi", "esac"]);
 var COMPOUND_CONT = /* @__PURE__ */ new Set(["do", "then", "else", "elif", "in", "time"]);
 function compoundState() {
-  return { depth: 0, expectCmd: true, word: "", comment: false };
+  return { depth: 0, expectCmd: true, word: "", comment: false, testDepth: 0 };
 }
 function compoundFlush(cs) {
   const w = cs.word;
@@ -22752,15 +22776,40 @@ function compoundStrayParen(cs) {
   cs.depth -= delta;
   cs.expectCmd = true;
 }
+function prevNonSpace(src, i) {
+  let j = i - 1;
+  while (j >= 0 && (src[j] === " " || src[j] === "	" || src[j] === "\n" || src[j] === "\r")) j--;
+  return j >= 0 ? src[j] : "";
+}
+function parenIsOpaque(src, i) {
+  const p = i > 0 ? src[i - 1] : "";
+  return p === "(" || p === "=" || p === "?" || p === "*" || p === "+" || p === "@" || p === "!";
+}
+function compoundParenClose(cs, src, i, paren) {
+  const hadWord = cs.word !== "" && !cs.comment;
+  const { delta } = compoundFlush(cs);
+  cs.testDepth = 0;
+  if (cs.depth > 0 && (hadWord || prevNonSpace(src, i) !== "(")) {
+    cs.depth -= delta;
+    cs.expectCmd = true;
+    return null;
+  }
+  cs.expectCmd = true;
+  return paren.pop() ?? null;
+}
 function compoundPush(cs, c2) {
   if (!cs.comment) cs.word += c2;
+}
+function compoundPushGated(cs, c2, opaque) {
+  if (opaque === 0 && cs.testDepth === 0) compoundPush(cs, c2);
 }
 function splitSemis(src, a, b) {
   const parts = [];
   let i = a;
   let start = a;
   let q = null;
-  let depth = 0;
+  const paren = [];
+  let opaque = 0;
   let esc2 = false;
   const cs = compoundState();
   const push = (e) => {
@@ -22798,19 +22847,28 @@ function splitSemis(src, a, b) {
     if (c2 === "$" && (src[i + 1] === "(" || src[i + 1] === "{")) {
       compoundMark(cs, c2);
       compoundMark(cs, src[i + 1]);
-      depth++;
+      paren.push(src[i + 1] === "(" ? "t" : "o");
+      if (paren[paren.length - 1] === "o") opaque++;
       i += 2;
       continue;
     }
     if (c2 === "(" || c2 === "{") {
       compoundMark(cs, c2);
-      depth++;
+      const k = c2 === "(" && !parenIsOpaque(src, i) ? "t" : "o";
+      paren.push(k);
+      if (k === "o") opaque++;
       i++;
       continue;
     }
-    if ((c2 === ")" || c2 === "}") && depth > 0) {
+    if (c2 === ")" && paren.length > 0) {
+      if (compoundParenClose(cs, src, i, paren) === "o") opaque--;
+      i++;
+      continue;
+    }
+    if (c2 === "}" && paren.length > 0) {
       compoundMark(cs, c2);
-      depth--;
+      if (paren.pop() === "o") opaque--;
+      cs.testDepth = 0;
       i++;
       continue;
     }
@@ -22824,13 +22882,26 @@ function splitSemis(src, a, b) {
       i++;
       continue;
     }
+    if (c2 === "[") {
+      compoundMark(cs, c2);
+      cs.testDepth++;
+      i++;
+      continue;
+    }
+    if (c2 === "]" && cs.testDepth > 0) {
+      compoundMark(cs, c2);
+      cs.testDepth--;
+      i++;
+      continue;
+    }
     if (/[A-Za-z0-9_]/.test(c2)) {
-      if (depth === 0) compoundPush(cs, c2);
+      compoundPushGated(cs, c2, opaque);
       i++;
       continue;
     }
     compoundMark(cs, c2);
-    if (depth === 0 && c2 === ";") {
+    if (c2 === ";" || c2 === "&") cs.testDepth = 0;
+    if (paren.length === 0 && c2 === ";") {
       if (cs.depth === 0) push(i);
       i++;
       continue;

@@ -82,6 +82,11 @@ export function parseHeredocOpen(src: string, i: number): HeredocOpen | null {
  * done/fi/esac close) never split. A multiline loop is one construct, not
  * one statement per line, and splitting it draws the terminator line as a
  * command panel.
+ *
+ * Ticket #340: the same holds inside transparent parens — a case arm `)`
+ * is not the subshell closer, so the newlines of a multiline subshell case
+ * never split either. The paren-depth gate counts frames, not bare depth,
+ * but still suppresses every split inside any open frame.
  */
 export function splitLines(src: string): SourceLine[] {
   const N = src.length;
@@ -89,7 +94,8 @@ export function splitLines(src: string): SourceLine[] {
   let i = 0;
   let start = 0;
   let q: string | null = null;
-  let depth = 0;
+  const paren: ParenKind[] = [];
+  let opaque = 0;
   let esc2 = false;
   const cs = compoundState();
   let pending: HeredocOpen[] = [];
@@ -159,19 +165,32 @@ export function splitLines(src: string): SourceLine[] {
     if (c === "$" && (src[i + 1] === "(" || src[i + 1] === "{")) {
       compoundMark(cs, c);
       compoundMark(cs, src[i + 1]);
-      depth++;
+      paren.push(src[i + 1] === "(" ? "t" : "o");
+      if (paren[paren.length - 1] === "o") opaque++;
       i += 2;
       continue;
     }
     if (c === "(" || c === "{") {
       compoundMark(cs, c);
-      depth++;
+      const k: ParenKind = c === "(" && !parenIsOpaque(src, i) ? "t" : "o";
+      paren.push(k);
+      if (k === "o") opaque++;
       i++;
       continue;
     }
-    if ((c === ")" || c === "}") && depth > 0) {
+    // A `)` with frames open is either a case-arm terminator (no pop, the
+    // #187 undo extended inside parens) or the genuine closer (pop); the
+    // tracker state after flushing the pending word decides (ticket #340).
+    // `}` always pops: in valid input it closes a `{` frame.
+    if (c === ")" && paren.length > 0) {
+      if (compoundParenClose(cs, src, i, paren) === "o") opaque--;
+      i++;
+      continue;
+    }
+    if (c === "}" && paren.length > 0) {
       compoundMark(cs, c);
-      depth--;
+      if (paren.pop() === "o") opaque--;
+      cs.testDepth = 0;
       i++;
       continue;
     }
@@ -189,7 +208,21 @@ export function splitLines(src: string): SourceLine[] {
       i++;
       continue;
     }
-    if (depth === 0 && c === "<" && src[i + 1] === "<") {
+    // Test and glob brackets (ticket #340): inside [...] words are operands
+    // or pattern text, never commands. `]` with nothing open is just a mark.
+    if (c === "[") {
+      compoundMark(cs, c);
+      cs.testDepth++;
+      i++;
+      continue;
+    }
+    if (c === "]" && cs.testDepth > 0) {
+      compoundMark(cs, c);
+      cs.testDepth--;
+      i++;
+      continue;
+    }
+    if (paren.length === 0 && c === "<" && src[i + 1] === "<") {
       const h = parseHeredocOpen(src, i);
       if (h) {
         // The opener through its delimiter is skipped unread: delimiter
@@ -204,14 +237,18 @@ export function splitLines(src: string): SourceLine[] {
       continue;
     }
     if (/[A-Za-z0-9_]/.test(c)) {
-      if (depth === 0) compoundPush(cs, c);
+      compoundPushGated(cs, c, opaque);
       i++;
       continue;
     }
     compoundMark(cs, c);
-    if (depth === 0 && c === "\n") {
+    // A statement bound ends any test bracket an unclosed `[` left open, so
+    // `echo [` cannot gag the compound words of the next statement.
+    if (c === ";" || c === "&") cs.testDepth = 0;
+    if (paren.length === 0 && c === "\n") {
       // A comment ends where its line does, even an unflushed one.
       cs.comment = false;
+      cs.testDepth = 0;
       if (cs.depth === 0) {
         flushLine(i, false);
         continue;
@@ -254,6 +291,19 @@ export interface SemiPart {
  * paren-nested text never forms words at all. A # at command position opens
  * a comment to the end of the line (splitLines) or range (splitSemis), so a
  * comment mentioning a keyword cannot open or close anything either.
+ *
+ * Ticket #340: paren-nested text is no longer uniformly dark. Transparent
+ * frames (subshells, command and process substitutions) track words exactly
+ * as depth 0 does, so a `)` there goes through the arm-or-closer rule
+ * (compoundParenClose): compound still open means a case arm, which keeps
+ * the frame open with the #187 undo, while a closed or absent compound
+ * means the genuine closer, which pops. Opaque frames (braces, arithmetic,
+ * arrays, extglob) and `[...]` brackets stay gated as before, because the
+ * words there are identifiers, expansions or pattern text rather than
+ * commands. Known residual, same ambiguity class #187 solved only at
+ * depth 0: a closer-spelled arm label (`done)`, `esac)`) inside parens is
+ * indistinguishable from the genuine closer of an already-closed compound,
+ * so it still pops early and tears.
  */
 const COMPOUND_OPEN = new Set(["for", "while", "until", "select", "if", "case"]);
 const COMPOUND_CLOSE = new Set(["done", "fi", "esac"]);
@@ -264,10 +314,16 @@ interface CompoundState {
   expectCmd: boolean;
   word: string;
   comment: boolean;
+  // Ticket #340: inside [...] every word is data (a test operand, a glob, a
+  // pattern bracket), never a command, so the tracker stops forming words
+  // there. Set on `[`, cleared on `]` (floored at 0, so a bare `]` is still
+  // just a mark) and reset at statement bounds (`;`, `&`, newline) so an
+  // unclosed `[` cannot gag the rest of the range.
+  testDepth: number;
 }
 
 function compoundState(): CompoundState {
-  return { depth: 0, expectCmd: true, word: "", comment: false };
+  return { depth: 0, expectCmd: true, word: "", comment: false, testDepth: 0 };
 }
 
 /** Close the pending word: openers deepen, closers shallow (floored at 0).
@@ -343,9 +399,95 @@ function compoundStrayParen(cs: CompoundState): void {
   cs.expectCmd = true;
 }
 
-/** One word char in active (unquoted, depth-0, uncommented) text. */
+/**
+ * Ticket #340: paren frames. A `(`/`{` opens a frame; only the frame kind
+ * decides whether words inside still reach the compound tracker.
+ *
+ * TRANSPARENT ("t") frames hold real commands — subshells `( ... )`,
+ * command substitutions `$( ... )` and process substitutions `>( ... )`,
+ * `<( ... )` — so the tracker keeps working inside them exactly as at
+ * depth 0: `case` opens, `esac` closes, arm bodies re-arm. That is what
+ * lets the closer rule below tell a case-arm `)` from a genuine `)`.
+ *
+ * OPAQUE ("o") frames hold anything else: brace groups and brace expansion
+ * (`{ ... }`), parameter expansion (`${ ... }`), arithmetic (`(( ... ))`
+ * and `$(( ... ))`, recognised by a `(` glued to `(`), array literals
+ * (`=( ... )`, glued to `=`) and extglob groups (`?( ... )` and kin, glued
+ * to their operator). Words there are identifiers, expansions or pattern
+ * text — `((case+1))`, `{for,bar}`, `a=(for bar)` are all valid bash — so
+ * the tracker stays gated there exactly as it used to be everywhere inside
+ * parens. `{` is always opaque; `}` pops whatever frame is open (in valid
+ * input it is always the matching `{`).
+ */
+type ParenKind = "t" | "o";
+
+/** The char before src[i] skipping blanks ("" at range start). */
+function prevNonSpace(src: string, i: number): string {
+  let j = i - 1;
+  while (j >= 0 && (src[j] === " " || src[j] === "\t" || src[j] === "\n" || src[j] === "\r")) j--;
+  return j >= 0 ? src[j] : "";
+}
+
+/**
+ * Whether a `(` at src[i] opens an opaque frame: glued to `(`, `=`, or an
+ * extglob operator (`?*+@!`), it starts arithmetic, an array literal or an
+ * extglob group rather than a subshell. Anything else (space, `;`, `|`,
+ * word char for `f()`, `>`/`<` for process substitution) is a real command
+ * position and stays transparent.
+ */
+function parenIsOpaque(src: string, i: number): boolean {
+  const p = i > 0 ? src[i - 1] : "";
+  return p === "(" || p === "=" || p === "?" || p === "*" || p === "+" || p === "@" || p === "!";
+}
+
+/**
+ * A `)` that arrives while frames are open (ticket #340). Two shapes share
+ * this character and only the compound tracker tells them apart:
+ *
+ * - An ARM terminator (`a)`, `*)`, `a|b)`, `for)`): the flushed word leaves
+ *   a compound still open, so in valid bash this paren closes no subshell —
+ *   a subshell holding an unclosed compound is a syntax error. The frame
+ *   stays open and the word's depth effect is undone, the #187 stray rule
+ *   extended inside parens: `for)` opened one the single `esac` cannot
+ *   close, and the arm body still follows. A wordless `)` whose previous
+ *   non-blank is `(` is NOT this shape — that is `f()` or `( )` — and falls
+ *   through to the closer below.
+ * - A genuine CLOSER (`(echo hi)`, `(for ...; done)`, `(case ...; esac)`):
+ *   the word closed whatever was open (or nothing was), so the frame pops.
+ *
+ * Returns the popped frame kind, or null when the paren was an arm and no
+ * frame popped. Either way the test bracket is over: no valid construct
+ * leaves `[` open across a `)`.
+ */
+function compoundParenClose(
+  cs: CompoundState,
+  src: string,
+  i: number,
+  paren: ParenKind[],
+): ParenKind | null {
+  const hadWord = cs.word !== "" && !cs.comment;
+  const { delta } = compoundFlush(cs);
+  cs.testDepth = 0;
+  if (cs.depth > 0 && (hadWord || prevNonSpace(src, i) !== "(")) {
+    cs.depth -= delta;
+    cs.expectCmd = true;
+    return null;
+  }
+  cs.expectCmd = true;
+  return paren.pop() ?? null;
+}
+
+/** One word char in active (unquoted, uncommented) text. */
 function compoundPush(cs: CompoundState, c: string): void {
   if (!cs.comment) cs.word += c;
+}
+
+/** One word char in active text. Gated (ticket #340): words form at depth 0
+ *  as before, and inside transparent parens outside test brackets; opaque
+ *  frames and `[...]` hold non-command words, so nothing there is pushed.
+ */
+function compoundPushGated(cs: CompoundState, c: string, opaque: number): void {
+  if (opaque === 0 && cs.testDepth === 0) compoundPush(cs, c);
 }
 
 /** Split a line at depth-0 semicolons. Empty parts are dropped.
@@ -353,13 +495,18 @@ function compoundPush(cs: CompoundState, c: string): void {
  * Ticket #187: semicolons inside a compound never split. `for f in a b;
  * do echo $f; done` is one construct; cutting it at each `;` tears it into
  * three sibling statements and draws `done` as a command.
+ *
+ * Ticket #340: semicolons inside transparent parens never split either —
+ * the arm `)` of a subshell case is not its closer, so the `;;` arm
+ * separators stay body punctuation and the subshell keeps one segment.
  */
 export function splitSemis(src: string, a: number, b: number): SemiPart[] {
   const parts: SemiPart[] = [];
   let i = a;
   let start = a;
   let q: string | null = null;
-  let depth = 0;
+  const paren: ParenKind[] = [];
+  let opaque = 0;
   let esc2 = false;
   const cs = compoundState();
   const push = (e: number): void => {
@@ -397,19 +544,32 @@ export function splitSemis(src: string, a: number, b: number): SemiPart[] {
     if (c === "$" && (src[i + 1] === "(" || src[i + 1] === "{")) {
       compoundMark(cs, c);
       compoundMark(cs, src[i + 1]);
-      depth++;
+      paren.push(src[i + 1] === "(" ? "t" : "o");
+      if (paren[paren.length - 1] === "o") opaque++;
       i += 2;
       continue;
     }
     if (c === "(" || c === "{") {
       compoundMark(cs, c);
-      depth++;
+      const k: ParenKind = c === "(" && !parenIsOpaque(src, i) ? "t" : "o";
+      paren.push(k);
+      if (k === "o") opaque++;
       i++;
       continue;
     }
-    if ((c === ")" || c === "}") && depth > 0) {
+    // A `)` with frames open is either a case-arm terminator (no pop, the
+    // #187 undo extended inside parens) or the genuine closer (pop); the
+    // tracker state after flushing the pending word decides (ticket #340).
+    // `}` always pops: in valid input it closes a `{` frame.
+    if (c === ")" && paren.length > 0) {
+      if (compoundParenClose(cs, src, i, paren) === "o") opaque--;
+      i++;
+      continue;
+    }
+    if (c === "}" && paren.length > 0) {
       compoundMark(cs, c);
-      depth--;
+      if (paren.pop() === "o") opaque--;
+      cs.testDepth = 0;
       i++;
       continue;
     }
@@ -427,13 +587,28 @@ export function splitSemis(src: string, a: number, b: number): SemiPart[] {
       i++;
       continue;
     }
+    // Test and glob brackets (ticket #340): inside [...] words are operands
+    // or pattern text, never commands. `]` with nothing open is just a mark.
+    if (c === "[") {
+      compoundMark(cs, c);
+      cs.testDepth++;
+      i++;
+      continue;
+    }
+    if (c === "]" && cs.testDepth > 0) {
+      compoundMark(cs, c);
+      cs.testDepth--;
+      i++;
+      continue;
+    }
     if (/[A-Za-z0-9_]/.test(c)) {
-      if (depth === 0) compoundPush(cs, c);
+      compoundPushGated(cs, c, opaque);
       i++;
       continue;
     }
     compoundMark(cs, c);
-    if (depth === 0 && c === ";") {
+    if (c === ";" || c === "&") cs.testDepth = 0;
+    if (paren.length === 0 && c === ";") {
       if (cs.depth === 0) push(i);
       i++;
       continue;
