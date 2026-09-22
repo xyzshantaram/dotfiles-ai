@@ -16,7 +16,7 @@ function makeMatcher(query) {
   const lower = trimmed.toLowerCase();
   return (text) => text.toLowerCase().includes(lower);
 }
-function eventText(ev) {
+function renderEventText(ev, verbose) {
   const d = ev?.data ?? {};
   const t = ev?.type;
   if (t === "user/message" || t === "assistant/message") {
@@ -26,8 +26,10 @@ function eventText(ev) {
       for (const b of content) {
         if (!b) continue;
         if (b.type === "text") s += (b.text ?? "") + " ";
-        else if (b.type === "tool-call") s += "[tool:" + (b.call?.name ?? "?") + "] ";
-        else if (b.type === "tool-result") s += "[result] ";
+        else if (b.type === "tool-call")
+          s += (verbose ? "[tool-call " : "[tool:") + (b.call?.name ?? "?") + "] ";
+        else if (b.type === "tool-result") s += verbose ? "[tool-result] " : "[result] ";
+        else if (verbose) s += "[" + (b.type ?? "unknown-block") + "] ";
       }
     }
     return s.trim();
@@ -38,7 +40,8 @@ function eventText(ev) {
     if (typeof r === "string") return r;
     if (r && typeof r === "object") {
       try {
-        return JSON.stringify(r).slice(0, 200);
+        const json = JSON.stringify(r);
+        return verbose ? json : json.slice(0, 200);
       } catch {
         return "[unserializable result]";
       }
@@ -49,47 +52,18 @@ function eventText(ev) {
     return "compaction shadowed " + (d?.shadowedSeqs?.length ?? 0) + " seqs";
   if (t === "subagent/descriptor") return "subagent " + (d?.label ?? "") + " " + (d?.mode ?? "");
   if (t === "turn/start") return "turn " + (d?.turn ?? "?");
-  return "";
-}
-function fullEventText(ev) {
-  const d = ev?.data ?? {};
-  const t = ev?.type;
-  if (t === "user/message" || t === "assistant/message") {
-    const content = d?.message?.content;
-    let s = "";
-    if (Array.isArray(content)) {
-      for (const b of content) {
-        if (!b) continue;
-        if (b.type === "text") s += (b.text ?? "") + " ";
-        else if (b.type === "tool-call") s += "[tool-call " + (b.call?.name ?? "?") + "] ";
-        else if (b.type === "tool-result") s += "[tool-result] ";
-        else s += "[" + (b.type ?? "unknown-block") + "] ";
-      }
-    }
-    return s.trim();
-  }
-  if (t === "tool/call") return "call " + (d?.call?.name ?? "?");
-  if (t === "tool/result") {
-    const r = d?.result;
-    if (typeof r === "string") return r;
-    if (r && typeof r === "object") {
-      try {
-        return JSON.stringify(r);
-      } catch {
-        return "[unserializable result]";
-      }
-    }
-    return "";
-  }
-  if (t === "compaction/summary")
-    return "compaction shadowed " + (d?.shadowedSeqs?.length ?? 0) + " seqs";
-  if (t === "subagent/descriptor") return "subagent " + (d?.label ?? "") + " " + (d?.mode ?? "");
-  if (t === "turn/start") return "turn " + (d?.turn ?? "?");
+  if (!verbose) return "";
   try {
     return JSON.stringify({ type: t, data: d });
   } catch {
     return "";
   }
+}
+function eventText(ev) {
+  return renderEventText(ev, false);
+}
+function fullEventText(ev) {
+  return renderEventText(ev, true);
 }
 function eventRole(ev) {
   const d = ev?.data ?? {};

@@ -152,10 +152,8 @@ function isPlainObject(value) {
 
 // plugins/profiles.ts
 var name = "profiles";
-var inject = ["tools", "subagents", "systemPrompt"];
+var inject = ["systemPrompt"];
 var Config = z.object({
-  /** The subagents provider to start children on. The standard preset uses spawn. */
-  provider: z.string().default("spawn"),
   /** Same-provider retry cap for retryPolicy.mode="always" adapters. */
   alwaysMaxRetries: z.number().step(1).min(1).default(2)
 });
@@ -653,120 +651,109 @@ function canonicalConfig(profile) {
     }
   };
 }
-function validateRouteRow(value, path) {
-  if (!isPlainObject(value)) return { ok: false, error: `${path} must be an object` };
+var NonEmptyString = z.string().min(1);
+var PutRouteRow = z.object({
+  provider: z.string().min(1).required(),
+  model: z.string().min(1).required(),
+  reasoningEffort: z.string().min(1)
+}).required();
+var PutChainObject = z.object({
+  routes: z.array(PutRouteRow).required()
+}).required();
+var PutChainArray = z.array(
+  z.union([NonEmptyString, PutRouteRow]).required()
+);
+var PutChain = z.union([PutChainObject, PutChainArray]).required();
+var PutEntryField = z.union([NonEmptyString, PutChainObject, PutChainArray]).required();
+var PutEntry = z.object({
+  orchestrator: PutEntryField,
+  subagent: PutEntryField
+}).required();
+var PutChains = z.dict(PutChain);
+var PutSection = z.object({
+  active: z.union([z.const("work"), z.const("personal")]).required(),
+  work: PutEntry,
+  personal: PutEntry,
+  chains: PutChains
+}).required();
+function badKey(value, allowed) {
   for (const key of Object.keys(value)) {
-    if (key !== "provider" && key !== "model" && key !== "reasoningEffort") {
-      return { ok: false, error: `${path} has unknown key "${key}"` };
-    }
+    if (!allowed.includes(key)) return key;
   }
-  const provider = value.provider;
-  const model = value.model;
-  if (typeof provider !== "string" || provider.length === 0) {
-    return { ok: false, error: `${path}.provider must be a non-empty string` };
-  }
-  if (typeof model !== "string" || model.length === 0) {
-    return { ok: false, error: `${path}.model must be a non-empty string` };
-  }
-  const rawEffort = value.reasoningEffort;
-  let reasoningEffort;
-  if (rawEffort !== void 0) {
-    if (typeof rawEffort !== "string" || rawEffort.length === 0) {
-      return { ok: false, error: `${path}.reasoningEffort must be a non-empty string` };
-    }
-    reasoningEffort = rawEffort;
-  }
-  return {
-    ok: true,
-    value: {
-      provider,
-      model,
-      ...reasoningEffort !== void 0 ? { reasoningEffort } : {}
-    }
-  };
+  return void 0;
 }
-function validateChain(value, path) {
+function sweepRow(value, path) {
+  if (!isPlainObject(value)) return void 0;
+  const bad = badKey(value, ["provider", "model", "reasoningEffort"]);
+  if (bad !== void 0) return `${path} has unknown key "${bad}"`;
+  if (value.reasoningEffort === null) {
+    return `${path}.reasoningEffort must be a non-empty string`;
+  }
+  return void 0;
+}
+function sweepChain(value, path) {
   if (isPlainObject(value)) {
-    for (const key of Object.keys(value)) {
-      if (key !== "routes") return { ok: false, error: `${path} has unknown key "${key}"` };
+    const bad = badKey(value, ["routes"]);
+    if (bad !== void 0) return `${path} has unknown key "${bad}"`;
+    if (Array.isArray(value.routes)) {
+      for (let i = 0; i < value.routes.length; i++) {
+        const hit = sweepRow(value.routes[i], `${path}.routes[${i}]`);
+        if (hit !== void 0) return hit;
+      }
     }
-    if (!Array.isArray(value.routes))
-      return { ok: false, error: `${path}.routes must be an array` };
-    for (let i = 0; i < value.routes.length; i++) {
-      const row = validateRouteRow(value.routes[i], `${path}.routes[${i}]`);
-      if (row.ok === false) return row;
-    }
-    return { ok: true, value };
+    return void 0;
   }
   if (Array.isArray(value)) {
     for (let i = 0; i < value.length; i++) {
       const step = value[i];
-      if (typeof step === "string") {
-        if (step.length === 0)
-          return { ok: false, error: `${path}[${i}] must be a non-empty string` };
-      } else if (isPlainObject(step)) {
-        const row = validateRouteRow(step, `${path}[${i}]`);
-        if (row.ok === false) return row;
-      } else {
-        return { ok: false, error: `${path}[${i}] must be a string or route pair` };
-      }
-    }
-    return { ok: true, value };
-  }
-  return { ok: false, error: `${path} must be an object ({routes}) or array (composition)` };
-}
-function validateEntryField(value, path) {
-  if (typeof value === "string") {
-    if (value.length === 0) return { ok: false, error: `${path} must be a non-empty string` };
-    return { ok: true, value };
-  }
-  return validateChain(value, path);
-}
-function validateEntry(value, path) {
-  if (!isPlainObject(value)) return { ok: false, error: `${path} must be an object` };
-  for (const key of Object.keys(value)) {
-    if (key !== "orchestrator" && key !== "subagent") {
-      return { ok: false, error: `${path} has unknown key "${key}"` };
+      if (typeof step === "string" || !isPlainObject(step)) continue;
+      const hit = sweepRow(step, `${path}[${i}]`);
+      if (hit !== void 0) return hit;
     }
   }
-  const orchestrator = validateEntryField(value.orchestrator, `${path}.orchestrator`);
-  if (orchestrator.ok === false) return orchestrator;
-  const subagent = validateEntryField(value.subagent, `${path}.subagent`);
-  if (subagent.ok === false) return subagent;
-  return { ok: true, value: { orchestrator: orchestrator.value, subagent: subagent.value } };
+  return void 0;
 }
-function validateChains(value, path) {
-  if (!isPlainObject(value)) return { ok: false, error: `${path} must be an object` };
-  const result = {};
+function sweepField(value, path) {
+  if (typeof value === "string") return void 0;
+  return sweepChain(value, path);
+}
+function sweepEntry(value, path) {
+  if (!isPlainObject(value)) return void 0;
+  const bad = badKey(value, ["orchestrator", "subagent"]);
+  if (bad !== void 0) return `${path} has unknown key "${bad}"`;
+  return sweepField(value.orchestrator, `${path}.orchestrator`) ?? sweepField(value.subagent, `${path}.subagent`);
+}
+function sweepSection(value) {
+  if (!isPlainObject(value)) return void 0;
+  const bad = badKey(value, ["active", "work", "personal", "chains"]);
+  if (bad !== void 0) return `unknown key "${bad}"`;
+  if (value.chains === null) return "chains must be an object";
+  return sweepEntry(value.work, "work") ?? sweepEntry(value.personal, "personal") ?? sweepChains(value.chains);
+}
+function sweepChains(value) {
+  if (!isPlainObject(value)) return void 0;
   for (const key of Object.keys(value)) {
-    const chain = validateChain(value[key], `${path}.${key}`);
-    if (chain.ok === false) return chain;
-    result[key] = chain.value;
+    const hit = sweepChain(value[key], `chains.${key}`);
+    if (hit !== void 0) return hit;
   }
-  return { ok: true, value: result };
+  return void 0;
 }
 function validateSection(value) {
   if (!isPlainObject(value)) return { ok: false, error: "config must be an object" };
-  for (const key of Object.keys(value)) {
-    if (key !== "active" && key !== "work" && key !== "personal" && key !== "chains") {
-      return { ok: false, error: `unknown key "${key}"` };
-    }
-  }
-  const active = value.active;
-  if (typeof active !== "string" || active !== "work" && active !== "personal") {
+  const topBad = badKey(value, ["active", "work", "personal", "chains"]);
+  if (topBad !== void 0) return { ok: false, error: `unknown key "${topBad}"` };
+  if (typeof value.active !== "string" || value.active !== "work" && value.active !== "personal") {
     return { ok: false, error: 'active must be "work" or "personal"' };
   }
-  const work = validateEntry(value.work, "work");
-  if (work.ok === false) return work;
-  const personal = validateEntry(value.personal, "personal");
-  if (personal.ok === false) return personal;
-  let chains;
-  if (value.chains !== void 0) {
-    const validatedChains = validateChains(value.chains, "chains");
-    if (validatedChains.ok === false) return validatedChains;
-    chains = validatedChains.value;
+  const swept = sweepSection(value);
+  if (swept !== void 0) return { ok: false, error: swept };
+  try {
+    const out = z.resolve(value, PutSection, {})[0];
+    if (value.chains === void 0) delete out.chains;
+    return { ok: true, value: out };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
-  return { ok: true, value: { active, work: work.value, personal: personal.value, chains } };
 }
 function makeConfigHandler(ctx) {
   return async (req, res) => {

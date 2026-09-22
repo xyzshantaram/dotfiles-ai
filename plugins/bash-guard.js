@@ -12843,33 +12843,64 @@ async function evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates)
       return { action: "run", command, rewritten: false };
   }
 }
+function matchInTree(root, decide) {
+  const walk2 = (node) => {
+    const verdict = decide(node);
+    if (verdict !== "descend") return verdict;
+    switch (node.type) {
+      case "Script":
+      case "CompoundList":
+        return node.commands.some((s) => walk2(s));
+      case "Statement":
+        return walk2(node.command);
+      case "AndOr":
+        return node.commands.some((c) => walk2(c));
+      case "If":
+        return walk2(node.clause) || walk2(node.then) || node.else !== void 0 && walk2(node.else);
+      case "While":
+        return walk2(node.clause) || walk2(node.body);
+      case "For":
+      case "Select":
+      case "ArithmeticFor":
+        return walk2(node.body);
+      case "Subshell":
+      case "BraceGroup":
+        return walk2(node.body);
+      case "Function":
+      case "Coproc":
+        return walk2(node.body);
+      case "Case":
+        return node.items.some((item) => walk2(item.body));
+      default:
+        return false;
+    }
+  };
+  return walk2(root);
+}
 function containsPipeline(node) {
+  return matchInTree(node, containsPipelineVerdict);
+}
+function containsPipelineVerdict(node) {
   switch (node.type) {
     case "Pipeline":
       return true;
+    case "Command":
+      return false;
     case "Script":
     case "CompoundList":
-      return node.commands.some((s) => containsPipeline(s));
     case "Statement":
-      return containsPipeline(node.command);
     case "AndOr":
-      return node.commands.some((c) => containsPipeline(c));
     case "If":
-      return containsPipeline(node.clause) || containsPipeline(node.then) || node.else !== void 0 && containsPipeline(node.else);
     case "While":
-      return containsPipeline(node.clause) || containsPipeline(node.body);
     case "For":
     case "Select":
     case "ArithmeticFor":
-      return containsPipeline(node.body);
     case "Subshell":
     case "BraceGroup":
-      return containsPipeline(node.body);
     case "Function":
     case "Coproc":
-      return containsPipeline(node.body);
     case "Case":
-      return node.items.some((item) => containsPipeline(item.body));
+      return "descend";
     default:
       return false;
   }
@@ -12929,105 +12960,79 @@ function finalPipelineNaming(command, script) {
   return leading !== void 0 && leading !== "" ? { names, leading } : null;
 }
 function hasBackgroundStatement(script) {
-  const walk2 = (node) => {
+  return matchInTree(script, (node) => {
     switch (node.type) {
-      case "Script":
-      case "CompoundList":
-        return node.commands.some((s) => walk2(s));
       case "Statement":
-        return node.background === true || walk2(node.command);
+        return node.background === true ? true : "descend";
       case "Pipeline":
-        return false;
       case "Command":
         return false;
+      case "Script":
+      case "CompoundList":
       case "AndOr":
-        return node.commands.some((c) => walk2(c));
       case "If":
-        return walk2(node.clause) || walk2(node.then) || node.else !== void 0 && walk2(node.else);
       case "While":
-        return walk2(node.clause) || walk2(node.body);
       case "For":
       case "Select":
       case "ArithmeticFor":
-        return walk2(node.body);
       case "BraceGroup":
-        return walk2(node.body);
       case "Case":
-        return node.items.some((item) => walk2(item.body));
+        return "descend";
       default:
         return false;
     }
-  };
-  return walk2(script);
+  });
 }
 function hasInvisibleStatement(script) {
-  const walk2 = (node) => {
+  return matchInTree(script, (node) => {
     switch (node.type) {
-      case "Script":
-      case "CompoundList":
-        return node.commands.some((s) => walk2(s));
-      case "Statement":
-        return walk2(node.command);
       case "Subshell":
       case "Coproc":
         return true;
       case "Pipeline":
-        return false;
       case "Command":
         return false;
+      case "Script":
+      case "CompoundList":
+      case "Statement":
       case "AndOr":
-        return node.commands.some((c) => walk2(c));
       case "If":
-        return walk2(node.clause) || walk2(node.then) || node.else !== void 0 && walk2(node.else);
       case "While":
-        return walk2(node.clause) || walk2(node.body);
       case "For":
       case "Select":
       case "ArithmeticFor":
-        return walk2(node.body);
       case "BraceGroup":
-        return walk2(node.body);
       case "Function":
-        return walk2(node.body);
       case "Case":
-        return node.items.some((item) => walk2(item.body));
+        return "descend";
       default:
         return false;
     }
-  };
-  return walk2(script);
+  });
 }
 function hasChainConditional(script) {
-  const walk2 = (node) => {
+  return matchInTree(script, (node) => {
     switch (node.type) {
-      case "Script":
-      case "CompoundList":
-        return node.commands.some((s) => walk2(s));
-      case "Statement":
-        return walk2(node.command);
       case "AndOr":
         return true;
       case "Pipeline":
-        return false;
       case "Command":
         return false;
+      case "Script":
+      case "CompoundList":
+      case "Statement":
       case "If":
-        return walk2(node.clause) || walk2(node.then) || node.else !== void 0 && walk2(node.else);
       case "While":
-        return walk2(node.clause) || walk2(node.body);
       case "For":
       case "Select":
       case "ArithmeticFor":
-        return walk2(node.body);
       case "BraceGroup":
-        return walk2(node.body);
       case "Case":
-        return node.items.some((item) => walk2(item.body));
+        return "descend";
       default:
         return false;
     }
-  };
-  return walk2(script);
+  });
 }
 function hasWrappableSteps(script) {
   if (script.commands.length > 1) return true;

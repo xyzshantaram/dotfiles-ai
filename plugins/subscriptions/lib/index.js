@@ -873,6 +873,20 @@ function cachedOnce(fn, ttlMs) {
     return promise;
   };
 }
+function loginWindowHandler(url) {
+  return async (_req, res) => {
+    try {
+      const child = spawn("firefox", ["--new-window", url], {
+        detached: true,
+        stdio: "ignore"
+      });
+      child.unref();
+      sendJson(res, 200, { ok: true });
+    } catch (error) {
+      sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) });
+    }
+  };
+}
 function makeHeaders(cookie, serverId, referer) {
   return {
     cookie,
@@ -1179,90 +1193,70 @@ function apply(ctx, config) {
     onChange: () => {
     }
   });
-  const quotaOnce = cachedOnce(async () => {
-    const res = await fetch("http://localhost:9000/v1/usage/quota/all", {
-      signal: AbortSignal.timeout(MERIDIAN_TIMEOUT_MS)
-    });
-    if (!res.ok) throw new Error(`meridian quota HTTP ${res.status}`);
-    return res.json();
-  }, 3e4);
-  const handleQuota = async (_req, res) => {
-    try {
-      sendJson(res, 200, await quotaOnce());
-    } catch (error) {
-      sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) });
+  const meridianProxies = [
+    // quota, all profiles
+    {
+      route: "/subscriptions/meridian-quota",
+      upstream: "http://localhost:9000/v1/usage/quota/all",
+      label: "quota",
+      ttl: 3e4
+    },
+    // telemetry summary
+    {
+      route: "/subscriptions/meridian-telemetry",
+      upstream: "http://localhost:9000/telemetry/summary?window=86400000",
+      label: "telemetry",
+      ttl: 6e4
+    },
+    // quota, single profile with enriched buckets
+    {
+      route: "/subscriptions/meridian-quota-single",
+      upstream: "http://localhost:9000/v1/usage/quota",
+      label: "quota",
+      ttl: 3e4
+    },
+    // telemetry, recent requests
+    {
+      route: "/subscriptions/meridian-telemetry-requests",
+      upstream: "http://localhost:9000/telemetry/requests?limit=20",
+      label: "requests",
+      ttl: 6e4
+    },
+    // meridian recent logs
+    {
+      route: "/subscriptions/meridian-logs",
+      upstream: "http://localhost:9000/telemetry/logs?limit=10",
+      label: "logs",
+      ttl: 15e3
+    },
+    // meridian health / auth
+    {
+      route: "/subscriptions/meridian-health",
+      upstream: "http://localhost:9000/health",
+      label: "health",
+      ttl: 6e4
     }
-  };
-  const telemetryOnce = cachedOnce(async () => {
-    const res = await fetch("http://localhost:9000/telemetry/summary?window=86400000", {
-      signal: AbortSignal.timeout(MERIDIAN_TIMEOUT_MS)
+  ];
+  for (const proxy of meridianProxies) {
+    const once = cachedOnce(async () => {
+      const res = await fetch(proxy.upstream, {
+        signal: AbortSignal.timeout(MERIDIAN_TIMEOUT_MS)
+      });
+      if (!res.ok) throw new Error(`meridian ${proxy.label} HTTP ${res.status}`);
+      return res.json();
+    }, proxy.ttl);
+    ctx.webServer.register({
+      kind: "exact",
+      path: proxy.route,
+      handler: async (_req, res) => {
+        try {
+          sendJson(res, 200, await once());
+        } catch (error) {
+          sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) });
+        }
+      }
     });
-    if (!res.ok) throw new Error(`meridian telemetry HTTP ${res.status}`);
-    return res.json();
-  }, 6e4);
-  const handleTelemetry = async (_req, res) => {
-    try {
-      sendJson(res, 200, await telemetryOnce());
-    } catch (error) {
-      sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) });
-    }
-  };
-  const quotaSingleOnce = cachedOnce(async () => {
-    const res = await fetch("http://localhost:9000/v1/usage/quota", {
-      signal: AbortSignal.timeout(MERIDIAN_TIMEOUT_MS)
-    });
-    if (!res.ok) throw new Error(`meridian quota HTTP ${res.status}`);
-    return res.json();
-  }, 3e4);
-  const handleQuotaSingle = async (_req, res) => {
-    try {
-      sendJson(res, 200, await quotaSingleOnce());
-    } catch (error) {
-      sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) });
-    }
-  };
-  const telemetryRequestsOnce = cachedOnce(async () => {
-    const res = await fetch("http://localhost:9000/telemetry/requests?limit=20", {
-      signal: AbortSignal.timeout(MERIDIAN_TIMEOUT_MS)
-    });
-    if (!res.ok) throw new Error(`meridian requests HTTP ${res.status}`);
-    return res.json();
-  }, 6e4);
-  const handleTelemetryRequests = async (_req, res) => {
-    try {
-      sendJson(res, 200, await telemetryRequestsOnce());
-    } catch (error) {
-      sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) });
-    }
-  };
-  const meridianLogsOnce = cachedOnce(async () => {
-    const res = await fetch("http://localhost:9000/telemetry/logs?limit=10", {
-      signal: AbortSignal.timeout(MERIDIAN_TIMEOUT_MS)
-    });
-    if (!res.ok) throw new Error(`meridian logs HTTP ${res.status}`);
-    return res.json();
-  }, 15e3);
-  const handleMeridianLogs = async (_req, res) => {
-    try {
-      sendJson(res, 200, await meridianLogsOnce());
-    } catch (error) {
-      sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) });
-    }
-  };
-  const meridianHealthOnce = cachedOnce(async () => {
-    const res = await fetch("http://localhost:9000/health", {
-      signal: AbortSignal.timeout(MERIDIAN_TIMEOUT_MS)
-    });
-    if (!res.ok) throw new Error(`meridian health HTTP ${res.status}`);
-    return res.json();
-  }, 6e4);
-  const handleMeridianHealth = async (_req, res) => {
-    try {
-      sendJson(res, 200, await meridianHealthOnce());
-    } catch (error) {
-      sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) });
-    }
-  };
+  }
   let balanceCache = null;
   const cachedBalance = (cookie) => {
     const now = Date.now();
@@ -1728,18 +1722,7 @@ function apply(ctx, config) {
       });
     }
   };
-  const handleDeepSeekTokenLogin = async (_req, res) => {
-    try {
-      const child = spawn("firefox", ["--new-window", "https://platform.deepseek.com"], {
-        detached: true,
-        stdio: "ignore"
-      });
-      child.unref();
-      sendJson(res, 200, { ok: true });
-    } catch (error) {
-      sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) });
-    }
-  };
+  const handleDeepSeekTokenLogin = loginWindowHandler("https://platform.deepseek.com");
   const readCookieString = async (dbDir) => {
     const src = join(dbDir, "cookies.sqlite");
     if (!existsSync(src)) return null;
@@ -1795,18 +1778,7 @@ function apply(ctx, config) {
       });
     }
   };
-  const handleCookieLogin = async (_req, res) => {
-    try {
-      const child = spawn("firefox", ["--new-window", "https://opencode.ai"], {
-        detached: true,
-        stdio: "ignore"
-      });
-      child.unref();
-      sendJson(res, 200, { ok: true });
-    } catch (error) {
-      sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) });
-    }
-  };
+  const handleCookieLogin = loginWindowHandler("https://opencode.ai");
   const firefoxElectronHubProfileDirs = () => {
     try {
       const iniPath = join(homedir(), ".mozilla", "firefox", "profiles.ini");
@@ -1987,48 +1959,7 @@ SELECT value FROM moz_cookies ${where} LIMIT 1;`;
     ctx.logger.info("harvested ElectronHub browser session from Firefox profile");
     sendJson(res, 200, { ok: true, session: found.session });
   };
-  const handleElectronhubSessionLogin = async (_req, res) => {
-    try {
-      const child = spawn("firefox", ["--new-window", "https://app.electronhub.ai"], {
-        detached: true,
-        stdio: "ignore"
-      });
-      child.unref();
-      sendJson(res, 200, { ok: true });
-    } catch (error) {
-      sendJson(res, 502, { error: error instanceof Error ? error.message : String(error) });
-    }
-  };
-  ctx.webServer.register({
-    kind: "exact",
-    path: "/subscriptions/meridian-quota",
-    handler: handleQuota
-  });
-  ctx.webServer.register({
-    kind: "exact",
-    path: "/subscriptions/meridian-telemetry",
-    handler: handleTelemetry
-  });
-  ctx.webServer.register({
-    kind: "exact",
-    path: "/subscriptions/meridian-quota-single",
-    handler: handleQuotaSingle
-  });
-  ctx.webServer.register({
-    kind: "exact",
-    path: "/subscriptions/meridian-telemetry-requests",
-    handler: handleTelemetryRequests
-  });
-  ctx.webServer.register({
-    kind: "exact",
-    path: "/subscriptions/meridian-logs",
-    handler: handleMeridianLogs
-  });
-  ctx.webServer.register({
-    kind: "exact",
-    path: "/subscriptions/meridian-health",
-    handler: handleMeridianHealth
-  });
+  const handleElectronhubSessionLogin = loginWindowHandler("https://app.electronhub.ai");
   ctx.webServer.register({
     kind: "exact",
     path: "/subscriptions/opencode-balance",
