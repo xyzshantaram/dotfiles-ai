@@ -317,6 +317,83 @@ function matchPool(
   return group !== undefined && group.members.length > 0 ? group.members : undefined;
 }
 
+type NameMapResult = Awaited<ReturnType<typeof buildNameMap>>;
+type GroupChoice = PushSession["groupChoices"][number];
+
+// The deferred name mapping (#192), shared by both prepareSplitwise
+// branches: with skipNames the first pass maps nothing, otherwise names
+// match against the chosen group's members. The ERROR PATHS stay with the
+// callers — the override branch falls back to aggregate when mapping
+// throws, the credentials branch lets it propagate.
+async function mapNames(
+  api: PushApi,
+  live: PushSession,
+  skipNames: boolean,
+): Promise<NameMapResult> {
+  if (skipNames) {
+    return { ok: true as const, map: new Map<string, number>(), pending: [] };
+  }
+  return await buildNameMap(api, live.people, live.nameChoices, matchPool(live));
+}
+
+// Stash pending name picks and report the picker error. Same shape on both
+// branches: mapping runs again once the group is known.
+function stashNamePicks(
+  live: PushSession,
+  mapped: NameMapResult,
+): { ok: false; error: string; needsNamePick: true } | null {
+  if (mapped.pending.length === 0) return null;
+  live.mode = "idle";
+  live.namePicks = mapped.pending;
+  return { ok: false, error: namePickError(mapped.pending), needsNamePick: true };
+}
+
+// The group list both branches refresh after mapping: the members ride
+// along (#192) so the name step has something to offer, and a missing
+// list degrades to empty rather than failing the setup.
+async function loadGroupChoices(api: PushApi): Promise<GroupChoice[]> {
+  try {
+    return (await api.getGroups()).map((group) => ({
+      id: Number(group.id),
+      name: String(group.name ?? "group"),
+      // KEEP THE MEMBERS (#192). get_groups already returns them and this
+      // mapping used to discard them, so the name step had nothing to offer
+      // and fell back to a hand-typed id.
+      members: Array.isArray(group.members) ? (group.members as Record<string, unknown>[]) : [],
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// Flip a mapped session live, keeping the group the owner picked across
+// the prepareSplitwise rerun. A pick the refreshed list no longer offers
+// still falls back to 0, because pushing into a group that is gone is
+// worse than pushing into none.
+function goLive(
+  live: PushSession,
+  api: PushApi,
+  mapped: NameMapResult,
+  signedInAs: string,
+  choices: GroupChoice[],
+): { ok: true } {
+  Object.assign(live, {
+    mode: "live",
+    api,
+    nameMap: mapped.map,
+    namePicks: [],
+    signedInAs,
+    // KEEP THE PICK (#192 review). This used to be a flat `groupId: 0`, and
+    // prepareSplitwise runs AGAIN after the group screen — so the group was
+    // wiped moments after it was chosen, the member offer below found no
+    // group, and executePush sent group_id "0": a plain expense, not the
+    // group the owner picked.
+    groupId: choices.some((g) => g.id === live.groupId) ? live.groupId : 0,
+    groupChoices: choices,
+  });
+  return { ok: true };
+}
+
 /**
  * Sign in, list the groups, and map local people to Splitwise users.
  *
@@ -342,52 +419,18 @@ export async function prepareSplitwise(
     } catch {
       name = "";
     }
-    let mapped: Awaited<ReturnType<typeof buildNameMap>>;
+    let mapped: NameMapResult;
     try {
-      mapped = opts?.skipNames === true
-        ? { ok: true as const, map: new Map<string, number>(), pending: [] }
-        : await buildNameMap(apiOverride, live.people, live.nameChoices, matchPool(live));
+      mapped = await mapNames(apiOverride, live, opts?.skipNames === true);
     } catch (err) {
       live.mode = "aggregate";
       live.api = null;
       live.setupError = signInCheckError(err);
       return { ok: true };
     }
-    if (mapped.pending.length > 0) {
-      live.mode = "idle";
-      live.namePicks = mapped.pending;
-      return { ok: false, error: namePickError(mapped.pending), needsNamePick: true };
-    }
-    let choices: { id: number; name: string; members: Record<string, unknown>[] }[] = [];
-    try {
-      choices = (await apiOverride.getGroups()).map((group) => ({
-        id: Number(group.id),
-        name: String(group.name ?? "group"),
-        // KEEP THE MEMBERS (#192). get_groups already returns them and this
-        // mapping used to discard them, so the name step had nothing to offer
-        // and fell back to a hand-typed id.
-        members: Array.isArray(group.members) ? (group.members as Record<string, unknown>[]) : [],
-      }));
-    } catch {
-      choices = [];
-    }
-    Object.assign(live, {
-      mode: "live",
-      api: apiOverride,
-      nameMap: mapped.map,
-      namePicks: [],
-      signedInAs: name,
-      // KEEP THE PICK (#192 review). This used to be a flat `groupId: 0`, and
-      // prepareSplitwise runs AGAIN after the group screen — so the group was
-      // wiped moments after it was chosen, the member offer below found no
-      // group, and executePush sent group_id "0": a plain expense, not the
-      // group the owner picked. A pick the refreshed list no longer offers
-      // still falls back to 0, because pushing into a group that is gone is
-      // worse than pushing into none.
-      groupId: choices.some((g) => g.id === live.groupId) ? live.groupId : 0,
-      groupChoices: choices,
-    });
-    return { ok: true };
+    const picks = stashNamePicks(live, mapped);
+    if (picks !== null) return picks;
+    return goLive(live, apiOverride, mapped, name, await loadGroupChoices(apiOverride));
   }
   // Discover the key pair at the shared config path only.
   let discovered = splitwiseEnvPath();
@@ -422,40 +465,10 @@ export async function prepareSplitwise(
     live.setupError = signInCheckError(err);
     return { ok: true };
   }
-  const mapped = opts?.skipNames === true
-    ? { ok: true as const, map: new Map<string, number>(), pending: [] }
-    : await buildNameMap(api, live.people, live.nameChoices, matchPool(live));
-  if (mapped.pending.length > 0) {
-    live.mode = "idle";
-    live.namePicks = mapped.pending;
-    return { ok: false, error: namePickError(mapped.pending), needsNamePick: true };
-  }
-  let choices: { id: number; name: string; members: Record<string, unknown>[] }[] = [];
-  try {
-    choices = (await api.getGroups()).map((group) => ({
-      id: Number(group.id),
-      name: String(group.name ?? "group"),
-      members: Array.isArray(group.members) ? (group.members as Record<string, unknown>[]) : [],
-    }));
-  } catch {
-    choices = [];
-  }
-  Object.assign(live, {
-    mode: "live",
-    api,
-    nameMap: mapped.map,
-    namePicks: [],
-    // KEEP THE PICK (#192 review). This used to be a flat `groupId: 0`, and
-    // prepareSplitwise runs AGAIN after the group screen — so the group was
-    // wiped moments after it was chosen, the member offer below found no
-    // group, and executePush sent group_id "0": a plain expense, not the
-    // group the owner picked. A pick the refreshed list no longer offers
-    // still falls back to 0, because pushing into a group that is gone is
-    // worse than pushing into none.
-    groupId: choices.some((g) => g.id === live.groupId) ? live.groupId : 0,
-    groupChoices: choices,
-  });
-  return { ok: true };
+  const mapped = await mapNames(api, live, opts?.skipNames === true);
+  const picks = stashNamePicks(live, mapped);
+  if (picks !== null) return picks;
+  return goLive(live, api, mapped, live.signedInAs, await loadGroupChoices(api));
 }
 
 // One plain line naming the people who need a pick. No raw error text.
