@@ -21,22 +21,9 @@ import { describe, expect, it } from "vitest";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { evaluate, type GuardOutcome } from "./bash-guard";
+import { fakeCtx } from "./fake-ctx";
 
 const GUARDS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "guards");
-
-/** Same fake ctx the rewrite contract tests use. */
-function fakeCtx() {
-  const noop = () => {};
-  return {
-    logger: { debug: noop, info: noop, warn: noop, error: noop },
-    on() {
-      return () => {};
-    },
-    get() {
-      return undefined;
-    },
-  };
-}
 
 /**
  * Run one command through `evaluate` with the base rules plus one phase

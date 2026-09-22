@@ -22,6 +22,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as bashGuard from "./bash-guard";
+import { fakeCtx } from "./fake-ctx";
 
 type GuardOutcome =
   | { action: "run"; command: string; rewritten: boolean; reason?: string }
@@ -42,20 +43,6 @@ function evaluate(): (
     throw new Error("bash-guard does not export evaluate() yet");
   }
   return fn as never;
-}
-
-/** Same fake ctx the existing bash-guard.test.ts mounts the plugin with. */
-function fakeCtx() {
-  const noop = () => {};
-  return {
-    logger: { debug: noop, info: noop, warn: noop, error: noop },
-    on() {
-      return () => {};
-    },
-    get() {
-      return undefined;
-    },
-  };
 }
 
 /**

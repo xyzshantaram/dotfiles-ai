@@ -39,22 +39,9 @@ import {
   isHostEscalationReason,
   isRetiredEscalationPrompt,
 } from "./tool-render/src/guard.js";
+import { fakeCtx } from "./fake-ctx";
 
 const GUARDS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "guards");
-
-/** Same fake ctx the rewrite contract tests use. */
-function fakeCtx() {
-  const noop = () => {};
-  return {
-    logger: { debug: noop, info: noop, warn: noop, error: noop },
-    on() {
-      return () => {};
-    },
-    get() {
-      return undefined;
-    },
-  };
-}
 
 /**
  * Run one command through `evaluate` against the repo's real rule files.

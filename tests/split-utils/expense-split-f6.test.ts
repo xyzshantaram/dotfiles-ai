@@ -18,11 +18,9 @@ import {
 import { backupFailedRun, isDryMap, listRunsSync } from "@app/src/runstate.ts";
 import type { Step } from "jsr:@xyzshantaram/wizardkit@^0.1.1";
 import type { StepFn } from "jsr:@xyzshantaram/wizardkit@^0.1.1";
-
-// Fail the test when a condition misses.
-function assert(cond: boolean, msg: string): void {
-  if (!cond) throw new Error("assert failed: " + msg);
-}
+import { assert } from "@std/assert";
+import { fakeApi } from "./fake-push-api.ts";
+import { freshRoot } from "./test-state.ts";
 
 // Text of one node plus nested option, item, row, and button text.
 function texts(node: unknown): string[] {
@@ -73,14 +71,6 @@ function restoreEnv(saved: Map<string, string | undefined>): void {
   }
 }
 
-// Fresh state root plus an empty pushed map. Returns the root.
-async function freshRoot(prefix: string, sid: string): Promise<string> {
-  const root = await Deno.makeTempDir({ prefix });
-  Deno.env.set("SPLIT_UTILS_STATE", root);
-  resetPush(sid);
-  return root;
-}
-
 // One split line for the push doc.
 function line(
   item: string,
@@ -114,22 +104,6 @@ function pushDoc() {
     totals: { Ann: 115, Bob: 65 },
     settlements: [{ from: "Bob", to: "Ann", amount: 65 }],
   };
-}
-
-// Fake API. Records createExpense payloads, hands out expense ids.
-function fakeApi() {
-  const expenses: Record<string, string>[] = [];
-  const api: PushApi = {
-    getCurrentUser: () => Promise.resolve({ first_name: "Ann", last_name: "", id: 1 }),
-    getFriends: () => Promise.resolve([{ first_name: "Bob", last_name: "", id: 2 }]),
-    getGroups: () => Promise.resolve([{ name: "Trip", id: 7 }]),
-    createExpense: (data) => {
-      expenses.push({ ...data });
-      return Promise.resolve({ expenses: [{ id: 101 }] });
-    },
-    createComment: () => Promise.resolve(),
-  };
-  return { api, expenses };
 }
 
 // Step function entries of a steps array, called with the answers map.
