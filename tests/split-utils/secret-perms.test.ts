@@ -5,12 +5,7 @@
 
 import { writeSplitwiseEnv } from "@app/app/expense-split/settings.ts";
 import { splitwiseEnvPath } from "@app/src/paths.ts";
-
-// Throw on a false check with a plain message.
-function assert(cond: boolean, msg: string): void {
-  // Raise a plain error when the check fails.
-  if (!cond) throw new Error("assert failed: " + msg);
-}
+import { assert } from "@std/assert";
 
 Deno.test("writeSplitwiseEnv ends at mode 600 on new and old files", async () => {
   // Point the state root at a fresh temp dir.

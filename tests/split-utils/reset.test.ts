@@ -3,11 +3,7 @@
 
 import { factoryReset, resetTargets } from "@app/src/reset.ts";
 import { profileDir, pushedFilePath, stateRoot, tokenFilePath } from "@app/src/paths.ts";
-
-// Fail the test when a condition misses.
-function assert(cond: boolean, msg: string): void {
-  if (!cond) throw new Error("assert failed: " + msg);
-}
+import { assert } from "@std/assert";
 
 // True when the path exists on disk.
 async function exists(path: string): Promise<boolean> {

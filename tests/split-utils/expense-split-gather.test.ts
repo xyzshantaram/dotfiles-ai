@@ -20,7 +20,6 @@ import { DEFAULT_LOCATION } from "@app/src/zomato.ts";
 import { routeStatus, splitSteps } from "@app/app/expense-split/split.ts";
 import { runsDir } from "@app/src/runstate.ts";
 import { assert, assertStringIncludes, assertMatch } from "@std/assert";
-import { freshState } from "./test-state.ts";
 
 // List manual run names under runsDir. A missing dir counts as empty.
 async function manualRunNames(): Promise<string[]> {
@@ -69,7 +68,8 @@ function jarSid(handle: (req: Request) => Promise<Response>): string {
 }
 
 Deno.test("manual expenses become a run and split end to end", async () => {
-  const root = await freshState("f5-state-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "f5-state-" });
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   const handle = createWizard({
     title: "F5 drive",
     steps: [...gatherSteps(), ...splitSteps()],
@@ -218,7 +218,8 @@ Deno.test("manual expenses become a run and split end to end", async () => {
 });
 
 Deno.test("manual step render writes no run until persistManualRun runs", async () => {
-  const root = await freshState("c3-state-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "c3-state-" });
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
     const handle = createWizard({ title: "C3 drive", steps: gatherSteps() });
     await post(handle, { step: "gather-platforms", action: "next", platforms: "Manual" });
@@ -282,7 +283,8 @@ function assertEqualsRunShape(got: unknown, want: string[]): void {
 }
 
 Deno.test("zomato step offers the live login fields, not the dead ones", async () => {
-  const root = await freshState("f5-zom-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "f5-zom-" });
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   const handle = createWizard({ title: "F5 zomato", steps: gatherSteps() });
   await post(handle, {
     step: "gather-platforms",
@@ -393,7 +395,8 @@ function fullStepText(step: { nodes: unknown[] }): string {
 }
 
 Deno.test("review Done needs a run before Continue", async () => {
-  const root = await freshState("b4-state-");
+  const root = await Deno.makeTempDir({ prefix: "b4-state-" });
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
     // No runs on disk: Next is refused and names the Fetch button.
     const bare = await reviewNext(
@@ -590,8 +593,9 @@ function actionCommand(nodes: unknown[], label: string): string[] {
 }
 
 Deno.test("zomato accounts without sign in shows phone login and city save", async () => {
-  const root = await freshState("zom-acc-off-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "zom-acc-off-" });
   const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
     const nodes = accountsNodes(
       new Map([["platforms", ["Zomato"]], ["range", ["30"]]]),
@@ -626,8 +630,9 @@ Deno.test("zomato accounts without sign in shows phone login and city save", asy
 });
 
 Deno.test("zomato accounts with sign in shows ready and no phone entry", async () => {
-  const root = await freshState("zom-acc-on-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "zom-acc-on-" });
   const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
     await Deno.mkdir(root + "/share", { recursive: true });
     await Deno.writeTextFile(
@@ -654,8 +659,9 @@ Deno.test("zomato accounts with sign in shows ready and no phone entry", async (
 });
 
 Deno.test("zomato login finish command carries phone and otp markers", async () => {
-  const root = await freshState("zom-acc-cmd-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "zom-acc-cmd-" });
   const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
     const nodes = accountsNodes(
       new Map([["platforms", ["Zomato"]], ["range", ["30"]]]),
@@ -685,8 +691,9 @@ Deno.test("zomato login finish command carries phone and otp markers", async () 
 });
 
 Deno.test("zomato city entries prefill the default city values", async () => {
-  const root = await freshState("zom-acc-city-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "zom-acc-city-" });
   const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
     const nodes = accountsNodes(
       new Map([["platforms", ["Zomato"]], ["range", ["30"]]]),
@@ -723,8 +730,9 @@ Deno.test("zomato city entries prefill the default city values", async () => {
 });
 
 Deno.test("manual rows saved under session A do not appear for session B", async () => {
-  const root = await freshState("iso-manual-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "iso-manual-" });
   const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
     const sidA = "iso-manual-A";
     const sidB = "iso-manual-B";
@@ -837,8 +845,9 @@ function pickBox(step: { nodes: unknown[] }): Record<string, unknown> {
 }
 
 Deno.test("pick step lists one option per order with nothing ticked", async () => {
-  const root = await freshState("pick-list-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-list-" });
   const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
     writePickRun("pick-r1", ["zepto"], [
       pickOrder("zepto", "2026-09-08", 530, ["A", "B", "C", "D"]),
@@ -877,8 +886,9 @@ Deno.test("pick next with nothing ticked returns the tick error", async () => {
 });
 
 Deno.test("pick next with two orders ticked writes the indexes", async () => {
-  const root = await freshState("pick-save-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-save-" });
   const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
     const sid = "t-pick-save-1";
     writePickRun("pick-r2", ["zepto"], [
@@ -904,8 +914,9 @@ Deno.test("pick next with two orders ticked writes the indexes", async () => {
 });
 
 Deno.test("pick-all re-renders the same step with every option ticked", async () => {
-  const root = await freshState("pick-all-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-all-" });
   const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
     const sid = "t-pick-all-1";
     writePickRun("pick-r3", ["zepto"], [
@@ -931,8 +942,9 @@ Deno.test("pick-all re-renders the same step with every option ticked", async ()
 });
 
 Deno.test("pick-none re-renders with nothing ticked", async () => {
-  const root = await freshState("pick-none-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-none-" });
   const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
     const sid = "t-pick-none-1";
     writePickRun("pick-r4", ["zepto"], [
@@ -958,8 +970,9 @@ Deno.test("pick-none re-renders with nothing ticked", async () => {
 
 Deno.test("pick screen declares its bar with both actions and next", async () => {
   // Build one run. Read its bar. Check both actions plus Next.
-  const root = await freshState("pick-bar-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-bar-" });
   const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
     writePickRun("pick-bar-1", ["zepto"], [
       pickOrder("zepto", "2026-09-08", 530, ["A"]),
@@ -1025,8 +1038,9 @@ Deno.test("pick step is skipped when the dry run box is ticked", () => {
 });
 
 Deno.test("sign in action for zepto carries the login flag", async () => {
-  const root = await freshState("pick-login-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-login-" });
   const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
     const nodes = accountsNodes(new Map([["platforms", ["Zepto"]]]));
     const command = actionCommand(nodes, "Sign in to Zepto");
@@ -1044,8 +1058,9 @@ Deno.test("sign in action for zepto carries the login flag", async () => {
 });
 
 Deno.test("pick option hint names the first five items plus the rest", async () => {
-  const root = await freshState("pick-hint-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-hint-" });
   const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
     writePickRun("pick-h1", ["zepto"], [{
       id: "zepto-2026-09-08",
@@ -1079,8 +1094,9 @@ Deno.test("pick option hint names the first five items plus the rest", async () 
 });
 
 Deno.test("pick option hint for a single item names it with no plus marker", async () => {
-  const root = await freshState("pick-hint-one-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-hint-one-" });
   const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
     writePickRun("pick-h2", ["zepto"], [{
       id: "zepto-2026-09-08",
@@ -1106,8 +1122,9 @@ Deno.test("pick option hint for a single item names it with no plus marker", asy
 });
 
 Deno.test("pick option for an order with no items has no hint", async () => {
-  const root = await freshState("pick-hint-empty-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-hint-empty-" });
   const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
     writePickRun("pick-h3", ["zepto"], [{
       id: "zepto-2026-09-08",
@@ -1130,8 +1147,9 @@ Deno.test("pick option for an order with no items has no hint", async () => {
 });
 
 Deno.test("gatherPickRunId prefers the resume choice over the newest run", async () => {
-  const root = await freshState("pick-resume-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-resume-" });
   const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
     writePickRun("pick-rs-a", ["zepto"], [
       pickOrder("zepto", "2026-09-08", 530, ["A"]),
@@ -1154,8 +1172,9 @@ Deno.test("gatherPickRunId prefers the resume choice over the newest run", async
 });
 
 Deno.test("pick step seeds ticks from the saved run when none were posted", async () => {
-  const root = await freshState("pick-seed-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-seed-" });
   const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
     writePickRun("pick-s1", ["zepto"], [
       pickOrder("zepto", "2026-09-08", 530, ["A"]),
@@ -1231,8 +1250,9 @@ Deno.test("tidy product name drops pack weight and volume", () => {
 
 // Prove the hint names only the product beside a fee row.
 Deno.test("pick hint drops the fee row and tidies the product", async () => {
-  const root = await freshState("pick-ledger-hint-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-ledger-hint-" });
   const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
     writePickRun("pick-ledger-1", ["zepto"], [
       pickOrder("zepto", "2026-09-08", 200, ["Latte (250 ml)", "[Fees]"]),
@@ -1251,8 +1271,9 @@ Deno.test("pick hint drops the fee row and tidies the product", async () => {
 
 // Prove the label counts only the product beside a fee row.
 Deno.test("pick label counts only the product beside a fee row", async () => {
-  const root = await freshState("pick-ledger-count-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-ledger-count-" });
   const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
     writePickRun("pick-ledger-2", ["zepto"], [
       pickOrder("zepto", "2026-09-08", 200, ["Latte (250 ml)", "[Fees]"]),
@@ -1271,8 +1292,9 @@ Deno.test("pick label counts only the product beside a fee row", async () => {
 
 // Prove an order with only ledger rows carries no hint.
 Deno.test("pick option with only ledger rows carries no hint", async () => {
-  const root = await freshState("pick-ledger-only-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-ledger-only-" });
   const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
     writePickRun("pick-ledger-3", ["zepto"], [
       pickOrder("zepto", "2026-09-08", 20, ["[Fees]", "[Rounding]", "[Screenshot only]"]),
@@ -1291,8 +1313,9 @@ Deno.test("pick option with only ledger rows carries no hint", async () => {
 
 // Prove the five item limit still applies after ledger rows drop.
 Deno.test("pick hint keeps the five item limit after ledger rows drop", async () => {
-  const root = await freshState("pick-ledger-limit-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-ledger-limit-" });
   const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
     writePickRun("pick-ledger-4", ["zepto"], [
       pickOrder("zepto", "2026-09-08", 600, ["A", "B", "C", "D", "E", "F", "[Fees]"]),
@@ -1310,8 +1333,9 @@ Deno.test("pick hint keeps the five item limit after ledger rows drop", async ()
 });
 
 Deno.test("pick next sends the user to the People step after a good tick post", async () => {
-  const root = await freshState("pick-goto-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "pick-goto-" });
   const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
     const sid = "t-pick-goto-1";
     writePickRun("pick-goto-1", ["zepto"], [
@@ -1379,8 +1403,9 @@ Deno.test("item summary merges repeats and drops ledger rows", () => {
 // works. Swiggy expired a session on 2026-09-17 while this screen read
 // "ready" and drew no way back in.
 Deno.test("a signed in browser platform still offers a sign in action", async () => {
-  const root = await freshState("acc-cached-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "acc-cached-" });
   const prev = Deno.env.get("SPLIT_UTILS_STATE");
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   try {
     await Deno.mkdir(root + "/share/profiles/swiggy", { recursive: true });
     const nodes = accountsNodes(

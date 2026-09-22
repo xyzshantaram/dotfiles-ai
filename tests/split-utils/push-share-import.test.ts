@@ -9,11 +9,7 @@ import {
   resetPush,
 } from "@app/app/expense-split/push-engine.ts";
 import { stateRoot } from "@app/src/runstate.ts";
-
-// Fail the test when a condition misses.
-function assert(cond: boolean, msg: string): void {
-  if (!cond) throw new Error("assert failed: " + msg);
-}
+import { assert } from "@std/assert";
 
 // One finished output doc with a rare marker in the item name.
 function docText(): string {

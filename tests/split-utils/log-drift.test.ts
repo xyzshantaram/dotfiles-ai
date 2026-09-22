@@ -3,12 +3,7 @@
 
 import { createRunLog, redact } from "@app/src/log.ts";
 import { detectDrift, driftMessage, ISSUES_URL } from "@app/src/drift.ts";
-
-// Throw on a false check with a plain message.
-function assert(cond: boolean, msg: string): void {
-  // Raise a plain error when the check fails.
-  if (!cond) throw new Error("assert failed: " + msg);
-}
+import { assert } from "@std/assert";
 
 Deno.test("redact masks phones mails tokens cash and codes", () => {
   // Check a ten digit phone keeps only the last four.

@@ -1,12 +1,7 @@
 // Tests for the term wrap helper. Wrapping keeps lines short
 // and never splits words unless one word fills the whole width.
 import { wrap } from "@app/src/term.ts";
-
-// Fail the test when a flag misses.
-function assert(cond: boolean, msg: string): void {
-  // Throw a clear error when false.
-  if (!cond) throw new Error("assert failed: " + msg);
-}
+import { assert } from "@std/assert";
 
 // Short text passes through untouched.
 Deno.test("wrap keeps short lines whole", () => {

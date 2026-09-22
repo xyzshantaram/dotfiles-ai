@@ -2,11 +2,7 @@
 // fetch, so no test touches the network or the global fetch.
 
 import { errorText, loadCredentials, SplitwiseAPI } from "@app/src/splitwise.ts";
-
-// Fail the test when a condition misses.
-function assert(cond: boolean, msg: string): void {
-  if (!cond) throw new Error("assert failed: " + msg);
-}
+import { assert } from "@std/assert";
 
 Deno.test("getCurrentUser sends the bearer key and returns the user", async () => {
   let seenAuth: string | null = null;

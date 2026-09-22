@@ -3,13 +3,8 @@
 // reach past validation toward the browser. Success paths need a
 // headed window, so source assertions do not cover them here.
 
+import { assert } from "@std/assert";
 const GATHERER = new URL(import.meta.resolve("@app/scripts/gatherer.ts")).pathname;
-
-// Throw on a false check with a plain message.
-function assert(cond: boolean, msg: string): void {
-  // Raise a plain error when the check fails.
-  if (!cond) throw new Error("assert failed: " + msg);
-}
 
 // Run the gatherer under a fresh state root and capture the result.
 async function runGatherer(

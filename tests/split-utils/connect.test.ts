@@ -3,11 +3,7 @@
 // a fresh session id, so sign-in state never leaks across tests.
 import { currentSignedInAs, type IdentityApi, verifyKey } from "@app/app/expense-split/connect.ts";
 import { fullName } from "@app/src/splitwise.ts";
-
-// Fail the test when a condition misses.
-function assert(cond: boolean, msg: string): void {
-  if (!cond) throw new Error("assert failed: " + msg);
-}
+import { assert } from "@std/assert";
 
 // Fail unless the outcome failed, then hand back its error text.
 function assertFails(

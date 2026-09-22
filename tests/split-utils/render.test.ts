@@ -3,12 +3,7 @@
 
 import { buildItemizedComment, formatTitle, renderOrderTree, renderTree } from "@app/src/render.ts";
 import type { SplitEntry } from "@app/src/common.ts";
-
-// Throw on a false check with a plain message.
-function assert(cond: boolean, msg: string): void {
-  // Raise a plain error when the check fails.
-  if (!cond) throw new Error("assert failed: " + msg);
-}
+import { assert } from "@std/assert";
 
 // Build one test order with a fixed date and total.
 function oneOrder(date: string): SplitEntry[] {

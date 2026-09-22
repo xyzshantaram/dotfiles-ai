@@ -1,21 +1,7 @@
 // Tests for the app settings store. Each test uses a fresh state root
 // and restores the env var on exit.
 import { loadSettings, saveSettings } from "@app/src/settings.ts";
-
-// Fail the test when a flag misses.
-function assert(cond: boolean, msg: string): void {
-  // Throw a clear error when false.
-  if (!cond) throw new Error("assert failed: " + msg);
-}
-
-// Fail the test when two values differ.
-function assertEquals(actual: unknown, expected: unknown, msg: string): void {
-  // Compare with JSON form for depth.
-  const a = JSON.stringify(actual);
-  const b = JSON.stringify(expected);
-  // Throw a clear error on mismatch.
-  if (a !== b) throw new Error(msg + ": want " + b + " got " + a);
-}
+import { assert, assertEquals } from "@std/assert";
 
 // Point SPLIT_UTILS_STATE at a fresh temp dir and return the old value.
 async function freshRoot(): Promise<string | undefined> {

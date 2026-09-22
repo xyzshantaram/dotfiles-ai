@@ -3,28 +3,7 @@
 // push input builder, and the usage text are all pure.
 import { buildPushInput, parseNameMap, parsePushFlags, usageText } from "@app/scripts/cli.ts";
 import type { OutputDoc } from "@app/src/common.ts";
-
-// Fail the test when a condition misses.
-function assert(cond: boolean, msg: string): void {
-  if (!cond) throw new Error("assert failed: " + msg);
-}
-
-// Fail the test when two values differ.
-function assertEquals(actual: unknown, expected: unknown, msg: string): void {
-  const a = JSON.stringify(actual);
-  const b = JSON.stringify(expected);
-  if (a !== b) throw new Error(msg + ": want " + b + " got " + a);
-}
-
-// Fail the test when the function does not throw.
-function assertThrows(fn: () => unknown, msg: string): void {
-  try {
-    fn();
-  } catch {
-    return;
-  }
-  throw new Error("assert failed, nothing threw: " + msg);
-}
+import { assert, assertEquals, assertThrows } from "@std/assert";
 
 // One split line for Ann and Bob.
 function line(item: string, orderId: string, price: number, a: number, b: number) {

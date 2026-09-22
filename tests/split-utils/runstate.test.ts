@@ -13,21 +13,7 @@ import {
   updateRun,
 } from "@app/src/runstate.ts";
 import { loadSettingsSync } from "@app/src/settings.ts";
-
-// Fail the test when a flag misses.
-function assert(cond: boolean, msg: string): void {
-  // Throw a clear error when false.
-  if (!cond) throw new Error("assert failed: " + msg);
-}
-
-// Fail the test when two values differ.
-function assertEquals(actual: unknown, expected: unknown, msg: string): void {
-  // Compare with JSON form for depth.
-  const a = JSON.stringify(actual);
-  const b = JSON.stringify(expected);
-  // Throw a clear error on mismatch.
-  if (a !== b) throw new Error(msg + ": want " + b + " got " + a);
-}
+import { assert, assertEquals } from "@std/assert";
 
 // createRun writes a gathered meta that readRun returns.
 Deno.test("createRun writes gathered meta", async () => {

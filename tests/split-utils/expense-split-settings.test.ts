@@ -6,10 +6,10 @@ import { startUsageNext } from "@app/app/expense-split.ts";
 import { settingsNext, settingsReset, settingsSteps } from "@app/app/expense-split/settings.ts";
 import { loadSettings, saveSettings } from "@app/src/settings.ts";
 import { assert } from "@std/assert";
-import { freshState } from "./test-state.ts";
 
 Deno.test("custom currency code saves in uppercase", async () => {
-  const root = await freshState("b1-state-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "b1-state-" });
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   const out = await settingsNext(
     new Map(),
     { currency: ["__custom__"], "custom-currency": ["eur"] },
@@ -21,7 +21,8 @@ Deno.test("custom currency code saves in uppercase", async () => {
 });
 
 Deno.test("custom currency rejects a bad code", async () => {
-  const root = await freshState("b1-state-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "b1-state-" });
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   const out = await settingsNext(
     new Map(),
     { currency: ["__custom__"], "custom-currency": ["e1"] },
@@ -38,7 +39,8 @@ Deno.test("custom currency rejects a bad code", async () => {
 });
 
 Deno.test("custom currency rejects a code outside ISO 4217", async () => {
-  const root = await freshState("b1-state-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "b1-state-" });
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   const out = await settingsNext(
     new Map(),
     { currency: ["__custom__"], "custom-currency": ["zzz"] },
@@ -51,7 +53,8 @@ Deno.test("custom currency rejects a code outside ISO 4217", async () => {
 });
 
 Deno.test("fixed currency pick still saves", async () => {
-  const root = await freshState("b1-state-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "b1-state-" });
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   const out = await settingsNext(
     new Map(),
     { currency: ["USD"] },
@@ -81,7 +84,8 @@ Deno.test("settings step renders all four tab labels", () => {
 });
 
 Deno.test("currency field inside a tab still posts its answer", async () => {
-  const root = await freshState("b1-state-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "b1-state-" });
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   const out = await settingsNext(
     new Map(),
     { currency: ["GBP"] },
@@ -93,7 +97,8 @@ Deno.test("currency field inside a tab still posts its answer", async () => {
 });
 
 Deno.test("reset action refuses a wrong confirm word", async () => {
-  const root = await freshState("b1-state-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "b1-state-" });
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   const out = await settingsReset(
     new Map(),
     { currency: ["USD"], "reset-confirm": ["please"] },
@@ -133,7 +138,8 @@ Deno.test("ai usage answer opens settings on the ai tab", () => {
 });
 
 Deno.test("saved ai usage opens settings on the ai tab", async () => {
-  const root = await freshState("b1-state-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "b1-state-" });
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   await saveSettings({ currency: "INR", usage: "ai" });
   const entry = settingsSteps().find((item) =>
     typeof item === "function" ? item(new Map()).id === "settings" : item.id === "settings"
@@ -150,7 +156,8 @@ Deno.test("saved ai usage opens settings on the ai tab", async () => {
 });
 
 Deno.test("saved manual usage opens settings on the first tab", async () => {
-  const root = await freshState("b1-state-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "b1-state-" });
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   await saveSettings({ currency: "INR", usage: "manual" });
   const entry = settingsSteps().find((item) =>
     typeof item === "function" ? item(new Map()).id === "settings" : item.id === "settings"
@@ -167,7 +174,8 @@ Deno.test("saved manual usage opens settings on the first tab", async () => {
 });
 
 Deno.test("the answers map and the onboarding flag stay apart for A and B", async () => {
-  const root = await freshState("iso-hub-");
+  const root = await Deno.makeTempDir({ dir: "/tmp", prefix: "iso-hub-" });
+  Deno.env.set("SPLIT_UTILS_STATE", root);
   const sidA = "iso-hub-A";
   const sidB = "iso-hub-B";
   // The manual screen used to be skipped by a routing jump checked

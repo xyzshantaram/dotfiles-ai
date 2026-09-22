@@ -3,7 +3,6 @@
 import { type PushApi, runPush } from "@app/src/pushcore.ts";
 import { orderFingerprint } from "@app/src/render.ts";
 import { assert } from "@std/assert";
-import { fakeApi } from "./fake-push-api.ts";
 
 // One split line.
 function line(
@@ -23,6 +22,29 @@ function line(
     split_type: "custom",
     assignments: { Ann: a, Bob: b },
   };
+}
+
+// Fake API with scripted calls. Records createExpense payloads and
+// comments, and hands out expense ids in sequence.
+function fakeApi(options?: { failExpense?: boolean }) {
+  const expenses: Record<string, string>[] = [];
+  const comments: string[] = [];
+  let nextId = 101;
+  const api: PushApi = {
+    getCurrentUser: () => Promise.resolve({ first_name: "Ann", last_name: "", id: 1 }),
+    getFriends: () => Promise.resolve([{ first_name: "Bob", last_name: "", id: 2 }]),
+    getGroups: () => Promise.resolve([{ name: "Trip", id: 7 }]),
+    createExpense: (data) => {
+      if (options?.failExpense) throw new Error("splitwise 500");
+      expenses.push({ ...data });
+      return Promise.resolve({ expenses: [{ id: nextId++ }] });
+    },
+    createComment: (_eid, content) => {
+      comments.push(content);
+      return Promise.resolve();
+    },
+  };
+  return { api, expenses, comments };
 }
 
 const order1 = [line("Milk", "o1", "2026-01-01T10:00:00", 100, 60, 40)];
