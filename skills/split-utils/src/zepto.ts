@@ -162,7 +162,11 @@ export function mapOrder(
   };
 }
 
-/** Balance check: items must sum to paid (fees are baked in). */
+/**
+ * Balance check: items must sum to paid (fees are baked in). Stays separate
+ * from common.ts's checkBalance on purpose: sharing that version would add
+ * the fees term a second time and double-count them.
+ */
 export function checkBalance(mapped: Order): boolean {
   const itemsSum = mapped.items.reduce((s, i) => s + i.price * i.quantity, 0);
   return Math.abs(itemsSum - mapped.paid) < 0.01;

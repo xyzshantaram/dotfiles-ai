@@ -52,6 +52,18 @@ export function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+/**
+ * Balance check: items + fees must equal paid. Shared by blinkit and
+ * swiggy, whose copies were byte-identical. zepto keeps its own on
+ * purpose: its mapper folds every fee into the item prices (fees stay
+ * zero), so adding the fees term here would double-count them.
+ */
+export function checkBalance(mapped: Order): boolean {
+  const itemsSum = mapped.items.reduce((s, i) => s + i.price * i.quantity, 0);
+  const feesSum = mapped.fees.delivery + mapped.fees.packaging;
+  return Math.abs(itemsSum + feesSum - mapped.paid) < 0.01;
+}
+
 /** Format a rupee amount with 2 decimals. */
 export function fmtRs(amount: number): string {
   return amount.toFixed(2);

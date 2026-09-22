@@ -263,9 +263,5 @@ export function mapDashOrder(
   };
 }
 
-/** Balance check: items + fees must equal paid. */
-export function checkBalance(mapped: Order): boolean {
-  const itemsSum = mapped.items.reduce((s, i) => s + i.price * i.quantity, 0);
-  const feesSum = mapped.fees.delivery + mapped.fees.packaging;
-  return Math.abs(itemsSum + feesSum - mapped.paid) < 0.01;
-}
+/** Balance check: items + fees must equal paid. Shared from common.ts. */
+export { checkBalance } from "./common.ts";
