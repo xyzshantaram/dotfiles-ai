@@ -170,8 +170,9 @@ export const HLJS_THEME_CSS = [
 ].join("");
 
 /**
- * React hooks live in `client-react.ts`. This module stays framework-free so
- * its vitest suite can run in plain node, where `react` does not resolve.
+ * React hooks live in their owning client bundles (e.g. `useDismissable` in
+ * `plugins/context-meter/src/client.tsx`). This module stays framework-free
+ * so its vitest suite can run in plain node, where `react` does not resolve.
  */
 
 /**
