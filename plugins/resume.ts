@@ -54,10 +54,15 @@ interface Hit {
   text: string;
 }
 
-// Short summary text for a search hit. Always truncated: search shows many
-// hits, so each one stays a one-line teaser. resume_read uses fullEventText
-// for the untruncated content.
-function eventText(ev: any): string {
+// One renderer for both event-text paths. verbose=false is the search
+// teaser (eventText): terse block markers, tool/result JSON capped at 200
+// chars, unknown types render empty. verbose=true is resume_read
+// (fullEventText): fuller block markers plus a per-block fallback, uncapped
+// JSON, and the whole payload for unknown types. The marker wordings differ
+// on purpose per path ([tool:x] vs [tool-call x]), so they stay a verbose
+// branch rather than being unified. summarize() still caps the teaser at
+// 160 chars on top.
+function renderEventText(ev: any, verbose: boolean): string {
   const d = ev?.data ?? {};
   const t = ev?.type;
   if (t === "user/message" || t === "assistant/message") {
@@ -67,8 +72,10 @@ function eventText(ev: any): string {
       for (const b of content) {
         if (!b) continue;
         if (b.type === "text") s += (b.text ?? "") + " ";
-        else if (b.type === "tool-call") s += "[tool:" + (b.call?.name ?? "?") + "] ";
-        else if (b.type === "tool-result") s += "[result] ";
+        else if (b.type === "tool-call")
+          s += (verbose ? "[tool-call " : "[tool:") + (b.call?.name ?? "?") + "] ";
+        else if (b.type === "tool-result") s += verbose ? "[tool-result] " : "[result] ";
+        else if (verbose) s += "[" + (b.type ?? "unknown-block") + "] ";
       }
     }
     return s.trim();
@@ -79,7 +86,8 @@ function eventText(ev: any): string {
     if (typeof r === "string") return r;
     if (r && typeof r === "object") {
       try {
-        return JSON.stringify(r).slice(0, 200);
+        const json = JSON.stringify(r);
+        return verbose ? json : json.slice(0, 200);
       } catch {
         return "[unserializable result]";
       }
@@ -90,46 +98,7 @@ function eventText(ev: any): string {
     return "compaction shadowed " + ((d?.shadowedSeqs as unknown[])?.length ?? 0) + " seqs";
   if (t === "subagent/descriptor") return "subagent " + (d?.label ?? "") + " " + (d?.mode ?? "");
   if (t === "turn/start") return "turn " + (d?.turn ?? "?");
-  return "";
-}
-
-// Full, untruncated content for resume_read. Deliberately a second function:
-// the search path must keep its 160-char teasers, and folding a `limit`
-// through one function would couple the two callers.
-function fullEventText(ev: any): string {
-  const d = ev?.data ?? {};
-  const t = ev?.type;
-  if (t === "user/message" || t === "assistant/message") {
-    const content = d?.message?.content;
-    let s = "";
-    if (Array.isArray(content)) {
-      for (const b of content) {
-        if (!b) continue;
-        if (b.type === "text") s += (b.text ?? "") + " ";
-        else if (b.type === "tool-call") s += "[tool-call " + (b.call?.name ?? "?") + "] ";
-        else if (b.type === "tool-result") s += "[tool-result] ";
-        else s += "[" + (b.type ?? "unknown-block") + "] ";
-      }
-    }
-    return s.trim();
-  }
-  if (t === "tool/call") return "call " + (d?.call?.name ?? "?");
-  if (t === "tool/result") {
-    const r = d?.result;
-    if (typeof r === "string") return r;
-    if (r && typeof r === "object") {
-      try {
-        return JSON.stringify(r);
-      } catch {
-        return "[unserializable result]";
-      }
-    }
-    return "";
-  }
-  if (t === "compaction/summary")
-    return "compaction shadowed " + ((d?.shadowedSeqs as unknown[])?.length ?? 0) + " seqs";
-  if (t === "subagent/descriptor") return "subagent " + (d?.label ?? "") + " " + (d?.mode ?? "");
-  if (t === "turn/start") return "turn " + (d?.turn ?? "?");
+  if (!verbose) return "";
   // Unknown event type: return its whole payload instead of an empty string,
   // so resume_read on a novel seq still shows something useful.
   try {
@@ -137,6 +106,18 @@ function fullEventText(ev: any): string {
   } catch {
     return "";
   }
+}
+
+// Short summary text for a search hit. Always truncated: search shows many
+// hits, so each one stays a one-line teaser. resume_read uses fullEventText
+// for the untruncated content.
+function eventText(ev: any): string {
+  return renderEventText(ev, false);
+}
+
+// Full, untruncated content for resume_read.
+function fullEventText(ev: any): string {
+  return renderEventText(ev, true);
 }
 
 function eventRole(ev: any): string {
