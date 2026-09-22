@@ -1330,11 +1330,25 @@ export function ensureBashGraphMeasure() {
  * would overwrite the theme page-wide. The source carries no such blocks
  * (deleted, ticket #336) — this stays as a guard, pinned by the wiring test
  * against a synthetic fixture. Both patterns are single-brace rules.
+ *
+ * THE MATCH IS ANCHORED TO A RULE BOUNDARY, and that is load-bearing rather
+ * than tidiness. The unanchored form matched the word ":root" ANYWHERE,
+ * including inside a comment — and styles.css opens with a comment that
+ * names the selector while explaining that the blocks were deleted. So the
+ * guard matched its own documentation, then `[^{]*` ran forward to the next
+ * `{` and `[^}]*\}` swallowed to the next `}`, deleting 1347 bytes ending in
+ * the base `.prim-panel` rule. That rule carries `background:
+ * var(--dsw-alias-bg-base)`, so every bash-graph panel rendered with no
+ * background on the page while the source file was provably correct.
+ *
+ * Anchoring to `^` or a preceding `}` means a `:root` mentioned in prose can
+ * never match, because prose never sits at a rule boundary. Do not
+ * "simplify" this back.
  */
 export function stripBashGraphRoot(cssText) {
   return String(cssText)
-    .replace(/:root[^{]*\{[^}]*\}/g, "")
-    .replace(/html\[data-theme="light"\]\{[^}]*\}/g, "");
+    .replace(/(^|\})\s*:root[^{]*\{[^}]*\}/g, "$1")
+    .replace(/(^|\})\s*html\[data-theme="[^"]*"\]\s*\{[^}]*\}/g, "$1");
 }
 
 /** Cache key: the command plus the exit-code stages as JSON ("" when none). */

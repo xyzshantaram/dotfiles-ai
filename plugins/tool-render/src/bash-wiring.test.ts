@@ -128,11 +128,44 @@ describe("bash wiring: the stylesheet", () => {
     const stripped = stripBashGraphRoot(css);
     expect(stripped).toContain(".prim-node");
     expect(stripped).toContain("#measure");
+
+    /*
+     * THE ASSERTION THAT WOULD HAVE CAUGHT THE BUG, and the reason the three
+     * above did not. This file carries no :root VALUE block, so the strip
+     * must be a byte-for-byte NO-OP on it. It was not: the unanchored pattern
+     * matched the word ":root" inside this file's OWN history comment, then
+     * `[^{]*` ran to the next `{` and `[^}]*\}` swallowed to the next `}` —
+     * deleting 1347 bytes ending in the base `.prim-panel` rule. That rule
+     * carries `background: var(--dsw-alias-bg-base)`, so every bash-graph
+     * panel rendered with no background while the source was provably fine.
+     *
+     * `.prim-node` and `#measure` both survived that deletion, which is
+     * precisely why containment checks could not see it. Equality can.
+     */
+    expect(stripped).toBe(css);
+
+    // Name the casualty too, so a future over-match that spares most of the
+    // file but eats this one rule still fails loudly rather than silently.
+    expect(stripped).toMatch(/\.prim-panel\{[^}]*background:\s*var\(--dsw-alias-bg-base\)/);
+
     const fixture = ':root{--x:1;}html[data-theme="light"]{--y:2;}.prim-node{color:red;}';
     const cleaned = stripBashGraphRoot(fixture);
     expect(cleaned).not.toContain(":root");
     expect(cleaned).not.toContain("data-theme");
     expect(cleaned).toContain(".prim-node");
+
+    // A dark block leaks token values exactly as a light one does.
+    const darkFixture = 'html[data-theme="dark"] {--y:2;}.prim-node{color:red;}';
+    expect(stripBashGraphRoot(darkFixture)).not.toContain("data-theme");
+    expect(stripBashGraphRoot(darkFixture)).toContain(".prim-node");
+
+    /*
+     * The regression fixture: ":root" in PROSE, followed by a real rule.
+     * Prose never sits at a rule boundary, so an anchored pattern cannot
+     * match it, and the rule after it must survive untouched.
+     */
+    const prose = "/* :root blocks used to live here and were deleted */\n.prim-panel{background:red;}";
+    expect(stripBashGraphRoot(prose)).toBe(prose);
   });
 });
 
