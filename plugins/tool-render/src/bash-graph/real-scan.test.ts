@@ -378,3 +378,99 @@ describe("criterion 1 over further shapes", () => {  it("loses no word on the re
     expect(n).toBe(shapes.length);
   });
 });
+
+describe("a case inside a subshell stays whole (ticket #340)", () => {
+  const edgeCount = (html: string): number => (html.match(/prim-edge/g) || []).length;
+  const panels = (r: CardResult): string[] =>
+    r.panelsHTML.map((p) => unesc(p.replace(/<[^>]*>/g, "")).replace(/\s+/g, " ").trim());
+
+  it("draws no `esac)` panel for a case inside a subshell", async () => {
+    // REJECTS the tear: the arm `)` decremented the paren depth as though it
+    // closed the subshell, so `;;` split at depth 0 and `esac)` drew as a
+    // command. Two panels: the subshell whole, then the sibling.
+    const src = "(case $x in a) echo hi;; esac); echo after";
+    const { r, html } = await renderReal(src, 50);
+    expect(r.panelsHTML.length).toBe(2);
+    expect(edgeCount(html)).toBe(0);
+    expect(panels(r).some((p) => p === "esac)" || p === "esac")).toBe(false);
+    expect(shown(r)).toContain("(case $x in a) echo hi;; esac)");
+    expect(shown(r)).toContain("echo after");
+    assertWordsSurvive(src, r);
+  });
+
+  it("treats a keyword-named arm like an ordinary one inside a subshell", async () => {
+    // REJECTS the same tear through `for)`: the cause is the inert tracker,
+    // not the word, so ordinary and keyword arms must behave the same.
+    const src = "(case $x in for) echo hi;; esac); echo after";
+    const { r, html } = await renderReal(src, 51);
+    expect(r.panelsHTML.length).toBe(2);
+    expect(edgeCount(html)).toBe(0);
+    expect(panels(r).some((p) => p === "esac)" || p === "esac")).toBe(false);
+    expect(shown(r)).toContain("(case $x in for) echo hi;; esac)");
+    expect(shown(r)).toContain("echo after");
+    assertWordsSurvive(src, r);
+  });
+
+  it("holds star and alternation arms too", async () => {
+    // REJECTS the tear where no word precedes the arm `)`: `*)` carries no
+    // pending word, so the arm rule cannot depend on one being there.
+    for (const [src, whole, idx] of [
+      ["(case x in *) echo hi;; esac); echo after", "(case x in *) echo hi;; esac)", 52],
+      ["(case x in a|b) echo hi;; esac); echo after", "(case x in a|b) echo hi;; esac)", 53],
+    ] as [string, string, number][]) {
+      const { r, html } = await renderReal(src, idx);
+      expect(r.panelsHTML.length, src).toBe(2);
+      expect(edgeCount(html), src).toBe(0);
+      expect(panels(r).some((p) => p === "esac)" || p === "esac"), src).toBe(false);
+      expect(shown(r), src).toContain(whole);
+      expect(shown(r), src).toContain("echo after");
+      assertWordsSurvive(src, r);
+    }
+  });
+
+  it("holds an empty-bodied arm and a command substitution", async () => {
+    // REJECTS the tear where the arm body is empty (`a);;`) and where the
+    // case sits in `$(...)` rather than a plain subshell.
+    for (const [src, whole, idx] of [
+      ["(case x in a);; esac); echo after", "(case x in a);; esac)", 54],
+      ["(echo $(case x in a) echo one;; esac)); echo after", "(echo $(case x in a) echo one;; esac))", 55],
+    ] as [string, string, number][]) {
+      const { r, html } = await renderReal(src, idx);
+      expect(r.panelsHTML.length, src).toBe(2);
+      expect(edgeCount(html), src).toBe(0);
+      expect(shown(r), src).toContain(whole);
+      expect(shown(r), src).toContain("echo after");
+      assertWordsSurvive(src, r);
+    }
+  });
+
+  it("holds a multiline subshell case in one panel", async () => {
+    // REJECTS the line-split twin: the same miscounted arm `)` restored the
+    // newline gate, so the construct drew as five panels down to a lone `)`.
+    const src = "(case $x in a)\n echo hi;; esac\n); echo after";
+    const { r, html } = await renderReal(src, 56);
+    expect(r.panelsHTML.length).toBe(2);
+    expect(edgeCount(html)).toBe(0);
+    expect(panels(r).some((p) => p === "esac" || p === ")" || p === "esac)")).toBe(false);
+    expect(shown(r)).toContain("echo after");
+    assertWordsSurvive(src, r);
+  });
+
+  it("keeps non-command keywords inside parens out of the tracker", async () => {
+    // LOCKS the paren-depth gate's good side: arithmetic identifiers, brace
+    // expansion, array elements, loop-body function definitions and spaced
+    // closers are valid bash whose keyword-spelled words must steer nothing.
+    // Each draws exactly as many panels as siblings demand — no fusion.
+    for (const [src, n, idx] of [
+      ["((case+1)); echo after", 2, 57],
+      ["echo {for,bar}; echo after", 2, 58],
+      ["a=(for bar); echo after", 2, 59],
+      ["(for f in a; do f() { echo hi; }; done); echo after", 2, 60],
+      ["(for f in a; do echo $f; done ); echo after", 2, 61],
+    ] as [string, number, number][]) {
+      const { r } = await renderReal(src, idx);
+      expect(r.panelsHTML.length, src).toBe(n);
+      assertWordsSurvive(src, r);
+    }
+  });
+});
