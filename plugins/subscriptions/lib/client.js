@@ -140,6 +140,41 @@ function ehSessionHasContent(session) {
   return false;
 }
 
+// plugins/subscriptions/src/eh-ws.ts
+var EH_WS_MAX_FRAME = 1024 * 1024;
+var EH_DEVPASS_RESET_UTC_HOUR = 21;
+var EH_DEVPASS_UNLIMITED = "Unlimited tokens";
+var EH_DEVPASS_REDUCED = "Reduced speed";
+var EH_DEVPASS_HEADROOM_NOTE = "Beyond your full-speed headroom, requests continue at lower priority. Resets 21:00 UTC.";
+var ehTextEncoder = new TextEncoder();
+var ehTextDecoder = new TextDecoder();
+function ehDevpassServiceChip(mode) {
+  if (mode === null || mode === void 0) return null;
+  if (mode === "interactive") return EH_DEVPASS_UNLIMITED;
+  if (mode === "slowed") return EH_DEVPASS_REDUCED;
+  return String(mode);
+}
+function ehDevpassHasContent(status) {
+  if (!status || typeof status !== "object") return false;
+  var s = status;
+  return s.subscribed != null || s.tier != null || s.status != null || s.todayTokens != null || s.dailyLimit != null || s.weekTokens != null || s.weeklyCap != null || s.activeRequests != null || s.concurrencyLimit != null || s.serviceMode != null;
+}
+function ehDevpassResetMs(nowMs) {
+  var now = typeof nowMs === "number" ? nowMs : Date.now();
+  var at = new Date(now);
+  var reset = Date.UTC(
+    at.getUTCFullYear(),
+    at.getUTCMonth(),
+    at.getUTCDate(),
+    EH_DEVPASS_RESET_UTC_HOUR,
+    0,
+    0,
+    0
+  );
+  if (reset <= now) reset += 864e5;
+  return reset - now;
+}
+
 // plugins/subscriptions/src/eh-section-model.ts
 function ehResultError(result, fallback) {
   if (!result) return null;
@@ -237,7 +272,9 @@ function ehSectionModel(ehUsage, ehModels, ehSession = null) {
     notes.push(EH_SESSION_TIER_UNRESOLVED_NOTE);
     notes.push(EH_SESSION_ANALYTICS_NOTE);
   }
-  var hasContent = ehUsageHasContent(usage) || models !== null && models.length > 0 || accountUsage !== null && accountUsage.length > 0 || hasSessionContent;
+  var devpassRaw = usage !== null && usage.devpass !== null && typeof usage.devpass === "object" && !Array.isArray(usage.devpass) ? usage.devpass : null;
+  var devpass = devpassRaw !== null && ehDevpassHasContent(devpassRaw) ? devpassRaw : null;
+  var hasContent = ehUsageHasContent(usage) || models !== null && models.length > 0 || accountUsage !== null && accountUsage.length > 0 || hasSessionContent || devpass !== null;
   var isDevKeyAnswer = usage !== null && usage.devKey === true;
   var status;
   if (errorLine) status = "error";
@@ -256,6 +293,7 @@ function ehSectionModel(ehUsage, ehModels, ehSession = null) {
     usage,
     models,
     session,
+    devpass,
     accountUsage,
     totalConsumption: modelsBody !== null ? ehNumber(modelsBody.totalConsumption) ?? (derivedAccount !== null ? derivedAccount.totalConsumption : null) : null,
     lastUpdated: modelsBody !== null ? typeof modelsBody.lastUpdated === "string" ? modelsBody.lastUpdated : derivedAccount !== null ? derivedAccount.lastUpdated : null : null,
@@ -580,6 +618,15 @@ function fmtCredits(n) {
   if (Math.abs(n) >= 1e3) return fmtCount(n);
   return String(Math.round(n * 100) / 100);
 }
+function fmtDevpassCountdown(ms) {
+  if (!Number.isFinite(ms) || ms < 0) return "soon";
+  var totalMin = Math.floor(ms / 6e4);
+  var h = Math.floor(totalMin / 60);
+  var m = totalMin % 60;
+  if (h <= 0 && m <= 0) return "under a minute";
+  if (h <= 0) return m + "m";
+  return h + "h " + m + "m";
+}
 function renderEhSection(ehUsage, ehModels, ehSession, ehSessionUi, onHarvestSession, onOpenEhLogin) {
   var rawSession = ehSession && ehSession.data && ehSession.data.ok === true ? ehSession : null;
   var harvested = rawSession && rawSession.data && rawSession.data.session ? rawSession.data.session : null;
@@ -589,6 +636,7 @@ function renderEhSection(ehUsage, ehModels, ehSession, ehSessionUi, onHarvestSes
   var usage = model.usage;
   var models = model.models;
   var session = sessionFresh ? model.session : null;
+  var devpass = model.devpass;
   var hero = null;
   if (usage) {
     var tier = typeof usage.subscription === "string" && usage.subscription !== "" ? usage.subscription.charAt(0).toUpperCase() + usage.subscription.slice(1) + (usage.codingPlan ? " (coding plan)" : " plan") : null;
@@ -649,6 +697,69 @@ function renderEhSection(ehUsage, ehModels, ehSession, ehSessionUi, onHarvestSes
         /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-card", key: "eh-mon-" + mi }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-label" }, boxLabel), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-value" }, parts.join(" \xB7 ") || "\u2014"), resetLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-label" }, resetLine) : null)
       );
     }
+  }
+  var devpassCards = [];
+  var devpassLines = [];
+  if (devpass !== null) {
+    var dpToday = [];
+    if (typeof devpass.todayTokens === "number")
+      dpToday.push(fmtCount(devpass.todayTokens) + " used");
+    if (typeof devpass.dailyLimit === "number")
+      dpToday.push("limit " + fmtCount(devpass.dailyLimit));
+    if (typeof devpass.todayPercent === "number")
+      dpToday.push(devpass.todayPercent + "% full-speed");
+    if (dpToday.length > 0) {
+      devpassCards.push(
+        /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-card", key: "eh-dp-today" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-label" }, "DevPass today"), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-value" }, dpToday.join(" \xB7 ")))
+      );
+    }
+    var dpWeek = [];
+    if (typeof devpass.weekTokens === "number")
+      dpWeek.push(fmtCount(devpass.weekTokens) + " used");
+    if (typeof devpass.weeklyCap === "number")
+      dpWeek.push("cap " + fmtCount(devpass.weeklyCap));
+    if (typeof devpass.weekPercent === "number") dpWeek.push(devpass.weekPercent + "%");
+    var dpActivity = devpass.activity !== null && typeof devpass.activity === "object" ? devpass.activity : null;
+    var dpLeaving = null;
+    if (dpActivity !== null && typeof dpActivity.leavingTokens === "number") {
+      dpLeaving = String(dpActivity.leavingDay) + " rolls out (" + fmtCount(dpActivity.leavingTokens) + ")";
+    }
+    if (dpWeek.length > 0 || dpLeaving !== null) {
+      devpassCards.push(
+        /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-card", key: "eh-dp-week" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-label" }, "DevPass week (rolling 7d)"), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-value" }, dpWeek.join(" \xB7 ") || "\u2014"), dpLeaving !== null ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-label" }, dpLeaving) : null)
+      );
+    }
+    var dpConc = [];
+    if (typeof devpass.activeRequests === "number")
+      dpConc.push(fmtCount(devpass.activeRequests) + " active");
+    if (typeof devpass.concurrencyLimit === "number")
+      dpConc.push("limit " + fmtCount(devpass.concurrencyLimit));
+    if (dpConc.length > 0) {
+      devpassCards.push(
+        /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-card", key: "eh-dp-conc" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-label" }, "DevPass concurrency"), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-value" }, dpConc.join(" \xB7 ")))
+      );
+    }
+    var dpChip = ehDevpassServiceChip(devpass.serviceMode);
+    if (dpChip !== null) {
+      devpassCards.push(
+        /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-card", key: "eh-dp-speed" }, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-label" }, "DevPass speed"), /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-value" }, dpChip))
+      );
+    }
+    var dpPlan = [];
+    if (typeof devpass.tier === "string" && devpass.tier !== "") dpPlan.push(devpass.tier);
+    if (typeof devpass.status === "string" && devpass.status !== "") dpPlan.push(devpass.status);
+    if (typeof devpass.subscribed === "boolean")
+      dpPlan.push(devpass.subscribed ? "subscribed" : "not subscribed");
+    if (typeof devpass.periodEnd === "string" && devpass.periodEnd !== "")
+      dpPlan.push("period ends " + devpass.periodEnd);
+    if (dpPlan.length > 0) {
+      devpassLines.push(
+        /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note", key: "eh-dp-plan" }, "DevPass: " + dpPlan.join(" \xB7 "))
+      );
+    }
+    devpassLines.push(
+      /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note", key: "eh-dp-headroom" }, EH_DEVPASS_HEADROOM_NOTE + " (" + fmtDevpassCountdown(ehDevpassResetMs(Date.now())) + " left)")
+    );
   }
   var historyRows = [];
   if (usage && Array.isArray(usage.history)) {
@@ -790,7 +901,7 @@ function renderEhSection(ehUsage, ehModels, ehSession, ehSessionUi, onHarvestSes
   }
   return /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-section" }, /* @__PURE__ */ import_react2.default.createElement("h4", { className: "ocgs-section-title" }, "ElectronHub"), errorLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "dsp-err" }, errorLine) : null, model.emptyLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note" }, model.emptyLine) : null, model.notes.map(function(note, ni) {
     return /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note", key: "eh-n-" + ni }, note);
-  }), hero, sessionHero, sessionHarvestedLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note" }, sessionHarvestedLine) : null, rawSession !== null && session === null ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note" }, EH_SESSION_EXPIRED_LINE) : null, sessionLines, sessionCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, sessionCards) : null, creditCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, creditCards) : null, tokenCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, tokenCards) : null, monthlyCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, monthlyCards) : null, historyRows.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, historyRows) : null, endpointCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, endpointCards) : null, accountUsageList, modelList, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-cookie" }, /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", disabled: ehSessionUi.busy, onClick: onHarvestSession }, ehSessionUi.busy ? "Fetching\u2026" : "Fetch session from Firefox"), ehSessionUi.showLogin ? /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", onClick: onOpenEhLogin }, "Open app.electronhub.ai") : null, ehSessionUi.note ? /* @__PURE__ */ import_react2.default.createElement("span", { className: "ocgs-cookie-note" }, ehSessionUi.note) : null));
+  }), hero, sessionHero, sessionHarvestedLine ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note" }, sessionHarvestedLine) : null, rawSession !== null && session === null ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-note" }, EH_SESSION_EXPIRED_LINE) : null, sessionLines, sessionCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, sessionCards) : null, devpassLines, devpassCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, devpassCards) : null, creditCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, creditCards) : null, tokenCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, tokenCards) : null, monthlyCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, monthlyCards) : null, historyRows.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-rows" }, historyRows) : null, endpointCards.length > 0 ? /* @__PURE__ */ import_react2.default.createElement("div", { className: "ds-usage-grid" }, endpointCards) : null, accountUsageList, modelList, /* @__PURE__ */ import_react2.default.createElement("div", { className: "ocgs-cookie" }, /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", disabled: ehSessionUi.busy, onClick: onHarvestSession }, ehSessionUi.busy ? "Fetching\u2026" : "Fetch session from Firefox"), ehSessionUi.showLogin ? /* @__PURE__ */ import_react2.default.createElement("button", { className: "ocgs-btn", onClick: onOpenEhLogin }, "Open app.electronhub.ai") : null, ehSessionUi.note ? /* @__PURE__ */ import_react2.default.createElement("span", { className: "ocgs-cookie-note" }, ehSessionUi.note) : null));
 }
 function makePanel(ctx, config) {
   return function Panel() {

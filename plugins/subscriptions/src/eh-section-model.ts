@@ -30,6 +30,7 @@ import {
   EH_SESSION_TIER_UNRESOLVED_NOTE,
   ehSessionHasContent,
 } from "./eh-session-model";
+import { ehDevpassHasContent } from "./eh-ws";
 
 /** The failure string of one fetch result, or null. */
 export function ehResultError(result, fallback) {
@@ -352,6 +353,13 @@ export var ELECTRONHUB_CODING_PLAN_NOTE =
  * only: the account/tier mismatch is recorded unresolved (criterion 8), so
  * the fold never headlines them as the plan. The analytics limitation is
  * stated as a note (criterion 7), never approximated.
+ *
+ * #68 additions: the usage envelope may carry `devpass` — the parsed
+ * WebSocket status+activity the host fetched with a session JWT for a dev
+ * key (or no key at all). A devpass with content makes the section ready on
+ * its own: the host omits the dev-key note when it answers real numbers, so
+ * the note survives only where no session exists. An all-null devpass folds
+ * to null — the client null-checks one field instead of re-proving content.
  */
 export function ehSectionModel(ehUsage, ehModels, ehSession = null) {
   var errorLine =
@@ -401,11 +409,25 @@ export function ehSectionModel(ehUsage, ehModels, ehSession = null) {
     notes.push(EH_SESSION_ANALYTICS_NOTE);
   }
 
+  // #68: the WebSocket devpass usage rides the usage envelope (parsed by
+  // ./eh-ws.ts on the host). An all-null devpass folds to null so the
+  // client draws nothing from it; content makes the section ready even for
+  // a dev key or no key, where REST could never produce numbers.
+  var devpassRaw =
+    usage !== null &&
+    usage.devpass !== null &&
+    typeof usage.devpass === "object" &&
+    !Array.isArray(usage.devpass)
+      ? usage.devpass
+      : null;
+  var devpass = devpassRaw !== null && ehDevpassHasContent(devpassRaw) ? devpassRaw : null;
+
   var hasContent =
     ehUsageHasContent(usage) ||
     (models !== null && models.length > 0) ||
     (accountUsage !== null && accountUsage.length > 0) ||
-    hasSessionContent;
+    hasSessionContent ||
+    devpass !== null;
 
   // A dev key's answer IS the note: the section renders ready-with-note, not
   // an error, and never the "invalid key" reading (#74 kept honest).
@@ -435,6 +457,7 @@ export function ehSectionModel(ehUsage, ehModels, ehSession = null) {
     usage: usage,
     models: models,
     session: session,
+    devpass: devpass,
     accountUsage: accountUsage,
     totalConsumption:
       modelsBody !== null

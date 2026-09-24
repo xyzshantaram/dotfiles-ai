@@ -590,6 +590,13 @@ import {
   ehResolveFirefoxProfiles,
   ehSessionCookieHeader,
 } from "./eh-session-model";
+import {
+  ehDevpassHasContent,
+  ehJwtCache,
+  ehParseDevpassActivity,
+  ehParseDevpassStatus,
+  ehWsDevpassFetch,
+} from "./eh-ws";
 
 export function apply(ctx, config) {
   const credentials = ctx.get("credentials");
@@ -992,7 +999,24 @@ export function apply(ctx, config) {
     // must never read as an invalid key (#74's surfacing kept honest). This
     // branch answers from the prefix alone; the fold renders its note.
     if (ehIsDevKey(key)) {
-      return { ...parseElectronHubUsage(null), devKey: true, note: ELECTRONHUB_DEV_NOTE };
+      // #68: a dev key WITH a Firefox session gets REAL usage over the
+      // private WebSocket (41/42 status + 47/48 activity on a session JWT —
+      // see ./eh-ws.ts). The dev note below survives only when no session
+      // exists; the model list stays the public catalog either way.
+      // devpassUsageOnce lives alongside the session machinery below; the
+      // call happens per request, long after every const initialises.
+      try {
+        return {
+          ...parseElectronHubUsage(null),
+          devKey: true,
+          devpass: await devpassUsageOnce(),
+        };
+      } catch (error) {
+        if (error instanceof Error && error.message === EH_SESSION_NO_COOKIE) {
+          return { ...parseElectronHubUsage(null), devKey: true, note: ELECTRONHUB_DEV_NOTE };
+        }
+        throw error;
+      }
     }
     const res = await electronhubGet("/user/me", key);
     // 403 is a CAPABILITY limit: the key is accepted, this surface is not in
@@ -1105,6 +1129,19 @@ export function apply(ctx, config) {
     try {
       const key = await resolveElectronHubKey();
       if (!key) {
+        // #68: no key but a Firefox session still yields real usage over
+        // the WebSocket; the missing-credential affordance answers only
+        // when no session exists either.
+        try {
+          sendJson(res, 200, {
+            ok: true,
+            ...parseElectronHubUsage(null),
+            devpass: await devpassUsageOnce(),
+          });
+          return;
+        } catch (error) {
+          if (!(error instanceof Error && error.message === EH_SESSION_NO_COOKIE)) throw error;
+        }
         sendJson(res, 200, { ok: false, error: ELECTRONHUB_KEY_MISSING });
         return;
       }
@@ -1548,21 +1585,27 @@ export function apply(ctx, config) {
   };
 
   /**
-   * Harvest across profiles in profiles.ini order: first profile whose
-   * cookie mints wins. A dead cookie (refresh 401) moves on to the next
-   * profile; a transport/parse failure aborts with its message.
+   * Mint via the Firefox profiles in profiles.ini order: first profile
+   * whose cookie mints wins, with rotation reflection exactly as the
+   * extract path always did. Shared by the explicit extract action AND the
+   * WS poll — both reach it through caches, so neither mints per request.
+   * Returns null when no profile holds a usable cookie; throws
+   * EH_SESSION_EXPIRED when cookies were seen but every mint 401'd (the
+   * session is dead, not absent); throws anything else (transport/parse).
    */
-  const harvestElectronHubSession = async () => {
+  const mintHarvestedJwt = async () => {
+    let sawCookie = false;
     for (const dir of firefoxElectronHubProfileDirs()) {
       if (!existsSync(join(dir, "cookies.sqlite"))) continue;
       const refreshValue = await readElectronHubRefreshCookie(dir);
       if (refreshValue === null) continue;
+      sawCookie = true;
       let minted = null;
       try {
         minted = await mintElectronHubSessionJwt(refreshValue);
       } catch (error) {
         if (error instanceof Error && error.message === EH_SESSION_EXPIRED) continue;
-        return { ok: false as const, error: error instanceof Error ? error.message : String(error) };
+        throw error;
       }
       let reflected = false;
       if (minted.successor !== null && minted.successor !== refreshValue) {
@@ -1572,18 +1615,67 @@ export function apply(ctx, config) {
           reflected = false;
         }
       }
-      try {
-        const session = await fetchElectronHubSession(minted.accessToken);
-        return {
-          ok: true as const,
-          session: { ...session, reflected, sessionExpiresIn: minted.expiresIn },
-        };
-      } catch (error) {
-        return { ok: false as const, error: error instanceof Error ? error.message : String(error) };
-      }
+      return {
+        accessToken: minted.accessToken,
+        expiresIn: minted.expiresIn,
+        reflected,
+      };
     }
+    if (sawCookie) throw new Error(EH_SESSION_EXPIRED);
     return null;
   };
+
+  /**
+   * Harvest across profiles in profiles.ini order: first profile whose
+   * cookie mints wins. A dead cookie (refresh 401) moves on to the next
+   * profile; a transport/parse failure aborts with its message.
+   */
+  const harvestElectronHubSession = async () => {
+    let minted = null;
+    try {
+      minted = await mintHarvestedJwt();
+    } catch (error) {
+      // Dead cookies read as no session on the extract path (unchanged):
+      // the NO_COOKIE affordance tells the user to sign in again.
+      if (error instanceof Error && error.message === EH_SESSION_EXPIRED) return null;
+      return { ok: false as const, error: error instanceof Error ? error.message : String(error) };
+    }
+    if (minted === null) return null;
+    try {
+      const session = await fetchElectronHubSession(minted.accessToken);
+      return {
+        ok: true as const,
+        session: { ...session, reflected: minted.reflected, sessionExpiresIn: minted.expiresIn },
+      };
+    } catch (error) {
+      return { ok: false as const, error: error instanceof Error ? error.message : String(error) };
+    }
+  };
+
+  // ── DevPass WS usage for dev keys / no key (#68) ─────────────────────────
+  // The poll reuses ONE minted JWT until it is near expiry: the jwt cache
+  // mints at most once per ~55 minutes with a failure cooldown, because
+  // each mint ROTATES the refresh token and per-request minting would churn
+  // the browser's own chain. The WS result itself caches 60s like the
+  // section's other routes. The route answers NUMBERS, never tokens — the
+  // parsers pick known fields only, and no JWT is logged, stored, or
+  // returned (it rides solely inside the 41/47 request frames on the wire).
+  const devpassJwt = ehJwtCache(async () => {
+    const minted = await mintHarvestedJwt();
+    if (minted === null) throw new Error(EH_SESSION_NO_COOKIE);
+    return minted;
+  });
+  const fetchDevpassUsage = async () => {
+    const jwt = await devpassJwt.get();
+    const raw = await ehWsDevpassFetch(jwt.accessToken, { timeoutMs: ELECTRONHUB_TIMEOUT_MS });
+    const status = ehParseDevpassStatus(raw.status);
+    // An unrecognised 42 payload is a fetch failure, not an empty section:
+    // surfacing it beats rendering a heading with no cards beneath it.
+    if (!ehDevpassHasContent(status))
+      throw new Error("electronhub devpass WS returned an unrecognised payload");
+    return { ...status, activity: ehParseDevpassActivity(raw.activity) };
+  };
+  const devpassUsageOnce = cachedOnce(fetchDevpassUsage, ELECTRONHUB_USAGE_CACHE_MS);
 
   const handleElectronhubSessionExtract = async (_req, res) => {
     const found = await harvestElectronHubSession();

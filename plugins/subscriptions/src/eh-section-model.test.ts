@@ -534,3 +534,100 @@ describe("#141 account-models parser edge cases", () => {
     expect(account.lastUpdated).toBeNull();
   });
 });
+
+describe("#68 host wiring: the dev branch polls the WS through the reuse cache, never minting per request", () => {
+  // Source-structure pins, the same tool as the #141 guard-order test:
+  // importing the host half would drag in Cordis, so the tests read it.
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, "index.ts"), "utf8");
+
+  it("electronhubUsageOnce consults devpassUsageOnce before answering the dev note", () => {
+    const start = src.indexOf("electronhubUsageOnce");
+    const end = src.indexOf("handleElectronhubUsage");
+    const body = src.slice(start, end);
+    const guard = body.indexOf("ehIsDevKey(key)");
+    const poll = body.indexOf("devpassUsageOnce()");
+    const note = body.indexOf("ELECTRONHUB_DEV_NOTE");
+    expect(guard).toBeGreaterThan(-1);
+    expect(poll).toBeGreaterThan(-1);
+    expect(note).toBeGreaterThan(-1);
+    // Real numbers first, the honest note only when no session exists.
+    expect(guard).toBeLessThan(poll);
+    expect(poll).toBeLessThan(note);
+  });
+
+  it("exactly one mint site feeds both the extract action and the poll cache", () => {
+    // mintElectronHubSessionJwt is DEFINED once and CALLED once — inside
+    // mintHarvestedJwt, which both paths share. A second call site would
+    // mean a second rotation chain the tests cannot see.
+    const calls = src.split("mintElectronHubSessionJwt(").length - 1;
+    expect(calls).toBe(1);
+    const mintSite = src.indexOf("mintElectronHubSessionJwt(");
+    const loopStart = src.indexOf("mintHarvestedJwt");
+    expect(mintSite).toBeGreaterThan(loopStart);
+    // And the poll reaches the loop only through the reuse cache.
+    expect(src).toContain("devpassJwt = ehJwtCache(");
+    expect(src).toContain("mintHarvestedJwt()");
+  });
+});
+describe("#68: WebSocket devpass usage renders real numbers for a dev key or no key", () => {
+  /** What the host answers when the WS round-trip succeeds: parsed status + activity. */
+  const DEVPASS = {
+    subscribed: true,
+    tier: "devpass",
+    status: "active",
+    todayTokens: 1200,
+    dailyLimit: 5000,
+    todayPercent: 24,
+    weekTokens: 9000,
+    weeklyCap: 20000,
+    weekPercent: 45,
+    activeRequests: 2,
+    concurrencyLimit: 5,
+    serviceMode: "interactive",
+    periodEnd: "2026-09-23T21:00:00Z",
+    activity: {
+      days: [{ day: "2026-09-22", tokens: 333 }],
+      weekStart: "2026-09-16",
+      leavingDay: "2026-09-15",
+      leavingTokens: 111,
+    },
+  };
+
+  it("a dev key with devpass is ready on the numbers, with no stale unavailability note", () => {
+    const model = fold(
+      okBody({ ok: true, ...parseElectronHubUsage(null), devKey: true, devpass: DEVPASS }),
+      okBody({ ok: true, models: ["gpt-4o"], source: "catalog" }),
+    );
+    expect(model.status).toBe("ready");
+    expect(model.errorLine).toBeNull();
+    expect(model.emptyLine).toBeNull();
+    expect(model.devpass).toEqual(DEVPASS);
+    expect(model.notes.join(" ")).not.toContain("unavailable to dev keys");
+  });
+
+  it("no key with devpass is ready too — the session stands in for the credential", () => {
+    const model = fold(
+      okBody({ ok: true, ...parseElectronHubUsage(null), devpass: DEVPASS }),
+      okBody({ ok: true, models: ["gpt-4o"], source: "catalog" }),
+    );
+    expect(model.status).toBe("ready");
+    expect(model.devpass).toEqual(DEVPASS);
+  });
+
+  it("an all-null devpass folds to null: notes only, never an empty usage block", () => {
+    const model = fold(
+      okBody({
+        ok: true,
+        ...parseElectronHubUsage(null),
+        devKey: true,
+        note: ELECTRONHUB_DEV_NOTE,
+        devpass: { todayTokens: null, serviceMode: null },
+      }),
+      undefined,
+    );
+    expect(model.devpass).toBeNull();
+    expect(model.status).toBe("ready");
+    expect(model.notes.join(" ")).toContain("unavailable to dev keys");
+  });
+});

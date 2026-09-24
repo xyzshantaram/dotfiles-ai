@@ -679,6 +679,264 @@ function ehParseSessionFlexCredits(data) {
   };
 }
 
+// plugins/subscriptions/src/eh-ws.ts
+var EH_WS_URLS = [
+  "wss://api.electronhub.ai/v1/ws/auth",
+  "wss://ws.electronhub.ai/v1/ws/auth"
+];
+var EH_WS_ERROR = 5;
+var EH_WS_PING = 6;
+var EH_WS_PONG = 7;
+var EH_WS_DEVPASS_STATUS_REQ = 41;
+var EH_WS_DEVPASS_STATUS_RES = 42;
+var EH_WS_DEVPASS_ACTIVITY_REQ = 47;
+var EH_WS_DEVPASS_ACTIVITY_RES = 48;
+var EH_WS_MAX_FRAME = 1024 * 1024;
+var EH_DEVPASS_ACTIVITY_DAYS = 14;
+var ehTextEncoder = new TextEncoder();
+var ehTextDecoder = new TextDecoder();
+function ehWsEncode(type, payload) {
+  var body = ehTextEncoder.encode(JSON.stringify(payload));
+  var out = new Uint8Array(5 + body.length);
+  out[0] = type & 255;
+  out[1] = body.length >>> 24 & 255;
+  out[2] = body.length >>> 16 & 255;
+  out[3] = body.length >>> 8 & 255;
+  out[4] = body.length & 255;
+  out.set(body, 5);
+  return out;
+}
+function ehWsReader() {
+  var buffered = new Uint8Array(0);
+  var join2 = function(chunk) {
+    var next = new Uint8Array(buffered.length + chunk.length);
+    next.set(buffered, 0);
+    next.set(chunk, buffered.length);
+    buffered = next;
+    var frames = [];
+    for (; ; ) {
+      if (buffered.length < 5) return frames;
+      var length = buffered[1] * 16777216 + buffered[2] * 65536 + buffered[3] * 256 + buffered[4];
+      if (length > EH_WS_MAX_FRAME) throw new Error("electronhub ws frame exceeds 1MB cap");
+      if (buffered.length < 5 + length) return frames;
+      var text = ehTextDecoder.decode(buffered.slice(5, 5 + length));
+      var payload;
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        throw new Error("electronhub ws frame is not JSON");
+      }
+      frames.push({ type: buffered[0], payload });
+      buffered = buffered.slice(5 + length);
+    }
+  };
+  return { push: join2 };
+}
+function wsNum(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string" && value.trim() !== "") {
+    var parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+function wsStr(value) {
+  return typeof value === "string" && value !== "" ? value : null;
+}
+function wsBool(value) {
+  return typeof value === "boolean" ? value : null;
+}
+function ehDevpassPercent(used, limit) {
+  if (used === null || limit === null || limit <= 0) return null;
+  return Math.round(Math.min(100, used / limit * 100));
+}
+function ehParseDevpassStatus(data) {
+  if (data === null || typeof data !== "object" || Array.isArray(data)) return null;
+  var source = data;
+  var todayTokens = wsNum(source.tokens_used_today);
+  var dailyLimit = wsNum(source.daily_limit);
+  var weekTokens = wsNum(source.tokens_week);
+  var weeklyCap = wsNum(source.weekly_cap);
+  return {
+    subscribed: wsBool(source.subscribed),
+    tier: wsStr(source.tier),
+    status: wsStr(source.status),
+    todayTokens,
+    dailyLimit,
+    todayPercent: ehDevpassPercent(todayTokens, dailyLimit),
+    weekTokens,
+    weeklyCap,
+    weekPercent: ehDevpassPercent(weekTokens, weeklyCap),
+    activeRequests: wsNum(source.active_requests),
+    concurrencyLimit: wsNum(source.concurrency_limit),
+    serviceMode: wsStr(source.service_mode),
+    periodEnd: wsStr(source.period_end)
+  };
+}
+function ehDevpassHasContent(status) {
+  if (!status || typeof status !== "object") return false;
+  var s = status;
+  return s.subscribed != null || s.tier != null || s.status != null || s.todayTokens != null || s.dailyLimit != null || s.weekTokens != null || s.weeklyCap != null || s.activeRequests != null || s.concurrencyLimit != null || s.serviceMode != null;
+}
+function wsDayEntry(item) {
+  if (item === null || typeof item !== "object") return null;
+  var entry = item;
+  if (typeof entry.day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(entry.day)) return null;
+  return { day: entry.day, tokens: wsNum(entry.tokens) };
+}
+function utcDayString(nowMs, deltaDays) {
+  return new Date(nowMs + deltaDays * 864e5).toISOString().slice(0, 10);
+}
+function ehParseDevpassActivity(data, nowMs = null) {
+  if (data === null || typeof data !== "object" || Array.isArray(data)) return null;
+  var now = typeof nowMs === "number" ? nowMs : Date.now();
+  var days = [];
+  var raw = data.days;
+  if (Array.isArray(raw)) {
+    for (var i = 0; i < raw.length; i++) {
+      var entry = wsDayEntry(raw[i]);
+      if (entry !== null) days.push(entry);
+    }
+  }
+  var leavingDay = utcDayString(now, -7);
+  var leavingTokens = null;
+  for (var j = 0; j < days.length; j++) {
+    if (days[j].day === leavingDay) {
+      leavingTokens = days[j].tokens;
+      break;
+    }
+  }
+  return {
+    days,
+    weekStart: utcDayString(now, -6),
+    leavingDay,
+    leavingTokens
+  };
+}
+function ehJwtCache(mint, opts = null) {
+  var options = opts !== null && typeof opts === "object" ? opts : {};
+  var marginSec = typeof options.refreshMarginSec === "number" ? options.refreshMarginSec : 300;
+  var cooldownMs = typeof options.failCooldownMs === "number" ? options.failCooldownMs : 3e5;
+  var defaultTtlSec = typeof options.defaultTtlSec === "number" ? options.defaultTtlSec : 3300;
+  var nowFn = typeof options.now === "function" ? options.now : Date.now;
+  var cached = null;
+  var inFlight = null;
+  var failedAt = 0;
+  var lastError = null;
+  var get = function() {
+    var now = nowFn();
+    if (cached !== null && cached.expMs - now >= marginSec * 1e3) {
+      return Promise.resolve({ accessToken: cached.token, expiresIn: cached.ttl });
+    }
+    if (inFlight !== null) return inFlight;
+    if (lastError !== null && now - failedAt < cooldownMs) return Promise.reject(lastError);
+    inFlight = Promise.resolve().then(function() {
+      return mint();
+    }).then(function(minted) {
+      var ttl = minted !== null && typeof minted === "object" && typeof minted.expiresIn === "number" && Number.isFinite(minted.expiresIn) && minted.expiresIn > 0 ? minted.expiresIn : defaultTtlSec;
+      cached = { token: minted.accessToken, expMs: nowFn() + ttl * 1e3, ttl };
+      lastError = null;
+      return { accessToken: cached.token, expiresIn: ttl };
+    }).catch(function(error) {
+      failedAt = nowFn();
+      lastError = error;
+      throw error;
+    }).finally(function() {
+      inFlight = null;
+    });
+    return inFlight;
+  };
+  return { get };
+}
+async function ehWsDevpassFetch(jwt, opts = null) {
+  var options = opts !== null && typeof opts === "object" ? opts : {};
+  var urls = Array.isArray(options.urls) && options.urls.length > 0 ? options.urls : EH_WS_URLS;
+  var timeoutMs = typeof options.timeoutMs === "number" && options.timeoutMs > 0 ? options.timeoutMs : 15e3;
+  var Socket = typeof globalThis.WebSocket === "function" ? globalThis.WebSocket : null;
+  if (Socket === null) throw new Error("electronhub ws fetch needs a global WebSocket");
+  if (typeof jwt !== "string" || jwt === "") throw new Error("electronhub ws fetch needs a JWT");
+  var lastError = null;
+  for (var u = 0; u < urls.length; u++) {
+    try {
+      return await ehWsRoundTrip(Socket, urls[u], jwt, timeoutMs);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+function ehWsRoundTrip(Socket, url, jwt, timeoutMs) {
+  return new Promise(function(resolve, reject) {
+    var settled = false;
+    var socket = null;
+    var reader = ehWsReader();
+    var statusPayload = null;
+    var finish = function(error, result) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try {
+        if (socket !== null) socket.close();
+      } catch {
+      }
+      if (error !== null) reject(error);
+      else resolve(result);
+    };
+    var timer = setTimeout(function() {
+      finish(new Error("electronhub ws fetch timed out"), null);
+    }, timeoutMs);
+    if (timer !== null && typeof timer.unref === "function") timer.unref();
+    var send = function(type, payload) {
+      socket.send(ehWsEncode(type, payload));
+    };
+    var connected = false;
+    try {
+      socket = new Socket(url);
+    } catch (error) {
+      finish(error, null);
+      return;
+    }
+    socket.addEventListener("error", function() {
+      if (!connected) finish(new Error("electronhub ws connect failed for " + url), null);
+      else finish(new Error("electronhub ws socket error"), null);
+    });
+    socket.addEventListener("open", function() {
+      connected = true;
+      try {
+        send(EH_WS_DEVPASS_STATUS_REQ, { access_token: jwt });
+      } catch (error) {
+        finish(error, null);
+      }
+    });
+    socket.addEventListener("message", function(event) {
+      try {
+        if (typeof event.data === "string") return;
+        var chunk = event.data instanceof Uint8Array ? event.data : new Uint8Array(event.data);
+        var frames = reader.push(chunk);
+        for (var i = 0; i < frames.length; i++) {
+          var frame = frames[i];
+          if (frame.type === EH_WS_PING) {
+            send(EH_WS_PONG, frame.payload);
+          } else if (frame.type === EH_WS_ERROR) {
+            var detail = frame.payload !== null && typeof frame.payload === "object" ? JSON.stringify(frame.payload).slice(0, 200) : String(frame.payload).slice(0, 200);
+            finish(new Error("electronhub ws error: " + detail), null);
+          } else if (frame.type === EH_WS_DEVPASS_STATUS_RES && statusPayload === null) {
+            statusPayload = frame.payload;
+            send(EH_WS_DEVPASS_ACTIVITY_REQ, {
+              access_token: jwt,
+              days: EH_DEVPASS_ACTIVITY_DAYS
+            });
+          } else if (frame.type === EH_WS_DEVPASS_ACTIVITY_RES && statusPayload !== null) {
+            finish(null, { status: statusPayload, activity: frame.payload });
+          }
+        }
+      } catch (error) {
+        finish(error, null);
+      }
+    });
+  });
+}
+
 // plugins/subscriptions/src/eh-section-model.ts
 var ELECTRONHUB_DEV_PREFIX = "ek-dev-";
 var ELECTRONHUB_DEV_NOTE = "usage endpoints are unavailable to dev keys: the 2026-09-17 probe showed this key class answers HTTP 401 on /user/me and /user/models, so account usage is unreachable for it \u2014 the key is valid for inference only";
@@ -1508,7 +1766,18 @@ function apply(ctx, config) {
   });
   const electronhubUsageOnce = cachedOnce(async (key) => {
     if (ehIsDevKey(key)) {
-      return { ...parseElectronHubUsage(null), devKey: true, note: ELECTRONHUB_DEV_NOTE };
+      try {
+        return {
+          ...parseElectronHubUsage(null),
+          devKey: true,
+          devpass: await devpassUsageOnce()
+        };
+      } catch (error) {
+        if (error instanceof Error && error.message === EH_SESSION_NO_COOKIE) {
+          return { ...parseElectronHubUsage(null), devKey: true, note: ELECTRONHUB_DEV_NOTE };
+        }
+        throw error;
+      }
     }
     const res = await electronhubGet("/user/me", key);
     if (res.status === 403) {
@@ -1577,6 +1846,16 @@ function apply(ctx, config) {
     try {
       const key = await resolveElectronHubKey();
       if (!key) {
+        try {
+          sendJson(res, 200, {
+            ok: true,
+            ...parseElectronHubUsage(null),
+            devpass: await devpassUsageOnce()
+          });
+          return;
+        } catch (error) {
+          if (!(error instanceof Error && error.message === EH_SESSION_NO_COOKIE)) throw error;
+        }
         sendJson(res, 200, { ok: false, error: ELECTRONHUB_KEY_MISSING });
         return;
       }
@@ -1914,17 +2193,19 @@ SELECT value FROM moz_cookies ${where} LIMIT 1;`;
     session.partial = partial;
     return session;
   };
-  const harvestElectronHubSession = async () => {
+  const mintHarvestedJwt = async () => {
+    let sawCookie = false;
     for (const dir of firefoxElectronHubProfileDirs()) {
       if (!existsSync(join(dir, "cookies.sqlite"))) continue;
       const refreshValue = await readElectronHubRefreshCookie(dir);
       if (refreshValue === null) continue;
+      sawCookie = true;
       let minted = null;
       try {
         minted = await mintElectronHubSessionJwt(refreshValue);
       } catch (error) {
         if (error instanceof Error && error.message === EH_SESSION_EXPIRED) continue;
-        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+        throw error;
       }
       let reflected = false;
       if (minted.successor !== null && minted.successor !== refreshValue) {
@@ -1934,18 +2215,48 @@ SELECT value FROM moz_cookies ${where} LIMIT 1;`;
           reflected = false;
         }
       }
-      try {
-        const session = await fetchElectronHubSession(minted.accessToken);
-        return {
-          ok: true,
-          session: { ...session, reflected, sessionExpiresIn: minted.expiresIn }
-        };
-      } catch (error) {
-        return { ok: false, error: error instanceof Error ? error.message : String(error) };
-      }
+      return {
+        accessToken: minted.accessToken,
+        expiresIn: minted.expiresIn,
+        reflected
+      };
     }
+    if (sawCookie) throw new Error(EH_SESSION_EXPIRED);
     return null;
   };
+  const harvestElectronHubSession = async () => {
+    let minted = null;
+    try {
+      minted = await mintHarvestedJwt();
+    } catch (error) {
+      if (error instanceof Error && error.message === EH_SESSION_EXPIRED) return null;
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+    if (minted === null) return null;
+    try {
+      const session = await fetchElectronHubSession(minted.accessToken);
+      return {
+        ok: true,
+        session: { ...session, reflected: minted.reflected, sessionExpiresIn: minted.expiresIn }
+      };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  };
+  const devpassJwt = ehJwtCache(async () => {
+    const minted = await mintHarvestedJwt();
+    if (minted === null) throw new Error(EH_SESSION_NO_COOKIE);
+    return minted;
+  });
+  const fetchDevpassUsage = async () => {
+    const jwt = await devpassJwt.get();
+    const raw = await ehWsDevpassFetch(jwt.accessToken, { timeoutMs: ELECTRONHUB_TIMEOUT_MS });
+    const status = ehParseDevpassStatus(raw.status);
+    if (!ehDevpassHasContent(status))
+      throw new Error("electronhub devpass WS returned an unrecognised payload");
+    return { ...status, activity: ehParseDevpassActivity(raw.activity) };
+  };
+  const devpassUsageOnce = cachedOnce(fetchDevpassUsage, ELECTRONHUB_USAGE_CACHE_MS);
   const handleElectronhubSessionExtract = async (_req, res) => {
     const found = await harvestElectronHubSession();
     if (found === null) {

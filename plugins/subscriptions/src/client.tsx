@@ -39,6 +39,7 @@ import { SettingsSection } from "../../shared/settings-panel";
 import settingsCss from "../../shared/settings.css";
 import localCss from "./client.module.css";
 import { ehSectionModel } from "./eh-section-model";
+import { EH_DEVPASS_HEADROOM_NOTE, ehDevpassResetMs, ehDevpassServiceChip } from "./eh-ws";
 
 /** Stable plugin identity, also the loader entry id in cordis.patch.yml. */
 var PLUGIN_NAME = "subscriptions";
@@ -540,6 +541,21 @@ function fmtCredits(n) {
   return String(Math.round(n * 100) / 100);
 }
 
+/**
+ * #68: the DevPass reset countdown ("3h 12m") appended to the headroom
+ * line. Seconds never render — the minute the reset lands in is all the
+ * panel promises.
+ */
+function fmtDevpassCountdown(ms) {
+  if (!Number.isFinite(ms) || ms < 0) return "soon";
+  var totalMin = Math.floor(ms / 60000);
+  var h = Math.floor(totalMin / 60);
+  var m = totalMin % 60;
+  if (h <= 0 && m <= 0) return "under a minute";
+  if (h <= 0) return m + "m";
+  return h + "h " + m + "m";
+}
+
 function renderEhSection(ehUsage, ehModels, ehSession, ehSessionUi, onHarvestSession, onOpenEhLogin) {
   // A stale harvest is folded as absent (its figures must never render); the
   // expired line is drawn explicitly below with the harvest buttons.
@@ -552,6 +568,9 @@ function renderEhSection(ehUsage, ehModels, ehSession, ehSessionUi, onHarvestSes
   var usage = model.usage;
   var models = model.models;
   var session = sessionFresh ? model.session : null;
+  // #68: the WebSocket devpass usage (dev key or no key + Firefox session).
+  // The fold already nulled an all-absent devpass, so non-null means drawable.
+  var devpass = model.devpass;
 
   // Hero: subscription tier + remaining credits headline.
   var hero = null;
@@ -652,6 +671,94 @@ function renderEhSection(ehUsage, ehModels, ehSession, ehSessionUi, onHarvestSes
         </div>,
       );
     }
+  }
+
+  // #68: DevPass WS usage. Every card renders only the fields the 42/48
+  // payloads actually carried — an absent field omits its fragment, never
+  // renders 0. Same ds-usage-card grid as the other usage blocks.
+  var devpassCards = [];
+  var devpassLines = [];
+  if (devpass !== null) {
+    var dpToday = [];
+    if (typeof devpass.todayTokens === "number")
+      dpToday.push(fmtCount(devpass.todayTokens) + " used");
+    if (typeof devpass.dailyLimit === "number")
+      dpToday.push("limit " + fmtCount(devpass.dailyLimit));
+    if (typeof devpass.todayPercent === "number")
+      dpToday.push(devpass.todayPercent + "% full-speed");
+    if (dpToday.length > 0) {
+      devpassCards.push(
+        <div className="ds-usage-card" key="eh-dp-today">
+          <div className="ds-usage-label">DevPass today</div>
+          <div className="ds-usage-value">{dpToday.join(" · ")}</div>
+        </div>,
+      );
+    }
+    var dpWeek = [];
+    if (typeof devpass.weekTokens === "number")
+      dpWeek.push(fmtCount(devpass.weekTokens) + " used");
+    if (typeof devpass.weeklyCap === "number")
+      dpWeek.push("cap " + fmtCount(devpass.weeklyCap));
+    if (typeof devpass.weekPercent === "number") dpWeek.push(devpass.weekPercent + "%");
+    var dpActivity =
+      devpass.activity !== null && typeof devpass.activity === "object" ? devpass.activity : null;
+    var dpLeaving = null;
+    if (dpActivity !== null && typeof dpActivity.leavingTokens === "number") {
+      dpLeaving =
+        String(dpActivity.leavingDay) + " rolls out (" + fmtCount(dpActivity.leavingTokens) + ")";
+    }
+    if (dpWeek.length > 0 || dpLeaving !== null) {
+      devpassCards.push(
+        <div className="ds-usage-card" key="eh-dp-week">
+          <div className="ds-usage-label">DevPass week (rolling 7d)</div>
+          <div className="ds-usage-value">{dpWeek.join(" · ") || "—"}</div>
+          {dpLeaving !== null ? <div className="ds-usage-label">{dpLeaving}</div> : null}
+        </div>,
+      );
+    }
+    var dpConc = [];
+    if (typeof devpass.activeRequests === "number")
+      dpConc.push(fmtCount(devpass.activeRequests) + " active");
+    if (typeof devpass.concurrencyLimit === "number")
+      dpConc.push("limit " + fmtCount(devpass.concurrencyLimit));
+    if (dpConc.length > 0) {
+      devpassCards.push(
+        <div className="ds-usage-card" key="eh-dp-conc">
+          <div className="ds-usage-label">DevPass concurrency</div>
+          <div className="ds-usage-value">{dpConc.join(" · ")}</div>
+        </div>,
+      );
+    }
+    var dpChip = ehDevpassServiceChip(devpass.serviceMode);
+    if (dpChip !== null) {
+      devpassCards.push(
+        <div className="ds-usage-card" key="eh-dp-speed">
+          <div className="ds-usage-label">DevPass speed</div>
+          <div className="ds-usage-value">{dpChip}</div>
+        </div>,
+      );
+    }
+    // Raw plan labels, never a verdict: tier here is the WS account's own
+    // field, not the unresolved dashboard tier of criterion 8.
+    var dpPlan = [];
+    if (typeof devpass.tier === "string" && devpass.tier !== "") dpPlan.push(devpass.tier);
+    if (typeof devpass.status === "string" && devpass.status !== "") dpPlan.push(devpass.status);
+    if (typeof devpass.subscribed === "boolean")
+      dpPlan.push(devpass.subscribed ? "subscribed" : "not subscribed");
+    if (typeof devpass.periodEnd === "string" && devpass.periodEnd !== "")
+      dpPlan.push("period ends " + devpass.periodEnd);
+    if (dpPlan.length > 0) {
+      devpassLines.push(
+        <div className="ocgs-note" key="eh-dp-plan">
+          {"DevPass: " + dpPlan.join(" · ")}
+        </div>,
+      );
+    }
+    devpassLines.push(
+      <div className="ocgs-note" key="eh-dp-headroom">
+        {EH_DEVPASS_HEADROOM_NOTE + " (" + fmtDevpassCountdown(ehDevpassResetMs(Date.now())) + " left)"}
+      </div>,
+    );
   }
 
   // Daily request history: same track/fill bars as the window meters, but the
@@ -910,6 +1017,8 @@ function renderEhSection(ehUsage, ehModels, ehSession, ehSessionUi, onHarvestSes
       ) : null}
       {sessionLines}
       {sessionCards.length > 0 ? <div className="ds-usage-grid">{sessionCards}</div> : null}
+      {devpassLines}
+      {devpassCards.length > 0 ? <div className="ds-usage-grid">{devpassCards}</div> : null}
       {creditCards.length > 0 ? <div className="ds-usage-grid">{creditCards}</div> : null}
       {tokenCards.length > 0 ? <div className="ds-usage-grid">{tokenCards}</div> : null}
       {monthlyCards.length > 0 ? <div className="ds-usage-grid">{monthlyCards}</div> : null}
