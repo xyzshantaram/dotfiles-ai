@@ -430,6 +430,7 @@ import {
   EH_SESSION_EXPIRED,
   EH_SESSION_NO_COOKIE,
   ehDecodeJwtPayload,
+  ehHarvestOutcome,
   ehIsPlausibleTokenChars,
   ehJwtIsExpired,
   ehParseRefreshBody,
@@ -1467,15 +1468,18 @@ export function apply(ctx, config) {
    */
   const harvestElectronHubSession = async () => {
     let minted = null;
+    let mintError = null;
     try {
       minted = await mintHarvestedJwt();
     } catch (error) {
-      // Dead cookies read as no session on the extract path (unchanged):
-      // the NO_COOKIE affordance tells the user to sign in again.
-      if (error instanceof Error && error.message === EH_SESSION_EXPIRED) return null;
-      return { ok: false as const, error: error instanceof Error ? error.message : String(error) };
+      mintError = error;
     }
-    if (minted === null) return null;
+    // Pure outcome split (eh-session-model.ts): a dead cookie is EXPIRED,
+    // never "no session" — the cookie exists, the credential does not.
+    const outcome = ehHarvestOutcome({ minted, error: mintError });
+    if (outcome.kind === "no-cookie") return null;
+    if (outcome.kind === "expired") return { ok: false as const, error: EH_SESSION_EXPIRED };
+    if (outcome.kind === "error") return { ok: false as const, error: outcome.message };
     try {
       const session = await fetchElectronHubSession(minted.accessToken);
       return {
@@ -1495,9 +1499,19 @@ export function apply(ctx, config) {
   // section's other routes. The route answers NUMBERS, never tokens — the
   // parsers pick known fields only, and no JWT is logged, stored, or
   // returned (it rides solely inside the 41/47 request frames on the wire).
+  //
+  // BURN GUARD (2026-09-24): a poll mint whose rotation successor fails to
+  // write back into the profile leaves a CONSUMED token in the jar — the
+  // next unattended poll mint would 401, and each later login would be
+  // burned the same way (probed live: token created 16:20, dead by 16:32,
+  // the restart's first poll mint). Disarmed, the poll answers the honest
+  // expired message; ONLY the explicit extract action re-arms it.
+  let ehAutoMintDisarmed = false;
   const devpassJwt = ehJwtCache(async () => {
+    if (ehAutoMintDisarmed) throw new Error(EH_SESSION_EXPIRED);
     const minted = await mintHarvestedJwt();
     if (minted === null) throw new Error(EH_SESSION_NO_COOKIE);
+    if (minted.reflected !== true) ehAutoMintDisarmed = true;
     return minted;
   });
   const fetchDevpassUsage = async () => {
@@ -1513,6 +1527,9 @@ export function apply(ctx, config) {
   const devpassUsageOnce = cachedOnce(fetchDevpassUsage, ELECTRONHUB_USAGE_CACHE_MS);
 
   const handleElectronhubSessionExtract = async (_req, res) => {
+    // The explicit action re-arms the poll's auto-mint: the user is at the
+    // panel, accepting one rotation on purpose (burn guard above).
+    ehAutoMintDisarmed = false;
     const found = await harvestElectronHubSession();
     if (found === null) {
       sendJson(res, 200, { ok: false, error: EH_SESSION_NO_COOKIE });

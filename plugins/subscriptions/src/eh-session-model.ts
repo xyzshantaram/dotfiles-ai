@@ -74,6 +74,32 @@ export var EH_SESSION_NO_COOKIE =
 export var EH_SESSION_EXPIRED =
   "ElectronHub browser session expired — log in to ElectronHub in Firefox again, " +
   "then fetch the session again";
+
+// ── Harvest outcome decision (pure; pinned by table tests) ─────────────────
+
+/**
+ * Decide the honest extract answer from what the mint loop saw.
+ *
+ * The split that matters (probed live 2026-09-24): a profile that HOLDS the
+ * refresh_token cookie but whose mint answers 401 is EXPIRED, not absent —
+ * relabeling it NO_COOKIE sent the owner hunting a harvest bug that did not
+ * exist while the cookie sat in the profile, merely dead. NO_COOKIE is
+ * reserved for a profile set that holds no ElectronHub cookie at all.
+ * Transport/parse failures keep their own message; success carries whether
+ * the rotation successor was written back to the profile.
+ */
+export function ehHarvestOutcome(input) {
+  if (input === null || typeof input !== "object") return { kind: "no-cookie" };
+  var error = input.error;
+  if (error !== null && error !== undefined) {
+    var message = error instanceof Error ? error.message : String(error);
+    if (message === EH_SESSION_EXPIRED) return { kind: "expired" };
+    return { kind: "error", message: message };
+  }
+  var minted = input.minted;
+  if (minted === null || minted === undefined) return { kind: "no-cookie" };
+  return { kind: "session", reflected: minted.reflected === true };
+}
 /**
  * Analytics endpoints unidentified (criterion 7): the token/API usage tabs
  * ride an authenticated WebSocket (/v1/ws/auth, protocol unknown from the

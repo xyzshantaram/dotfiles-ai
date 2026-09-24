@@ -29,6 +29,7 @@ import {
   ehParseSessionPermanentCredits,
   ehParseSessionSubscription,
   ehPickRefreshCookie,
+  ehHarvestOutcome,
   ehResolveFirefoxProfiles,
   ehSessionCookieHeader,
   ehSessionHasContent,
@@ -352,5 +353,39 @@ describe("#108 fold: harvested session envelope", () => {
       ).length;
       expect(slots).toBe(1);
     }
+  });
+});
+
+describe("ehHarvestOutcome (the dead-cookie lie, pinned)", () => {
+  // Probed live 2026-09-24: the profile HELD the cookie (87 chars, exact
+  // host) while the mint answered 401 — the old code relabeled that
+  // EXPIRED state as NO_COOKIE and sent the owner hunting a harvest bug
+  // that did not exist. These rows pin the honest split.
+  it("a dead cookie (mint 401, cookie seen) is EXPIRED, never no-cookie", () => {
+    const outcome = ehHarvestOutcome({ minted: null, error: new Error(EH_SESSION_EXPIRED) });
+    expect(outcome).toEqual({ kind: "expired" });
+  });
+  it("no cookie in any profile is the only no-cookie case", () => {
+    expect(ehHarvestOutcome({ minted: null, error: null })).toEqual({ kind: "no-cookie" });
+    expect(ehHarvestOutcome(null)).toEqual({ kind: "no-cookie" });
+    expect(ehHarvestOutcome({})).toEqual({ kind: "no-cookie" });
+  });
+  it("transport/parse failures keep their own message", () => {
+    const outcome = ehHarvestOutcome({ minted: null, error: new Error("fetch failed") });
+    expect(outcome).toEqual({ kind: "error", message: "fetch failed" });
+  });
+  it("a non-Error rejection is stringified, never crashes the split", () => {
+    const outcome = ehHarvestOutcome({ minted: null, error: "boom" });
+    expect(outcome).toEqual({ kind: "error", message: "boom" });
+  });
+  it("success carries whether the rotation successor was written back", () => {
+    expect(ehHarvestOutcome({ minted: { reflected: true }, error: null })).toEqual({
+      kind: "session",
+      reflected: true,
+    });
+    expect(ehHarvestOutcome({ minted: { reflected: false }, error: null })).toEqual({
+      kind: "session",
+      reflected: false,
+    });
   });
 });

@@ -553,6 +553,18 @@ var EH_SESSION_ENDPOINT_PATHS = [
 ];
 var EH_SESSION_NO_COOKIE = "no ElectronHub browser session in any Firefox profile \u2014 open app.electronhub.ai in Firefox and sign in, then fetch the session again";
 var EH_SESSION_EXPIRED = "ElectronHub browser session expired \u2014 log in to ElectronHub in Firefox again, then fetch the session again";
+function ehHarvestOutcome(input) {
+  if (input === null || typeof input !== "object") return { kind: "no-cookie" };
+  var error = input.error;
+  if (error !== null && error !== void 0) {
+    var message = error instanceof Error ? error.message : String(error);
+    if (message === EH_SESSION_EXPIRED) return { kind: "expired" };
+    return { kind: "error", message };
+  }
+  var minted = input.minted;
+  if (minted === null || minted === void 0) return { kind: "no-cookie" };
+  return { kind: "session", reflected: minted.reflected === true };
+}
 function ehIniProfiles(text) {
   var out = [];
   var current = null;
@@ -2156,13 +2168,16 @@ SELECT value FROM moz_cookies ${where} LIMIT 1;`;
   };
   const harvestElectronHubSession = async () => {
     let minted = null;
+    let mintError = null;
     try {
       minted = await mintHarvestedJwt();
     } catch (error) {
-      if (error instanceof Error && error.message === EH_SESSION_EXPIRED) return null;
-      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      mintError = error;
     }
-    if (minted === null) return null;
+    const outcome = ehHarvestOutcome({ minted, error: mintError });
+    if (outcome.kind === "no-cookie") return null;
+    if (outcome.kind === "expired") return { ok: false, error: EH_SESSION_EXPIRED };
+    if (outcome.kind === "error") return { ok: false, error: outcome.message };
     try {
       const session = await fetchElectronHubSession(minted.accessToken);
       return {
@@ -2173,9 +2188,12 @@ SELECT value FROM moz_cookies ${where} LIMIT 1;`;
       return { ok: false, error: error instanceof Error ? error.message : String(error) };
     }
   };
+  let ehAutoMintDisarmed = false;
   const devpassJwt = ehJwtCache(async () => {
+    if (ehAutoMintDisarmed) throw new Error(EH_SESSION_EXPIRED);
     const minted = await mintHarvestedJwt();
     if (minted === null) throw new Error(EH_SESSION_NO_COOKIE);
+    if (minted.reflected !== true) ehAutoMintDisarmed = true;
     return minted;
   });
   const fetchDevpassUsage = async () => {
@@ -2188,6 +2206,7 @@ SELECT value FROM moz_cookies ${where} LIMIT 1;`;
   };
   const devpassUsageOnce = cachedOnce(fetchDevpassUsage, ELECTRONHUB_USAGE_CACHE_MS);
   const handleElectronhubSessionExtract = async (_req, res) => {
+    ehAutoMintDisarmed = false;
     const found = await harvestElectronHubSession();
     if (found === null) {
       sendJson(res, 200, { ok: false, error: EH_SESSION_NO_COOKIE });
