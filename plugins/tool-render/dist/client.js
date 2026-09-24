@@ -2268,7 +2268,7 @@ function escapeHtml(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
-// css-text:/home/sid/.dsh/aidos/scratch/--home-sid-repos-dotfiles-ai--/wt-340b/plugins/tool-render/src/client.module.css
+// css-text:/home/sid/repos/dotfiles-ai/plugins/tool-render/src/client.module.css
 var client_default = `/* ==========================================================================
  * THE SCALE (#169) \u2014 the file's contract. Read this before adding a rule.
  *
@@ -24545,7 +24545,7 @@ function swapIcons(html) {
   });
 }
 
-// css-text:/home/sid/.dsh/aidos/scratch/--home-sid-repos-dotfiles-ai--/wt-340b/plugins/tool-render/src/bash-graph/styles.css
+// css-text:/home/sid/repos/dotfiles-ai/plugins/tool-render/src/bash-graph/styles.css
 var styles_default = `/* bash-graph styles: fair copy of the prototype diagram rules.
  *
  * PORT NOTE (criterion 4): this file transcribes the prototype <style>
