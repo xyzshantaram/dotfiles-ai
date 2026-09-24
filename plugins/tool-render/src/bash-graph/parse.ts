@@ -94,7 +94,7 @@ export function splitLines(src: string): SourceLine[] {
   let i = 0;
   let start = 0;
   let q: string | null = null;
-  const paren: ParenKind[] = [];
+  const paren: ParenFrame[] = [];
   let opaque = 0;
   let esc2 = false;
   const cs = compoundState();
@@ -165,31 +165,32 @@ export function splitLines(src: string): SourceLine[] {
     if (c === "$" && (src[i + 1] === "(" || src[i + 1] === "{")) {
       compoundMark(cs, c);
       compoundMark(cs, src[i + 1]);
-      paren.push(src[i + 1] === "(" ? "t" : "o");
-      if (paren[paren.length - 1] === "o") opaque++;
+      paren.push({ kind: src[i + 1] === "(" ? "t" : "o", depth: cs.depth });
+      if (paren[paren.length - 1].kind === "o") opaque++;
       i += 2;
       continue;
     }
     if (c === "(" || c === "{") {
       compoundMark(cs, c);
       const k: ParenKind = c === "(" && !parenIsOpaque(src, i) ? "t" : "o";
-      paren.push(k);
+      paren.push({ kind: k, depth: cs.depth });
       if (k === "o") opaque++;
       i++;
       continue;
     }
     // A `)` with frames open is either a case-arm terminator (no pop, the
     // #187 undo extended inside parens) or the genuine closer (pop); the
-    // tracker state after flushing the pending word decides (ticket #340).
+    // frame-age decides (ticket #340 round 2): a compound opened after the
+    // innermost frame means an arm, anything else the closer.
     // `}` always pops: in valid input it closes a `{` frame.
     if (c === ")" && paren.length > 0) {
-      if (compoundParenClose(cs, src, i, paren) === "o") opaque--;
+      if (compoundParenClose(cs, paren) === "o") opaque--;
       i++;
       continue;
     }
     if (c === "}" && paren.length > 0) {
       compoundMark(cs, c);
-      if (paren.pop() === "o") opaque--;
+      if (paren.pop()?.kind === "o") opaque--;
       cs.testDepth = 0;
       i++;
       continue;
@@ -295,9 +296,12 @@ export interface SemiPart {
  * Ticket #340: paren-nested text is no longer uniformly dark. Transparent
  * frames (subshells, command and process substitutions) track words exactly
  * as depth 0 does, so a `)` there goes through the arm-or-closer rule
- * (compoundParenClose): compound still open means a case arm, which keeps
- * the frame open with the #187 undo, while a closed or absent compound
- * means the genuine closer, which pops. Opaque frames (braces, arithmetic,
+ * (compoundParenClose): a compound opened after the innermost frame means
+ * a case arm, which keeps the frame open with the #187 undo, while a frame
+ * opened at the live depth (round 2: the old ended-with-a-word test read
+ * nearly every `(cmd args)` inside a loop/if/case body as an arm and fused
+ * the construct with its sibling) or a closed or absent compound means the
+ * genuine closer, which pops. Opaque frames (braces, arithmetic,
  * arrays, extglob) and `[...]` brackets stay gated as before, because the
  * words there are identifiers, expansions or pattern text rather than
  * commands. Known residual, same ambiguity class #187 solved only at
@@ -418,14 +422,19 @@ function compoundStrayParen(cs: CompoundState): void {
  * the tracker stays gated there exactly as it used to be everywhere inside
  * parens. `{` is always opaque; `}` pops whatever frame is open (in valid
  * input it is always the matching `{`).
+ *
+ * Round 2: every frame remembers the compound depth its opener saw. An arm
+ * `)` opens no frame after the innermost compound opened, while a genuine
+ * closer always closes one that did — so the closer rule compares the
+ * innermost frame's depth against the live depth instead of asking whether
+ * the frame merely ends with a word.
  */
 type ParenKind = "t" | "o";
 
-/** The char before src[i] skipping blanks ("" at range start). */
-function prevNonSpace(src: string, i: number): string {
-  let j = i - 1;
-  while (j >= 0 && (src[j] === " " || src[j] === "\t" || src[j] === "\n" || src[j] === "\r")) j--;
-  return j >= 0 ? src[j] : "";
+/** One open frame: its kind, plus the compound depth when it opened. */
+interface ParenFrame {
+  kind: ParenKind;
+  depth: number;
 }
 
 /**
@@ -441,40 +450,38 @@ function parenIsOpaque(src: string, i: number): boolean {
 }
 
 /**
- * A `)` that arrives while frames are open (ticket #340). Two shapes share
- * this character and only the compound tracker tells them apart:
+ * A `)` that arrives while frames are open (ticket #340, round 2). Two
+ * shapes share this character and only frame-age tells them apart:
  *
- * - An ARM terminator (`a)`, `*)`, `a|b)`, `for)`): the flushed word leaves
- *   a compound still open, so in valid bash this paren closes no subshell —
- *   a subshell holding an unclosed compound is a syntax error. The frame
- *   stays open and the word's depth effect is undone, the #187 stray rule
- *   extended inside parens: `for)` opened one the single `esac` cannot
- *   close, and the arm body still follows. A wordless `)` whose previous
- *   non-blank is `(` is NOT this shape — that is `f()` or `( )` — and falls
- *   through to the closer below.
- * - A genuine CLOSER (`(echo hi)`, `(for ...; done)`, `(case ...; esac)`):
- *   the word closed whatever was open (or nothing was), so the frame pops.
+ * - An ARM terminator (`a)`, `*)`, `a|b)`, `for)`): a compound opened AFTER
+ *   the innermost frame did, so in valid bash this paren closes no frame —
+ *   a frame holding an unclosed compound is a syntax error. The frame stays
+ *   open and the word's depth effect is undone, the #187 stray rule extended
+ *   inside parens: `for)` opened one the single `esac` cannot close, and
+ *   the arm body still follows.
+ * - A genuine CLOSER (`(echo hi)`, `(echo hi;)`, `(for ...; done)`,
+ *   `(case ...; esac)`): the innermost frame opened at the live depth (no
+ *   compound opened since), or no compound is open at all, so the frame
+ *   pops. This is the round-2 fix: the old rule asked whether the frame
+ *   ended with a word, so nearly every `(cmd args)` inside a loop/if/case
+ *   body took the arm branch, leaked its frame, and fused the construct
+ *   with its sibling.
  *
  * Returns the popped frame kind, or null when the paren was an arm and no
  * frame popped. Either way the test bracket is over: no valid construct
  * leaves `[` open across a `)`.
  */
-function compoundParenClose(
-  cs: CompoundState,
-  src: string,
-  i: number,
-  paren: ParenKind[],
-): ParenKind | null {
-  const hadWord = cs.word !== "" && !cs.comment;
+function compoundParenClose(cs: CompoundState, paren: ParenFrame[]): ParenKind | null {
   const { delta } = compoundFlush(cs);
   cs.testDepth = 0;
-  if (cs.depth > 0 && (hadWord || prevNonSpace(src, i) !== "(")) {
+  const top = paren[paren.length - 1];
+  if (cs.depth > 0 && top !== undefined && top.depth < cs.depth) {
     cs.depth -= delta;
     cs.expectCmd = true;
     return null;
   }
   cs.expectCmd = true;
-  return paren.pop() ?? null;
+  return paren.pop()?.kind ?? null;
 }
 
 /** One word char in active (unquoted, uncommented) text. */
@@ -505,7 +512,7 @@ export function splitSemis(src: string, a: number, b: number): SemiPart[] {
   let i = a;
   let start = a;
   let q: string | null = null;
-  const paren: ParenKind[] = [];
+  const paren: ParenFrame[] = [];
   let opaque = 0;
   let esc2 = false;
   const cs = compoundState();
@@ -544,31 +551,32 @@ export function splitSemis(src: string, a: number, b: number): SemiPart[] {
     if (c === "$" && (src[i + 1] === "(" || src[i + 1] === "{")) {
       compoundMark(cs, c);
       compoundMark(cs, src[i + 1]);
-      paren.push(src[i + 1] === "(" ? "t" : "o");
-      if (paren[paren.length - 1] === "o") opaque++;
+      paren.push({ kind: src[i + 1] === "(" ? "t" : "o", depth: cs.depth });
+      if (paren[paren.length - 1].kind === "o") opaque++;
       i += 2;
       continue;
     }
     if (c === "(" || c === "{") {
       compoundMark(cs, c);
       const k: ParenKind = c === "(" && !parenIsOpaque(src, i) ? "t" : "o";
-      paren.push(k);
+      paren.push({ kind: k, depth: cs.depth });
       if (k === "o") opaque++;
       i++;
       continue;
     }
     // A `)` with frames open is either a case-arm terminator (no pop, the
     // #187 undo extended inside parens) or the genuine closer (pop); the
-    // tracker state after flushing the pending word decides (ticket #340).
+    // frame-age decides (ticket #340 round 2): a compound opened after the
+    // innermost frame means an arm, anything else the closer.
     // `}` always pops: in valid input it closes a `{` frame.
     if (c === ")" && paren.length > 0) {
-      if (compoundParenClose(cs, src, i, paren) === "o") opaque--;
+      if (compoundParenClose(cs, paren) === "o") opaque--;
       i++;
       continue;
     }
     if (c === "}" && paren.length > 0) {
       compoundMark(cs, c);
-      if (paren.pop() === "o") opaque--;
+      if (paren.pop()?.kind === "o") opaque--;
       cs.testDepth = 0;
       i++;
       continue;

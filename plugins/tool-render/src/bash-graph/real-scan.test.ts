@@ -474,3 +474,37 @@ describe("a case inside a subshell stays whole (ticket #340)", () => {
     }
   });
 });
+
+describe("a non-empty subshell inside an open compound stays whole (ticket #340 round 2)", () => {
+  const edgeCount = (html: string): number => (html.match(/prim-edge/g) || []).length;
+  const panels = (r: CardResult): string[] =>
+    r.panelsHTML.map((p) => unesc(p.replace(/<[^>]*>/g, "")).replace(/\s+/g, " ").trim());
+
+  // REJECTS the 753c757 regression (both directions): compoundParenClose read
+  // a GENUINE subshell/cmdsubst closer as a case-arm terminator whenever an
+  // outer compound was still open and the frame ended with a word — nearly
+  // every `(cmd args)` inside a loop/if/case body. The arm branch leaked the
+  // frame, so the later `esac)`/`done`/`fi` popped the leaked frame, the
+  // outer `(` never closed, the `;` never split, and the construct fused with
+  // its sibling (1 panel instead of 2). Each shape below fused pre-fix.
+  for (const [src, whole, idx] of [
+    ["for f in a; do (echo hi); done; echo after", "for f in a; do (echo hi); done", 62],
+    ["if true; then (echo hi); fi; echo after", "if true; then (echo hi); fi", 63],
+    ["while true; do (echo hi); done; echo after", "while true; do (echo hi); done", 64],
+    ["case $x in a) (echo hi);; esac; echo after", "case $x in a) (echo hi);; esac", 65],
+    ["for f in a; do echo $(echo hi); done; echo after", "for f in a; do echo $(echo hi); done", 66],
+    ["for f in a; do (echo hi;); done; echo after", "for f in a; do (echo hi;); done", 67],
+    ["for f in a; do (echo a); (echo b); done; echo after", "for f in a; do (echo a); (echo b); done", 68],
+    ["(case $x in a) (echo hi);; esac); echo after", "(case $x in a) (echo hi);; esac)", 69],
+  ] as [string, string, number][]) {
+    it(`draws 2 panels for ${src}`, async () => {
+      const { r, html } = await renderReal(src, idx);
+      expect(r.panelsHTML.length, src).toBe(2);
+      expect(edgeCount(html), src).toBe(0);
+      expect(panels(r).some((p) => p === "done" || p === "fi" || p === "esac"), src).toBe(false);
+      expect(shown(r), src).toContain(whole);
+      expect(shown(r), src).toContain("echo after");
+      assertWordsSurvive(src, r);
+    });
+  }
+});

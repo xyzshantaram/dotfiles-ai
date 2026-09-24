@@ -2268,7 +2268,7 @@ function escapeHtml(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
-// css-text:/home/sid/repos/dotfiles-ai/plugins/tool-render/src/client.module.css
+// css-text:/home/sid/.dsh/aidos/scratch/--home-sid-repos-dotfiles-ai--/wt-340b/plugins/tool-render/src/client.module.css
 var client_default = `/* ==========================================================================
  * THE SCALE (#169) \u2014 the file's contract. Read this before adding a rule.
  *
@@ -22659,27 +22659,27 @@ function splitLines2(src) {
     if (c2 === "$" && (src[i + 1] === "(" || src[i + 1] === "{")) {
       compoundMark(cs, c2);
       compoundMark(cs, src[i + 1]);
-      paren.push(src[i + 1] === "(" ? "t" : "o");
-      if (paren[paren.length - 1] === "o") opaque++;
+      paren.push({ kind: src[i + 1] === "(" ? "t" : "o", depth: cs.depth });
+      if (paren[paren.length - 1].kind === "o") opaque++;
       i += 2;
       continue;
     }
     if (c2 === "(" || c2 === "{") {
       compoundMark(cs, c2);
       const k = c2 === "(" && !parenIsOpaque(src, i) ? "t" : "o";
-      paren.push(k);
+      paren.push({ kind: k, depth: cs.depth });
       if (k === "o") opaque++;
       i++;
       continue;
     }
     if (c2 === ")" && paren.length > 0) {
-      if (compoundParenClose(cs, src, i, paren) === "o") opaque--;
+      if (compoundParenClose(cs, paren) === "o") opaque--;
       i++;
       continue;
     }
     if (c2 === "}" && paren.length > 0) {
       compoundMark(cs, c2);
-      if (paren.pop() === "o") opaque--;
+      if (paren.pop()?.kind === "o") opaque--;
       cs.testDepth = 0;
       i++;
       continue;
@@ -22776,26 +22776,21 @@ function compoundStrayParen(cs) {
   cs.depth -= delta;
   cs.expectCmd = true;
 }
-function prevNonSpace(src, i) {
-  let j = i - 1;
-  while (j >= 0 && (src[j] === " " || src[j] === "	" || src[j] === "\n" || src[j] === "\r")) j--;
-  return j >= 0 ? src[j] : "";
-}
 function parenIsOpaque(src, i) {
   const p = i > 0 ? src[i - 1] : "";
   return p === "(" || p === "=" || p === "?" || p === "*" || p === "+" || p === "@" || p === "!";
 }
-function compoundParenClose(cs, src, i, paren) {
-  const hadWord = cs.word !== "" && !cs.comment;
+function compoundParenClose(cs, paren) {
   const { delta } = compoundFlush(cs);
   cs.testDepth = 0;
-  if (cs.depth > 0 && (hadWord || prevNonSpace(src, i) !== "(")) {
+  const top = paren[paren.length - 1];
+  if (cs.depth > 0 && top !== void 0 && top.depth < cs.depth) {
     cs.depth -= delta;
     cs.expectCmd = true;
     return null;
   }
   cs.expectCmd = true;
-  return paren.pop() ?? null;
+  return paren.pop()?.kind ?? null;
 }
 function compoundPush(cs, c2) {
   if (!cs.comment) cs.word += c2;
@@ -22847,27 +22842,27 @@ function splitSemis(src, a, b) {
     if (c2 === "$" && (src[i + 1] === "(" || src[i + 1] === "{")) {
       compoundMark(cs, c2);
       compoundMark(cs, src[i + 1]);
-      paren.push(src[i + 1] === "(" ? "t" : "o");
-      if (paren[paren.length - 1] === "o") opaque++;
+      paren.push({ kind: src[i + 1] === "(" ? "t" : "o", depth: cs.depth });
+      if (paren[paren.length - 1].kind === "o") opaque++;
       i += 2;
       continue;
     }
     if (c2 === "(" || c2 === "{") {
       compoundMark(cs, c2);
       const k = c2 === "(" && !parenIsOpaque(src, i) ? "t" : "o";
-      paren.push(k);
+      paren.push({ kind: k, depth: cs.depth });
       if (k === "o") opaque++;
       i++;
       continue;
     }
     if (c2 === ")" && paren.length > 0) {
-      if (compoundParenClose(cs, src, i, paren) === "o") opaque--;
+      if (compoundParenClose(cs, paren) === "o") opaque--;
       i++;
       continue;
     }
     if (c2 === "}" && paren.length > 0) {
       compoundMark(cs, c2);
-      if (paren.pop() === "o") opaque--;
+      if (paren.pop()?.kind === "o") opaque--;
       cs.testDepth = 0;
       i++;
       continue;
@@ -24550,7 +24545,7 @@ function swapIcons(html) {
   });
 }
 
-// css-text:/home/sid/repos/dotfiles-ai/plugins/tool-render/src/bash-graph/styles.css
+// css-text:/home/sid/.dsh/aidos/scratch/--home-sid-repos-dotfiles-ai--/wt-340b/plugins/tool-render/src/bash-graph/styles.css
 var styles_default = `/* bash-graph styles: fair copy of the prototype diagram rules.
  *
  * PORT NOTE (criterion 4): this file transcribes the prototype <style>
