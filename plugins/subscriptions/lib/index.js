@@ -28,9 +28,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// ../../../../../home/sid/repos/dotfiles-ai/node_modules/.pnpm/snappyjs@0.7.0/node_modules/snappyjs/snappy_decompressor.js
+// node_modules/.pnpm/snappyjs@0.7.0/node_modules/snappyjs/snappy_decompressor.js
 var require_snappy_decompressor = __commonJS({
-  "../../../../../home/sid/repos/dotfiles-ai/node_modules/.pnpm/snappyjs@0.7.0/node_modules/snappyjs/snappy_decompressor.js"(exports) {
+  "node_modules/.pnpm/snappyjs@0.7.0/node_modules/snappyjs/snappy_decompressor.js"(exports) {
     "use strict";
     var WORD_MASK = [0, 255, 65535, 16777215, 4294967295];
     function copyBytes(fromArray, fromPos, toArray, toPos, length) {
@@ -134,9 +134,9 @@ var require_snappy_decompressor = __commonJS({
   }
 });
 
-// ../../../../../home/sid/repos/dotfiles-ai/node_modules/.pnpm/snappyjs@0.7.0/node_modules/snappyjs/snappy_compressor.js
+// node_modules/.pnpm/snappyjs@0.7.0/node_modules/snappyjs/snappy_compressor.js
 var require_snappy_compressor = __commonJS({
-  "../../../../../home/sid/repos/dotfiles-ai/node_modules/.pnpm/snappyjs@0.7.0/node_modules/snappyjs/snappy_compressor.js"(exports) {
+  "node_modules/.pnpm/snappyjs@0.7.0/node_modules/snappyjs/snappy_compressor.js"(exports) {
     "use strict";
     var BLOCK_LOG = 16;
     var BLOCK_SIZE = 1 << BLOCK_LOG;
@@ -316,9 +316,9 @@ var require_snappy_compressor = __commonJS({
   }
 });
 
-// ../../../../../home/sid/repos/dotfiles-ai/node_modules/.pnpm/snappyjs@0.7.0/node_modules/snappyjs/index.js
+// node_modules/.pnpm/snappyjs@0.7.0/node_modules/snappyjs/index.js
 var require_snappyjs = __commonJS({
-  "../../../../../home/sid/repos/dotfiles-ai/node_modules/.pnpm/snappyjs@0.7.0/node_modules/snappyjs/index.js"(exports) {
+  "node_modules/.pnpm/snappyjs@0.7.0/node_modules/snappyjs/index.js"(exports) {
     "use strict";
     function isNode() {
       if (typeof process === "object") {
