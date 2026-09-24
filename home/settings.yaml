@@ -1148,53 +1148,10 @@ llm-pi-ai:
       # markers here on purpose: keep sync-models from overwriting with
       # cross-vendor guesses. maxTokens is conservative (no upstream data).
       models:
-      # sync-models:begin
-      - id: deepseek-v4-flash:dev
-        name: DeepSeek V4 Flash
-        contextWindow: 1000000
-        maxTokens: 384000
-        input:
-        - text
-        reasoningEfforts:
-          off:
-          high: high
-          max: max
-      - id: deepseek-v4-flash-0731:dev
-        name: DeepSeek V4 Flash 0731
-        contextWindow: 1000000
-        maxTokens: 384000
-        input:
-        - text
-        reasoningEfforts:
-          off:
-          minimal: minimal
-          low: low
-          medium: medium
-          high: high
-      - id: mimo-v2.5:dev
-        name: MiMo-V2.5
-        contextWindow: 1048576
-        maxTokens: 131072
-        input:
-        - text
-        - image
-      - id: minimax-m2.7:dev
-        name: minimax-m2.7
-        contextWindow: 196608
-        maxTokens: 196608
-        input:
-        - text
-      - id: qwen3.8-27b:dev
-        name: Qwen3.8 27B
-        contextWindow: 262144
-        maxTokens: 32768
-        input:
-        - text
-        - image
       - id: glm-5.3:dev
-        name: GLM5.3
-        contextWindow: 1048576
-        maxTokens: 1048576
+        name: GLM 5.3 (DevPass)
+        contextWindow: 262000
+        maxTokens: 65536
         input:
         - text
         reasoningEfforts:
@@ -1202,17 +1159,51 @@ llm-pi-ai:
           high: high
           max: max
       - id: glm-5.3-flash:dev
-        name: GLM5.3 Flash
-        contextWindow: 1048576
-        maxTokens: 1048576
+        name: GLM 5.3 Flash (DevPass)
+        contextWindow: 1000000
+        maxTokens: 131072
         input:
         - text
         - image
         reasoningEfforts:
-          medium: medium
+          low: low
           high: high
-          xhigh: xhigh
-      # sync-models:end
+          max: max
+      - id: deepseek-v4-flash:dev
+        name: DeepSeek V4 Flash (DevPass)
+        contextWindow: 1000000
+        maxTokens: 131072
+        input:
+        - text
+      - id: deepseek-v4-flash-0731:dev
+        name: DeepSeek V4 Flash 0731 (DevPass)
+        contextWindow: 400000
+        maxTokens: 65536
+        input:
+        - text
+      - id: mimo-v2.5:dev
+        name: Mimo V2.5 (DevPass)
+        contextWindow: 1000000
+        maxTokens: 131072
+        input:
+        - text
+        - image
+      - id: minimax-m2.7:dev
+        name: MiniMax M2.7 (DevPass)
+        contextWindow: 180000
+        maxTokens: 65536
+        input:
+        - text
+      # qwen3.8-27b:dev has no hand-seeded value (it arrived with the #99
+      # reseed, which is also what stomped the entries above): its numbers
+      # are the reseed's and stay until measured against the live catalog.
+      - id: qwen3.8-27b:dev
+        name: Qwen3.8 27B
+        contextWindow: 262144
+        maxTokens: 32768
+        input:
+        - text
+        - image
 agent-presets:
   default: standard
 profile:
