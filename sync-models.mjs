@@ -118,7 +118,9 @@ const VISION_MODELS = new Set([
 ]);
 
 // Map our provider route to the models.dev provider we should look at first.
-const TIER1_ROUTE = { "opencode-zen": "opencode", "opencode-go": "opencode" };
+// opencode-go-responses shares the go endpoint, so it shares the tier-1
+// catalog provider too.
+const TIER1_ROUTE = { "opencode-zen": "opencode", "opencode-go": "opencode", "opencode-go-responses": "opencode" };
 // Map a regex of model id to the first-party vendor's models.dev provider.
 // Every value is confirmed present in models.dev. There is deliberately no
 // tencent entry: models.dev has no tencent provider.
@@ -458,7 +460,12 @@ const MARKER_BEGIN_COMMENT = "# sync-models:begin";
 const MARKER_END_COMMENT = "# sync-models:end";
 const MARKER_BEGIN = "      " + MARKER_BEGIN_COMMENT;
 const MARKER_END = "      " + MARKER_END_COMMENT;
-const SEEDED_PROVIDERS = new Set(["command-code", "opencode-zen", "opencode-go", "meridian", "zai", "electronhub"]);
+// opencode-go-responses is the second route onto the same endpoint,
+// differing only in protocol (api: openai-responses): it seeds the Meta
+// ids the completions route filters out, so every Meta model the endpoint
+// serves lands on the protocol it answers. It takes markers like any
+// other seeded provider on first seeding.
+const SEEDED_PROVIDERS = new Set(["command-code", "opencode-zen", "opencode-go", "opencode-go-responses", "meridian", "zai", "electronhub"]);
 // Model-listing path for a provider whose endpoint is not at `{baseURL}/models`.
 // meridian proxies the Anthropic API and serves an OpenAI-shaped list at
 // /v1/models; a GET on /models returns "Endpoint not supported".
@@ -652,8 +659,85 @@ function prettyName(id) {
 }
 
 
+// An emitted `name:` value must be a YAML plain scalar or the whole file
+// stops parsing: models.dev names like `Meituan: LongCat 2.0` carry `: `,
+// which a bare scalar reads as a nested map. Quote exactly those (a value
+// containing `: ` or ` #`, a trailing `:`, a leading indicator character,
+// or something that parses as a non-string), so safe names pass through
+// byte-identical and diffs stay minimal. Double quotes via JSON.stringify
+// are valid YAML and escape embedded quotes and newlines.
+function yamlNeedsQuote(value) {
+  if (typeof value !== "string" || value.length === 0) return true;
+  if (/^\s|\s$/.test(value)) return true;
+  if (value.includes(": ") || value.includes(":\t") || value.endsWith(":") || value.includes(" #"))
+    return true;
+  if (`-?:,[]{}#&*!|>'"%@\``.includes(value[0])) return true;
+  if (/^(?:[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?|[-+]?\.(?:inf|nan)|true|false|null|Null|NULL|True|False|TRUE|FALSE|~|y|Y|n|N|yes|Yes|YES|no|No|NO|on|On|ON|off|Off|OFF)$/.test(value))
+    return true;
+  return false;
+}
+
+function yamlQuoteScalar(value) {
+  return yamlNeedsQuote(value) ? JSON.stringify(value) : value;
+}
+
+// A Meta model id, in either gateway id form: `meta/muse-spark-*` (the
+// command-code form) or bare `muse-spark-*` (the opencode-go form). Meta
+// models answer only over the Responses API: on the OpenCode Go endpoint
+// they 500 over /chat/completions and return 200 over /responses (#92,
+// verified 2026-09-08), so the sync seeds them into the `-responses`
+// route and keeps them out of the completions route.
+function isMetaModelId(id) {
+  return id.startsWith("meta/") || id.includes("muse-spark-");
+}
+
+// Split one live id list for the two routes onto the OpenCode Go endpoint:
+// Responses-only (Meta) models seed `opencode-go-responses`; everything
+// else stays on the `opencode-go` completions route.
+function partitionGoIds(ids) {
+  return {
+    completions: ids.filter((id) => !isMetaModelId(id)),
+    responses: ids.filter(isMetaModelId),
+  };
+}
+
+// One electronhub `:dev` row under DevPass preservation (#342): the
+// EXISTING row's name/contextWindow/maxTokens win — those are hand-kept
+// DevPass plan headroom, which models.dev cannot know — and models.dev
+// backfills only what is absent. A new id with no row seeds from the
+// lookup exactly like every other provider. `existing` is a plain object
+// (or null); the caller reads it off the CST row.
+function electronhubRow(existing, id, entry) {
+  const name =
+    typeof existing?.name === "string" && existing.name.length > 0
+      ? existing.name
+      : displayName(id, entry);
+  const contextWindow =
+    typeof existing?.contextWindow === "number"
+      ? existing.contextWindow
+      : entry?.limit?.context;
+  const maxTokens =
+    typeof existing?.maxTokens === "number" ? existing.maxTokens : entry?.limit?.output;
+  return { name, contextWindow, maxTokens };
+}
+
+// The `models:` edit for one provider. ElectronHub keeps markers out on
+// purpose (pinned by home/electronhub-block.test.mjs): its entries region
+// is always replaced marker-less, which also heals a block a bad run
+// stamped markers into. Every other provider replaces only the entries
+// between markers, or wraps the region with markers on first seeding.
+function modelsEditForProvider(providerName, keyLine, last, beginLine, endMarkerLine, block, markerBlock) {
+  if (providerName === "electronhub") {
+    return { at: keyLine + 1, deleteCount: last - keyLine, block };
+  }
+  if (beginLine >= 0 && endMarkerLine > beginLine) {
+    return { at: beginLine + 1, deleteCount: endMarkerLine - beginLine - 1, block };
+  }
+  return { at: keyLine + 1, deleteCount: last - keyLine, block: markerBlock };
+}
+
 function entryText(id, name, meta) {
-  const out = [`      - id: ${id}`, `        name: ${name}`];
+  const out = [`      - id: ${id}`, `        name: ${yamlQuoteScalar(name)}`];
   if (meta) {
     if (typeof meta.contextWindow === "number")
       out.push(`        contextWindow: ${meta.contextWindow}`);
@@ -745,6 +829,18 @@ async function main() {
       ids = ids.filter((id) => id.includes(':dev'));
       console.log(`  filtering to :dev ids: ${ids.length} model id(s)`);
     }
+    // OpenCode Go endpoint split: Meta models seed the `-responses` route
+    // and stay out of the completions route (Responses API only, #92).
+    // No chain ref points at an opencode-go Meta id, so the completions
+    // side loses nothing the chains need; the responses side keeps
+    // muse-spark-1.3-contributor, which frontier and flash reference.
+    if (p.name === "opencode-go" || p.name === "opencode-go-responses") {
+      const split = partitionGoIds(ids);
+      ids = p.name === "opencode-go" ? split.completions : split.responses;
+      console.log(
+        `  Meta split: ${split.responses.length} model(s) to the responses route, ${split.completions.length} staying on completions`,
+      );
+    }
     // Gateway-extras: cut the catalog provider's own models so this route
     // only lists what the catalog does not ship, except chain-mentioned ids
     // the live endpoint serves: those stay seeded so chain refs never warn.
@@ -785,18 +881,42 @@ async function main() {
       // only `off` is not real reasoning support, so emit nothing for it.
       let reasoningEfforts = reasoningEffortsForEntry(entry);
       if (reasoningEfforts && Object.keys(reasoningEfforts).length === 1 && "off" in reasoningEfforts) reasoningEfforts = null;
+      // The existing row, hoisted for both the DevPass preservation below
+      // and the image-input delta after the push.
+      const existing = p.models?.items?.find((it) => it?.get?.("id") === id);
+      let name = displayName(id, entry);
+      let contextWindow = entry?.limit?.context;
+      let maxTokens = entry?.limit?.output;
+      if (p.name === "electronhub") {
+        // DevPass preservation: the existing row's name/contextWindow/
+        // maxTokens win; models.dev backfills only what is absent. A new
+        // id with no row seeds from the lookup, like every other provider.
+        const row = electronhubRow(
+          existing
+            ? {
+                name: existing.get("name"),
+                contextWindow: existing.get("contextWindow"),
+                maxTokens: existing.get("maxTokens"),
+              }
+            : null,
+          id,
+          entry,
+        );
+        name = row.name;
+        contextWindow = row.contextWindow;
+        maxTokens = row.maxTokens;
+      }
       const meta = {
-        contextWindow: entry?.limit?.context,
-        maxTokens: entry?.limit?.output,
+        contextWindow,
+        maxTokens,
         image: vision,
         reasoningEfforts,
       };
-      block.push(...entryText(id, displayName(id, entry), meta));
+      block.push(...entryText(id, name, meta));
       chainVision.set(`${p.name}/${id}`, tierVision);
       // Track the image-input delta against the file's current entries. Read
       // both key names: `input` is what we write now, `defaultInput` is the
       // wrong key older runs wrote, and a file mid-migration can hold either.
-      const existing = p.models?.items?.find((it) => it?.get?.("id") === id);
       if (existing) {
         const di = existing.get("input") ?? existing.get("defaultInput");
         const hadImage = !!di?.items?.some((n) => n?.value === "image");
@@ -842,7 +962,9 @@ async function main() {
       // sibling and produced a duplicate `models:` key).
       const pb = providerBlockLines(p, text);
       const at = pb.last + 1;
-      edits.push({ at, deleteCount: 0, block: ["      models:", ...markerBlock] });
+      // ElectronHub never emits markers, even on first seeding.
+      const firstBlock = p.name === "electronhub" ? block : markerBlock;
+      edits.push({ at, deleteCount: 0, block: ["      models:", ...firstBlock] });
       console.info(`  [${p.name}] no models list: creating markers for the first time`);
       console.debug(`  [${p.name}] insert at line ${at + 1}`);
       summary.push({ provider: p.name, added: ids.length });
@@ -862,7 +984,13 @@ async function main() {
       else if (t === MARKER_END_COMMENT) endMarkerLine = i;
     }
 
-    if (beginLine >= 0 && endMarkerLine > beginLine) {
+    if (p.name === "electronhub") {
+      // DevPass block keeps markers out on purpose: replace the whole
+      // entries region marker-less (modelsEditForProvider), which also
+      // heals a block a bad run stamped markers into.
+      console.debug(`  [${p.name}] DevPass block: replacing entries region marker-less`);
+      edits.push(modelsEditForProvider(p.name, keyLine, last, beginLine, endMarkerLine, block, markerBlock));
+    } else if (beginLine >= 0 && endMarkerLine > beginLine) {
       // Markers already present: replace only the entries between them. The
       // marker lines and everything outside them (the `models:` key, comments,
       // blank lines) stay byte-identical.
@@ -1064,4 +1192,4 @@ if (RUN_AS_SCRIPT) {
   });
 }
 
-export { priceKey, rateForEntry, indexModelsDev, buildFreshRates, renderPricesSection, droppedPricesLines };
+export { priceKey, rateForEntry, indexModelsDev, buildFreshRates, renderPricesSection, droppedPricesLines, yamlQuoteScalar, yamlNeedsQuote, entryText, electronhubRow, modelsEditForProvider, isMetaModelId, partitionGoIds };

@@ -24,11 +24,24 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import * as YAML from "yaml";
 import {
   buildFreshRates,
+  electronhubRow,
+  entryText,
   indexModelsDev,
+  isMetaModelId,
+  modelsEditForProvider,
+  partitionGoIds,
   renderPricesSection,
+  yamlNeedsQuote,
+  yamlQuoteScalar,
 } from "./sync-models.mjs";
+
+const here = dirname(fileURLToPath(import.meta.url));
 
 // Minimal models.dev api.json shape: provider -> { models: { id: entry } }.
 // "my-local" is priced at 1s so the override below (7s) can never pass by
@@ -143,5 +156,210 @@ describe("a local price override survives a sync run", () => {
     const block = renderPricesSection(fresh, null);
     expect(block[0]).toBe("prices:");
     expect(block).toContain("  overrides: {}");
+  });
+});
+
+describe("quoted display names survive a YAML round-trip (#342a)", () => {
+  it("quotes the two killer names from the 2026-09-24 run", () => {
+    expect(entryText("longcat-2.0", "Meituan: LongCat 2.0", null)).toContain(
+      '        name: "Meituan: LongCat 2.0"',
+    );
+    expect(entryText("x", "inclusionAI: Ling 3.0 Flash Sante (free)", null)).toContain(
+      '        name: "inclusionAI: Ling 3.0 Flash Sante (free)"',
+    );
+  });
+
+  it("passes safe names through unquoted so diffs stay minimal", () => {
+    for (const n of [
+      "LongCat 2.0",
+      "GLM 5.3 (DevPass)",
+      "Qwen3.8 27B",
+      "MiMo-V2.5",
+      "Hy4 preview",
+      "Muse Spark 1.3 Contributor",
+    ]) {
+      expect(yamlNeedsQuote(n)).toBe(false);
+      expect(yamlQuoteScalar(n)).toBe(n);
+      expect(entryText("x", n, null)).toContain(`        name: ${n}`);
+    }
+  });
+
+  it("quotes number/bool/null-like and indicator-led names", () => {
+    for (const n of [
+      "123",
+      "1.5",
+      "true",
+      "null",
+      "~",
+      "yes",
+      "off",
+      "#trending",
+      "- dash",
+      "trailing:",
+      "hash # tag",
+      "? query",
+    ]) {
+      expect(yamlNeedsQuote(n)).toBe(true);
+      expect(yamlQuoteScalar(n)).toBe(JSON.stringify(n));
+    }
+  });
+
+  it("the unquoted killer name really did break parsing (regression pin)", () => {
+    // The exact bytes the 2026-09-24 run emitted: a bare `name:` scalar
+    // containing ": " is a nested map to the parser, so the entry's name
+    // is not a string at all.
+    expect(() =>
+      YAML.parse("models:\n      - id: x\n        name: Meituan: LongCat 2.0"),
+    ).toThrow();
+  });
+
+  it("emitted entries parse back to the same names", () => {
+    const text = [
+      "models:",
+      ...entryText("longcat-2.0", "Meituan: LongCat 2.0", null),
+      ...entryText("glm-5.3-flash", "GLM 5.3 Flash", null),
+    ].join("\n");
+    const doc = YAML.parse(text);
+    expect(doc.models[0].name).toBe("Meituan: LongCat 2.0");
+    expect(doc.models[1].name).toBe("GLM 5.3 Flash");
+  });
+});
+
+describe("DevPass preservation (#342b)", () => {
+  const vendor = {
+    name: "Vendor Guess",
+    limit: { context: 1000000, output: 262144 },
+    modalities: { input: ["text"] },
+  };
+
+  it("the existing row's name/contextWindow/maxTokens win over models.dev", () => {
+    expect(
+      electronhubRow(
+        { name: "GLM 5.3 (DevPass)", contextWindow: 262000, maxTokens: 65536 },
+        "glm-5.3:dev",
+        vendor,
+      ),
+    ).toEqual({ name: "GLM 5.3 (DevPass)", contextWindow: 262000, maxTokens: 65536 });
+  });
+
+  it("absent fields backfill from the lookup", () => {
+    const row = electronhubRow(
+      { name: "Qwen3.8 27B", contextWindow: undefined, maxTokens: undefined },
+      "qwen3.8-27b:dev",
+      vendor,
+    );
+    expect(row.name).toBe("Qwen3.8 27B");
+    expect(row.contextWindow).toBe(1000000);
+    expect(row.maxTokens).toBe(262144);
+  });
+
+  it("a new id with no row seeds from the lookup", () => {
+    expect(electronhubRow(null, "mimo-v2.5:dev", vendor)).toEqual({
+      name: "Vendor Guess",
+      contextWindow: 1000000,
+      maxTokens: 262144,
+    });
+  });
+
+  it("falls back to prettyName with no row and no entry", () => {
+    expect(electronhubRow(null, "mimo-v2.5:dev", null).name).toBe("Mimo V2.5:dev");
+  });
+
+  it("electronhub emits no markers, and heals a block a bad run stamped", () => {
+    const block = ["      - id: x"];
+    const stamped = ["      # sync-models:begin", ...block, "      # sync-models:end"];
+    // No markers present: the entries region is replaced with bare entries.
+    expect(modelsEditForProvider("electronhub", 10, 15, -1, -1, block, stamped)).toEqual({
+      at: 11,
+      deleteCount: 5,
+      block,
+    });
+    // Markers present (post-stomp state): the whole region — markers
+    // included — is replaced with bare entries, so the markers are gone.
+    const healed = modelsEditForProvider("electronhub", 10, 20, 12, 19, block, stamped);
+    expect(healed).toEqual({ at: 11, deleteCount: 10, block });
+    expect(healed.block.join("\n")).not.toContain("sync-models:");
+  });
+
+  it("other providers keep the marker behavior", () => {
+    const block = ["      - id: x"];
+    const marked = ["      # sync-models:begin", ...block, "      # sync-models:end"];
+    expect(modelsEditForProvider("zai", 10, 20, 12, 19, block, marked)).toEqual({
+      at: 13,
+      deleteCount: 6,
+      block,
+    });
+    expect(modelsEditForProvider("zai", 10, 15, -1, -1, block, marked)).toEqual({
+      at: 11,
+      deleteCount: 5,
+      block: marked,
+    });
+  });
+});
+
+describe("Meta models seed the responses route (#342c)", () => {
+  it("matches both gateway id forms and nothing else", () => {
+    for (const id of [
+      "meta/muse-spark-1.3-contributor",
+      "meta/muse-spark-1.1",
+      "muse-spark-1.3-contributor",
+      "muse-spark-1.2-contributor",
+    ]) {
+      expect(isMetaModelId(id)).toBe(true);
+    }
+    for (const id of [
+      "glm-5.3-flash",
+      "longcat-2.0",
+      "qwen3.7-max",
+      "mimo-v2.5",
+      "hy3",
+      "omen-alpha",
+      "qwen3.8-27b:dev",
+    ]) {
+      expect(isMetaModelId(id)).toBe(false);
+    }
+  });
+
+  it("partitions one live fetch into completions + responses", () => {
+    expect(
+      partitionGoIds([
+        "longcat-2.0",
+        "glm-5.3-flash",
+        "qwen3.7-max",
+        "muse-spark-1.3-contributor",
+        "muse-spark-1.2-contributor",
+        "omen-alpha",
+      ]),
+    ).toEqual({
+      completions: ["longcat-2.0", "glm-5.3-flash", "qwen3.7-max", "omen-alpha"],
+      responses: ["muse-spark-1.3-contributor", "muse-spark-1.2-contributor"],
+    });
+  });
+
+  it("no chain ref points at an opencode-go Meta id, and the responses rung resolves", () => {
+    // The completions filter drops every Meta id from opencode-go: prove
+    // no chain needs one there. The responses filter keeps Meta ids: prove
+    // the rung the chains need survives it.
+    const text = readFileSync(join(here, "home", "settings.yaml"), "utf8");
+    const doc = YAML.parse(text);
+    const refs = [];
+    for (const chain of Object.values(doc.profile.chains ?? {})) {
+      for (const r of chain ?? []) {
+        if (typeof r === "string" && r.includes("/") && !r.startsWith("chain:")) refs.push(r);
+        else if (r && typeof r === "object" && r.provider && r.model)
+          refs.push(`${r.provider}/${r.model}`);
+      }
+    }
+    expect(refs.length).toBeGreaterThan(0);
+    for (const ref of refs) {
+      const slash = ref.indexOf("/");
+      const prov = ref.slice(0, slash);
+      const model = ref.slice(slash + 1);
+      if (prov === "opencode-go") expect(isMetaModelId(model)).toBe(false);
+    }
+    expect(refs).toContain("opencode-go-responses/muse-spark-1.3-contributor");
+    expect(
+      partitionGoIds(["muse-spark-1.3-contributor", "glm-5.3-flash"]).responses,
+    ).toContain("muse-spark-1.3-contributor");
   });
 });
