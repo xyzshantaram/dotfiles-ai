@@ -25150,9 +25150,19 @@ function errorTextOf(block) {
   if (block.error && block.error.code) return String(block.error.code);
   return null;
 }
+function useExpanded() {
+  var expandedState = useState(false);
+  var expanded = expandedState[0];
+  return [expanded, function() {
+    expandedState[1](!expandedState[0]);
+  }];
+}
 function firstLine2(text) {
   var at = text.indexOf("\n");
   return at === -1 ? text : text.slice(0, at);
+}
+function errorSummaryOf(state, errorText) {
+  return state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
 }
 function relativizeToCwd(text, cwd) {
   if (typeof cwd !== "string" || cwd === "" || typeof text !== "string") return text;
@@ -25598,9 +25608,9 @@ function ToolRenderApprovalBar(props) {
   )));
 }
 function ReadRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+  var expanded = expandedPair[0];
+  var toggleExpanded = expandedPair[1];
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs2(argsRawOf(block));
@@ -25608,7 +25618,7 @@ function ReadRow(props) {
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var errorSummary = errorSummaryOf(state, errorText);
   var summary = path !== void 0 ? relativizeToCwd(firstLine2(path), props.cwd) : "Read";
   var body = null;
   if (output !== null && output !== "") {
@@ -25634,9 +25644,7 @@ function ReadRow(props) {
     state,
     expandable: body !== null,
     expanded,
-    onToggle: function() {
-      setExpanded(!expanded);
-    },
+    onToggle: toggleExpanded,
     body,
     errorSummary,
     errorText,
@@ -25669,7 +25677,7 @@ function ensureBashGraphMeasure() {
   return document.querySelector("#" + BASH_MEASURE_ID) !== null;
 }
 function stripBashGraphRoot(cssText) {
-  return String(cssText).replace(/:root[^{]*\{[^}]*\}/g, "").replace(/html\[data-theme="light"\]\{[^}]*\}/g, "");
+  return String(cssText).replace(/(^|\})\s*:root[^{]*\{[^}]*\}/g, "$1").replace(/(^|\})\s*html\[data-theme="[^"]*"\]\s*\{[^}]*\}/g, "$1");
 }
 function bashGraphCacheKey(command, pipeStages) {
   var stages = "";
@@ -25794,9 +25802,9 @@ function BashTabStrip(props) {
   );
 }
 function BashRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+  var expanded = expandedPair[0];
+  var toggleExpanded = expandedPair[1];
   var bashTabUserState = useState(null);
   var bashTabUser = bashTabUserState[0];
   var setBashTabUser = bashTabUserState[1];
@@ -25808,7 +25816,7 @@ function BashRow(props) {
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = bashErrorState(rowStateOf(block), output, block.meta);
-  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var errorSummary = errorSummaryOf(state, errorText);
   var summary = description !== void 0 && description !== "" ? firstLine2(description) : command !== void 0 ? firstLine2(command) : "Bash";
   var escalated = escalatedOf(argsObj);
   var escalation = escalationDetailOf(argsObj);
@@ -25959,9 +25967,7 @@ function BashRow(props) {
     state,
     expandable: body !== null,
     expanded,
-    onToggle: function() {
-      setExpanded(!expanded);
-    },
+    onToggle: toggleExpanded,
     body,
     errorSummary,
     errorText,
@@ -26222,9 +26228,9 @@ function editBadgeLabel(rawName, toolTitle) {
 }
 function makeEditRow(toolTitle) {
   return function EditToolRow(props) {
-    var expandedState = useState(false);
-    var expanded = expandedState[0];
-    var setExpanded = expandedState[1];
+    var expandedPair = useExpanded();
+    var expanded = expandedPair[0];
+    var toggleExpanded = expandedPair[1];
     var block = props.block;
     if (block === null || typeof block !== "object") {
       return toolRenderRow({
@@ -26264,7 +26270,7 @@ function makeEditRow(toolTitle) {
     var output = done ? resultTextOf(block) : null;
     var errorText = done ? errorTextOf(block) : null;
     var state = rowStateOf(block);
-    var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+    var errorSummary = errorSummaryOf(state, errorText);
     var summaryPath = pickString2(argsObject, ["path", "file_path"]);
     var summary = summaryPath !== void 0 ? relativizeToCwd(firstLine2(summaryPath), effectiveCwd) : toolTitle;
     var body = null;
@@ -26294,9 +26300,7 @@ function makeEditRow(toolTitle) {
       state,
       expandable: body !== null,
       expanded,
-      onToggle: function() {
-        setExpanded(!expanded);
-      },
+      onToggle: toggleExpanded,
       body,
       errorSummary,
       errorText,
@@ -26504,9 +26508,9 @@ function writeBody(path, before, newText) {
   return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-write-diff" }, lines);
 }
 function WriteRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+  var expanded = expandedPair[0];
+  var toggleExpanded = expandedPair[1];
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs2(argsRawOf(block));
@@ -26517,7 +26521,7 @@ function WriteRow(props) {
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var errorSummary = errorSummaryOf(state, errorText);
   var summary = path !== void 0 ? relativizeToCwd(firstLine2(path), effectiveCwd) : "Write";
   var before = null;
   if (path !== void 0 && props.useSession !== void 0) {
@@ -26545,9 +26549,7 @@ function WriteRow(props) {
     state,
     expandable: body !== null,
     expanded,
-    onToggle: function() {
-      setExpanded(!expanded);
-    },
+    onToggle: toggleExpanded,
     body,
     errorSummary,
     errorText,
@@ -26587,9 +26589,9 @@ function planBody(todos) {
   return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-plan" }, children);
 }
 function TodoRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+  var expanded = expandedPair[0];
+  var toggleExpanded = expandedPair[1];
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs2(argsRawOf(block));
@@ -26597,7 +26599,7 @@ function TodoRow(props) {
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var errorSummary = errorSummaryOf(state, errorText);
   var counts = todos !== null ? planSummary(todos) : null;
   var summary;
   if (counts !== null && (done === false || state !== "error")) {
@@ -26628,9 +26630,7 @@ function TodoRow(props) {
     state,
     expandable: body !== null,
     expanded,
-    onToggle: function() {
-      setExpanded(!expanded);
-    },
+    onToggle: toggleExpanded,
     body,
     errorSummary,
     errorText,
@@ -26971,9 +26971,9 @@ function AskAnswerForm(props) {
   ))));
 }
 function AskRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+  var expanded = expandedPair[0];
+  var toggleExpanded = expandedPair[1];
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs2(argsRawOf(block));
@@ -26982,7 +26982,7 @@ function AskRow(props) {
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var errorSummary = errorSummaryOf(state, errorText);
   var summary;
   if (state === "error") {
     summary = "Ask user";
@@ -27029,9 +27029,7 @@ function AskRow(props) {
     questionState,
     expandable: body !== null,
     expanded,
-    onToggle: function() {
-      setExpanded(!expanded);
-    },
+    onToggle: toggleExpanded,
     body,
     errorSummary,
     errorText,
@@ -27044,9 +27042,9 @@ function subagentPrompt(args) {
   return args.prompt;
 }
 function SubagentRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+  var expanded = expandedPair[0];
+  var toggleExpanded = expandedPair[1];
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs2(argsRawOf(block));
@@ -27055,7 +27053,7 @@ function SubagentRow(props) {
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var errorSummary = errorSummaryOf(state, errorText);
   var background = args !== null && args.run_in_background === true;
   var title = background ? "Background subagent" : "Subagent";
   var summary = description !== void 0 ? firstLine2(relativizeToCwd(description, props.cwd)) : title;
@@ -27074,9 +27072,7 @@ function SubagentRow(props) {
     state,
     expandable: body !== null,
     expanded,
-    onToggle: function() {
-      setExpanded(!expanded);
-    },
+    onToggle: toggleExpanded,
     body,
     errorSummary,
     errorText,
@@ -27091,9 +27087,9 @@ function sendMessageArgs(args) {
 }
 var JOB_STATUS_RE = /\[status: ([a-z]+)\]\s*$/;
 function JobOutputRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+  var expanded = expandedPair[0];
+  var toggleExpanded = expandedPair[1];
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs2(argsRawOf(block));
@@ -27101,7 +27097,7 @@ function JobOutputRow(props) {
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var errorSummary = errorSummaryOf(state, errorText);
   var statusMatch = output !== null ? JOB_STATUS_RE.exec(output) : null;
   var summary = statusMatch !== null ? "status: " + statusMatch[1] : "Job output";
   var body = state !== "error" && output !== null && output !== "" ? /* @__PURE__ */ import_react4.default.createElement("pre", { className: "tool-render-output" }, stripAnsi(output)) : null;
@@ -27117,9 +27113,7 @@ function JobOutputRow(props) {
     state,
     expandable: body !== null,
     expanded,
-    onToggle: function() {
-      setExpanded(!expanded);
-    },
+    onToggle: toggleExpanded,
     body,
     errorSummary,
     errorText,
@@ -27134,9 +27128,9 @@ function packageActionTitle(action) {
   return "Package";
 }
 function PackageRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+  var expanded = expandedPair[0];
+  var toggleExpanded = expandedPair[1];
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs2(argsRawOf(block));
@@ -27146,7 +27140,7 @@ function PackageRow(props) {
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var errorSummary = errorSummaryOf(state, errorText);
   var title = packageActionTitle(action);
   var summary = target !== void 0 && target !== "" ? target : title;
   var body = state !== "error" && output !== null && output !== "" ? /* @__PURE__ */ import_react4.default.createElement("pre", { className: "tool-render-output" }, stripAnsi(output)) : null;
@@ -27162,9 +27156,7 @@ function PackageRow(props) {
     state,
     expandable: body !== null,
     expanded,
-    onToggle: function() {
-      setExpanded(!expanded);
-    },
+    onToggle: toggleExpanded,
     body,
     errorSummary,
     errorText,
@@ -27172,15 +27164,15 @@ function PackageRow(props) {
   });
 }
 function SendMessageRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+  var expanded = expandedPair[0];
+  var toggleExpanded = expandedPair[1];
   var block = props.block;
   var done = doneOf(block);
   var args = sendMessageArgs(parseArgs2(argsRawOf(block)));
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var errorSummary = errorSummaryOf(state, errorText);
   var body = state !== "error" && args !== null ? /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react4.default.createElement(MarkdownText2, { text: args.message })) : null;
   return toolRenderRow({
     callId: props.callId,
@@ -27194,9 +27186,7 @@ function SendMessageRow(props) {
     state,
     expandable: body !== null,
     expanded,
-    onToggle: function() {
-      setExpanded(!expanded);
-    },
+    onToggle: toggleExpanded,
     body,
     errorSummary,
     errorText,
@@ -27210,7 +27200,7 @@ function InterruptAgentRow(props) {
   var agentId = args !== null ? pickString2(args, ["agent_id"]) : void 0;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var errorSummary = errorSummaryOf(state, errorText);
   return toolRenderRow({
     callId: props.callId,
     useSession: props.useSession,
@@ -27240,15 +27230,15 @@ function agentsSummaryText(entries) {
   return running > 0 ? head + " \xB7 " + String(running) + " running" : head;
 }
 function ListAgentsRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+  var expanded = expandedPair[0];
+  var toggleExpanded = expandedPair[1];
   var block = props.block;
   var done = doneOf(block);
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var errorSummary = errorSummaryOf(state, errorText);
   var entries = state === "error" || output === null ? [] : parseAgentLines(output);
   var body = entries.length > 0 ? /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-agents" }, entries.map(function(entry, index) {
     var depth = typeof entry.depth === "number" && entry.depth > 0 ? entry.depth : 0;
@@ -27282,9 +27272,7 @@ function ListAgentsRow(props) {
     state,
     expandable: body !== null,
     expanded,
-    onToggle: function() {
-      setExpanded(!expanded);
-    },
+    onToggle: toggleExpanded,
     body,
     errorSummary,
     errorText,
@@ -27304,9 +27292,9 @@ function contextText(content) {
 }
 var FAILOVER_LINE_RE = /^LLM failover (\S+)\/(\S+) -> (\S+)\/(\S+) \(([^)]+)\)$/;
 function FailoverRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+  var expanded = expandedPair[0];
+  var toggleExpanded = expandedPair[1];
   var text = contextText(props.content);
   var lines = text.split("\n");
   var headerLine = lines.length > 0 ? lines[0] : "";
@@ -27338,9 +27326,7 @@ function FailoverRow(props) {
     state: "error",
     expandable: errorText !== void 0,
     expanded,
-    onToggle: function() {
-      setExpanded(!expanded);
-    },
+    onToggle: toggleExpanded,
     errorSummary,
     errorText,
     body: errorText !== void 0 ? /* @__PURE__ */ import_react4.default.createElement("pre", { className: "tool-render-output", "tool-render-error": true }, errorText) : null
@@ -27363,9 +27349,9 @@ function markdownWithReminders(text) {
   });
 }
 function SkillContentCard(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+  var expanded = expandedPair[0];
+  var toggleExpanded = expandedPair[1];
   var body = /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react4.default.createElement("table", { className: "tool-render-skill-table" }, /* @__PURE__ */ import_react4.default.createElement("tbody", null, /* @__PURE__ */ import_react4.default.createElement("tr", null, /* @__PURE__ */ import_react4.default.createElement("th", null, "Name"), /* @__PURE__ */ import_react4.default.createElement("td", null, props.name)), /* @__PURE__ */ import_react4.default.createElement("tr", null, /* @__PURE__ */ import_react4.default.createElement("th", null, "Resources"), /* @__PURE__ */ import_react4.default.createElement("td", null, props.resourceHint)))), markdownWithReminders(props.instructions));
   return toolRenderRow({
     callId: props.callId,
@@ -27378,16 +27364,14 @@ function SkillContentCard(props) {
     summary: props.name,
     expandable: true,
     expanded,
-    onToggle: function() {
-      setExpanded(!expanded);
-    },
+    onToggle: toggleExpanded,
     body
   });
 }
 function GenericContextCard(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+  var expanded = expandedPair[0];
+  var toggleExpanded = expandedPair[1];
   var provenance = props.provenance;
   var text = contextText(props.content);
   var skill = parseSkillContent(text);
@@ -27416,9 +27400,7 @@ function GenericContextCard(props) {
     summary: text !== "" ? firstLine2(text) : title,
     expandable: body !== null,
     expanded,
-    onToggle: function() {
-      setExpanded(!expanded);
-    },
+    onToggle: toggleExpanded,
     body
   });
 }
@@ -27439,14 +27421,14 @@ function ContextRow(props) {
   );
 }
 function SkillRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+  var expanded = expandedPair[0];
+  var toggleExpanded = expandedPair[1];
   var block = props.block;
   var done = doneOf(block);
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var errorSummary = errorSummaryOf(state, errorText);
   var skill = state !== "error" && done ? parseSkillContent(resultTextOf(block)) : null;
   if (skill !== null) {
     return /* @__PURE__ */ import_react4.default.createElement(
@@ -27471,9 +27453,7 @@ function SkillRow(props) {
     state,
     expandable: false,
     expanded,
-    onToggle: function() {
-      setExpanded(!expanded);
-    },
+    onToggle: toggleExpanded,
     errorSummary,
     errorText,
     inspect: props.inspect
@@ -27534,9 +27514,9 @@ function parseReadImageResult(text) {
   };
 }
 function ReadImageRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+  var expanded = expandedPair[0];
+  var toggleExpanded = expandedPair[1];
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs2(argsRawOf(block));
@@ -27544,7 +27524,7 @@ function ReadImageRow(props) {
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var errorSummary = errorSummaryOf(state, errorText);
   var meta = done && state !== "error" ? parseReadImageResult(output) : null;
   var summary = meta !== null ? basenameOf(meta.path) + " \xB7 " + meta.width + "x" + meta.height + " \xB7 " + formatBytes(meta.bytes) : path !== void 0 ? relativizeToCwd(path, props.cwd) : "Read image";
   var body = null;
@@ -27570,9 +27550,7 @@ function ReadImageRow(props) {
     state,
     expandable: body !== null,
     expanded,
-    onToggle: function() {
-      setExpanded(!expanded);
-    },
+    onToggle: toggleExpanded,
     body,
     errorSummary,
     errorText,
@@ -27580,9 +27558,9 @@ function ReadImageRow(props) {
   });
 }
 function SeeRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+  var expanded = expandedPair[0];
+  var toggleExpanded = expandedPair[1];
   var showMoreState = useState(false);
   var showMore = showMoreState[0];
   var setShowMore = showMoreState[1];
@@ -27594,7 +27572,7 @@ function SeeRow(props) {
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var errorSummary = errorSummaryOf(state, errorText);
   var description = done && state !== "error" ? output : null;
   var summary = question !== void 0 ? firstLine2(question) : "See";
   var needsClamp = description !== null && description.length > 400;
@@ -27629,9 +27607,7 @@ function SeeRow(props) {
     state,
     expandable: body !== null,
     expanded,
-    onToggle: function() {
-      setExpanded(!expanded);
-    },
+    onToggle: toggleExpanded,
     body,
     errorSummary,
     errorText,
@@ -27657,9 +27633,9 @@ function searchSummary(queries, state, output) {
   return queries[0] + extra;
 }
 function WebSearchRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+  var expanded = expandedPair[0];
+  var toggleExpanded = expandedPair[1];
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs2(argsRawOf(block));
@@ -27667,7 +27643,7 @@ function WebSearchRow(props) {
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var errorSummary = errorSummaryOf(state, errorText);
   var summary = searchSummary(queries, state, output);
   var body = state !== "error" && output !== null && output !== "" ? /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-markdown-body" }, /* @__PURE__ */ import_react4.default.createElement(MarkdownText2, { text: output })) : null;
   return toolRenderRow({
@@ -27681,9 +27657,7 @@ function WebSearchRow(props) {
     state,
     expandable: body !== null,
     expanded,
-    onToggle: function() {
-      setExpanded(!expanded);
-    },
+    onToggle: toggleExpanded,
     body,
     errorSummary,
     errorText,
@@ -27691,9 +27665,9 @@ function WebSearchRow(props) {
   });
 }
 function WebFetchRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+  var expanded = expandedPair[0];
+  var toggleExpanded = expandedPair[1];
   var block = props.block;
   var done = doneOf(block);
   var args = parseArgs2(argsRawOf(block));
@@ -27701,7 +27675,7 @@ function WebFetchRow(props) {
   var output = done ? resultTextOf(block) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var errorSummary = errorSummaryOf(state, errorText);
   var summary = url !== void 0 ? firstLine2(url) : "Web fetch";
   var body = null;
   if (state !== "error" && output !== null && output !== "") {
@@ -27718,9 +27692,7 @@ function WebFetchRow(props) {
     state,
     expandable: body !== null,
     expanded,
-    onToggle: function() {
-      setExpanded(!expanded);
-    },
+    onToggle: toggleExpanded,
     body,
     errorSummary,
     errorText,
@@ -27766,7 +27738,7 @@ function RunCodeRow(props) {
   var output = done ? runCodeOutputText(content, isError, error) : null;
   var errorText = done ? errorTextOf(block) : null;
   var state = rowStateOf(block);
-  var errorSummary = state === "error" && errorText !== null && errorText !== "" ? firstLineOfError(errorText) : void 0;
+  var errorSummary = errorSummaryOf(state, errorText);
   var outText = output;
   if (outText === null && isError === true) {
     var errMsg = error !== void 0 && error !== null && typeof error.message === "string" ? error.message : "";
@@ -27906,9 +27878,9 @@ function compactionBody(view, rows) {
   return /* @__PURE__ */ import_react4.default.createElement("div", { className: "tool-render-compaction" }, children);
 }
 function CompactionRow(props) {
-  var expandedState = useState(false);
-  var expanded = expandedState[0];
-  var setExpanded = expandedState[1];
+  var expandedPair = useExpanded();
+  var expanded = expandedPair[0];
+  var toggleExpanded = expandedPair[1];
   var data = props.node !== null && props.node !== void 0 && typeof props.node === "object" ? props.node.data : null;
   var node = compactionSummaryNode(data);
   var commandError = compactionCommandError(data);
@@ -27933,9 +27905,7 @@ function CompactionRow(props) {
       state: commandError !== null ? "error" : void 0,
       expandable: fallbackBody !== null || commandError !== null,
       expanded,
-      onToggle: function() {
-        setExpanded(!expanded);
-      },
+      onToggle: toggleExpanded,
       body: fallbackBody,
       errorSummary,
       errorText: commandError
@@ -27952,9 +27922,7 @@ function CompactionRow(props) {
     summary: compactionSummaryText(rows, pretty.span),
     expandable: true,
     expanded,
-    onToggle: function() {
-      setExpanded(!expanded);
-    },
+    onToggle: toggleExpanded,
     body: compactionBody(pretty, rows)
   });
 }
