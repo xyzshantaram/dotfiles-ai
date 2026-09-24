@@ -42,7 +42,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#404341f585015718c0accb8923714c00ac2d1a68}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#5430da2f42b1c02bd6b3f0b6744c8d9d7ed2d60f}"
 
 # Git-hosted specs whose build scripts pnpm must be allowed to run. pnpm 10+
 # blocks lifecycle scripts (prepare/postinstall) unless the exact resolved
