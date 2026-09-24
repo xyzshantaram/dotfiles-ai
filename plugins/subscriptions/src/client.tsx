@@ -1383,9 +1383,20 @@ function makePanel(ctx, config) {
       });
     };
 
-    // OpenCode GO windows
-
+    // OpenCode GO windows: the API-key usage route first; the cookie-based
+    // balance payload carries the same meter set as `usage`, so the section
+    // keeps its windows even when no API key is stored.
     var goUsage = go && !go.error && go.data ? go.data.usage : null;
+    if (
+      (goUsage === null || goUsage === undefined) &&
+      balance &&
+      !balance.error &&
+      balance.data &&
+      balance.data.ok === true &&
+      balance.data.usage
+    ) {
+      goUsage = balance.data.usage;
+    }
 
     // Claude (meridian) windows: the profile the service marks active (by
     // id first, then isActive), not just the first profile with windows. The

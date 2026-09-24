@@ -20,8 +20,9 @@
  *   - GET /subscriptions/electronhub-models — ElectronHub model list (cached 5min;
  *     the account-scoped list when the key may read it, else the public catalog)
  *   - POST /subscriptions/opencode-cookie/extract — pull the opencode.ai
- *     session cookie out of a local Firefox profile, validate it against the
- *     `_server` RPC, and save it as the OPENCODE_SESSION_COOKIE credential
+ *     session cookies out of a local Firefox profile, validate them against
+ *     the console session endpoint, and save them as the
+ *     OPENCODE_SESSION_COOKIE credential
  *   - POST /subscriptions/opencode-cookie/login — open opencode.ai in the
  *     browser so the user can sign in, then re-run extract
  *   - POST /subscriptions/electronhub-session/extract — harvest the
@@ -41,11 +42,12 @@
  * GO windows are now fetched via the zen API key at /subscriptions/opencode-usage.
  *
  * The balance has no public API. The zen balance equals the go balance and
- * is reachable only through opencode.ai's private `_server` RPC using the
- * browser-session cookie. The cookie lives in the credentials domain
- * (`OPENCODE_SESSION_COOKIE`), never in settings.
+ * is reachable only through opencode.ai's private console REST surface
+ * (/console/auth/session, /console/api/orgs, /console/api/go/status,
+ * /console/api/billing/status) using the browser-session cookies. The cookies
+ * live in the credentials domain (`OPENCODE_SESSION_COOKIE`), never in
+ * settings. Pure parsing lives in ./opencode-console.ts.
  */
-import { randomUUID } from "node:crypto";
 import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { execFile, execFileSync, spawn } from "node:child_process";
 import { homedir, tmpdir } from "node:os";
@@ -89,11 +91,18 @@ function service<T>(ctx: unknown, name: string): T | undefined {
   return (ctx as { get(name: string): unknown }).get(name) as T | undefined;
 }
 
-/** opencode.ai reports balance and monthlyUsage as fixed-point scaled by 1e8. */
-const USD_SCALE = 100_000_000;
-/** SolidStart server-function ids discovered by CodexBar. */
-const WORKSPACES_SERVER_ID = "def39973159c7f0483d8793a822b8dbb10d067e12c65455fcb4608459ba0234f";
-const BILLING_SERVER_ID = "c83b78a614689c38ebee981f9b39a8b377716db85c1fd7dbab604adc02d3313d";
+/** opencode.ai console REST model: parsing, cookie building, stale mapping. */
+import {
+  OPENCODE_CONSOLE,
+  OPENCODE_UA,
+  buildConsoleCookie,
+  consoleStatusIsStale,
+  parseConsoleOrgs,
+  shapeConsoleBalance,
+} from "./opencode-console";
+
+/** Console session cookies harvested from Firefox (both are mandatory). */
+const OPENCODE_COOKIE_NAMES = ["auth", "__Host-console_session"];
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36";
 const BALANCE_CACHE_MS = 30_000;
@@ -132,211 +141,52 @@ function loginWindowHandler(url) {
   };
 }
 
-/** Headers the opencode.ai `_server` RPC expects from a browser session. */
-function makeHeaders(cookie, serverId, referer) {
-  return {
+/** Browser-faithful headers for the opencode.ai console REST surface. */
+function consoleHeaders(cookie, orgId) {
+  const headers = {
     cookie,
-    "x-server-id": serverId,
-    "x-server-instance": `server-fn:${randomUUID()}`,
-    "user-agent": USER_AGENT,
-    origin: "https://opencode.ai",
-    referer,
-    accept: "text/javascript, application/json;q=0.9, */*;q=0.8",
+    "user-agent": OPENCODE_UA,
+    origin: OPENCODE_CONSOLE,
+    referer: `${OPENCODE_CONSOLE}/console`,
+    accept: "application/json",
   };
+  if (orgId !== null && orgId !== undefined) headers["x-org-id"] = orgId;
+  return headers;
 }
 
-/** GET or POST the `_server` RPC and return the raw text. */
-async function fetchServerText(url, options) {
-  const res = await fetch(url, { ...options, signal: AbortSignal.timeout(OPENCODE_TIMEOUT_MS) });
+/** GET one console REST path; 401/403 surface as a stale-session error. */
+async function fetchConsoleJson(path, cookie, orgId) {
+  const res = await fetch(`${OPENCODE_CONSOLE}${path}`, {
+    headers: consoleHeaders(cookie, orgId),
+    signal: AbortSignal.timeout(OPENCODE_TIMEOUT_MS),
+  });
+  if (consoleStatusIsStale(res.status)) throw new Error("opencode session stale");
   if (!res.ok) throw new Error(`opencode HTTP ${res.status}`);
-  return res.text();
+  return res.json();
 }
 
-/** A signed-out session page contains one of these markers. */
-function looksSignedOut(text) {
-  const lower = String(text).toLowerCase();
-  return (
-    lower.includes("/login") ||
-    lower.includes("sign in") ||
-    lower.includes("/auth/authorize") ||
-    lower.includes("sign-in")
-  );
+/** Step 1: validate the harvested cookies against the live session. */
+async function validateConsoleSession(cookie) {
+  await fetchConsoleJson("/console/auth/session", cookie, null);
 }
 
-/** First workspace id from the SolidStart payload, then a JSON walk. */
-function parseWorkspaceId(text) {
-  const match = /id\s*:\s*"(wrk_[^"]+)"/.exec(text);
-  if (match !== null) return match[1];
-  try {
-    return findWorkspaceId(JSON.parse(text));
-  } catch {
-    return null;
-  }
-}
-
-function findWorkspaceId(value) {
-  if (typeof value === "string") return value.startsWith("wrk_") ? value : null;
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const found = findWorkspaceId(item);
-      if (found !== null) return found;
-    }
-  } else if (value !== null && typeof value === "object") {
-    for (const key of Object.keys(value)) {
-      const found = findWorkspaceId(value[key]);
-      if (found !== null) return found;
-    }
-  }
-  return null;
-}
-
-/** Step 1: discover the first workspace id, with a POST fallback. */
-async function resolveWorkspaceId(cookie) {
-  const url = `https://opencode.ai/_server?id=${WORKSPACES_SERVER_ID}`;
-  let text = await fetchServerText(url, {
-    headers: makeHeaders(cookie, WORKSPACES_SERVER_ID, "https://opencode.ai"),
-  });
-  let id = parseWorkspaceId(text);
-  if (id !== null) return id;
-  text = await fetchServerText(url, {
-    method: "POST",
-    headers: {
-      ...makeHeaders(cookie, WORKSPACES_SERVER_ID, "https://opencode.ai"),
-      "content-type": "application/json",
-    },
-    body: "[]",
-  });
-  id = parseWorkspaceId(text);
-  if (id === null) throw new Error("no workspace id");
+/** Step 2: discover the first org id (replaces the old workspace lookup). */
+async function resolveConsoleOrgId(cookie) {
+  const id = parseConsoleOrgs(await fetchConsoleJson("/console/api/orgs", cookie, null));
+  if (id === null) throw new Error("no org id");
   return id;
 }
 
-/** Step 2: fetch the customer/billing payload for the workspace. */
-async function fetchBillingPayload(cookie, workspaceId) {
-  const args = encodeURIComponent(JSON.stringify([workspaceId]));
-  const url = `https://opencode.ai/_server?id=${BILLING_SERVER_ID}&args=${args}`;
-  return fetchServerText(url, {
-    headers: makeHeaders(cookie, BILLING_SERVER_ID, `https://opencode.ai/workspace/${workspaceId}`),
-  });
-}
-
-/** Step 2a: fetch the workspace billing page, which embeds the balance. */
-async function fetchBillingText(cookie, workspaceId) {
-  return fetchServerText(`https://opencode.ai/workspace/${workspaceId}/billing`, {
-    headers: {
-      cookie,
-      "user-agent": USER_AGENT,
-      accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      origin: "https://opencode.ai",
-      referer: "https://opencode.ai",
-    },
-  });
-}
-
-/** The dict that carries a non-empty customerID, found recursively. */
-function findCustomer(value) {
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const found = findCustomer(item);
-      if (found !== null) return found;
-    }
-    return null;
-  }
-  if (value === null || typeof value !== "object") return null;
-  if (typeof value.customerID === "string" && value.customerID.length > 0) return value;
-  for (const key of Object.keys(value)) {
-    const found = findCustomer(value[key]);
-    if (found !== null) return found;
-  }
-  return null;
-}
-
-/** Tolerant field scan: matches `monthlyUsage:123` and `"monthlyUsage":$R[3]=123`. */
-function numberField(text, field) {
-  const regex = new RegExp(
-    `(?:["']?${field}["']?\\s*:\\s*)(?:\\$R\\[\\d+\\]\\s*=\\s*)?(-?[0-9]+(?:\\.[0-9]+)?)`,
-  );
-  const match = regex.exec(text);
-  if (match === null) return null;
-  const value = Number(match[1]);
-  return Number.isFinite(value) ? value : null;
-}
-
-/**
- * Parse the billing payload. It is a SolidStart `$R[...]` JavaScript
- * payload, not plain JSON, so the JSON path runs first and a tolerant field
- * scan follows. customerID must be present before any number is trusted.
- */
-function parseBilling(text) {
-  try {
-    const object = JSON.parse(text);
-    const customer = findCustomer(object);
-    if (customer !== null && typeof customer.monthlyUsage === "number") {
-      return {
-        monthlyUsage: customer.monthlyUsage / USD_SCALE,
-        monthlyLimit: typeof customer.monthlyLimit === "number" ? customer.monthlyLimit : null,
-        balance: typeof customer.balance === "number" ? customer.balance / USD_SCALE : null,
-      };
-    }
-  } catch {
-    // fall through to the tolerant field scan
-  }
-  if (!/customerID\s*:\s*"[^"]+"/.test(text)) return null;
-  const usage = numberField(text, "monthlyUsage");
-  if (usage === null) return null;
-  const limit = numberField(text, "monthlyLimit");
-  const balance = numberField(text, "balance");
-  return {
-    monthlyUsage: usage / USD_SCALE,
-    monthlyLimit: limit,
-    balance: balance === null ? null : balance / USD_SCALE,
-  };
-}
-
-/**
- * Parse a Zen balance in USD out of the workspace dashboard page or the
- * billing payload. Tries, in order: a JSON walk for a customerID-carrying
- * object with a numeric balance, the SolidStart `customerID ... balance`
- * serialization, and a "current balance"/"zen balance" label next to a
- * dollar figure. Returns null when no balance is found.
- */
-function parseZenBalanceText(text) {
-  text = String(text).replace(/<!--[\s\S]*?-->/g, "");
-  const slot = /data-slot="balance-value"[^>]*>\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i.exec(text);
-  if (slot !== null) {
-    const v = Number(slot[1].replace(/,/g, ""));
-    if (Number.isFinite(v) && v >= 0) return v;
-  }
-  try {
-    const object = JSON.parse(text);
-    const customer = findCustomer(object);
-    if (customer !== null && typeof customer.balance === "number") {
-      return customer.balance / USD_SCALE;
-    }
-  } catch {
-    // not JSON; fall through to the regex paths
-  }
-  const solid =
-    /(?:^|[,{])\s*(?:"customerID"|customerID)\s*:\s*(?:\$R\[\d+\]\s*=\s*)?"[^"]+"[^{}]{0,512}?(?:"balance"|balance)\s*:\s*(?:\$R\[\d+\]\s*=\s*)?(-?[0-9]+(?:\.[0-9]+)?)/.exec(
-      text,
-    );
-  if (solid !== null && solid[1] !== undefined) {
-    const raw = Number(solid[1]);
-    if (Number.isFinite(raw)) return raw / USD_SCALE;
-  }
-  const after =
-    /(?:current\s+balance|zen\s+balance)[\s\S]{0,160}?\$\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i.exec(text);
-  if (after !== null && after[1] !== undefined) {
-    const value = Number(after[1].replace(/,/g, ""));
-    if (Number.isFinite(value) && value >= 0) return value;
-  }
-  const before =
-    /\$\s*([0-9][0-9,]*(?:\.[0-9]+)?)[\s\S]{0,160}?(?:current\s+balance|zen\s+balance)/i.exec(text);
-  if (before !== null && before[1] !== undefined) {
-    const value = Number(before[1].replace(/,/g, ""));
-    if (Number.isFinite(value) && value >= 0) return value;
-  }
-  return null;
+/** Step 3: fetch GO meters + billing balance for the org, then shape. */
+async function fetchConsoleBalance(cookie) {
+  const orgId = await resolveConsoleOrgId(cookie);
+  const [go, billing] = await Promise.all([
+    fetchConsoleJson("/console/api/go/status", cookie, orgId),
+    fetchConsoleJson("/console/api/billing/status", cookie, orgId),
+  ]);
+  const shaped = shapeConsoleBalance(go, billing);
+  if (shaped === null) throw new Error("parse failed");
+  return shaped;
 }
 
 /**
@@ -677,9 +527,13 @@ export function apply(ctx, config) {
   }
 
   // ── cookie-based OpenCode GO balance ───────────────────────────────────
-  // The cookie comes from the credentials domain. A missing credential or a
-  // signed-out/parse failure both answer with 200 and a JSON error object so
-  // the browser panel can show the message inline.
+  // The cookies come from the credentials domain. A missing credential or a
+  // stale/parse failure both answer with 200 and a JSON error object so
+  // the browser panel can show the message inline. Balance + GO meters ride
+  // the console REST surface (auth/session validation, org discovery,
+  // go/status + billing/status); the payload keeps the old response shape
+  // plus the meter set as `usage` so the GO section keeps its windows even
+  // when the API-key usage route has no key.
   let balanceCache = null;
   const cachedBalance = (cookie) => {
     const now = Date.now();
@@ -689,26 +543,7 @@ export function apply(ctx, config) {
       balanceCache.cookie === cookie
     )
       return balanceCache.promise;
-    const promise = (async () => {
-      const workspaceId = await resolveWorkspaceId(cookie);
-      const text = await fetchBillingPayload(cookie, workspaceId);
-      if (looksSignedOut(text)) throw new Error("signed out");
-      const parsed = parseBilling(text);
-      if (parsed === null) throw new Error("parse failed");
-      // Prefer the balance embedded in the workspace dashboard page (the
-      // pattern used by CodexBar and pi-sub-limits); keep the billing RPC
-      // payload for monthly usage and as the fallback. Best-effort only.
-      try {
-        const dashboard = await fetchBillingText(cookie, workspaceId);
-        if (!looksSignedOut(dashboard)) {
-          const dashBalance = parseZenBalanceText(dashboard);
-          if (dashBalance !== null) parsed.balance = dashBalance;
-        }
-      } catch {
-        // keep the billing payload balance
-      }
-      return parsed;
-    })();
+    const promise = (async () => fetchConsoleBalance(cookie))();
     balanceCache = { at: now, promise, cookie };
     promise.catch(() => {
       if (balanceCache?.promise === promise) balanceCache = null;
@@ -737,6 +572,7 @@ export function apply(ctx, config) {
         monthlyUsage: data.monthlyUsage,
         monthlyLimit: data.monthlyLimit,
         currency: "USD",
+        usage: data.usage,
       });
     } catch {
       sendJson(res, 200, { ok: false, error: "cookie invalid or expired" });
@@ -745,11 +581,8 @@ export function apply(ctx, config) {
 
   // ── OpenCode Zen balance (no public API-key billing endpoint) ──────────
   // The zen gateway (/zen/v1) ships only inference routes; no billing path
-  // answers there. Zen and GO share one account and one cookie-based
-  // `_server` payload, so the zen route serves the same handler as the GO
-  // balance. The balance itself is read from the workspace dashboard page
-  // when parseable, with the `_server` billing payload as fallback (the
-  // pattern used by CodexBar and pi-sub-limits).
+  // answers there. Zen and GO share one account and one console REST
+  // payload, so the zen route serves the same handler as the GO balance.
   const handleOzBalance = handleBalance;
 
   // ── OpenCode GO windows (zen API key, no cookie) ────────────────────────
@@ -1315,32 +1148,34 @@ export function apply(ctx, config) {
 
   // Firefox keeps the cookie DB in WAL mode. Copy sqlite + wal + shm to a
   // scratch dir so the read never contends with the live writer, then query
-  // the copies read-only. Returns the opencode.ai cookie header string.
+  // the copies read-only. Returns the opencode.ai cookie header string, or
+  // null when either cookie is absent (`__Host-console_session` is mandatory:
+  // `auth` alone answers 401).
   const readCookieString = async (dbDir) => {
     const src = join(dbDir, "cookies.sqlite");
     if (!existsSync(src)) return null;
     const sql =
-      "SELECT name || char(9) || value FROM moz_cookies WHERE (host = 'opencode.ai' OR host LIKE '%.opencode.ai') AND name = 'auth'";
-    const raw = await sqliteSnapshotAndQuery(src, sql);
+      "SELECT name || char(9) || value FROM moz_cookies " +
+      "WHERE host = 'opencode.ai' AND name IN ('auth', '__Host-console_session')";
+    const raw = await sqliteWalValue(src, sql);
     if (raw === null) return null;
-    const parts = String(raw)
-      .split("\n")
-      .map((line) => {
-        const tab = String(line).indexOf("\t");
-        return tab === -1 ? null : String(line).slice(0, tab) + "=" + String(line).slice(tab + 1);
-      })
-      .filter((part) => part !== null && String(part).includes("="));
-    return parts.length > 0 ? parts.join("; ") : null;
+    const jar: Record<string, string> = {};
+    for (const line of String(raw).split("\n")) {
+      const tab = String(line).indexOf("\t");
+      if (tab === -1) continue;
+      jar[String(line).slice(0, tab)] = String(line).slice(tab + 1);
+    }
+    return buildConsoleCookie(jar.auth, jar["__Host-console_session"]);
   };
 
-  // Validate the cookie against the real `_server` RPC before saving.
+  // Validate the cookies against the live console session before saving.
   const extractCookie = async () => {
     for (const dir of firefoxProfileDirs()) {
       if (!existsSync(join(dir, "cookies.sqlite"))) continue;
       const cookieString = await readCookieString(dir);
       if (cookieString === null) continue;
       try {
-        await cachedBalance(cookieString);
+        await validateConsoleSession(cookieString);
         return { cookie: cookieString };
       } catch {
         return { cookie: cookieString, stale: true };

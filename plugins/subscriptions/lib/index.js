@@ -28,9 +28,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// node_modules/.pnpm/snappyjs@0.7.0/node_modules/snappyjs/snappy_decompressor.js
+// ../../../../../home/sid/repos/dotfiles-ai/node_modules/.pnpm/snappyjs@0.7.0/node_modules/snappyjs/snappy_decompressor.js
 var require_snappy_decompressor = __commonJS({
-  "node_modules/.pnpm/snappyjs@0.7.0/node_modules/snappyjs/snappy_decompressor.js"(exports) {
+  "../../../../../home/sid/repos/dotfiles-ai/node_modules/.pnpm/snappyjs@0.7.0/node_modules/snappyjs/snappy_decompressor.js"(exports) {
     "use strict";
     var WORD_MASK = [0, 255, 65535, 16777215, 4294967295];
     function copyBytes(fromArray, fromPos, toArray, toPos, length) {
@@ -134,9 +134,9 @@ var require_snappy_decompressor = __commonJS({
   }
 });
 
-// node_modules/.pnpm/snappyjs@0.7.0/node_modules/snappyjs/snappy_compressor.js
+// ../../../../../home/sid/repos/dotfiles-ai/node_modules/.pnpm/snappyjs@0.7.0/node_modules/snappyjs/snappy_compressor.js
 var require_snappy_compressor = __commonJS({
-  "node_modules/.pnpm/snappyjs@0.7.0/node_modules/snappyjs/snappy_compressor.js"(exports) {
+  "../../../../../home/sid/repos/dotfiles-ai/node_modules/.pnpm/snappyjs@0.7.0/node_modules/snappyjs/snappy_compressor.js"(exports) {
     "use strict";
     var BLOCK_LOG = 16;
     var BLOCK_SIZE = 1 << BLOCK_LOG;
@@ -316,9 +316,9 @@ var require_snappy_compressor = __commonJS({
   }
 });
 
-// node_modules/.pnpm/snappyjs@0.7.0/node_modules/snappyjs/index.js
+// ../../../../../home/sid/repos/dotfiles-ai/node_modules/.pnpm/snappyjs@0.7.0/node_modules/snappyjs/index.js
 var require_snappyjs = __commonJS({
-  "node_modules/.pnpm/snappyjs@0.7.0/node_modules/snappyjs/index.js"(exports) {
+  "../../../../../home/sid/repos/dotfiles-ai/node_modules/.pnpm/snappyjs@0.7.0/node_modules/snappyjs/index.js"(exports) {
     "use strict";
     function isNode() {
       if (typeof process === "object") {
@@ -431,7 +431,6 @@ var require_snappyjs = __commonJS({
 
 // plugins/subscriptions/src/index.ts
 var import_snappyjs = __toESM(require_snappyjs(), 1);
-import { randomUUID } from "node:crypto";
 import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { execFile, execFileSync, spawn } from "node:child_process";
 import { homedir, tmpdir } from "node:os";
@@ -469,6 +468,78 @@ async function readBody(req, maxBytes = DEFAULT_MAX_BODY_BYTES) {
 }
 function isPlainObject(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+// plugins/subscriptions/src/opencode-console.ts
+var OPENCODE_USD_SCALE = 1e8;
+var OPENCODE_CONSOLE = "https://opencode.ai";
+var OPENCODE_UA = "Mozilla/5.0 (X11; Linux x86_64; rv:144.0) Gecko/20100101 Firefox/144.0";
+function microCentsToUsd(value) {
+  const n = typeof value === "string" && value.trim() !== "" ? Number(value) : value;
+  if (typeof n !== "number" || !Number.isFinite(n)) return null;
+  return n / OPENCODE_USD_SCALE;
+}
+function parseConsoleOrgs(data) {
+  if (!Array.isArray(data)) return null;
+  for (const entry of data) {
+    if (entry !== null && typeof entry === "object" && typeof entry.id === "string" && entry.id.length > 0) {
+      return entry.id;
+    }
+  }
+  return null;
+}
+function parseConsoleMeter(data) {
+  if (data === null || typeof data !== "object") return null;
+  const record = data;
+  const used = microCentsToUsd(record.usedMicroCents);
+  const cap = microCentsToUsd(record.limitMicroCents);
+  if (used === null || cap === null) return null;
+  const resetsAt = typeof record.resetsAt === "string" ? record.resetsAt : null;
+  return {
+    used,
+    cap,
+    percent: cap > 0 ? Math.max(0, Math.min(100, used / cap * 100)) : 0,
+    resetsAt
+  };
+}
+function parseGoStatus(data) {
+  if (data === null || typeof data !== "object") return null;
+  const access = data.access;
+  if (access === null || typeof access !== "object") return null;
+  const meters = access.meters;
+  if (meters === null || typeof meters !== "object") return null;
+  const record = meters;
+  return {
+    rolling: parseConsoleMeter(record.fiveHour),
+    weekly: parseConsoleMeter(record.week),
+    monthly: parseConsoleMeter(record.month)
+  };
+}
+function parseBillingStatus(data) {
+  if (data === null || typeof data !== "object") return null;
+  const record = data;
+  const balance = microCentsToUsd(record.balanceMicroCents);
+  const available = microCentsToUsd(record.availableMicroCents);
+  if (balance === null && available === null) return null;
+  return { balance, available };
+}
+function shapeConsoleBalance(go, billing) {
+  const meters = parseGoStatus(go);
+  const money = parseBillingStatus(billing);
+  const balance = money !== null ? money.available ?? money.balance : null;
+  const monthlyUsage = meters?.monthly?.used ?? null;
+  const monthlyLimit = meters?.monthly?.cap ?? null;
+  const usage = meters ?? { rolling: null, weekly: null, monthly: null };
+  if (balance === null && monthlyUsage === null) return null;
+  return { balance, monthlyUsage, monthlyLimit, usage };
+}
+function consoleStatusIsStale(status) {
+  return status === 401 || status === 403;
+}
+function buildConsoleCookie(auth, session) {
+  if (typeof auth !== "string" || auth === "") return null;
+  if (typeof session !== "string" || session === "") return null;
+  return `auth=${auth}; __Host-console_session=${session}`;
 }
 
 // plugins/subscriptions/src/eh-session-model.ts
@@ -1110,9 +1181,6 @@ var CONFIG_NS = settingsNamespace("subscriptions");
 function service(ctx, name2) {
   return ctx.get(name2);
 }
-var USD_SCALE = 1e8;
-var WORKSPACES_SERVER_ID = "def39973159c7f0483d8793a822b8dbb10d067e12c65455fcb4608459ba0234f";
-var BILLING_SERVER_ID = "c83b78a614689c38ebee981f9b39a8b377716db85c1fd7dbab604adc02d3313d";
 var USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36";
 var BALANCE_CACHE_MS = 3e4;
 var MERIDIAN_TIMEOUT_MS = 1e4;
@@ -1145,169 +1213,43 @@ function loginWindowHandler(url) {
     }
   };
 }
-function makeHeaders(cookie, serverId, referer) {
-  return {
+function consoleHeaders(cookie, orgId) {
+  const headers = {
     cookie,
-    "x-server-id": serverId,
-    "x-server-instance": `server-fn:${randomUUID()}`,
-    "user-agent": USER_AGENT,
-    origin: "https://opencode.ai",
-    referer,
-    accept: "text/javascript, application/json;q=0.9, */*;q=0.8"
+    "user-agent": OPENCODE_UA,
+    origin: OPENCODE_CONSOLE,
+    referer: `${OPENCODE_CONSOLE}/console`,
+    accept: "application/json"
   };
+  if (orgId !== null && orgId !== void 0) headers["x-org-id"] = orgId;
+  return headers;
 }
-async function fetchServerText(url, options) {
-  const res = await fetch(url, { ...options, signal: AbortSignal.timeout(OPENCODE_TIMEOUT_MS) });
+async function fetchConsoleJson(path, cookie, orgId) {
+  const res = await fetch(`${OPENCODE_CONSOLE}${path}`, {
+    headers: consoleHeaders(cookie, orgId),
+    signal: AbortSignal.timeout(OPENCODE_TIMEOUT_MS)
+  });
+  if (consoleStatusIsStale(res.status)) throw new Error("opencode session stale");
   if (!res.ok) throw new Error(`opencode HTTP ${res.status}`);
-  return res.text();
+  return res.json();
 }
-function looksSignedOut(text) {
-  const lower = String(text).toLowerCase();
-  return lower.includes("/login") || lower.includes("sign in") || lower.includes("/auth/authorize") || lower.includes("sign-in");
+async function validateConsoleSession(cookie) {
+  await fetchConsoleJson("/console/auth/session", cookie, null);
 }
-function parseWorkspaceId(text) {
-  const match = /id\s*:\s*"(wrk_[^"]+)"/.exec(text);
-  if (match !== null) return match[1];
-  try {
-    return findWorkspaceId(JSON.parse(text));
-  } catch {
-    return null;
-  }
-}
-function findWorkspaceId(value) {
-  if (typeof value === "string") return value.startsWith("wrk_") ? value : null;
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const found = findWorkspaceId(item);
-      if (found !== null) return found;
-    }
-  } else if (value !== null && typeof value === "object") {
-    for (const key of Object.keys(value)) {
-      const found = findWorkspaceId(value[key]);
-      if (found !== null) return found;
-    }
-  }
-  return null;
-}
-async function resolveWorkspaceId(cookie) {
-  const url = `https://opencode.ai/_server?id=${WORKSPACES_SERVER_ID}`;
-  let text = await fetchServerText(url, {
-    headers: makeHeaders(cookie, WORKSPACES_SERVER_ID, "https://opencode.ai")
-  });
-  let id = parseWorkspaceId(text);
-  if (id !== null) return id;
-  text = await fetchServerText(url, {
-    method: "POST",
-    headers: {
-      ...makeHeaders(cookie, WORKSPACES_SERVER_ID, "https://opencode.ai"),
-      "content-type": "application/json"
-    },
-    body: "[]"
-  });
-  id = parseWorkspaceId(text);
-  if (id === null) throw new Error("no workspace id");
+async function resolveConsoleOrgId(cookie) {
+  const id = parseConsoleOrgs(await fetchConsoleJson("/console/api/orgs", cookie, null));
+  if (id === null) throw new Error("no org id");
   return id;
 }
-async function fetchBillingPayload(cookie, workspaceId) {
-  const args = encodeURIComponent(JSON.stringify([workspaceId]));
-  const url = `https://opencode.ai/_server?id=${BILLING_SERVER_ID}&args=${args}`;
-  return fetchServerText(url, {
-    headers: makeHeaders(cookie, BILLING_SERVER_ID, `https://opencode.ai/workspace/${workspaceId}`)
-  });
-}
-async function fetchBillingText(cookie, workspaceId) {
-  return fetchServerText(`https://opencode.ai/workspace/${workspaceId}/billing`, {
-    headers: {
-      cookie,
-      "user-agent": USER_AGENT,
-      accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      origin: "https://opencode.ai",
-      referer: "https://opencode.ai"
-    }
-  });
-}
-function findCustomer(value) {
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const found = findCustomer(item);
-      if (found !== null) return found;
-    }
-    return null;
-  }
-  if (value === null || typeof value !== "object") return null;
-  if (typeof value.customerID === "string" && value.customerID.length > 0) return value;
-  for (const key of Object.keys(value)) {
-    const found = findCustomer(value[key]);
-    if (found !== null) return found;
-  }
-  return null;
-}
-function numberField(text, field) {
-  const regex = new RegExp(
-    `(?:["']?${field}["']?\\s*:\\s*)(?:\\$R\\[\\d+\\]\\s*=\\s*)?(-?[0-9]+(?:\\.[0-9]+)?)`
-  );
-  const match = regex.exec(text);
-  if (match === null) return null;
-  const value = Number(match[1]);
-  return Number.isFinite(value) ? value : null;
-}
-function parseBilling(text) {
-  try {
-    const object = JSON.parse(text);
-    const customer = findCustomer(object);
-    if (customer !== null && typeof customer.monthlyUsage === "number") {
-      return {
-        monthlyUsage: customer.monthlyUsage / USD_SCALE,
-        monthlyLimit: typeof customer.monthlyLimit === "number" ? customer.monthlyLimit : null,
-        balance: typeof customer.balance === "number" ? customer.balance / USD_SCALE : null
-      };
-    }
-  } catch {
-  }
-  if (!/customerID\s*:\s*"[^"]+"/.test(text)) return null;
-  const usage = numberField(text, "monthlyUsage");
-  if (usage === null) return null;
-  const limit = numberField(text, "monthlyLimit");
-  const balance = numberField(text, "balance");
-  return {
-    monthlyUsage: usage / USD_SCALE,
-    monthlyLimit: limit,
-    balance: balance === null ? null : balance / USD_SCALE
-  };
-}
-function parseZenBalanceText(text) {
-  text = String(text).replace(/<!--[\s\S]*?-->/g, "");
-  const slot = /data-slot="balance-value"[^>]*>\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i.exec(text);
-  if (slot !== null) {
-    const v = Number(slot[1].replace(/,/g, ""));
-    if (Number.isFinite(v) && v >= 0) return v;
-  }
-  try {
-    const object = JSON.parse(text);
-    const customer = findCustomer(object);
-    if (customer !== null && typeof customer.balance === "number") {
-      return customer.balance / USD_SCALE;
-    }
-  } catch {
-  }
-  const solid = /(?:^|[,{])\s*(?:"customerID"|customerID)\s*:\s*(?:\$R\[\d+\]\s*=\s*)?"[^"]+"[^{}]{0,512}?(?:"balance"|balance)\s*:\s*(?:\$R\[\d+\]\s*=\s*)?(-?[0-9]+(?:\.[0-9]+)?)/.exec(
-    text
-  );
-  if (solid !== null && solid[1] !== void 0) {
-    const raw = Number(solid[1]);
-    if (Number.isFinite(raw)) return raw / USD_SCALE;
-  }
-  const after = /(?:current\s+balance|zen\s+balance)[\s\S]{0,160}?\$\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i.exec(text);
-  if (after !== null && after[1] !== void 0) {
-    const value = Number(after[1].replace(/,/g, ""));
-    if (Number.isFinite(value) && value >= 0) return value;
-  }
-  const before = /\$\s*([0-9][0-9,]*(?:\.[0-9]+)?)[\s\S]{0,160}?(?:current\s+balance|zen\s+balance)/i.exec(text);
-  if (before !== null && before[1] !== void 0) {
-    const value = Number(before[1].replace(/,/g, ""));
-    if (Number.isFinite(value) && value >= 0) return value;
-  }
-  return null;
+async function fetchConsoleBalance(cookie) {
+  const orgId = await resolveConsoleOrgId(cookie);
+  const [go, billing] = await Promise.all([
+    fetchConsoleJson("/console/api/go/status", cookie, orgId),
+    fetchConsoleJson("/console/api/billing/status", cookie, orgId)
+  ]);
+  const shaped = shapeConsoleBalance(go, billing);
+  if (shaped === null) throw new Error("parse failed");
+  return shaped;
 }
 function unwrapData(json) {
   if (json !== null && typeof json === "object" && !Array.isArray(json) && "data" in json)
@@ -1520,22 +1462,7 @@ function apply(ctx, config) {
     const now = Date.now();
     if (balanceCache !== null && now - balanceCache.at < BALANCE_CACHE_MS && balanceCache.cookie === cookie)
       return balanceCache.promise;
-    const promise = (async () => {
-      const workspaceId = await resolveWorkspaceId(cookie);
-      const text = await fetchBillingPayload(cookie, workspaceId);
-      if (looksSignedOut(text)) throw new Error("signed out");
-      const parsed = parseBilling(text);
-      if (parsed === null) throw new Error("parse failed");
-      try {
-        const dashboard = await fetchBillingText(cookie, workspaceId);
-        if (!looksSignedOut(dashboard)) {
-          const dashBalance = parseZenBalanceText(dashboard);
-          if (dashBalance !== null) parsed.balance = dashBalance;
-        }
-      } catch {
-      }
-      return parsed;
-    })();
+    const promise = (async () => fetchConsoleBalance(cookie))();
     balanceCache = { at: now, promise, cookie };
     promise.catch(() => {
       if (balanceCache?.promise === promise) balanceCache = null;
@@ -1561,7 +1488,8 @@ function apply(ctx, config) {
         balance: data.balance,
         monthlyUsage: data.monthlyUsage,
         monthlyLimit: data.monthlyLimit,
-        currency: "USD"
+        currency: "USD",
+        usage: data.usage
       });
     } catch {
       sendJson(res, 200, { ok: false, error: "cookie invalid or expired" });
@@ -2005,14 +1933,16 @@ function apply(ctx, config) {
   const readCookieString = async (dbDir) => {
     const src = join(dbDir, "cookies.sqlite");
     if (!existsSync(src)) return null;
-    const sql = "SELECT name || char(9) || value FROM moz_cookies WHERE (host = 'opencode.ai' OR host LIKE '%.opencode.ai') AND name = 'auth'";
-    const raw = await sqliteSnapshotAndQuery(src, sql);
+    const sql = "SELECT name || char(9) || value FROM moz_cookies WHERE host = 'opencode.ai' AND name IN ('auth', '__Host-console_session')";
+    const raw = await sqliteWalValue(src, sql);
     if (raw === null) return null;
-    const parts = String(raw).split("\n").map((line) => {
+    const jar = {};
+    for (const line of String(raw).split("\n")) {
       const tab = String(line).indexOf("	");
-      return tab === -1 ? null : String(line).slice(0, tab) + "=" + String(line).slice(tab + 1);
-    }).filter((part) => part !== null && String(part).includes("="));
-    return parts.length > 0 ? parts.join("; ") : null;
+      if (tab === -1) continue;
+      jar[String(line).slice(0, tab)] = String(line).slice(tab + 1);
+    }
+    return buildConsoleCookie(jar.auth, jar["__Host-console_session"]);
   };
   const extractCookie = async () => {
     for (const dir of firefoxProfileDirs()) {
@@ -2020,7 +1950,7 @@ function apply(ctx, config) {
       const cookieString = await readCookieString(dir);
       if (cookieString === null) continue;
       try {
-        await cachedBalance(cookieString);
+        await validateConsoleSession(cookieString);
         return { cookie: cookieString };
       } catch {
         return { cookie: cookieString, stale: true };
