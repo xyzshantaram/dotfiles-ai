@@ -96,7 +96,8 @@
  *     name: /path/to/plugins/bash-guard.js
  *     config: {}                # rules come from the drop-in files
  */
-import { mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { access, constants as fsConstants, mkdir, mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
+import { spawn } from "node:child_process";
 import { stringify } from "yaml";
 import { join, resolve, sep, isAbsolute } from "node:path";
 import {
@@ -112,6 +113,7 @@ import type { Command as UnbashCommand, Node as UnbashNode, Script as UnbashScri
 import type { Context } from "@deepseek-ai/cordis";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import type { ShellExecRequest } from "@deepseek-ai/dsh-shell";
+import { delegationDepthOf } from "@deepseek-ai/dsh-subagent";
 import z from "@deepseek-ai/schemastery";
 import { TRANSLATORS, shellQuote } from "./bash-guard-translate";
 
@@ -246,6 +248,8 @@ interface JobsServiceLike {
 
 export const Config = z.object({
   guardsDir: z.string().default("$DSH_HOME/plugins/guards"),
+  hooksDir: z.string().default("$DSH_HOME/plugins/command-hooks"),
+  hookTimeoutMs: z.number().default(10_000),
   // Left unset by default (not defaulted to ""): evaluate() falls back to
   // DEFAULT_DENY_TEMPLATE/DEFAULT_ASK_TEMPLATE with `??`, which only skips a
   // nullish value. A "" default here used to satisfy that check and silently
@@ -258,6 +262,8 @@ export const Config = z.object({
 
 type BashGuardConfig = {
   guardsDir?: string;
+  hooksDir?: string;
+  hookTimeoutMs?: number;
   denyMessage?: string;
   askMessage?: string;
 };
@@ -748,7 +754,11 @@ export type GuardOutcome =
       notes?: string[];
       mutatingWhy?: string[];
     }
-  | { action: "deny"; reason: string };
+  // `escapable: true` marks a deny that came from a RULE verdict — the only
+  // denies a pre-command hook may override. Parse failures and translation
+  // blockers stay fail-closed: an unparsed or untranslated command must
+  // never run on a hook's say-so.
+  | { action: "deny"; reason: string; escapable?: boolean };
 
 /**
  * Build the message that hands the model an exact replacement command.
@@ -1190,7 +1200,7 @@ export async function evaluate(
       });
       const ruleNames = [...new Set(denying.map((h) => h.name))].join(", ");
       ctx.logger.warn(`bash-guard: command denied by rules [${ruleNames}]: ${command}`);
-      return { action: "deny", reason };
+      return { action: "deny", reason, escapable: true };
     }
     case "ask": {
       const asking = hits.filter((h) => h.verdict === "ask");
@@ -2206,8 +2216,177 @@ function renderProcessDelta(read: {
   return text;
 }
 
+// ── Pre-command hooks: the escape hatch ────────────────────────────────────
+//
+// Owner spec 2026-09-24, semantics confirmed ("escape hatch"): the rule layer
+// stays the default policy. When — and only when — the rules gate a command
+// (an ask, or a deny that carries escapable:true), every executable FILE in
+// hooksDir is offered the decision, in name order:
+//
+//   hook <depth> <command>     cwd = the command's resolved workdir, when one
+//                              is known; the harness cwd otherwise
+//     env DSH_HOOK_PROFILE     the aidos bash profile, or "none"
+//     env DSH_HOOK_VERDICT     "ask" | "deny" — what the rules decided
+//
+//   exit 0   → the command runs, no approval prompt (first such hook wins;
+//              later hooks are not consulted)
+//   nonzero  → this hook passes; the block stands unless a later hook allows
+//
+// A hook that cannot run at all (spawn failure, timeout, killed by the tool
+// call's abort) can never allow — fail closed — and never denies anything on
+// its own: the rule verdict it failed to escape still applies unchanged.
+// Hooks cannot relax the sandbox (executor-level) or the aidos write
+// boundary; they only bypass the rule layer's ask/deny for commands the
+// owner has scripted exceptions for.
+//
+// The depth is delegationDepthOf(agent) from @deepseek-ai/dsh-subagent —
+// max(session header delegationDepth, runtime subagentDepth) — the same
+// number aidos itself uses, so no aidos change and no pin moves.
+
+/** Cap on one hook's captured stdout/stderr: diagnostics, not a data channel. */
+const HOOK_OUTPUT_CAP = 4096;
+
+/** The result of offering one gated command to the hooks. */
+interface HookDecision {
+  allowed: boolean;
+  /** The hook that allowed (basename), for the log line. */
+  hook?: string;
+}
+
+/**
+ * Executable regular files in `dir`, in name order. A missing/unreadable
+ * directory means the feature is off — no hooks, no error, behavior
+ * identical to a build without hooks. Directories are skipped even though
+ * they carry the execute bit, and so is anything without it.
+ */
+async function listHooks(dir: string): Promise<string[]> {
+  let names;
+  try {
+    names = await readdir(dir);
+  } catch {
+    return [];
+  }
+  const out: string[] = [];
+  for (const name of names.sort()) {
+    const path = join(dir, name);
+    try {
+      const info = await stat(path);
+      if (!info.isFile()) continue;
+      await access(path, fsConstants.X_OK);
+      out.push(path);
+    } catch {
+      // Not a file / not executable / unreadable: not a hook.
+    }
+  }
+  return out;
+}
+
+/** Spawn one hook and settle its exit code (null on spawn failure/kill/abort). */
+function runOneHook(
+  path: string,
+  depth: number,
+  command: string,
+  env: NodeJS.ProcessEnv,
+  cwd: string | undefined,
+  timeoutMs: number,
+  signal: AbortSignal | undefined,
+): Promise<{ code: number | null; stderr: string }> {
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn(path, [String(depth), command], { cwd, env, signal, timeout: timeoutMs });
+    } catch {
+      resolve({ code: null, stderr: "" });
+      return;
+    }
+    let settled = false;
+    let stderr = "";
+    const settle = (code: number | null) => {
+      if (settled) return;
+      settled = true;
+      // 'exit' — not 'close': a hook's orphaned grandchild can hold the
+      // stdio pipes open long after the hook itself died (spawn's timeout
+      // kill reaches only the direct child), and 'close' would wait for it.
+      // Destroy the streams so nothing the guard owns waits on the orphan.
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+      resolve({ code, stderr });
+    };
+    // Drain stdout so a full pipe cannot wedge the hook; the hook's stdout
+    // is not a data channel.
+    child.stdout?.on("data", () => {});
+    child.stderr?.on("data", (chunk: Buffer) => {
+      if (stderr.length < HOOK_OUTPUT_CAP) stderr += chunk.toString("utf8", 0, HOOK_OUTPUT_CAP - stderr.length);
+    });
+    child.on("error", () => settle(null));
+    child.on("exit", (code) => settle(code));
+  });
+}
+
+/**
+ * Offer one gated command to every hook. First exit-0 wins; a hook that
+ * cannot run counts as non-allowing (fail closed). Never throws.
+ */
+async function runCommandHooks(
+  ctx: Context,
+  dir: string,
+  input: {
+    depth: number;
+    command: string;
+    profile: string;
+    verdict: "ask" | "deny";
+    workdir?: string;
+    timeoutMs: number;
+    signal?: AbortSignal;
+  },
+): Promise<HookDecision> {
+  const hooks = await listHooks(dir);
+  if (hooks.length === 0) return { allowed: false };
+  const env = {
+    ...process.env,
+    DSH_HOOK_PROFILE: input.profile,
+    DSH_HOOK_VERDICT: input.verdict,
+  };
+  for (const path of hooks) {
+    let outcome: { code: number | null; stderr: string };
+    try {
+      outcome = await runOneHook(
+        path,
+        input.depth,
+        input.command,
+        env,
+        input.workdir,
+        input.timeoutMs,
+        input.signal,
+      );
+    } catch (error) {
+      ctx.logger.warn(
+        `bash-guard: pre-command hook ${path} failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      continue;
+    }
+    if (outcome.code === 0) {
+      ctx.logger.info(
+        `bash-guard: pre-command hook ${path} allowed a gated command (${input.verdict}): ${input.command}`,
+      );
+      return { allowed: true, hook: path };
+    }
+    if (outcome.code === null) {
+      ctx.logger.warn(`bash-guard: pre-command hook ${path} did not exit cleanly; it cannot allow`);
+    } else if (outcome.stderr.trim().length > 0) {
+      // The hook declined with a reason: log it, so a misfiring hook is
+      // diagnosable from the journal without a manual re-run.
+      ctx.logger.debug(
+        `bash-guard: pre-command hook ${path} declined (exit ${outcome.code}): ${outcome.stderr.trim().split("\n")[0]}`,
+      );
+    }
+  }
+  return { allowed: false };
+}
+
 export function apply(ctx: Context, config: BashGuardConfig): void {
   const baseDir = resolveHome(config.guardsDir ?? "$DSH_HOME/plugins/guards");
+  const hooksBase = resolveHome(config.hooksDir ?? "$DSH_HOME/plugins/command-hooks");
 
   // Advertise the escalation arguments only when the executor confines.
   // Without confinement they must not exist in the schema at all.
@@ -2231,7 +2410,8 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
         "Run a bash command and return its output. Every command passes the " +
         "bash-guard rule layer first: a rule may replace the command with a " +
         "preferred form (which runs directly), ask you to wait for user " +
-        "approval, or deny it. " +
+        "approval, or deny it. A pre-command hook may also allow a gated " +
+        "command without a prompt. " +
         (escalationModes.length > 0
           ? "When the sandbox denies a file operation, retry the exact same command once with sandbox_permissions plus a one-sentence justification. A rejected escalation is final for that command."
           : ""),
@@ -2416,8 +2596,63 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
           profile === "none" ? [baseDir] : [baseDir, join(baseDir, `profile-${profile}`)];
         const templates = { deny: config.denyMessage, ask: config.askMessage };
 
-        const outcome = await evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates);
-        if (outcome.action === "deny") throw new Error(outcome.reason);
+        // The workdir is resolved once, before the verdict: the hook (when
+        // one runs) and the shell request below must see the same directory,
+        // and the hook needs it BEFORE the ask path computes anything.
+        const headerCwd = agent?.session.header.cwd;
+        const workdir =
+          args.workdir === undefined
+            ? headerCwd
+            : headerCwd !== undefined && !isAbsolute(args.workdir)
+              ? resolve(headerCwd, args.workdir)
+              : args.workdir;
+
+        let outcome = await evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates);
+
+        // Pre-command hooks, escape-hatch semantics: only a RULE verdict is
+        // escapable (ask always; deny only with escapable:true — parse
+        // failures and translation blockers are not). A hook that exits 0
+        // runs the command with no approval prompt; anything else leaves
+        // the verdict exactly as the rules produced it.
+        let hookEscaped = false;
+        if (outcome.action === "ask" || (outcome.action === "deny" && outcome.escapable === true)) {
+          let depth = 0;
+          if (agent !== undefined) {
+            try {
+              depth = delegationDepthOf(agent as never);
+            } catch {
+              depth = 0;
+            }
+          }
+          const decision = await runCommandHooks(ctx, hooksBase, {
+            depth,
+            command: outcome.action === "ask" ? outcome.command : command,
+            profile,
+            verdict: outcome.action,
+            workdir,
+            timeoutMs: config.hookTimeoutMs ?? 10_000,
+            signal: exec.signal,
+          });
+          hookEscaped = decision.allowed;
+        }
+
+        // Normalize an escaped verdict into a run: downstream narrowing and
+        // rendering then need no knowledge of hooks. An escaped deny runs
+        // the ORIGINAL command (deny outcomes carry no rewrite); an escaped
+        // ask runs the outcome's (possibly rewritten) form exactly as an
+        // approved ask would have.
+        if (outcome.action === "deny") {
+          if (!hookEscaped) throw new Error(outcome.reason);
+          outcome = { action: "run", command, rewritten: false };
+        } else if (outcome.action === "ask" && hookEscaped) {
+          outcome = {
+            action: "run",
+            command: outcome.command,
+            rewritten: outcome.rewritten,
+            reason: outcome.reason,
+            ranNote: outcome.ranNote,
+          };
+        }
 
         let toRun: string;
         if (outcome.action === "ask") {
@@ -2510,22 +2745,14 @@ export function apply(ctx: Context, config: BashGuardConfig): void {
           policy = { ...standing, mode: escalateTo };
         }
 
-        // Workdir: the calling agent's session cwd is the default, and a
-        // relative workdir resolves against it. Many sessions share one
-        // executor, so the executor's own default would be wrong here.
-        const headerCwd = agent?.session.header.cwd;
-        const workdir =
-          args.workdir === undefined
-            ? headerCwd
-            : headerCwd !== undefined && !isAbsolute(args.workdir)
-              ? resolve(headerCwd, args.workdir)
-              : args.workdir;
-        // One resolved request serves both paths: the same command, workdir,
-        // and sandbox policy. The foreground-only fields (the timeout and the
-        // tool call's abort signal) are added on the foreground branch only:
-        // dsh-shell applies no timeout to a background start, and a job the
-        // job runtime now owns must not die when the starting tool call
-        // aborts or hits its own deadline.
+        // Workdir was resolved once above, before the verdict, so the hook
+        // and the shell request agree. One resolved request serves both
+        // paths: the same command, workdir, and sandbox policy. The
+        // foreground-only fields (the timeout and the tool call's abort
+        // signal) are added on the foreground branch only: dsh-shell applies
+        // no timeout to a background start, and a job the job runtime now
+        // owns must not die when the starting tool call aborts or hits its
+        // own deadline.
         const request = {
           command: toRun,
           ...(workdir !== undefined ? { workdir } : {}),

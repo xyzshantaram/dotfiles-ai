@@ -37,3 +37,12 @@ bash-guard to skip it by name — the next such file hits the same wall.
 do not collide, precisely because bash-guard only globs `*.json`. That is an
 accident of the glob rather than a designed exemption; do not rely on it for a
 file that would otherwise be a rule.
+
+## Pre-command hooks do not live here
+
+bash-guard's pre-command hooks (the escape hatch that can allow a gated
+command without a prompt) have their own directory, `command-hooks/`, mirrored
+to `$DSH_HOME/plugins/command-hooks`. They are executable files recognized by
+the execute bit, not `.json` rule files — see `command-hooks/README.md` for
+the hook contract. A hook dropped into this directory would be silently
+ignored as a malformed rule file, which is the wrong kind of surprise.

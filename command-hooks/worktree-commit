@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Pre-command hook: let subagents commit inside git worktrees (#68/#345).
+#
+# The motivating case: aidos dispatches subagents onto detached worktrees
+# under the scratch root; their `git commit` hits the git rule's "ask"
+# verdict, and a background worker has no answerer — so the work piles up
+# uncommitted and the parent must relay every commit by hand. The owner's
+# policy: a subagent (depth >= 1) committing from inside a linked worktree
+# is trusted to commit.
+#
+# Caveat, deliberate: `git -C <path> commit` run FROM a worktree also
+# passes, even when -C names the main checkout. The worktree test inspects
+# the hook's cwd; parsing -C targets out of arbitrary command strings is
+# regex over a shell script and that way lies false confidence. The
+# orchestrator's own commits run at depth 0 and stay on the ask path.
+set -u
+depth="$1"
+command="$2"
+
+[ "$depth" -ge 1 ] || exit 1
+
+case "$command" in
+  git\ commit* | git\ -C\ *\ commit*) ;;
+  *) exit 1 ;;
+esac
+
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 1
+git_dir="$(git rev-parse --git-dir 2>/dev/null)" || exit 1
+case "$git_dir" in
+  */worktrees/*) exit 0 ;;
+  *) exit 1 ;;
+esac

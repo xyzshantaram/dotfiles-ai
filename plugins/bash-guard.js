@@ -7365,7 +7365,8 @@ var require_dist = __commonJS({
 
 // plugins/bash-guard.ts
 var import_yaml = __toESM(require_dist());
-import { mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { access, constants as fsConstants, mkdir, mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
+import { spawn } from "node:child_process";
 import { join as join2, resolve, sep, isAbsolute as isAbsolute2 } from "node:path";
 
 // node_modules/.pnpm/unbash@3.0.0/node_modules/unbash/dist/chars.js
@@ -11884,6 +11885,7 @@ function flagSpan(arg, i, args, flagArgs) {
 
 // plugins/bash-guard.ts
 import { defineTool } from "@deepseek-ai/dsh-tools";
+import { delegationDepthOf } from "@deepseek-ai/dsh-subagent";
 import z from "@deepseek-ai/schemastery";
 
 // plugins/bash-guard-translate.ts
@@ -12286,6 +12288,8 @@ function buildEscalationApprovalReason(fields) {
 }
 var Config = z.object({
   guardsDir: z.string().default("$DSH_HOME/plugins/guards"),
+  hooksDir: z.string().default("$DSH_HOME/plugins/command-hooks"),
+  hookTimeoutMs: z.number().default(1e4),
   // Left unset by default (not defaulted to ""): evaluate() falls back to
   // DEFAULT_DENY_TEMPLATE/DEFAULT_ASK_TEMPLATE with `??`, which only skips a
   // nullish value. A "" default here used to satisfy that check and silently
@@ -12824,7 +12828,7 @@ async function evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates)
       });
       const ruleNames = [...new Set(denying.map((h) => h.name))].join(", ");
       ctx.logger.warn(`bash-guard: command denied by rules [${ruleNames}]: ${command}`);
-      return { action: "deny", reason };
+      return { action: "deny", reason, escapable: true };
     }
     case "ask": {
       const asking = hits.filter((h) => h.verdict === "ask");
@@ -13366,8 +13370,99 @@ function renderProcessDelta(read) {
 ${read.delta}`;
   return text;
 }
+var HOOK_OUTPUT_CAP = 4096;
+async function listHooks(dir) {
+  let names;
+  try {
+    names = await readdir(dir);
+  } catch {
+    return [];
+  }
+  const out = [];
+  for (const name2 of names.sort()) {
+    const path3 = join2(dir, name2);
+    try {
+      const info = await stat(path3);
+      if (!info.isFile()) continue;
+      await access(path3, fsConstants.X_OK);
+      out.push(path3);
+    } catch {
+    }
+  }
+  return out;
+}
+function runOneHook(path3, depth, command, env, cwd, timeoutMs, signal) {
+  return new Promise((resolve2) => {
+    let child;
+    try {
+      child = spawn(path3, [String(depth), command], { cwd, env, signal, timeout: timeoutMs });
+    } catch {
+      resolve2({ code: null, stderr: "" });
+      return;
+    }
+    let settled = false;
+    let stderr = "";
+    const settle = (code) => {
+      if (settled) return;
+      settled = true;
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+      resolve2({ code, stderr });
+    };
+    child.stdout?.on("data", () => {
+    });
+    child.stderr?.on("data", (chunk) => {
+      if (stderr.length < HOOK_OUTPUT_CAP) stderr += chunk.toString("utf8", 0, HOOK_OUTPUT_CAP - stderr.length);
+    });
+    child.on("error", () => settle(null));
+    child.on("exit", (code) => settle(code));
+  });
+}
+async function runCommandHooks(ctx, dir, input) {
+  const hooks = await listHooks(dir);
+  if (hooks.length === 0) return { allowed: false };
+  const env = {
+    ...process.env,
+    DSH_HOOK_PROFILE: input.profile,
+    DSH_HOOK_VERDICT: input.verdict
+  };
+  for (const path3 of hooks) {
+    let outcome;
+    try {
+      outcome = await runOneHook(
+        path3,
+        input.depth,
+        input.command,
+        env,
+        input.workdir,
+        input.timeoutMs,
+        input.signal
+      );
+    } catch (error) {
+      ctx.logger.warn(
+        `bash-guard: pre-command hook ${path3} failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+      continue;
+    }
+    if (outcome.code === 0) {
+      ctx.logger.info(
+        `bash-guard: pre-command hook ${path3} allowed a gated command (${input.verdict}): ${input.command}`
+      );
+      return { allowed: true, hook: path3 };
+    }
+    if (outcome.code === null) {
+      ctx.logger.warn(`bash-guard: pre-command hook ${path3} did not exit cleanly; it cannot allow`);
+    } else if (outcome.stderr.trim().length > 0) {
+      ctx.logger.debug(
+        `bash-guard: pre-command hook ${path3} declined (exit ${outcome.code}): ${outcome.stderr.trim().split("\n")[0]}`
+      );
+    }
+  }
+  return { allowed: false };
+}
 function apply(ctx, config) {
   const baseDir = resolveHome(config.guardsDir ?? "$DSH_HOME/plugins/guards");
+  const hooksBase = resolveHome(config.hooksDir ?? "$DSH_HOME/plugins/command-hooks");
   const sandboxMode = ctx.shell.sandboxMode;
   const escalationModes = sandboxMode === void 0 ? [] : ESCALATION_TARGETS;
   const sandboxPolicy = ctx.get("sandboxPolicy");
@@ -13380,7 +13475,7 @@ function apply(ctx, config) {
   ctx.tools.register(
     defineTool({
       name: "bash",
-      description: "Run a bash command and return its output. Every command passes the bash-guard rule layer first: a rule may replace the command with a preferred form (which runs directly), ask you to wait for user approval, or deny it. " + (escalationModes.length > 0 ? "When the sandbox denies a file operation, retry the exact same command once with sandbox_permissions plus a one-sentence justification. A rejected escalation is final for that command." : ""),
+      description: "Run a bash command and return its output. Every command passes the bash-guard rule layer first: a rule may replace the command with a preferred form (which runs directly), ask you to wait for user approval, or deny it. A pre-command hook may also allow a gated command without a prompt. " + (escalationModes.length > 0 ? "When the sandbox denies a file operation, retry the exact same command once with sandbox_permissions plus a one-sentence justification. A rejected escalation is final for that command." : ""),
       parameters: {
         command: {
           type: "string",
@@ -13528,8 +13623,42 @@ function apply(ctx, config) {
         }
         const dirs = profile === "none" ? [baseDir] : [baseDir, join2(baseDir, `profile-${profile}`)];
         const templates = { deny: config.denyMessage, ask: config.askMessage };
-        const outcome = await evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates);
-        if (outcome.action === "deny") throw new Error(outcome.reason);
+        const headerCwd = agent?.session.header.cwd;
+        const workdir = args.workdir === void 0 ? headerCwd : headerCwd !== void 0 && !isAbsolute2(args.workdir) ? resolve(headerCwd, args.workdir) : args.workdir;
+        let outcome = await evaluate(ctx, dirs, command, safePaths, workspaceRoot, templates);
+        let hookEscaped = false;
+        if (outcome.action === "ask" || outcome.action === "deny" && outcome.escapable === true) {
+          let depth = 0;
+          if (agent !== void 0) {
+            try {
+              depth = delegationDepthOf(agent);
+            } catch {
+              depth = 0;
+            }
+          }
+          const decision = await runCommandHooks(ctx, hooksBase, {
+            depth,
+            command: outcome.action === "ask" ? outcome.command : command,
+            profile,
+            verdict: outcome.action,
+            workdir,
+            timeoutMs: config.hookTimeoutMs ?? 1e4,
+            signal: exec.signal
+          });
+          hookEscaped = decision.allowed;
+        }
+        if (outcome.action === "deny") {
+          if (!hookEscaped) throw new Error(outcome.reason);
+          outcome = { action: "run", command, rewritten: false };
+        } else if (outcome.action === "ask" && hookEscaped) {
+          outcome = {
+            action: "run",
+            command: outcome.command,
+            rewritten: outcome.rewritten,
+            reason: outcome.reason,
+            ranNote: outcome.ranNote
+          };
+        }
         let toRun;
         if (outcome.action === "ask") {
           if (approval === void 0 || agent === void 0) {
@@ -13603,8 +13732,6 @@ ${outcome.reason}` : "")
           }
           policy = { ...standing, mode: escalateTo };
         }
-        const headerCwd = agent?.session.header.cwd;
-        const workdir = args.workdir === void 0 ? headerCwd : headerCwd !== void 0 && !isAbsolute2(args.workdir) ? resolve(headerCwd, args.workdir) : args.workdir;
         const request = {
           command: toRun,
           ...workdir !== void 0 ? { workdir } : {},

@@ -42,7 +42,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE"
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#5430da2f42b1c02bd6b3f0b6744c8d9d7ed2d60f}"
+AIDOS_PLUGIN_SPEC="${AIDOS_PLUGIN_SPEC:-github:xyzshantaram/aidos#aa6833906d62c3e49d6937e34bd5282bc835b85f}"
 
 # Git-hosted specs whose build scripts pnpm must be allowed to run. pnpm 10+
 # blocks lifecycle scripts (prepare/postinstall) unless the exact resolved
@@ -113,6 +113,24 @@ step_sync_guard_rules() {
 	cp -r "$HERE/guards/." "$DSH_HOME/plugins/guards/"
 }
 
+step_sync_command_hooks() {
+	# MIRROR, for the same reason as step_sync_guard_rules (#128): bash-guard
+	# re-scans the hooks dir on every gated call, so a hook the repo stopped
+	# shipping must actually disappear from the runtime dir or it keeps
+	# allowing commands forever. Nothing writes here at runtime either.
+	#
+	# The execute bit is the convention (command-hooks/README.md): cp -r
+	# preserves it, and a file without it is silently ignored -- which is the
+	# documented behavior, not a sync failure.
+	if [ -z "${DSH_HOME:-}" ]; then
+		echo "  ERROR: DSH_HOME is unset; refusing to mirror command hooks." >&2
+		return 1
+	fi
+	rm -rf "$DSH_HOME/plugins/command-hooks"
+	mkdir -p "$DSH_HOME/plugins/command-hooks"
+	cp -r "$HERE/command-hooks/." "$DSH_HOME/plugins/command-hooks/"
+}
+
 step_write_web_patch() {
 	patch_dir="$DSH_HOME/profiles/web"
 	mkdir -p "$patch_dir"
@@ -134,6 +152,7 @@ step_write_web_patch() {
       name: $HERE/plugins/bash-guard.js
       config:
         guardsDir: $DSH_HOME/plugins/guards
+        hooksDir: $DSH_HOME/plugins/command-hooks
     # subagent-steer registers its own send_message (#129), so the preset's
     # builtin tool-subagent-control row is disabled below -- two registrars
     # for one tool name would throw on the duplicate. tool-subagent-list-agents
@@ -2106,6 +2125,7 @@ STEPS=(
 	"Sync skills -> $DSH_HOME/skills|step_sync_skills"
 	"Sync AGENTS.md -> $DSH_HOME/AGENTS.md|step_sync_agents_md"
 	"Sync bash-guard rule drop-ins -> $DSH_HOME/plugins/guards|step_sync_guard_rules"
+	"Sync bash-guard pre-command hooks -> $DSH_HOME/plugins/command-hooks|step_sync_command_hooks"
 	"Sync the MCP server roster|step_sync_mcp_config"
 	"Write the web-profile patch (host-plane rows)|step_write_web_patch"
 	"Allow pnpm build scripts for git-hosted plugins|step_allow_builds"
