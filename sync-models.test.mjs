@@ -29,6 +29,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as YAML from "yaml";
 import {
+  analyzeDocument,
   buildFreshRates,
   electronhubRow,
   entryText,
@@ -361,5 +362,102 @@ describe("Meta models seed the responses route (#342c)", () => {
     expect(
       partitionGoIds(["muse-spark-1.3-contributor", "glm-5.3-flash"]).responses,
     ).toContain("muse-spark-1.3-contributor");
+  });
+});
+
+/**
+ * Rung-form coverage for analyzeDocument's chain-ref collection.
+ *
+ * WHY THIS EXISTS. A chain step may be written three ways: a `routes:` map,
+ * a "provider/model" string, or — the only form that carries a per-rung
+ * reasoningEffort — a plain-list {provider, model, reasoningEffort} map. The
+ * collector read the first two. The moment `frontier` and `flash` were
+ * rewritten in the map form to set reasoningEffort, their rungs became
+ * INVISIBLE to every chainRefs consumer: the consistency check printed "all
+ * chain-referenced models are present" having read only the `see` chain, and
+ * the catalog cut stopped exempting the ids those chains name. A green line
+ * over chains nobody read is worse than no line at all.
+ *
+ * The last case pins the real file, because the synthetic fixture alone
+ * would pass again the day someone re-hand-rolls the rung list in a way
+ * that misses the form the shipped settings actually use.
+ */
+describe("analyzeDocument chain refs", () => {
+  // One chain per form, plus the cases that must NOT produce a route: a
+  // `chain:name` reference (it names another chain) and a map with no model.
+  const FIXTURE = [
+    "llm-pi-ai:",
+    "  providers:",
+    "    p1:",
+    "      models:",
+    "      - id: m1",
+    "      - id: m2",
+    "profile:",
+    "  active: personal",
+    "  chains:",
+    "    map-chain:",
+    "      - provider: p1",
+    "        model: m1",
+    "        reasoningEffort: high",
+    "    str-chain:",
+    "      - p1/m2",
+    "    mixed-chain:",
+    "      - chain:map-chain",
+    "      - provider: p1",
+    "        model: m2",
+    "    incomplete:",
+    "      - provider: p1",
+    "    see:",
+    "      - provider: p1",
+    "        model: m1",
+    "    routes-chain:",
+    "      routes:",
+    "        - provider: p1",
+    "          model: m2",
+    "",
+  ].join("\n");
+
+  function analyze(text) {
+    return analyzeDocument(YAML.parseDocument(text, { keepSourceTokens: true }), text);
+  }
+
+  it("collects a route written as a {provider, model} map", () => {
+    // The regression: this returned nothing for the map form.
+    const { chainRefs } = analyze(FIXTURE);
+    expect(chainRefs).toContain("p1/m1");
+  });
+
+  it("feeds the map form to the vision list too, for a see-* chain", () => {
+    // see.ts picks `see` or `see-<profile>`, and the vision check reads
+    // visionChainRefs. A map rung must reach it or the vision guard goes
+    // quiet on chains that are written that way.
+    const { chainRefs, visionChainRefs } = analyze(FIXTURE);
+    expect(visionChainRefs).toEqual(["p1/m1"]);
+    expect(chainRefs.length).toBeGreaterThan(visionChainRefs.length);
+  });
+
+  it("still reads the string and routes: forms, and invents no route", () => {
+    const { chainRefs } = analyze(FIXTURE);
+    // str-chain, mixed-chain and routes-chain all resolve to p1/m2.
+    expect(chainRefs.filter((ref) => ref === "p1/m2")).toHaveLength(3);
+    // `chain:map-chain` names a chain; it is not a route, and the map with
+    // no model must not become "p1/undefined".
+    for (const ref of chainRefs) {
+      expect(ref.startsWith("chain:")).toBe(false);
+      expect(ref.includes("undefined")).toBe(false);
+    }
+  });
+
+  it("sees every rung of the shipped settings chains, not only the string ones", () => {
+    const text = readFileSync(join(here, "home", "settings.yaml"), "utf8");
+    const { chainRefs } = analyze(text);
+    // frontier and flash are written as maps. Each of these rungs is the
+    // only place its model is named, so a miss means the consistency check
+    // reports an all-clear over rungs it never read.
+    expect(chainRefs).toContain("opencode-go/mimo-v2.6-pro");
+    expect(chainRefs).toContain("deepseek-official/deepseek-v4-flash");
+    expect(chainRefs).toContain("command-code/meta/muse-spark-1.3-contributor");
+    // ...and the string-form chains are still read.
+    expect(chainRefs).toContain("command-code/Qwen/Qwen3.7-Flash");
   });
 });

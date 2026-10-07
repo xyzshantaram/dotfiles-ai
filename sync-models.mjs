@@ -527,24 +527,37 @@ function analyzeDocument(doc, text) {
       const chain = pair.value;
       const chainName = pair.key?.value;
       const needsVision = typeof chainName === "string" && /^see(-|$)/.test(chainName);
+      // One collector for every rung form, so a form added later cannot be
+      // seen by one list and missed by the other. Both `chainRefs` consumers
+      // matter: the consistency check warns on a route the provider does not
+      // serve, and the catalog cut exempts a chain-mentioned id.
+      const addRef = (ref) => {
+        chainRefs.push(ref);
+        if (needsVision) visionChainRefs.push(ref);
+      };
       const routes = chain?.get?.("routes");
       if (routes && routes.items) {
         for (const r of routes.items) {
           const prov = r?.get?.("provider");
           const model = r?.get?.("model");
-          if (typeof prov === "string" && typeof model === "string") {
-            chainRefs.push(`${prov}/${model}`);
-            if (needsVision) visionChainRefs.push(`${prov}/${model}`);
-          }
+          if (typeof prov === "string" && typeof model === "string") addRef(`${prov}/${model}`);
         }
       } else if (chain && chain.items) {
-        // A plain list of "provider/model" or "chain:name" strings.
+        // A plain list of steps. A step is one of:
+        //   - a "provider/model" string (one inline route)
+        //   - a "chain:name" string (names another chain; not a route itself)
+        //   - a {provider, model, reasoningEffort} map, which is the ONLY
+        //     form that can carry a per-rung reasoningEffort, so chains that
+        //     set one are written this way and used to be skipped entirely.
         for (const item of chain.items) {
           const val = item?.value;
-          if (typeof val === "string" && val.includes("/") && !val.startsWith("chain:")) {
-            chainRefs.push(val);
-            if (needsVision) visionChainRefs.push(val);
+          if (typeof val === "string") {
+            if (val.includes("/") && !val.startsWith("chain:")) addRef(val);
+            continue;
           }
+          const prov = item?.get?.("provider");
+          const model = item?.get?.("model");
+          if (typeof prov === "string" && typeof model === "string") addRef(`${prov}/${model}`);
         }
       }
     }
@@ -1192,4 +1205,4 @@ if (RUN_AS_SCRIPT) {
   });
 }
 
-export { priceKey, rateForEntry, indexModelsDev, buildFreshRates, renderPricesSection, droppedPricesLines, yamlQuoteScalar, yamlNeedsQuote, entryText, electronhubRow, modelsEditForProvider, isMetaModelId, partitionGoIds };
+export { priceKey, rateForEntry, indexModelsDev, buildFreshRates, renderPricesSection, droppedPricesLines, yamlQuoteScalar, yamlNeedsQuote, entryText, electronhubRow, modelsEditForProvider, isMetaModelId, partitionGoIds, analyzeDocument };
